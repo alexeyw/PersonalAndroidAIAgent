@@ -111,4 +111,54 @@ class AppDatabaseMigrationTest {
         val parsed = Converters().toNodeContextConfig(defaultJson)
         assertEquals(NodeContextConfig.ALL_ENABLED, parsed)
     }
+
+    @Test
+    fun `MIGRATION_29_30 targets versions 29 to 30`() {
+        val migration = AppDatabase.MIGRATION_29_30
+
+        assertEquals(29, migration.startVersion)
+        assertEquals(30, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_29_30 creates pipeline_runs table with both indices`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val statements = mutableListOf<String>()
+
+        AppDatabase.MIGRATION_29_30.migrate(db)
+
+        verify(exactly = 3) { db.execSQL(capture(statements)) }
+
+        val createTable = statements.first().uppercase()
+        assertTrue(
+            "Expected CREATE TABLE pipeline_runs, got: ${statements.first()}",
+            createTable.contains("CREATE TABLE") && createTable.contains("PIPELINE_RUNS"),
+        )
+        // Columns that anchor the run lifecycle and the checkpoint contract.
+        listOf(
+            "ID", "SESSIONID", "PIPELINEID", "ORIGIN", "STATUS",
+            "CURRENTNODEID", "STARTEDAT", "FINISHEDAT", "ERRORMESSAGE", "GRAPHCONTENTHASH",
+        ).forEach { column ->
+            assertTrue("Missing column $column in: ${statements.first()}", createTable.contains(column))
+        }
+        assertTrue(
+            "Primary key must be the run id: ${statements.first()}",
+            createTable.contains("PRIMARY KEY(`ID`)"),
+        )
+        assertTrue(
+            "sessionId must deliberately carry no FK (run may precede its session row): " +
+                statements.first(),
+            !createTable.contains("FOREIGN KEY"),
+        )
+
+        val indexSql = statements.drop(1).joinToString(" ").uppercase()
+        assertTrue(
+            "Missing sessionId index: $indexSql",
+            indexSql.contains("INDEX_PIPELINE_RUNS_SESSIONID"),
+        )
+        assertTrue(
+            "Missing status index (orphan sweep / reattach queries): $indexSql",
+            indexSql.contains("INDEX_PIPELINE_RUNS_STATUS"),
+        )
+    }
 }

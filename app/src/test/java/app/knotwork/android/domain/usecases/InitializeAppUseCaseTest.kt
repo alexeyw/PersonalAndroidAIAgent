@@ -2,7 +2,11 @@ package app.knotwork.android.domain.usecases
 
 import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.models.PipelineGraph
+import app.knotwork.android.domain.models.PipelineRun
+import app.knotwork.android.domain.models.PipelineRunStatus
+import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.repositories.PipelineRepository
+import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -19,10 +23,12 @@ class InitializeAppUseCaseTest {
     private val settingsRepository: SettingsRepository = mockk(relaxed = true)
     private val pipelineRepository: PipelineRepository = mockk(relaxed = true)
     private val loadPipelineFromPresetUseCase: LoadPipelineFromPresetUseCase = mockk(relaxed = true)
+    private val pipelineRunRepository: PipelineRunRepository = mockk(relaxed = true)
     private val useCase = InitializeAppUseCase(
         settingsRepository,
         pipelineRepository,
         loadPipelineFromPresetUseCase,
+        pipelineRunRepository,
     )
 
     @Test
@@ -79,6 +85,79 @@ class InitializeAppUseCaseTest {
         coVerify(exactly = 0) { settingsRepository.setDefaultPipelineId(any()) }
         coVerify(exactly = 0) { settingsRepository.setFirstLaunch(any()) }
     }
+
+    @Test
+    fun `invoke sweeps orphaned runs to INTERRUPTED on every launch`() = runTest {
+        // Given — NOT a first launch, with two runs stranded by a dead process.
+        every { settingsRepository.isFirstLaunch } returns flowOf(false)
+        coEvery { pipelineRunRepository.getOrphanedRunning() } returns listOf(
+            orphanRun("run-1", PipelineRunStatus.RUNNING),
+            orphanRun("run-2", PipelineRunStatus.QUEUED),
+        )
+
+        // When
+        useCase()
+
+        // Then — both records are finalised as INTERRUPTED with the canonical reason.
+        coVerify {
+            pipelineRunRepository.finishRun(
+                "run-1",
+                PipelineRunStatus.INTERRUPTED,
+                "Process terminated during execution",
+            )
+        }
+        coVerify {
+            pipelineRunRepository.finishRun(
+                "run-2",
+                PipelineRunStatus.INTERRUPTED,
+                "Process terminated during execution",
+            )
+        }
+    }
+
+    @Test
+    fun `invoke sweeps orphaned runs on first launch too`() = runTest {
+        // Given — first launch AND an orphaned run (e.g. data restored from backup).
+        every { settingsRepository.isFirstLaunch } returns flowOf(true)
+        coEvery { loadPipelineFromPresetUseCase(SHOWCASE_PRESET_ID) } returns Result.success(SEEDED_ID)
+        coEvery { pipelineRunRepository.getOrphanedRunning() } returns listOf(
+            orphanRun("run-1", PipelineRunStatus.RUNNING),
+        )
+
+        // When
+        useCase()
+
+        // Then — the sweep is not gated behind the first-launch branch.
+        coVerify {
+            pipelineRunRepository.finishRun("run-1", PipelineRunStatus.INTERRUPTED, any())
+        }
+    }
+
+    @Test
+    fun `invoke leaves run store untouched when nothing is orphaned`() = runTest {
+        every { settingsRepository.isFirstLaunch } returns flowOf(false)
+        coEvery { pipelineRunRepository.getOrphanedRunning() } returns emptyList()
+
+        useCase()
+
+        coVerify(exactly = 0) { pipelineRunRepository.finishRun(any(), any(), any()) }
+    }
+
+    /**
+     * Builds an orphaned run fixture in the given non-terminal [status].
+     */
+    private fun orphanRun(id: String, status: PipelineRunStatus): PipelineRun = PipelineRun(
+        id = id,
+        sessionId = "session-1",
+        pipelineId = null,
+        origin = RunOrigin.CHAT,
+        status = status,
+        currentNodeId = null,
+        startedAt = 0L,
+        finishedAt = null,
+        errorMessage = null,
+        graphContentHash = null,
+    )
 
     private companion object {
         const val SHOWCASE_PRESET_ID = "showcase_full_agent"

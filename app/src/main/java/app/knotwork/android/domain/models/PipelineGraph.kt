@@ -1,5 +1,7 @@
 package app.knotwork.android.domain.models
 
+import java.security.MessageDigest
+
 /**
  * Represents a complete pipeline graph composed of nodes and directed connections.
  * Forms a Directed Acyclic Graph (DAG) for execution.
@@ -162,5 +164,86 @@ data class PipelineGraph(
         }
 
         return errors
+    }
+
+    /**
+     * Computes a stable SHA-256 hash over the *execution-relevant* content of
+     * the graph. The hash is captured into every persistent pipeline-run
+     * record when the run starts and is the checkpoint-invalidation contract:
+     * an interrupted run may only be resumed from its persisted node results
+     * while the stored hash still equals the current graph's hash — any
+     * mismatch means the graph was edited in between and the run must be
+     * restarted from scratch.
+     *
+     * Included: every node field that can influence execution or
+     * LLM-visible content (id, type, label — it leaks into tool-result
+     * attribution, tool/model/provider bindings, condition fields, system
+     * prompt, clarification timeout, context-config flags, per-node config
+     * JSON) and every connection (id, endpoints, routing label). Nodes and
+     * connections are sorted by id first, so persistence order never affects
+     * the hash.
+     *
+     * Excluded: canvas coordinates ([NodeModel.x] / [NodeModel.y]), the
+     * pipeline display [name], [id], and [updatedAt] — moving a node on the
+     * canvas or renaming the pipeline must not invalidate a resumable run.
+     *
+     * @return Lowercase hex encoding of the SHA-256 digest.
+     */
+    fun contentHash(): String {
+        val canonical = buildString {
+            nodes.sortedBy { it.id }.forEach { node ->
+                append(node.id).append(FIELD_SEPARATOR)
+                append(node.type.name).append(FIELD_SEPARATOR)
+                append(node.label).append(FIELD_SEPARATOR)
+                append(node.toolName.orEmpty()).append(FIELD_SEPARATOR)
+                append(node.modelPath.orEmpty()).append(FIELD_SEPARATOR)
+                append(node.conditionComplexity?.toString().orEmpty()).append(FIELD_SEPARATOR)
+                append(node.conditionKeywords.orEmpty()).append(FIELD_SEPARATOR)
+                append(node.conditionPrompt.orEmpty()).append(FIELD_SEPARATOR)
+                append(node.systemPrompt.orEmpty()).append(FIELD_SEPARATOR)
+                append(node.cloudProvider.orEmpty()).append(FIELD_SEPARATOR)
+                append(node.clarificationTimeoutMs?.toString().orEmpty()).append(FIELD_SEPARATOR)
+                append(node.contextConfig.toString()).append(FIELD_SEPARATOR)
+                append(node.configJson.orEmpty()).append(RECORD_SEPARATOR)
+            }
+            append(SECTION_SEPARATOR)
+            connections.sortedBy { it.id }.forEach { connection ->
+                append(connection.id).append(FIELD_SEPARATOR)
+                append(connection.sourceNodeId).append(FIELD_SEPARATOR)
+                append(connection.targetNodeId).append(FIELD_SEPARATOR)
+                append(connection.label.orEmpty()).append(RECORD_SEPARATOR)
+            }
+        }
+        val digest = MessageDigest.getInstance(HASH_ALGORITHM).digest(canonical.toByteArray(Charsets.UTF_8))
+        return digest.joinToString(separator = "") { byte ->
+            (byte.toInt() and BYTE_MASK).toString(HEX_RADIX).padStart(HEX_PAD_LENGTH, '0')
+        }
+    }
+
+    private companion object {
+        /** Digest algorithm backing [contentHash]. */
+        const val HASH_ALGORITHM = "SHA-256"
+
+        /**
+         * Unit-separator control character between fields of one record —
+         * cannot occur in user-authored prompt text, so concatenated fields
+         * can never collide across boundaries.
+         */
+        const val FIELD_SEPARATOR = '\u001F'
+
+        /** Record-separator control character after each node / connection. */
+        const val RECORD_SEPARATOR = '\u001E'
+
+        /** Group-separator control character between the node and connection sections. */
+        const val SECTION_SEPARATOR = '\u001D'
+
+        /** Mask extracting the unsigned byte value for hex encoding. */
+        const val BYTE_MASK = 0xFF
+
+        /** Radix for the hex encoding of digest bytes. */
+        const val HEX_RADIX = 16
+
+        /** Width every encoded digest byte is left-padded to. */
+        const val HEX_PAD_LENGTH = 2
     }
 }

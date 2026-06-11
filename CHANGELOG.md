@@ -15,6 +15,21 @@ details.
 
 ### Added
 
+- **Persistent pipeline-run records.** Every pipeline run is now a
+  first-class row in the encrypted local database (`pipeline_runs`,
+  schema v30): enqueueing creates a `QUEUED` record, the engine writes
+  the node currently executing and the human-in-the-loop suspension
+  statuses (`WAITING_APPROVAL` / `WAITING_CLARIFICATION`) as it walks the
+  graph, and the task queue settles the record as `COMPLETED`, `FAILED`
+  or `CANCELLED` (user stop is recorded distinctly from failure).
+  Runs stranded by a process death — Doze, an OOM kill, a swipe from
+  recents — are detected on the next launch and finalised as
+  `INTERRUPTED` instead of silently vanishing. Each record also captures
+  a content hash of the executing graph (cosmetic edits such as canvas
+  moves excluded), laying the groundwork for resuming interrupted runs
+  from their last completed node. Deleting a chat session removes its
+  run records as well.
+
 - **Re-embed reminder banner.** *Settings → Memory* now shows a persistent
   warning under the embedding-provider dropdown whenever the stored memory
   vectors were created with a different provider than the active one —

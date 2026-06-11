@@ -30,6 +30,7 @@ import app.knotwork.android.domain.models.NodeContextConfig
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
+import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.models.ToolApprovalPolicy
@@ -44,6 +45,7 @@ import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.MetricsRepository
 import app.knotwork.android.domain.repositories.NetworkActivityTracker
+import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
@@ -53,6 +55,7 @@ import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -61,6 +64,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -88,6 +94,7 @@ class GraphExecutionEngineTest {
     private lateinit var crashReportingRepository: CrashReportingRepository
     private lateinit var localModelRepository: LocalModelRepository
     private lateinit var memoryRepository: MemoryRepository
+    private lateinit var pipelineRunRepository: PipelineRunRepository
 
     private lateinit var engine: GraphExecutionEngine
     private lateinit var promptTemplateEngine: PromptTemplateEngine
@@ -114,6 +121,7 @@ class GraphExecutionEngineTest {
         crashReportingRepository = mockk(relaxed = true)
         localModelRepository = mockk(relaxed = true)
         memoryRepository = mockk(relaxed = true)
+        pipelineRunRepository = mockk(relaxed = true)
         clarificationRepository = mockk()
         // The resolver is exercised whenever a CLOUD node fires; default to a sensible
         // Koog model so each individual test does not have to wire it up.
@@ -202,6 +210,7 @@ class GraphExecutionEngineTest {
             crashReportingRepository,
             localModelRepository,
             memoryRepository,
+            pipelineRunRepository,
         )
 
         coEvery { getContextWindowUseCase(sessionId) } returns ""
@@ -471,6 +480,7 @@ class GraphExecutionEngineTest {
             PromptTemplateEngine(),
             emptySet(),
             NodeContextBuilder(),
+            mockk(relaxed = true),
             mockk(relaxed = true),
             mockk(relaxed = true),
             mockk(relaxed = true),
@@ -970,6 +980,7 @@ class GraphExecutionEngineTest {
             crashReportingRepository,
             localModelRepository,
             memoryRepository,
+            pipelineRunRepository,
         )
 
         val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
@@ -1144,6 +1155,7 @@ class GraphExecutionEngineTest {
                 crashReportingRepository,
                 localModelRepository,
                 memoryRepository,
+                pipelineRunRepository,
             )
 
             // Generate a question with two options; the first one is the default the
@@ -1837,5 +1849,169 @@ class GraphExecutionEngineTest {
             "Pipeline should reach Completed when HITL is skipped",
             emissions.any { it is AgentOrchestratorState.Completed },
         )
+    }
+
+    // ─── Persistent run write-through ──────────────────────────
+
+    @Test
+    fun `given runId then currentNodeId is written for every executed node`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+
+        val graph = PipelineGraph(
+            id = "g1",
+            name = "Linear",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_1"),
+                ConnectionModel("c2", "llm_1", "output_1"),
+            ),
+        )
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("answer")
+
+        engine(sessionId, "prompt", graph, "run-42").toList()
+
+        coVerifyOrder {
+            pipelineRunRepository.updateCurrentNode("run-42", "input_1")
+            pipelineRunRepository.updateCurrentNode("run-42", "llm_1")
+            pipelineRunRepository.updateCurrentNode("run-42", "output_1")
+        }
+    }
+
+    @Test
+    fun `given null runId then run persistence is never touched`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+
+        val graph = PipelineGraph(
+            id = "g1",
+            name = "Linear",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(ConnectionModel("c1", "input_1", "output_1")),
+        )
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("answer")
+
+        engine(sessionId, "prompt", graph).toList()
+
+        coVerify(exactly = 0) { pipelineRunRepository.updateCurrentNode(any(), any()) }
+        coVerify(exactly = 0) { pipelineRunRepository.updateStatus(any(), any()) }
+    }
+
+    /**
+     * A CLARIFICATION suspension persists WAITING_CLARIFICATION when the
+     * question is surfaced, and the record flips back to RUNNING on the first
+     * state forwarded after the user's reply resolves the suspension.
+     */
+    @Test
+    fun `given clarification suspension then record is WAITING_CLARIFICATION then RUNNING`() = runTest {
+        val graph = PipelineGraph(
+            id = "g1",
+            name = "Clarification",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel(
+                    id = "clar_1",
+                    type = NodeType.CLARIFICATION,
+                    x = 0f,
+                    y = 0f,
+                    systemPrompt = "Ask user for clarification.",
+                    clarificationTimeoutMs = 5_000L,
+                ),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "clar_1"),
+                ConnectionModel("c2", "clar_1", "output_1"),
+            ),
+        )
+        every { llmEngine.generateResponseStream(any()) } returns flowOf(
+            "{\"question\":\"Confirm?\",\"options\":[\"yes\",\"no\"]}",
+        )
+        coEvery { clarificationRepository.requestAnswer(any()) } returns "user reply"
+
+        engine(sessionId, "prompt", graph, "run-43").toList()
+
+        coVerifyOrder {
+            pipelineRunRepository.updateStatus("run-43", PipelineRunStatus.WAITING_CLARIFICATION)
+            pipelineRunRepository.updateStatus("run-43", PipelineRunStatus.RUNNING)
+        }
+    }
+
+    /**
+     * A SENSITIVE tool's HITL gate persists WAITING_APPROVAL while the run
+     * is suspended on the user, and the record flips back to RUNNING once
+     * the approval resolves and execution proceeds.
+     */
+    @Test
+    fun `given approval suspension then record is WAITING_APPROVAL then RUNNING`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
+        every { settingsRepository.toolCallTimeoutMs } returns flowOf(5_000L)
+        coEvery { toolRepository.getRisk("sens.tool") } returns ToolRisk.SENSITIVE
+        coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool("sens.tool", "Desc", "{}"))
+        coEvery { toolRepository.executeTool("sens.tool", any()) } returns "tool-result"
+
+        val graph = PipelineGraph(
+            id = "g1",
+            name = "Sensitive Tool",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("tool_1", NodeType.TOOL, 0f, 0f, toolName = "sens.tool"),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "tool_1"),
+                ConnectionModel("c2", "tool_1", "output_1"),
+            ),
+        )
+        every { llmEngine.generateResponseStream(any()) } returns
+            flowOf("""{"tool":"sens.tool","arguments":"a=1"}""")
+
+        val job = launch {
+            engine(sessionId, "prompt", graph, "run-44").toList()
+        }
+        // Flush pending tasks WITHOUT advancing virtual time so the executor
+        // suspends inside the approval gate without firing the timeout.
+        runCurrent()
+        engine.resumeWithApproval(sessionId, true)
+        advanceUntilIdle()
+
+        coVerifyOrder {
+            pipelineRunRepository.updateStatus("run-44", PipelineRunStatus.WAITING_APPROVAL)
+            pipelineRunRepository.updateStatus("run-44", PipelineRunStatus.RUNNING)
+        }
+        job.cancel()
+    }
+
+    /**
+     * Run-record persistence is observability, never a correctness
+     * dependency: a failing write must not break the run.
+     */
+    @Test
+    fun `given run persistence fails then pipeline still completes`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        coEvery { pipelineRunRepository.updateCurrentNode(any(), any()) } throws
+            IllegalStateException("disk full")
+
+        val graph = PipelineGraph(
+            id = "g1",
+            name = "Linear",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(ConnectionModel("c1", "input_1", "output_1")),
+        )
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("answer")
+
+        val states = engine(sessionId, "prompt", graph, "run-45").toList()
+
+        assertTrue(states.last() is AgentOrchestratorState.Completed)
     }
 }

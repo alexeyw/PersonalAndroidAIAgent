@@ -10,6 +10,7 @@ import app.knotwork.android.data.local.dao.LocalModelDao
 import app.knotwork.android.data.local.dao.MemoryDao
 import app.knotwork.android.data.local.dao.PipelineDao
 import app.knotwork.android.data.local.dao.PipelinePresetDao
+import app.knotwork.android.data.local.dao.PipelineRunDao
 import app.knotwork.android.data.local.dao.PromptPresetDao
 import app.knotwork.android.data.local.dao.PromptTemplateDao
 import app.knotwork.android.data.local.dao.TraceStepDao
@@ -21,6 +22,7 @@ import app.knotwork.android.data.local.models.MemoryChunkEntity
 import app.knotwork.android.data.local.models.NodeEntity
 import app.knotwork.android.data.local.models.PipelineEntity
 import app.knotwork.android.data.local.models.PipelinePresetEntity
+import app.knotwork.android.data.local.models.PipelineRunEntity
 import app.knotwork.android.data.local.models.PromptPresetEntity
 import app.knotwork.android.data.local.models.PromptTemplateEntity
 import app.knotwork.android.data.local.models.TraceStepEntity
@@ -50,8 +52,9 @@ import app.knotwork.android.data.local.models.TraceStepEntity
         TraceStepEntity::class,
         PipelinePresetEntity::class,
         PromptPresetEntity::class,
+        PipelineRunEntity::class,
     ],
-    version = 29,
+    version = 30,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -113,6 +116,14 @@ abstract class AppDatabase : RoomDatabase() {
      * @return The [PromptPresetDao] instance.
      */
     abstract fun promptPresetDao(): PromptPresetDao
+
+    /**
+     * Provides access to the [PipelineRunDao] backing the persistent
+     * pipeline-run records.
+     *
+     * @return The [PipelineRunDao] instance.
+     */
+    abstract fun pipelineRunDao(): PipelineRunDao
 
     companion object {
         /**
@@ -566,6 +577,46 @@ abstract class AppDatabase : RoomDatabase() {
                     floats[index] = parts[index].toFloatOrNull() ?: return ByteArray(0)
                 }
                 return EmbeddingBlobCodec.encode(floats)
+            }
+        }
+
+        /**
+         * Migration from version 29 to 30.
+         * Adds the `pipeline_runs` table — the persistent record of pipeline
+         * runs that survives process death (see `PipelineRunEntity`). Purely
+         * additive: no existing rows are touched. `sessionId` deliberately
+         * carries no foreign key (a run may be created before its session row
+         * exists — scheduler-originated sessions are materialised on first
+         * message save); the index pair backs the per-session queries and the
+         * status-driven orphan sweep.
+         */
+        val MIGRATION_29_30 = object : Migration(29, 30) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `pipeline_runs` (
+                        `id` TEXT NOT NULL,
+                        `sessionId` TEXT NOT NULL,
+                        `pipelineId` TEXT,
+                        `origin` TEXT NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `currentNodeId` TEXT,
+                        `startedAt` INTEGER NOT NULL,
+                        `finishedAt` INTEGER,
+                        `errorMessage` TEXT,
+                        `graphContentHash` TEXT,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_pipeline_runs_sessionId` " +
+                        "ON `pipeline_runs` (`sessionId`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_pipeline_runs_status` " +
+                        "ON `pipeline_runs` (`status`)",
+                )
             }
         }
     }

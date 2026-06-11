@@ -1,6 +1,7 @@
 package app.knotwork.android.data.repositories
 
 import app.knotwork.android.data.local.dao.ChatDao
+import app.knotwork.android.data.local.dao.PipelineRunDao
 import app.knotwork.android.data.local.dao.TraceStepDao
 import app.knotwork.android.data.local.models.ChatMessageEntity
 import app.knotwork.android.data.local.models.ChatSessionEntity
@@ -25,13 +26,28 @@ class ChatRepositoryImplTest {
 
     private lateinit var chatDao: ChatDao
     private lateinit var traceStepDao: TraceStepDao
+    private lateinit var pipelineRunDao: PipelineRunDao
     private lateinit var repository: ChatRepositoryImpl
 
     @Before
     fun setup() {
         chatDao = mockk(relaxed = true)
         traceStepDao = mockk(relaxed = true)
-        repository = ChatRepositoryImpl(chatDao, traceStepDao)
+        pipelineRunDao = mockk(relaxed = true)
+        repository = ChatRepositoryImpl(chatDao, traceStepDao, pipelineRunDao)
+    }
+
+    /**
+     * `pipeline_runs` has no FK cascade onto `chat_sessions`, so deleting a
+     * session must clean the run records up explicitly alongside the messages.
+     */
+    @Test
+    fun `given session deletion then run records are deleted explicitly`() = runTest {
+        repository.deleteSession("session-abc")
+
+        coVerify { chatDao.deleteSessionMessages("session-abc") }
+        coVerify { pipelineRunDao.deleteRunsForSession("session-abc") }
+        coVerify { chatDao.deleteSession("session-abc") }
     }
 
     @Test

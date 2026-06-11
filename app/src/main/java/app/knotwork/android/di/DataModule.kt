@@ -26,6 +26,7 @@ import app.knotwork.android.data.repositories.MemoryRepositoryImpl
 import app.knotwork.android.data.repositories.MetricsRepositoryImpl
 import app.knotwork.android.data.repositories.NetworkActivityTrackerImpl
 import app.knotwork.android.data.repositories.NetworkStateRepositoryImpl
+import app.knotwork.android.data.repositories.PipelineRunRepositoryImpl
 import app.knotwork.android.data.repositories.PowerStateRepositoryImpl
 import app.knotwork.android.data.repositories.PromptRepositoryImpl
 import app.knotwork.android.data.repositories.ToolRepositoryImpl
@@ -48,6 +49,7 @@ import app.knotwork.android.domain.repositories.NetworkActivityTracker
 import app.knotwork.android.domain.repositories.NetworkStateRepository
 import app.knotwork.android.domain.repositories.PipelinePresetRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
+import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.PowerStateRepository
 import app.knotwork.android.domain.repositories.PromptPresetRepository
 import app.knotwork.android.domain.repositories.PromptRepository
@@ -152,6 +154,15 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindChatRepository(repository: ChatRepositoryImpl): ChatRepository
+
+    /**
+     * Binds the [PipelineRunRepositoryImpl] implementation to the
+     * [PipelineRunRepository] interface backing the persistent
+     * pipeline-run records.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindPipelineRunRepository(repository: PipelineRunRepositoryImpl): PipelineRunRepository
 
     /**
      * Binds the [ToolRepositoryImpl] implementation to the [ToolRepository] interface.

@@ -6,9 +6,12 @@ import app.knotwork.android.domain.engine.TaskQueueManager
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTask
 import app.knotwork.android.domain.models.ChatMessage
+import app.knotwork.android.domain.models.PipelineRun
+import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
+import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -28,6 +31,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.util.PriorityQueue
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -43,6 +47,7 @@ class TaskQueueManagerImpl @Inject constructor(
     private val pipelineRepository: PipelineRepository,
     private val settingsRepository: SettingsRepository,
     private val graphExecutionEngine: GraphExecutionEngine,
+    private val pipelineRunRepository: PipelineRunRepository,
 ) : TaskQueueManager {
 
     @VisibleForTesting
@@ -161,9 +166,9 @@ class TaskQueueManagerImpl @Inject constructor(
         // silent from the user's perspective.
         val pipelines = pipelineRepository.getAllPipelines().firstOrNull() ?: emptyList()
         if (pipelines.isEmpty()) {
-            val errState = AgentOrchestratorState.Error(
-                "No active pipeline found. Please create one in the Visual Orchestrator.",
-            )
+            val message = "No active pipeline found. Please create one in the Visual Orchestrator."
+            persistRunSafely { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, message) }
+            val errState = AgentOrchestratorState.Error(message)
             stateFlow.emit(errState)
             _globalState.value = errState
             return
@@ -176,17 +181,37 @@ class TaskQueueManagerImpl @Inject constructor(
                 ?.let { id -> pipelines.firstOrNull { it.id == id } }
 
         if (activePipeline == null) {
-            val errState = AgentOrchestratorState.Error(
-                "No default pipeline configured. Set one in Settings or bind a pipeline to this chat.",
-            )
+            val message = "No default pipeline configured. Set one in Settings or bind a pipeline to this chat."
+            persistRunSafely { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, message) }
+            val errState = AgentOrchestratorState.Error(message)
             stateFlow.emit(errState)
             _globalState.value = errState
             return
         }
 
+        // The run record turns RUNNING the moment the pipeline is resolved —
+        // this is also where the (previously unknown) pipeline id and the
+        // graph content hash become available and are captured for the
+        // checkpoint-invalidation contract.
+        persistRunSafely {
+            pipelineRunRepository.markRunning(task.id, activePipeline.id, activePipeline.contentHash())
+        }
+
         // 3. Delegate to engine
         try {
-            graphExecutionEngine(task.sessionId, task.prompt, activePipeline).collect { state ->
+            graphExecutionEngine(task.sessionId, task.prompt, activePipeline, task.id).collect { state ->
+                // Terminal engine states are mirrored into the persistent run
+                // record as they pass through, so the record is already
+                // settled when the in-memory flow reaches its observers.
+                when (state) {
+                    is AgentOrchestratorState.Completed -> persistRunSafely {
+                        pipelineRunRepository.finishRun(task.id, PipelineRunStatus.COMPLETED)
+                    }
+                    is AgentOrchestratorState.Error -> persistRunSafely {
+                        pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, state.message)
+                    }
+                    else -> Unit
+                }
                 // `emit` (vs. `tryEmit`) back-pressures the engine if the
                 // buffer ever fills, so we never silently drop an event.
                 stateFlow.emit(state)
@@ -200,7 +225,9 @@ class TaskQueueManagerImpl @Inject constructor(
             // resets the session state.
             throw e
         } catch (e: Exception) {
-            val errState = AgentOrchestratorState.Error(e.message ?: "Execution failed")
+            val message = e.message ?: "Execution failed"
+            persistRunSafely { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, message) }
+            val errState = AgentOrchestratorState.Error(message)
             stateFlow.emit(errState)
             _globalState.value = errState
         } finally {
@@ -213,6 +240,13 @@ class TaskQueueManagerImpl @Inject constructor(
                 if (last !is AgentOrchestratorState.Completed &&
                     last !is AgentOrchestratorState.Error
                 ) {
+                    // Terminal write with `finally` semantics: reaching here
+                    // without a terminal state means the engine neither
+                    // completed nor failed — the task was cancelled (user
+                    // Stop / scope teardown). Cancellation is NOT a failure,
+                    // so it maps to CANCELLED, and the repository's terminal
+                    // guard keeps any already-settled record untouched.
+                    persistRunSafely { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.CANCELLED) }
                     stateFlow.emit(AgentOrchestratorState.Idle)
                 }
                 _globalState.value = AgentOrchestratorState.Idle
@@ -221,14 +255,56 @@ class TaskQueueManagerImpl @Inject constructor(
     }
 
     /**
+     * Runs a persistence [block] against the pipeline-run store without
+     * letting a storage failure take down task processing: run records are an
+     * observability layer, and a failed status write must never abort the
+     * inference it describes. [CancellationException] is re-thrown from the
+     * dedicated first catch clause to preserve cooperative cancellation.
+     *
+     * @param block The suspending repository write to attempt.
+     */
+    private suspend fun persistRunSafely(block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to persist pipeline-run state")
+        }
+    }
+
+    /**
      * Enqueues a new [AgentTask] for execution.
      * Atomically checks the current session state and adds the task to the queue
      * to prevent race conditions during state updates.
+     *
+     * A persistent [PipelineRun] record is created in
+     * [PipelineRunStatus.QUEUED] status *before* the task becomes visible to
+     * the worker, so every later lifecycle write targets an existing row.
+     * The pipeline id stored at this point is the session binding captured in
+     * the task (possibly `null`) — the resolved pipeline and graph hash are
+     * filled in when processing starts.
      *
      * @param task The task to be executed.
      */
     override fun enqueueTask(task: AgentTask) {
         scope.launch {
+            persistRunSafely {
+                pipelineRunRepository.createRun(
+                    PipelineRun(
+                        id = task.id,
+                        sessionId = task.sessionId,
+                        pipelineId = task.pipelineId,
+                        origin = task.origin,
+                        status = PipelineRunStatus.QUEUED,
+                        currentNodeId = null,
+                        startedAt = task.timestamp,
+                        finishedAt = null,
+                        errorMessage = null,
+                        graphContentHash = null,
+                    ),
+                )
+            }
             queueMutex.withLock {
                 val stateFlow = getOrCreateStateFlow(task.sessionId)
                 val last = stateFlow.replayCache.lastOrNull()

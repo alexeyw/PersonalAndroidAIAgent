@@ -16,6 +16,7 @@ import app.knotwork.android.data.local.dao.LocalModelDao
 import app.knotwork.android.data.local.dao.MemoryDao
 import app.knotwork.android.data.local.dao.PipelineDao
 import app.knotwork.android.data.local.dao.PipelinePresetDao
+import app.knotwork.android.data.local.dao.PipelineRunDao
 import app.knotwork.android.data.local.dao.PromptPresetDao
 import app.knotwork.android.data.local.dao.PromptTemplateDao
 import app.knotwork.android.data.local.dao.TraceStepDao
@@ -148,6 +149,7 @@ object AppModule {
                 AppDatabase.MIGRATION_26_27,
                 AppDatabase.MIGRATION_27_28,
                 AppDatabase.MIGRATION_28_29,
+                AppDatabase.MIGRATION_29_30,
             )
             // No destructive fallback on upgrade: every version bump must supply an explicit
             // migration above so user data survives. Destructive recreation is kept only for the
@@ -205,6 +207,12 @@ object AppModule {
      */
     @Provides
     fun providePromptPresetDao(database: AppDatabase): PromptPresetDao = database.promptPresetDao()
+
+    /**
+     * Provides the [PipelineRunDao] backing the persistent pipeline-run records.
+     */
+    @Provides
+    fun providePipelineRunDao(database: AppDatabase): PipelineRunDao = database.pipelineRunDao()
 
     /**
      * Provides the singleton instance of Converters for Room mapping.
