@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import androidx.room.Upsert
 import app.knotwork.android.data.local.models.ChatMessageEntity
@@ -143,6 +144,39 @@ interface ChatDao {
      */
     @Query("DELETE FROM chat_sessions WHERE id = :id")
     suspend fun deleteSession(id: String)
+
+    /**
+     * Deletes every persistent pipeline-run record of [sessionId]. Lives here
+     * (not in `PipelineRunDao`) because `pipeline_runs` deliberately has no
+     * FK cascade onto `chat_sessions` — a run row may be created before its
+     * session row exists — so run cleanup is part of the session-deletion
+     * transaction instead.
+     *
+     * @param sessionId The ID of the deleted session.
+     */
+    @Query("DELETE FROM pipeline_runs WHERE sessionId = :sessionId")
+    suspend fun deleteSessionRuns(sessionId: String)
+
+    /**
+     * Atomically deletes a session with everything it owns: its messages,
+     * its pipeline-run records (no FK cascade — see [deleteSessionRuns]) and
+     * the session row itself (whose deletion FK-cascades the trace steps).
+     * The single transaction guarantees a process death mid-delete can never
+     * leave a half-deleted session behind.
+     *
+     * If a pipeline run of this session is still executing, its record is
+     * deleted with the session — subsequent lifecycle writes for that run
+     * match zero rows and are deliberately tolerated: the user explicitly
+     * discarded the conversation the run belongs to.
+     *
+     * @param sessionId The ID of the session to delete.
+     */
+    @Transaction
+    suspend fun deleteSessionCompletely(sessionId: String) {
+        deleteSessionMessages(sessionId)
+        deleteSessionRuns(sessionId)
+        deleteSession(sessionId)
+    }
 
     /**
      * Updates only the [updatedAt] timestamp of an existing session without a SELECT round-trip.

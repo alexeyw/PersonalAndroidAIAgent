@@ -6,9 +6,12 @@ import app.knotwork.android.domain.engine.TaskQueueManager
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTask
 import app.knotwork.android.domain.models.ChatMessage
+import app.knotwork.android.domain.models.PipelineRun
+import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
+import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -43,6 +46,7 @@ class TaskQueueManagerImpl @Inject constructor(
     private val pipelineRepository: PipelineRepository,
     private val settingsRepository: SettingsRepository,
     private val graphExecutionEngine: GraphExecutionEngine,
+    private val pipelineRunRepository: PipelineRunRepository,
 ) : TaskQueueManager {
 
     @VisibleForTesting
@@ -138,6 +142,14 @@ class TaskQueueManagerImpl @Inject constructor(
         stateFlow.emit(loadingState)
         _globalState.value = loadingState
 
+        // Ensure the persistent QUEUED record exists before any lifecycle
+        // UPDATE targets it. `enqueueTask` writes the same record off the
+        // enqueue critical path; whichever side lands first wins and the
+        // other insert is a conflict-IGNORE no-op, so every interleaving
+        // (including the worker overtaking the enqueue coroutine) converges
+        // on one consistent row.
+        pipelineRunRepository.createRun(task.toQueuedRun())
+
         // 1. Save user message
         val userMessage = ChatMessage(
             sessionId = task.sessionId,
@@ -161,9 +173,9 @@ class TaskQueueManagerImpl @Inject constructor(
         // silent from the user's perspective.
         val pipelines = pipelineRepository.getAllPipelines().firstOrNull() ?: emptyList()
         if (pipelines.isEmpty()) {
-            val errState = AgentOrchestratorState.Error(
-                "No active pipeline found. Please create one in the Visual Orchestrator.",
-            )
+            val message = "No active pipeline found. Please create one in the Visual Orchestrator."
+            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, message)
+            val errState = AgentOrchestratorState.Error(message)
             stateFlow.emit(errState)
             _globalState.value = errState
             return
@@ -176,17 +188,33 @@ class TaskQueueManagerImpl @Inject constructor(
                 ?.let { id -> pipelines.firstOrNull { it.id == id } }
 
         if (activePipeline == null) {
-            val errState = AgentOrchestratorState.Error(
-                "No default pipeline configured. Set one in Settings or bind a pipeline to this chat.",
-            )
+            val message = "No default pipeline configured. Set one in Settings or bind a pipeline to this chat."
+            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, message)
+            val errState = AgentOrchestratorState.Error(message)
             stateFlow.emit(errState)
             _globalState.value = errState
             return
         }
 
+        // The run record turns RUNNING the moment the pipeline is resolved —
+        // this is also where the (previously unknown) pipeline id and the
+        // graph content hash become available and are captured for the
+        // checkpoint-invalidation contract.
+        pipelineRunRepository.markRunning(task.id, activePipeline.id, activePipeline.contentHash())
+
         // 3. Delegate to engine
         try {
-            graphExecutionEngine(task.sessionId, task.prompt, activePipeline).collect { state ->
+            graphExecutionEngine(task.sessionId, task.prompt, activePipeline, task.id).collect { state ->
+                // Terminal engine states are mirrored into the persistent run
+                // record as they pass through, so the record is already
+                // settled when the in-memory flow reaches its observers.
+                when (state) {
+                    is AgentOrchestratorState.Completed ->
+                        pipelineRunRepository.finishRun(task.id, PipelineRunStatus.COMPLETED)
+                    is AgentOrchestratorState.Error ->
+                        pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, state.message)
+                    else -> Unit
+                }
                 // `emit` (vs. `tryEmit`) back-pressures the engine if the
                 // buffer ever fills, so we never silently drop an event.
                 stateFlow.emit(state)
@@ -200,7 +228,9 @@ class TaskQueueManagerImpl @Inject constructor(
             // resets the session state.
             throw e
         } catch (e: Exception) {
-            val errState = AgentOrchestratorState.Error(e.message ?: "Execution failed")
+            val message = e.message ?: "Execution failed"
+            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, message)
+            val errState = AgentOrchestratorState.Error(message)
             stateFlow.emit(errState)
             _globalState.value = errState
         } finally {
@@ -213,6 +243,13 @@ class TaskQueueManagerImpl @Inject constructor(
                 if (last !is AgentOrchestratorState.Completed &&
                     last !is AgentOrchestratorState.Error
                 ) {
+                    // Terminal write with `finally` semantics: reaching here
+                    // without a terminal state means the engine neither
+                    // completed nor failed — the task was cancelled (user
+                    // Stop / scope teardown). Cancellation is NOT a failure,
+                    // so it maps to CANCELLED, and the repository's terminal
+                    // guard keeps any already-settled record untouched.
+                    pipelineRunRepository.finishRun(task.id, PipelineRunStatus.CANCELLED)
                     stateFlow.emit(AgentOrchestratorState.Idle)
                 }
                 _globalState.value = AgentOrchestratorState.Idle
@@ -221,9 +258,38 @@ class TaskQueueManagerImpl @Inject constructor(
     }
 
     /**
+     * Builds the initial QUEUED run record for this task. Shared by
+     * [enqueueTask] (off the critical path) and [processTask] (the ensure
+     * step) — both inserts are conflict-IGNOREs of the same row.
+     *
+     * @return The QUEUED [PipelineRun] keyed by the task id.
+     */
+    private fun AgentTask.toQueuedRun(): PipelineRun = PipelineRun(
+        id = id,
+        sessionId = sessionId,
+        pipelineId = pipelineId,
+        origin = origin,
+        status = PipelineRunStatus.QUEUED,
+        currentNodeId = null,
+        startedAt = timestamp,
+        finishedAt = null,
+        errorMessage = null,
+        graphContentHash = null,
+    )
+
+    /**
      * Enqueues a new [AgentTask] for execution.
      * Atomically checks the current session state and adds the task to the queue
      * to prevent race conditions during state updates.
+     *
+     * A persistent [PipelineRun] record in [PipelineRunStatus.QUEUED] status
+     * is written *after* the task is offered and the worker signalled, so the
+     * encrypted-DB insert never delays queue entry or the Loading emit. If
+     * the worker overtakes this coroutine, [processTask]'s ensure step writes
+     * the identical record first and this insert becomes a conflict-IGNORE
+     * no-op. The pipeline id stored at this point is the session binding
+     * captured in the task (possibly `null`) — the resolved pipeline and
+     * graph hash are filled in when processing starts.
      *
      * @param task The task to be executed.
      */
@@ -242,6 +308,7 @@ class TaskQueueManagerImpl @Inject constructor(
                 taskQueue.offer(task)
             }
             taskSignal.trySend(Unit)
+            pipelineRunRepository.createRun(task.toQueuedRun())
         }
     }
 

@@ -2,7 +2,9 @@ package app.knotwork.android.domain.usecases
 
 import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.engine.DefaultPipelineFactory
+import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.repositories.PipelineRepository
+import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
@@ -12,11 +14,25 @@ import javax.inject.Inject
  * It checks if this is the first launch, and if so, initializes default settings,
  * such as saving the default system prompts to the settings repository,
  * and materialises the bundled showcase pipeline as the application default.
+ *
+ * On **every** invocation (not just the first launch) it additionally sweeps
+ * orphaned pipeline-run records: every non-terminal run whose owning process
+ * has died is finalised as [PipelineRunStatus.INTERRUPTED]. Orphan detection
+ * is ownership-based, not status-based — the repository excludes runs created
+ * by the live process — so re-running the sweep (Activity recreation, splash
+ * retry) can never interrupt a run that is still executing in this process
+ * (e.g. kept alive by the foreground service or a WorkManager worker).
+ * WAITING_* runs from dead processes are swept too: their pending approval /
+ * clarification lived in in-memory deferreds that died with the process, so
+ * nothing can ever settle them — revisit when persistent background HITL
+ * ships. The sweep is best-effort by the repository contract: a damaged run
+ * store degrades to an empty sweep instead of failing app initialization.
  */
 class InitializeAppUseCase @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val pipelineRepository: PipelineRepository,
     private val loadPipelineFromPresetUseCase: LoadPipelineFromPresetUseCase,
+    private val pipelineRunRepository: PipelineRunRepository,
 ) {
     /**
      * Executes the initialization logic.
@@ -32,6 +48,8 @@ class InitializeAppUseCase @Inject constructor(
      * [DefaultPipelineFactory] so first launch never leaves the library empty.
      */
     suspend operator fun invoke() {
+        sweepOrphanedRuns()
+
         val isFirstLaunch = settingsRepository.isFirstLaunch.first()
 
         if (isFirstLaunch) {
@@ -57,6 +75,20 @@ class InitializeAppUseCase @Inject constructor(
     }
 
     /**
+     * Finalises every run record orphaned by a process death: non-terminal
+     * records not owned by the live process are moved to
+     * [PipelineRunStatus.INTERRUPTED] with [ORPHANED_RUN_MESSAGE] as the
+     * reason. Idempotent and safe to call at any time — ownership filtering
+     * happens in the repository, and both calls are best-effort by its
+     * contract (failures log and degrade, never abort initialization).
+     */
+    private suspend fun sweepOrphanedRuns() {
+        pipelineRunRepository.getOrphanedRuns().forEach { run ->
+            pipelineRunRepository.finishRun(run.id, PipelineRunStatus.INTERRUPTED, ORPHANED_RUN_MESSAGE)
+        }
+    }
+
+    /**
      * Builds and persists the code-level default pipeline, returning its id.
      * Used only when the bundled showcase preset fails to materialise.
      */
@@ -73,5 +105,11 @@ class InitializeAppUseCase @Inject constructor(
          * the first-launch seed pipeline.
          */
         const val SHOWCASE_PRESET_ID = "showcase_full_agent"
+
+        /**
+         * Reason written into run records finalised by the orphan sweep —
+         * their owning process died before the run could finish.
+         */
+        const val ORPHANED_RUN_MESSAGE = "Process terminated during execution"
     }
 }

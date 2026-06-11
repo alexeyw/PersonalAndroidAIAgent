@@ -36,6 +36,7 @@ This file maps the contents of the main application package.
       - `MemoryDao.kt` - Memory chunks DAO.
       - `PipelineDao.kt` - Pipelines DAO.
       - `PipelinePresetDao.kt` - User-saved pipeline-preset DAO. Backs the `pipeline_presets` table; bundled presets live in `assets/presets/pipelines/` and never reach this DAO.
+      - `PipelineRunDao.kt` - Persistent pipeline-run records DAO (`pipeline_runs` table). Every mutating query carries a terminal-status `NOT IN` guard so a finished run can never be flipped back to an active status.
       - `PromptPresetDao.kt` - User-saved prompt-preset DAO. Backs the `prompt_presets` table; bundled presets live in `assets/presets/prompts/` and never reach this DAO.
       - `PromptTemplateDao.kt` - Prompt templates DAO.
       - `TraceStepDao.kt` - Trace steps DAO.
@@ -48,6 +49,7 @@ This file maps the contents of the main application package.
       - `NodeEntity.kt` - Pipeline node entity.
       - `PipelineEntity.kt` - Pipeline entity.
       - `PipelinePresetEntity.kt` - User-saved pipeline preset row. Stores `id`, `name`, `description`, `categoryKey`, `graphJson` (full preset payload serialised by `PipelinePresetJsonSerializer`), `tagsCsv`, `createdAt`.
+      - `PipelineRunEntity.kt` - Persistent pipeline-run row (`pipeline_runs`). No FK onto `chat_sessions` (a run may be created before its session row exists); cleanup on session deletion happens inside the `ChatDao.deleteSessionCompletely` transaction.
       - `PromptPresetEntity.kt` - User-saved prompt preset row. Stores `id`, `name`, `description`, `nodeTypeKey`, `systemPrompt`, `tagsCsv`, `createdAt`.
       - `PipelineWithNodesAndConnections.kt` - Pipeline relational model.
       - `PromptTemplateEntity.kt` - Prompt template entity.
@@ -85,6 +87,7 @@ This file maps the contents of the main application package.
     - `MetricsRepositoryImpl.kt` - Metrics repository implementation.
     - `NetworkActivityTrackerImpl.kt` - Records `System.currentTimeMillis()` on every outbound cloud-LLM and MCP call. Drives the More tab footer privacy pill via `NetworkActivityTracker.lastOutboundAt`.
     - `NetworkStateRepositoryImpl.kt` - Network state repository implementation.
+    - `PipelineRunRepositoryImpl.kt` - Room-backed `PipelineRunRepository`. Maps enums to `name` strings, enforces the terminal-status guard in SQL, absorbs storage failures per the best-effort contract, and keeps the in-memory live-run registry that makes the orphan sweep ownership-aware.
     - `PowerStateRepositoryImpl.kt` - Power state repository implementation.
     - `PromptRepositoryImpl.kt` - Room-backed implementation of `PromptRepository` (prompt-template CRUD).
     - `ToolRepositoryImpl.kt` - Tool repository implementation.
@@ -205,7 +208,8 @@ This file maps the contents of the main application package.
     - `NodeModel.kt` - Node model.
     - `NodeOutput.kt` - Sealed class wrapping `NodeExecutor.execute()` flow elements (`State` for orchestrator updates / `Result` for the terminal node result), replacing the legacy untyped `Flow<Any>` channel.
     - `NodeType.kt` - Node type enum.
-    - `PipelineGraph.kt` - Pipeline graph model.
+    - `PipelineGraph.kt` - Pipeline graph model. Also hosts `contentHash()` — a stable SHA-256 over execution-relevant graph content (canvas coordinates / pipeline name / `updatedAt` excluded), captured into run records as the checkpoint-invalidation contract.
+    - `PipelineRun.kt` - Persistent pipeline-run domain model plus `PipelineRunStatus` (QUEUED → RUNNING → WAITING_* → terminal, with `isTerminal`) and `RunOrigin` (CHAT / SCHEDULER).
     - `PipelineImportOutcome.kt` - Sealed result of parsing a pipeline JSON document (Success / SchemaMismatch / Failure) consumed by `ImportPipelineUseCase`.
     - `PipelinePreset.kt` - Domain model of a reusable pipeline template. Carries `id`, `name`, `description`, `category` (`PresetCategory` enum with wire keys), `graph: PipelineGraph` (template), `tags`, `isBundled`.
     - `PipelinePresetImportOutcome.kt` - Sealed result of parsing a preset JSON document (Success / SchemaMismatch / Failure), mirroring `PipelineImportOutcome`.
@@ -243,6 +247,7 @@ This file maps the contents of the main application package.
     - `PromptPresetRepository.kt` - Domain gateway over the two-tier prompt-preset catalogue: bundled (read-only, from APK assets) + user-saved (mutable, Room-backed). Exposes a per-`NodeType` filtered flow used by the Prompt Library. Data-layer impl: `LocalPromptPresetRepositoryImpl`.
     - `PromptRepository.kt` - Prompt-template repository interface (CRUD over `PromptTemplate`). Data-layer impl: `PromptRepositoryImpl`.
     - `PipelineRepository.kt` - Pipeline repository interface.
+    - `PipelineRunRepository.kt` - Persistent pipeline-run records interface: creation/RUNNING/terminal transitions are owned by the task queue, per-node progress and WAITING_* suspensions by the execution engine; terminal statuses are write-once; all methods are best-effort (storage failures absorbed); orphan detection is process-ownership-based. Data-layer impl: `PipelineRunRepositoryImpl`.
     - `PowerStateRepository.kt` - Power state repository interface.
     - `SettingsRepository.kt` - Settings repository interface.
     - `ToolRepository.kt` - Tool repository interface.

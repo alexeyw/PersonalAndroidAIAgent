@@ -28,6 +28,7 @@ import javax.inject.Singleton
  * the same session skip the [ChatDao.getSessionById] round-trip and update only the timestamp.
  *
  * @property chatDao The Data Access Object for chat messages.
+ * @property traceStepDao The Data Access Object for pipeline trace steps.
  */
 @Singleton
 class ChatRepositoryImpl @Inject constructor(private val chatDao: ChatDao, private val traceStepDao: TraceStepDao) :
@@ -77,8 +78,10 @@ class ChatRepositoryImpl @Inject constructor(private val chatDao: ChatDao, priva
     }
 
     override suspend fun deleteSession(sessionId: String) {
-        chatDao.deleteSessionMessages(sessionId)
-        chatDao.deleteSession(sessionId)
+        // Single transaction: messages + pipeline-run records + session row
+        // (trace steps cascade via FK) — a crash mid-delete can never leave a
+        // half-deleted session behind.
+        chatDao.deleteSessionCompletely(sessionId)
     }
 
     override suspend fun getAllSessions(): List<String> = chatDao.getAllSessions()

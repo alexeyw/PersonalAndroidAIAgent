@@ -34,6 +34,18 @@ class ChatRepositoryImplTest {
         repository = ChatRepositoryImpl(chatDao, traceStepDao)
     }
 
+    /**
+     * Session deletion must go through the single transactional DAO method —
+     * messages, pipeline-run records (no FK cascade) and the session row die
+     * together or not at all.
+     */
+    @Test
+    fun `given session deletion then transactional complete delete is used`() = runTest {
+        repository.deleteSession("session-abc")
+
+        coVerify { chatDao.deleteSessionCompletely("session-abc") }
+    }
+
     @Test
     fun `given same sessionId when saveMessage called twice then getSessionById called only once`() = runTest {
         val sessionId = "session-abc"
