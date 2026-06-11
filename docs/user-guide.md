@@ -645,6 +645,26 @@ For a marketing-style preview of this screen see
 [`docs/images/hero-tools.png`](images/hero-tools.png)
 (dark variant: [`hero-tools-dark.png`](images/hero-tools-dark.png)).
 
+### Where scheduled task results land
+
+A task created with **schedule_task** executes through the same
+pipeline as an interactive message, and its result lands in the
+conversation that scheduled it: when the task fires, the prompt
+appears as a user message, intermediate steps go to the console, and
+the final answer arrives as a regular agent reply. Opening the chat
+later shows the exchange as if the run had happened on screen — and if
+the chat is already open when the task fires, the run attaches live.
+
+If the original conversation was deleted before the task fired (or the
+task predates session binding), the result is delivered to a fresh
+conversation named after the task, e.g. *Scheduled: check the news*.
+
+When a scheduled run finishes, the app posts a **Task completed**
+notification with the first line of the answer — or **Task failed**
+with the reason — and tapping it opens the conversation. The
+announcement can be turned off with **Settings → Notifications →
+Scheduled task results** (on by default).
+
 ### Risk levels and human-in-the-loop
 
 Every tool declares a **risk level** that controls whether the agent
@@ -958,6 +978,11 @@ The action trio:
 - **Long-running tasks** — when on, a low-importance system
   notification fires when a backgrounded pipeline run exceeds the
   long-running threshold.
+- **Scheduled task results** — when on, finishing a scheduled
+  background task posts a **Task completed** notification with the
+  first line of the answer (or **Task failed** with the reason);
+  tapping it opens the conversation the result landed in. On by
+  default.
 
 ### Privacy
 

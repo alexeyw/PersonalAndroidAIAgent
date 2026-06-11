@@ -1378,7 +1378,7 @@ class GraphExecutionEngineTest {
             AgentTool("web.search", "Search the web", "{}"),
             AgentTool("calendar.read", "Read the calendar", "{}"),
         )
-        coEvery { toolRepository.executeTool("web.search", any()) } returns "search-result"
+        coEvery { toolRepository.executeTool("web.search", any(), any()) } returns "search-result"
 
         val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
         val toolNode = NodeModel(
@@ -1516,7 +1516,7 @@ class GraphExecutionEngineTest {
         coEvery { toolRepository.getAvailableTools() } returns listOf(
             AgentTool("web.search", "Search the web", "{}"),
         )
-        coEvery { toolRepository.executeTool("web.search", any()) } returns "search-result"
+        coEvery { toolRepository.executeTool("web.search", any(), any()) } returns "search-result"
 
         // Cloud client mock — captures the prompt the CLOUD node receives so we
         // can assert that the full-context wrap reached the cloud LLM.
@@ -1827,7 +1827,7 @@ class GraphExecutionEngineTest {
         // reaches OUTPUT without intervention.
         coEvery { toolRepository.getRisk("web.search") } returns ToolRisk.READ_ONLY
         coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool("web.search", "Search", "{}"))
-        coEvery { toolRepository.executeTool("web.search", any()) } returns "search-result"
+        coEvery { toolRepository.executeTool("web.search", any(), any()) } returns "search-result"
 
         val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
         val toolNode = NodeModel(
@@ -1967,7 +1967,7 @@ class GraphExecutionEngineTest {
         every { settingsRepository.toolCallTimeoutMs } returns flowOf(5_000L)
         coEvery { toolRepository.getRisk("sens.tool") } returns ToolRisk.SENSITIVE
         coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool("sens.tool", "Desc", "{}"))
-        coEvery { toolRepository.executeTool("sens.tool", any()) } returns "tool-result"
+        coEvery { toolRepository.executeTool("sens.tool", any(), any()) } returns "tool-result"
 
         val graph = PipelineGraph(
             id = "g1",
@@ -2093,7 +2093,7 @@ class GraphExecutionEngineTest {
         every { settingsRepository.toolCallTimeoutMs } returns flowOf(5_000L)
         coEvery { toolRepository.getRisk("sens.tool") } returns ToolRisk.SENSITIVE
         coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool("sens.tool", "Desc", "{}"))
-        coEvery { toolRepository.executeTool("sens.tool", any()) } returns "tool-result"
+        coEvery { toolRepository.executeTool("sens.tool", any(), any()) } returns "tool-result"
 
         val graph = PipelineGraph(
             id = "g-susp-flush",
@@ -2315,7 +2315,7 @@ class GraphExecutionEngineTest {
         // Completed before the interruption → replayed: no approval gate, no
         // tool execution, the recorded observation flows to OUTPUT.
         assertTrue(states.filterIsInstance<AgentOrchestratorState.WaitingForApproval>().isEmpty())
-        coVerify(exactly = 0) { toolRepository.executeTool(any(), any()) }
+        coVerify(exactly = 0) { toolRepository.executeTool(any(), any(), any()) }
         assertEquals("tool-observation", (states.last() as AgentOrchestratorState.Completed).finalResponse)
     }
 
@@ -2326,7 +2326,7 @@ class GraphExecutionEngineTest {
         every { settingsRepository.toolCallTimeoutMs } returns flowOf(5_000L)
         coEvery { toolRepository.getRisk("sens.tool") } returns ToolRisk.SENSITIVE
         coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool("sens.tool", "Desc", "{}"))
-        coEvery { toolRepository.executeTool("sens.tool", any()) } returns "fresh-result"
+        coEvery { toolRepository.executeTool("sens.tool", any(), any()) } returns "fresh-result"
 
         val graph = PipelineGraph(
             id = "g-resume-tool-live",
@@ -2370,7 +2370,7 @@ class GraphExecutionEngineTest {
         engine.resumeWithApproval(sessionId, true)
         advanceUntilIdle()
 
-        coVerify(exactly = 1) { toolRepository.executeTool("sens.tool", any()) }
+        coVerify(exactly = 1) { toolRepository.executeTool("sens.tool", any(), any()) }
         assertEquals("fresh-result", (states.last() as AgentOrchestratorState.Completed).finalResponse)
         job.cancel()
     }

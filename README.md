@@ -116,6 +116,12 @@ configured it.
   directly into chat home.
 - Background execution as an Android Foreground Service with explicit idle
   and power-state management.
+- Scheduled tasks that report back: a task created with `schedule_task`
+  runs through the same pipeline as an interactive message, lands its
+  result in the conversation that scheduled it (or a fresh auto-named one
+  if that chat was deleted), and announces the outcome with a
+  "Task completed" / "Task failed" notification deep-linking into the
+  session.
 - Chat reattach: reopening a chat reconnects to a run still executing in
   the background, restores pending approval / clarification cards from the
   persistent run record, flags busy conversations with an in-progress

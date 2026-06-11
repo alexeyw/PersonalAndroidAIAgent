@@ -564,6 +564,23 @@ interface SettingsRepository {
     suspend fun setLongRunningTaskNotificationsEnabled(enabled: Boolean)
 
     /**
+     * `true` when the user wants a system notification announcing the outcome
+     * of a scheduled background run ("Task completed" / "Task failed").
+     * Drives the "Scheduled task results" toggle in the Notifications card —
+     * gates `ScheduledTaskNotifier`, which posts to the dedicated
+     * default-importance channel with a deep-link into the session the run
+     * landed in. Defaults to `true`.
+     */
+    val scheduledTaskNotificationsEnabled: Flow<Boolean>
+
+    /**
+     * Persists the scheduled-task result notifications toggle.
+     *
+     * @param enabled `true` to announce scheduled run outcomes.
+     */
+    suspend fun setScheduledTaskNotificationsEnabled(enabled: Boolean)
+
+    /**
      * Last persisted result of a `Test backend` run inside Settings.
      * Emits `null` until the user has run the probe at least once.
      */

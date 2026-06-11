@@ -35,6 +35,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -105,6 +106,7 @@ class ChatHomeConsoleStreamingTest {
         coEvery { pipelineRunRepository.getActiveRunForSession(any()) } returns null
         coEvery { pipelineRunRepository.getLatestRunForSession(any()) } returns null
         every { pipelineRunRepository.observeActiveRunSessionIds() } returns MutableStateFlow(emptySet())
+        every { pipelineRunRepository.observeRunsForSession(any()) } returns flowOf(emptyList())
         coEvery { runTraceRepository.getTraceForRun(any()) } returns emptyList()
 
         sessionsFlow = MutableStateFlow(emptyList())

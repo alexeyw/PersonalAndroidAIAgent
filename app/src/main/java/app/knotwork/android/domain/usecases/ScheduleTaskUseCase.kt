@@ -26,11 +26,21 @@ class ScheduleTaskUseCase @Inject constructor(private val workManager: WorkManag
      * @param intervalHours The interval in hours. If > 0, it schedules a periodic task.
      *                      If 0, it schedules a one-time task to execute immediately (or later if we added delay).
      * @param delayMinutes Optional delay in minutes for one-time tasks.
+     * @param sessionId Id of the chat session the scheduled run should land its
+     *   result in. Comes from the engine-side `ToolExecutionContext` (never from
+     *   LLM arguments). `null` — e.g. for work enqueued before this parameter
+     *   existed — makes `AgentWorker` create a fresh auto-named session per run.
      * @return A success message or an error message.
      */
-    operator fun invoke(prompt: String, intervalHours: Long = 0, delayMinutes: Long = 0): String = try {
+    operator fun invoke(
+        prompt: String,
+        intervalHours: Long = 0,
+        delayMinutes: Long = 0,
+        sessionId: String? = null,
+    ): String = try {
         val inputData = Data.Builder()
             .putString(AgentWorker.KEY_PROMPT, prompt)
+            .putString(AgentWorker.KEY_SESSION_ID, sessionId)
             .build()
 
         val constraints = Constraints.Builder()

@@ -124,6 +124,7 @@ class SettingsViewModelTest {
         every { settings.activeEmbeddingProviderId } returns MutableStateFlow(EmbeddingProvider.ID_USE)
         every { settings.lastReembedProviderId } returns MutableStateFlow<String?>(null)
         every { settings.longRunningTaskNotificationsEnabled } returns MutableStateFlow(true)
+        every { settings.scheduledTaskNotificationsEnabled } returns MutableStateFlow(true)
         every { settings.crashReportingEnabled } returns MutableStateFlow(false)
         every { settings.verboseMemoryLoggingEnabled } returns MutableStateFlow(false)
 
@@ -509,6 +510,22 @@ class SettingsViewModelTest {
         viewModel.setLongRunningTaskNotificationsEnabled(false)
         advanceUntilIdle()
         coVerify { settings.setLongRunningTaskNotificationsEnabled(false) }
+    }
+
+    @Test
+    fun `setScheduledTaskNotificationsEnabled routes through repository`() = runTest {
+        advanceUntilIdle()
+        viewModel.setScheduledTaskNotificationsEnabled(false)
+        advanceUntilIdle()
+        coVerify { settings.setScheduledTaskNotificationsEnabled(false) }
+    }
+
+    @Test
+    fun `scheduledTaskNotificationsEnabled mirrors the repository flow into ui state`() = runTest {
+        every { settings.scheduledTaskNotificationsEnabled } returns MutableStateFlow(false)
+        viewModel = newViewModel()
+        advanceUntilIdle()
+        assertEquals(false, viewModel.uiState.value.scheduledTaskNotificationsEnabled)
     }
 
     @Test

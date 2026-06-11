@@ -278,6 +278,10 @@ class SettingsViewModel @Inject constructor(
             _uiState.update { it.copy(longRunningTaskNotificationsEnabled = value) }
         }.launchIn(viewModelScope)
 
+        settingsRepository.scheduledTaskNotificationsEnabled.onEach { value ->
+            _uiState.update { it.copy(scheduledTaskNotificationsEnabled = value) }
+        }.launchIn(viewModelScope)
+
         settingsRepository.crashReportingEnabled.onEach { value ->
             _uiState.update { it.copy(crashReportingEnabled = value) }
         }.launchIn(viewModelScope)
@@ -822,6 +826,7 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.setBlockNetworkFromLocalModel(false)
             settingsRepository.setAutoSummarizeThreshold(SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_DEFAULT)
             settingsRepository.setLongRunningTaskNotificationsEnabled(true)
+            settingsRepository.setScheduledTaskNotificationsEnabled(true)
             settingsRepository.setSystemPromptPrefix("")
             resetMemoryTuningDefaults()
             emitSnackbar(appContext.getString(R.string.settings_reset_button))
@@ -849,6 +854,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setLongRunningTaskNotificationsEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setLongRunningTaskNotificationsEnabled(enabled) }
+    }
+
+    fun setScheduledTaskNotificationsEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setScheduledTaskNotificationsEnabled(enabled) }
     }
 
     fun setCrashReportingEnabled(enabled: Boolean) {

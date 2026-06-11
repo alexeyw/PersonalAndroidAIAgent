@@ -7,6 +7,7 @@ import app.knotwork.android.data.tools.local.SearchTool
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.McpServerConfig
+import app.knotwork.android.domain.models.ToolExecutionContext
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.models.ToolSource
 import app.knotwork.android.domain.repositories.ApiKeyRepository
@@ -284,13 +285,16 @@ class ToolRepositoryImpl @Inject constructor(
      *
      * @param name The name of the tool to execute.
      * @param arguments A JSON string containing the arguments required by the tool.
+     * @param context Engine-supplied [ToolExecutionContext] carrying trusted environment
+     *   values (the invoking session id). Forwarded to built-in executors only; the
+     *   AppFunction and MCP protocols have no session notion, so those branches drop it.
      * @return A string representing the result of the tool execution.
      * @throws IllegalArgumentException If the tool is disabled, has no executor registered,
      *   or is not found across active providers.
      * @throws IllegalStateException If a system-level AppFunction call reports a failure
      *   (re-thrown verbatim by [LocalAppFunctionManager.invokeByName]).
      */
-    override suspend fun executeTool(name: String, arguments: String): String {
+    override suspend fun executeTool(name: String, arguments: String, context: ToolExecutionContext): String {
         val builtinTools = getBuiltinTools()
         val disabled = settingsRepository.disabledAppFunctions.first()
         if (builtinTools.any { it.name == name }) {
@@ -300,7 +304,7 @@ class ToolRepositoryImpl @Inject constructor(
 
             val executor = localToolExecutors[name]
                 ?: throw IllegalArgumentException("Local tool $name has no executor registered")
-            return executor.execute(arguments)
+            return executor.execute(arguments, context)
         }
 
         val builtinNames = builtinTools.mapTo(mutableSetOf()) { it.name }

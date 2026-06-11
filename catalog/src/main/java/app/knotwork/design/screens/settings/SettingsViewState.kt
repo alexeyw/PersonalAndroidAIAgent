@@ -252,7 +252,15 @@ data class MemoryCardState(
     val reembedBanner: String? = null,
 )
 
-data class NotificationsCardState(val longRunningEnabled: Boolean)
+/**
+ * Notifications card slice.
+ *
+ * @property longRunningEnabled Whether the "still running" ping for
+ *   backgrounded long pipeline runs is on.
+ * @property scheduledResultsEnabled Whether the "Task completed" / "Task
+ *   failed" announcement for scheduled background runs is on.
+ */
+data class NotificationsCardState(val longRunningEnabled: Boolean, val scheduledResultsEnabled: Boolean = true)
 
 /**
  * Privacy card slice. Carries the crash-reporting toggle and the verbose
@@ -390,6 +398,7 @@ class SettingsCallbacks(
 
     // Notifications.
     val onLongRunningToggle: (Boolean) -> Unit = {},
+    val onScheduledResultsToggle: (Boolean) -> Unit = {},
 
     // Privacy.
     val onCrashReportingToggle: (Boolean) -> Unit = {},

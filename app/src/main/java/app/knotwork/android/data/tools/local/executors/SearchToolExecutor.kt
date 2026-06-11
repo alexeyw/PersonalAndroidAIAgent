@@ -1,6 +1,7 @@
 package app.knotwork.android.data.tools.local.executors
 
 import app.knotwork.android.data.tools.local.SearchTool
+import app.knotwork.android.domain.models.ToolExecutionContext
 import app.knotwork.android.domain.repositories.LocalToolExecutor
 import org.json.JSONObject
 import javax.inject.Inject
@@ -16,7 +17,7 @@ class SearchToolExecutor @Inject constructor(private val searchTool: SearchTool)
 
     override val toolName: String = SearchTool.TOOL_NAME
 
-    override suspend fun execute(arguments: String): String {
+    override suspend fun execute(arguments: String, context: ToolExecutionContext): String {
         val json = JSONObject(arguments)
         val query = json.optString("query", "")
         val lang = json.optString("lang", "en")

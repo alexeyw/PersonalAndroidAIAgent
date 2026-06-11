@@ -125,6 +125,16 @@
     <string name="notifications_long_running_channel_name">Long-running tasks</string>
     <string name="notifications_long_running_channel_description">Background pipeline-runtime updates.</string>
     <string name="notifications_long_running_body" tools:ignore="PluralsCandidate">Still running · %1$d s elapsed.</string>
+    <!-- Mirrors the hardcoded channel name registered by AgentForegroundService so a
+         headless-process registration by AgentWorker does not rename the user-visible channel. -->
+    <string name="notifications_agent_foreground_channel_name">Agent Service</string>
+    <string name="notifications_scheduled_running_title">Scheduled task</string>
+    <string name="notifications_scheduled_running_body">Agent is working in the background…</string>
+    <string name="notifications_task_results_channel_name">Scheduled task results</string>
+    <string name="notifications_task_results_channel_description">Outcome of scheduled background tasks.</string>
+    <string name="notifications_task_completed_title">Task completed</string>
+    <string name="notifications_task_failed_title">Task failed</string>
+    <string name="scheduled_session_name">Scheduled: %1$s</string>
 
     <!-- About expansion -->
     <string name="about_section_app">Version</string>

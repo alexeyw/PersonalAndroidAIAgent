@@ -10,6 +10,7 @@ import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.models.ToolApprovalPolicy
+import app.knotwork.android.domain.models.ToolExecutionContext
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
@@ -380,7 +381,10 @@ class ToolNodeExecutor @Inject constructor(
 
         emit(NodeOutput.State(AgentOrchestratorState.ExecutingTool(resolvedToolName, resolvedToolArgs)))
         val result = try {
-            toolRepository.executeTool(resolvedToolName, resolvedToolArgs)
+            // The context carries the engine-known session id so tools that
+            // bind follow-up work to the conversation (schedule_task) get it
+            // from a source the LLM-emitted arguments cannot spoof.
+            toolRepository.executeTool(resolvedToolName, resolvedToolArgs, ToolExecutionContext(sessionId))
         } catch (e: CancellationException) {
             // Preserve structured-concurrency cancellation: tool execution may suspend,
             // and a broad `catch (Exception)` would silently swallow the cancel.

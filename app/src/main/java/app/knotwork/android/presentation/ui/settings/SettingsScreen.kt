@@ -413,7 +413,10 @@ private fun buildViewState(uiState: SettingsUiState, context: android.content.Co
                 uiState.lastReembedProviderId != uiState.activeEmbeddingProviderId
         },
     )
-    val notifications = NotificationsCardState(longRunningEnabled = uiState.longRunningTaskNotificationsEnabled)
+    val notifications = NotificationsCardState(
+        longRunningEnabled = uiState.longRunningTaskNotificationsEnabled,
+        scheduledResultsEnabled = uiState.scheduledTaskNotificationsEnabled,
+    )
     val privacy = PrivacyCardState(
         crashReportingEnabled = uiState.crashReportingEnabled,
         verboseMemoryLoggingEnabled = uiState.verboseMemoryLoggingEnabled,
@@ -646,6 +649,7 @@ private fun buildCallbacks(
     onReembedClick = viewModel::runReembed,
     onClearMemoryClick = viewModel::stageClearMemory,
     onLongRunningToggle = viewModel::setLongRunningTaskNotificationsEnabled,
+    onScheduledResultsToggle = viewModel::setScheduledTaskNotificationsEnabled,
     onCrashReportingToggle = viewModel::setCrashReportingEnabled,
     onVerboseMemoryLoggingToggle = viewModel::setVerboseMemoryLoggingEnabled,
     onResetSettingsClick = viewModel::stageResetSettings,

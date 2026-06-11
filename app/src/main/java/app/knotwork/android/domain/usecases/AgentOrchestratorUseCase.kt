@@ -3,6 +3,7 @@ package app.knotwork.android.domain.usecases
 import app.knotwork.android.domain.engine.TaskQueueManager
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTask
+import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.TaskPriority
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -84,5 +85,38 @@ class AgentOrchestratorUseCase @Inject constructor(private val taskQueueManager:
         )
         taskQueueManager.enqueueTask(task)
         return taskQueueManager.observeTaskState(sessionId)
+    }
+
+    /**
+     * Enqueues a scheduler-origin run and returns its run id instead of a
+     * state flow.
+     *
+     * Background callers (the WorkManager-driven `AgentWorker`) must not track
+     * completion through [observe]: the per-session flow replays its latest
+     * state on subscription, so a worker firing into a session that already
+     * finished an earlier run would observe the stale terminal state and
+     * report completion before its own run even started. Returning the run id
+     * (identical to the persistent `PipelineRun` record id) lets the caller
+     * await the terminal status on `PipelineRunRepository` — the persistent
+     * source of truth that carries run identity.
+     *
+     * The task is enqueued with [TaskPriority.NORMAL] so a scheduled run never
+     * preempts an interactive one, and with [RunOrigin.SCHEDULER] so the
+     * persistent run record attributes the execution to the scheduler.
+     *
+     * @param sessionId Chat session the run lands its messages in.
+     * @param userPrompt The stored prompt of the scheduled task.
+     * @return Id of the enqueued task, equal to the id of its persistent
+     *   `PipelineRun` record.
+     */
+    fun enqueueScheduled(sessionId: String, userPrompt: String): String {
+        val task = AgentTask(
+            sessionId = sessionId,
+            prompt = userPrompt,
+            priority = TaskPriority.NORMAL,
+            origin = RunOrigin.SCHEDULER,
+        )
+        taskQueueManager.enqueueTask(task)
+        return task.id
     }
 }
