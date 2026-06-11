@@ -132,8 +132,12 @@ sealed interface AgentOrchestratorState {
      *
      * @property events Append-only ordered list of console events for the
      *   current run. The engine emits a fresh immutable copy on every change.
+     * @property runId Id of the persistent pipeline run the events belong to,
+     *   or `null` when the run is not persisted (e.g. editor test runs). The
+     *   UI uses it at the console replay/live seam: a live snapshot of the
+     *   same run merges with the replayed baseline by [ConsoleEvent.seq].
      */
-    data class ConsoleLog(val events: List<ConsoleEvent>) : AgentOrchestratorState
+    data class ConsoleLog(val events: List<ConsoleEvent>, val runId: String? = null) : AgentOrchestratorState
 
     /**
      * Per-node input/output snapshot emitted by

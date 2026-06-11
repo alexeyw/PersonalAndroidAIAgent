@@ -34,6 +34,23 @@ details.
   from their last completed node. Deleting a chat session removes its
   run records as well.
 
+- **Persistent run trace with console replay.** The execution trace of a
+  run — every console log line plus each node's input/output snapshot —
+  is now written through to the encrypted database (`trace_steps`
+  extended with run attribution, schema v31) instead of living only in
+  ViewModel memory. Writes are buffered and land in batches (by size or
+  a short timer, force-flushed whenever the run suspends on a
+  human-in-the-loop request or ends), so trace persistence never
+  competes with on-device inference for disk I/O on every streamed
+  token. Opening a chat replays the trace of the active (or most
+  recent) run into the console pane: the Logs tab shows the recorded
+  events, and the Vars / Traces tabs are rebuilt from the persisted
+  per-node records — so a run that executed in the background is no
+  longer a black box. Live console events of the same run merge
+  seamlessly on top of the replayed history without duplicates, and
+  pre-existing trace rows survive the upgrade. Deleting a run (future
+  retention cleanup) removes its trace atomically.
+
 - **Re-embed reminder banner.** *Settings → Memory* now shows a persistent
   warning under the embedding-provider dropdown whenever the stored memory
   vectors were created with a different provider than the active one —

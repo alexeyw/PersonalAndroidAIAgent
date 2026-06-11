@@ -29,6 +29,7 @@ import app.knotwork.android.data.repositories.NetworkStateRepositoryImpl
 import app.knotwork.android.data.repositories.PipelineRunRepositoryImpl
 import app.knotwork.android.data.repositories.PowerStateRepositoryImpl
 import app.knotwork.android.data.repositories.PromptRepositoryImpl
+import app.knotwork.android.data.repositories.RunTraceRepositoryImpl
 import app.knotwork.android.data.repositories.ToolRepositoryImpl
 import app.knotwork.android.data.services.LongRunningTaskNotifierImpl
 import app.knotwork.android.data.services.WorkManagerMemoryReembedScheduler
@@ -53,6 +54,7 @@ import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.PowerStateRepository
 import app.knotwork.android.domain.repositories.PromptPresetRepository
 import app.knotwork.android.domain.repositories.PromptRepository
+import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.DatabaseResetService
@@ -163,6 +165,15 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindPipelineRunRepository(repository: PipelineRunRepositoryImpl): PipelineRunRepository
+
+    /**
+     * Binds the [RunTraceRepositoryImpl] implementation to the
+     * [RunTraceRepository] interface backing the buffered persistent
+     * pipeline-run trace.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindRunTraceRepository(repository: RunTraceRepositoryImpl): RunTraceRepository
 
     /**
      * Binds the [ToolRepositoryImpl] implementation to the [ToolRepository] interface.

@@ -174,6 +174,32 @@ class PipelineRunRepositoryImplTest {
     }
 
     @Test
+    fun `given entity when getLatestRunForSession then maps to domain regardless of status`() = runTest {
+        coEvery {
+            pipelineRunDao.getLatestRunForSession("session-1")
+        } returns sampleEntity.copy(status = "COMPLETED")
+
+        val run = repository.getLatestRunForSession("session-1")
+
+        assertEquals(PipelineRunStatus.COMPLETED, run?.status)
+        assertEquals(RunOrigin.SCHEDULER, run?.origin)
+    }
+
+    @Test
+    fun `given no runs when getLatestRunForSession then returns null`() = runTest {
+        coEvery { pipelineRunDao.getLatestRunForSession("session-1") } returns null
+
+        assertNull(repository.getLatestRunForSession("session-1"))
+    }
+
+    @Test
+    fun `given store failure when getLatestRunForSession then degrades to null`() = runTest {
+        coEvery { pipelineRunDao.getLatestRunForSession("session-1") } throws RuntimeException("corrupt")
+
+        assertNull(repository.getLatestRunForSession("session-1"))
+    }
+
+    @Test
     fun `orphan query covers every non-terminal status`() = runTest {
         val statuses = slot<List<String>>()
         coEvery { pipelineRunDao.getRunsByStatuses(capture(statuses)) } returns listOf(

@@ -17,7 +17,7 @@ import org.junit.runner.RunWith
  * [AppDatabaseMigrationTest] (which covers pre-baseline versions that were
  * never exported), this suite drives every migration whose **starting**
  * schema JSON is committed under `app/schemas/` — i.e. the
- * baseline-and-up range `23 → 29`.
+ * baseline-and-up range `23 → 31`.
  *
  * For each step it:
  * 1. Materialises the database at the older version straight from the
@@ -197,14 +197,69 @@ class AppDatabaseMigrationHelperTest {
     }
 
     @Test
-    fun migrateFullChain23to29_preservesDataAndValidatesFinalSchema() {
+    fun migrate30to31_extendsTraceStepsPreservingLegacyRows() {
+        helper.createDatabase(TEST_DB, 30).use { db ->
+            // The legacy FK requires the parent session row to exist.
+            db.execSQL(
+                "INSERT INTO chat_sessions(id, name, updatedAt, isStarred) " +
+                    "VALUES('$SESSION_ID', 'Chat', $CHUNK_TS, 0)",
+            )
+            db.execSQL(
+                "INSERT INTO trace_steps(sessionId, nodeName, outputText, timestamp, durationMs, tokenCount) " +
+                    "VALUES('$SESSION_ID', 'LITE_RT', 'legacy output', $CHUNK_TS, 120, 9)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 31, true, AppDatabase.MIGRATION_30_31).use { db ->
+            // The legacy row survives the table recreation with NULL run
+            // attribution and the documented NODE_IO defaults.
+            db.query(
+                "SELECT sessionId, nodeName, outputText, timestamp, durationMs, tokenCount, " +
+                    "runId, seq, recordKind, consoleEventType, nodeId, inputText FROM trace_steps",
+            ).use { c ->
+                assertTrue("legacy trace row must survive", c.moveToFirst())
+                assertEquals(SESSION_ID, c.getString(0))
+                assertEquals("LITE_RT", c.getString(1))
+                assertEquals("legacy output", c.getString(2))
+                assertEquals(CHUNK_TS, c.getLong(3))
+                assertEquals(120L, c.getLong(4))
+                assertEquals(9, c.getInt(5))
+                assertTrue("legacy rows carry no run attribution", c.isNull(6))
+                assertEquals(0L, c.getLong(7))
+                assertEquals("NODE_IO", c.getString(8))
+                assertTrue(c.isNull(9))
+                assertTrue(c.isNull(10))
+                assertTrue(c.isNull(11))
+            }
+            // A new-style console-event row round-trips against the new schema.
+            db.execSQL(
+                "INSERT INTO pipeline_runs" +
+                    "(id, sessionId, pipelineId, origin, status, startedAt) " +
+                    "VALUES('run-1', '$SESSION_ID', 'p1', 'CHAT', 'COMPLETED', $CHUNK_TS)",
+            )
+            db.execSQL(
+                "INSERT INTO trace_steps" +
+                    "(sessionId, nodeName, outputText, timestamp, durationMs, runId, seq, " +
+                    "recordKind, consoleEventType) " +
+                    "VALUES('$SESSION_ID', '', '▶ LITE_RT', $CHUNK_TS, 0, 'run-1', 1, " +
+                    "'CONSOLE_EVENT', 'NODE_EXECUTION')",
+            )
+            assertEquals(
+                "run-1",
+                querySingleString(db, "SELECT runId FROM trace_steps WHERE recordKind = 'CONSOLE_EVENT'"),
+            )
+        }
+    }
+
+    @Test
+    fun migrateFullChain23to31_preservesDataAndValidatesFinalSchema() {
         helper.createDatabase(TEST_DB, 23).use { db ->
             seedMemoryChunkV23(db)
         }
 
         helper.runMigrationsAndValidate(
             TEST_DB,
-            29,
+            31,
             true,
             AppDatabase.MIGRATION_23_24,
             AppDatabase.MIGRATION_24_25,
@@ -212,6 +267,8 @@ class AppDatabaseMigrationHelperTest {
             AppDatabase.MIGRATION_26_27,
             AppDatabase.MIGRATION_27_28,
             AppDatabase.MIGRATION_28_29,
+            AppDatabase.MIGRATION_29_30,
+            AppDatabase.MIGRATION_30_31,
         ).use { db ->
             // The original v23 row must survive every step with the new
             // columns filled by their documented defaults and the embedding
@@ -274,5 +331,6 @@ class AppDatabaseMigrationHelperTest {
         const val CHUNK_TEXT = "remember me"
         const val CHUNK_EMBEDDING = "0.1,0.2,0.3"
         const val CHUNK_TS = 1_700_000_000_000L
+        const val SESSION_ID = "session-mig"
     }
 }

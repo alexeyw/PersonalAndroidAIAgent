@@ -14,6 +14,7 @@ import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRunStatus
+import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.ToolInvocationResult
 import app.knotwork.android.domain.models.usesContextConfig
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
@@ -24,11 +25,15 @@ import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.MetricsRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
+import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -53,6 +58,7 @@ class GraphExecutionEngine @Inject constructor(
     private val localModelRepository: LocalModelRepository,
     private val memoryRepository: MemoryRepository,
     private val pipelineRunRepository: PipelineRunRepository,
+    private val runTraceRepository: RunTraceRepository,
 ) {
 
     /**
@@ -70,9 +76,12 @@ class GraphExecutionEngine @Inject constructor(
      * @param graph The pipeline graph to execute.
      * @param runId Id of the persistent pipeline-run record this execution
      *   writes its progress into (the node currently executing and the
-     *   WAITING_APPROVAL / WAITING_CLARIFICATION suspension statuses).
-     *   `null` disables run persistence entirely — terminal statuses and the
-     *   RUNNING transition are owned by the task queue, never by the engine.
+     *   WAITING_APPROVAL / WAITING_CLARIFICATION suspension statuses) and
+     *   whose persistent trace receives every console event and per-node
+     *   I/O snapshot (buffered, force-flushed at suspension and terminal
+     *   points). `null` disables run persistence entirely — terminal statuses
+     *   and the RUNNING transition are owned by the task queue, never by the
+     *   engine.
      * @return A cold flow of orchestrator states describing the run.
      */
     // Reason: this is the agent's core orchestrator. It is a long single
@@ -93,13 +102,35 @@ class GraphExecutionEngine @Inject constructor(
         // updates the collapsed/expanded console panels.
         val consoleEvents = mutableListOf<ConsoleEvent>()
 
+        // Monotonic position of the next trace record within this run, shared
+        // by console events and per-node I/O snapshots. Uniqueness per run is
+        // what lets the console deduplicate the replay/live seam by seq.
+        var traceSeq = 0L
+
         suspend fun pushConsole(type: ConsoleEventType, message: String) {
-            consoleEvents += ConsoleEvent(
+            val event = ConsoleEvent(
                 timestamp = System.currentTimeMillis(),
                 type = type,
                 message = message,
+                seq = traceSeq++,
             )
-            emit(AgentOrchestratorState.ConsoleLog(consoleEvents.toList()))
+            consoleEvents += event
+            // Write-through into the persistent run trace. The repository
+            // buffers and batch-flushes, so this never costs a SQLCipher
+            // commit per streamed event.
+            if (runId != null) {
+                runTraceRepository.append(
+                    RunTraceRecord.ConsoleEntry(
+                        runId = runId,
+                        sessionId = sessionId,
+                        seq = event.seq,
+                        timestamp = event.timestamp,
+                        type = type,
+                        message = message,
+                    ),
+                )
+            }
+            emit(AgentOrchestratorState.ConsoleLog(consoleEvents.toList(), runId))
         }
 
         if (!graph.isValidDAG()) {
@@ -369,13 +400,27 @@ class GraphExecutionEngine @Inject constructor(
                         tokenCount = nodeTokenCount,
                     ),
                 )
-                chatRepository.saveTraceStep(
-                    sessionId = sessionId,
-                    nodeName = currentNode.type.name,
-                    outputText = outputText,
-                    durationMs = nodeDurationMs,
-                    tokenCount = nodeTokenCount,
-                )
+                // Write-through into the persistent run trace: the NodeIo
+                // record carries the full input/output pair so the Vars and
+                // Traces console tabs can be rebuilt for a finished run, and
+                // the checkpoint/resume path can substitute the recorded
+                // output for re-execution.
+                if (runId != null) {
+                    runTraceRepository.append(
+                        RunTraceRecord.NodeIo(
+                            runId = runId,
+                            sessionId = sessionId,
+                            seq = traceSeq++,
+                            timestamp = System.currentTimeMillis(),
+                            nodeId = currentNode.id,
+                            nodeType = currentNode.type.name,
+                            inputText = executorInput,
+                            outputText = outputText,
+                            durationMs = nodeDurationMs,
+                            tokenCount = nodeTokenCount,
+                        ),
+                    )
+                }
                 emit(AgentOrchestratorState.PipelineTrace(traceSteps.toList()))
                 // Surface the per-node I/O pair for the Vars tab of the
                 // chat-home console pane. INPUT is skipped (its input is
@@ -502,6 +547,17 @@ class GraphExecutionEngine @Inject constructor(
                 ),
             )
         }
+    }.onCompletion {
+        // Terminal flush: completion, failure and cancellation all land here,
+        // so the persisted trace is complete the moment the run ends — even
+        // when the process is about to die right after. The cancellation path
+        // arrives with the coroutine already cancelled, hence NonCancellable;
+        // the flush itself is best-effort and never throws storage failures.
+        if (runId != null) {
+            withContext(NonCancellable) {
+                runTraceRepository.flush()
+            }
+        }
     }
 
     /**
@@ -594,10 +650,15 @@ class GraphExecutionEngine @Inject constructor(
     ): Boolean = when {
         state is AgentOrchestratorState.WaitingForApproval -> {
             pipelineRunRepository.updateStatus(runId, PipelineRunStatus.WAITING_APPROVAL)
+            // Suspension flush: the run may now wait indefinitely (and the
+            // process may die waiting), so the trace must be durable up to
+            // this exact point.
+            runTraceRepository.flush()
             true
         }
         state is AgentOrchestratorState.AwaitingClarification -> {
             pipelineRunRepository.updateStatus(runId, PipelineRunStatus.WAITING_CLARIFICATION)
+            runTraceRepository.flush()
             true
         }
         wasSuspended -> {

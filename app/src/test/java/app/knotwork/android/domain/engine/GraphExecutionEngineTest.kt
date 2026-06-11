@@ -33,6 +33,7 @@ import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.Role
+import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.ToolApprovalPolicy
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
@@ -46,6 +47,7 @@ import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.MetricsRepository
 import app.knotwork.android.domain.repositories.NetworkActivityTracker
 import app.knotwork.android.domain.repositories.PipelineRunRepository
+import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
@@ -95,6 +97,7 @@ class GraphExecutionEngineTest {
     private lateinit var localModelRepository: LocalModelRepository
     private lateinit var memoryRepository: MemoryRepository
     private lateinit var pipelineRunRepository: PipelineRunRepository
+    private lateinit var runTraceRepository: RunTraceRepository
 
     private lateinit var engine: GraphExecutionEngine
     private lateinit var promptTemplateEngine: PromptTemplateEngine
@@ -122,6 +125,7 @@ class GraphExecutionEngineTest {
         localModelRepository = mockk(relaxed = true)
         memoryRepository = mockk(relaxed = true)
         pipelineRunRepository = mockk(relaxed = true)
+        runTraceRepository = mockk(relaxed = true)
         clarificationRepository = mockk()
         // The resolver is exercised whenever a CLOUD node fires; default to a sensible
         // Koog model so each individual test does not have to wire it up.
@@ -211,6 +215,7 @@ class GraphExecutionEngineTest {
             localModelRepository,
             memoryRepository,
             pipelineRunRepository,
+            runTraceRepository,
         )
 
         coEvery { getContextWindowUseCase(sessionId) } returns ""
@@ -480,6 +485,7 @@ class GraphExecutionEngineTest {
             PromptTemplateEngine(),
             emptySet(),
             NodeContextBuilder(),
+            mockk(relaxed = true),
             mockk(relaxed = true),
             mockk(relaxed = true),
             mockk(relaxed = true),
@@ -862,18 +868,20 @@ class GraphExecutionEngineTest {
             flowOf("final"),
         )
 
-        val states = engine(sessionId, "prompt", graph).toList()
+        val states = engine(sessionId, "prompt", graph, runId = "run-trace-1").toList()
 
         val trace = states.filterIsInstance<AgentOrchestratorState.PipelineTrace>().last()
         assertTrue(trace.steps.any { it.nodeName == "LITE_RT" && (it.tokenCount ?: 0) > 0 })
         assertTrue(trace.steps.all { it.durationMs >= 0 })
         coVerify(atLeast = 1) {
-            chatRepository.saveTraceStep(
-                sessionId = any(),
-                nodeName = "LITE_RT",
-                outputText = any(),
-                durationMs = any(),
-                tokenCount = match { it != null && it > 0 },
+            runTraceRepository.append(
+                match { record ->
+                    record is RunTraceRecord.NodeIo &&
+                        record.runId == "run-trace-1" &&
+                        record.nodeType == "LITE_RT" &&
+                        (record.tokenCount ?: 0) > 0 &&
+                        record.durationMs >= 0
+                },
             )
         }
     }
@@ -981,6 +989,7 @@ class GraphExecutionEngineTest {
             localModelRepository,
             memoryRepository,
             pipelineRunRepository,
+            runTraceRepository,
         )
 
         val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
@@ -1156,6 +1165,7 @@ class GraphExecutionEngineTest {
                 localModelRepository,
                 memoryRepository,
                 pipelineRunRepository,
+                runTraceRepository,
             )
 
             // Generate a question with two options; the first one is the default the
@@ -1985,6 +1995,137 @@ class GraphExecutionEngineTest {
         coVerifyOrder {
             pipelineRunRepository.updateStatus("run-44", PipelineRunStatus.WAITING_APPROVAL)
             pipelineRunRepository.updateStatus("run-44", PipelineRunStatus.RUNNING)
+        }
+        job.cancel()
+    }
+
+    /**
+     * The persistent run trace must be complete after a run: every console
+     * event and every per-node I/O snapshot reaches the trace repository,
+     * attributed to the run, with a strictly monotonic per-run seq shared
+     * across both record kinds, and the buffer is force-flushed at the
+     * terminal point.
+     */
+    @Test
+    fun `given persisted run when pipeline completes then full trace lands in repository`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        val appended = mutableListOf<RunTraceRecord>()
+        coEvery { runTraceRepository.append(capture(appended)) } returns Unit
+
+        val graph = PipelineGraph(
+            id = "g-trace",
+            name = "Trace Completeness",
+            nodes = listOf(
+                NodeModel("input", NodeType.INPUT, 0f, 0f),
+                NodeModel("llm", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("output", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input", "llm"),
+                ConnectionModel("c2", "llm", "output"),
+            ),
+        )
+        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+            flowOf("answer"),
+            flowOf("final"),
+        )
+
+        val states = engine(sessionId, "prompt", graph, runId = "run-full").toList()
+
+        // Every console event emitted to the UI also landed in the trace.
+        val emittedConsoleCount =
+            states.filterIsInstance<AgentOrchestratorState.ConsoleLog>().maxOf { it.events.size }
+        val persistedConsole = appended.filterIsInstance<RunTraceRecord.ConsoleEntry>()
+        assertEquals(emittedConsoleCount, persistedConsole.size)
+        assertTrue(persistedConsole.any { it.message == "▶ LITE_RT" })
+        // The LITE_RT node's I/O snapshot landed with its full input/output pair.
+        val nodeIo = appended.filterIsInstance<RunTraceRecord.NodeIo>().single { it.nodeId == "llm" }
+        assertEquals("LITE_RT", nodeIo.nodeType)
+        assertEquals("answer", nodeIo.outputText)
+        assertTrue(nodeIo.inputText.isNotBlank())
+        // Run attribution and strictly monotonic seq across both record kinds.
+        assertTrue(appended.all { it.runId == "run-full" && it.sessionId == sessionId })
+        val seqs = appended.map { it.seq }
+        assertEquals(seqs.sorted(), seqs)
+        assertEquals(seqs.size, seqs.distinct().size)
+        // Terminal flush makes the trace durable the moment the run ends.
+        coVerify(atLeast = 1) { runTraceRepository.flush() }
+    }
+
+    /**
+     * `runId = null` (editor test runs, legacy flows) disables trace
+     * persistence entirely — no appends, no flushes.
+     */
+    @Test
+    fun `given no runId when pipeline completes then no trace records are appended`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+
+        val graph = PipelineGraph(
+            id = "g-no-run",
+            name = "No Run Id",
+            nodes = listOf(
+                NodeModel("input", NodeType.INPUT, 0f, 0f),
+                NodeModel("output", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(ConnectionModel("c1", "input", "output")),
+        )
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("final")
+
+        engine(sessionId, "prompt", graph).toList()
+
+        coVerify(exactly = 0) { runTraceRepository.append(any()) }
+        coVerify(exactly = 0) { runTraceRepository.flush() }
+    }
+
+    /**
+     * Entering a HITL suspension force-flushes the buffered trace right
+     * after the WAITING_APPROVAL status write — the process may die while
+     * waiting, so the persisted trace must already cover everything up to
+     * the suspension point.
+     */
+    @Test
+    fun `given approval suspension then trace is flushed at the suspension point`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
+        every { settingsRepository.toolCallTimeoutMs } returns flowOf(5_000L)
+        coEvery { toolRepository.getRisk("sens.tool") } returns ToolRisk.SENSITIVE
+        coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool("sens.tool", "Desc", "{}"))
+        coEvery { toolRepository.executeTool("sens.tool", any()) } returns "tool-result"
+
+        val graph = PipelineGraph(
+            id = "g-susp-flush",
+            name = "Suspension Flush",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("tool_1", NodeType.TOOL, 0f, 0f, toolName = "sens.tool"),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "tool_1"),
+                ConnectionModel("c2", "tool_1", "output_1"),
+            ),
+        )
+        every { llmEngine.generateResponseStream(any()) } returns
+            flowOf("""{"tool":"sens.tool","arguments":"a=1"}""")
+
+        val job = launch {
+            engine(sessionId, "prompt", graph, "run-45").toList()
+        }
+        // Flush pending tasks WITHOUT advancing virtual time so the executor
+        // suspends inside the approval gate without firing the timeout.
+        runCurrent()
+        engine.resumeWithApproval(sessionId, true)
+        advanceUntilIdle()
+
+        // The suspension flush must land between the WAITING_APPROVAL write
+        // and the RUNNING flip — the terminal flush (after RUNNING) cannot
+        // satisfy this order, so the assertion pins the suspension-point
+        // flush specifically.
+        coVerifyOrder {
+            pipelineRunRepository.updateStatus("run-45", PipelineRunStatus.WAITING_APPROVAL)
+            runTraceRepository.flush()
+            pipelineRunRepository.updateStatus("run-45", PipelineRunStatus.RUNNING)
         }
         job.cancel()
     }

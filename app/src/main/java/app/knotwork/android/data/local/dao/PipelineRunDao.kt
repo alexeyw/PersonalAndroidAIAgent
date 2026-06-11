@@ -115,6 +115,16 @@ interface PipelineRunDao {
     suspend fun getActiveRunForSession(sessionId: String, activeStatuses: List<String>): PipelineRunEntity?
 
     /**
+     * Returns the most recently started run of [sessionId] regardless of
+     * status, or `null` when the session has never had a run. Backs the
+     * console replay baseline for sessions whose last run already finished.
+     *
+     * @param sessionId Id of the chat session to query.
+     */
+    @Query("SELECT * FROM pipeline_runs WHERE sessionId = :sessionId ORDER BY startedAt DESC LIMIT 1")
+    suspend fun getLatestRunForSession(sessionId: String): PipelineRunEntity?
+
+    /**
      * Observes all runs of [sessionId], most recently started first.
      *
      * @param sessionId Id of the chat session to observe.

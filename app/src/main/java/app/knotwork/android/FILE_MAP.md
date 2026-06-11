@@ -39,7 +39,7 @@ This file maps the contents of the main application package.
       - `PipelineRunDao.kt` - Persistent pipeline-run records DAO (`pipeline_runs` table). Every mutating query carries a terminal-status `NOT IN` guard so a finished run can never be flipped back to an active status.
       - `PromptPresetDao.kt` - User-saved prompt-preset DAO. Backs the `prompt_presets` table; bundled presets live in `assets/presets/prompts/` and never reach this DAO.
       - `PromptTemplateDao.kt` - Prompt templates DAO.
-      - `TraceStepDao.kt` - Trace steps DAO.
+      - `TraceStepDao.kt` - Run-trace DAO, deliberately batch-only: single-transaction batch insert (the write path of the buffered trace recorder) and the per-run `seq`-ordered query; session-scoped cleanup rides the `chat_sessions` FK cascade.
     - `models/` - Local DB entity models.
       - `ChatMessageEntity.kt` - Chat message entity.
       - `ChatSessionEntity.kt` - Chat session entity.
@@ -53,7 +53,7 @@ This file maps the contents of the main application package.
       - `PromptPresetEntity.kt` - User-saved prompt preset row. Stores `id`, `name`, `description`, `nodeTypeKey`, `systemPrompt`, `tagsCsv`, `createdAt`.
       - `PipelineWithNodesAndConnections.kt` - Pipeline relational model.
       - `PromptTemplateEntity.kt` - Prompt template entity.
-      - `TraceStepEntity.kt` - Trace step entity.
+      - `TraceStepEntity.kt` - Run-trace row: `NODE_IO` (per-node input/output) and `CONSOLE_EVENT` (persisted console line) record kinds discriminated by `recordKind`, attributed to a run via `runId` (CASCADE FK onto `pipeline_runs`) with a per-run monotonic `seq`.
   - `prompt/` - Built-in `PromptVariableProvider` implementations.
     - `DateVariableProvider.kt` - Resolves `$DATE` to the current device-local date (`dd MMMM yyyy`).
     - `TimeVariableProvider.kt` - Resolves `$TIME` to the current device-local time (`HH:mm`).
@@ -74,6 +74,7 @@ This file maps the contents of the main application package.
   - `network/` - Network handling.
     - `AndroidModelDownloadManager.kt` - Download manager for models.
   - `repositories/` - Repository implementations.
+    - `BestEffortStore.kt` - Shared `absorbingStoreFailure` helper implementing the best-effort persistence contract (absorb storage failures, re-throw `CancellationException` first) reused by the run-record and run-trace repositories.
     - `ChatRepositoryImpl.kt` - Chat repository implementation.
     - `ClarificationRepositoryImpl.kt` - In-memory implementation of `ClarificationRepository` that suspends pipeline coroutines until the user answers (or the request times out).
     - `FirebaseCrashReportingRepositoryImpl.kt` - Firebase-backed `CrashReportingRepository`. Every method is gated on `SettingsRepository.crashReportingEnabled` and short-circuits to no-op when the user has not opted in.
@@ -88,6 +89,7 @@ This file maps the contents of the main application package.
     - `NetworkActivityTrackerImpl.kt` - Records `System.currentTimeMillis()` on every outbound cloud-LLM and MCP call. Drives the More tab footer privacy pill via `NetworkActivityTracker.lastOutboundAt`.
     - `NetworkStateRepositoryImpl.kt` - Network state repository implementation.
     - `PipelineRunRepositoryImpl.kt` - Room-backed `PipelineRunRepository`. Maps enums to `name` strings, enforces the terminal-status guard in SQL, absorbs storage failures per the best-effort contract, and keeps the in-memory live-run registry that makes the orphan sweep ownership-aware.
+    - `RunTraceRepositoryImpl.kt` - Room-backed, write-buffered `RunTraceRepository`. Mutex-guarded buffer flushed by size (32), timer (500 ms) or force; batch inserts via `TraceStepDao.insertTraceSteps` with a per-run retry on batch failure (a poisoned run cannot destroy co-buffered records of healthy runs); maps both record kinds to/from `TraceStepEntity` (console type stored as a stable name, unreadable rows skipped on read).
     - `PowerStateRepositoryImpl.kt` - Power state repository implementation.
     - `PromptRepositoryImpl.kt` - Room-backed implementation of `PromptRepository` (prompt-template CRUD).
     - `ToolRepositoryImpl.kt` - Tool repository implementation.
@@ -183,7 +185,7 @@ This file maps the contents of the main application package.
     - `ClarificationRequest.kt` - Domain model describing a clarification question issued by the agent (id, question, options, timeoutMs).
     - `CloudProvider.kt` - Typed enum identifying the cloud LLM providers the agent can dispatch to (`openai`, `anthropic`, `google`, `deepseek`, `ollama`); owns `fromId` parsing with legacy `"gemini"` alias and the `AUTO_KEY` UI sentinel.
     - `ConnectionModel.kt` - Connection model.
-    - `ConsoleEvent.kt` - Domain model of a single agent-console entry (`timestamp`, `type`, `message`) with `ConsoleEventType` sealed interface (`NodeExecution`, `ToolCall`, `MemoryAccess`, `SystemMessage`, `Error`).
+    - `ConsoleEvent.kt` - Domain model of a single agent-console entry (`timestamp`, `type`, `message`, per-run `seq`) with `ConsoleEventType` sealed interface (`NodeExecution`, `ToolCall`, `MemoryAccess`, `SystemMessage`, `Error`).
     - `DbPassphraseUnavailableException.kt` - Typed exception raised when the SQLCipher passphrase cannot be read (or does not match) while an encrypted DB file exists (`Reason`: PREFS_OPEN_FAILED / PASSPHRASE_MISSING / PASSPHRASE_MALFORMED / KEY_MISMATCH); routes to the splash data-locked recovery screen.
     - `InitProgress.kt` - Domain model of cold-start progress (`stage`, `message`, `completedSteps`, `totalSteps`) plus `InitStage` sealed interface (Initializing, LoadingModel, LoadingPipelines, LoadingChats, LoadingMemory, Done, Failed) and `InitFailureKind` (GENERIC / DB_PASSPHRASE_UNAVAILABLE) consumed by the splash screen.
     - `DownloadState.kt` - Download state model.
@@ -210,6 +212,7 @@ This file maps the contents of the main application package.
     - `NodeType.kt` - Node type enum.
     - `PipelineGraph.kt` - Pipeline graph model. Also hosts `contentHash()` — a stable SHA-256 over execution-relevant graph content (canvas coordinates / pipeline name / `updatedAt` excluded), captured into run records as the checkpoint-invalidation contract.
     - `PipelineRun.kt` - Persistent pipeline-run domain model plus `PipelineRunStatus` (QUEUED → RUNNING → WAITING_* → terminal, with `isTerminal`) and `RunOrigin` (CHAT / SCHEDULER).
+    - `RunTraceRecord.kt` - Sealed domain model of one persistent run-trace record: `NodeIo` (per-node input/output snapshot) and `ConsoleEntry` (persisted console event), both carrying `runId` / `sessionId` / per-run `seq` / `timestamp`.
     - `PipelineImportOutcome.kt` - Sealed result of parsing a pipeline JSON document (Success / SchemaMismatch / Failure) consumed by `ImportPipelineUseCase`.
     - `PipelinePreset.kt` - Domain model of a reusable pipeline template. Carries `id`, `name`, `description`, `category` (`PresetCategory` enum with wire keys), `graph: PipelineGraph` (template), `tags`, `isBundled`.
     - `PipelinePresetImportOutcome.kt` - Sealed result of parsing a preset JSON document (Success / SchemaMismatch / Failure), mirroring `PipelineImportOutcome`.
@@ -248,6 +251,7 @@ This file maps the contents of the main application package.
     - `PromptRepository.kt` - Prompt-template repository interface (CRUD over `PromptTemplate`). Data-layer impl: `PromptRepositoryImpl`.
     - `PipelineRepository.kt` - Pipeline repository interface.
     - `PipelineRunRepository.kt` - Persistent pipeline-run records interface: creation/RUNNING/terminal transitions are owned by the task queue, per-node progress and WAITING_* suspensions by the execution engine; terminal statuses are write-once; all methods are best-effort (storage failures absorbed); orphan detection is process-ownership-based. Data-layer impl: `PipelineRunRepositoryImpl`.
+    - `RunTraceRepository.kt` - Buffered persistent run-trace interface (`append` / `flush` / `getTraceForRun`): writes are batched so trace persistence never costs a SQLCipher commit per streamed event; the engine force-flushes at suspension and terminal points. Best-effort contract. Data-layer impl: `RunTraceRepositoryImpl`.
     - `PowerStateRepository.kt` - Power state repository interface.
     - `SettingsRepository.kt` - Settings repository interface.
     - `ToolRepository.kt` - Tool repository interface.
@@ -342,7 +346,7 @@ This file maps the contents of the main application package.
         - `ChatHomeScreenState.kt` - Single immutable snapshot of the chat-home surface: `visual` (the sealed `ChatHomeUiState`), `ChatHomeComposerState`, the catalog `ChatHomeConsoleState` (reused verbatim), `ChatHomePendingState` (HITL tool + clarification), `ChatHomeThreadState`, `ChatHomeModelState`, `ChatHomeTokenState`, plus messages / pipelineName / availablePipelines.
         - `ChatHomeViewModel.kt` - Hilt ViewModel injecting `AgentOrchestratorUseCase`, `ChatRepository`, `PipelineRepository`, `SettingsRepository`, `GetContextWindowUseCase`, `LlmInferenceEngine`, `ClarificationRepository`. Exposes one consolidated `state: StateFlow<ChatHomeScreenState>` (every mutation via `update { it.copy(...) }`) plus the `pipelineFallbackEvents` / `consoleSnackbarEvents` / `exportEvents` / `importErrorEvents` / `memorySaveEvents` one-shots. Wires the orchestrator core, HITL (`WaitingForApproval` → `HitlConfirm(Risk)` with destructive typed-confirm gating, system-message persistence on reject), Clarification (`AwaitingClarification` → `Clarification` with VM-side watchdog timer), and the console pane (`ConsoleLog` / `PipelineTrace` / `NodeIO` aggregation with `consoleClearBaseline`, Copy line / Copy all clipboard payloads, persisted preferred tab).
         - `ChatHomeStateMapping.kt` - Pure-Kotlin mapper from `ChatHomeScreenState` to the catalog `ChatHomeViewState`, plus debug-picker fixtures and the `DebugStateIds` constants.
-        - `ChatHomeConsoleMapping.kt` - Pure-Kotlin mappers from the domain orchestrator output to the catalog console-pane row models: `ConsoleEvent → ConsoleLine`, `TraceStep → ConsoleTraceSpan`, `NodeIO → List<ConsoleVarRow>`.
+        - `ChatHomeConsoleMapping.kt` - Pure-Kotlin mappers from the domain orchestrator output to the catalog console-pane row models: `ConsoleEvent → ConsoleLine`, `TraceStep → ConsoleTraceSpan`, `NodeIO → List<ConsoleVarRow>`; replay re-hydrators from persisted `RunTraceRecord`s and the seq-keyed replay/live merge (`mergeConsoleEventsBySeq`).
         - `ChatHomeDebugStatePicker.kt` - Triple-tap state picker (`DropdownMenu`) — visible only in debug builds via `BuildConfig.DEBUG` guard.
         - `ChatHomeFixtures.kt` - Bundle of resolved UI strings (status pills, stub rows, suggestions) consumed by the `ChatHomeScreen` view-state mapping.
     - `memory/` - Memory screen components.

@@ -3,6 +3,7 @@ package app.knotwork.android.presentation.ui.chat.home
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ConsoleEvent
 import app.knotwork.android.domain.models.ConsoleEventType
+import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.design.components.console.ConsoleLevel
 import app.knotwork.design.components.console.ConsoleLine
 import app.knotwork.design.components.console.ConsoleSource
@@ -128,6 +129,76 @@ fun nodeIoToVarRows(io: AgentOrchestratorState.NodeIO): List<ConsoleVarRow> {
         ConsoleVarRow(node = node, key = CONSOLE_VAR_KEY_OUTPUT, valueJson = JSONObject.quote(io.output)),
     )
 }
+
+/**
+ * Merges the replayed console baseline of a run with a live cumulative
+ * snapshot of the same run, deduplicating by [ConsoleEvent.seq] — the
+ * monotonic per-run position assigned by the engine. The live event wins a
+ * collision (it is the same record, fresher by construction). The result is
+ * ordered by seq, so the seam between replayed history and the live stream
+ * renders correctly regardless of how much of the run the live snapshot
+ * covers (everything, after an in-process reattach; only the tail, after a
+ * future checkpoint resume).
+ *
+ * @param baseline Replayed events loaded from the persistent run trace.
+ * @param live The cumulative live snapshot from the engine.
+ * @return The merged event list ordered by seq, without duplicates.
+ */
+fun mergeConsoleEventsBySeq(baseline: List<ConsoleEvent>, live: List<ConsoleEvent>): List<ConsoleEvent> {
+    val bySeq = LinkedHashMap<Long, ConsoleEvent>()
+    baseline.forEach { bySeq[it.seq] = it }
+    live.forEach { bySeq[it.seq] = it }
+    return bySeq.values.sortedBy { it.seq }
+}
+
+/**
+ * Re-hydrates a persisted console entry into the domain [ConsoleEvent] used
+ * by the Logs tab. The replayed event keeps its original in-run [ConsoleEvent.seq],
+ * which is what lets the replay/live seam deduplicate when a live cumulative
+ * snapshot of the same run arrives on top of the baseline.
+ *
+ * @param entry Persisted console record loaded from the run trace.
+ * @return The equivalent domain event.
+ */
+fun consoleEntryToConsoleEvent(entry: RunTraceRecord.ConsoleEntry): ConsoleEvent = ConsoleEvent(
+    timestamp = entry.timestamp,
+    type = entry.type,
+    message = entry.message,
+    seq = entry.seq,
+)
+
+/**
+ * Re-hydrates a persisted node I/O record into the orchestrator
+ * [AgentOrchestratorState.NodeIO] snapshot shape, so the replay path can
+ * feed the exact same Vars-tab projection ([nodeIoToVarRows]) as the live
+ * path.
+ *
+ * @param record Persisted node I/O record loaded from the run trace.
+ * @return The equivalent per-node I/O snapshot.
+ */
+fun nodeIoRecordToNodeIo(record: RunTraceRecord.NodeIo): AgentOrchestratorState.NodeIO = AgentOrchestratorState.NodeIO(
+    nodeId = record.nodeId,
+    nodeType = record.nodeType,
+    input = record.inputText,
+    output = record.outputText,
+)
+
+/**
+ * Projects a persisted node I/O record onto a [ConsoleTraceSpan] for the
+ * Traces tab of a replayed run. [ConsoleTraceSpan.startedAt] renders the
+ * record's completion timestamp — the persisted analogue of the live path's
+ * "wall clock when the step landed".
+ *
+ * @param record Persisted node I/O record loaded from the run trace.
+ * @return Span row with `Ok` status — node failures short-circuit the run
+ *   before a NodeIo record is appended, mirroring the live-path invariant.
+ */
+fun nodeIoRecordToConsoleSpan(record: RunTraceRecord.NodeIo): ConsoleTraceSpan = ConsoleTraceSpan(
+    name = record.nodeType,
+    durationMs = record.durationMs,
+    startedAt = TIMESTAMP_FORMATTER.format(Instant.ofEpochMilli(record.timestamp)),
+    status = SpanStatus.Ok,
+)
 
 /**
  * Formats the grouping header for a [ConsoleVarRow] — concatenates the

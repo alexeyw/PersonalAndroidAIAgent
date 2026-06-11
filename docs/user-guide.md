@@ -274,6 +274,20 @@ tab you used last. The pane auto-scrolls to the latest event as long as
 you are pinned to the bottom; if you scroll up to read older events,
 auto-scroll pauses so you do not lose your place.
 
+### Trace replay after reopening a chat
+
+The console is no longer wiped when the app restarts. The execution
+trace of every run — the console log plus each node's input/output —
+is saved to the encrypted local database as the run executes, and
+opening a chat replays the trace of its active (or most recent) run
+into all three tabs. A run that executed while the app was closed is
+therefore fully inspectable afterwards: what the agent did, which
+tools it called, and what every node received and produced. If the run
+is still executing, live events continue seamlessly below the replayed
+history. **Clear console** keeps working on top of a replayed trace —
+cleared rows stay hidden until you switch sessions or send a new
+message.
+
 ### Approving a tool call
 
 If the agent needs your approval to run a sensitive or destructive

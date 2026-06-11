@@ -14,6 +14,8 @@ import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.ClarificationRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
+import app.knotwork.android.domain.repositories.PipelineRunRepository
+import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
@@ -87,6 +89,8 @@ class ChatHomeViewModelTest {
     private lateinit var localModelRepository: LocalModelRepository
     private lateinit var loadModelUseCase: LoadModelUseCase
     private lateinit var saveMessageToMemoryUseCase: SaveMessageToMemoryUseCase
+    private lateinit var pipelineRunRepository: PipelineRunRepository
+    private lateinit var runTraceRepository: RunTraceRepository
 
     private lateinit var sessionsFlow: MutableStateFlow<List<ChatSession>>
     private lateinit var localModelsFlow: MutableStateFlow<List<LocalModel>>
@@ -112,6 +116,11 @@ class ChatHomeViewModelTest {
         localModelRepository = mockk(relaxed = true)
         loadModelUseCase = mockk()
         saveMessageToMemoryUseCase = mockk()
+        pipelineRunRepository = mockk()
+        runTraceRepository = mockk()
+        coEvery { pipelineRunRepository.getActiveRunForSession(any()) } returns null
+        coEvery { pipelineRunRepository.getLatestRunForSession(any()) } returns null
+        coEvery { runTraceRepository.getTraceForRun(any()) } returns emptyList()
 
         sessionsFlow = MutableStateFlow(emptyList())
         localModelsFlow = MutableStateFlow(emptyList())
@@ -170,7 +179,13 @@ class ChatHomeViewModelTest {
         loadModelUseCase,
         mockk(relaxed = true),
         saveMessageToMemoryUseCase,
-    )
+        pipelineRunRepository,
+        runTraceRepository,
+    ).also { vm ->
+        // Keep the replay projection on the test scheduler so
+        // advanceUntilIdle() deterministically covers it.
+        vm.traceProjectionDispatcher = testDispatcher
+    }
 
     @Test
     fun `init generates session id when none persisted`() = runTest(testDispatcher) {

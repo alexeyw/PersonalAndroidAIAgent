@@ -563,9 +563,28 @@ and are never serialized into DataStore or git.
 
 The local database (`AppDatabase`, `agent_database.db`) holds chat
 sessions and messages, long-term memory chunks, local-model metadata,
-pipelines (nodes and connections), prompt templates, and pipeline
-trace steps. DAOs are split per aggregate (`ChatDao`, `MemoryDao`,
-`PipelineDao`, …) and live under `data/local/dao/`.
+pipelines (nodes and connections), prompt templates, pipeline-run
+lifecycle records and the per-run execution trace. DAOs are split per
+aggregate (`ChatDao`, `MemoryDao`, `PipelineDao`, …) and live under
+`data/local/dao/`.
+
+**Run trace (buffered write-through).** While the execution engine
+walks a graph it appends every console event and every node's
+input/output snapshot to the persistent run trace through the domain
+interface `RunTraceRepository`. The Room-backed implementation
+(`RunTraceRepositoryImpl`) never commits per event: records accumulate
+in an in-memory buffer and reach `trace_steps` as a single batch insert
+when the buffer fills (32 records) or a short timer elapses (500 ms),
+so trace persistence does not compete with on-device inference for
+disk I/O during token streaming. The engine force-flushes the buffer
+at every suspension point (tool-approval and clarification waits) and
+at the terminal point of the run — including cancellation — so the
+persisted trace is complete whenever the run can pause, end, or the
+process can be killed. Records carry a per-run monotonic sequence
+number; the chat console replays the stored trace of a session's
+active (or latest) run on open and merges live events on top by that
+sequence, which keeps the replay/live seam free of duplicates. Trace
+rows cascade-delete with their parent `pipeline_runs` row.
 
 Migration rules:
 
@@ -594,8 +613,11 @@ Encryption applies to every table that may hold user-derived content:
 - `chat_messages`, `chat_sessions` — user messages and LLM replies.
 - `memory_chunks` — long-term memory fragments distilled from
   conversations.
-- `trace_steps` — intermediate pipeline-node outputs derived from
+- `trace_steps` — the persistent pipeline-run trace: per-node
+  input/output snapshots and console log events, all derived from
   user input.
+- `pipeline_runs` — run lifecycle records (status, current node,
+  graph content hash, error message).
 
 Secrets — the SQLCipher passphrase, per-provider cloud API keys, and
 the HuggingFace access token —

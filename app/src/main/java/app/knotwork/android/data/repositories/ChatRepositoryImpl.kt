@@ -1,12 +1,9 @@
 package app.knotwork.android.data.repositories
 
 import app.knotwork.android.data.local.dao.ChatDao
-import app.knotwork.android.data.local.dao.TraceStepDao
 import app.knotwork.android.data.local.models.ChatSessionEntity
-import app.knotwork.android.data.local.models.TraceStepEntity
 import app.knotwork.android.data.mappers.toDomain
 import app.knotwork.android.data.mappers.toEntity
-import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.Role
@@ -28,11 +25,9 @@ import javax.inject.Singleton
  * the same session skip the [ChatDao.getSessionById] round-trip and update only the timestamp.
  *
  * @property chatDao The Data Access Object for chat messages.
- * @property traceStepDao The Data Access Object for pipeline trace steps.
  */
 @Singleton
-class ChatRepositoryImpl @Inject constructor(private val chatDao: ChatDao, private val traceStepDao: TraceStepDao) :
-    ChatRepository {
+class ChatRepositoryImpl @Inject constructor(private val chatDao: ChatDao) : ChatRepository {
 
     @Volatile
     private var cachedSessionId: String? = null
@@ -149,37 +144,6 @@ class ChatRepositoryImpl @Inject constructor(private val chatDao: ChatDao, priva
     }
 
     override suspend fun getSessionById(id: String): ChatSession? = chatDao.getSessionById(id)?.toDomain()
-
-    override suspend fun saveTraceStep(
-        sessionId: String,
-        nodeName: String,
-        outputText: String,
-        durationMs: Long,
-        tokenCount: Int?,
-    ) {
-        traceStepDao.insertTraceStep(
-            TraceStepEntity(
-                sessionId = sessionId,
-                nodeName = nodeName,
-                outputText = outputText,
-                timestamp = System.currentTimeMillis(),
-                durationMs = durationMs,
-                tokenCount = tokenCount,
-            ),
-        )
-    }
-
-    override fun getTraceSteps(sessionId: String): Flow<List<AgentOrchestratorState.TraceStep>> =
-        traceStepDao.getTraceStepsForSession(sessionId).map { entities ->
-            entities.map {
-                AgentOrchestratorState.TraceStep(
-                    nodeName = it.nodeName,
-                    outputText = it.outputText,
-                    durationMs = it.durationMs,
-                    tokenCount = it.tokenCount,
-                )
-            }
-        }
 
     private companion object {
         /**
