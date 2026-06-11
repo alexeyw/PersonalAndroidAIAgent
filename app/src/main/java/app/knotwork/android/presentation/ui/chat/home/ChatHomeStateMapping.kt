@@ -369,20 +369,21 @@ internal const val RAW_ARGS_FALLBACK_KEY: String = "args"
 /**
  * Trailing interrupted-run status row driven by the live
  * [InterruptedRunPending] snapshot the reattach protocol captured. Renders
- * the resolved node label inside the catalog `InterruptedRunCard`.
+ * the resolved node label inside the catalog `InterruptedRunCard`. The
+ * timestamp comes from the snapshot (the run's actual interruption time,
+ * formatted once when the card was installed) — recomputing "now" here
+ * would both lie about when the run died and change on every
+ * recomposition.
  */
-internal fun liveInterruptedRow(modelName: String, pending: InterruptedRunPending): ChatHomeMessageRow {
-    val timestamp = SimpleDateFormat(HITL_TIMESTAMP_PATTERN, Locale.getDefault())
-        .format(Date(System.currentTimeMillis()))
-    return ChatHomeMessageRow(
+internal fun liveInterruptedRow(modelName: String, pending: InterruptedRunPending): ChatHomeMessageRow =
+    ChatHomeMessageRow(
         id = "a-interrupted-${pending.runId}",
         role = ChatRole.Assistant,
         content = ChatContent.RunInterrupted(
             model = InterruptedRunCardModel(nodeLabel = pending.nodeLabel),
         ),
-        metadata = ChatMetadata(timestamp = timestamp, model = modelName),
+        metadata = ChatMetadata(timestamp = pending.timestamp, model = modelName),
     )
-}
 
 /** Trailing interrupted-run row appended when the debug picker forces the state without a pending snapshot. */
 internal fun interruptedRow(modelName: String): ChatHomeMessageRow = ChatHomeMessageRow(

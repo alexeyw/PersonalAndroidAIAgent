@@ -9,6 +9,7 @@ import app.knotwork.android.domain.repositories.PipelineRunRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -135,12 +136,16 @@ class PipelineRunRepositoryImpl @Inject constructor(private val pipelineRunDao: 
                 emit(emptyList())
             }
 
-    override fun observeActiveRuns(): Flow<List<PipelineRun>> =
-        pipelineRunDao.observeRunsByStatuses(ACTIVE_STATUS_NAMES)
-            .map { entities -> entities.map { it.toDomain() } }
+    override fun observeActiveRunSessionIds(): Flow<Set<String>> =
+        pipelineRunDao.observeSessionIdsByStatuses(ACTIVE_STATUS_NAMES)
+            .map { it.toSet() }
+            // Room re-runs the query on every table write (per-node progress
+            // included); the set only changes when a run starts or settles,
+            // so deduplicate here instead of in every consumer.
+            .distinctUntilChanged()
             .catch { e ->
-                Timber.e(e, "Pipeline-run store failure in observeActiveRuns; degrading to empty")
-                emit(emptyList())
+                Timber.e(e, "Pipeline-run store failure in observeActiveRunSessionIds; degrading to empty")
+                emit(emptySet())
             }
 
     override suspend fun discardInterruptedRun(runId: String) {

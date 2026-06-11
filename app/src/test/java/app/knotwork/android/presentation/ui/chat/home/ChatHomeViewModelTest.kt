@@ -105,7 +105,7 @@ class ChatHomeViewModelTest {
     private lateinit var defaultPipelineIdFlow: MutableStateFlow<String?>
     private lateinit var maxContextLengthFlow: MutableStateFlow<Int>
     private lateinit var consolePreferredConsoleTabNameFlow: MutableStateFlow<String>
-    private lateinit var activeRunsFlow: MutableStateFlow<List<PipelineRun>>
+    private lateinit var activeRunsFlow: MutableStateFlow<Set<String>>
 
     private lateinit var viewModel: ChatHomeViewModel
 
@@ -127,8 +127,9 @@ class ChatHomeViewModelTest {
         coEvery { pipelineRunRepository.getActiveRunForSession(any()) } returns null
         coEvery { pipelineRunRepository.getLatestRunForSession(any()) } returns null
         coEvery { runTraceRepository.getTraceForRun(any()) } returns emptyList()
-        activeRunsFlow = MutableStateFlow(emptyList())
-        every { pipelineRunRepository.observeActiveRuns() } returns activeRunsFlow
+        activeRunsFlow = MutableStateFlow(emptySet())
+        every { pipelineRunRepository.observeActiveRunSessionIds() } returns activeRunsFlow
+        coEvery { clarificationRepository.submitClarification(any(), any()) } returns true
 
         sessionsFlow = MutableStateFlow(emptyList())
         localModelsFlow = MutableStateFlow(emptyList())
@@ -1344,10 +1345,9 @@ class ChatHomeViewModelTest {
             advanceUntilIdle()
 
             assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
-            assertEquals(
-                InterruptedRunPending(runId = "run-int", nodeLabel = "Summarise"),
-                viewModel.state.value.pending.interrupted,
-            )
+            val pending = viewModel.state.value.pending.interrupted
+            assertEquals("run-int", pending?.runId)
+            assertEquals("Summarise", pending?.nodeLabel)
         }
 
     @Test
@@ -1456,6 +1456,114 @@ class ChatHomeViewModelTest {
     }
 
     @Test
+    fun `interrupted card survives opening and closing the drawer`() = runTest(testDispatcher) {
+        val sessionId = "session-drawer"
+        seedSavedSession(sessionId)
+        coEvery { pipelineRunRepository.getLatestRunForSession(sessionId) } returns
+            runRecord(sessionId, PipelineRunStatus.INTERRUPTED, id = "run-drw")
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
+
+        viewModel.openDrawer()
+        assertEquals(ChatHomeUiState.DrawerOpen, viewModel.state.value.visual)
+        viewModel.closeDrawer()
+
+        // The resting visual must resolve back to Interrupted while the
+        // snapshot is pending — otherwise Resume / Discard become
+        // unreachable until the next thread switch.
+        assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
+        assertNotNull(viewModel.state.value.pending.interrupted)
+    }
+
+    @Test
+    fun `interrupted card surfaces after the drawer closes when reattach resolved mid-overlay`() =
+        runTest(testDispatcher) {
+            val sessionId = "session-drawer-open"
+            seedSavedSession(sessionId)
+            coEvery { pipelineRunRepository.getLatestRunForSession(sessionId) } returns
+                runRecord(sessionId, PipelineRunStatus.INTERRUPTED, id = "run-mid")
+
+            viewModel = createViewModel()
+            // Drawer goes up before the reattach lookup lands.
+            viewModel.openDrawer()
+            advanceUntilIdle()
+
+            // The overlay is never yanked away…
+            assertEquals(ChatHomeUiState.DrawerOpen, viewModel.state.value.visual)
+            // …but the pending snapshot is installed, so closing the drawer
+            // settles straight onto the interrupted card.
+            assertNotNull(viewModel.state.value.pending.interrupted)
+            viewModel.closeDrawer()
+            assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
+        }
+
+    @Test
+    fun `clarification restore does not re-arm the UI watchdog`() = runTest(testDispatcher) {
+        val sessionId = "session-clar-watchdog"
+        seedSavedSession(sessionId)
+        coEvery { pipelineRunRepository.getActiveRunForSession(sessionId) } returns
+            runRecord(sessionId, PipelineRunStatus.WAITING_CLARIFICATION)
+        every { agentOrchestratorUseCase.observe(sessionId) } returns
+            flowOf(AgentOrchestratorState.ConsoleLog(events = emptyList(), runId = "run-1"))
+        val request = ClarificationRequest(
+            id = "req-wd",
+            sessionId = sessionId,
+            question = "Which calendar?",
+            options = listOf("Work"),
+            timeoutMs = 60_000L,
+        )
+        every { clarificationRepository.pendingRequests } returns flowOf(listOf(request))
+
+        viewModel = createViewModel()
+        // advanceUntilIdle would run a re-armed 60s watchdog to completion —
+        // the repository's authoritative timeout has been ticking since the
+        // request was raised, so the restore path must not start a second,
+        // desynchronized clock that later submits a spurious default.
+        advanceUntilIdle()
+
+        assertEquals(ChatHomeUiState.Clarification, viewModel.state.value.visual)
+        coVerify(exactly = 0) { clarificationRepository.submitClarification(any(), any()) }
+    }
+
+    @Test
+    fun `given stale clarification when reply not delivered then SYSTEM row records it`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        val request = ClarificationRequest(
+            id = "req-stale",
+            sessionId = sessionId,
+            question = "Which calendar?",
+            options = listOf("Work"),
+            timeoutMs = 0,
+        )
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(AgentOrchestratorState.AwaitingClarification(request))
+            delay(10_000)
+        }
+        // The request resolved on the repository side (timeout or an
+        // earlier answer) before the user's tap arrives.
+        coEvery { clarificationRepository.submitClarification("req-stale", "Work") } returns false
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        runCurrent()
+
+        viewModel.submitClarificationReply("Work")
+        advanceUntilIdle()
+
+        coVerify {
+            chatRepository.saveMessage(
+                match {
+                    it.role == Role.SYSTEM &&
+                        it.content == ChatHomeViewModel.SYSTEM_MESSAGE_CLARIFICATION_REPLY_NOT_DELIVERED
+                },
+            )
+        }
+    }
+
+    @Test
     fun `thread rows flag sessions with active background runs`() = runTest(testDispatcher) {
         val foreground = "session-fg"
         val background = "session-bg"
@@ -1468,7 +1576,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        activeRunsFlow.value = listOf(runRecord(background, PipelineRunStatus.RUNNING, id = "run-bg"))
+        activeRunsFlow.value = setOf(background)
         advanceUntilIdle()
 
         val rows = viewModel.state.value.thread.rows

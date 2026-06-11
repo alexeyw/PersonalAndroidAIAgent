@@ -121,15 +121,19 @@ interface PipelineRunRepository {
     fun observeRunsForSession(sessionId: String): Flow<List<PipelineRun>>
 
     /**
-     * Observes every non-terminal run across all sessions. Powers the drawer
-     * thread-list indicator: a session owning a run in any active status
-     * (QUEUED / RUNNING / WAITING_*) renders an in-progress badge so the user
-     * can see at a glance which background conversations are still working.
+     * Observes the set of session ids that currently own a non-terminal run
+     * (QUEUED / RUNNING / WAITING_*). Powers the drawer thread-list
+     * indicator: a session in the set renders an in-progress badge so the
+     * user can see at a glance which background conversations are still
+     * working. Deliberately a session-id projection rather than full run
+     * records — the underlying table is written on every node transition,
+     * and implementations deduplicate emissions so consumers only react
+     * when the set itself changes (run started / run settled).
      *
-     * @return A cold flow re-emitting the active-run list on every change;
+     * @return A cold flow of the active session-id set, deduplicated;
      *   storage failures degrade to an empty emission.
      */
-    fun observeActiveRuns(): Flow<List<PipelineRun>>
+    fun observeActiveRunSessionIds(): Flow<Set<String>>
 
     /**
      * Discards an interrupted run: transitions it from

@@ -330,16 +330,25 @@ class ToolNodeExecutor @Inject constructor(
 
             // Register deferred before any suspension point so a fast approval is not dropped
             val deferred = CompletableDeferred<Boolean>()
-            activeApprovalDeferreds[sessionId] = PendingApprovalHolder(deferred, approvalRequest)
+            val holder = PendingApprovalHolder(deferred, approvalRequest)
+            activeApprovalDeferreds[sessionId] = holder
             val timeoutMs = settingsRepository.toolCallTimeoutMs.first()
             isApproved = try {
                 withTimeout(timeoutMs) { deferred.await() }
             } catch (e: TimeoutCancellationException) {
-                activeApprovalDeferreds.remove(sessionId)
                 Timber.tag("PipelineDebug").w("Approval timed out for session: $sessionId")
                 emit(NodeOutput.State(AgentOrchestratorState.Error("Approval request timed out")))
                 emit(NodeOutput.Result(NodeExecutionResult(error = "Approval request timed out")))
                 return@flow
+            } finally {
+                // Covers every exit: timeout, resume (already removed — the
+                // two-arg remove is then a no-op), and plain cancellation of
+                // the suspended gate (scope teardown, an abandoned editor
+                // test run). Without this, a leaked holder would keep
+                // serving pendingApprovalFor a request no coroutine can
+                // ever settle. remove(key, value) leaves a newer
+                // registration for the same session untouched.
+                activeApprovalDeferreds.remove(sessionId, holder)
             }
 
             if (!isApproved) {

@@ -240,24 +240,40 @@ class PipelineRunRepositoryImplTest {
     }
 
     @Test
-    fun `observeActiveRuns queries every non-terminal status and maps entities`() = runTest {
-        coEvery { pipelineRunDao.observeRunsByStatuses(activeNames) } returns flowOf(
-            listOf(sampleEntity, sampleEntity.copy(id = "run-2", sessionId = "session-2", status = "RUNNING")),
+    fun `observeActiveRunSessionIds queries every non-terminal status and dedups to a set`() = runTest {
+        coEvery { pipelineRunDao.observeSessionIdsByStatuses(activeNames) } returns flowOf(
+            listOf("session-1", "session-2"),
         )
 
-        val runs = repository.observeActiveRuns().first()
+        val sessionIds = repository.observeActiveRunSessionIds().first()
 
-        assertEquals(listOf("run-1", "run-2"), runs.map { it.id })
-        assertEquals(PipelineRunStatus.RUNNING, runs[1].status)
+        assertEquals(setOf("session-1", "session-2"), sessionIds)
     }
 
     @Test
-    fun `given failing upstream when observeActiveRuns then emits empty list`() = runTest {
-        coEvery { pipelineRunDao.observeRunsByStatuses(any()) } returns flow {
+    fun `observeActiveRunSessionIds suppresses emissions with an unchanged set`() = runTest {
+        coEvery { pipelineRunDao.observeSessionIdsByStatuses(any()) } returns flowOf(
+            listOf("session-1"),
+            // Room re-runs the query on every table write; an order change
+            // or a re-emission with the same membership must not reach the
+            // consumer.
+            listOf("session-1"),
+            listOf("session-1", "session-2"),
+        )
+
+        val emissions = mutableListOf<Set<String>>()
+        repository.observeActiveRunSessionIds().collect { emissions.add(it) }
+
+        assertEquals(listOf(setOf("session-1"), setOf("session-1", "session-2")), emissions)
+    }
+
+    @Test
+    fun `given failing upstream when observeActiveRunSessionIds then emits empty set`() = runTest {
+        coEvery { pipelineRunDao.observeSessionIdsByStatuses(any()) } returns flow {
             throw IllegalStateException("io")
         }
 
-        assertEquals(emptyList<PipelineRun>(), repository.observeActiveRuns().first())
+        assertEquals(emptySet<String>(), repository.observeActiveRunSessionIds().first())
     }
 
     @Test

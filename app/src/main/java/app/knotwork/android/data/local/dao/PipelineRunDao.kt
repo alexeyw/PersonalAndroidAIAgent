@@ -143,14 +143,18 @@ interface PipelineRunDao {
     suspend fun getRunsByStatuses(statuses: List<String>): List<PipelineRunEntity>
 
     /**
-     * Observes every run whose status is in [statuses], across all sessions.
-     * Backs the drawer thread-list activity indicator (all non-terminal
-     * statuses).
+     * Observes the distinct session ids owning a run whose status is in
+     * [statuses]. Backs the drawer thread-list activity indicator (all
+     * non-terminal statuses). A single-column DISTINCT projection on
+     * purpose: Room re-runs the query on every `pipeline_runs` write (the
+     * engine writes per-node progress throughout a run), so each
+     * invalidation must stay a cheap column read instead of materialising
+     * full rows the consumer would reduce to ids anyway.
      *
      * @param statuses Status names to match.
      */
-    @Query("SELECT * FROM pipeline_runs WHERE status IN (:statuses)")
-    fun observeRunsByStatuses(statuses: List<String>): Flow<List<PipelineRunEntity>>
+    @Query("SELECT DISTINCT sessionId FROM pipeline_runs WHERE status IN (:statuses)")
+    fun observeSessionIdsByStatuses(statuses: List<String>): Flow<List<String>>
 
     /**
      * Discards an interrupted run: flips it to the FAILED status with the
