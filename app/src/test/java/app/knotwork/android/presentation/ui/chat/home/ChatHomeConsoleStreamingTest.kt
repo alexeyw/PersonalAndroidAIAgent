@@ -160,7 +160,11 @@ class ChatHomeConsoleStreamingTest {
         mockk(relaxed = true),
         pipelineRunRepository,
         runTraceRepository,
-    )
+    ).also { vm ->
+        // Keep the replay projection on the test scheduler so
+        // advanceUntilIdle() deterministically covers it.
+        vm.traceProjectionDispatcher = testDispatcher
+    }
 
     @Test
     fun `given ConsoleLog emissions when sendMessage then VM aggregates mapped lines in order`() =

@@ -1,5 +1,6 @@
 package app.knotwork.android.presentation.ui.chat.home
 
+import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.knotwork.android.domain.engine.LlmInferenceEngine
@@ -35,10 +36,14 @@ import app.knotwork.design.components.console.ConsoleLine
 import app.knotwork.design.components.console.ConsoleSnap
 import app.knotwork.design.components.console.ConsoleSource
 import app.knotwork.design.components.console.ConsoleTab
+import app.knotwork.design.components.console.ConsoleTraceSpan
+import app.knotwork.design.components.console.ConsoleVarRow
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
 import app.knotwork.design.screens.chat.ChatHomeThreadRow
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -51,6 +56,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import timber.log.Timber
@@ -205,26 +211,27 @@ class ChatHomeViewModel @Inject constructor(
     private val traceStepStartMs: MutableList<Long> = mutableListOf()
 
     /**
-     * Id of the run whose persisted trace is currently loaded as the console
-     * replay baseline, or `null` when no baseline is loaded. A live
-     * [AgentOrchestratorState.ConsoleLog] snapshot merges with the baseline
-     * only when it carries the same run id — events of a *different* run
-     * replace the baseline outright (a fresh send already cleared it via
-     * [resetConsoleCachesForNewRun]).
+     * Console replay baseline loaded from the persistent run trace when the
+     * session opens, or `null` when none is loaded. The run id and its
+     * replayed events travel as one value ([ReplayedBaseline]) so they can
+     * never desynchronize: a live [AgentOrchestratorState.ConsoleLog]
+     * snapshot merges with the events only when it carries the same run id —
+     * events of a *different* run replace the baseline outright (a fresh
+     * send already cleared it via [resetConsoleCachesForNewRun]).
      */
-    private var replayedRunId: String? = null
-
-    /**
-     * Replayed console events of [replayedRunId], loaded from the persistent
-     * run trace when the session opens. Merged with live cumulative
-     * snapshots by [ConsoleEvent.seq] (live wins on collision), so the seam
-     * between replayed history and the live stream renders without
-     * duplicates regardless of how much of the run the live snapshot covers.
-     */
-    private var replayedConsoleBaseline: List<ConsoleEvent> = emptyList()
+    private var replayedBaseline: ReplayedBaseline? = null
 
     /** Serializes replay loads so a rapid thread switch cannot interleave baselines. */
     private var consoleReplayJob: Job? = null
+
+    /**
+     * Dispatcher carrying the CPU-bound projection of a replayed trace
+     * (filtering and mapping the full record list to console rows). Off-main
+     * by default so a long run's one-shot projection cannot jank the session
+     * open; swapped for the test dispatcher in unit tests.
+     */
+    @VisibleForTesting
+    internal var traceProjectionDispatcher: CoroutineDispatcher = Dispatchers.Default
 
     init {
         observeAvailablePipelines()
@@ -847,9 +854,9 @@ class ChatHomeViewModel @Inject constructor(
      * @return The merged event list ordered by seq.
      */
     private fun mergeWithReplayedBaseline(live: List<ConsoleEvent>, liveRunId: String?): List<ConsoleEvent> {
-        val baseline = replayedConsoleBaseline
-        if (baseline.isEmpty() || liveRunId == null || liveRunId != replayedRunId) return live
-        return mergeConsoleEventsBySeq(baseline, live)
+        val baseline = replayedBaseline ?: return live
+        if (baseline.events.isEmpty() || liveRunId == null || liveRunId != baseline.runId) return live
+        return mergeConsoleEventsBySeq(baseline.events, live)
     }
 
     /**
@@ -857,9 +864,12 @@ class ChatHomeViewModel @Inject constructor(
      * active one if any, otherwise the most recently started — and installs
      * it as the console baseline: Logs from the replayed console events,
      * Vars and Traces re-projected from the replayed per-node I/O records
-     * through the exact same mappers as the live path. A session without
-     * runs (or without a persisted trace) leaves the console empty, which
-     * matches the pre-replay behaviour.
+     * through the exact same mappers as the live path. The CPU-bound
+     * projection of the full trace runs on [traceProjectionDispatcher];
+     * only the VM-confined cache and state installation happen back on the
+     * main dispatcher. A session without runs (or without a persisted
+     * trace) leaves the console empty, which matches the pre-replay
+     * behaviour.
      */
     private fun replayConsoleTrace(sessionId: String) {
         consoleReplayJob?.cancel()
@@ -869,18 +879,35 @@ class ChatHomeViewModel @Inject constructor(
                 ?: return@launch
             val trace = runTraceRepository.getTraceForRun(run.id)
             if (trace.isEmpty()) return@launch
-            replayedRunId = run.id
-            replayedConsoleBaseline = trace
-                .filterIsInstance<RunTraceRecord.ConsoleEntry>()
-                .map(::consoleEntryToConsoleEvent)
-            val nodeIoRecords = trace.filterIsInstance<RunTraceRecord.NodeIo>()
+            // Snapshot the main-confined clear baseline before hopping off
+            // the main dispatcher; the projection applies it as a plain drop
+            // (the equivalent of applyConsoleClearBaseline for a fresh list).
+            val clearBaseline = consoleClearBaseline
+            val projection = withContext(traceProjectionDispatcher) {
+                val consoleEvents = trace
+                    .filterIsInstance<RunTraceRecord.ConsoleEntry>()
+                    .map(::consoleEntryToConsoleEvent)
+                val nodeIoRecords = trace.filterIsInstance<RunTraceRecord.NodeIo>()
+                val snapshots = nodeIoRecords.map { it.nodeId to nodeIoRecordToNodeIo(it) }
+                ReplayProjection(
+                    baseline = ReplayedBaseline(runId = run.id, events = consoleEvents),
+                    nodeIoSnapshots = snapshots,
+                    logs = consoleEvents.drop(clearBaseline).map(ConsoleEvent::toConsoleLine),
+                    vars = snapshots.flatMap { (_, io) -> nodeIoToVarRows(io) },
+                    traces = nodeIoRecords.map(::nodeIoRecordToConsoleSpan),
+                )
+            }
+            replayedBaseline = projection.baseline
             nodeIoSnapshots.clear()
-            nodeIoRecords.forEach { record -> nodeIoSnapshots[record.nodeId] = nodeIoRecordToNodeIo(record) }
-            val logs = applyConsoleClearBaseline(replayedConsoleBaseline).map(ConsoleEvent::toConsoleLine)
-            val vars = nodeIoSnapshots.values.flatMap(::nodeIoToVarRows)
-            val traces = nodeIoRecords.map(::nodeIoRecordToConsoleSpan)
+            projection.nodeIoSnapshots.forEach { (nodeId, io) -> nodeIoSnapshots[nodeId] = io }
             _state.update {
-                it.copy(console = it.console.copy(logs = logs, vars = vars, traces = traces))
+                it.copy(
+                    console = it.console.copy(
+                        logs = projection.logs,
+                        vars = projection.vars,
+                        traces = projection.traces,
+                    ),
+                )
             }
         }
     }
@@ -942,8 +969,7 @@ class ChatHomeViewModel @Inject constructor(
         // the next live snapshot belongs to a different run, and a thread
         // switch reloads its own baseline via replayConsoleTrace.
         consoleReplayJob?.cancel()
-        replayedRunId = null
-        replayedConsoleBaseline = emptyList()
+        replayedBaseline = null
     }
 
     /**
@@ -1453,6 +1479,36 @@ class ChatHomeViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * Console replay baseline of one persisted run: the run id and its
+     * replayed console events as a single value, so the merge guard can
+     * never see one without the other.
+     *
+     * @property runId Id of the run whose trace was replayed.
+     * @property events The run's replayed console events, ordered by seq.
+     */
+    private data class ReplayedBaseline(val runId: String, val events: List<ConsoleEvent>)
+
+    /**
+     * Result of projecting a persisted run trace into console rows, built
+     * off the main dispatcher by [replayConsoleTrace] and installed on the
+     * main dispatcher in one step.
+     *
+     * @property baseline The replay/live merge baseline.
+     * @property nodeIoSnapshots Per-node I/O snapshots in trace order,
+     *   ready to seed [ChatHomeViewModel.nodeIoSnapshots].
+     * @property logs Pre-rendered Logs-tab rows (clear baseline applied).
+     * @property vars Pre-rendered Vars-tab rows.
+     * @property traces Pre-rendered Traces-tab spans.
+     */
+    private data class ReplayProjection(
+        val baseline: ReplayedBaseline,
+        val nodeIoSnapshots: List<Pair<String, AgentOrchestratorState.NodeIO>>,
+        val logs: List<ConsoleLine>,
+        val vars: List<ConsoleVarRow>,
+        val traces: List<ConsoleTraceSpan>,
+    )
 
     companion object {
         /** Default name of a freshly-created chat session — must match legacy `ChatViewModel` for compatibility. */

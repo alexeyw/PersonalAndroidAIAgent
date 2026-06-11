@@ -156,6 +156,33 @@ class RunTraceRepositoryImplTest {
     }
 
     @Test
+    fun `given poisoned run in mixed batch then healthy run's records are retried per run and survive`() = runTest {
+        repository.dispatcher = StandardTestDispatcher(testScheduler)
+        val insertedBatches = mutableListOf<List<TraceStepEntity>>()
+        coEvery { traceStepDao.insertTraceSteps(any()) } answers {
+            val batch = firstArg<List<TraceStepEntity>>()
+            // run-poisoned has no parent pipeline_runs row: any transaction
+            // containing its records fails the FK check as a whole.
+            if (batch.any { it.runId == "run-poisoned" }) {
+                throw RuntimeException("FOREIGN KEY constraint failed")
+            }
+            insertedBatches += batch
+        }
+
+        repository.append(consoleEntry(seq = 0))
+        repository.append(consoleEntry(seq = 1).copy(runId = "run-poisoned"))
+        repository.append(consoleEntry(seq = 2))
+        repository.flush()
+        runCurrent()
+
+        // The mixed batch failed, the per-run retry salvaged the healthy
+        // run's records; only the poisoned run's group was dropped.
+        assertEquals(1, insertedBatches.size)
+        assertEquals(listOf(0L, 2L), insertedBatches.single().map { it.seq })
+        assertTrue(insertedBatches.single().all { it.runId == RUN_ID })
+    }
+
+    @Test
     fun `given storage failure on flush then batch is dropped and later appends still work`() = runTest {
         repository.dispatcher = StandardTestDispatcher(testScheduler)
         val batches = mutableListOf<List<TraceStepEntity>>()

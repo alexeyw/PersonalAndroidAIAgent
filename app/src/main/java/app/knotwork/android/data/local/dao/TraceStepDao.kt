@@ -5,16 +5,18 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import app.knotwork.android.data.local.models.TraceStepEntity
-import kotlinx.coroutines.flow.Flow
 
 /**
- * Data Access Object for TraceStepEntity.
+ * Data Access Object for [TraceStepEntity] — the persistent pipeline-run
+ * trace. The write surface is deliberately batch-only: every production
+ * insert goes through the buffered run-trace recorder, so a per-row insert
+ * path would only invite per-event SQLCipher commits back onto the
+ * streaming hot path. Per-session reads and deletes are likewise absent —
+ * the trace is queried per run; session-scoped cleanup rides the
+ * `chat_sessions` foreign-key cascade.
  */
 @Dao
 interface TraceStepDao {
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertTraceStep(step: TraceStepEntity)
-
     /**
      * Inserts a batch of trace records in a single transaction. This is the
      * write path of the buffered run-trace recorder: flushing accumulated
@@ -25,9 +27,6 @@ interface TraceStepDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertTraceSteps(steps: List<TraceStepEntity>)
 
-    @Query("SELECT * FROM trace_steps WHERE sessionId = :sessionId ORDER BY timestamp ASC")
-    fun getTraceStepsForSession(sessionId: String): Flow<List<TraceStepEntity>>
-
     /**
      * Returns the full persisted trace of one pipeline run ordered by the
      * in-run sequence number — the order events were emitted by the engine.
@@ -37,7 +36,4 @@ interface TraceStepDao {
      */
     @Query("SELECT * FROM trace_steps WHERE runId = :runId ORDER BY seq ASC")
     suspend fun getTraceStepsForRun(runId: String): List<TraceStepEntity>
-
-    @Query("DELETE FROM trace_steps WHERE sessionId = :sessionId")
-    suspend fun deleteTraceStepsForSession(sessionId: String)
 }

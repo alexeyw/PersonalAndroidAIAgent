@@ -6,7 +6,6 @@ import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.repositories.PipelineRunRepository
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -145,22 +144,16 @@ class PipelineRunRepositoryImpl @Inject constructor(private val pipelineRunDao: 
     } ?: emptyList()
 
     /**
-     * Runs [block] under the best-effort contract: re-throws
-     * [CancellationException] from the dedicated first catch clause, logs any
-     * other failure and returns `null` so callers degrade gracefully.
+     * Runs [block] under the best-effort contract via the shared
+     * [absorbingStoreFailure] helper, branding the log line with the
+     * pipeline-run store prefix.
      *
      * @param operation Name used in the failure log line.
      * @param block The storage operation to attempt.
      * @return The block's result, or `null` when the store failed.
      */
-    private suspend fun <T> absorbing(operation: String, block: suspend () -> T): T? = try {
-        block()
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        Timber.e(e, "Pipeline-run store failure in %s; continuing without it", operation)
-        null
-    }
+    private suspend fun <T> absorbing(operation: String, block: suspend () -> T): T? =
+        absorbingStoreFailure({ "Pipeline-run store failure in $operation; continuing without it" }, block)
 
     private companion object {
         /** Terminal status names used as the SQL `NOT IN` overwrite guard. */

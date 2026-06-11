@@ -39,7 +39,7 @@ This file maps the contents of the main application package.
       - `PipelineRunDao.kt` - Persistent pipeline-run records DAO (`pipeline_runs` table). Every mutating query carries a terminal-status `NOT IN` guard so a finished run can never be flipped back to an active status.
       - `PromptPresetDao.kt` - User-saved prompt-preset DAO. Backs the `prompt_presets` table; bundled presets live in `assets/presets/prompts/` and never reach this DAO.
       - `PromptTemplateDao.kt` - Prompt templates DAO.
-      - `TraceStepDao.kt` - Run-trace DAO: single + batch inserts (batch backs the buffered trace recorder), per-session and per-run (`seq`-ordered) queries, scoped deletion.
+      - `TraceStepDao.kt` - Run-trace DAO, deliberately batch-only: single-transaction batch insert (the write path of the buffered trace recorder) and the per-run `seq`-ordered query; session-scoped cleanup rides the `chat_sessions` FK cascade.
     - `models/` - Local DB entity models.
       - `ChatMessageEntity.kt` - Chat message entity.
       - `ChatSessionEntity.kt` - Chat session entity.
@@ -74,6 +74,7 @@ This file maps the contents of the main application package.
   - `network/` - Network handling.
     - `AndroidModelDownloadManager.kt` - Download manager for models.
   - `repositories/` - Repository implementations.
+    - `BestEffortStore.kt` - Shared `absorbingStoreFailure` helper implementing the best-effort persistence contract (absorb storage failures, re-throw `CancellationException` first) reused by the run-record and run-trace repositories.
     - `ChatRepositoryImpl.kt` - Chat repository implementation.
     - `ClarificationRepositoryImpl.kt` - In-memory implementation of `ClarificationRepository` that suspends pipeline coroutines until the user answers (or the request times out).
     - `FirebaseCrashReportingRepositoryImpl.kt` - Firebase-backed `CrashReportingRepository`. Every method is gated on `SettingsRepository.crashReportingEnabled` and short-circuits to no-op when the user has not opted in.
@@ -88,7 +89,7 @@ This file maps the contents of the main application package.
     - `NetworkActivityTrackerImpl.kt` - Records `System.currentTimeMillis()` on every outbound cloud-LLM and MCP call. Drives the More tab footer privacy pill via `NetworkActivityTracker.lastOutboundAt`.
     - `NetworkStateRepositoryImpl.kt` - Network state repository implementation.
     - `PipelineRunRepositoryImpl.kt` - Room-backed `PipelineRunRepository`. Maps enums to `name` strings, enforces the terminal-status guard in SQL, absorbs storage failures per the best-effort contract, and keeps the in-memory live-run registry that makes the orphan sweep ownership-aware.
-    - `RunTraceRepositoryImpl.kt` - Room-backed, write-buffered `RunTraceRepository`. Mutex-guarded buffer flushed by size (32), timer (500 ms) or force; batch inserts via `TraceStepDao.insertTraceSteps`; maps both record kinds to/from `TraceStepEntity` (console type stored as a stable name, unreadable rows skipped on read).
+    - `RunTraceRepositoryImpl.kt` - Room-backed, write-buffered `RunTraceRepository`. Mutex-guarded buffer flushed by size (32), timer (500 ms) or force; batch inserts via `TraceStepDao.insertTraceSteps` with a per-run retry on batch failure (a poisoned run cannot destroy co-buffered records of healthy runs); maps both record kinds to/from `TraceStepEntity` (console type stored as a stable name, unreadable rows skipped on read).
     - `PowerStateRepositoryImpl.kt` - Power state repository implementation.
     - `PromptRepositoryImpl.kt` - Room-backed implementation of `PromptRepository` (prompt-template CRUD).
     - `ToolRepositoryImpl.kt` - Tool repository implementation.

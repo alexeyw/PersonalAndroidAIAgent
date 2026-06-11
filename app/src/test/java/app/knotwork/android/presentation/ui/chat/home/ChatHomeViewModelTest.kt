@@ -181,7 +181,11 @@ class ChatHomeViewModelTest {
         saveMessageToMemoryUseCase,
         pipelineRunRepository,
         runTraceRepository,
-    )
+    ).also { vm ->
+        // Keep the replay projection on the test scheduler so
+        // advanceUntilIdle() deterministically covers it.
+        vm.traceProjectionDispatcher = testDispatcher
+    }
 
     @Test
     fun `init generates session id when none persisted`() = runTest(testDispatcher) {

@@ -6,7 +6,6 @@ import app.knotwork.android.data.local.models.TraceStepEntity
 import app.knotwork.android.domain.models.ConsoleEventType
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.repositories.RunTraceRepository
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -43,11 +42,13 @@ import kotlin.coroutines.coroutineContext
  * flush triggers cannot reorder records and `seq` order is preserved in
  * insertion order.
  *
- * **Best-effort contract.** A failed batch insert is logged and the batch is
- * dropped — re-buffering a poisoned batch forever would grow the buffer
- * unbounded while the store stays broken. Reads degrade to an empty list;
- * a single unreadable row is skipped rather than discarding the whole trace.
- * [CancellationException] always propagates.
+ * **Best-effort contract.** A failed batch insert is retried per run id so a
+ * single poisoned run cannot destroy co-buffered records of healthy runs;
+ * a group that still fails is logged and dropped — re-buffering a poisoned
+ * batch forever would grow the buffer unbounded while the store stays
+ * broken. Reads degrade to an empty list; a single unreadable row is skipped
+ * rather than discarding the whole trace.
+ * `kotlinx.coroutines.CancellationException` always propagates.
  */
 @Singleton
 class RunTraceRepositoryImpl @Inject constructor(private val traceStepDao: TraceStepDao) : RunTraceRepository {
@@ -94,24 +95,27 @@ class RunTraceRepositoryImpl @Inject constructor(private val traceStepDao: Trace
         bufferMutex.withLock { drainAndInsertLocked() }
     }
 
-    override suspend fun getTraceForRun(runId: String): List<RunTraceRecord> = try {
-        withContext(dispatcher) {
-            traceStepDao.getTraceStepsForRun(runId).mapNotNull { it.toRecordOrNull() }
-        }
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        Timber.e(e, "Run-trace store failure in getTraceForRun; degrading to empty")
-        emptyList()
-    }
+    override suspend fun getTraceForRun(runId: String): List<RunTraceRecord> =
+        absorbingStoreFailure({ "Run-trace store failure in getTraceForRun; degrading to empty" }) {
+            withContext(dispatcher) {
+                traceStepDao.getTraceStepsForRun(runId).mapNotNull { it.toRecordOrNull() }
+            }
+        } ?: emptyList()
 
     /**
      * Drains the buffer and batch-inserts the drained records. Must be called
      * under [bufferMutex]. Cancels the pending timer — the work it was
      * scheduled for is being done right now — unless this call *is* the timer
      * firing: cancelling the calling coroutine would abort the insert below
-     * and silently drop the drained batch. A storage failure drops the
-     * drained batch (logged) per the best-effort contract.
+     * and silently drop the drained batch.
+     *
+     * **Failure isolation.** The shared buffer interleaves records of every
+     * run in the process, and Room inserts the batch in one transaction — a
+     * single poisoned run (e.g. its `pipeline_runs` row never landed, so the
+     * `runId` foreign key rejects the whole transaction) would otherwise
+     * destroy co-buffered records of healthy runs. On a batch failure the
+     * drained records are retried per run id, so only the failing run's group
+     * is dropped (logged) per the best-effort contract.
      */
     private suspend fun drainAndInsertLocked() {
         val pendingTimer = timerJob
@@ -122,14 +126,23 @@ class RunTraceRepositoryImpl @Inject constructor(private val traceStepDao: Trace
         if (buffer.isEmpty()) return
         val batch = buffer.toList()
         buffer.clear()
-        try {
+        val batchInserted = absorbingStoreFailure(
+            { "Run-trace store failure flushing ${batch.size} records; retrying per run" },
+        ) {
             withContext(dispatcher) {
                 traceStepDao.insertTraceSteps(batch)
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Timber.e(e, "Run-trace store failure flushing %d records; batch dropped", batch.size)
+        }
+        if (batchInserted == null) {
+            batch.groupBy { it.runId }.forEach { (runId, group) ->
+                absorbingStoreFailure(
+                    { "Run-trace store failure flushing ${group.size} records of run $runId; group dropped" },
+                ) {
+                    withContext(dispatcher) {
+                        traceStepDao.insertTraceSteps(group)
+                    }
+                }
+            }
         }
     }
 
