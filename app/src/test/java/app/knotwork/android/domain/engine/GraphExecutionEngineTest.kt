@@ -1988,30 +1988,4 @@ class GraphExecutionEngineTest {
         }
         job.cancel()
     }
-
-    /**
-     * Run-record persistence is observability, never a correctness
-     * dependency: a failing write must not break the run.
-     */
-    @Test
-    fun `given run persistence fails then pipeline still completes`() = runTest {
-        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
-        coEvery { pipelineRunRepository.updateCurrentNode(any(), any()) } throws
-            IllegalStateException("disk full")
-
-        val graph = PipelineGraph(
-            id = "g1",
-            name = "Linear",
-            nodes = listOf(
-                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
-                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
-            ),
-            connections = listOf(ConnectionModel("c1", "input_1", "output_1")),
-        )
-        every { llmEngine.generateResponseStream(any()) } returns flowOf("answer")
-
-        val states = engine(sessionId, "prompt", graph, "run-45").toList()
-
-        assertTrue(states.last() is AgentOrchestratorState.Completed)
-    }
 }

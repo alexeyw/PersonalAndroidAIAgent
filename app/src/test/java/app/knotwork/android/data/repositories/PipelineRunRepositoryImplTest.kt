@@ -10,6 +10,7 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
@@ -23,7 +24,8 @@ import org.junit.Test
 /**
  * Unit tests for [PipelineRunRepositoryImpl]: entity↔domain mapping, the
  * terminal-guard plumbing (every mutating call must pass the terminal status
- * list to the DAO), the orphan query scope, and strict enum parsing.
+ * list to the DAO), the ownership-filtered orphan query, and the best-effort
+ * contract (storage failures are absorbed, never propagated).
  */
 class PipelineRunRepositoryImplTest {
 
@@ -31,6 +33,7 @@ class PipelineRunRepositoryImplTest {
     private lateinit var repository: PipelineRunRepositoryImpl
 
     private val terminalNames = listOf("COMPLETED", "FAILED", "CANCELLED", "INTERRUPTED")
+    private val activeNames = listOf("QUEUED", "RUNNING", "WAITING_APPROVAL", "WAITING_CLARIFICATION")
 
     private val sampleRun = PipelineRun(
         id = "run-1",
@@ -160,10 +163,7 @@ class PipelineRunRepositoryImplTest {
         assertEquals(PipelineRunStatus.WAITING_APPROVAL, run?.status)
         assertEquals("node-7", run?.currentNodeId)
         // Active lookup must match exactly the non-terminal statuses.
-        assertEquals(
-            listOf("QUEUED", "RUNNING", "WAITING_APPROVAL", "WAITING_CLARIFICATION"),
-            statuses.captured,
-        )
+        assertEquals(activeNames, statuses.captured)
     }
 
     @Test
@@ -174,17 +174,31 @@ class PipelineRunRepositoryImplTest {
     }
 
     @Test
-    fun `given orphan query then only QUEUED and RUNNING are swept`() = runTest {
+    fun `orphan query covers every non-terminal status`() = runTest {
         val statuses = slot<List<String>>()
         coEvery { pipelineRunDao.getRunsByStatuses(capture(statuses)) } returns listOf(
-            sampleEntity.copy(status = "RUNNING"),
+            sampleEntity.copy(status = "WAITING_APPROVAL"),
         )
 
-        val orphans = repository.getOrphanedRunning()
+        val orphans = repository.getOrphanedRuns()
 
-        assertEquals(listOf("QUEUED", "RUNNING"), statuses.captured)
+        assertEquals(activeNames, statuses.captured)
         assertEquals(1, orphans.size)
-        assertEquals(PipelineRunStatus.RUNNING, orphans.first().status)
+        assertEquals(PipelineRunStatus.WAITING_APPROVAL, orphans.first().status)
+    }
+
+    @Test
+    fun `orphan query excludes runs created by the current process`() = runTest {
+        // Register run-1 as owned by this process; run-2 belongs to a dead one.
+        repository.createRun(sampleRun)
+        coEvery { pipelineRunDao.getRunsByStatuses(any()) } returns listOf(
+            sampleEntity.copy(id = "run-1", status = "RUNNING", origin = "CHAT"),
+            sampleEntity.copy(id = "run-2", status = "RUNNING", origin = "CHAT"),
+        )
+
+        val orphans = repository.getOrphanedRuns()
+
+        assertEquals(listOf("run-2"), orphans.map { it.id })
     }
 
     @Test
@@ -199,24 +213,65 @@ class PipelineRunRepositoryImplTest {
         assertEquals(PipelineRunStatus.COMPLETED, runs[1].status)
     }
 
-    @Test
-    fun `given session deletion then DAO delete is invoked`() = runTest {
-        repository.deleteRunsForSession("session-1")
+    // region Best-effort contract — storage failures are absorbed
 
-        coVerify { pipelineRunDao.deleteRunsForSession("session-1") }
+    @Test
+    fun `given DAO insert failure when createRun then absorbed and id still owned`() = runTest {
+        coEvery { pipelineRunDao.insertRun(any()) } throws IllegalStateException("disk full")
+
+        repository.createRun(sampleRun) // must not throw
+
+        // Ownership registration must precede the failed insert: the orphan
+        // sweep may never claim a run whose machinery lives in this process.
+        coEvery { pipelineRunDao.getRunsByStatuses(any()) } returns listOf(
+            sampleEntity.copy(id = sampleRun.id, status = "QUEUED", origin = "CHAT"),
+        )
+        assertEquals(emptyList<PipelineRun>(), repository.getOrphanedRuns())
     }
 
     @Test
-    fun `given corrupt status string when mapping then fails loudly`() {
+    fun `given DAO failure when writes then absorbed`() = runTest {
+        coEvery { pipelineRunDao.markRunning(any(), any(), any(), any(), any()) } throws
+            IllegalStateException("disk full")
+        coEvery { pipelineRunDao.updateStatus(any(), any(), any()) } throws IllegalStateException("disk full")
+        coEvery { pipelineRunDao.updateCurrentNode(any(), any(), any()) } throws IllegalStateException("disk full")
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } throws
+            IllegalStateException("disk full")
+
+        // None of these may throw — run records are observability only.
+        repository.markRunning("run-1", "pipe-1", "hash-1")
+        repository.updateStatus("run-1", PipelineRunStatus.RUNNING)
+        repository.updateCurrentNode("run-1", "node-3")
+        repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
+    }
+
+    @Test
+    fun `given DAO failure when reads then degrade to neutral results`() = runTest {
+        coEvery { pipelineRunDao.getActiveRunForSession(any(), any()) } throws IllegalStateException("io")
+        coEvery { pipelineRunDao.getRunsByStatuses(any()) } throws IllegalStateException("io")
+
+        assertNull(repository.getActiveRunForSession("session-1"))
+        assertEquals(emptyList<PipelineRun>(), repository.getOrphanedRuns())
+    }
+
+    @Test
+    fun `given corrupt status string when reading then degrades to null instead of crashing`() = runTest {
         coEvery { pipelineRunDao.getActiveRunForSession("session-1", any()) } returns
             sampleEntity.copy(status = "NOT_A_STATUS")
 
-        assertThrows(IllegalArgumentException::class.java) {
-            runBlocking {
-                repository.getActiveRunForSession("session-1")
-            }
-        }
+        assertNull(repository.getActiveRunForSession("session-1"))
     }
+
+    @Test
+    fun `given failing upstream when observeRunsForSession then emits empty list`() = runTest {
+        coEvery { pipelineRunDao.observeRunsForSession("session-1") } returns flow {
+            throw IllegalStateException("io")
+        }
+
+        assertEquals(emptyList<PipelineRun>(), repository.observeRunsForSession("session-1").first())
+    }
+
+    // endregion
 
     @Test
     fun `terminal flag covers exactly the four terminal statuses`() {

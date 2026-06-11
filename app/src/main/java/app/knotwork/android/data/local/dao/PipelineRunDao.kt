@@ -19,11 +19,14 @@ import kotlinx.coroutines.flow.Flow
 interface PipelineRunDao {
 
     /**
-     * Inserts a freshly enqueued run record.
+     * Inserts a freshly enqueued run record. Conflicts are IGNOREd — an
+     * existing row (whatever its status) is never overwritten, keeping the
+     * insert consistent with the write-once terminal guard: a re-delivered or
+     * racing insert can never resurrect a settled run as QUEUED.
      *
      * @param run The entity to insert.
      */
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertRun(run: PipelineRunEntity)
 
     /**
@@ -121,19 +124,11 @@ interface PipelineRunDao {
 
     /**
      * Returns every run whose status is in [statuses]. Used by the orphan
-     * sweep at application start (QUEUED + RUNNING).
+     * sweep at application start (all non-terminal statuses; process-owned
+     * runs are filtered out by the repository).
      *
      * @param statuses Status names to match.
      */
     @Query("SELECT * FROM pipeline_runs WHERE status IN (:statuses)")
     suspend fun getRunsByStatuses(statuses: List<String>): List<PipelineRunEntity>
-
-    /**
-     * Deletes every run record of [sessionId]. Explicit replacement for the
-     * FK cascade the table deliberately does not have.
-     *
-     * @param sessionId Id of the deleted chat session.
-     */
-    @Query("DELETE FROM pipeline_runs WHERE sessionId = :sessionId")
-    suspend fun deleteRunsForSession(sessionId: String)
 }

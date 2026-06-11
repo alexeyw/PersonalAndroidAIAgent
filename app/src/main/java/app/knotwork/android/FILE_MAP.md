@@ -49,7 +49,7 @@ This file maps the contents of the main application package.
       - `NodeEntity.kt` - Pipeline node entity.
       - `PipelineEntity.kt` - Pipeline entity.
       - `PipelinePresetEntity.kt` - User-saved pipeline preset row. Stores `id`, `name`, `description`, `categoryKey`, `graphJson` (full preset payload serialised by `PipelinePresetJsonSerializer`), `tagsCsv`, `createdAt`.
-      - `PipelineRunEntity.kt` - Persistent pipeline-run row (`pipeline_runs`). No FK onto `chat_sessions` (a run may be created before its session row exists); cleanup on session deletion is explicit via `PipelineRunDao.deleteRunsForSession`.
+      - `PipelineRunEntity.kt` - Persistent pipeline-run row (`pipeline_runs`). No FK onto `chat_sessions` (a run may be created before its session row exists); cleanup on session deletion happens inside the `ChatDao.deleteSessionCompletely` transaction.
       - `PromptPresetEntity.kt` - User-saved prompt preset row. Stores `id`, `name`, `description`, `nodeTypeKey`, `systemPrompt`, `tagsCsv`, `createdAt`.
       - `PipelineWithNodesAndConnections.kt` - Pipeline relational model.
       - `PromptTemplateEntity.kt` - Prompt template entity.
@@ -87,7 +87,7 @@ This file maps the contents of the main application package.
     - `MetricsRepositoryImpl.kt` - Metrics repository implementation.
     - `NetworkActivityTrackerImpl.kt` - Records `System.currentTimeMillis()` on every outbound cloud-LLM and MCP call. Drives the More tab footer privacy pill via `NetworkActivityTracker.lastOutboundAt`.
     - `NetworkStateRepositoryImpl.kt` - Network state repository implementation.
-    - `PipelineRunRepositoryImpl.kt` - Room-backed `PipelineRunRepository`. Maps enums to `name` strings, routes DAO calls through `Dispatchers.IO`, and enforces the terminal-status guard in SQL.
+    - `PipelineRunRepositoryImpl.kt` - Room-backed `PipelineRunRepository`. Maps enums to `name` strings, enforces the terminal-status guard in SQL, absorbs storage failures per the best-effort contract, and keeps the in-memory live-run registry that makes the orphan sweep ownership-aware.
     - `PowerStateRepositoryImpl.kt` - Power state repository implementation.
     - `PromptRepositoryImpl.kt` - Room-backed implementation of `PromptRepository` (prompt-template CRUD).
     - `ToolRepositoryImpl.kt` - Tool repository implementation.
@@ -247,7 +247,7 @@ This file maps the contents of the main application package.
     - `PromptPresetRepository.kt` - Domain gateway over the two-tier prompt-preset catalogue: bundled (read-only, from APK assets) + user-saved (mutable, Room-backed). Exposes a per-`NodeType` filtered flow used by the Prompt Library. Data-layer impl: `LocalPromptPresetRepositoryImpl`.
     - `PromptRepository.kt` - Prompt-template repository interface (CRUD over `PromptTemplate`). Data-layer impl: `PromptRepositoryImpl`.
     - `PipelineRepository.kt` - Pipeline repository interface.
-    - `PipelineRunRepository.kt` - Persistent pipeline-run records interface: creation/RUNNING/terminal transitions are owned by the task queue, per-node progress and WAITING_* suspensions by the execution engine; terminal statuses are write-once. Data-layer impl: `PipelineRunRepositoryImpl`.
+    - `PipelineRunRepository.kt` - Persistent pipeline-run records interface: creation/RUNNING/terminal transitions are owned by the task queue, per-node progress and WAITING_* suspensions by the execution engine; terminal statuses are write-once; all methods are best-effort (storage failures absorbed); orphan detection is process-ownership-based. Data-layer impl: `PipelineRunRepositoryImpl`.
     - `PowerStateRepository.kt` - Power state repository interface.
     - `SettingsRepository.kt` - Settings repository interface.
     - `ToolRepository.kt` - Tool repository interface.

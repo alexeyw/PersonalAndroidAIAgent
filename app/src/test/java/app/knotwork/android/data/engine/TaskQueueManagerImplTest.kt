@@ -12,7 +12,6 @@ import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
-import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -557,28 +556,6 @@ class TaskQueueManagerImplTest {
         coVerify(exactly = 0) {
             pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, any())
         }
-    }
-
-    /**
-     * A failing run-record write must never abort task processing — the
-     * persistence layer is observability, not a correctness dependency.
-     */
-    @Test
-    fun `given run persistence fails then task still completes`() = testScope.runTest {
-        coEvery { pipelineRunRepository.createRun(any()) } throws IllegalStateException("disk full")
-        coEvery {
-            pipelineRunRepository.markRunning(any(), any(), any())
-        } throws IllegalStateException("disk full")
-        every {
-            graphExecutionEngine.invoke(any(), any(), any(), any())
-        } returns flowOf(AgentOrchestratorState.Completed("ok"))
-
-        val task = AgentTask(sessionId = "session_persist_fail", prompt = "p")
-        taskQueueManager.enqueueTask(task)
-        advanceUntilIdle()
-
-        val state = taskQueueManager.observeTaskState("session_persist_fail").first()
-        assertTrue("Expected Completed, got $state", state is AgentOrchestratorState.Completed)
     }
 
     // endregion

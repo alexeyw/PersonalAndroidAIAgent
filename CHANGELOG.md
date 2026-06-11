@@ -24,7 +24,11 @@ details.
   or `CANCELLED` (user stop is recorded distinctly from failure).
   Runs stranded by a process death — Doze, an OOM kill, a swipe from
   recents — are detected on the next launch and finalised as
-  `INTERRUPTED` instead of silently vanishing. Each record also captures
+  `INTERRUPTED` instead of silently vanishing; the detection is
+  ownership-based (runs created by the live process are never touched),
+  so a run still executing in the background — kept alive by the
+  foreground service or a scheduled worker — survives reopening the app
+  untouched. Each record also captures
   a content hash of the executing graph (cosmetic edits such as canvas
   moves excluded), laying the groundwork for resuming interrupted runs
   from their last completed node. Deleting a chat session removes its

@@ -6,10 +6,14 @@ import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.repositories.PipelineRunRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import timber.log.Timber
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,69 +26,134 @@ import javax.inject.Singleton
  * the repository contract is implemented in SQL — every mutating DAO query
  * carries a `status NOT IN (terminal)` clause — so the guard holds even when
  * two writers race on different coroutines.
+ *
+ * **Best-effort contract.** Every method absorbs storage and mapping failures
+ * (logged, neutral result) per the interface contract: run records must never
+ * take down the execution they describe, nor brick app startup when the table
+ * holds an unreadable row. `CancellationException` is always re-thrown.
+ *
+ * **Process ownership.** [liveRunIds] records every run id created by this
+ * process (the class is a process-wide `@Singleton`). [getOrphanedRuns]
+ * filters those ids out, which is what makes the startup orphan sweep safe to
+ * run at any time: a run still executing in this process — kept alive by the
+ * foreground service or a WorkManager worker while no Activity exists — can
+ * never be mistaken for an orphan of a dead process.
  */
 @Singleton
 class PipelineRunRepositoryImpl @Inject constructor(private val pipelineRunDao: PipelineRunDao) :
     PipelineRunRepository {
 
-    override suspend fun createRun(run: PipelineRun) = withContext(Dispatchers.IO) {
-        pipelineRunDao.insertRun(run.toEntity())
-    }
+    /**
+     * Ids of runs created by the current process. Membership means the run's
+     * in-memory machinery (queue worker, suspension deferreds) is — or was —
+     * hosted here, so the orphan sweep must not touch the record. The set
+     * dies with the process, exactly matching the ownership semantics.
+     */
+    private val liveRunIds = ConcurrentHashMap.newKeySet<String>()
 
-    override suspend fun markRunning(runId: String, pipelineId: String, graphContentHash: String) =
-        withContext(Dispatchers.IO) {
-            pipelineRunDao.markRunning(
-                runId = runId,
-                status = PipelineRunStatus.RUNNING.name,
-                pipelineId = pipelineId,
-                graphContentHash = graphContentHash,
-                terminalStatuses = TERMINAL_STATUS_NAMES,
-            )
+    override suspend fun createRun(run: PipelineRun) {
+        // Register ownership before the insert: even if the write fails, the
+        // id is process-owned and must be invisible to the orphan sweep.
+        liveRunIds.add(run.id)
+        absorbing("createRun") {
+            withContext(Dispatchers.IO) {
+                pipelineRunDao.insertRun(run.toEntity())
+            }
         }
-
-    override suspend fun updateStatus(runId: String, status: PipelineRunStatus) = withContext(Dispatchers.IO) {
-        pipelineRunDao.updateStatus(
-            runId = runId,
-            status = status.name,
-            terminalStatuses = TERMINAL_STATUS_NAMES,
-        )
     }
 
-    override suspend fun updateCurrentNode(runId: String, nodeId: String) = withContext(Dispatchers.IO) {
-        pipelineRunDao.updateCurrentNode(
-            runId = runId,
-            nodeId = nodeId,
-            terminalStatuses = TERMINAL_STATUS_NAMES,
-        )
-    }
-
-    override suspend fun finishRun(runId: String, status: PipelineRunStatus, errorMessage: String?) =
-        withContext(Dispatchers.IO) {
-            require(status.isTerminal) { "finishRun requires a terminal status, got $status" }
-            pipelineRunDao.finishRun(
-                runId = runId,
-                status = status.name,
-                finishedAt = System.currentTimeMillis(),
-                errorMessage = errorMessage,
-                terminalStatuses = TERMINAL_STATUS_NAMES,
-            )
+    override suspend fun markRunning(runId: String, pipelineId: String, graphContentHash: String) {
+        absorbing("markRunning") {
+            withContext(Dispatchers.IO) {
+                pipelineRunDao.markRunning(
+                    runId = runId,
+                    status = PipelineRunStatus.RUNNING.name,
+                    pipelineId = pipelineId,
+                    graphContentHash = graphContentHash,
+                    terminalStatuses = TERMINAL_STATUS_NAMES,
+                )
+            }
         }
+    }
 
-    override suspend fun getActiveRunForSession(sessionId: String): PipelineRun? = withContext(Dispatchers.IO) {
-        pipelineRunDao.getActiveRunForSession(sessionId, ACTIVE_STATUS_NAMES)?.toDomain()
+    override suspend fun updateStatus(runId: String, status: PipelineRunStatus) {
+        absorbing("updateStatus") {
+            withContext(Dispatchers.IO) {
+                pipelineRunDao.updateStatus(
+                    runId = runId,
+                    status = status.name,
+                    terminalStatuses = TERMINAL_STATUS_NAMES,
+                )
+            }
+        }
+    }
+
+    override suspend fun updateCurrentNode(runId: String, nodeId: String) {
+        absorbing("updateCurrentNode") {
+            withContext(Dispatchers.IO) {
+                pipelineRunDao.updateCurrentNode(
+                    runId = runId,
+                    nodeId = nodeId,
+                    terminalStatuses = TERMINAL_STATUS_NAMES,
+                )
+            }
+        }
+    }
+
+    override suspend fun finishRun(runId: String, status: PipelineRunStatus, errorMessage: String?) {
+        // Caller contract violation, not a storage failure — never absorbed.
+        require(status.isTerminal) { "finishRun requires a terminal status, got $status" }
+        absorbing("finishRun") {
+            withContext(Dispatchers.IO) {
+                pipelineRunDao.finishRun(
+                    runId = runId,
+                    status = status.name,
+                    finishedAt = System.currentTimeMillis(),
+                    errorMessage = errorMessage,
+                    terminalStatuses = TERMINAL_STATUS_NAMES,
+                )
+            }
+        }
+    }
+
+    override suspend fun getActiveRunForSession(sessionId: String): PipelineRun? = absorbing("getActiveRunForSession") {
+        withContext(Dispatchers.IO) {
+            pipelineRunDao.getActiveRunForSession(sessionId, ACTIVE_STATUS_NAMES)?.toDomain()
+        }
     }
 
     override fun observeRunsForSession(sessionId: String): Flow<List<PipelineRun>> =
-        pipelineRunDao.observeRunsForSession(sessionId).map { entities ->
-            entities.map { it.toDomain() }
+        pipelineRunDao.observeRunsForSession(sessionId)
+            .map { entities -> entities.map { it.toDomain() } }
+            .catch { e ->
+                Timber.e(e, "Pipeline-run store failure in observeRunsForSession; degrading to empty")
+                emit(emptyList())
+            }
+
+    override suspend fun getOrphanedRuns(): List<PipelineRun> = absorbing("getOrphanedRuns") {
+        withContext(Dispatchers.IO) {
+            pipelineRunDao.getRunsByStatuses(ACTIVE_STATUS_NAMES)
+                .filter { it.id !in liveRunIds }
+                .map { it.toDomain() }
         }
+    } ?: emptyList()
 
-    override suspend fun getOrphanedRunning(): List<PipelineRun> = withContext(Dispatchers.IO) {
-        pipelineRunDao.getRunsByStatuses(ORPHAN_SWEEP_STATUS_NAMES).map { it.toDomain() }
-    }
-
-    override suspend fun deleteRunsForSession(sessionId: String) = withContext(Dispatchers.IO) {
-        pipelineRunDao.deleteRunsForSession(sessionId)
+    /**
+     * Runs [block] under the best-effort contract: re-throws
+     * [CancellationException] from the dedicated first catch clause, logs any
+     * other failure and returns `null` so callers degrade gracefully.
+     *
+     * @param operation Name used in the failure log line.
+     * @param block The storage operation to attempt.
+     * @return The block's result, or `null` when the store failed.
+     */
+    private suspend fun <T> absorbing(operation: String, block: suspend () -> T): T? = try {
+        block()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Timber.e(e, "Pipeline-run store failure in %s; continuing without it", operation)
+        null
     }
 
     private companion object {
@@ -92,18 +161,9 @@ class PipelineRunRepositoryImpl @Inject constructor(private val pipelineRunDao: 
         val TERMINAL_STATUS_NAMES: List<String> =
             PipelineRunStatus.entries.filter { it.isTerminal }.map { it.name }
 
-        /** Non-terminal status names matched by the active-run lookup. */
+        /** Non-terminal status names: active-run lookup and orphan-sweep scope. */
         val ACTIVE_STATUS_NAMES: List<String> =
             PipelineRunStatus.entries.filterNot { it.isTerminal }.map { it.name }
-
-        /**
-         * Statuses swept to INTERRUPTED at application start. WAITING_* runs
-         * are excluded — the background-HITL flow owns their fate.
-         */
-        val ORPHAN_SWEEP_STATUS_NAMES: List<String> = listOf(
-            PipelineRunStatus.QUEUED.name,
-            PipelineRunStatus.RUNNING.name,
-        )
     }
 }
 
@@ -127,8 +187,9 @@ private fun PipelineRun.toEntity(): PipelineRunEntity = PipelineRunEntity(
 
 /**
  * Maps the persistence entity back to the domain run. Enum columns are parsed
- * strictly — the table is written exclusively by this app, so an unknown name
- * is data corruption worth failing loudly on, not silently coercing.
+ * strictly ([IllegalArgumentException] on unknown names) — an unreadable row
+ * is data corruption; the repository's best-effort wrapper turns it into a
+ * logged degraded read instead of a crash.
  *
  * @return The domain model.
  */

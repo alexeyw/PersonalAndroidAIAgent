@@ -201,16 +201,10 @@ class GraphExecutionEngine @Inject constructor(
             stepCount++
 
             // Record the node about to execute so an interrupted run can
-            // report where it stopped. Best-effort: run records are an
-            // observability layer and must never abort the run itself.
-            // The id is read outside the lambda — `currentNode` is a
-            // mutable loop variable and cannot be smart-cast inside a
-            // capturing closure.
+            // report where it stopped. The repository is best-effort by
+            // contract — a storage failure never aborts the run itself.
             if (runId != null) {
-                val executingNodeId = currentNode.id
-                persistRunStateSafely {
-                    pipelineRunRepository.updateCurrentNode(runId, executingNodeId)
-                }
+                pipelineRunRepository.updateCurrentNode(runId, currentNode.id)
             }
 
             // Emit current step with dynamically estimated total (null = still unknown).
@@ -291,6 +285,17 @@ class GraphExecutionEngine @Inject constructor(
                             is NodeOutput.Result -> nodeResult = output.result
                         }
                     }
+
+                // The executor flow completing means any HITL suspension of
+                // this node is definitively resolved — flip the record back
+                // to RUNNING here instead of waiting for the next forwarded
+                // state (a clarification node, for instance, emits no state
+                // after its answer arrives, which would otherwise leave the
+                // record stale-WAITING through the next node's model load).
+                if (runId != null && runSuspended) {
+                    pipelineRunRepository.updateStatus(runId, PipelineRunStatus.RUNNING)
+                    runSuspended = false
+                }
 
                 Timber.tag(
                     "PipelineDebug",
@@ -570,9 +575,12 @@ class GraphExecutionEngine @Inject constructor(
      * persistent run record. [AgentOrchestratorState.WaitingForApproval] and
      * [AgentOrchestratorState.AwaitingClarification] move the record to the
      * matching WAITING_* status; the first state forwarded *after* a
-     * suspension flips it back to [PipelineRunStatus.RUNNING]. All other
-     * states leave the record untouched — the RUNNING transition itself and
-     * every terminal status are owned by the task queue.
+     * suspension flips it back to [PipelineRunStatus.RUNNING] (the node-end
+     * flip in the main loop covers executors that emit no state after
+     * resolution). All other states leave the record untouched — the RUNNING
+     * transition itself and every terminal status are owned by the task
+     * queue. The repository is best-effort by contract, so no guard is
+     * needed here.
      *
      * @param runId Id of the persistent run record.
      * @param state The orchestrator state about to be forwarded downstream.
@@ -585,44 +593,18 @@ class GraphExecutionEngine @Inject constructor(
         wasSuspended: Boolean,
     ): Boolean = when {
         state is AgentOrchestratorState.WaitingForApproval -> {
-            persistRunStateSafely {
-                pipelineRunRepository.updateStatus(runId, PipelineRunStatus.WAITING_APPROVAL)
-            }
+            pipelineRunRepository.updateStatus(runId, PipelineRunStatus.WAITING_APPROVAL)
             true
         }
         state is AgentOrchestratorState.AwaitingClarification -> {
-            persistRunStateSafely {
-                pipelineRunRepository.updateStatus(runId, PipelineRunStatus.WAITING_CLARIFICATION)
-            }
+            pipelineRunRepository.updateStatus(runId, PipelineRunStatus.WAITING_CLARIFICATION)
             true
         }
         wasSuspended -> {
-            persistRunStateSafely {
-                pipelineRunRepository.updateStatus(runId, PipelineRunStatus.RUNNING)
-            }
+            pipelineRunRepository.updateStatus(runId, PipelineRunStatus.RUNNING)
             false
         }
         else -> false
-    }
-
-    /**
-     * Runs a persistence [block] against the pipeline-run store without
-     * letting a storage failure take down the run it describes: run records
-     * are an observability layer, never a correctness dependency of the
-     * execution itself. [kotlinx.coroutines.CancellationException] is
-     * re-thrown from the dedicated first catch clause to preserve cooperative
-     * cancellation.
-     *
-     * @param block The suspending repository write to attempt.
-     */
-    private suspend fun persistRunStateSafely(block: suspend () -> Unit) {
-        try {
-            block()
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Timber.tag("PipelineDebug").w(e, "Failed to persist pipeline-run state; continuing")
-        }
     }
 
     /**

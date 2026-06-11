@@ -1,7 +1,6 @@
 package app.knotwork.android.data.repositories
 
 import app.knotwork.android.data.local.dao.ChatDao
-import app.knotwork.android.data.local.dao.PipelineRunDao
 import app.knotwork.android.data.local.dao.TraceStepDao
 import app.knotwork.android.data.local.models.ChatSessionEntity
 import app.knotwork.android.data.local.models.TraceStepEntity
@@ -30,17 +29,10 @@ import javax.inject.Singleton
  *
  * @property chatDao The Data Access Object for chat messages.
  * @property traceStepDao The Data Access Object for pipeline trace steps.
- * @property pipelineRunDao The Data Access Object for persistent pipeline-run
- *   records — `pipeline_runs` has no FK cascade onto `chat_sessions` (a run
- *   may be created before its session row exists), so session deletion cleans
- *   the run records up explicitly.
  */
 @Singleton
-class ChatRepositoryImpl @Inject constructor(
-    private val chatDao: ChatDao,
-    private val traceStepDao: TraceStepDao,
-    private val pipelineRunDao: PipelineRunDao,
-) : ChatRepository {
+class ChatRepositoryImpl @Inject constructor(private val chatDao: ChatDao, private val traceStepDao: TraceStepDao) :
+    ChatRepository {
 
     @Volatile
     private var cachedSessionId: String? = null
@@ -86,9 +78,10 @@ class ChatRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteSession(sessionId: String) {
-        chatDao.deleteSessionMessages(sessionId)
-        pipelineRunDao.deleteRunsForSession(sessionId)
-        chatDao.deleteSession(sessionId)
+        // Single transaction: messages + pipeline-run records + session row
+        // (trace steps cascade via FK) — a crash mid-delete can never leave a
+        // half-deleted session behind.
+        chatDao.deleteSessionCompletely(sessionId)
     }
 
     override suspend fun getAllSessions(): List<String> = chatDao.getAllSessions()

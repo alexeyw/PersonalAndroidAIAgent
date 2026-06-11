@@ -15,13 +15,18 @@ import javax.inject.Inject
  * such as saving the default system prompts to the settings repository,
  * and materialises the bundled showcase pipeline as the application default.
  *
- * On **every** launch (not just the first) it additionally sweeps orphaned
- * pipeline-run records: any run still in QUEUED or RUNNING status at process
- * start necessarily belonged to a process that died mid-execution — an
- * in-process run cannot predate the process — and is finalised as
- * [PipelineRunStatus.INTERRUPTED]. WAITING_* runs are deliberately left
- * untouched: a pending approval or clarification survives process death by
- * design, and its fate is decided by the background-HITL flow.
+ * On **every** invocation (not just the first launch) it additionally sweeps
+ * orphaned pipeline-run records: every non-terminal run whose owning process
+ * has died is finalised as [PipelineRunStatus.INTERRUPTED]. Orphan detection
+ * is ownership-based, not status-based — the repository excludes runs created
+ * by the live process — so re-running the sweep (Activity recreation, splash
+ * retry) can never interrupt a run that is still executing in this process
+ * (e.g. kept alive by the foreground service or a WorkManager worker).
+ * WAITING_* runs from dead processes are swept too: their pending approval /
+ * clarification lived in in-memory deferreds that died with the process, so
+ * nothing can ever settle them — revisit when persistent background HITL
+ * ships. The sweep is best-effort by the repository contract: a damaged run
+ * store degrades to an empty sweep instead of failing app initialization.
  */
 class InitializeAppUseCase @Inject constructor(
     private val settingsRepository: SettingsRepository,
@@ -70,14 +75,15 @@ class InitializeAppUseCase @Inject constructor(
     }
 
     /**
-     * Finalises every run record orphaned by a previous process death:
-     * QUEUED / RUNNING records are moved to [PipelineRunStatus.INTERRUPTED]
-     * with [ORPHANED_RUN_MESSAGE] as the reason. The repository excludes
-     * WAITING_* statuses from the orphan query, so suspended HITL runs are
-     * never touched here.
+     * Finalises every run record orphaned by a process death: non-terminal
+     * records not owned by the live process are moved to
+     * [PipelineRunStatus.INTERRUPTED] with [ORPHANED_RUN_MESSAGE] as the
+     * reason. Idempotent and safe to call at any time — ownership filtering
+     * happens in the repository, and both calls are best-effort by its
+     * contract (failures log and degrade, never abort initialization).
      */
     private suspend fun sweepOrphanedRuns() {
-        pipelineRunRepository.getOrphanedRunning().forEach { run ->
+        pipelineRunRepository.getOrphanedRuns().forEach { run ->
             pipelineRunRepository.finishRun(run.id, PipelineRunStatus.INTERRUPTED, ORPHANED_RUN_MESSAGE)
         }
     }

@@ -15,6 +15,14 @@ import kotlinx.coroutines.flow.Flow
  * ([updateCurrentNode]) and the suspension statuses
  * ([PipelineRunStatus.WAITING_APPROVAL] / [PipelineRunStatus.WAITING_CLARIFICATION]).
  *
+ * **Best-effort contract.** Run records are an observability layer, never a
+ * correctness dependency of the execution they describe. Implementations must
+ * absorb storage and data-corruption failures: writes log and return, reads
+ * log and degrade to `null` / empty results. The only exceptions allowed to
+ * escape are `CancellationException` (cooperative cancellation must survive)
+ * and [IllegalArgumentException] for caller contract violations (see
+ * [finishRun]). Callers therefore never need their own guards.
+ *
  * All status mutations are guarded: once a run reaches a terminal status
  * (see [PipelineRunStatus.isTerminal]) further updates are silently ignored,
  * so racing writers (e.g. an engine status write racing the queue's
@@ -23,7 +31,11 @@ import kotlinx.coroutines.flow.Flow
 interface PipelineRunRepository {
 
     /**
-     * Persists a freshly enqueued run in [PipelineRunStatus.QUEUED] status.
+     * Persists a freshly enqueued run in [PipelineRunStatus.QUEUED] status and
+     * registers the run as **owned by the current process** (see
+     * [getOrphanedRuns]). Inserting an id that already has a row is a silent
+     * no-op — the existing record (whatever its status) is never overwritten,
+     * so racing creators and re-deliveries cannot resurrect a settled run.
      *
      * @param run The run record to insert. Its [PipelineRun.pipelineId] and
      *   [PipelineRun.graphContentHash] are typically `null` at this point —
@@ -70,7 +82,8 @@ interface PipelineRunRepository {
      *
      * @param runId Id of the run to finish.
      * @param status The terminal status to write. Must satisfy
-     *   [PipelineRunStatus.isTerminal].
+     *   [PipelineRunStatus.isTerminal] — a non-terminal status is a caller
+     *   bug and throws [IllegalArgumentException] (not absorbed).
      * @param errorMessage Failure or interruption reason; `null` for
      *   successful or cancelled runs.
      */
@@ -78,8 +91,9 @@ interface PipelineRunRepository {
 
     /**
      * Returns the most recently started non-terminal run of [sessionId], or
-     * `null` when every run of the session already finished. This is the
-     * entry point of the chat reattach protocol.
+     * `null` when every run of the session already finished (or the store is
+     * unreadable — best-effort contract). This is the entry point of the
+     * chat reattach protocol.
      *
      * @param sessionId Id of the chat session to query.
      * @return The active run, or `null` when none is active.
@@ -90,28 +104,27 @@ interface PipelineRunRepository {
      * Observes all runs of [sessionId], most recently started first.
      *
      * @param sessionId Id of the chat session to observe.
-     * @return A cold flow re-emitting the full run list on every change.
+     * @return A cold flow re-emitting the full run list on every change;
+     *   storage failures degrade to an empty emission.
      */
     fun observeRunsForSession(sessionId: String): Flow<List<PipelineRun>>
 
     /**
-     * Returns runs stranded in [PipelineRunStatus.QUEUED] or
-     * [PipelineRunStatus.RUNNING]. Called at application start, where any
-     * such record is by definition orphaned — an in-process run cannot
-     * predate the process. WAITING_* runs are deliberately excluded: their
-     * fate is decided by the background-HITL flow, not the orphan sweep.
+     * Returns every non-terminal run that is **not owned by the current
+     * process** — i.e. whose [createRun] happened in a process that has since
+     * died. Such runs are orphans by definition: the in-memory machinery that
+     * could finish or resume them (queue worker, suspension deferreds) died
+     * with their process. Runs created by the live process are excluded no
+     * matter their status, so the startup sweep can never interrupt a run
+     * that is actively executing (e.g. kept alive by the foreground service
+     * or a WorkManager worker while no Activity exists).
+     *
+     * WAITING_* runs from dead processes are included: the pending approval /
+     * clarification lives only in in-memory deferreds today, so after a
+     * process death nothing can ever settle them. Revisit when persistent
+     * background HITL ships and suspended runs become resumable.
      *
      * @return Runs whose owning process died mid-execution.
      */
-    suspend fun getOrphanedRunning(): List<PipelineRun>
-
-    /**
-     * Deletes every run record of [sessionId]. Called when the user deletes
-     * the chat session itself; the table has no foreign key to
-     * `chat_sessions` (a run may be created before its session row exists),
-     * so cleanup is explicit.
-     *
-     * @param sessionId Id of the deleted chat session.
-     */
-    suspend fun deleteRunsForSession(sessionId: String)
+    suspend fun getOrphanedRuns(): List<PipelineRun>
 }

@@ -88,11 +88,14 @@ class InitializeAppUseCaseTest {
 
     @Test
     fun `invoke sweeps orphaned runs to INTERRUPTED on every launch`() = runTest {
-        // Given — NOT a first launch, with two runs stranded by a dead process.
+        // Given — NOT a first launch, with three runs stranded by a dead
+        // process, including one suspended on a HITL approval (its in-memory
+        // deferred died with the process, so nothing else can settle it).
         every { settingsRepository.isFirstLaunch } returns flowOf(false)
-        coEvery { pipelineRunRepository.getOrphanedRunning() } returns listOf(
+        coEvery { pipelineRunRepository.getOrphanedRuns() } returns listOf(
             orphanRun("run-1", PipelineRunStatus.RUNNING),
             orphanRun("run-2", PipelineRunStatus.QUEUED),
+            orphanRun("run-3", PipelineRunStatus.WAITING_APPROVAL),
         )
 
         // When
@@ -113,6 +116,13 @@ class InitializeAppUseCaseTest {
                 "Process terminated during execution",
             )
         }
+        coVerify {
+            pipelineRunRepository.finishRun(
+                "run-3",
+                PipelineRunStatus.INTERRUPTED,
+                "Process terminated during execution",
+            )
+        }
     }
 
     @Test
@@ -120,7 +130,7 @@ class InitializeAppUseCaseTest {
         // Given — first launch AND an orphaned run (e.g. data restored from backup).
         every { settingsRepository.isFirstLaunch } returns flowOf(true)
         coEvery { loadPipelineFromPresetUseCase(SHOWCASE_PRESET_ID) } returns Result.success(SEEDED_ID)
-        coEvery { pipelineRunRepository.getOrphanedRunning() } returns listOf(
+        coEvery { pipelineRunRepository.getOrphanedRuns() } returns listOf(
             orphanRun("run-1", PipelineRunStatus.RUNNING),
         )
 
@@ -136,7 +146,7 @@ class InitializeAppUseCaseTest {
     @Test
     fun `invoke leaves run store untouched when nothing is orphaned`() = runTest {
         every { settingsRepository.isFirstLaunch } returns flowOf(false)
-        coEvery { pipelineRunRepository.getOrphanedRunning() } returns emptyList()
+        coEvery { pipelineRunRepository.getOrphanedRuns() } returns emptyList()
 
         useCase()
 

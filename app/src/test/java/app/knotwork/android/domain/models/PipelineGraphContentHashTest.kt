@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.reflect.full.primaryConstructor
 
 /**
  * Unit tests for [PipelineGraph.contentHash] — the checkpoint-invalidation
@@ -121,6 +122,51 @@ class PipelineGraphContentHashTest {
 
         assertNotEquals(baseGraph().contentHash(), rewired.contentHash())
     }
+
+    /**
+     * Drift guard: contentHash() hand-enumerates the model fields, so every
+     * field added to [NodeModel] / [ConnectionModel] / [PipelineGraph] MUST
+     * be classified — either appended to the canonical serialization or
+     * added to the documented exclusion set below. This test fails the build
+     * until the author makes that call, preventing the silent-stale-hash
+     * failure mode where an execution-relevant field is edited between
+     * interruption and resume without invalidating the checkpoint.
+     */
+    @Test
+    fun `contentHash enumeration tracks every model field`() {
+        val hashedNodeFields = setOf(
+            "id", "type", "label", "toolName", "modelPath", "conditionComplexity",
+            "conditionKeywords", "conditionPrompt", "systemPrompt", "cloudProvider",
+            "clarificationTimeoutMs", "contextConfig", "configJson",
+        )
+        val excludedNodeFields = setOf("x", "y")
+        assertEquals(
+            "NodeModel gained or lost a field — classify it in PipelineGraph.contentHash() " +
+                "(hash it, or document the exclusion) and update this guard.",
+            hashedNodeFields + excludedNodeFields,
+            constructorParamNames(NodeModel::class),
+        )
+
+        val hashedConnectionFields = setOf("id", "sourceNodeId", "targetNodeId", "label")
+        assertEquals(
+            "ConnectionModel gained or lost a field — classify it in PipelineGraph.contentHash() " +
+                "and update this guard.",
+            hashedConnectionFields,
+            constructorParamNames(ConnectionModel::class),
+        )
+
+        val hashedGraphFields = setOf("nodes", "connections")
+        val excludedGraphFields = setOf("id", "name", "updatedAt")
+        assertEquals(
+            "PipelineGraph gained or lost a field — classify it in contentHash() " +
+                "and update this guard.",
+            hashedGraphFields + excludedGraphFields,
+            constructorParamNames(PipelineGraph::class),
+        )
+    }
+
+    private fun constructorParamNames(klass: kotlin.reflect.KClass<*>): Set<String> =
+        klass.primaryConstructor!!.parameters.mapNotNull { it.name }.toSet()
 
     @Test
     fun `field shifting between adjacent columns cannot collide`() {

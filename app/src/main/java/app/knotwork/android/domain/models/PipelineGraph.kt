@@ -215,9 +215,7 @@ data class PipelineGraph(
             }
         }
         val digest = MessageDigest.getInstance(HASH_ALGORITHM).digest(canonical.toByteArray(Charsets.UTF_8))
-        return digest.joinToString(separator = "") { byte ->
-            (byte.toInt() and BYTE_MASK).toString(HEX_RADIX).padStart(HEX_PAD_LENGTH, '0')
-        }
+        return digest.toHexString()
     }
 
     private companion object {
@@ -236,14 +234,5 @@ data class PipelineGraph(
 
         /** Group-separator control character between the node and connection sections. */
         const val SECTION_SEPARATOR = '\u001D'
-
-        /** Mask extracting the unsigned byte value for hex encoding. */
-        const val BYTE_MASK = 0xFF
-
-        /** Radix for the hex encoding of digest bytes. */
-        const val HEX_RADIX = 16
-
-        /** Width every encoded digest byte is left-padded to. */
-        const val HEX_PAD_LENGTH = 2
     }
 }

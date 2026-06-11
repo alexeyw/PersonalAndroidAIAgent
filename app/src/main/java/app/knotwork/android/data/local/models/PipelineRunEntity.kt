@@ -14,7 +14,7 @@ import androidx.room.PrimaryKey
  * scheduler-originated tasks precedes the creation of the chat-session row
  * itself (the session is auto-created when the first message is saved).
  * This follows the `chat_messages` precedent; cleanup on session deletion is
- * explicit via `PipelineRunDao.deleteRunsForSession`.
+ * explicit, inside the `ChatDao.deleteSessionCompletely` transaction.
  *
  * @property id Unique run id (UUID), equal to the id of the originating agent task.
  * @property sessionId Id of the owning chat session (indexed, no FK — see above).
