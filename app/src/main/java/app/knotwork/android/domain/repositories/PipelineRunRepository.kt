@@ -121,6 +121,31 @@ interface PipelineRunRepository {
     fun observeRunsForSession(sessionId: String): Flow<List<PipelineRun>>
 
     /**
+     * Observes every non-terminal run across all sessions. Powers the drawer
+     * thread-list indicator: a session owning a run in any active status
+     * (QUEUED / RUNNING / WAITING_*) renders an in-progress badge so the user
+     * can see at a glance which background conversations are still working.
+     *
+     * @return A cold flow re-emitting the active-run list on every change;
+     *   storage failures degrade to an empty emission.
+     */
+    fun observeActiveRuns(): Flow<List<PipelineRun>>
+
+    /**
+     * Discards an interrupted run: transitions it from
+     * [PipelineRunStatus.INTERRUPTED] to [PipelineRunStatus.FAILED] with a
+     * fixed "discarded by user" error message. This is the only sanctioned
+     * terminal-to-terminal transition — the user explicitly dismissed the
+     * resume offer, so the record must stop presenting itself as resumable.
+     * Guarded in SQL: a run in any other status (including the other terminal
+     * ones) is left untouched, so a racing resume or a stale UI action can
+     * never corrupt a settled record.
+     *
+     * @param runId Id of the run to discard.
+     */
+    suspend fun discardInterruptedRun(runId: String)
+
+    /**
      * Returns every non-terminal run that is **not owned by the current
      * process** — i.e. whose [createRun] happened in a process that has since
      * died. Such runs are orphans by definition: the in-memory machinery that

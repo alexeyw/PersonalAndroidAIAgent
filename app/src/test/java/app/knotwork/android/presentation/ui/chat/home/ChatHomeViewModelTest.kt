@@ -6,9 +6,14 @@ import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.ClarificationRequest
 import app.knotwork.android.domain.models.LocalModel
+import app.knotwork.android.domain.models.NodeModel
+import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
+import app.knotwork.android.domain.models.PipelineRun
+import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.Role
+import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.ClarificationRepository
@@ -100,6 +105,7 @@ class ChatHomeViewModelTest {
     private lateinit var defaultPipelineIdFlow: MutableStateFlow<String?>
     private lateinit var maxContextLengthFlow: MutableStateFlow<Int>
     private lateinit var consolePreferredConsoleTabNameFlow: MutableStateFlow<String>
+    private lateinit var activeRunsFlow: MutableStateFlow<List<PipelineRun>>
 
     private lateinit var viewModel: ChatHomeViewModel
 
@@ -121,6 +127,8 @@ class ChatHomeViewModelTest {
         coEvery { pipelineRunRepository.getActiveRunForSession(any()) } returns null
         coEvery { pipelineRunRepository.getLatestRunForSession(any()) } returns null
         coEvery { runTraceRepository.getTraceForRun(any()) } returns emptyList()
+        activeRunsFlow = MutableStateFlow(emptyList())
+        every { pipelineRunRepository.observeActiveRuns() } returns activeRunsFlow
 
         sessionsFlow = MutableStateFlow(emptyList())
         localModelsFlow = MutableStateFlow(emptyList())
@@ -854,6 +862,7 @@ class ChatHomeViewModelTest {
         val sessionId = viewModel.state.value.thread.currentSessionId
         val request = ClarificationRequest(
             id = "req-1",
+            sessionId = "session-1",
             question = "Which calendar?",
             options = listOf("Work", "Personal"),
             timeoutMs = 0,
@@ -878,6 +887,7 @@ class ChatHomeViewModelTest {
         val sessionId = viewModel.state.value.thread.currentSessionId
         val request = ClarificationRequest(
             id = "req-7",
+            sessionId = "session-1",
             question = "Q?",
             options = listOf("Yes", "No"),
             timeoutMs = 0,
@@ -905,6 +915,7 @@ class ChatHomeViewModelTest {
         val sessionId = viewModel.state.value.thread.currentSessionId
         val request = ClarificationRequest(
             id = "req-timeout",
+            sessionId = "session-1",
             question = "Pick one",
             options = listOf("Alpha", "Beta"),
             timeoutMs = 500L,
@@ -946,6 +957,7 @@ class ChatHomeViewModelTest {
         val sessionId = viewModel.state.value.thread.currentSessionId
         val request = ClarificationRequest(
             id = "req-blank",
+            sessionId = "session-1",
             question = "Anything else?",
             options = null,
             timeoutMs = 0,
@@ -1205,6 +1217,266 @@ class ChatHomeViewModelTest {
         assertTrue(rows.first().starred)
         assertEquals(a, rows.last().id)
     }
+
+    // region Chat reattach protocol
+
+    /** Builds a [PipelineRun] fixture for the reattach-protocol scenarios. */
+    private fun runRecord(
+        sessionId: String,
+        status: PipelineRunStatus,
+        id: String = "run-1",
+        pipelineId: String? = null,
+        currentNodeId: String? = null,
+    ): PipelineRun = PipelineRun(
+        id = id,
+        sessionId = sessionId,
+        pipelineId = pipelineId,
+        origin = RunOrigin.CHAT,
+        status = status,
+        currentNodeId = currentNodeId,
+        startedAt = 0L,
+        finishedAt = null,
+        errorMessage = null,
+        graphContentHash = null,
+    )
+
+    /** Persists [sessionId] as the saved session so `initializeSession` restores it. */
+    private fun seedSavedSession(sessionId: String) {
+        savedSessionIdFlow.value = sessionId
+        sessionsFlow.value = listOf(ChatSession(id = sessionId, name = "Existing", updatedAt = 0))
+    }
+
+    @Test
+    fun `given active running run when session opens then UI reattaches without enqueueing`() =
+        runTest(testDispatcher) {
+            val sessionId = "session-running"
+            seedSavedSession(sessionId)
+            coEvery { pipelineRunRepository.getActiveRunForSession(sessionId) } returns
+                runRecord(sessionId, PipelineRunStatus.RUNNING)
+            every { agentOrchestratorUseCase.observe(sessionId) } returns
+                flowOf(AgentOrchestratorState.Thinking("working"))
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
+            verify { agentOrchestratorUseCase.observe(sessionId) }
+            verify(exactly = 0) { agentOrchestratorUseCase.invoke(any(), any(), any()) }
+        }
+
+    @Test
+    fun `given waiting approval run when session opens then HITL card restored from pending snapshot`() =
+        runTest(testDispatcher) {
+            val sessionId = "session-hitl"
+            seedSavedSession(sessionId)
+            coEvery { pipelineRunRepository.getActiveRunForSession(sessionId) } returns
+                runRecord(sessionId, PipelineRunStatus.WAITING_APPROVAL)
+            // The live replay cache holds a console snapshot, NOT the
+            // WaitingForApproval emission — the card must come from the
+            // persistent-status branch, never from the flow.
+            every { agentOrchestratorUseCase.observe(sessionId) } returns
+                flowOf(AgentOrchestratorState.ConsoleLog(events = emptyList(), runId = "run-1"))
+            every { agentOrchestratorUseCase.pendingApprovalFor(sessionId) } returns
+                AgentOrchestratorState.WaitingForApproval(
+                    toolName = "fs.delete_file",
+                    arguments = "{}",
+                    risk = ToolRisk.SENSITIVE,
+                )
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.visual is ChatHomeUiState.HitlConfirm)
+            assertEquals("fs.delete_file", viewModel.state.value.pending.tool?.toolName)
+        }
+
+    @Test
+    fun `given waiting clarification run when session opens then clarification card restored from repository`() =
+        runTest(testDispatcher) {
+            val sessionId = "session-clar"
+            seedSavedSession(sessionId)
+            coEvery { pipelineRunRepository.getActiveRunForSession(sessionId) } returns
+                runRecord(sessionId, PipelineRunStatus.WAITING_CLARIFICATION)
+            every { agentOrchestratorUseCase.observe(sessionId) } returns
+                flowOf(AgentOrchestratorState.ConsoleLog(events = emptyList(), runId = "run-1"))
+            val request = ClarificationRequest(
+                id = "req-77",
+                sessionId = sessionId,
+                question = "Which calendar?",
+                options = listOf("Work"),
+                timeoutMs = 0,
+            )
+            val otherSessions = ClarificationRequest(
+                id = "req-foreign",
+                sessionId = "other-session",
+                question = "Unrelated?",
+                options = null,
+                timeoutMs = 0,
+            )
+            every { clarificationRepository.pendingRequests } returns flowOf(listOf(otherSessions, request))
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertEquals(ChatHomeUiState.Clarification, viewModel.state.value.visual)
+            assertEquals("req-77", viewModel.state.value.pending.clarification?.id)
+        }
+
+    @Test
+    fun `given latest run interrupted when session opens then interrupted card surfaces with node label`() =
+        runTest(testDispatcher) {
+            val sessionId = "session-int"
+            seedSavedSession(sessionId)
+            coEvery { pipelineRunRepository.getLatestRunForSession(sessionId) } returns runRecord(
+                sessionId,
+                PipelineRunStatus.INTERRUPTED,
+                id = "run-int",
+                pipelineId = "p1",
+                currentNodeId = "n2",
+            )
+            coEvery { pipelineRepository.getPipelineById("p1") } returns PipelineGraph(
+                id = "p1",
+                name = "Pipeline",
+                nodes = listOf(NodeModel(id = "n2", type = NodeType.LITE_RT, x = 0f, y = 0f, label = "Summarise")),
+            )
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
+            assertEquals(
+                InterruptedRunPending(runId = "run-int", nodeLabel = "Summarise"),
+                viewModel.state.value.pending.interrupted,
+            )
+        }
+
+    @Test
+    fun `given latest run interrupted with deleted pipeline then card falls back to unknown step`() =
+        runTest(testDispatcher) {
+            val sessionId = "session-int-deleted"
+            seedSavedSession(sessionId)
+            coEvery { pipelineRunRepository.getLatestRunForSession(sessionId) } returns runRecord(
+                sessionId,
+                PipelineRunStatus.INTERRUPTED,
+                id = "run-int",
+                pipelineId = "gone",
+                currentNodeId = "n2",
+            )
+            coEvery { pipelineRepository.getPipelineById("gone") } returns null
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertEquals(
+                ChatHomeViewModel.INTERRUPTED_UNKNOWN_NODE_LABEL,
+                viewModel.state.value.pending.interrupted?.nodeLabel,
+            )
+        }
+
+    @Test
+    fun `given latest run completed when session opens then no reattach happens`() = runTest(testDispatcher) {
+        val sessionId = "session-done"
+        seedSavedSession(sessionId)
+        coEvery { pipelineRunRepository.getLatestRunForSession(sessionId) } returns
+            runRecord(sessionId, PipelineRunStatus.COMPLETED)
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertEquals(ChatHomeUiState.Empty, viewModel.state.value.visual)
+        assertNull(viewModel.state.value.pending.interrupted)
+        verify(exactly = 0) { agentOrchestratorUseCase.observe(any()) }
+    }
+
+    @Test
+    fun `selectThread reattaches to the new thread's active run`() = runTest(testDispatcher) {
+        val first = "session-a"
+        val second = "session-b"
+        seedSavedSession(first)
+        sessionsFlow.value = listOf(
+            ChatSession(id = first, name = "A", updatedAt = 0),
+            ChatSession(id = second, name = "B", updatedAt = 0),
+        )
+        coEvery { pipelineRunRepository.getActiveRunForSession(second) } returns
+            runRecord(second, PipelineRunStatus.RUNNING, id = "run-b")
+        every { agentOrchestratorUseCase.observe(second) } returns
+            flowOf(AgentOrchestratorState.Thinking("working"))
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.selectThread(second)
+        advanceUntilIdle()
+
+        assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
+        verify { agentOrchestratorUseCase.observe(second) }
+    }
+
+    @Test
+    fun `discardInterruptedRun settles the run and hides the card`() = runTest(testDispatcher) {
+        val sessionId = "session-discard"
+        seedSavedSession(sessionId)
+        coEvery { pipelineRunRepository.getLatestRunForSession(sessionId) } returns
+            runRecord(sessionId, PipelineRunStatus.INTERRUPTED, id = "run-d")
+        coEvery { pipelineRunRepository.discardInterruptedRun("run-d") } returns Unit
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
+
+        viewModel.discardInterruptedRun()
+        advanceUntilIdle()
+
+        assertNull(viewModel.state.value.pending.interrupted)
+        assertEquals(ChatHomeUiState.Empty, viewModel.state.value.visual)
+        coVerify { pipelineRunRepository.discardInterruptedRun("run-d") }
+    }
+
+    @Test
+    fun `resumeInterruptedRun emits the resume-unavailable event and keeps the card`() = runTest(testDispatcher) {
+        val sessionId = "session-resume"
+        seedSavedSession(sessionId)
+        coEvery { pipelineRunRepository.getLatestRunForSession(sessionId) } returns
+            runRecord(sessionId, PipelineRunStatus.INTERRUPTED, id = "run-r")
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val events = mutableListOf<Unit>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.resumeUnavailableEvents.collect { events.add(it) }
+        }
+        runCurrent()
+
+        viewModel.resumeInterruptedRun()
+        advanceUntilIdle()
+
+        assertEquals(1, events.size)
+        assertNotNull(viewModel.state.value.pending.interrupted)
+    }
+
+    @Test
+    fun `thread rows flag sessions with active background runs`() = runTest(testDispatcher) {
+        val foreground = "session-fg"
+        val background = "session-bg"
+        seedSavedSession(foreground)
+        sessionsFlow.value = listOf(
+            ChatSession(id = foreground, name = "Foreground", updatedAt = 100L),
+            ChatSession(id = background, name = "Background", updatedAt = 50L),
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        activeRunsFlow.value = listOf(runRecord(background, PipelineRunStatus.RUNNING, id = "run-bg"))
+        advanceUntilIdle()
+
+        val rows = viewModel.state.value.thread.rows
+        assertTrue(rows.first { it.id == background }.running)
+        assertTrue(!rows.first { it.id == foreground }.running)
+    }
+
+    // endregion
 
     private companion object {
         const val DEFAULT_TOKENS_MAX: Int = 4096

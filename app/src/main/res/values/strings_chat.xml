@@ -54,6 +54,8 @@
     <string name="chat_snackbar_save_to_memory_failed">Couldn\'t save to memory</string>
     <string name="chat_snackbar_console_copied">Console log copied</string>
     <string name="chat_snackbar_console_line_copied">Line copied</string>
+    <!-- Shown when the user taps Resume on the interrupted-run card before checkpoint-resume ships. -->
+    <string name="chat_snackbar_resume_unavailable">Resuming interrupted runs isn\'t available yet</string>
     <string name="chat_console_clear_dialog_confirm">Clear</string>
     <string name="chat_console_clear_dialog_cancel">Cancel</string>
 
@@ -65,6 +67,7 @@
     <string name="chat_home_debug_state_hitl_sensitive">HITL — Sensitive</string>
     <string name="chat_home_debug_state_hitl_destructive">HITL — Destructive</string>
     <string name="chat_home_debug_state_clarification">Clarification</string>
+    <string name="chat_home_debug_state_interrupted">Interrupted</string>
     <string name="chat_home_debug_state_error">Error</string>
     <string name="chat_home_debug_state_drawer_open">Drawer open</string>
     <string name="chat_home_debug_state_console_partial">Console — Partial</string>

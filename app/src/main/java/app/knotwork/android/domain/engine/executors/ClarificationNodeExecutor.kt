@@ -98,6 +98,7 @@ class ClarificationNodeExecutor @Inject constructor(
 
         val request = ClarificationRequest(
             id = UUID.randomUUID().toString(),
+            sessionId = sessionId,
             question = question,
             options = options,
             timeoutMs = node.clarificationTimeoutMs ?: DEFAULT_TIMEOUT_MS,

@@ -40,6 +40,7 @@ class ClarificationRepositoryImplTest {
         runTest {
             val request = ClarificationRequest(
                 id = "req-1",
+                sessionId = "session-1",
                 question = "Pick a colour",
                 options = listOf("red", "blue"),
                 timeoutMs = 60_000L,
@@ -58,6 +59,7 @@ class ClarificationRepositoryImplTest {
     fun `given options non-empty and timeout elapses then returns first option`() = runTest {
         val request = ClarificationRequest(
             id = "req-2",
+            sessionId = "session-1",
             question = "Pick a colour",
             options = listOf("red", "blue"),
             timeoutMs = 100L,
@@ -74,6 +76,7 @@ class ClarificationRepositoryImplTest {
     fun `given options is null and timeout elapses then returns empty string`() = runTest {
         val request = ClarificationRequest(
             id = "req-3",
+            sessionId = "session-1",
             question = "Free-form question",
             options = null,
             timeoutMs = 100L,
@@ -90,6 +93,7 @@ class ClarificationRepositoryImplTest {
     fun `given options is empty list and timeout elapses then returns empty string`() = runTest {
         val request = ClarificationRequest(
             id = "req-4",
+            sessionId = "session-1",
             question = "Edge case",
             options = emptyList(),
             timeoutMs = 100L,
@@ -106,6 +110,7 @@ class ClarificationRepositoryImplTest {
     fun `given requestAnswer in flight then pendingRequests exposes the request and clears after resolve`() = runTest {
         val request = ClarificationRequest(
             id = "req-5",
+            sessionId = "session-1",
             question = "What is your name?",
             options = null,
             timeoutMs = 60_000L,
@@ -126,6 +131,7 @@ class ClarificationRepositoryImplTest {
     fun `given two sequential requests when each gets its own answer then both resolve correctly`() = runTest {
         val firstRequest = ClarificationRequest(
             id = "req-6a",
+            sessionId = "session-1",
             question = "Q1?",
             options = null,
             timeoutMs = 60_000L,
@@ -137,6 +143,7 @@ class ClarificationRepositoryImplTest {
 
         val secondRequest = ClarificationRequest(
             id = "req-6b",
+            sessionId = "session-1",
             question = "Q2?",
             options = listOf("yes", "no"),
             timeoutMs = 60_000L,
@@ -151,6 +158,7 @@ class ClarificationRepositoryImplTest {
     fun `given mismatched requestId in submitClarification then waiting request is not resolved`() = runTest {
         val request = ClarificationRequest(
             id = "req-7",
+            sessionId = "session-1",
             question = "Real question",
             options = listOf("a", "b"),
             timeoutMs = 100L,
@@ -175,6 +183,7 @@ class ClarificationRepositoryImplTest {
 
         val request = ClarificationRequest(
             id = "req-8",
+            sessionId = "session-1",
             question = "After ghost",
             options = null,
             timeoutMs = 60_000L,
@@ -190,6 +199,7 @@ class ClarificationRepositoryImplTest {
     fun `given pending request resolved by timeout then pendingRequests flow is reset to empty`() = runTest {
         val request = ClarificationRequest(
             id = "req-9",
+            sessionId = "session-1",
             question = "Will time out",
             options = null,
             timeoutMs = 50L,
@@ -208,12 +218,14 @@ class ClarificationRepositoryImplTest {
     fun `given two concurrent requests then both are visible and each is answered independently`() = runTest {
         val first = ClarificationRequest(
             id = "concurrent-a",
+            sessionId = "session-1",
             question = "Q-A?",
             options = listOf("a1", "a2"),
             timeoutMs = 60_000L,
         )
         val second = ClarificationRequest(
             id = "concurrent-b",
+            sessionId = "session-1",
             question = "Q-B?",
             options = null,
             timeoutMs = 60_000L,
@@ -243,6 +255,7 @@ class ClarificationRepositoryImplTest {
     fun `submitClarification returns true when request was successfully delivered`() = runTest {
         val request = ClarificationRequest(
             id = "ret-true",
+            sessionId = "session-1",
             question = "Q?",
             options = listOf("a", "b"),
             timeoutMs = 60_000L,
@@ -267,6 +280,7 @@ class ClarificationRepositoryImplTest {
     fun `submitClarification returns false when request has already timed out`() = runTest {
         val request = ClarificationRequest(
             id = "ret-late",
+            sessionId = "session-1",
             question = "Late?",
             options = listOf("default"),
             timeoutMs = 50L,
@@ -289,12 +303,14 @@ class ClarificationRepositoryImplTest {
     fun `given two concurrent requests when one times out then the other remains answerable`() = runTest {
         val shortLived = ClarificationRequest(
             id = "short",
+            sessionId = "session-1",
             question = "Will time out",
             options = listOf("default-short"),
             timeoutMs = 50L,
         )
         val longLived = ClarificationRequest(
             id = "long",
+            sessionId = "session-1",
             question = "Stays around",
             options = listOf("default-long"),
             timeoutMs = 60_000L,

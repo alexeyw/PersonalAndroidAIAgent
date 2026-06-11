@@ -104,6 +104,10 @@ private const val LONG_PRESS_SCALE_DURATION_MS = 60
  * for Destructive, `true` for Readonly (auto-allowed display state).
  * @param onClarificationReply invoked when the user taps a quick-reply chip
  * or submits the free-form field on a [ChatContent.Clarification] card.
+ * @param onRunResume invoked when the user taps the Resume CTA on a
+ * [ChatContent.RunInterrupted] card.
+ * @param onRunDiscard invoked when the user taps the Discard CTA on a
+ * [ChatContent.RunInterrupted] card.
  */
 @Composable
 @Suppress("LongParameterList") // Public chat-message API — collapsing into a single config object hides intent.
@@ -121,6 +125,8 @@ fun ChatMessage(
     onTypedConfirmChange: (String) -> Unit = {},
     allowOnceEnabled: Boolean = true,
     onClarificationReply: (String) -> Unit = {},
+    onRunResume: () -> Unit = {},
+    onRunDiscard: () -> Unit = {},
     markdownRenderer: (@Composable (String) -> Unit)? = null,
 ) {
     when (role) {
@@ -138,6 +144,8 @@ fun ChatMessage(
             onTypedConfirmChange = onTypedConfirmChange,
             allowOnceEnabled = allowOnceEnabled,
             onClarificationReply = onClarificationReply,
+            onRunResume = onRunResume,
+            onRunDiscard = onRunDiscard,
             markdownRenderer = markdownRenderer,
             modifier = modifier,
         )
@@ -154,6 +162,8 @@ fun ChatMessage(
             onTypedConfirmChange = onTypedConfirmChange,
             allowOnceEnabled = allowOnceEnabled,
             onClarificationReply = onClarificationReply,
+            onRunResume = onRunResume,
+            onRunDiscard = onRunDiscard,
             markdownRenderer = markdownRenderer,
             modifier = modifier,
         )
@@ -176,6 +186,8 @@ private fun BubbleMessage(
     onTypedConfirmChange: (String) -> Unit,
     allowOnceEnabled: Boolean,
     onClarificationReply: (String) -> Unit,
+    onRunResume: () -> Unit,
+    onRunDiscard: () -> Unit,
     markdownRenderer: (@Composable (String) -> Unit)?,
     modifier: Modifier,
 ) {
@@ -207,13 +219,18 @@ private fun BubbleMessage(
                 onTypedConfirmChange = onTypedConfirmChange,
                 allowOnceEnabled = allowOnceEnabled,
                 onClarificationReply = onClarificationReply,
+                onRunResume = onRunResume,
+                onRunDiscard = onRunDiscard,
                 markdownRenderer = markdownRenderer,
             )
             // Clarification / HITL confirmation cards are self-contained
             // panels with their own internal status indicators; rendering
             // the standard timestamp + model footer underneath them would
             // clash. Every other variant keeps the footer.
-            if (content !is ChatContent.Clarification && content !is ChatContent.Confirmation) {
+            if (content !is ChatContent.Clarification &&
+                content !is ChatContent.Confirmation &&
+                content !is ChatContent.RunInterrupted
+            ) {
                 BubbleFooter(role = role, metadata = metadata)
             }
         }
@@ -305,6 +322,8 @@ private fun BubbleBody(
     onTypedConfirmChange: (String) -> Unit,
     allowOnceEnabled: Boolean,
     onClarificationReply: (String) -> Unit,
+    onRunResume: () -> Unit,
+    onRunDiscard: () -> Unit,
     markdownRenderer: (@Composable (String) -> Unit)?,
 ) {
     when (content) {
@@ -336,6 +355,11 @@ private fun BubbleBody(
         is ChatContent.Clarification -> ClarificationCard(
             model = content.model,
             onReply = onClarificationReply,
+        )
+        is ChatContent.RunInterrupted -> InterruptedRunCard(
+            model = content.model,
+            onResume = onRunResume,
+            onDiscard = onRunDiscard,
         )
     }
 }

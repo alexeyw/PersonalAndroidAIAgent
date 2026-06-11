@@ -32,6 +32,35 @@ class AgentOrchestratorUseCase @Inject constructor(private val taskQueueManager:
     }
 
     /**
+     * Subscribes to the execution state of [sessionId] without enqueueing a
+     * new task. Backs the chat reattach protocol: when a session is reopened
+     * while its run is still in flight (started earlier in this process and
+     * kept alive by the singleton task queue), the UI re-attaches to the live
+     * stream instead of restarting the pipeline. The underlying per-session
+     * flow replays its latest state on subscription, so the collector
+     * immediately observes where the run currently stands.
+     *
+     * @param sessionId The chat session whose execution state to observe.
+     * @return A [Flow] of [AgentOrchestratorState] for the given session.
+     */
+    fun observe(sessionId: String): Flow<AgentOrchestratorState> = taskQueueManager.observeTaskState(sessionId)
+
+    /**
+     * Returns the tool-approval request the run of [sessionId] is currently
+     * suspended on, or `null` when no approval gate is active.
+     *
+     * Counterpart of [resumeWithApproval] for the reattach path: a session
+     * whose persistent run record reads `WAITING_APPROVAL` restores its HITL
+     * confirmation card from this snapshot rather than from the state flow's
+     * replay cache (which console events overwrite while the run waits).
+     *
+     * @param sessionId The session ID whose pending approval is queried.
+     * @return The pending [AgentOrchestratorState.WaitingForApproval], or `null`.
+     */
+    fun pendingApprovalFor(sessionId: String): AgentOrchestratorState.WaitingForApproval? =
+        taskQueueManager.pendingApproval(sessionId)
+
+    /**
      * Starts the orchestration cycle for a given user prompt by queueing a task.
      *
      * @param sessionId The current chat session ID.

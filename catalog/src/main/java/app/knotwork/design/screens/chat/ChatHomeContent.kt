@@ -628,6 +628,8 @@ private fun ChatHomeMessageList(
                 onAllowAlways = callbacks.onHitlAllowAlways,
                 onReject = callbacks.onHitlReject,
                 onClarificationReply = callbacks.onClarificationReply,
+                onRunResume = callbacks.onResumeRun,
+                onRunDiscard = callbacks.onDiscardRun,
                 onErrorRetry = callbacks.onErrorRetry,
                 onContextAction = { action -> callbacks.onMessageContextAction(row.id, action) },
                 markdownRenderer = markdownRenderer,
@@ -855,6 +857,7 @@ private fun ChatHomeDrawerThreadRow(row: ChatHomeThreadRow, onClick: () -> Unit,
     } else {
         KnotworkTheme.extended.onSurfaceMuted
     }
+    val runningDescription = stringResource(R.string.knotwork_chat_home_drawer_running_cd)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
@@ -899,6 +902,17 @@ private fun ChatHomeDrawerThreadRow(row: ChatHomeThreadRow, onClick: () -> Unit,
                 color = rowSubtitleFg,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (row.running) {
+            CircularProgressIndicator(
+                color = MaterialTheme.colorScheme.primary,
+                strokeWidth = DRAWER_RUNNING_STROKE_WIDTH,
+                modifier = Modifier
+                    .size(DRAWER_RUNNING_INDICATOR_SIZE)
+                    .semantics {
+                        contentDescription = runningDescription
+                    },
             )
         }
         IconButton(onClick = onEdit) {
@@ -946,6 +960,12 @@ private fun DrawerFooterRow(icon: ImageVector, title: String, subtitle: String, 
 
 /** Diameter of the leading status dot rendered next to each session row. */
 private val DRAWER_STATUS_DOT_SIZE = 8.dp
+
+/** Diameter of the trailing in-progress indicator on a drawer thread row with an active run. */
+private val DRAWER_RUNNING_INDICATOR_SIZE = 16.dp
+
+/** Stroke width of the drawer thread-row in-progress indicator. */
+private val DRAWER_RUNNING_STROKE_WIDTH = 2.dp
 
 /** Size of the inline star glyph rendered before a favorited session's title. */
 private val DRAWER_STARRED_ICON_SIZE = 14.dp

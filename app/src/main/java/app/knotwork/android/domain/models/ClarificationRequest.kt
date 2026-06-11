@@ -11,6 +11,12 @@ package app.knotwork.android.domain.models
  *
  * @property id Unique identifier of this request, used to correlate the user's reply
  *   with the suspended coroutine. Typically a UUID generated at request creation.
+ * @property sessionId Id of the chat session whose run raised the request. Lets a
+ *   UI re-attaching to a session (chat reattach protocol) pick *its* pending
+ *   request out of the global
+ *   [app.knotwork.android.domain.repositories.ClarificationRepository.pendingRequests]
+ *   stream — concurrent pipelines may hold overlapping requests for different
+ *   sessions.
  * @property question Human-readable question to display to the user.
  * @property options Predefined answer choices. When `null` the UI must offer a
  *   free-form text input. An empty list is treated equivalently to `null` for
@@ -18,4 +24,10 @@ package app.knotwork.android.domain.models
  * @property timeoutMs Maximum time, in milliseconds, the agent will wait for the
  *   user's response before falling back to the default answer.
  */
-data class ClarificationRequest(val id: String, val question: String, val options: List<String>?, val timeoutMs: Long)
+data class ClarificationRequest(
+    val id: String,
+    val sessionId: String,
+    val question: String,
+    val options: List<String>?,
+    val timeoutMs: Long,
+)

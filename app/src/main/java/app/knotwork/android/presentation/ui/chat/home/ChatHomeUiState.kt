@@ -42,6 +42,14 @@ sealed interface ChatHomeUiState {
     data object Clarification : ChatHomeUiState
 
     /**
+     * The session's most recent pipeline run was interrupted by a process
+     * death before reaching a terminal state. The tail of the conversation
+     * hosts the interrupted-run status card with Resume / Discard actions;
+     * the card payload lives in `ChatHomePendingState.interrupted`.
+     */
+    data object Interrupted : ChatHomeUiState
+
+    /**
      * Inline error tile + retry CTA. The user-visible message is carried
      * here so the surface can render the failure cause without consulting
      * any other source of truth.

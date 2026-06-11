@@ -46,6 +46,12 @@ enum class ChatHomeVisualState {
     /** Assistant needs more info. Clarification card pinned to last bubble. */
     Clarification,
 
+    /**
+     * The session's most recent run was interrupted by a process death.
+     * Interrupted-run status card (Resume / Discard) pinned to last bubble.
+     */
+    Interrupted,
+
     /** Inline error tile + retry. */
     Error,
 
@@ -98,6 +104,13 @@ data class ChatHomeThreadRow(
      * `isStarred` flag persisted in `chat_sessions.isStarred`.
      */
     val starred: Boolean = false,
+    /**
+     * `true` when the thread owns a pipeline run in a non-terminal status
+     * (queued, executing, or suspended on a human-in-the-loop request).
+     * Renders a small trailing progress indicator so the user can spot
+     * background conversations that are still working at a glance.
+     */
+    val running: Boolean = false,
 )
 
 /**
@@ -245,6 +258,16 @@ class ChatHomeCallbacks(
     val onHitlReject: () -> Unit = {},
     val onHitlTypedConfirmChange: (String) -> Unit = {},
     val onClarificationReply: (String) -> Unit = {},
+    /**
+     * Fired when the user taps the Resume CTA on the interrupted-run card.
+     * Hosts wire this to the checkpoint-resume mechanism.
+     */
+    val onResumeRun: () -> Unit = {},
+    /**
+     * Fired when the user taps the Discard CTA on the interrupted-run card.
+     * Hosts settle the interrupted run as failed and drop the card.
+     */
+    val onDiscardRun: () -> Unit = {},
     val onErrorRetry: () -> Unit = {},
     val onTitleTripleTap: () -> Unit = {},
     val onToggleFavorite: () -> Unit = {},

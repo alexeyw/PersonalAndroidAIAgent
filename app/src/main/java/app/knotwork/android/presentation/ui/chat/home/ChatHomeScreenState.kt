@@ -84,8 +84,15 @@ data class ChatHomeComposerState(val value: String = "", val typedConfirm: Strin
  * @property clarification clarification request awaiting the user's reply
  *   (`null` when the agent is not waiting). Renders the trailing
  *   clarification card.
+ * @property interrupted snapshot of the session's interrupted run (`null`
+ *   when the latest run finished normally or is still active). Renders the
+ *   trailing interrupted-run status card with Resume / Discard actions.
  */
-data class ChatHomePendingState(val tool: HitlPending? = null, val clarification: ClarificationRequest? = null)
+data class ChatHomePendingState(
+    val tool: HitlPending? = null,
+    val clarification: ClarificationRequest? = null,
+    val interrupted: InterruptedRunPending? = null,
+)
 
 /**
  * Active-thread metadata and the drawer thread list.

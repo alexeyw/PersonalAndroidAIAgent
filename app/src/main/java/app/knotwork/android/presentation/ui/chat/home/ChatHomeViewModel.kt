@@ -9,6 +9,8 @@ import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.ClarificationRequest
 import app.knotwork.android.domain.models.ConsoleEvent
+import app.knotwork.android.domain.models.PipelineRun
+import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.models.RunTraceRecord
@@ -141,6 +143,7 @@ class ChatHomeViewModel @Inject constructor(
     private val _exportEvents: MutableSharedFlow<ChatExportPayload> = MutableSharedFlow(extraBufferCapacity = 1)
     private val _importErrorEvents: MutableSharedFlow<String> = MutableSharedFlow(extraBufferCapacity = 1)
     private val _memorySaveEvents: MutableSharedFlow<MemorySaveEvent> = MutableSharedFlow(extraBufferCapacity = 1)
+    private val _resumeUnavailableEvents: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 1)
 
     /**
      * One-shot signal raised when the binding of the active chat points
@@ -180,6 +183,15 @@ class ChatHomeViewModel @Inject constructor(
      */
     val memorySaveEvents: SharedFlow<MemorySaveEvent> = _memorySaveEvents.asSharedFlow()
 
+    /**
+     * One-shot signal raised when the user taps Resume on the interrupted-run
+     * card while checkpoint-resume is not shipped yet. The screen surfaces a
+     * snackbar explaining the limitation. The flow (and the explanatory copy)
+     * disappears once the resume mechanism replaces the stub in
+     * [resumeInterruptedRun].
+     */
+    val resumeUnavailableEvents: SharedFlow<Unit> = _resumeUnavailableEvents.asSharedFlow()
+
     private var messagesJob: Job? = null
     private var generationJob: Job? = null
     private var tokenCounterJob: Job? = null
@@ -187,6 +199,16 @@ class ChatHomeViewModel @Inject constructor(
     private var sessions: List<ChatSession> = emptyList()
     private var availablePipelinesObserved: Boolean = false
     private var defaultPipelineId: String? = null
+
+    /** Serializes reattach lookups so a rapid thread switch cannot interleave run branches. */
+    private var reattachJob: Job? = null
+
+    /**
+     * Session ids that currently own a pipeline run in a non-terminal status.
+     * Fed by [observeActiveRuns] and projected into the drawer thread rows as
+     * the in-progress badge ([buildThreadRows]).
+     */
+    private var activeRunSessionIds: Set<String> = emptySet()
 
     /**
      * Number of [ConsoleEvent]s the user has already dismissed via
@@ -240,6 +262,7 @@ class ChatHomeViewModel @Inject constructor(
         observeMaxContextSize()
         observeConsolePreferredTab()
         observeInstalledModels()
+        observeActiveRuns()
         initializeSession()
     }
 
@@ -286,6 +309,10 @@ class ChatHomeViewModel @Inject constructor(
         val pipelineId = sessions.firstOrNull { it.id == sessionId }?.pipelineId
 
         cancelClarificationWatchdog()
+        // A reattach lookup still in flight must not race the fresh send —
+        // its stale branch could re-subscribe the collector or resurface a
+        // card belonging to the previous run.
+        reattachJob?.cancel()
         // Fresh run = fresh cumulative log upstream; the baseline carried
         // over from a previous run's mid-stream Clear no longer applies
         // (the engine restarts events from scratch). Mirrors legacy
@@ -366,6 +393,7 @@ class ChatHomeViewModel @Inject constructor(
      */
     fun stopGeneration() {
         generationJob?.cancel()
+        reattachJob?.cancel()
         cancelClarificationWatchdog()
         _state.update { current ->
             val cleared = current.withPendingCleared()
@@ -422,6 +450,7 @@ class ChatHomeViewModel @Inject constructor(
         }
         observeMessages(threadId)
         replayConsoleTrace(threadId)
+        reattachToRun(threadId)
         viewModelScope.launch {
             settingsRepository.setCurrentChatSessionId(threadId)
             // The pipelines / sessions flows do not re-emit on a thread
@@ -599,6 +628,7 @@ class ChatHomeViewModel @Inject constructor(
             }
             observeMessages(sessionId)
             replayConsoleTrace(sessionId)
+            reattachToRun(sessionId)
         }
     }
 
@@ -690,6 +720,7 @@ class ChatHomeViewModel @Inject constructor(
                 selected = session.id == activeId,
                 active = session.id == activeId,
                 starred = session.isStarred,
+                running = session.id in activeRunSessionIds,
             )
         }
     }
@@ -911,6 +942,196 @@ class ChatHomeViewModel @Inject constructor(
             }
         }
     }
+
+    /**
+     * Chat reattach protocol — re-binds the UI to whatever the persistent run
+     * record says about [sessionId] when the session is opened (cold start or
+     * thread switch). Branches:
+     *
+     *  - **Active run** (QUEUED / RUNNING / WAITING_*) → subscribe to the live
+     *    per-session state flow *without* enqueueing a new task; the
+     *    suspension cards are restored from the authoritative pending
+     *    snapshots (see [restoreSuspensionCard]) because the flow's replay
+     *    cache may have been overwritten by console events.
+     *  - **Latest run INTERRUPTED** → surface the interrupted-run status card
+     *    (Resume / Discard) with the display label of the node the run
+     *    stopped at.
+     *  - **Anything else** (terminal run or no runs) → no-op; the regular
+     *    message flow + console trace replay already render the outcome.
+     *
+     * The branch decision is made against the persistent status, never the
+     * in-memory flow: WAITING_* runs of a dead process are settled to
+     * INTERRUPTED by the startup orphan sweep (which runs under the splash
+     * screen, before this ViewModel exists), so an active status here always
+     * denotes a run that is genuinely alive in this process.
+     */
+    private fun reattachToRun(sessionId: String) {
+        reattachJob?.cancel()
+        reattachJob = viewModelScope.launch {
+            val activeRun = pipelineRunRepository.getActiveRunForSession(sessionId)
+            // A rapid thread switch may have changed the active session while
+            // the lookup suspended — applying the stale branch would bleed
+            // the previous thread's run state into the new one.
+            if (_state.value.thread.currentSessionId != sessionId) return@launch
+            if (activeRun != null) {
+                attachToLiveRun(sessionId, activeRun.status)
+                return@launch
+            }
+            val latestRun = pipelineRunRepository.getLatestRunForSession(sessionId)
+            if (_state.value.thread.currentSessionId != sessionId) return@launch
+            if (latestRun?.status == PipelineRunStatus.INTERRUPTED) {
+                presentInterruptedRun(latestRun)
+            }
+        }
+    }
+
+    /**
+     * Live branch of the reattach protocol: subscribes the orchestrator-state
+     * collector to [sessionId] without enqueueing a task, flips the surface
+     * to `Generating` (the run is in flight — the composer must offer Stop,
+     * not Send), and restores the HITL / clarification card when the
+     * persistent [status] says the run is suspended on one.
+     */
+    private suspend fun attachToLiveRun(sessionId: String, status: PipelineRunStatus) {
+        _state.update { current ->
+            if (current.visual.isRestingOrCold()) {
+                current.copy(visual = ChatHomeUiState.Generating)
+            } else {
+                current
+            }
+        }
+        generationJob?.cancel()
+        generationJob = viewModelScope.launch {
+            agentOrchestratorUseCase.observe(sessionId)
+                .catch { error ->
+                    _state.update {
+                        it.copy(visual = ChatHomeUiState.Error(error.message ?: UNKNOWN_ERROR_FALLBACK))
+                    }
+                }
+                .collect { orchestratorState -> handleOrchestratorState(orchestratorState) }
+        }
+        restoreSuspensionCard(sessionId, status)
+    }
+
+    /**
+     * Restores the trailing suspension card from the authoritative pending
+     * snapshot when the persistent run [status] is a WAITING_* one. The live
+     * flow cannot be relied on for this: its replay cache (depth 1) holds
+     * whatever the engine emitted last, and console events emitted while the
+     * run waits overwrite the `WaitingForApproval` / `AwaitingClarification`
+     * emission. A pending snapshot that is already gone (the request was
+     * resolved between the status read and this lookup) is a benign no-op —
+     * the live subscription delivers the post-resolution states.
+     */
+    private suspend fun restoreSuspensionCard(sessionId: String, status: PipelineRunStatus) {
+        when (status) {
+            PipelineRunStatus.WAITING_APPROVAL -> {
+                agentOrchestratorUseCase.pendingApprovalFor(sessionId)?.let(::handleWaitingForApproval)
+            }
+            PipelineRunStatus.WAITING_CLARIFICATION -> {
+                clarificationRepository.pendingRequests.first()
+                    .lastOrNull { it.sessionId == sessionId }
+                    ?.let(::handleAwaitingClarification)
+            }
+            else -> Unit
+        }
+    }
+
+    /**
+     * Interrupted branch of the reattach protocol: installs the
+     * interrupted-run snapshot (run id + resolved node label) into the
+     * pending slice and flips the surface to [ChatHomeUiState.Interrupted] so
+     * the mapping appends the status card with Resume / Discard actions. The
+     * visual flip is guarded to resting/cold states only — a user already
+     * generating in this session must not have the overlay yanked away.
+     */
+    private suspend fun presentInterruptedRun(run: PipelineRun) {
+        val nodeLabel = resolveNodeLabel(run)
+        _state.update { current ->
+            if (current.visual.isRestingOrCold()) {
+                current.copy(
+                    pending = current.pending.copy(
+                        interrupted = InterruptedRunPending(runId = run.id, nodeLabel = nodeLabel),
+                    ),
+                    visual = ChatHomeUiState.Interrupted,
+                )
+            } else {
+                current
+            }
+        }
+    }
+
+    /**
+     * Resolves the display label of the node [PipelineRun.currentNodeId]
+     * points at by loading the run's pipeline graph. Falls back to
+     * [INTERRUPTED_UNKNOWN_NODE_LABEL] when the run never reached a node, the
+     * pipeline was deleted since, or the node id no longer exists in the
+     * graph (the graph may have been edited after the interruption).
+     */
+    private suspend fun resolveNodeLabel(run: PipelineRun): String {
+        val nodeId = run.currentNodeId ?: return INTERRUPTED_UNKNOWN_NODE_LABEL
+        val graph = run.pipelineId?.let { pipelineRepository.getPipelineById(it) }
+            ?: return INTERRUPTED_UNKNOWN_NODE_LABEL
+        val node = graph.nodes.firstOrNull { it.id == nodeId } ?: return INTERRUPTED_UNKNOWN_NODE_LABEL
+        return node.label.ifBlank { node.type.name }
+    }
+
+    /**
+     * Discards the interrupted run surfaced by the status card: settles the
+     * persistent record as FAILED with a "discarded by user" marker (a
+     * guarded INTERRUPTED → FAILED transition — see
+     * [PipelineRunRepository.discardInterruptedRun]) and drops the card. The
+     * trace stays in the database until retention cleanup; only the resume
+     * offer disappears. No-op when no interrupted run is pending.
+     */
+    fun discardInterruptedRun() {
+        val pending = _state.value.pending.interrupted ?: return
+        _state.update { current ->
+            val cleared = current.copy(pending = current.pending.copy(interrupted = null))
+            cleared.copy(visual = cleared.restingVisual())
+        }
+        viewModelScope.launch {
+            pipelineRunRepository.discardInterruptedRun(pending.runId)
+        }
+    }
+
+    /**
+     * Resume CTA of the interrupted-run card. Checkpoint-resume is not
+     * shipped yet — until the resume mechanism lands this surfaces the
+     * "not available yet" snackbar via [resumeUnavailableEvents] and keeps
+     * the card up so the user can still Discard. The card and both intents
+     * are wired end-to-end so the mechanism can slot in here without
+     * touching the UI contract.
+     */
+    fun resumeInterruptedRun() {
+        if (_state.value.pending.interrupted == null) return
+        _resumeUnavailableEvents.tryEmit(Unit)
+    }
+
+    /**
+     * Mirrors the set of sessions owning a non-terminal run into
+     * [activeRunSessionIds] and refreshes the drawer rows, so threads with a
+     * run still working in the background render the in-progress badge.
+     */
+    private fun observeActiveRuns() {
+        viewModelScope.launch {
+            pipelineRunRepository.observeActiveRuns().collect { runs ->
+                val sessionIds = runs.map { it.sessionId }.toSet()
+                if (sessionIds == activeRunSessionIds) return@collect
+                activeRunSessionIds = sessionIds
+                _state.update { it.withSessionMetadataRefreshed() }
+            }
+        }
+    }
+
+    /**
+     * Whether this visual is a resting or cold-start state that a reattach
+     * branch may safely overwrite. Active overlays (Generating, HITL,
+     * Clarification, Error, Drawer) are user-facing context that the
+     * asynchronous reattach lookup must never yank away.
+     */
+    private fun ChatHomeUiState.isRestingOrCold(): Boolean =
+        this is ChatHomeUiState.Loading || this is ChatHomeUiState.Empty || this is ChatHomeUiState.Idle
 
     /**
      * Mirrors the latest [AgentOrchestratorState.PipelineTrace.steps]
@@ -1576,6 +1797,13 @@ class ChatHomeViewModel @Inject constructor(
          */
         const val CLARIFICATION_DEFAULT_BLANK: String = "(blank)"
 
+        /**
+         * Fallback node label rendered on the interrupted-run card when the
+         * run stopped before reaching any node, the pipeline was deleted, or
+         * the recorded node id no longer exists in the (since-edited) graph.
+         */
+        const val INTERRUPTED_UNKNOWN_NODE_LABEL: String = "unknown step"
+
         /** Pre-formatted timestamp format used in [ChatMetadata.timestamp] (24h, locale-aware). */
         private const val TIMESTAMP_PATTERN: String = "HH:mm"
 
@@ -1658,6 +1886,18 @@ data class PipelineSummary(val id: String, val name: String)
  * @property risk per-tool risk tier resolved by `ToolRepository.getRisk`.
  */
 data class HitlPending(val toolName: String, val arguments: String, val risk: ToolRisk)
+
+/**
+ * Snapshot of the session's interrupted run, exposed through
+ * [ChatHomePendingState.interrupted] so the mapping can render the trailing
+ * interrupted-run status card (Resume / Discard) from real data.
+ *
+ * @property runId id of the interrupted persistent run record — the Discard
+ *   intent settles exactly this record, never "whatever is interrupted now".
+ * @property nodeLabel resolved display label of the node the run stopped at
+ *   (falls back to [ChatHomeViewModel.INTERRUPTED_UNKNOWN_NODE_LABEL]).
+ */
+data class InterruptedRunPending(val runId: String, val nodeLabel: String)
 
 /**
  * Maps the domain [ToolRisk] enum onto the catalog [Risk] enum. The two

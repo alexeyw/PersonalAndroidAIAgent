@@ -135,6 +135,27 @@ class PipelineRunRepositoryImpl @Inject constructor(private val pipelineRunDao: 
                 emit(emptyList())
             }
 
+    override fun observeActiveRuns(): Flow<List<PipelineRun>> =
+        pipelineRunDao.observeRunsByStatuses(ACTIVE_STATUS_NAMES)
+            .map { entities -> entities.map { it.toDomain() } }
+            .catch { e ->
+                Timber.e(e, "Pipeline-run store failure in observeActiveRuns; degrading to empty")
+                emit(emptyList())
+            }
+
+    override suspend fun discardInterruptedRun(runId: String) {
+        absorbing("discardInterruptedRun") {
+            withContext(Dispatchers.IO) {
+                pipelineRunDao.discardInterruptedRun(
+                    runId = runId,
+                    fromStatus = PipelineRunStatus.INTERRUPTED.name,
+                    toStatus = PipelineRunStatus.FAILED.name,
+                    errorMessage = DISCARDED_BY_USER_MESSAGE,
+                )
+            }
+        }
+    }
+
     override suspend fun getOrphanedRuns(): List<PipelineRun> = absorbing("getOrphanedRuns") {
         withContext(Dispatchers.IO) {
             pipelineRunDao.getRunsByStatuses(ACTIVE_STATUS_NAMES)
@@ -163,6 +184,9 @@ class PipelineRunRepositoryImpl @Inject constructor(private val pipelineRunDao: 
         /** Non-terminal status names: active-run lookup and orphan-sweep scope. */
         val ACTIVE_STATUS_NAMES: List<String> =
             PipelineRunStatus.entries.filterNot { it.isTerminal }.map { it.name }
+
+        /** Error message stamped on a run the user explicitly discarded instead of resuming. */
+        const val DISCARDED_BY_USER_MESSAGE: String = "Discarded by user"
     }
 }
 

@@ -8,6 +8,7 @@ import app.knotwork.design.components.chat.ChatRole
 import app.knotwork.design.components.chat.ClarificationCardModel
 import app.knotwork.design.components.chat.ComposerState
 import app.knotwork.design.components.chat.HitlConfirmationModel
+import app.knotwork.design.components.chat.InterruptedRunCardModel
 import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.components.console.ConsoleSnap
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
@@ -135,6 +136,23 @@ fun ChatHomeScreenState.toViewState(fixtures: ChatHomeFixtures = ChatHomeFixture
             tokensMax = tokens.max,
             favorite = thread.favorite,
             agentStatusLine = fixtures.statusClarification,
+            console = console,
+        )
+
+        is ChatHomeUiState.Interrupted -> ChatHomeViewState(
+            visualState = ChatHomeVisualState.Interrupted,
+            threadTitle = threadTitle,
+            modelName = modelName,
+            messages = messages + (
+                pending.interrupted?.let { liveInterruptedRow(modelName, it) }
+                    ?: interruptedRow(modelName)
+                ),
+            composerValue = composerValue,
+            pipelineName = resolvedPipelineName,
+            tokensUsed = tokens.used,
+            tokensMax = tokens.max,
+            favorite = thread.favorite,
+            agentStatusLine = fixtures.statusIdle,
             console = console,
         )
 
@@ -348,6 +366,34 @@ internal const val PIPELINE_NAME_PLACEHOLDER: String = "default"
 /** Key used when the orchestrator's argument blob cannot be parsed as a JSON object. */
 internal const val RAW_ARGS_FALLBACK_KEY: String = "args"
 
+/**
+ * Trailing interrupted-run status row driven by the live
+ * [InterruptedRunPending] snapshot the reattach protocol captured. Renders
+ * the resolved node label inside the catalog `InterruptedRunCard`.
+ */
+internal fun liveInterruptedRow(modelName: String, pending: InterruptedRunPending): ChatHomeMessageRow {
+    val timestamp = SimpleDateFormat(HITL_TIMESTAMP_PATTERN, Locale.getDefault())
+        .format(Date(System.currentTimeMillis()))
+    return ChatHomeMessageRow(
+        id = "a-interrupted-${pending.runId}",
+        role = ChatRole.Assistant,
+        content = ChatContent.RunInterrupted(
+            model = InterruptedRunCardModel(nodeLabel = pending.nodeLabel),
+        ),
+        metadata = ChatMetadata(timestamp = timestamp, model = modelName),
+    )
+}
+
+/** Trailing interrupted-run row appended when the debug picker forces the state without a pending snapshot. */
+internal fun interruptedRow(modelName: String): ChatHomeMessageRow = ChatHomeMessageRow(
+    id = "a-interrupted",
+    role = ChatRole.Assistant,
+    content = ChatContent.RunInterrupted(
+        model = InterruptedRunCardModel(nodeLabel = "Summarise"),
+    ),
+    metadata = ChatMetadata(timestamp = "09:16", model = modelName),
+)
+
 /** Trailing clarification row appended in the Clarification state. */
 internal fun clarificationRow(modelName: String): ChatHomeMessageRow = ChatHomeMessageRow(
     id = "a-clar",
@@ -374,6 +420,7 @@ internal object DebugStateIds {
     const val HITL_SENSITIVE: String = "hitl_sensitive"
     const val HITL_DESTRUCTIVE: String = "hitl_destructive"
     const val CLARIFICATION: String = "clarification"
+    const val INTERRUPTED: String = "interrupted"
     const val ERROR: String = "error"
     const val DRAWER_OPEN: String = "drawer_open"
     const val CONSOLE_PARTIAL: String = "console_partial"
@@ -389,6 +436,7 @@ internal fun debugStateForId(id: String): ChatHomeUiState? = when (id) {
     DebugStateIds.HITL_SENSITIVE -> ChatHomeUiState.HitlConfirm(Risk.Sensitive)
     DebugStateIds.HITL_DESTRUCTIVE -> ChatHomeUiState.HitlConfirm(Risk.Destructive)
     DebugStateIds.CLARIFICATION -> ChatHomeUiState.Clarification
+    DebugStateIds.INTERRUPTED -> ChatHomeUiState.Interrupted
     DebugStateIds.ERROR -> ChatHomeUiState.Error(message = "Something went wrong while generating the reply.")
     DebugStateIds.DRAWER_OPEN -> ChatHomeUiState.DrawerOpen
     // Console snaps are handled separately via [debugConsoleSnapForId] —

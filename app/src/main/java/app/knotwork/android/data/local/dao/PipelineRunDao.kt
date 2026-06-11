@@ -141,4 +141,32 @@ interface PipelineRunDao {
      */
     @Query("SELECT * FROM pipeline_runs WHERE status IN (:statuses)")
     suspend fun getRunsByStatuses(statuses: List<String>): List<PipelineRunEntity>
+
+    /**
+     * Observes every run whose status is in [statuses], across all sessions.
+     * Backs the drawer thread-list activity indicator (all non-terminal
+     * statuses).
+     *
+     * @param statuses Status names to match.
+     */
+    @Query("SELECT * FROM pipeline_runs WHERE status IN (:statuses)")
+    fun observeRunsByStatuses(statuses: List<String>): Flow<List<PipelineRunEntity>>
+
+    /**
+     * Discards an interrupted run: flips it to the FAILED status with the
+     * supplied error message. The `WHERE status = :fromStatus` guard pins the
+     * transition to INTERRUPTED rows only — the single sanctioned
+     * terminal-to-terminal transition (user dismissed the resume offer); any
+     * other status leaves the row untouched.
+     *
+     * @param runId Id of the run to discard.
+     * @param fromStatus The INTERRUPTED status name the row must currently hold.
+     * @param toStatus The FAILED status name to write.
+     * @param errorMessage The "discarded by user" marker to record.
+     */
+    @Query(
+        "UPDATE pipeline_runs SET status = :toStatus, errorMessage = :errorMessage " +
+            "WHERE id = :runId AND status = :fromStatus",
+    )
+    suspend fun discardInterruptedRun(runId: String, fromStatus: String, toStatus: String, errorMessage: String)
 }

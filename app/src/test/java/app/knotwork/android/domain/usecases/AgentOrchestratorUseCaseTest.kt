@@ -3,6 +3,7 @@ package app.knotwork.android.domain.usecases
 import app.knotwork.android.domain.engine.TaskQueueManager
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTask
+import app.knotwork.android.domain.models.ToolRisk
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -47,6 +48,31 @@ class AgentOrchestratorUseCaseTest {
     fun `resumeWithApproval delegates to TaskQueueManager`() {
         useCase.resumeWithApproval(sessionId, true)
         verify { taskQueueManager.resumeWithApproval(sessionId, true) }
+    }
+
+    @Test
+    fun `observe subscribes to the session state without enqueueing a task`() = runTest {
+        every { taskQueueManager.observeTaskState(sessionId) } returns flowOf(
+            AgentOrchestratorState.Thinking("working"),
+        )
+
+        val states = useCase.observe(sessionId).toList()
+
+        assertTrue(states.single() is AgentOrchestratorState.Thinking)
+        verify(exactly = 0) { taskQueueManager.enqueueTask(any()) }
+    }
+
+    @Test
+    fun `pendingApprovalFor delegates to TaskQueueManager`() {
+        val pending = AgentOrchestratorState.WaitingForApproval(
+            toolName = "fs.delete_file",
+            arguments = "{}",
+            risk = ToolRisk.SENSITIVE,
+        )
+        every { taskQueueManager.pendingApproval(sessionId) } returns pending
+
+        assertTrue(useCase.pendingApprovalFor(sessionId) === pending)
+        verify { taskQueueManager.pendingApproval(sessionId) }
     }
 
     /**
