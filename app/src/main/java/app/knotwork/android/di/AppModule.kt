@@ -23,7 +23,9 @@ import app.knotwork.android.data.local.dao.TraceStepDao
 import app.knotwork.android.data.tools.local.AppFunctionDataCodec
 import app.knotwork.android.data.tools.local.LocalAppFunctionManager
 import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.services.ScheduledTaskNotifier
 import app.knotwork.android.presentation.notifications.ApprovalNotificationManager
+import app.knotwork.android.presentation.notifications.ScheduledTaskNotifierImpl
 import app.knotwork.android.presentation.state.ActiveSessionTracker
 import com.google.firebase.FirebaseApp
 import com.google.firebase.analytics.FirebaseAnalytics
@@ -307,4 +309,13 @@ object AppModule {
         @ApplicationContext appContext: Context,
         activeSessionTracker: ActiveSessionTracker,
     ): ApprovalNotifier = ApprovalNotificationManager(appContext, activeSessionTracker)
+
+    /**
+     * Binds the presentation-layer [ScheduledTaskNotifierImpl] (deep-links into
+     * `MainActivity`) to the domain-level [ScheduledTaskNotifier] consumed by
+     * the background `AgentWorker`.
+     */
+    @Provides
+    @Singleton
+    fun provideScheduledTaskNotifier(impl: ScheduledTaskNotifierImpl): ScheduledTaskNotifier = impl
 }

@@ -314,6 +314,8 @@
 
     <string name="knotwork_settings_notifications_long_running">Long-running tasks</string>
     <string name="knotwork_settings_notifications_long_running_subtitle">Ping when a pipeline runs &gt; 8 s in background.</string>
+    <string name="knotwork_settings_notifications_scheduled_results">Scheduled task results</string>
+    <string name="knotwork_settings_notifications_scheduled_results_subtitle">Notify when a scheduled task completes or fails.</string>
 
     <string name="knotwork_settings_crash_reporting_label">Send anonymous crash reports</string>
     <string name="knotwork_settings_crash_reporting_hint">Help improve stability by sharing anonymous crash data.</string>

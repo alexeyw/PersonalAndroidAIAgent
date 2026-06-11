@@ -57,7 +57,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -982,7 +984,39 @@ class ChatHomeViewModel @Inject constructor(
                 baselineRun?.status == PipelineRunStatus.INTERRUPTED -> presentInterruptedRun(baselineRun)
                 else -> Unit
             }
+            watchForBackgroundRuns(sessionId, alreadyAttachedRunId = activeRun?.id)
         }
+    }
+
+    /**
+     * Keeps watching the session's persistent run records after the one-shot
+     * reattach so a run that *starts* while the session is already open still
+     * attaches the UI to the live stream. The one-shot path only covers runs
+     * that existed at session-open time; a scheduler-origin run firing into
+     * the open session afterwards would otherwise stream its messages (the
+     * Room flow is live) with no Generating state and no live console.
+     *
+     * Attach conditions: a non-terminal run the collector has not attached
+     * yet **and** a resting/cold visual surface. The visual guard keeps the
+     * watcher away from interactive sends — `sendMessage` flips the surface
+     * to `Generating` synchronously before its run record can appear here,
+     * and its own collector already owns the stream.
+     *
+     * Rides [reattachJob], so a thread switch (which re-runs the one-shot
+     * path) or [onCleared] cancels the watcher with it.
+     */
+    private suspend fun watchForBackgroundRuns(sessionId: String, alreadyAttachedRunId: String?) {
+        var attachedRunId = alreadyAttachedRunId
+        pipelineRunRepository.observeRunsForSession(sessionId)
+            .mapNotNull { runs -> runs.firstOrNull { !it.status.isTerminal } }
+            .distinctUntilChangedBy { it.id }
+            .collect { run ->
+                if (run.id == attachedRunId) return@collect
+                if (_state.value.thread.currentSessionId != sessionId) return@collect
+                if (!_state.value.visual.isRestingOrCold()) return@collect
+                attachedRunId = run.id
+                attachToLiveRun(sessionId, run.status)
+            }
     }
 
     /**

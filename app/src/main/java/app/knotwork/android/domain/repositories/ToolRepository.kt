@@ -1,6 +1,7 @@
 package app.knotwork.android.domain.repositories
 
 import app.knotwork.android.domain.models.AgentTool
+import app.knotwork.android.domain.models.ToolExecutionContext
 import app.knotwork.android.domain.models.ToolRisk
 
 /**
@@ -26,9 +27,16 @@ interface ToolRepository {
      *
      * @param name The name of the tool to execute.
      * @param arguments The arguments to pass to the tool, formatted as a JSON string.
+     * @param context Engine-supplied [ToolExecutionContext] with trusted environment
+     *   values (invoking session id). Forwarded to built-in [LocalToolExecutor]
+     *   strategies; the AppFunction and MCP branches ignore it.
      * @return The result of the tool execution as a string.
      */
-    suspend fun executeTool(name: String, arguments: String): String
+    suspend fun executeTool(
+        name: String,
+        arguments: String,
+        context: ToolExecutionContext = ToolExecutionContext.EMPTY,
+    ): String
 
     /**
      * Resolves the effective [ToolRisk] for a tool by its name. This is the single

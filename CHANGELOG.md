@@ -15,6 +15,33 @@ details.
 
 ### Added
 
+- **Scheduled tasks land their results in chat.** A task created with
+  `schedule_task` now executes through the exact same task-queue →
+  engine path as an interactive message and is bound to the
+  conversation that scheduled it: when the task fires, the stored
+  prompt is saved as a user message, intermediate node output goes to
+  the console trace, and the final answer arrives as a regular agent
+  reply — reopening the chat shows the run as if it had happened on
+  screen, and a chat that is already open attaches to the run live. If
+  the originating conversation was deleted before the task fired, the
+  result is delivered to a fresh auto-named session
+  (*Scheduled: &lt;task text&gt;*). Scheduled runs are recorded with
+  `SCHEDULER` origin and run at normal queue priority so they never
+  preempt an interactive request, and the executing worker promotes
+  itself to a foreground service for the duration of inference
+  (releasing the model afterwards when nothing else owns it).
+
+- **"Task completed" / "Task failed" notifications.** Finishing a
+  scheduled background run now posts a default-importance system
+  notification — the completion variant carries the first line of the
+  final answer, the failure variant the recorded reason — and tapping
+  it deep-links straight into the conversation the result landed in.
+  Announcements live on their own notification channel, separate from
+  the high-importance approval prompts, and respect the new
+  **Settings → Notifications → Scheduled task results** toggle
+  (on by default). Cancelled and interrupted runs are deliberately not
+  announced.
+
 - **Checkpoint resume for interrupted runs.** The **Resume** button on the
   "Run interrupted" card now works: the run continues from its last
   completed node instead of starting over. Node results recorded in the

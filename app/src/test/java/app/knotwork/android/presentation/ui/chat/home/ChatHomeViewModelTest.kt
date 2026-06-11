@@ -136,6 +136,7 @@ class ChatHomeViewModelTest {
             MutableStateFlow(SettingsDefaults.RESUME_MAX_AGE_HOURS_DEFAULT)
         activeRunsFlow = MutableStateFlow(emptySet())
         every { pipelineRunRepository.observeActiveRunSessionIds() } returns activeRunsFlow
+        every { pipelineRunRepository.observeRunsForSession(any()) } returns flowOf(emptyList())
         coEvery { clarificationRepository.submitClarification(any(), any()) } returns true
 
         sessionsFlow = MutableStateFlow(emptyList())
@@ -1284,6 +1285,59 @@ class ChatHomeViewModelTest {
             verify { agentOrchestratorUseCase.observe(sessionId) }
             verify(exactly = 0) { agentOrchestratorUseCase.invoke(any(), any(), any()) }
         }
+
+    @Test
+    fun `given scheduler run starting in the open session then UI attaches to the live stream`() =
+        runTest(testDispatcher) {
+            val sessionId = "session-bg"
+            seedSavedSession(sessionId)
+            val runsFlow = MutableStateFlow<List<PipelineRun>>(emptyList())
+            every { pipelineRunRepository.observeRunsForSession(sessionId) } returns runsFlow
+            every { agentOrchestratorUseCase.observe(sessionId) } returns
+                flowOf(AgentOrchestratorState.Thinking("working"))
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            // Session opened idle: no run yet, nothing to attach to.
+            verify(exactly = 0) { agentOrchestratorUseCase.observe(any()) }
+
+            // A scheduler-origin run fires into the already-open session.
+            runsFlow.value = listOf(
+                runRecord(sessionId, PipelineRunStatus.RUNNING, id = "bg-run-1")
+                    .copy(origin = RunOrigin.SCHEDULER),
+            )
+            advanceUntilIdle()
+
+            assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
+            verify { agentOrchestratorUseCase.observe(sessionId) }
+            verify(exactly = 0) { agentOrchestratorUseCase.invoke(any(), any(), any()) }
+        }
+
+    @Test
+    fun `given same background run emits again then UI does not re-attach`() = runTest(testDispatcher) {
+        val sessionId = "session-bg-2"
+        seedSavedSession(sessionId)
+        val runsFlow = MutableStateFlow<List<PipelineRun>>(emptyList())
+        every { pipelineRunRepository.observeRunsForSession(sessionId) } returns runsFlow
+        every { agentOrchestratorUseCase.observe(sessionId) } returns
+            flowOf(AgentOrchestratorState.Thinking("working"))
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        runsFlow.value = listOf(
+            runRecord(sessionId, PipelineRunStatus.RUNNING, id = "bg-run-2")
+                .copy(origin = RunOrigin.SCHEDULER),
+        )
+        advanceUntilIdle()
+        // Same run transitions status — the id-keyed dedup must not re-subscribe.
+        runsFlow.value = listOf(
+            runRecord(sessionId, PipelineRunStatus.WAITING_APPROVAL, id = "bg-run-2")
+                .copy(origin = RunOrigin.SCHEDULER),
+        )
+        advanceUntilIdle()
+
+        verify(exactly = 1) { agentOrchestratorUseCase.observe(sessionId) }
+    }
 
     @Test
     fun `given waiting approval run when session opens then HITL card restored from pending snapshot`() =

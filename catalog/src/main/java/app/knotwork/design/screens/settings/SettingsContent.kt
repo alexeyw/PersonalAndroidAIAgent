@@ -1124,6 +1124,15 @@ private fun NotificationsCard(state: NotificationsCardState, callbacks: Settings
             checked = state.longRunningEnabled,
             onCheckedChange = callbacks.onLongRunningToggle,
         )
+        IconToggleRow(
+            icon = AppIcons.Check,
+            title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_notifications_scheduled_results),
+            subtitle = androidx.compose.ui.res.stringResource(
+                R.string.knotwork_settings_notifications_scheduled_results_subtitle,
+            ),
+            checked = state.scheduledResultsEnabled,
+            onCheckedChange = callbacks.onScheduledResultsToggle,
+        )
     }
 }
 

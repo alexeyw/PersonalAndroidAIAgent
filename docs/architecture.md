@@ -693,6 +693,26 @@ idle. Three components coordinate that lifecycle:
 | `AgentWorker` (WorkManager)| Executes deferred / scheduled tasks (driven by `ScheduleTaskUseCase`).                        |
 | `AgentIdleManager`         | Watches device idle / Doze state and signals when the agent can safely unload the model.     |
 | `AgentPowerManager`        | Watches charging and battery state; throttles or defers work on low battery.                  |
+| `ScheduledTaskNotifier`    | Announces scheduled-run outcomes ("Task completed" / "Task failed") with a deep-link into the session. |
+
+A scheduled task is not a separate execution path: `AgentWorker`
+enqueues the stored prompt through the same `TaskQueueManager` →
+`GraphExecutionEngine` chain as an interactive message (with
+`origin = SCHEDULER` on the persistent run record and normal — not
+interactive — queue priority). Everything the engine persists for
+interactive runs therefore lands identically for scheduled ones: the
+user message, intermediate `isFinal = false` node messages, the final
+answer, and the trace. The worker tracks completion through the
+persistent `pipeline_runs` record (the in-memory state flow replays
+stale terminal states and carries no run identity), promotes itself to
+a foreground service via WorkManager's `setForeground()` for the
+duration of inference (degrading gracefully when the OS forbids the
+promotion from deep background), and — when the session the task was
+bound to has been deleted — re-binds the run to a fresh auto-named
+session. In a headless process (no activity, so no
+`AgentForegroundService` and no `AgentIdleManager`) the worker unloads
+the LLM engine itself once the run settles and no other session has an
+active run.
 
 The model-unload contract is non-negotiable: when the agent has been
 inactive in the background for the configured idle window, the

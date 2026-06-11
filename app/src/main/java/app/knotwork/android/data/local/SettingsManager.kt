@@ -119,6 +119,7 @@ class SettingsManager @Inject constructor(
             "auto_summarize_threshold",
         )
         val LONG_RUNNING_TASKS_NOTIFICATIONS = booleanPreferencesKey("long_running_tasks_notifications")
+        val SCHEDULED_TASK_NOTIFICATIONS = booleanPreferencesKey("scheduled_task_notifications")
         val LAST_TEST_PROBE_RESULT = stringPreferencesKey("last_test_probe_result")
 
         // Embedding provider abstraction.
@@ -1200,6 +1201,25 @@ class SettingsManager @Inject constructor(
     override suspend fun setLongRunningTaskNotificationsEnabled(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.LONG_RUNNING_TASKS_NOTIFICATIONS] = enabled
+        }
+    }
+
+    override val scheduledTaskNotificationsEnabled: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.SCHEDULED_TASK_NOTIFICATIONS] ?: true
+        }
+
+    override suspend fun setScheduledTaskNotificationsEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.SCHEDULED_TASK_NOTIFICATIONS] = enabled
         }
     }
 

@@ -7,6 +7,7 @@ import app.knotwork.android.data.tools.local.SearchTool
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.McpAuth
 import app.knotwork.android.domain.models.McpServerConfig
+import app.knotwork.android.domain.models.ToolExecutionContext
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.repositories.ApiKeyRepository
 import app.knotwork.android.domain.repositories.LocalToolExecutor
@@ -177,6 +178,21 @@ class ToolRepositoryImplTest {
 
         assertEquals("scheduled", result)
         coVerify(exactly = 1) { scheduleTaskExecutor.execute("{\"prompt\":\"do X\"}") }
+    }
+
+    @Test
+    fun `executeTool forwards the engine execution context to the local executor`() = runTest {
+        // The context carries the trusted session identity (used by schedule_task
+        // to bind the scheduled run back to its conversation) — it must reach the
+        // executor unmodified.
+        val context = ToolExecutionContext(sessionId = "session-3")
+        coEvery { scheduleTaskExecutor.execute("{}", context) } returns "scheduled"
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        val result = repository.executeTool("schedule_task", "{}", context)
+
+        assertEquals("scheduled", result)
+        coVerify(exactly = 1) { scheduleTaskExecutor.execute("{}", context) }
     }
 
     @Test

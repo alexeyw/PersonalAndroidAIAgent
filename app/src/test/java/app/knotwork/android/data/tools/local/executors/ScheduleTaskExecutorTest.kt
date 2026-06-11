@@ -1,5 +1,6 @@
 package app.knotwork.android.data.tools.local.executors
 
+import app.knotwork.android.domain.models.ToolExecutionContext
 import app.knotwork.android.domain.usecases.ScheduleTaskUseCase
 import io.mockk.every
 import io.mockk.mockk
@@ -19,7 +20,8 @@ import org.junit.Test
  *  - optional `intervalHours` (defaults to 0 — one-shot),
  *  - optional `delayMinutes` (defaults to 0 — execute ASAP),
  * and verifies that the parsed values are forwarded to [ScheduleTaskUseCase] without
- * mutation, and that the use case's return value (or exception) is propagated.
+ * mutation, that the engine-supplied [ToolExecutionContext.sessionId] travels with
+ * them, and that the use case's return value (or exception) is propagated.
  */
 class ScheduleTaskExecutorTest {
 
@@ -69,6 +71,20 @@ class ScheduleTaskExecutorTest {
         // Then
         assertEquals("Success: scheduled (id=once)", result)
         verify(exactly = 1) { scheduleTaskUseCase("One-shot task", 0L, 0L) }
+    }
+
+    @Test
+    fun `given execution context with session id when execute then forwards it to use case`() = runTest {
+        // Given
+        val arguments = """{"prompt":"Morning summary"}"""
+        every { scheduleTaskUseCase("Morning summary", 0L, 0L, "session-9") } returns "Scheduled"
+
+        // When
+        val result = executor.execute(arguments, ToolExecutionContext(sessionId = "session-9"))
+
+        // Then — the session id comes from the trusted engine context, never the LLM JSON.
+        assertEquals("Scheduled", result)
+        verify(exactly = 1) { scheduleTaskUseCase("Morning summary", 0L, 0L, "session-9") }
     }
 
     @Test

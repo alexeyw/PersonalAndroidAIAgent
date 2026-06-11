@@ -97,7 +97,7 @@ This file maps the contents of the main application package.
     - `AgentForegroundService.kt` - Foreground service for agent.
     - `AgentIdleManager.kt` - Manager for device idle state.
     - `AgentPowerManager.kt` - Manager for power states.
-    - `AgentWorker.kt` - WorkManager worker for agent tasks.
+    - `AgentWorker.kt` - WorkManager worker executing scheduled agent tasks through the same task-queue → engine path as interactive messages; binds the run to its originating session (or a fresh auto-named one), tracks completion via the persistent run record, and hands the outcome to `ScheduledTaskNotifier`.
     - `MemoryCompactionScheduler.kt` - Owns the WorkManager scheduling of `MemoryCompactionWorker`: a daily periodic job (charging + device-idle) plus an out-of-schedule `startHardLimitWatch` that fires an immediate relaxed-constraint pass when the chunk count crosses `maxMemoryChunks`. Wired from `MainActivity.onCreate`.
     - `MemoryCompactionWorker.kt` - `@HiltWorker` that runs one long-term memory compaction pass. Gates on `SettingsRepository.memoryCompactionEnabled` and delegates clustering/consolidation to `MemoryCompactionUseCase`.
     - `MemoryReembedWorker.kt` - `@HiltWorker` that re-embeds memory chunks flagged `needsReembedding` (imported under a different provider) off the hot path, delegating to `RecomputePendingEmbeddingsUseCase`; `Result.retry()` on failure so WorkManager backs off and retries.
@@ -132,7 +132,7 @@ This file maps the contents of the main application package.
   - `constants/` - Domain-level constants.
     - `DefaultPrompts.kt` - Default system prompts.
     - `PromptPresetConstants.kt` - Cross-module limits + `LLM_DRIVEN_NODE_TYPES` set shared by the prompt-preset domain: `MAX_NAME_LENGTH = 60`, `MAX_SYSTEM_PROMPT_LENGTH = 8000`, and the set of node types that can host a system-prompt preset.
-    - `NotificationChannels.kt` - Canonical ids of every Android `NotificationChannel` (foreground service status, approval prompts).
+    - `NotificationChannels.kt` - Canonical ids of every Android `NotificationChannel` (foreground service status, approval prompts, long-running pings, scheduled-task results).
     - `OnboardingModelCatalog.kt` - Maps the catalog-side `OnboardingLiteRtModel.id` (`gemma_4_e2b` / `gemma_4_e4b`) to the on-disk filename + HuggingFace URL consumed by `OnboardingViewModel.startDownload` and `LocalModelRepository.isInstalled`. Also derives a filename from the user-supplied custom URL row.
     - `PipelineExecutionDefaults.kt` - Engine-level timing and log-size constants consumed by `GraphExecutionEngine` and the LLM-backed node executors (post-emit pause, LiteRT pre-warm delay, node-IO log char limit).
     - `SettingsDefaults.kt` - Default values for every user-tunable preference (sampling params, timeouts, pipeline-step bounds, Ollama context window). Single source of truth shared by `SettingsManager`, `SettingsViewModel`, and the visual orchestrator.
@@ -230,6 +230,7 @@ This file maps the contents of the main application package.
     - `TaskPriority.kt` - Task priority enum.
     - `TestProbeResult.kt` - Persisted outcome of a local-model backend probe (token count, duration, throughput) shown on the Settings backend-test row.
     - `ToolApprovalPolicy.kt` - Enum driving the Human-in-the-Loop approval semantics for tool execution (`AllCalls` / `SensitiveOrDestructive` / `NeverPrompt`).
+    - `ToolExecutionContext.kt` - Trusted engine-side context accompanying a tool invocation (invoking session id); how `schedule_task` learns which conversation to bind the scheduled run to without trusting LLM-emitted arguments.
     - `ToolInvocationResult.kt` - Snapshot of a single tool invocation (toolName + output) accumulated by `GraphExecutionEngine` during a pipeline run for the `--- Tool Results ---` block.
     - `ToolRisk.kt` - Per-tool risk classification (`READ_ONLY` / `SENSITIVE` / `DESTRUCTIVE`) consumed by the HITL gate; canonical resolution lives in `ToolRepository.getRisk`.
     - `UpdateMcpServerResult.kt` - Sealed outcome of `SettingsRepository.updateMcpServer` (`Success` / `UrlCollision(collidingUrl, collidingDisplayName)`). Lets the Edit-MCP-server form surface an inline error instead of silently overwriting a sibling row when the user types a URL that already belongs to another persisted server.
@@ -263,6 +264,7 @@ This file maps the contents of the main application package.
     - `EmbeddingProviderResolver.kt` - Resolves the active `EmbeddingProvider` from the Hilt map and `SettingsRepository.activeEmbeddingProviderId`, falling back to on-device USE.
     - `KMeansClusterer.kt` - Deterministic k-means clusterer over embedding vectors (farthest-first seeding, cosine distance, no randomness). Groups stale memory chunks for `MemoryCompactionUseCase`; `k = max(1, floor(sqrt(N) / 2))`.
     - `LongRunningTaskNotifier.kt` - Domain seam for posting a notification when a backgrounded pipeline run exceeds the configured duration. Data-layer impl: `LongRunningTaskNotifierImpl`.
+    - `ScheduledTaskNotifier.kt` - Domain seam for announcing scheduled-run outcomes ("Task completed" / "Task failed") with a deep-link into the bound session. Presentation-layer impl: `ScheduledTaskNotifierImpl`; gated on the Settings → Notifications → "Scheduled task results" toggle.
     - `MemoryReembedScheduler.kt` - Domain seam for scheduling the background re-embed pass over chunks flagged `needsReembedding`. Keeps `MemoryImportUseCase` free of WorkManager; data-layer impl: `WorkManagerMemoryReembedScheduler`.
     - `MemoryAutoExtractionCoordinator.kt` - App-scoped, debounced (30s/session) trigger that runs `MemoryExtractionUseCase` after a pipeline completes; short-circuits when `SettingsRepository.autoExtractEnabled` is off, and defers (re-waits a debounce window) while `TaskQueueManager.globalState` shows an active pipeline so it never races a foreground generation on the single-conversation engine. Notified by `ChatHomeViewModel` on the terminal `Completed` state.
     - `MemoryReranker.kt` - Pure, clock-free re-ranker for long-term-memory search hits. Re-scores `(MemoryChunk, similarity)` pairs with recency decay (half-life-based), a flat pinned boost (+0.2, hard-sorted to the top and threshold-exempt), 80-char-prefix deduplication (newest survivor), and a final-score threshold filter. Used by `RetrieveRelevantMemoryUseCase`; the caller supplies `nowMillis`.
@@ -291,7 +293,7 @@ This file maps the contents of the main application package.
     - `SavePromptAsPresetUseCase.kt` - Packages a freshly-edited system prompt into a user-saved `PromptPreset`. Validates name (1..60), `systemPrompt` (non-blank, ≤ `MAX_SYSTEM_PROMPT_LENGTH`), and that the target `NodeType` is LLM-driven..
     - `SavePipelineUseCase.kt` - Use case to save a pipeline.
     - `SavePromptTemplateUseCase.kt` - Creates or updates a prompt template via `PromptRepository`.
-    - `ScheduleTaskUseCase.kt` - Use case to schedule tasks.
+    - `ScheduleTaskUseCase.kt` - Use case to schedule tasks; carries the originating session id into the WorkManager input data so `AgentWorker` lands the result in the right chat.
     - `TaskRouterUseCase.kt` - Use case to route tasks.
     - `ResetSamplingDefaultsUseCase.kt` - Resets temperature / top-K / top-P / repetition penalty / max context / max steps to the documented defaults.
     - `ResumePipelineRunUseCase.kt` - Validates and launches the checkpoint resume of an INTERRUPTED run (status / prompt presence / resume-window age / graph content-hash preconditions, guarded INTERRUPTED → QUEUED transition, resume-flagged `AgentTask` enqueue). Hosts the `ResumeOutcome` sealed result consumed by the chat UI.
@@ -309,6 +311,7 @@ This file maps the contents of the main application package.
     - `DisplayFormat.kt` - Shared display formatters (`formatBytes` byte-size ladder, `approxTokenCount`, `CHARS_PER_TOKEN`) so byte sizes / token estimates render identically across Memory and Settings instead of drifting between per-screen copies.
   - `notifications/` - Notification handling.
     - `ApprovalNotificationManager.kt` - Manager for approval notifications.
+    - `ScheduledTaskNotifierImpl.kt` - `ScheduledTaskNotifier` impl posting "Task completed" / "Task failed" on the `TaskResultsChannel` with a `knotwork://chat/{threadId}` deep-link tap action; double-gated on the settings toggle and POST_NOTIFICATIONS.
   - `receivers/` - Broadcast receivers.
     - `AgentApprovalReceiver.kt` - Receiver for agent approvals; dispatches via the typed `ApprovalAction` enum.
     - `ApprovalAction.kt` - Typed enum pairing the Approve/Deny notification actions with their wire `Intent.action` strings; owns `fromAction` parsing.

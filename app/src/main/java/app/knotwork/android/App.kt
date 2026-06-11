@@ -9,6 +9,7 @@ import app.knotwork.android.data.tools.local.appfunctions.SearchAppFunction
 import app.knotwork.android.domain.repositories.CrashReportingRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.LongRunningTaskNotifier
+import app.knotwork.android.domain.services.ScheduledTaskNotifier
 import app.knotwork.android.presentation.theme.KnotworkFontsBootstrap
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -59,6 +60,9 @@ class App :
     @Inject
     lateinit var longRunningTaskNotifier: LongRunningTaskNotifier
 
+    @Inject
+    lateinit var scheduledTaskNotifier: ScheduledTaskNotifier
+
     /**
      * Hilt-managed factory for the callee-side [SearchAppFunction] wrapper. A [Provider] is
      * used (not a direct [Inject]) because the AppFunctions runtime asks for a fresh
@@ -98,6 +102,7 @@ class App :
         // so screens render against the brand fonts on the very first frame.
         KnotworkFontsBootstrap.install()
         longRunningTaskNotifier.registerChannel()
+        scheduledTaskNotifier.registerChannel()
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         } else {

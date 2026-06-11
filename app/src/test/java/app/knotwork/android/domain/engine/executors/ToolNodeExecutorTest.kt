@@ -9,6 +9,7 @@ import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.ToolApprovalPolicy
+import app.knotwork.android.domain.models.ToolExecutionContext
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
@@ -127,13 +128,31 @@ class ToolNodeExecutorTest {
         coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool(toolName, "Desc", "Schema"))
         every { llmEngine.generateResponseStream(any()) } returns
             flowOf("""{"tool": "MyTool", "arguments": "arg_value"}""")
-        coEvery { toolRepository.executeTool(toolName, "arg_value") } returns "Tool Success"
+        coEvery { toolRepository.executeTool(toolName, "arg_value", any()) } returns "Tool Success"
 
         val states = executor.execute(node, "Do something", "session-1", "").toList().unwrap()
 
         // Checking last state
         val lastState = states.last() as NodeExecutionResult
         assertEquals("Tool Success", lastState.outputText)
+    }
+
+    @Test
+    fun `execute passes the session id to the tool through the execution context`() = runTest {
+        // schedule_task binds the scheduled run back to the conversation via this
+        // context — the id must come from the engine, never from the LLM arguments.
+        val toolName = "MyTool"
+        val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName)
+        coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool(toolName, "Desc", "Schema"))
+        every { llmEngine.generateResponseStream(any()) } returns
+            flowOf("""{"tool": "MyTool", "arguments": "arg_value"}""")
+        coEvery { toolRepository.executeTool(any(), any(), any()) } returns "ok"
+
+        executor.execute(node, "Do something", "session-77", "").toList()
+
+        coVerify(exactly = 1) {
+            toolRepository.executeTool(toolName, "arg_value", ToolExecutionContext(sessionId = "session-77"))
+        }
     }
 
     @Test
@@ -177,7 +196,7 @@ class ToolNodeExecutorTest {
         coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool(toolName, "Desc", "Schema"))
         every { llmEngine.generateResponseStream(any()) } returns
             flowOf("""{"tool": "ReadTool", "arguments": "args"}""")
-        coEvery { toolRepository.executeTool(toolName, "args") } returns "ok"
+        coEvery { toolRepository.executeTool(toolName, "args", any()) } returns "ok"
 
         val states = executor.execute(node, "Read", "session-1", "").toList().unwrap()
 
@@ -319,7 +338,7 @@ class ToolNodeExecutorTest {
             )
             assertTrue(finalResult.error!!.contains("blocked by Settings", ignoreCase = true))
             assertEquals(null, finalResult.outputText)
-            coVerify(exactly = 0) { toolRepository.executeTool(any(), any()) }
+            coVerify(exactly = 0) { toolRepository.executeTool(any(), any(), any()) }
             verify(exactly = 0) { approvalNotifier.sendApprovalRequest(any(), any(), any(), any()) }
         }
 
@@ -339,7 +358,7 @@ class ToolNodeExecutorTest {
         assertNotNull(finalResult)
         assertNotNull("getRisk failure must surface as a structured error", finalResult!!.error)
         assertTrue(finalResult.error!!.contains("Risk lookup failed", ignoreCase = true))
-        coVerify(exactly = 0) { toolRepository.executeTool(any(), any()) }
+        coVerify(exactly = 0) { toolRepository.executeTool(any(), any(), any()) }
         verify(exactly = 0) { approvalNotifier.sendApprovalRequest(any(), any(), any(), any()) }
     }
 
@@ -374,7 +393,7 @@ class ToolNodeExecutorTest {
         val finalResult = results.filterIsInstance<NodeExecutionResult>().lastOrNull()
         assertNotNull(finalResult)
         assertEquals("Execution denied by user", finalResult!!.outputText)
-        coVerify(exactly = 0) { toolRepository.executeTool(any(), any()) }
+        coVerify(exactly = 0) { toolRepository.executeTool(any(), any(), any()) }
         job.cancel()
     }
 
@@ -390,7 +409,7 @@ class ToolNodeExecutorTest {
         coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool(toolName, "Desc", "Schema"))
         every { llmEngine.generateResponseStream(any()) } returns
             flowOf("""{"tool": "SensTool", "arguments": "args"}""")
-        coEvery { toolRepository.executeTool(any(), any()) } returns "ok"
+        coEvery { toolRepository.executeTool(any(), any(), any()) } returns "ok"
 
         assertNull(executor.pendingApprovalFor("session-1"))
 
@@ -474,7 +493,7 @@ class ToolNodeExecutorTest {
             AgentTool("ToolB", "DescB", "SchemaB"),
         )
         every { llmEngine.generateResponseStream(any()) } returns flowOf("""{"tool": "ToolB", "arguments": "arg_b"}""")
-        coEvery { toolRepository.executeTool("ToolB", "arg_b") } returns "Tool B Success"
+        coEvery { toolRepository.executeTool("ToolB", "arg_b", any()) } returns "Tool B Success"
 
         val states = executor.execute(node, "Do B", "session-1", "").toList().unwrap()
 
@@ -495,7 +514,7 @@ class ToolNodeExecutorTest {
             )
             every { llmEngine.generateResponseStream(any()) } returns
                 flowOf("""{"tool": "ToolA", "arguments": "arg_a"}""")
-            coEvery { toolRepository.executeTool("ToolA", "arg_a") } returns "Tool A Success"
+            coEvery { toolRepository.executeTool("ToolA", "arg_a", any()) } returns "Tool A Success"
 
             val states = executor.execute(node, "Do A", "session-1", "").toList().unwrap()
 

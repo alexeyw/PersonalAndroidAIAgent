@@ -66,6 +66,8 @@ import app.knotwork.android.domain.models.ToolApprovalPolicy
  * @property reembedProgress `null` when no re-embed job is in flight;
  *   otherwise `0f..1f`.
  * @property longRunningTaskNotificationsEnabled Mirror of the toggle.
+ * @property scheduledTaskNotificationsEnabled Mirror of the "Scheduled task
+ *   results" notifications toggle.
  * @property crashReportingEnabled Mirror of the toggle.
  * @property verboseMemoryLoggingEnabled Mirror of the verbose memory logging
  *   toggle (Settings → Privacy).
@@ -112,6 +114,7 @@ data class SettingsUiState(
     val memoryValidationError: MemoryValidationError? = null,
     val reembedProgress: Float? = null,
     val longRunningTaskNotificationsEnabled: Boolean = true,
+    val scheduledTaskNotificationsEnabled: Boolean = true,
     val crashReportingEnabled: Boolean = false,
     val verboseMemoryLoggingEnabled: Boolean = SettingsDefaults.VERBOSE_MEMORY_LOGGING_ENABLED_DEFAULT,
     val restartRequired: Boolean = false,
