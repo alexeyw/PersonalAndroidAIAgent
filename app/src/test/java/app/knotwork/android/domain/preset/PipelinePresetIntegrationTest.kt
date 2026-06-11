@@ -182,6 +182,7 @@ class PipelinePresetIntegrationTest {
             localModelRepository,
             mockk(relaxed = true),
             mockk(relaxed = true),
+            mockk(relaxed = true),
         )
 
         every { llmEngine.generateResponseStream(any()) } returns flowOf(cannedAnswer)

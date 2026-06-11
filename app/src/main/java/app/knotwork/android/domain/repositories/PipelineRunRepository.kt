@@ -101,6 +101,17 @@ interface PipelineRunRepository {
     suspend fun getActiveRunForSession(sessionId: String): PipelineRun?
 
     /**
+     * Returns the most recently started run of [sessionId] regardless of
+     * status, or `null` when the session has never had a run (or the store
+     * is unreadable — best-effort contract). The console replay path uses it
+     * to pick the baseline trace when no run is currently active.
+     *
+     * @param sessionId Id of the chat session to query.
+     * @return The latest run, or `null` when the session has no runs.
+     */
+    suspend fun getLatestRunForSession(sessionId: String): PipelineRun?
+
+    /**
      * Observes all runs of [sessionId], most recently started first.
      *
      * @param sessionId Id of the chat session to observe.

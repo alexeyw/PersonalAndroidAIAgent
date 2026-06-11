@@ -122,6 +122,12 @@ class PipelineRunRepositoryImpl @Inject constructor(private val pipelineRunDao: 
         }
     }
 
+    override suspend fun getLatestRunForSession(sessionId: String): PipelineRun? = absorbing("getLatestRunForSession") {
+        withContext(Dispatchers.IO) {
+            pipelineRunDao.getLatestRunForSession(sessionId)?.toDomain()
+        }
+    }
+
     override fun observeRunsForSession(sessionId: String): Flow<List<PipelineRun>> =
         pipelineRunDao.observeRunsForSession(sessionId)
             .map { entities -> entities.map { it.toDomain() } }

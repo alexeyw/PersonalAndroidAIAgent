@@ -161,4 +161,69 @@ class AppDatabaseMigrationTest {
             indexSql.contains("INDEX_PIPELINE_RUNS_STATUS"),
         )
     }
+
+    @Test
+    fun `MIGRATION_30_31 targets versions 30 to 31`() {
+        val migration = AppDatabase.MIGRATION_30_31
+
+        assertEquals(30, migration.startVersion)
+        assertEquals(31, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_30_31 recreates trace_steps with run attribution and preserves legacy rows`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val statements = mutableListOf<String>()
+
+        AppDatabase.MIGRATION_30_31.migrate(db)
+
+        // CREATE new + INSERT SELECT + DROP + RENAME + 2 index recreations.
+        verify(exactly = 6) { db.execSQL(capture(statements)) }
+
+        val createTable = statements[0].uppercase()
+        assertTrue(
+            "Expected CREATE TABLE trace_steps_new, got: ${statements[0]}",
+            createTable.contains("CREATE TABLE") && createTable.contains("TRACE_STEPS_NEW"),
+        )
+        // Legacy columns plus the new run-trace columns.
+        listOf(
+            "SESSIONID", "NODENAME", "OUTPUTTEXT", "TIMESTAMP", "DURATIONMS", "TOKENCOUNT",
+            "RUNID", "SEQ", "RECORDKIND", "CONSOLEEVENTTYPE", "NODEID", "INPUTTEXT",
+        ).forEach { column ->
+            assertTrue("Missing column $column in: ${statements[0]}", createTable.contains(column))
+        }
+        // SQLite cannot ALTER-in a foreign key — the recreate must carry both
+        // the legacy chat_sessions FK and the new pipeline_runs CASCADE FK.
+        assertTrue(
+            "Missing chat_sessions FK: ${statements[0]}",
+            createTable.contains("REFERENCES `CHAT_SESSIONS`"),
+        )
+        assertTrue(
+            "Missing pipeline_runs CASCADE FK (retention deletes traces with their run): ${statements[0]}",
+            createTable.contains("REFERENCES `PIPELINE_RUNS`") && createTable.contains("ON DELETE CASCADE"),
+        )
+
+        val insert = statements[1].uppercase()
+        assertTrue(
+            "Legacy rows must be copied, not dropped: ${statements[1]}",
+            insert.contains("INSERT INTO `TRACE_STEPS_NEW`") && insert.contains("FROM `TRACE_STEPS`"),
+        )
+        assertTrue(
+            "Legacy rows keep NULL runId and NODE_IO kind: ${statements[1]}",
+            insert.contains("NULL") && insert.contains("'NODE_IO'"),
+        )
+
+        assertTrue("Old table must be dropped: ${statements[2]}", statements[2].uppercase().contains("DROP TABLE"))
+        assertTrue("New table must be renamed: ${statements[3]}", statements[3].uppercase().contains("RENAME TO"))
+
+        val indexSql = statements.drop(4).joinToString(" ").uppercase()
+        assertTrue(
+            "Missing recreated sessionId index: $indexSql",
+            indexSql.contains("INDEX_TRACE_STEPS_SESSIONID"),
+        )
+        assertTrue(
+            "Missing runId index (replay + retention queries): $indexSql",
+            indexSql.contains("INDEX_TRACE_STEPS_RUNID"),
+        )
+    }
 }

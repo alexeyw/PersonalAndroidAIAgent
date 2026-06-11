@@ -8,8 +8,10 @@ package app.knotwork.android.domain.models
  * Events are produced by [app.knotwork.android.domain.engine.GraphExecutionEngine]
  * during pipeline execution and forwarded to the UI through
  * [AgentOrchestratorState.ConsoleLog]. They are display-oriented (already
- * formatted human-readable strings) and intentionally not persisted — the log
- * resets on every new send / session switch.
+ * formatted human-readable strings). Events of a persisted run are also
+ * written through to the run trace
+ * ([app.knotwork.android.domain.repositories.RunTraceRepository]) so the
+ * console can replay them after the UI reattaches to a background run.
  *
  * @property timestamp Wall-clock time of the event in `System.currentTimeMillis()`
  *   units. Used by the UI to render the leading `HH:mm:ss(.SSS)` timecode.
@@ -18,8 +20,11 @@ package app.knotwork.android.domain.models
  * @property message Pre-formatted human-readable text shown verbatim in the
  *   console (e.g. `"▶ LITE_RT"`, `"calendar_create_event"`, `"Memory: 3 chunks
  *   retrieved"`).
+ * @property seq Zero-based monotonic position of the event within its pipeline
+ *   run. The console replay/live seam deduplicates by this number, so it is
+ *   unique within a run; `0` for events emitted outside a persisted run.
  */
-data class ConsoleEvent(val timestamp: Long, val type: ConsoleEventType, val message: String)
+data class ConsoleEvent(val timestamp: Long, val type: ConsoleEventType, val message: String, val seq: Long = 0)
 
 /**
  * Category of a [ConsoleEvent]. Modelled as a sealed interface with `data

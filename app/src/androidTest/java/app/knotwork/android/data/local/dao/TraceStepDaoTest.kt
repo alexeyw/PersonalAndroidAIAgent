@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.knotwork.android.data.local.AppDatabase
 import app.knotwork.android.data.local.models.ChatSessionEntity
+import app.knotwork.android.data.local.models.PipelineRunEntity
 import app.knotwork.android.data.local.models.TraceStepEntity
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -131,10 +132,88 @@ class TraceStepDaoTest {
         assertTrue(traceStepDao.getTraceStepsForSession("s").first().isEmpty())
     }
 
+    @Test
+    fun insertTraceSteps_batchInsertsAllRows() = runBlocking {
+        chatDao.insertSession(ChatSessionEntity(id = "s", name = "n", updatedAt = 0L))
+        insertRun(runId = "r1", sessionId = "s")
+
+        traceStepDao.insertTraceSteps(
+            (0L until 3L).map { seq ->
+                runStep(runId = "r1", sessionId = "s", seq = seq)
+            },
+        )
+
+        assertEquals(3, traceStepDao.getTraceStepsForRun("r1").size)
+    }
+
+    @Test
+    fun getTraceStepsForRun_ordersBySeqAndFiltersByRun() = runBlocking {
+        chatDao.insertSession(ChatSessionEntity(id = "s", name = "n", updatedAt = 0L))
+        insertRun(runId = "r1", sessionId = "s")
+        insertRun(runId = "r2", sessionId = "s")
+
+        traceStepDao.insertTraceSteps(
+            listOf(
+                runStep(runId = "r1", sessionId = "s", seq = 2L),
+                runStep(runId = "r1", sessionId = "s", seq = 0L),
+                runStep(runId = "r2", sessionId = "s", seq = 0L),
+                runStep(runId = "r1", sessionId = "s", seq = 1L),
+            ),
+        )
+
+        assertEquals(listOf(0L, 1L, 2L), traceStepDao.getTraceStepsForRun("r1").map { it.seq })
+        assertEquals(listOf(0L), traceStepDao.getTraceStepsForRun("r2").map { it.seq })
+    }
+
+    @Test
+    fun deletingOwningRun_cascadesItsTraceRecordsOnly() = runBlocking {
+        chatDao.insertSession(ChatSessionEntity(id = "s", name = "n", updatedAt = 0L))
+        insertRun(runId = "r1", sessionId = "s")
+        traceStepDao.insertTraceSteps(listOf(runStep(runId = "r1", sessionId = "s", seq = 0L)))
+        // A legacy row without run attribution must survive run deletion.
+        traceStepDao.insertTraceStep(step(sessionId = "s", nodeName = "LEGACY", timestamp = 1L))
+
+        database.openHelper.writableDatabase.execSQL("DELETE FROM pipeline_runs WHERE id = 'r1'")
+
+        assertTrue(traceStepDao.getTraceStepsForRun("r1").isEmpty())
+        assertEquals(
+            listOf("LEGACY"),
+            traceStepDao.getTraceStepsForSession("s").first().map { it.nodeName },
+        )
+    }
+
     private fun step(sessionId: String, nodeName: String, timestamp: Long): TraceStepEntity = TraceStepEntity(
         sessionId = sessionId,
         nodeName = nodeName,
         outputText = "out-$nodeName",
         timestamp = timestamp,
     )
+
+    private fun runStep(runId: String, sessionId: String, seq: Long): TraceStepEntity = TraceStepEntity(
+        sessionId = sessionId,
+        nodeName = "",
+        outputText = "▶ NODE",
+        timestamp = seq,
+        runId = runId,
+        seq = seq,
+        recordKind = TraceStepEntity.KIND_CONSOLE_EVENT,
+        consoleEventType = "NODE_EXECUTION",
+    )
+
+    private suspend fun insertRun(runId: String, sessionId: String) {
+        database.pipelineRunDao().insertRun(
+            PipelineRunEntity(
+                id = runId,
+                sessionId = sessionId,
+                pipelineId = "p1",
+                origin = "CHAT",
+                status = "COMPLETED",
+                currentNodeId = null,
+                startedAt = 0L,
+                finishedAt = 1L,
+                errorMessage = null,
+                graphContentHash = null,
+            ),
+        )
+    }
 }
