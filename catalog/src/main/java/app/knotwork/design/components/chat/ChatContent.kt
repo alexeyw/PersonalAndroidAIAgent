@@ -62,6 +62,17 @@ sealed interface ChatContent {
     data class Clarification(val model: ClarificationCardModel) : ChatContent
 
     /**
+     * Interrupted-run status card — `InterruptedRunCard` rendered inside the
+     * assistant bubble when the session's most recent pipeline run died with
+     * its process instead of finishing. Resume / Discard actions are hoisted
+     * to the screen via [ChatMessage]'s `onRunResume` / `onRunDiscard`
+     * callbacks.
+     *
+     * @property model immutable payload (resolved node label).
+     */
+    data class RunInterrupted(val model: InterruptedRunCardModel) : ChatContent
+
+    /**
      * Error tile — the message failed at the runtime layer (LLM error,
      * network error, validation failure). Renders with a `signalError`
      * border and an optional retry CTA.

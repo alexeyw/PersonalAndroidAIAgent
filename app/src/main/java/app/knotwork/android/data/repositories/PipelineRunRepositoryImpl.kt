@@ -9,6 +9,7 @@ import app.knotwork.android.domain.repositories.PipelineRunRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -135,6 +136,31 @@ class PipelineRunRepositoryImpl @Inject constructor(private val pipelineRunDao: 
                 emit(emptyList())
             }
 
+    override fun observeActiveRunSessionIds(): Flow<Set<String>> =
+        pipelineRunDao.observeSessionIdsByStatuses(ACTIVE_STATUS_NAMES)
+            .map { it.toSet() }
+            // Room re-runs the query on every table write (per-node progress
+            // included); the set only changes when a run starts or settles,
+            // so deduplicate here instead of in every consumer.
+            .distinctUntilChanged()
+            .catch { e ->
+                Timber.e(e, "Pipeline-run store failure in observeActiveRunSessionIds; degrading to empty")
+                emit(emptySet())
+            }
+
+    override suspend fun discardInterruptedRun(runId: String) {
+        absorbing("discardInterruptedRun") {
+            withContext(Dispatchers.IO) {
+                pipelineRunDao.discardInterruptedRun(
+                    runId = runId,
+                    fromStatus = PipelineRunStatus.INTERRUPTED.name,
+                    toStatus = PipelineRunStatus.FAILED.name,
+                    errorMessage = DISCARDED_BY_USER_MESSAGE,
+                )
+            }
+        }
+    }
+
     override suspend fun getOrphanedRuns(): List<PipelineRun> = absorbing("getOrphanedRuns") {
         withContext(Dispatchers.IO) {
             pipelineRunDao.getRunsByStatuses(ACTIVE_STATUS_NAMES)
@@ -163,6 +189,9 @@ class PipelineRunRepositoryImpl @Inject constructor(private val pipelineRunDao: 
         /** Non-terminal status names: active-run lookup and orphan-sweep scope. */
         val ACTIVE_STATUS_NAMES: List<String> =
             PipelineRunStatus.entries.filterNot { it.isTerminal }.map { it.name }
+
+        /** Error message stamped on a run the user explicitly discarded instead of resuming. */
+        const val DISCARDED_BY_USER_MESSAGE: String = "Discarded by user"
     }
 }
 

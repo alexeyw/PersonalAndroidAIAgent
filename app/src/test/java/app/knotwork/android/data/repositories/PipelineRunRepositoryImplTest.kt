@@ -239,6 +239,65 @@ class PipelineRunRepositoryImplTest {
         assertEquals(PipelineRunStatus.COMPLETED, runs[1].status)
     }
 
+    @Test
+    fun `observeActiveRunSessionIds queries every non-terminal status and dedups to a set`() = runTest {
+        coEvery { pipelineRunDao.observeSessionIdsByStatuses(activeNames) } returns flowOf(
+            listOf("session-1", "session-2"),
+        )
+
+        val sessionIds = repository.observeActiveRunSessionIds().first()
+
+        assertEquals(setOf("session-1", "session-2"), sessionIds)
+    }
+
+    @Test
+    fun `observeActiveRunSessionIds suppresses emissions with an unchanged set`() = runTest {
+        coEvery { pipelineRunDao.observeSessionIdsByStatuses(any()) } returns flowOf(
+            listOf("session-1"),
+            // Room re-runs the query on every table write; an order change
+            // or a re-emission with the same membership must not reach the
+            // consumer.
+            listOf("session-1"),
+            listOf("session-1", "session-2"),
+        )
+
+        val emissions = mutableListOf<Set<String>>()
+        repository.observeActiveRunSessionIds().collect { emissions.add(it) }
+
+        assertEquals(listOf(setOf("session-1"), setOf("session-1", "session-2")), emissions)
+    }
+
+    @Test
+    fun `given failing upstream when observeActiveRunSessionIds then emits empty set`() = runTest {
+        coEvery { pipelineRunDao.observeSessionIdsByStatuses(any()) } returns flow {
+            throw IllegalStateException("io")
+        }
+
+        assertEquals(emptySet<String>(), repository.observeActiveRunSessionIds().first())
+    }
+
+    @Test
+    fun `discardInterruptedRun issues the guarded INTERRUPTED to FAILED transition`() = runTest {
+        repository.discardInterruptedRun("run-1")
+
+        coVerify {
+            pipelineRunDao.discardInterruptedRun(
+                runId = "run-1",
+                fromStatus = "INTERRUPTED",
+                toStatus = "FAILED",
+                errorMessage = "Discarded by user",
+            )
+        }
+    }
+
+    @Test
+    fun `given DAO failure when discardInterruptedRun then absorbed`() = runTest {
+        coEvery { pipelineRunDao.discardInterruptedRun(any(), any(), any(), any()) } throws
+            IllegalStateException("disk full")
+
+        repository.discardInterruptedRun("run-1") // must not throw
+    }
+
     // region Best-effort contract — storage failures are absorbed
 
     @Test

@@ -51,6 +51,23 @@ details.
   pre-existing trace rows survive the upgrade. Deleting a run (future
   retention cleanup) removes its trace atomically.
 
+- **Chat reattach protocol.** Opening a chat now reconnects the UI to
+  whatever its persistent run record says instead of assuming nothing
+  happened while the screen was away. A run still executing in this
+  process re-attaches to the live state stream without restarting the
+  pipeline; a run suspended on a tool approval or a clarification
+  question restores its card in the message stream from the
+  authoritative pending snapshot (the in-memory stream's replay slot
+  may have been overwritten by console events); a run that finished in
+  the background renders normally on top of the replayed trace. A run
+  that died with its process surfaces a **Run interrupted** status card
+  naming the node it stopped at, with **Resume** and **Discard**
+  actions — Discard settles the record as failed ("Discarded by user"),
+  while Resume is wired end-to-end and reports that checkpoint-resume
+  is not available yet (it ships with the resume mechanism). Threads
+  that own a run in any active status show an in-progress indicator in
+  the drawer list, so background work is visible at a glance.
+
 - **Re-embed reminder banner.** *Settings → Memory* now shows a persistent
   warning under the embedding-provider dropdown whenever the stored memory
   vectors were created with a different provider than the active one —

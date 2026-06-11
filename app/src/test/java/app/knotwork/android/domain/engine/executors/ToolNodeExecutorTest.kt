@@ -379,6 +379,94 @@ class ToolNodeExecutorTest {
     }
 
     @Test
+    fun `pendingApprovalFor exposes the suspended request and clears after resolution`() = runTest {
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
+        every { settingsRepository.toolCallTimeoutMs } returns flowOf(5_000L)
+        coEvery { toolRepository.getRisk(any()) } returns ToolRisk.SENSITIVE
+
+        val toolName = "SensTool"
+        val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName)
+        coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool(toolName, "Desc", "Schema"))
+        every { llmEngine.generateResponseStream(any()) } returns
+            flowOf("""{"tool": "SensTool", "arguments": "args"}""")
+        coEvery { toolRepository.executeTool(any(), any()) } returns "ok"
+
+        assertNull(executor.pendingApprovalFor("session-1"))
+
+        val job = launch {
+            executor.execute(node, "Do", "session-1", "").collect { }
+        }
+        runCurrent()
+
+        // Suspended on the approval gate: the snapshot must be addressable.
+        val pending = executor.pendingApprovalFor("session-1")
+        assertNotNull(pending)
+        assertEquals(toolName, pending!!.toolName)
+        assertEquals(ToolRisk.SENSITIVE, pending.risk)
+        assertNull("Other sessions must not see the request", executor.pendingApprovalFor("session-2"))
+
+        executor.resumeWithApproval("session-1", isApproved = true)
+        advanceUntilIdle()
+
+        assertNull("Resolved request must be cleared", executor.pendingApprovalFor("session-1"))
+        job.cancel()
+    }
+
+    @Test
+    fun `pendingApprovalFor clears when the suspended gate is cancelled`() = runTest {
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
+        every { settingsRepository.toolCallTimeoutMs } returns flowOf(60_000L)
+        coEvery { toolRepository.getRisk(any()) } returns ToolRisk.SENSITIVE
+
+        val toolName = "SensTool"
+        val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName)
+        coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool(toolName, "Desc", "Schema"))
+        every { llmEngine.generateResponseStream(any()) } returns
+            flowOf("""{"tool": "SensTool", "arguments": "args"}""")
+
+        val job = launch {
+            executor.execute(node, "Do", "session-1", "").collect { }
+        }
+        runCurrent()
+        assertNotNull(executor.pendingApprovalFor("session-1"))
+
+        // Plain cancellation of the suspended gate (scope teardown, an
+        // abandoned editor test run) must not leak the holder — a stale
+        // entry would serve a request no coroutine can ever settle.
+        job.cancel()
+        runCurrent()
+
+        assertNull("Cancelled gate must clear its pending request", executor.pendingApprovalFor("session-1"))
+    }
+
+    @Test
+    fun `pendingApprovalFor clears after the approval times out`() = runTest {
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
+        every { settingsRepository.toolCallTimeoutMs } returns flowOf(1_000L)
+        coEvery { toolRepository.getRisk(any()) } returns ToolRisk.SENSITIVE
+
+        val toolName = "SensTool"
+        val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName)
+        coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool(toolName, "Desc", "Schema"))
+        every { llmEngine.generateResponseStream(any()) } returns
+            flowOf("""{"tool": "SensTool", "arguments": "args"}""")
+
+        val job = launch {
+            executor.execute(node, "Do", "session-1", "").collect { }
+        }
+        runCurrent()
+        assertNotNull(executor.pendingApprovalFor("session-1"))
+
+        advanceUntilIdle() // virtual time fires the 1s approval timeout
+
+        assertNull("Timed-out request must be cleared", executor.pendingApprovalFor("session-1"))
+        job.cancel()
+    }
+
+    @Test
     fun `execute uses LLM for auto mode to select tool and generate arguments`() = runTest {
         val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = "auto")
         coEvery { toolRepository.getAvailableTools() } returns listOf(

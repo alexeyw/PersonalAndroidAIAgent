@@ -181,6 +181,7 @@ class ChatHomeDrawerTest {
             initialState = ChatHomeUiState.Clarification,
             initialPendingClarification = ClarificationRequest(
                 id = "clar-x",
+                sessionId = "session-1",
                 question = "Pick a calendar",
                 options = listOf("Work"),
                 timeoutMs = 5_000L,

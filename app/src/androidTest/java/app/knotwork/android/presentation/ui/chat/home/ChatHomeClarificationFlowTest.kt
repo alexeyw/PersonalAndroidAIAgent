@@ -34,6 +34,7 @@ class ChatHomeClarificationFlowTest {
             initialState = ChatHomeUiState.Clarification,
             initialPendingClarification = ClarificationRequest(
                 id = "clar-1",
+                sessionId = "session-1",
                 question = "Which calendar should I use for the rollout sync?",
                 options = listOf("Work", "Personal"),
                 timeoutMs = 5_000L,
@@ -57,6 +58,7 @@ class ChatHomeClarificationFlowTest {
             initialState = ChatHomeUiState.Clarification,
             initialPendingClarification = ClarificationRequest(
                 id = "clar-2",
+                sessionId = "session-1",
                 question = "Pick a colour",
                 options = listOf("Red", "Blue"),
                 timeoutMs = 5_000L,
@@ -79,6 +81,7 @@ class ChatHomeClarificationFlowTest {
             initialState = ChatHomeUiState.Clarification,
             initialPendingClarification = ClarificationRequest(
                 id = "clar-3",
+                sessionId = "session-1",
                 question = "Pick a calendar for the rollout",
                 options = listOf("Work", "Personal"),
                 timeoutMs = 5_000L,

@@ -69,6 +69,20 @@ class GraphExecutionEngine @Inject constructor(
     }
 
     /**
+     * Returns the approval request the run of [sessionId] is currently
+     * suspended on, or `null` when no approval gate is active. Mirrors
+     * [resumeWithApproval] — both delegate to the [ToolNodeExecutor]
+     * singleton that owns the per-session suspension primitives. Used by the
+     * chat reattach protocol to restore the HITL confirmation card from the
+     * authoritative pending snapshot.
+     *
+     * @param sessionId chat session id whose pending approval is queried.
+     * @return the pending [AgentOrchestratorState.WaitingForApproval], or `null`.
+     */
+    fun pendingApprovalFor(sessionId: String): AgentOrchestratorState.WaitingForApproval? =
+        toolNodeExecutor.pendingApprovalFor(sessionId)
+
+    /**
      * Executes the graph by processing nodes sequentially.
      *
      * @param sessionId Id of the chat session the run belongs to.

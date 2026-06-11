@@ -104,6 +104,7 @@ class ChatHomeConsoleStreamingTest {
         runTraceRepository = mockk()
         coEvery { pipelineRunRepository.getActiveRunForSession(any()) } returns null
         coEvery { pipelineRunRepository.getLatestRunForSession(any()) } returns null
+        every { pipelineRunRepository.observeActiveRunSessionIds() } returns MutableStateFlow(emptySet())
         coEvery { runTraceRepository.getTraceForRun(any()) } returns emptyList()
 
         sessionsFlow = MutableStateFlow(emptyList())

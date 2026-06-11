@@ -288,6 +288,32 @@ history. **Clear console** keeps working on top of a replayed trace —
 cleared rows stay hidden until you switch sessions or send a new
 message.
 
+### Reopening a chat while a run is in flight
+
+Closing the chat — or the whole app UI — no longer disconnects you from
+a run that is still working. When you open a session, the app checks
+the persistent run record and reattaches accordingly:
+
+- **Run still executing** — the chat reconnects to the live run
+  without restarting it: the generating indicator returns, streaming
+  continues, and the console picks up where the replayed trace ends.
+- **Run waiting on you** — a pending tool approval or clarification
+  question is restored as its card in the message stream, so a request
+  raised while you were away is never lost behind a spinner.
+- **Run finished in the background** — the final answer is already in
+  the conversation and the console holds the full trace; nothing
+  restarts.
+- **Run interrupted** — if the process died mid-run (battery
+  optimisation, memory pressure, swiping the app away), the chat shows
+  a **Run interrupted** card naming the node the run stopped at, with
+  **Resume** and **Discard** buttons. *Discard* dismisses the run for
+  good; *Resume* continues it without redoing completed work (if your
+  build does not support resuming yet, the app says so).
+
+Conversations with a run still working in the background are easy to
+spot: their row in the thread drawer shows a small in-progress
+indicator next to the title.
+
 ### Approving a tool call
 
 If the agent needs your approval to run a sensitive or destructive

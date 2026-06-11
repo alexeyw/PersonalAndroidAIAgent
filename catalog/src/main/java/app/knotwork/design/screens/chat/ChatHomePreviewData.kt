@@ -11,6 +11,7 @@ import app.knotwork.design.components.chat.ChatRole
 import app.knotwork.design.components.chat.ClarificationCardModel
 import app.knotwork.design.components.chat.ComposerState
 import app.knotwork.design.components.chat.HitlConfirmationModel
+import app.knotwork.design.components.chat.InterruptedRunCardModel
 import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.components.console.ConsoleFilter
 import app.knotwork.design.components.console.ConsoleLevel
@@ -234,6 +235,21 @@ internal object ChatHomePreview {
         ),
     )
 
+    /** Interrupted state — the previous run died with its process; status card with Resume / Discard. */
+    fun interrupted(): ChatHomeViewState = ChatHomeViewState(
+        visualState = ChatHomeVisualState.Interrupted,
+        threadTitle = THREAD_TITLE,
+        modelName = MODEL_NAME,
+        messages = baselineMessages() + ChatHomeMessageRow(
+            id = "a-interrupted",
+            role = ChatRole.Assistant,
+            content = ChatContent.RunInterrupted(
+                model = InterruptedRunCardModel(nodeLabel = "Summarise"),
+            ),
+            metadata = ChatMetadata(timestamp = "09:16", model = MODEL_NAME),
+        ),
+    )
+
     /** Error state — model failed, inline error tile + retry. */
     fun error(): ChatHomeViewState = ChatHomeViewState(
         visualState = ChatHomeVisualState.Error,
@@ -269,13 +285,14 @@ internal object ChatHomePreview {
         ),
     )
 
-    /** All nine canonical states in the spec's documented order. */
+    /** All canonical states in the spec's documented order. */
     fun allStates(): List<ChatHomeViewState> = listOf(
         empty(),
         idle(),
         generating(),
         hitlConfirm(),
         clarification(),
+        interrupted(),
         error(),
         drawerOpen(),
         consoleExpanded(),
@@ -294,6 +311,7 @@ internal fun ChatHomeVisualState.snapshotTag(): String = when (this) {
     ChatHomeVisualState.Generating -> "generating"
     ChatHomeVisualState.HitlConfirm -> "hitl_confirm"
     ChatHomeVisualState.Clarification -> "clarification"
+    ChatHomeVisualState.Interrupted -> "interrupted"
     ChatHomeVisualState.Error -> "error"
     ChatHomeVisualState.DrawerOpen -> "drawer_open"
     ChatHomeVisualState.ConsoleExpanded -> "console_expanded"

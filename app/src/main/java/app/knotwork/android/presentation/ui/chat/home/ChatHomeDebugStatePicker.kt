@@ -65,6 +65,7 @@ internal enum class DebugStateRows(val id: String, val labelRes: Int) {
     HitlSensitive(id = DebugStateIds.HITL_SENSITIVE, labelRes = R.string.chat_home_debug_state_hitl_sensitive),
     HitlDestructive(id = DebugStateIds.HITL_DESTRUCTIVE, labelRes = R.string.chat_home_debug_state_hitl_destructive),
     Clarification(id = DebugStateIds.CLARIFICATION, labelRes = R.string.chat_home_debug_state_clarification),
+    Interrupted(id = DebugStateIds.INTERRUPTED, labelRes = R.string.chat_home_debug_state_interrupted),
     Error(id = DebugStateIds.ERROR, labelRes = R.string.chat_home_debug_state_error),
     DrawerOpen(id = DebugStateIds.DRAWER_OPEN, labelRes = R.string.chat_home_debug_state_drawer_open),
     ConsolePartial(id = DebugStateIds.CONSOLE_PARTIAL, labelRes = R.string.chat_home_debug_state_console_partial),

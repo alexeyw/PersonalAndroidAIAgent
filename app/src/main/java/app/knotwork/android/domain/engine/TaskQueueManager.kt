@@ -43,4 +43,20 @@ interface TaskQueueManager {
      * @param isApproved True if the user approved the action.
      */
     fun resumeWithApproval(sessionId: String, isApproved: Boolean)
+
+    /**
+     * Returns the tool-approval request the run of [sessionId] is currently
+     * suspended on, or `null` when no approval gate is active for that session.
+     *
+     * Counterpart of [resumeWithApproval] for the chat reattach protocol: a UI
+     * re-attaching to a session whose persistent run record reads
+     * `WAITING_APPROVAL` restores the confirmation card from this snapshot —
+     * the per-session state flow's replay cache cannot be relied on because
+     * console events emitted while the run waits overwrite the
+     * [AgentOrchestratorState.WaitingForApproval] emission.
+     *
+     * @param sessionId The session ID whose pending approval is queried.
+     * @return The pending [AgentOrchestratorState.WaitingForApproval], or `null`.
+     */
+    fun pendingApproval(sessionId: String): AgentOrchestratorState.WaitingForApproval?
 }

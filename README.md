@@ -109,13 +109,18 @@ configured it.
   mid-pipeline and wait for the reply (human-in-the-loop).
 - Multi-session chats with a priority task queue and a redesigned chat
   home built on the Knotwork design system, covering the documented
-  Empty / Idle / Generating / HITL / Clarification / Error / Drawer /
-  Console-expanded states deterministically. Drawer / overflow secondary
+  Empty / Idle / Generating / HITL / Clarification / Interrupted / Error /
+  Drawer / Console-expanded states deterministically. Drawer / overflow secondary
   affordances — new chat with pipeline picker, rename, favorite, JSON
   import / export, in-chat model picker, Settings deep-link — are wired
   directly into chat home.
 - Background execution as an Android Foreground Service with explicit idle
   and power-state management.
+- Chat reattach: reopening a chat reconnects to a run still executing in
+  the background, restores pending approval / clarification cards from the
+  persistent run record, flags busy conversations with an in-progress
+  indicator in the thread drawer, and surfaces a Resume / Discard card for
+  runs interrupted by a process death.
 - Long-term memory with semantic retrieval (RAG) over past conversations,
   including automatic extraction of durable facts from finished conversations
   (toggleable in Settings → Memory), manual "Save to memory" from any chat

@@ -71,7 +71,23 @@ class ToolNodeExecutor @Inject constructor(
     private val chatRepository: ChatRepository,
 ) : NodeExecutor {
 
-    private val activeApprovalDeferreds = ConcurrentHashMap<String, CompletableDeferred<Boolean>>()
+    private val activeApprovalDeferreds = ConcurrentHashMap<String, PendingApprovalHolder>()
+
+    /**
+     * Pairs the suspension primitive of one pending approval with the request
+     * snapshot it was raised for, so a UI re-attaching to a suspended run can
+     * re-render the confirmation card from the authoritative source instead of
+     * hoping the per-session state flow's replay cache still holds the
+     * [AgentOrchestratorState.WaitingForApproval] emission (console events
+     * emitted while the run waits overwrite it — the replay depth is 1).
+     *
+     * @property deferred completes with the user's decision via [resumeWithApproval].
+     * @property request the exact approval request published to the UI.
+     */
+    private data class PendingApprovalHolder(
+        val deferred: CompletableDeferred<Boolean>,
+        val request: AgentOrchestratorState.WaitingForApproval,
+    )
 
     /**
      * Completes the suspended approval request for [sessionId] with the user's decision.
@@ -85,9 +101,25 @@ class ToolNodeExecutor @Inject constructor(
      * @param isApproved `true` if the user approved tool execution, `false` to deny it.
      */
     fun resumeWithApproval(sessionId: String, isApproved: Boolean) {
-        val deferred = activeApprovalDeferreds.remove(sessionId)
-        deferred?.complete(isApproved)
+        val holder = activeApprovalDeferreds.remove(sessionId)
+        holder?.deferred?.complete(isApproved)
     }
+
+    /**
+     * Returns the approval request the run of [sessionId] is currently suspended
+     * on, or `null` when no approval gate is active for that session.
+     *
+     * Backs the chat reattach protocol: when a session is reopened while its
+     * persistent run record reads `WAITING_APPROVAL`, the UI restores the HITL
+     * confirmation card from this snapshot — the per-session state flow cannot
+     * be relied on for it because its replay cache (depth 1) is overwritten by
+     * console events emitted after the suspension.
+     *
+     * @param sessionId chat session id used as the lookup key.
+     * @return the pending [AgentOrchestratorState.WaitingForApproval], or `null`.
+     */
+    fun pendingApprovalFor(sessionId: String): AgentOrchestratorState.WaitingForApproval? =
+        activeApprovalDeferreds[sessionId]?.request
 
     /**
      * Test-only readiness probe: returns `true` once [execute] has registered a
@@ -292,25 +324,31 @@ class ToolNodeExecutor @Inject constructor(
         var isApproved = true
 
         if (needsApproval) {
-            emit(
-                NodeOutput.State(
-                    AgentOrchestratorState.WaitingForApproval(resolvedToolName, resolvedToolArgs, risk),
-                ),
-            )
+            val approvalRequest = AgentOrchestratorState.WaitingForApproval(resolvedToolName, resolvedToolArgs, risk)
+            emit(NodeOutput.State(approvalRequest))
             approvalNotifier.sendApprovalRequest(sessionId, resolvedToolName, resolvedToolArgs, risk)
 
             // Register deferred before any suspension point so a fast approval is not dropped
             val deferred = CompletableDeferred<Boolean>()
-            activeApprovalDeferreds[sessionId] = deferred
+            val holder = PendingApprovalHolder(deferred, approvalRequest)
+            activeApprovalDeferreds[sessionId] = holder
             val timeoutMs = settingsRepository.toolCallTimeoutMs.first()
             isApproved = try {
                 withTimeout(timeoutMs) { deferred.await() }
             } catch (e: TimeoutCancellationException) {
-                activeApprovalDeferreds.remove(sessionId)
                 Timber.tag("PipelineDebug").w("Approval timed out for session: $sessionId")
                 emit(NodeOutput.State(AgentOrchestratorState.Error("Approval request timed out")))
                 emit(NodeOutput.Result(NodeExecutionResult(error = "Approval request timed out")))
                 return@flow
+            } finally {
+                // Covers every exit: timeout, resume (already removed — the
+                // two-arg remove is then a no-op), and plain cancellation of
+                // the suspended gate (scope teardown, an abandoned editor
+                // test run). Without this, a leaked holder would keep
+                // serving pendingApprovalFor a request no coroutine can
+                // ever settle. remove(key, value) leaves a newer
+                // registration for the same session untouched.
+                activeApprovalDeferreds.remove(sessionId, holder)
             }
 
             if (!isApproved) {

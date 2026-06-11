@@ -319,6 +319,9 @@ class TaskQueueManagerImpl @Inject constructor(
         graphExecutionEngine.resumeWithApproval(sessionId, isApproved)
     }
 
+    override fun pendingApproval(sessionId: String): AgentOrchestratorState.WaitingForApproval? =
+        graphExecutionEngine.pendingApprovalFor(sessionId)
+
     private fun getOrCreateStateFlow(sessionId: String): MutableSharedFlow<AgentOrchestratorState> {
         synchronized(sessionStates) {
             return sessionStates.getOrPut(sessionId) {
