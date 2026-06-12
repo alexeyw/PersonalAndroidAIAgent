@@ -15,6 +15,18 @@ details.
 
 ### Added
 
+- **Agent file workspace (foundation).** Groundwork for letting the agent
+  read and write files: a single, jailed directory (`files/agent_workspace/`
+  in the app's private storage) with a strict containment boundary. Every
+  path is canonicalised through one gate, so a relative path that tries to
+  escape the workspace (`../` traversal, an absolute path, or a symlink
+  pointing out) is refused before any file is touched. Two size quotas keep
+  it bounded — a per-file limit (default 5 MB) and a workspace-wide limit
+  (default 100 MB) — so a looping agent cannot exhaust device storage. This
+  release lands the internal foundation only (text read/write/list with
+  binary files listable but not text-readable); the file tools and the Files
+  screen build on top of it.
+
 - **Run-history retention.** Persistent pipeline runs and their traces
   no longer accumulate forever: a daily maintenance pass (WorkManager,
   charging + idle — the same window as memory compaction) deletes

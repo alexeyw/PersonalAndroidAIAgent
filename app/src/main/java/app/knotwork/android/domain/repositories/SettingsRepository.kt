@@ -386,6 +386,37 @@ interface SettingsRepository {
     suspend fun setToolCallTimeoutMs(timeoutMs: Long)
 
     /**
+     * A [Flow] of the maximum size, in bytes, of any single file the agent
+     * workspace will accept. Writes whose content exceeds this are refused
+     * ([app.knotwork.android.domain.models.WorkspaceError.TooLarge]); it also
+     * caps how large a file the workspace will pull into memory for a text read.
+     */
+    val workspaceMaxFileSizeBytes: Flow<Long>
+
+    /**
+     * Updates the per-file size limit of the agent workspace.
+     *
+     * @param bytes The new per-file ceiling, in bytes.
+     */
+    suspend fun setWorkspaceMaxFileSizeBytes(bytes: Long)
+
+    /**
+     * A [Flow] of the maximum total size, in bytes, the agent workspace may
+     * occupy across all files. A write that would push the workspace past this
+     * is refused
+     * ([app.knotwork.android.domain.models.WorkspaceError.QuotaExceeded]) so a
+     * looping pipeline cannot exhaust device storage.
+     */
+    val workspaceMaxTotalBytes: Flow<Long>
+
+    /**
+     * Updates the workspace-wide total-size limit.
+     *
+     * @param bytes The new workspace-wide ceiling, in bytes.
+     */
+    suspend fun setWorkspaceMaxTotalBytes(bytes: Long)
+
+    /**
      * A [Flow] representing the maximum number of pipeline execution steps.
      * Prevents infinite loops in pipeline graphs. Valid range: 5–100.
      */

@@ -38,6 +38,20 @@ object SettingsDefaults {
     const val TOOL_CALL_TIMEOUT_MS_DEFAULT: Long = 60_000L
 
     /**
+     * Default per-file size ceiling for the agent workspace, in bytes (5 MB).
+     * Caps both the largest file a write will accept and the largest file a text
+     * read will pull into memory wholesale.
+     */
+    const val WORKSPACE_MAX_FILE_SIZE_BYTES_DEFAULT: Long = 5L * 1024 * 1024
+
+    /**
+     * Default workspace-wide total-size ceiling, in bytes (100 MB). A write that
+     * would push the workspace past this is refused, bounding how much device
+     * storage a runaway pipeline can consume.
+     */
+    const val WORKSPACE_MAX_TOTAL_BYTES_DEFAULT: Long = 100L * 1024 * 1024
+
+    /**
      * Default wall-clock timeout for a `CLARIFICATION` node's outstanding question,
      * in milliseconds. Mirrors [TOOL_CALL_TIMEOUT_MS_DEFAULT] today but is exposed
      * as a separate constant so the two can diverge without code-wide impact.
