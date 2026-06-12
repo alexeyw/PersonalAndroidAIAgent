@@ -24,12 +24,13 @@ before the next release ships.
 1. [Getting started](#getting-started)
 2. [Chats](#chats)
 3. [Console](#console)
-4. [Pipelines](#pipelines)
-5. [Browser pipeline editor](#browser-pipeline-editor)
-6. [Tools and MCP](#tools-and-mcp)
-7. [Memory](#memory)
-8. [Settings](#settings)
-9. [Troubleshooting](#troubleshooting)
+4. [Background tasks](#background-tasks)
+5. [Pipelines](#pipelines)
+6. [Browser pipeline editor](#browser-pipeline-editor)
+7. [Tools and MCP](#tools-and-mcp)
+8. [Memory](#memory)
+9. [Settings](#settings)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -274,6 +275,53 @@ tab you used last. The pane auto-scrolls to the latest event as long as
 you are pinned to the bottom; if you scroll up to read older events,
 auto-scroll pauses so you do not lose your place.
 
+### Trace replay after reopening a chat
+
+The console is no longer wiped when the app restarts. The execution
+trace of every run — the console log plus each node's input/output —
+is saved to the encrypted local database as the run executes, and
+opening a chat replays the trace of its active (or most recent) run
+into all three tabs. A run that executed while the app was closed is
+therefore fully inspectable afterwards: what the agent did, which
+tools it called, and what every node received and produced. If the run
+is still executing, live events continue seamlessly below the replayed
+history. **Clear console** keeps working on top of a replayed trace —
+cleared rows stay hidden until you switch sessions or send a new
+message.
+
+### Reopening a chat while a run is in flight
+
+Closing the chat — or the whole app UI — no longer disconnects you from
+a run that is still working. When you open a session, the app checks
+the persistent run record and reattaches accordingly:
+
+- **Run still executing** — the chat reconnects to the live run
+  without restarting it: the generating indicator returns, streaming
+  continues, and the console picks up where the replayed trace ends.
+- **Run waiting on you** — a pending tool approval or clarification
+  question is restored as its card in the message stream, so a request
+  raised while you were away is never lost behind a spinner.
+- **Run finished in the background** — the final answer is already in
+  the conversation and the console holds the full trace; nothing
+  restarts.
+- **Run interrupted** — if the process died mid-run (battery
+  optimisation, memory pressure, swiping the app away), the chat shows
+  a **Run interrupted** card naming the node the run stopped at, with
+  **Resume** and **Discard** buttons. *Discard* dismisses the run for
+  good. *Resume* continues from the checkpoint: nodes that already
+  finished replay their recorded results instantly (no re-inference),
+  and execution restarts at the first unfinished node. A tool call the
+  run died on is never replayed — the tool may or may not have acted —
+  so it runs again from scratch, asking for your approval as usual.
+  Resume is offered while the interruption is younger than the
+  **Resume window** setting (default 48 hours) and the pipeline has not
+  been edited since the run started; an edited or deleted pipeline
+  means the task can only be restarted from the beginning.
+
+Conversations with a run still working in the background are easy to
+spot: their row in the thread drawer shows a small in-progress
+indicator next to the title.
+
 ### Approving a tool call
 
 If the agent needs your approval to run a sensitive or destructive
@@ -283,6 +331,83 @@ a colour-coded risk pill (`READ` / `SENS` / `DEST`), and **Approve** /
 **Deny** buttons. Destructive tools also require typing the literal
 tool name as a typed-confirm gate before the **Approve** button is
 enabled.
+
+An unanswered request does not fail the run. When the live waiting
+window elapses — say a scheduled run hits a sensitive tool at 6 a.m. —
+the run parks in a persistent waiting state and an ongoing notification
+becomes your way back to it; swiping the notification away simply
+re-posts it. For read-only and sensitive tools, **Approve** and
+**Deny** work straight from the notification, even if the app process
+has since been killed: the run resumes from its checkpoint and the
+tool call is re-validated before your stored decision is applied.
+Destructive tools never execute from a notification — it offers
+**Deny** and a **Review in chat** link to the regular typed-confirm
+card. Clarifying questions park the same way under an **Agent needs
+your input** notification that deep-links back to the chat. Parked
+requests expire after the **Settings → Approval window** period
+(default 24 hours); an expired run fails with *Approval window
+expired*.
+
+---
+
+## Background tasks
+
+A pipeline run does not need the screen. This section is the
+one-stop summary of what happens when the app goes away mid-run; the
+chat-level details live in [Chats](#chats).
+
+### What happens when you close the app during a run
+
+- **Backgrounding the app** keeps the run alive: a foreground service
+  (or, for scheduled tasks, the worker itself) holds the process while
+  inference continues, with a persistent status notification.
+- **Process death** (battery optimisation, memory pressure, swiping
+  the app away) cannot be survived in place — but every run writes its
+  progress to the encrypted database as it executes. On the next app
+  start the run is detected and marked **interrupted**, and its chat
+  shows a **Run interrupted** card with **Resume** / **Discard**.
+  *Resume* continues from the checkpoint — finished nodes replay their
+  recorded results instantly, only unfinished work re-executes (see
+  [Reopening a chat while a run is in flight](#reopening-a-chat-while-a-run-is-in-flight)).
+- **A run that finishes in the background** lands its answer in the
+  conversation as usual; open the chat and the full console trace is
+  there to replay.
+
+### Notifications
+
+| Notification | When | Actions |
+|---|---|---|
+| *Agent is working* (persistent) | While a run executes in the background | Opens the app |
+| *Approval required* | A sensitive/destructive tool call awaits your decision | **Approve** / **Deny** (destructive: **Deny** / **Review in chat**) |
+| *Agent needs your input* | A clarification question is waiting | Deep-links into the chat |
+| *Task completed* / *Task failed* | A scheduled task finished | Opens the conversation the result landed in |
+| *Still running* (optional ping) | A long backgrounded run is still going | Opens the app |
+
+Approval and clarification requests survive process death: the staged
+request is stored persistently, and acting on the notification resumes
+the run from its checkpoint even if the app was killed in between. An
+unanswered request waits for the **Approval window** setting (default
+24 hours, Settings → LLM parameters) and then fails the run with
+*Approval window expired*.
+
+### Run history and retention
+
+Every run's record and trace are kept in the encrypted local database
+so chats can reattach, traces can replay, and interrupted runs can
+resume. To keep that history from growing forever, a daily maintenance
+pass (it runs while the device is charging and idle) deletes old
+finished runs and their traces:
+
+- **Keep run history per chat** (Settings → Privacy, default 20) — each
+  conversation keeps its most recent runs; older finished ones are
+  removed.
+- **Run history max age** (Settings → Privacy, default 30 days) —
+  finished runs older than this are removed regardless of count.
+
+Runs still waiting on an approval or clarification are never removed by
+retention — they stay until you respond or their approval window
+expires. Deleting a conversation removes its runs and traces
+immediately.
 
 ---
 
@@ -598,6 +723,26 @@ For a marketing-style preview of this screen see
 [`docs/images/hero-tools.png`](images/hero-tools.png)
 (dark variant: [`hero-tools-dark.png`](images/hero-tools-dark.png)).
 
+### Where scheduled task results land
+
+A task created with **schedule_task** executes through the same
+pipeline as an interactive message, and its result lands in the
+conversation that scheduled it: when the task fires, the prompt
+appears as a user message, intermediate steps go to the console, and
+the final answer arrives as a regular agent reply. Opening the chat
+later shows the exchange as if the run had happened on screen — and if
+the chat is already open when the task fires, the run attaches live.
+
+If the original conversation was deleted before the task fired (or the
+task predates session binding), the result is delivered to a fresh
+conversation named after the task, e.g. *Scheduled: check the news*.
+
+When a scheduled run finishes, the app posts a **Task completed**
+notification with the first line of the answer — or **Task failed**
+with the reason — and tapping it opens the conversation. The
+announcement can be turned off with **Settings → Notifications →
+Scheduled task results** (on by default).
+
 ### Risk levels and human-in-the-loop
 
 Every tool declares a **risk level** that controls whether the agent
@@ -827,6 +972,13 @@ The "Reset to defaults" action restores every slider in this card.
 - **Max steps** (5 – 100) — pipeline-iteration cap (same value
   as Restrictions → Cap autonomous steps; the two surfaces share
   the underlying preference).
+- **Resume window** (1 – 168 hours, default 48) — how long an
+  interrupted run stays resumable from its checkpoint. Older
+  interrupted runs only offer **Discard** — their recorded context
+  grows stale with time.
+- **Approval window** (1 – 168 hours, default 24) — how long a run
+  parked on an unanswered tool approval or clarifying question waits
+  for your response before failing with *Approval window expired*.
 
 ### Local Model
 
@@ -907,6 +1059,11 @@ The action trio:
 - **Long-running tasks** — when on, a low-importance system
   notification fires when a backgrounded pipeline run exceeds the
   long-running threshold.
+- **Scheduled task results** — when on, finishing a scheduled
+  background task posts a **Task completed** notification with the
+  first line of the answer (or **Task failed** with the reason);
+  tapping it opens the conversation the result landed in. On by
+  default.
 
 ### Privacy
 
@@ -919,6 +1076,14 @@ The action trio:
   snippet and similarity score (see [Console](#console)), and the
   background compaction pass logs which chunks it merged. A local
   diagnostic only — nothing leaves the device.
+- **Keep run history per chat** — slider (5–100, default 20): how many
+  most-recent pipeline runs each conversation keeps. Older finished
+  runs and their traces are deleted by the daily maintenance pass (see
+  [Background tasks](#background-tasks)).
+- **Run history max age** — slider (7–180 days, default 30): finished
+  runs older than this are deleted regardless of the per-chat count.
+  Runs still waiting on an approval or clarification are never removed
+  by retention.
 - **Reset all settings** — typed-confirm dialog that restores
   every preference to defaults (API keys, downloaded models, and
   memory are untouched).

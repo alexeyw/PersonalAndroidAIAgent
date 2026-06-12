@@ -15,6 +15,136 @@ details.
 
 ### Added
 
+- **Run-history retention.** Persistent pipeline runs and their traces
+  no longer accumulate forever: a daily maintenance pass (WorkManager,
+  charging + idle — the same window as memory compaction) deletes
+  finished runs that fall outside the most-recent window of each chat
+  or exceed the maximum age, together with their traces (and legacy
+  pre-run trace rows). Two new **Settings → Privacy** sliders control
+  the limits: **Keep run history per chat** (5–100, default 20) and
+  **Run history max age** (7–180 days, default 30). Only settled runs
+  are eligible — a run parked on a background approval or clarification
+  is never removed while it waits; its lifetime stays bounded by the
+  approval window. Documented in `SECURITY.md` as a mitigating control
+  for the at-rest accumulation of user-derived content.
+
+- **Background approvals and questions survive app death.** A run that
+  hits a tool-approval gate or a clarifying question no longer fails
+  when nobody answers within the live timeout: it parks in a persistent
+  waiting state instead. The pending request (tool name, arguments and
+  risk — or the generated question) is stored on-device, the engine and
+  foreground service are released, and an ongoing notification becomes
+  the way back to the run — swiping it away re-posts it from the stored
+  request. Approve / Deny act directly from the notification for
+  read-only and sensitive tools and work even after the process died:
+  the decision is recorded one-shot and the run resumes from its
+  checkpoint, re-validating the tool call so a stale approval can never
+  authorise different arguments. Destructive tools keep their typed
+  confirmation — the notification offers Deny plus a *Review in chat*
+  deep link. Clarifications park the same way under an *Agent needs
+  your input* notification, and the answer given in chat resumes the
+  run without re-generating the question. Unanswered requests expire
+  after the new **Settings → Approval window** period (default 24 h,
+  1–168 h): a periodic maintenance pass fails the run with *Approval
+  window expired*.
+
+- **Scheduled tasks land their results in chat.** A task created with
+  `schedule_task` now executes through the exact same task-queue →
+  engine path as an interactive message and is bound to the
+  conversation that scheduled it: when the task fires, the stored
+  prompt is saved as a user message, intermediate node output goes to
+  the console trace, and the final answer arrives as a regular agent
+  reply — reopening the chat shows the run as if it had happened on
+  screen, and a chat that is already open attaches to the run live. If
+  the originating conversation was deleted before the task fired, the
+  result is delivered to a fresh auto-named session
+  (*Scheduled: &lt;task text&gt;*). Scheduled runs are recorded with
+  `SCHEDULER` origin and run at normal queue priority so they never
+  preempt an interactive request, and the executing worker promotes
+  itself to a foreground service for the duration of inference
+  (releasing the model afterwards when nothing else owns it).
+
+- **"Task completed" / "Task failed" notifications.** Finishing a
+  scheduled background run now posts a default-importance system
+  notification — the completion variant carries the first line of the
+  final answer, the failure variant the recorded reason — and tapping
+  it deep-links straight into the conversation the result landed in.
+  Announcements live on their own notification channel, separate from
+  the high-importance approval prompts, and respect the new
+  **Settings → Notifications → Scheduled task results** toggle
+  (on by default). Cancelled and interrupted runs are deliberately not
+  announced.
+
+- **Checkpoint resume for interrupted runs.** The **Resume** button on the
+  "Run interrupted" card now works: the run continues from its last
+  completed node instead of starting over. Node results recorded in the
+  persistent trace — including condition / router branch decisions and
+  the long-term-memory context retrieved by the original run — replay
+  without re-inference, so a background run killed mid-pipeline only pays
+  for the nodes it never finished. Tool calls are the deliberate
+  exception: a tool node the run died on is never replayed (whether its
+  side effects happened is unknowable) and re-executes with a fresh
+  human-in-the-loop approval, while a tool that demonstrably finished
+  reuses its recorded observation. Resume is refused with an explicit
+  message when the pipeline was edited or deleted since the run started
+  (graph content-hash check) and when the interruption is older than the
+  new **Resume window** setting (1–168 hours, default 48) — expired runs
+  offer Discard only. Database schema v32 adds the recorded routing
+  verdicts and the originating prompt to the encrypted run records.
+
+- **Persistent pipeline-run records.** Every pipeline run is now a
+  first-class row in the encrypted local database (`pipeline_runs`,
+  schema v30): enqueueing creates a `QUEUED` record, the engine writes
+  the node currently executing and the human-in-the-loop suspension
+  statuses (`WAITING_APPROVAL` / `WAITING_CLARIFICATION`) as it walks the
+  graph, and the task queue settles the record as `COMPLETED`, `FAILED`
+  or `CANCELLED` (user stop is recorded distinctly from failure).
+  Runs stranded by a process death — Doze, an OOM kill, a swipe from
+  recents — are detected on the next launch and finalised as
+  `INTERRUPTED` instead of silently vanishing; the detection is
+  ownership-based (runs created by the live process are never touched),
+  so a run still executing in the background — kept alive by the
+  foreground service or a scheduled worker — survives reopening the app
+  untouched. Each record also captures
+  a content hash of the executing graph (cosmetic edits such as canvas
+  moves excluded), laying the groundwork for resuming interrupted runs
+  from their last completed node. Deleting a chat session removes its
+  run records as well.
+
+- **Persistent run trace with console replay.** The execution trace of a
+  run — every console log line plus each node's input/output snapshot —
+  is now written through to the encrypted database (`trace_steps`
+  extended with run attribution, schema v31) instead of living only in
+  ViewModel memory. Writes are buffered and land in batches (by size or
+  a short timer, force-flushed whenever the run suspends on a
+  human-in-the-loop request or ends), so trace persistence never
+  competes with on-device inference for disk I/O on every streamed
+  token. Opening a chat replays the trace of the active (or most
+  recent) run into the console pane: the Logs tab shows the recorded
+  events, and the Vars / Traces tabs are rebuilt from the persisted
+  per-node records — so a run that executed in the background is no
+  longer a black box. Live console events of the same run merge
+  seamlessly on top of the replayed history without duplicates, and
+  pre-existing trace rows survive the upgrade. Deleting a run (future
+  retention cleanup) removes its trace atomically.
+
+- **Chat reattach protocol.** Opening a chat now reconnects the UI to
+  whatever its persistent run record says instead of assuming nothing
+  happened while the screen was away. A run still executing in this
+  process re-attaches to the live state stream without restarting the
+  pipeline; a run suspended on a tool approval or a clarification
+  question restores its card in the message stream from the
+  authoritative pending snapshot (the in-memory stream's replay slot
+  may have been overwritten by console events); a run that finished in
+  the background renders normally on top of the replayed trace. A run
+  that died with its process surfaces a **Run interrupted** status card
+  naming the node it stopped at, with **Resume** and **Discard**
+  actions — Discard settles the record as failed ("Discarded by user"),
+  while Resume is wired end-to-end and reports that checkpoint-resume
+  is not available yet (it ships with the resume mechanism). Threads
+  that own a run in any active status show an in-progress indicator in
+  the drawer list, so background work is visible at a glance.
+
 - **Re-embed reminder banner.** *Settings → Memory* now shows a persistent
   warning under the embedding-provider dropdown whenever the stored memory
   vectors were created with a different provider than the active one —

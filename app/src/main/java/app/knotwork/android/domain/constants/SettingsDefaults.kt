@@ -44,6 +44,67 @@ object SettingsDefaults {
      */
     const val CLARIFICATION_TIMEOUT_MS_DEFAULT: Long = 60_000L
 
+    /**
+     * Default window, in hours, during which an interrupted pipeline run can
+     * be resumed from its checkpoint. Older interrupted runs only offer the
+     * regular discard path — their recorded context (chat history, memory,
+     * tool observations) is increasingly stale, and replaying it as if no
+     * time had passed gets less defensible the older the run is.
+     */
+    const val RESUME_MAX_AGE_HOURS_DEFAULT: Int = 48
+
+    /** Lower bound enforced when the user edits the resume-window setting. */
+    const val RESUME_MAX_AGE_HOURS_MIN: Int = 1
+
+    /** Upper bound enforced when the user edits the resume-window setting. */
+    const val RESUME_MAX_AGE_HOURS_MAX: Int = 168
+
+    /**
+     * Default window, in hours, during which a run parked on a persistent
+     * HITL request (background approval or clarification) waits for the
+     * user's response. The window counts from the moment the live in-process
+     * waiting phase timed out; once it elapses, the maintenance pass fails
+     * the run with an "Approval window expired" message — an unanswered
+     * request must not keep a run (and its notification) alive forever.
+     */
+    const val BACKGROUND_APPROVAL_WINDOW_HOURS_DEFAULT: Int = 24
+
+    /** Lower bound enforced when the user edits the background-approval-window setting. */
+    const val BACKGROUND_APPROVAL_WINDOW_HOURS_MIN: Int = 1
+
+    /** Upper bound enforced when the user edits the background-approval-window setting. */
+    const val BACKGROUND_APPROVAL_WINDOW_HOURS_MAX: Int = 168
+
+    /**
+     * Default number of most-recent pipeline runs preserved per chat session
+     * by the retention pass. Terminal runs (and their persisted traces, via
+     * the `trace_steps` foreign-key cascade) beyond this count are deleted
+     * during the daily maintenance window. Non-terminal runs — including runs
+     * parked on a background approval or clarification — are never counted
+     * against, nor removed by, retention.
+     */
+    const val TRACE_RETENTION_RUNS_PER_SESSION_DEFAULT: Int = 20
+
+    /** Lower bound enforced when the user edits the runs-per-session retention setting. */
+    const val TRACE_RETENTION_RUNS_PER_SESSION_MIN: Int = 5
+
+    /** Upper bound enforced when the user edits the runs-per-session retention setting. */
+    const val TRACE_RETENTION_RUNS_PER_SESSION_MAX: Int = 100
+
+    /**
+     * Default maximum age, in days, a terminal pipeline run (and its trace)
+     * is kept before the retention pass deletes it regardless of the
+     * per-session count. Bounds how long derived user content (per-node
+     * inputs/outputs, console events) accumulates at rest.
+     */
+    const val TRACE_RETENTION_MAX_AGE_DAYS_DEFAULT: Int = 30
+
+    /** Lower bound enforced when the user edits the max-age retention setting. */
+    const val TRACE_RETENTION_MAX_AGE_DAYS_MIN: Int = 7
+
+    /** Upper bound enforced when the user edits the max-age retention setting. */
+    const val TRACE_RETENTION_MAX_AGE_DAYS_MAX: Int = 180
+
     /** Default maximum number of pipeline steps allowed per user request. */
     const val PIPELINE_MAX_STEPS_DEFAULT: Int = 15
 

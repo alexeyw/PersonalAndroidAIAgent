@@ -1,25 +1,39 @@
 package app.knotwork.android.presentation.ui.chat.home
 
+import app.knotwork.android.domain.constants.SettingsDefaults
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.ClarificationRequest
 import app.knotwork.android.domain.models.LocalModel
+import app.knotwork.android.domain.models.NodeModel
+import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
+import app.knotwork.android.domain.models.PipelineRun
+import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.Role
+import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.ClarificationRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
+import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
+import app.knotwork.android.domain.repositories.PipelineRunRepository
+import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
+import app.knotwork.android.domain.usecases.PendingSubmissionOutcome
+import app.knotwork.android.domain.usecases.ResumeOutcome
+import app.knotwork.android.domain.usecases.ResumePipelineRunUseCase
 import app.knotwork.android.domain.usecases.SaveMessageToMemoryUseCase
 import app.knotwork.android.domain.usecases.SaveToMemoryOutcome
+import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
+import app.knotwork.android.domain.usecases.SubmitClarificationAnswerUseCase
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ChatRole
 import app.knotwork.design.components.chips.Risk
@@ -87,6 +101,12 @@ class ChatHomeViewModelTest {
     private lateinit var localModelRepository: LocalModelRepository
     private lateinit var loadModelUseCase: LoadModelUseCase
     private lateinit var saveMessageToMemoryUseCase: SaveMessageToMemoryUseCase
+    private lateinit var pipelineRunRepository: PipelineRunRepository
+    private lateinit var runTraceRepository: RunTraceRepository
+    private lateinit var resumePipelineRunUseCase: ResumePipelineRunUseCase
+    private lateinit var pendingInteractionRepository: PendingInteractionRepository
+    private lateinit var submitApprovalDecisionUseCase: SubmitApprovalDecisionUseCase
+    private lateinit var submitClarificationAnswerUseCase: SubmitClarificationAnswerUseCase
 
     private lateinit var sessionsFlow: MutableStateFlow<List<ChatSession>>
     private lateinit var localModelsFlow: MutableStateFlow<List<LocalModel>>
@@ -96,6 +116,7 @@ class ChatHomeViewModelTest {
     private lateinit var defaultPipelineIdFlow: MutableStateFlow<String?>
     private lateinit var maxContextLengthFlow: MutableStateFlow<Int>
     private lateinit var consolePreferredConsoleTabNameFlow: MutableStateFlow<String>
+    private lateinit var activeRunsFlow: MutableStateFlow<Set<String>>
 
     private lateinit var viewModel: ChatHomeViewModel
 
@@ -112,6 +133,26 @@ class ChatHomeViewModelTest {
         localModelRepository = mockk(relaxed = true)
         loadModelUseCase = mockk()
         saveMessageToMemoryUseCase = mockk()
+        pipelineRunRepository = mockk()
+        runTraceRepository = mockk()
+        resumePipelineRunUseCase = mockk()
+        pendingInteractionRepository = mockk(relaxed = true)
+        coEvery { pendingInteractionRepository.getForSession(any()) } returns null
+        submitApprovalDecisionUseCase = mockk(relaxed = true)
+        coEvery { submitApprovalDecisionUseCase(any(), any(), any()) } returns PendingSubmissionOutcome.LiveResumed
+        submitClarificationAnswerUseCase = mockk(relaxed = true)
+        coEvery {
+            submitClarificationAnswerUseCase(any(), any(), any())
+        } returns PendingSubmissionOutcome.LiveResumed
+        coEvery { pipelineRunRepository.getActiveRunForSession(any()) } returns null
+        coEvery { pipelineRunRepository.getLatestRunForSession(any()) } returns null
+        coEvery { runTraceRepository.getTraceForRun(any()) } returns emptyList()
+        every { settingsRepository.resumeMaxAgeHours } returns
+            MutableStateFlow(SettingsDefaults.RESUME_MAX_AGE_HOURS_DEFAULT)
+        activeRunsFlow = MutableStateFlow(emptySet())
+        every { pipelineRunRepository.observeActiveRunSessionIds() } returns activeRunsFlow
+        every { pipelineRunRepository.observeRunsForSession(any()) } returns flowOf(emptyList())
+        coEvery { clarificationRepository.submitClarification(any(), any()) } returns true
 
         sessionsFlow = MutableStateFlow(emptyList())
         localModelsFlow = MutableStateFlow(emptyList())
@@ -170,7 +211,17 @@ class ChatHomeViewModelTest {
         loadModelUseCase,
         mockk(relaxed = true),
         saveMessageToMemoryUseCase,
-    )
+        pipelineRunRepository,
+        runTraceRepository,
+        resumePipelineRunUseCase,
+        pendingInteractionRepository,
+        submitApprovalDecisionUseCase,
+        submitClarificationAnswerUseCase,
+    ).also { vm ->
+        // Keep the replay projection on the test scheduler so
+        // advanceUntilIdle() deterministically covers it.
+        vm.traceProjectionDispatcher = testDispatcher
+    }
 
     @Test
     fun `init generates session id when none persisted`() = runTest(testDispatcher) {
@@ -735,7 +786,7 @@ class ChatHomeViewModelTest {
     }
 
     @Test
-    fun `approveTool calls resumeWithApproval(true) and flips to Generating`() = runTest(testDispatcher) {
+    fun `approveTool routes the decision and flips to Generating`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
         val sessionId = viewModel.state.value.thread.currentSessionId
@@ -756,13 +807,13 @@ class ChatHomeViewModelTest {
         viewModel.approveTool()
         advanceUntilIdle()
 
-        verify { agentOrchestratorUseCase.resumeWithApproval(sessionId, true) }
+        coVerify { submitApprovalDecisionUseCase(sessionId, true, null) }
         assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
         assertNull(viewModel.state.value.pending.tool)
     }
 
     @Test
-    fun `rejectTool calls resumeWithApproval(false) and appends system denial message`() = runTest(testDispatcher) {
+    fun `rejectTool routes the denial and appends system denial message`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
         val sessionId = viewModel.state.value.thread.currentSessionId
@@ -783,7 +834,7 @@ class ChatHomeViewModelTest {
         viewModel.rejectTool()
         advanceUntilIdle()
 
-        verify { agentOrchestratorUseCase.resumeWithApproval(sessionId, false) }
+        coVerify { submitApprovalDecisionUseCase(sessionId, false, null) }
         coVerify {
             chatRepository.saveMessage(
                 match { msg ->
@@ -821,14 +872,14 @@ class ChatHomeViewModelTest {
         // Empty typed-confirm — Allow must be refused.
         viewModel.approveTool()
         advanceUntilIdle()
-        verify(exactly = 0) { agentOrchestratorUseCase.resumeWithApproval(any(), true) }
+        coVerify(exactly = 0) { submitApprovalDecisionUseCase(any(), true, any()) }
         assertTrue(viewModel.state.value.visual is ChatHomeUiState.HitlConfirm)
 
         // Typing the canonical magic word unlocks the gate.
         viewModel.onTypedConfirmChange("yes")
         viewModel.approveTool()
         advanceUntilIdle()
-        verify { agentOrchestratorUseCase.resumeWithApproval(sessionId, true) }
+        coVerify { submitApprovalDecisionUseCase(sessionId, true, null) }
         assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
     }
 
@@ -839,6 +890,7 @@ class ChatHomeViewModelTest {
         val sessionId = viewModel.state.value.thread.currentSessionId
         val request = ClarificationRequest(
             id = "req-1",
+            sessionId = "session-1",
             question = "Which calendar?",
             options = listOf("Work", "Personal"),
             timeoutMs = 0,
@@ -857,12 +909,13 @@ class ChatHomeViewModelTest {
     }
 
     @Test
-    fun `submitClarificationReply calls repository and flips to Generating`() = runTest(testDispatcher) {
+    fun `submitClarificationReply routes the answer and flips to Generating`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
         val sessionId = viewModel.state.value.thread.currentSessionId
         val request = ClarificationRequest(
             id = "req-7",
+            sessionId = "session-1",
             question = "Q?",
             options = listOf("Yes", "No"),
             timeoutMs = 0,
@@ -878,18 +931,19 @@ class ChatHomeViewModelTest {
         viewModel.submitClarificationReply(" Yes  ")
         advanceUntilIdle()
 
-        coVerify { clarificationRepository.submitClarification("req-7", "Yes") }
+        coVerify { submitClarificationAnswerUseCase(sessionId, "req-7", "Yes") }
         assertNull(viewModel.state.value.pending.clarification)
         assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
     }
 
     @Test
-    fun `clarification watchdog submits default answer on timeout`() = runTest(testDispatcher) {
+    fun `clarification card outlives its live timeout without auto-submitting a default`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
         val sessionId = viewModel.state.value.thread.currentSessionId
         val request = ClarificationRequest(
             id = "req-timeout",
+            sessionId = "session-1",
             question = "Pick one",
             options = listOf("Alpha", "Beta"),
             timeoutMs = 500L,
@@ -900,28 +954,20 @@ class ChatHomeViewModelTest {
         }
         viewModel.onComposerValueChange("hi")
         viewModel.sendMessage()
-        // Use runCurrent() not advanceUntilIdle: the latter would skip past the
-        // 500ms watchdog delay and fire the timeout *before* this assertion.
         testScheduler.runCurrent()
         assertEquals(ChatHomeUiState.Clarification, viewModel.state.value.visual)
 
+        // Drive virtual time well past the live window: the repository owns
+        // that timeout (the run then parks persistently) — the UI must NOT
+        // fabricate a default answer, and the card must stay answerable so
+        // the reply can route through the parked-run submission path.
         testScheduler.advanceTimeBy(600L)
         testScheduler.runCurrent()
 
-        coVerify { clarificationRepository.submitClarification("req-timeout", "Alpha") }
-        coVerify {
-            chatRepository.saveMessage(
-                match { msg ->
-                    msg.role == Role.SYSTEM &&
-                        msg.content.contains("Alpha") &&
-                        msg.content.contains("timed out")
-                },
-            )
-        }
-        assertNull(viewModel.state.value.pending.clarification)
-        // Pipeline resumes after the default answer is submitted — keep Generating
-        // until the orchestrator's next state lands.
-        assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
+        coVerify(exactly = 0) { submitClarificationAnswerUseCase(any(), any(), any()) }
+        coVerify(exactly = 0) { clarificationRepository.submitClarification(any(), any()) }
+        assertEquals(request, viewModel.state.value.pending.clarification)
+        assertEquals(ChatHomeUiState.Clarification, viewModel.state.value.visual)
     }
 
     @Test
@@ -931,6 +977,7 @@ class ChatHomeViewModelTest {
         val sessionId = viewModel.state.value.thread.currentSessionId
         val request = ClarificationRequest(
             id = "req-blank",
+            sessionId = "session-1",
             question = "Anything else?",
             options = null,
             timeoutMs = 0,
@@ -946,7 +993,7 @@ class ChatHomeViewModelTest {
         viewModel.submitClarificationReply("   ")
         advanceUntilIdle()
 
-        coVerify { clarificationRepository.submitClarification("req-blank", "") }
+        coVerify { submitClarificationAnswerUseCase(sessionId, "req-blank", "") }
         assertNull(viewModel.state.value.pending.clarification)
         assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
     }
@@ -1190,6 +1237,501 @@ class ChatHomeViewModelTest {
         assertTrue(rows.first().starred)
         assertEquals(a, rows.last().id)
     }
+
+    // region Chat reattach protocol
+
+    /** Builds a [PipelineRun] fixture for the reattach-protocol scenarios. */
+    private fun runRecord(
+        sessionId: String,
+        status: PipelineRunStatus,
+        id: String = "run-1",
+        pipelineId: String? = null,
+        currentNodeId: String? = null,
+        finishedAt: Long? = null,
+        userPrompt: String? = null,
+    ): PipelineRun = PipelineRun(
+        id = id,
+        sessionId = sessionId,
+        pipelineId = pipelineId,
+        origin = RunOrigin.CHAT,
+        status = status,
+        currentNodeId = currentNodeId,
+        startedAt = 0L,
+        finishedAt = finishedAt,
+        errorMessage = null,
+        graphContentHash = null,
+        userPrompt = userPrompt,
+    )
+
+    /** Interrupted-run record fresh and complete enough to offer the Resume CTA. */
+    private fun resumableRunRecord(sessionId: String, id: String): PipelineRun = runRecord(
+        sessionId = sessionId,
+        status = PipelineRunStatus.INTERRUPTED,
+        id = id,
+        finishedAt = System.currentTimeMillis(),
+        userPrompt = "original prompt",
+    )
+
+    /** Persists [sessionId] as the saved session so `initializeSession` restores it. */
+    private fun seedSavedSession(sessionId: String) {
+        savedSessionIdFlow.value = sessionId
+        sessionsFlow.value = listOf(ChatSession(id = sessionId, name = "Existing", updatedAt = 0))
+    }
+
+    @Test
+    fun `given active running run when session opens then UI reattaches without enqueueing`() =
+        runTest(testDispatcher) {
+            val sessionId = "session-running"
+            seedSavedSession(sessionId)
+            coEvery { pipelineRunRepository.getActiveRunForSession(sessionId) } returns
+                runRecord(sessionId, PipelineRunStatus.RUNNING)
+            every { agentOrchestratorUseCase.observe(sessionId) } returns
+                flowOf(AgentOrchestratorState.Thinking("working"))
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
+            verify { agentOrchestratorUseCase.observe(sessionId) }
+            verify(exactly = 0) { agentOrchestratorUseCase.invoke(any(), any(), any()) }
+        }
+
+    @Test
+    fun `given scheduler run starting in the open session then UI attaches to the live stream`() =
+        runTest(testDispatcher) {
+            val sessionId = "session-bg"
+            seedSavedSession(sessionId)
+            val runsFlow = MutableStateFlow<List<PipelineRun>>(emptyList())
+            every { pipelineRunRepository.observeRunsForSession(sessionId) } returns runsFlow
+            every { agentOrchestratorUseCase.observe(sessionId) } returns
+                flowOf(AgentOrchestratorState.Thinking("working"))
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            // Session opened idle: no run yet, nothing to attach to.
+            verify(exactly = 0) { agentOrchestratorUseCase.observe(any()) }
+
+            // A scheduler-origin run fires into the already-open session.
+            runsFlow.value = listOf(
+                runRecord(sessionId, PipelineRunStatus.RUNNING, id = "bg-run-1")
+                    .copy(origin = RunOrigin.SCHEDULER),
+            )
+            advanceUntilIdle()
+
+            assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
+            verify { agentOrchestratorUseCase.observe(sessionId) }
+            verify(exactly = 0) { agentOrchestratorUseCase.invoke(any(), any(), any()) }
+        }
+
+    @Test
+    fun `given same background run emits again then UI does not re-attach`() = runTest(testDispatcher) {
+        val sessionId = "session-bg-2"
+        seedSavedSession(sessionId)
+        val runsFlow = MutableStateFlow<List<PipelineRun>>(emptyList())
+        every { pipelineRunRepository.observeRunsForSession(sessionId) } returns runsFlow
+        every { agentOrchestratorUseCase.observe(sessionId) } returns
+            flowOf(AgentOrchestratorState.Thinking("working"))
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        runsFlow.value = listOf(
+            runRecord(sessionId, PipelineRunStatus.RUNNING, id = "bg-run-2")
+                .copy(origin = RunOrigin.SCHEDULER),
+        )
+        advanceUntilIdle()
+        // Same run transitions status — the id-keyed dedup must not re-subscribe.
+        runsFlow.value = listOf(
+            runRecord(sessionId, PipelineRunStatus.WAITING_APPROVAL, id = "bg-run-2")
+                .copy(origin = RunOrigin.SCHEDULER),
+        )
+        advanceUntilIdle()
+
+        verify(exactly = 1) { agentOrchestratorUseCase.observe(sessionId) }
+    }
+
+    @Test
+    fun `given waiting approval run when session opens then HITL card restored from pending snapshot`() =
+        runTest(testDispatcher) {
+            val sessionId = "session-hitl"
+            seedSavedSession(sessionId)
+            coEvery { pipelineRunRepository.getActiveRunForSession(sessionId) } returns
+                runRecord(sessionId, PipelineRunStatus.WAITING_APPROVAL)
+            // The live replay cache holds a console snapshot, NOT the
+            // WaitingForApproval emission — the card must come from the
+            // persistent-status branch, never from the flow.
+            every { agentOrchestratorUseCase.observe(sessionId) } returns
+                flowOf(AgentOrchestratorState.ConsoleLog(events = emptyList(), runId = "run-1"))
+            every { agentOrchestratorUseCase.pendingApprovalFor(sessionId) } returns
+                AgentOrchestratorState.WaitingForApproval(
+                    toolName = "fs.delete_file",
+                    arguments = "{}",
+                    risk = ToolRisk.SENSITIVE,
+                )
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertTrue(viewModel.state.value.visual is ChatHomeUiState.HitlConfirm)
+            assertEquals("fs.delete_file", viewModel.state.value.pending.tool?.toolName)
+        }
+
+    @Test
+    fun `given waiting clarification run when session opens then clarification card restored from repository`() =
+        runTest(testDispatcher) {
+            val sessionId = "session-clar"
+            seedSavedSession(sessionId)
+            coEvery { pipelineRunRepository.getActiveRunForSession(sessionId) } returns
+                runRecord(sessionId, PipelineRunStatus.WAITING_CLARIFICATION)
+            every { agentOrchestratorUseCase.observe(sessionId) } returns
+                flowOf(AgentOrchestratorState.ConsoleLog(events = emptyList(), runId = "run-1"))
+            val request = ClarificationRequest(
+                id = "req-77",
+                sessionId = sessionId,
+                question = "Which calendar?",
+                options = listOf("Work"),
+                timeoutMs = 0,
+            )
+            val otherSessions = ClarificationRequest(
+                id = "req-foreign",
+                sessionId = "other-session",
+                question = "Unrelated?",
+                options = null,
+                timeoutMs = 0,
+            )
+            every { clarificationRepository.pendingRequests } returns flowOf(listOf(otherSessions, request))
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertEquals(ChatHomeUiState.Clarification, viewModel.state.value.visual)
+            assertEquals("req-77", viewModel.state.value.pending.clarification?.id)
+        }
+
+    @Test
+    fun `given latest run interrupted when session opens then interrupted card surfaces with node label`() =
+        runTest(testDispatcher) {
+            val sessionId = "session-int"
+            seedSavedSession(sessionId)
+            coEvery { pipelineRunRepository.getLatestRunForSession(sessionId) } returns runRecord(
+                sessionId,
+                PipelineRunStatus.INTERRUPTED,
+                id = "run-int",
+                pipelineId = "p1",
+                currentNodeId = "n2",
+            )
+            coEvery { pipelineRepository.getPipelineById("p1") } returns PipelineGraph(
+                id = "p1",
+                name = "Pipeline",
+                nodes = listOf(NodeModel(id = "n2", type = NodeType.LITE_RT, x = 0f, y = 0f, label = "Summarise")),
+            )
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
+            val pending = viewModel.state.value.pending.interrupted
+            assertEquals("run-int", pending?.runId)
+            assertEquals("Summarise", pending?.nodeLabel)
+        }
+
+    @Test
+    fun `given latest run interrupted with deleted pipeline then card falls back to unknown step`() =
+        runTest(testDispatcher) {
+            val sessionId = "session-int-deleted"
+            seedSavedSession(sessionId)
+            coEvery { pipelineRunRepository.getLatestRunForSession(sessionId) } returns runRecord(
+                sessionId,
+                PipelineRunStatus.INTERRUPTED,
+                id = "run-int",
+                pipelineId = "gone",
+                currentNodeId = "n2",
+            )
+            coEvery { pipelineRepository.getPipelineById("gone") } returns null
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertEquals(
+                ChatHomeViewModel.INTERRUPTED_UNKNOWN_NODE_LABEL,
+                viewModel.state.value.pending.interrupted?.nodeLabel,
+            )
+        }
+
+    @Test
+    fun `given latest run completed when session opens then no reattach happens`() = runTest(testDispatcher) {
+        val sessionId = "session-done"
+        seedSavedSession(sessionId)
+        coEvery { pipelineRunRepository.getLatestRunForSession(sessionId) } returns
+            runRecord(sessionId, PipelineRunStatus.COMPLETED)
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertEquals(ChatHomeUiState.Empty, viewModel.state.value.visual)
+        assertNull(viewModel.state.value.pending.interrupted)
+        verify(exactly = 0) { agentOrchestratorUseCase.observe(any()) }
+    }
+
+    @Test
+    fun `selectThread reattaches to the new thread's active run`() = runTest(testDispatcher) {
+        val first = "session-a"
+        val second = "session-b"
+        seedSavedSession(first)
+        sessionsFlow.value = listOf(
+            ChatSession(id = first, name = "A", updatedAt = 0),
+            ChatSession(id = second, name = "B", updatedAt = 0),
+        )
+        coEvery { pipelineRunRepository.getActiveRunForSession(second) } returns
+            runRecord(second, PipelineRunStatus.RUNNING, id = "run-b")
+        every { agentOrchestratorUseCase.observe(second) } returns
+            flowOf(AgentOrchestratorState.Thinking("working"))
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.selectThread(second)
+        advanceUntilIdle()
+
+        assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
+        verify { agentOrchestratorUseCase.observe(second) }
+    }
+
+    @Test
+    fun `discardInterruptedRun settles the run and hides the card`() = runTest(testDispatcher) {
+        val sessionId = "session-discard"
+        seedSavedSession(sessionId)
+        coEvery { pipelineRunRepository.getLatestRunForSession(sessionId) } returns
+            runRecord(sessionId, PipelineRunStatus.INTERRUPTED, id = "run-d")
+        coEvery { pipelineRunRepository.discardInterruptedRun("run-d") } returns Unit
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
+
+        viewModel.discardInterruptedRun()
+        advanceUntilIdle()
+
+        assertNull(viewModel.state.value.pending.interrupted)
+        assertEquals(ChatHomeUiState.Empty, viewModel.state.value.visual)
+        coVerify { pipelineRunRepository.discardInterruptedRun("run-d") }
+    }
+
+    @Test
+    fun `resumeInterruptedRun on success clears the card and flips to Generating`() = runTest(testDispatcher) {
+        val sessionId = "session-resume"
+        seedSavedSession(sessionId)
+        coEvery { pipelineRunRepository.getLatestRunForSession(sessionId) } returns
+            resumableRunRecord(sessionId, id = "run-r")
+        coEvery { resumePipelineRunUseCase("run-r") } returns ResumeOutcome.Resumed
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
+        assertTrue(viewModel.state.value.pending.interrupted?.resumable == true)
+
+        viewModel.resumeInterruptedRun()
+        advanceUntilIdle()
+
+        assertNull(viewModel.state.value.pending.interrupted)
+        assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
+        coVerify { resumePipelineRunUseCase("run-r") }
+    }
+
+    @Test
+    fun `resumeInterruptedRun surfaces GraphChanged feedback and keeps the card`() = runTest(testDispatcher) {
+        val sessionId = "session-resume-gc"
+        seedSavedSession(sessionId)
+        coEvery { pipelineRunRepository.getLatestRunForSession(sessionId) } returns
+            resumableRunRecord(sessionId, id = "run-gc")
+        coEvery { resumePipelineRunUseCase("run-gc") } returns ResumeOutcome.GraphChanged
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val events = mutableListOf<ResumeFeedbackEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.resumeFeedbackEvents.collect { events.add(it) }
+        }
+        runCurrent()
+
+        viewModel.resumeInterruptedRun()
+        advanceUntilIdle()
+
+        assertEquals(listOf(ResumeFeedbackEvent.GraphChanged), events)
+        assertNotNull(viewModel.state.value.pending.interrupted)
+        assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
+    }
+
+    @Test
+    fun `resumeInterruptedRun on Expired demotes the card to discard-only`() = runTest(testDispatcher) {
+        val sessionId = "session-resume-exp"
+        seedSavedSession(sessionId)
+        coEvery { pipelineRunRepository.getLatestRunForSession(sessionId) } returns
+            resumableRunRecord(sessionId, id = "run-exp")
+        coEvery { resumePipelineRunUseCase("run-exp") } returns ResumeOutcome.Expired
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val events = mutableListOf<ResumeFeedbackEvent>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.resumeFeedbackEvents.collect { events.add(it) }
+        }
+        runCurrent()
+
+        viewModel.resumeInterruptedRun()
+        advanceUntilIdle()
+
+        assertEquals(listOf(ResumeFeedbackEvent.Expired), events)
+        assertEquals(false, viewModel.state.value.pending.interrupted?.resumable)
+    }
+
+    @Test
+    fun `interrupted record without the original prompt presents a discard-only card`() = runTest(testDispatcher) {
+        val sessionId = "session-legacy"
+        seedSavedSession(sessionId)
+        coEvery { pipelineRunRepository.getLatestRunForSession(sessionId) } returns
+            runRecord(sessionId, PipelineRunStatus.INTERRUPTED, id = "run-legacy", userPrompt = null)
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
+        assertEquals(false, viewModel.state.value.pending.interrupted?.resumable)
+    }
+
+    @Test
+    fun `interrupted card survives opening and closing the drawer`() = runTest(testDispatcher) {
+        val sessionId = "session-drawer"
+        seedSavedSession(sessionId)
+        coEvery { pipelineRunRepository.getLatestRunForSession(sessionId) } returns
+            runRecord(sessionId, PipelineRunStatus.INTERRUPTED, id = "run-drw")
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
+
+        viewModel.openDrawer()
+        assertEquals(ChatHomeUiState.DrawerOpen, viewModel.state.value.visual)
+        viewModel.closeDrawer()
+
+        // The resting visual must resolve back to Interrupted while the
+        // snapshot is pending — otherwise Resume / Discard become
+        // unreachable until the next thread switch.
+        assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
+        assertNotNull(viewModel.state.value.pending.interrupted)
+    }
+
+    @Test
+    fun `interrupted card surfaces after the drawer closes when reattach resolved mid-overlay`() =
+        runTest(testDispatcher) {
+            val sessionId = "session-drawer-open"
+            seedSavedSession(sessionId)
+            coEvery { pipelineRunRepository.getLatestRunForSession(sessionId) } returns
+                runRecord(sessionId, PipelineRunStatus.INTERRUPTED, id = "run-mid")
+
+            viewModel = createViewModel()
+            // Drawer goes up before the reattach lookup lands.
+            viewModel.openDrawer()
+            advanceUntilIdle()
+
+            // The overlay is never yanked away…
+            assertEquals(ChatHomeUiState.DrawerOpen, viewModel.state.value.visual)
+            // …but the pending snapshot is installed, so closing the drawer
+            // settles straight onto the interrupted card.
+            assertNotNull(viewModel.state.value.pending.interrupted)
+            viewModel.closeDrawer()
+            assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
+        }
+
+    @Test
+    fun `clarification restore does not re-arm the UI watchdog`() = runTest(testDispatcher) {
+        val sessionId = "session-clar-watchdog"
+        seedSavedSession(sessionId)
+        coEvery { pipelineRunRepository.getActiveRunForSession(sessionId) } returns
+            runRecord(sessionId, PipelineRunStatus.WAITING_CLARIFICATION)
+        every { agentOrchestratorUseCase.observe(sessionId) } returns
+            flowOf(AgentOrchestratorState.ConsoleLog(events = emptyList(), runId = "run-1"))
+        val request = ClarificationRequest(
+            id = "req-wd",
+            sessionId = sessionId,
+            question = "Which calendar?",
+            options = listOf("Work"),
+            timeoutMs = 60_000L,
+        )
+        every { clarificationRepository.pendingRequests } returns flowOf(listOf(request))
+
+        viewModel = createViewModel()
+        // advanceUntilIdle would run a re-armed 60s watchdog to completion —
+        // the repository's authoritative timeout has been ticking since the
+        // request was raised, so the restore path must not start a second,
+        // desynchronized clock that later submits a spurious default.
+        advanceUntilIdle()
+
+        assertEquals(ChatHomeUiState.Clarification, viewModel.state.value.visual)
+        coVerify(exactly = 0) { clarificationRepository.submitClarification(any(), any()) }
+    }
+
+    @Test
+    fun `given stale clarification when reply not delivered then SYSTEM row records it`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        val request = ClarificationRequest(
+            id = "req-stale",
+            sessionId = sessionId,
+            question = "Which calendar?",
+            options = listOf("Work"),
+            timeoutMs = 0,
+        )
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(AgentOrchestratorState.AwaitingClarification(request))
+            delay(10_000)
+        }
+        // Neither a live deferred nor a parked record consumed the reply —
+        // the request resolved before the user's tap arrived.
+        coEvery {
+            submitClarificationAnswerUseCase(sessionId, "req-stale", "Work")
+        } returns PendingSubmissionOutcome.NothingPending
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        runCurrent()
+
+        viewModel.submitClarificationReply("Work")
+        advanceUntilIdle()
+
+        coVerify {
+            chatRepository.saveMessage(
+                match {
+                    it.role == Role.SYSTEM &&
+                        it.content == ChatHomeViewModel.SYSTEM_MESSAGE_CLARIFICATION_REPLY_NOT_DELIVERED
+                },
+            )
+        }
+    }
+
+    @Test
+    fun `thread rows flag sessions with active background runs`() = runTest(testDispatcher) {
+        val foreground = "session-fg"
+        val background = "session-bg"
+        seedSavedSession(foreground)
+        sessionsFlow.value = listOf(
+            ChatSession(id = foreground, name = "Foreground", updatedAt = 100L),
+            ChatSession(id = background, name = "Background", updatedAt = 50L),
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        activeRunsFlow.value = setOf(background)
+        advanceUntilIdle()
+
+        val rows = viewModel.state.value.thread.rows
+        assertTrue(rows.first { it.id == background }.running)
+        assertTrue(!rows.first { it.id == foreground }.running)
+    }
+
+    // endregion
 
     private companion object {
         const val DEFAULT_TOKENS_MAX: Int = 4096

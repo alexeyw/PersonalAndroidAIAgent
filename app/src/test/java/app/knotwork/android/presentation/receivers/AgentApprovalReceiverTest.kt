@@ -5,11 +5,23 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import app.knotwork.android.domain.constants.TimeAndIdConstants
-import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
+import app.knotwork.android.domain.models.PendingInteraction
+import app.knotwork.android.domain.models.PendingInteractionKind
+import app.knotwork.android.domain.models.ToolRisk
+import app.knotwork.android.domain.repositories.PendingInteractionRepository
+import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.services.ClarificationNotifier
+import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
 import app.knotwork.android.presentation.notifications.ApprovalNotificationManager
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.confirmVerified
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
@@ -20,35 +32,46 @@ import org.robolectric.Shadows
 
 /**
  * Robolectric coverage for [AgentApprovalReceiver] — the broadcast receiver that
- * translates the Approve / Deny notification action buttons into
- * `AgentOrchestratorUseCase.resumeWithApproval` calls.
+ * routes the Approve / Deny notification actions through
+ * [SubmitApprovalDecisionUseCase] (live gate or parked record) and re-posts
+ * persistent notifications on [ApprovalAction.REPOST].
  *
  * The receiver is `@AndroidEntryPoint`; rather than spin up a full
  * `HiltTestApplication` runner just to instantiate one receiver, we flip the
  * private `injected` flag in the generated `Hilt_AgentApprovalReceiver`
- * superclass via reflection and assign the `@Inject lateinit var` field by
- * hand (same pattern used by `AgentForegroundServiceTest`). The end result is
- * a receiver whose `onReceive` runs the production code path unmodified
- * against a mocked orchestrator.
+ * superclass via reflection and assign the `@Inject lateinit var` fields by
+ * hand (same pattern used by `AgentForegroundServiceTest`). The receiver's
+ * own scope is replaced with an unconfined test scope so the bridged
+ * suspending work completes synchronously inside each test body.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
 class AgentApprovalReceiverTest {
 
     private lateinit var context: Context
-    private lateinit var orchestrator: AgentOrchestratorUseCase
+    private lateinit var submitDecision: SubmitApprovalDecisionUseCase
+    private lateinit var pendingInteractionRepository: PendingInteractionRepository
+    private lateinit var approvalNotifier: ApprovalNotifier
+    private lateinit var clarificationNotifier: ClarificationNotifier
     private lateinit var receiver: AgentApprovalReceiver
 
     @Before
     fun setup() {
         context = RuntimeEnvironment.getApplication()
-        orchestrator = mockk(relaxed = true)
+        submitDecision = mockk(relaxed = true)
+        pendingInteractionRepository = mockk(relaxed = true)
+        approvalNotifier = mockk(relaxed = true)
+        clarificationNotifier = mockk(relaxed = true)
         receiver = AgentApprovalReceiver().also { instance ->
             // Bypass Hilt's auto-inject — flip the generated `injected` flag and assign
-            // the `@Inject lateinit var` directly. See class KDoc for rationale.
+            // the `@Inject lateinit var`s directly. See class KDoc for rationale.
             val injectedField = instance.javaClass.superclass!!.getDeclaredField("injected")
             injectedField.isAccessible = true
             injectedField.setBoolean(instance, true)
-            instance.orchestratorUseCase = orchestrator
+            instance.submitApprovalDecisionUseCase = submitDecision
+            instance.pendingInteractionRepository = pendingInteractionRepository
+            instance.approvalNotifier = approvalNotifier
+            instance.clarificationNotifier = clarificationNotifier
         }
     }
 
@@ -67,100 +90,137 @@ class AgentApprovalReceiverTest {
         notificationManager().notify(expectedNotificationId(sessionId), notification)
     }
 
-    private fun intent(action: String?, sessionId: String?): Intent = Intent().apply {
+    private fun intent(action: String?, sessionId: String?, runId: String? = null): Intent = Intent().apply {
         if (action != null) this.action = action
-        if (sessionId != null) putExtra("sessionId", sessionId)
+        if (sessionId != null) putExtra(AgentApprovalReceiver.EXTRA_SESSION_ID, sessionId)
+        if (runId != null) putExtra(AgentApprovalReceiver.EXTRA_RUN_ID, runId)
+    }
+
+    /** Runs [body] with the receiver's scope bound to the test's unconfined dispatcher. */
+    private fun runReceiverTest(body: suspend () -> Unit) = runTest {
+        receiver.scope = CoroutineScope(UnconfinedTestDispatcher(testScheduler))
+        body()
     }
 
     @Test
-    fun `given APPROVE action when onReceive then resumeWithApproval is called with true`() {
+    fun `given APPROVE action when onReceive then decision use case is called with true`() = runReceiverTest {
         receiver.onReceive(context, intent(ApprovalAction.APPROVE.action, "s1"))
 
-        verify(exactly = 1) { orchestrator.resumeWithApproval("s1", true) }
-        confirmVerified(orchestrator)
+        coVerify(exactly = 1) { submitDecision("s1", true, null) }
+        confirmVerified(submitDecision)
     }
 
     @Test
-    fun `given DENY action when onReceive then resumeWithApproval is called with false`() {
+    fun `given DENY action when onReceive then decision use case is called with false`() = runReceiverTest {
         receiver.onReceive(context, intent(ApprovalAction.DENY.action, "s1"))
 
-        verify(exactly = 1) { orchestrator.resumeWithApproval("s1", false) }
-        confirmVerified(orchestrator)
+        coVerify(exactly = 1) { submitDecision("s1", false, null) }
+        confirmVerified(submitDecision)
     }
 
     @Test
-    fun `given unknown action when onReceive then orchestrator is not called`() {
+    fun `given APPROVE with runId extra when onReceive then run id reaches the use case`() = runReceiverTest {
+        receiver.onReceive(context, intent(ApprovalAction.APPROVE.action, "s1", runId = "run-1"))
+
+        coVerify(exactly = 1) { submitDecision("s1", true, "run-1") }
+    }
+
+    @Test
+    fun `given unknown action when onReceive then nothing is dispatched`() = runReceiverTest {
         receiver.onReceive(context, intent("app.knotwork.android.ACTION_UNKNOWN", "s1"))
 
-        // Unknown actions hit the `null -> Unit` branch; the receiver still
-        // dismisses the notification but must not advance the orchestrator.
-        verify(exactly = 0) { orchestrator.resumeWithApproval(any(), any()) }
-        confirmVerified(orchestrator)
+        coVerify(exactly = 0) { submitDecision(any(), any(), any()) }
+        confirmVerified(submitDecision)
     }
 
     @Test
-    fun `given null action when onReceive then orchestrator is not called`() {
-        receiver.onReceive(context, intent(action = null, sessionId = "s1"))
-
-        verify(exactly = 0) { orchestrator.resumeWithApproval(any(), any()) }
-        confirmVerified(orchestrator)
-    }
-
-    @Test
-    fun `given missing sessionId extra when onReceive then orchestrator skipped and notification kept`() {
-        // Post a placeholder at a slot that *would* be cancelled if the receiver
-        // continued past the sessionId guard — used to prove the early return.
+    fun `given missing sessionId extra when onReceive then use case skipped and notification kept`() = runReceiverTest {
         postPlaceholder("would-be-cancelled")
         assertEquals(1, Shadows.shadowOf(notificationManager()).size())
 
         receiver.onReceive(context, intent(ApprovalAction.APPROVE.action, sessionId = null))
 
-        verify(exactly = 0) { orchestrator.resumeWithApproval(any(), any()) }
-        confirmVerified(orchestrator)
-        // Pre-existing notification must still be there — the receiver returned
-        // before reaching the cancel call.
+        coVerify(exactly = 0) { submitDecision(any(), any(), any()) }
+        // Pre-existing notification must still be there — the receiver
+        // returned before reaching the cancel call.
         assertEquals(1, Shadows.shadowOf(notificationManager()).size())
     }
 
     @Test
-    fun `given a pending notification when onReceive APPROVE then it is cancelled at the matching id`() {
-        val sessionId = "session-cancel"
-        postPlaceholder(sessionId)
-        assertEquals(
-            "Precondition: placeholder notification must be posted before onReceive runs",
-            1,
-            Shadows.shadowOf(notificationManager()).size(),
+    fun `given a pending notification when onReceive APPROVE then it is cancelled at the matching id`() =
+        runReceiverTest {
+            val sessionId = "session-cancel"
+            postPlaceholder(sessionId)
+            assertEquals(
+                "Precondition: placeholder notification must be posted before onReceive runs",
+                1,
+                Shadows.shadowOf(notificationManager()).size(),
+            )
+
+            receiver.onReceive(context, intent(ApprovalAction.APPROVE.action, sessionId))
+
+            assertEquals(0, Shadows.shadowOf(notificationManager()).size())
+            coVerify(exactly = 1) { submitDecision(sessionId, true, null) }
+        }
+
+    @Test
+    fun `given REPOST for a parked approval when onReceive then notification reposted from record`() = runReceiverTest {
+        coEvery { pendingInteractionRepository.getForRun("run-1") } returns PendingInteraction(
+            runId = "run-1",
+            sessionId = "s1",
+            kind = PendingInteractionKind.APPROVAL,
+            toolName = "send_email",
+            toolArgs = "{\"to\":\"a@b.c\"}",
+            risk = ToolRisk.DESTRUCTIVE,
+            requestedAt = 0L,
         )
 
-        receiver.onReceive(context, intent(ApprovalAction.APPROVE.action, sessionId))
+        receiver.onReceive(context, intent(ApprovalAction.REPOST.action, "s1", runId = "run-1"))
 
-        // Notification at the documented partitioned slot must be cleared.
-        assertEquals(0, Shadows.shadowOf(notificationManager()).size())
-        verify(exactly = 1) { orchestrator.resumeWithApproval(sessionId, true) }
+        verify(exactly = 1) {
+            approvalNotifier.sendPersistentApprovalRequest(
+                runId = "run-1",
+                sessionId = "s1",
+                toolName = "send_email",
+                arguments = "{\"to\":\"a@b.c\"}",
+                risk = ToolRisk.DESTRUCTIVE,
+            )
+        }
+        coVerify(exactly = 0) { submitDecision(any(), any(), any()) }
     }
 
     @Test
-    fun `given an unknown action and a pending notification when onReceive then notification is still cancelled`() {
-        // Documents current behaviour: notification cancellation happens before the
-        // action-dispatch `when`, so even an unknown action clears the slot. This
-        // is intentional — once the user has tapped the notification at all, the
-        // shade entry is consumed.
-        val sessionId = "session-cancel"
-        postPlaceholder(sessionId)
+    fun `given REPOST for a parked clarification when onReceive then question notification reposted`() =
+        runReceiverTest {
+            coEvery { pendingInteractionRepository.getForRun("run-2") } returns PendingInteraction(
+                runId = "run-2",
+                sessionId = "s2",
+                kind = PendingInteractionKind.CLARIFICATION,
+                question = "Which city?",
+                requestedAt = 0L,
+            )
 
-        receiver.onReceive(context, intent("app.knotwork.android.ACTION_UNKNOWN", sessionId))
+            receiver.onReceive(context, intent(ApprovalAction.REPOST.action, "s2", runId = "run-2"))
 
-        assertEquals(0, Shadows.shadowOf(notificationManager()).size())
-        verify(exactly = 0) { orchestrator.resumeWithApproval(any(), any()) }
+            verify(exactly = 1) {
+                clarificationNotifier.sendPersistentClarificationRequest("run-2", "s2", "Which city?")
+            }
+        }
+
+    @Test
+    fun `given REPOST with no surviving record when onReceive then nothing reposted`() = runReceiverTest {
+        coEvery { pendingInteractionRepository.getForRun("run-3") } returns null
+
+        receiver.onReceive(context, intent(ApprovalAction.REPOST.action, "s3", runId = "run-3"))
+
+        verify(exactly = 0) { approvalNotifier.sendPersistentApprovalRequest(any(), any(), any(), any(), any()) }
+        verify(exactly = 0) { clarificationNotifier.sendPersistentClarificationRequest(any(), any(), any()) }
     }
 
     @Test
-    fun `given two APPROVE intents in a row when onReceive then resumeWithApproval is invoked twice`() {
-        // Documents that the receiver has no internal dedup — repeated broadcasts
-        // forward through. Dedup, if needed, is the orchestrator's responsibility.
-        receiver.onReceive(context, intent(ApprovalAction.APPROVE.action, "s1"))
-        receiver.onReceive(context, intent(ApprovalAction.APPROVE.action, "s1"))
+    fun `given REPOST without runId when onReceive then record is never queried`() = runReceiverTest {
+        receiver.onReceive(context, intent(ApprovalAction.REPOST.action, "s4"))
 
-        verify(exactly = 2) { orchestrator.resumeWithApproval("s1", true) }
+        coVerify(exactly = 0) { pendingInteractionRepository.getForRun(any()) }
     }
 }

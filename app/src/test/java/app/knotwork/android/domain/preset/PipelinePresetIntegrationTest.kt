@@ -32,11 +32,13 @@ import app.knotwork.android.domain.repositories.CrashReportingRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.MetricsRepository
 import app.knotwork.android.domain.repositories.NetworkActivityTracker
+import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelinePresetRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.usecases.EvaluateIfConditionUseCase
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
@@ -97,6 +99,8 @@ class PipelinePresetIntegrationTest {
     private lateinit var apiKeyRepository: ApiKeyRepository
     private lateinit var metricsRepository: MetricsRepository
     private lateinit var approvalNotifier: ApprovalNotifier
+    private lateinit var pendingInteractionRepository: PendingInteractionRepository
+    private lateinit var clarificationNotifier: ClarificationNotifier
     private lateinit var koogClientFactory: KoogClientFactory
     private lateinit var cloudLlmModelResolver: KoogCloudLlmModelResolver
     private lateinit var networkActivityTracker: NetworkActivityTracker
@@ -122,6 +126,10 @@ class PipelinePresetIntegrationTest {
         apiKeyRepository = mockk(relaxed = true)
         metricsRepository = mockk(relaxed = true)
         approvalNotifier = mockk(relaxed = true)
+        pendingInteractionRepository = mockk(relaxed = true)
+        coEvery { pendingInteractionRepository.getForRun(any()) } returns null
+        coEvery { pendingInteractionRepository.save(any()) } returns true
+        clarificationNotifier = mockk(relaxed = true)
         koogClientFactory = mockk(relaxed = true)
         cloudLlmModelResolver = mockk(relaxed = true)
         networkActivityTracker = mockk(relaxed = true)
@@ -138,6 +146,7 @@ class PipelinePresetIntegrationTest {
             settingsRepository,
             approvalNotifier,
             chatRepository,
+            pendingInteractionRepository,
         )
         val nodeExecutorFactory = NodeExecutorFactory(
             InputNodeExecutor(),
@@ -165,7 +174,13 @@ class PipelinePresetIntegrationTest {
             SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
             QueueProcessorNodeExecutor(),
             SummaryNodeExecutor(llmEngine, loadModelUseCase),
-            ClarificationNodeExecutor(llmEngine, loadModelUseCase, clarificationRepository),
+            ClarificationNodeExecutor(
+                llmEngine,
+                loadModelUseCase,
+                clarificationRepository,
+                pendingInteractionRepository,
+                clarificationNotifier,
+            ),
         )
 
         engine = GraphExecutionEngine(
@@ -180,6 +195,8 @@ class PipelinePresetIntegrationTest {
             retrieveRelevantMemoryUseCase,
             crashReportingRepository,
             localModelRepository,
+            mockk(relaxed = true),
+            mockk(relaxed = true),
             mockk(relaxed = true),
         )
 

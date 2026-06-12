@@ -29,6 +29,8 @@
     <string name="settings_row_repetition_penalty_title">Repetition penalty</string>
     <string name="settings_row_max_context_title">Max context</string>
     <string name="settings_row_max_steps_title">Max steps</string>
+    <string name="settings_row_resume_window_title">Resume window</string>
+    <string name="settings_row_approval_window_title">Approval window</string>
     <string name="settings_llm_reset_defaults">Sampling parameters reset to defaults.</string>
 
     <!-- Local model card -->
@@ -70,6 +72,10 @@
     <string name="settings_memory_compaction_subtitle">Clusters stale, unpinned chunks into summaries while the device is charging and idle.</string>
 
     <string name="settings_memory_embedding_title">Embedding model</string>
+
+    <!-- Privacy retention sliders. -->
+    <string name="settings_privacy_retention_runs_title">Keep run history per chat</string>
+    <string name="settings_privacy_retention_age_title">Run history max age</string>
 
     <!-- Memory tuning validation errors surfaced when an out-of-range value is rejected. -->
     <string name="settings_memory_validation_top_k" tools:ignore="PluralsCandidate">Top-K must be between %1$d and %2$d.</string>
@@ -124,6 +130,16 @@
     <string name="notifications_long_running_channel_name">Long-running tasks</string>
     <string name="notifications_long_running_channel_description">Background pipeline-runtime updates.</string>
     <string name="notifications_long_running_body" tools:ignore="PluralsCandidate">Still running · %1$d s elapsed.</string>
+    <!-- Mirrors the hardcoded channel name registered by AgentForegroundService so a
+         headless-process registration by AgentWorker does not rename the user-visible channel. -->
+    <string name="notifications_agent_foreground_channel_name">Agent Service</string>
+    <string name="notifications_scheduled_running_title">Scheduled task</string>
+    <string name="notifications_scheduled_running_body">Agent is working in the background…</string>
+    <string name="notifications_task_results_channel_name">Scheduled task results</string>
+    <string name="notifications_task_results_channel_description">Outcome of scheduled background tasks.</string>
+    <string name="notifications_task_completed_title">Task completed</string>
+    <string name="notifications_task_failed_title">Task failed</string>
+    <string name="scheduled_session_name">Scheduled: %1$s</string>
 
     <!-- About expansion -->
     <string name="about_section_app">Version</string>

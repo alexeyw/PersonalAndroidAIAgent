@@ -80,6 +80,19 @@
     <!-- Header label rendered above the clarification question. -->
     <string name="knotwork_clarification_header">Quick question from the agent</string>
 
+    <!-- ============ InterruptedRunCard ============ -->
+
+    <!-- Header label of the interrupted-run status card. -->
+    <string name="knotwork_interrupted_run_header">Run interrupted</string>
+    <!-- Body line; %1$s is the display label of the node the run stopped at. -->
+    <string name="knotwork_interrupted_run_body">Execution was interrupted at node “%1$s”.</string>
+    <!-- Primary CTA: continue the run from its last completed node. -->
+    <string name="knotwork_interrupted_run_resume">Resume</string>
+    <!-- Secondary CTA: dismiss the interrupted run for good. -->
+    <string name="knotwork_interrupted_run_discard">Discard</string>
+    <!-- Muted note appended when the run can no longer be resumed (window elapsed). -->
+    <string name="knotwork_interrupted_run_expired_note">This run can no longer be resumed.</string>
+
     <!-- ============ ChatComposer ============ -->
 
     <!-- Placeholder for the multiline composer input. -->
@@ -301,6 +314,8 @@
 
     <string name="knotwork_settings_notifications_long_running">Long-running tasks</string>
     <string name="knotwork_settings_notifications_long_running_subtitle">Ping when a pipeline runs &gt; 8 s in background.</string>
+    <string name="knotwork_settings_notifications_scheduled_results">Scheduled task results</string>
+    <string name="knotwork_settings_notifications_scheduled_results_subtitle">Notify when a scheduled task completes or fails.</string>
 
     <string name="knotwork_settings_crash_reporting_label">Send anonymous crash reports</string>
     <string name="knotwork_settings_crash_reporting_hint">Help improve stability by sharing anonymous crash data.</string>
@@ -602,6 +617,8 @@
     <string name="knotwork_chat_home_drawer_edit_cd">Rename thread</string>
     <!-- Drawer per-row starred glyph contentDescription. -->
     <string name="knotwork_chat_home_drawer_starred_cd">Starred</string>
+    <!-- Content description of the trailing in-progress indicator on a thread row with an active background run. -->
+    <string name="knotwork_chat_home_drawer_running_cd">Task in progress</string>
     <!-- Drawer footer entry: import a chat from JSON / text. -->
     <string name="knotwork_chat_home_drawer_import_title">Import chat</string>
     <string name="knotwork_chat_home_drawer_import_subtitle">From JSON / text</string>

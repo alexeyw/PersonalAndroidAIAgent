@@ -109,13 +109,30 @@ configured it.
   mid-pipeline and wait for the reply (human-in-the-loop).
 - Multi-session chats with a priority task queue and a redesigned chat
   home built on the Knotwork design system, covering the documented
-  Empty / Idle / Generating / HITL / Clarification / Error / Drawer /
-  Console-expanded states deterministically. Drawer / overflow secondary
+  Empty / Idle / Generating / HITL / Clarification / Interrupted / Error /
+  Drawer / Console-expanded states deterministically. Drawer / overflow secondary
   affordances — new chat with pipeline picker, rename, favorite, JSON
   import / export, in-chat model picker, Settings deep-link — are wired
   directly into chat home.
 - Background execution as an Android Foreground Service with explicit idle
   and power-state management.
+- Scheduled tasks that report back: a task created with `schedule_task`
+  runs through the same pipeline as an interactive message, lands its
+  result in the conversation that scheduled it (or a fresh auto-named one
+  if that chat was deleted), and announces the outcome with a
+  "Task completed" / "Task failed" notification deep-linking into the
+  session.
+- Chat reattach: reopening a chat reconnects to a run still executing in
+  the background, restores pending approval / clarification cards from the
+  persistent run record, flags busy conversations with an in-progress
+  indicator in the thread drawer, and surfaces a Resume / Discard card for
+  runs interrupted by a process death.
+- Checkpoint resume: an interrupted run continues from its last completed
+  node — recorded node results (including routing decisions and the
+  retrieved memory context) replay from the persisted trace without
+  re-inference, while tool calls the run died on re-execute with a fresh
+  approval. Resume is guarded by a graph content hash (an edited pipeline
+  requires a restart) and a configurable freshness window.
 - Long-term memory with semantic retrieval (RAG) over past conversations,
   including automatic extraction of durable facts from finished conversations
   (toggleable in Settings → Memory), manual "Save to memory" from any chat

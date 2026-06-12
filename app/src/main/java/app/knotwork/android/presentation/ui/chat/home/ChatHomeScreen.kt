@@ -174,6 +174,9 @@ fun ChatHomeScreen(
     val rateComingSoonMessage = stringResource(R.string.chat_message_rate_coming_soon)
     val savedToMemoryMessage = stringResource(R.string.chat_snackbar_saved_to_memory)
     val saveToMemoryFailedMessage = stringResource(R.string.chat_snackbar_save_to_memory_failed)
+    val resumeGraphChangedMessage = stringResource(R.string.chat_snackbar_resume_graph_changed)
+    val resumeExpiredMessage = stringResource(R.string.chat_snackbar_resume_expired)
+    val resumeUnavailableMessage = stringResource(R.string.chat_snackbar_resume_unavailable)
 
     LaunchedEffect(viewModel) {
         viewModel.pipelineFallbackEvents.collect {
@@ -202,6 +205,16 @@ fun ChatHomeScreen(
     LaunchedEffect(viewModel) {
         viewModel.importErrorEvents.collect { reason ->
             snackbarHostState.showSnackbar(message = importFailedTemplate.format(reason))
+        }
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.resumeFeedbackEvents.collect { event ->
+            val message = when (event) {
+                ResumeFeedbackEvent.GraphChanged -> resumeGraphChangedMessage
+                ResumeFeedbackEvent.Expired -> resumeExpiredMessage
+                ResumeFeedbackEvent.NotResumable -> resumeUnavailableMessage
+            }
+            snackbarHostState.showSnackbar(message = message)
         }
     }
     LaunchedEffect(viewModel) {
@@ -277,6 +290,8 @@ fun ChatHomeScreen(
         onHitlReject = viewModel::rejectTool,
         onHitlTypedConfirmChange = viewModel::onTypedConfirmChange,
         onClarificationReply = viewModel::submitClarificationReply,
+        onResumeRun = viewModel::resumeInterruptedRun,
+        onDiscardRun = viewModel::discardInterruptedRun,
         onErrorRetry = viewModel::retryAfterError,
         onTitleTripleTap = { debugPickerExpanded = true },
         onToggleFavorite = viewModel::toggleFavoriteCurrent,

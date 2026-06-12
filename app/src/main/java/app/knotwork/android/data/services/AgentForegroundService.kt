@@ -9,6 +9,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.os.PowerManager
+import androidx.annotation.VisibleForTesting
 import androidx.core.app.NotificationCompat
 import androidx.work.WorkManager
 import app.knotwork.android.domain.constants.NotificationChannels
@@ -75,6 +76,26 @@ class AgentForegroundService : Service() {
         private const val NOTIFICATION_ID = 101
         private const val WAKE_LOCK_TAG = "AndroidAIAgent:InferenceLock"
         private const val WAKE_LOCK_TIMEOUT_MS = 10 * 60 * 1000L
+
+        /**
+         * `true` while an instance of this service is alive (between [onCreate]
+         * and [onDestroy]).
+         *
+         * Lets headless background components — `AgentWorker` running in a
+         * process the user never opened — decide who owns post-run engine
+         * cleanup: when the service is alive its [AgentIdleManager] unloads the
+         * model after the idle timeout, so the worker must leave the engine
+         * alone; when it is not, nothing else would ever release the model
+         * memory and the worker unloads eagerly after its run finishes.
+         * `@Volatile` because the flag is written on the main thread and read
+         * from worker threads. The setter is internal (not private) solely so
+         * tests can reset the process-wide flag between Robolectric classes,
+         * which share a classloader.
+         */
+        @Volatile
+        var isRunning: Boolean = false
+            @VisibleForTesting
+            internal set
     }
 
     /**
@@ -84,6 +105,7 @@ class AgentForegroundService : Service() {
      */
     override fun onCreate() {
         super.onCreate()
+        isRunning = true
         createNotificationChannel()
         startForegroundServiceWithNotification("Initializing...")
 
@@ -154,6 +176,7 @@ class AgentForegroundService : Service() {
         is AgentOrchestratorState.ExecutingTool -> "Using tool: ${state.toolName}..."
         is AgentOrchestratorState.WaitingForApproval -> "Awaiting user confirmation..."
         is AgentOrchestratorState.AwaitingClarification -> "Awaiting user clarification..."
+        is AgentOrchestratorState.SuspendedInBackground -> "Waiting for user response in background"
         is AgentOrchestratorState.ObservationResult -> "Processing tool result..."
         is AgentOrchestratorState.Answering -> "Answering..."
         is AgentOrchestratorState.Completed -> "Task completed"
@@ -222,6 +245,7 @@ class AgentForegroundService : Service() {
      */
     override fun onDestroy() {
         super.onDestroy()
+        isRunning = false
         releaseWakeLock()
         serviceScope.cancel()
         if (llmEngine.isInitialized) {

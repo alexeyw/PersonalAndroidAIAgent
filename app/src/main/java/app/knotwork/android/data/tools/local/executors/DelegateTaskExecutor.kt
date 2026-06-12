@@ -2,6 +2,7 @@ package app.knotwork.android.data.tools.local.executors
 
 import app.knotwork.android.data.tools.local.DelegateTaskTool
 import app.knotwork.android.domain.models.CloudProvider
+import app.knotwork.android.domain.models.ToolExecutionContext
 import app.knotwork.android.domain.repositories.LocalToolExecutor
 import org.json.JSONObject
 import javax.inject.Inject
@@ -17,7 +18,7 @@ class DelegateTaskExecutor @Inject constructor(private val delegateTaskTool: Del
 
     override val toolName: String = TOOL_NAME
 
-    override suspend fun execute(arguments: String): String {
+    override suspend fun execute(arguments: String, context: ToolExecutionContext): String {
         val json = JSONObject(arguments)
         val taskDescription = json.getString("taskDescription")
         val targetModel = if (json.has("targetModel")) json.getString("targetModel") else CloudProvider.ANTHROPIC.id

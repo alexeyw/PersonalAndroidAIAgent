@@ -6,9 +6,16 @@ import app.knotwork.android.domain.engine.TaskQueueManager
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTask
 import app.knotwork.android.domain.models.ChatMessage
+import app.knotwork.android.domain.models.PipelineGraph
+import app.knotwork.android.domain.models.PipelineRun
+import app.knotwork.android.domain.models.PipelineRunStatus
+import app.knotwork.android.domain.models.ResumeContext
 import app.knotwork.android.domain.models.Role
+import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
+import app.knotwork.android.domain.repositories.PipelineRunRepository
+import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -43,6 +50,8 @@ class TaskQueueManagerImpl @Inject constructor(
     private val pipelineRepository: PipelineRepository,
     private val settingsRepository: SettingsRepository,
     private val graphExecutionEngine: GraphExecutionEngine,
+    private val pipelineRunRepository: PipelineRunRepository,
+    private val runTraceRepository: RunTraceRepository,
 ) : TaskQueueManager {
 
     @VisibleForTesting
@@ -133,10 +142,22 @@ class TaskQueueManagerImpl @Inject constructor(
     }
 
     private suspend fun processTask(task: AgentTask) {
+        if (task.isResume) {
+            processResumeTask(task)
+            return
+        }
         val stateFlow = getOrCreateStateFlow(task.sessionId)
         val loadingState = AgentOrchestratorState.Loading
         stateFlow.emit(loadingState)
         _globalState.value = loadingState
+
+        // Ensure the persistent QUEUED record exists before any lifecycle
+        // UPDATE targets it. `enqueueTask` writes the same record off the
+        // enqueue critical path; whichever side lands first wins and the
+        // other insert is a conflict-IGNORE no-op, so every interleaving
+        // (including the worker overtaking the enqueue coroutine) converges
+        // on one consistent row.
+        pipelineRunRepository.createRun(task.toQueuedRun())
 
         // 1. Save user message
         val userMessage = ChatMessage(
@@ -161,9 +182,9 @@ class TaskQueueManagerImpl @Inject constructor(
         // silent from the user's perspective.
         val pipelines = pipelineRepository.getAllPipelines().firstOrNull() ?: emptyList()
         if (pipelines.isEmpty()) {
-            val errState = AgentOrchestratorState.Error(
-                "No active pipeline found. Please create one in the Visual Orchestrator.",
-            )
+            val message = "No active pipeline found. Please create one in the Visual Orchestrator."
+            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, message)
+            val errState = AgentOrchestratorState.Error(message)
             stateFlow.emit(errState)
             _globalState.value = errState
             return
@@ -176,17 +197,108 @@ class TaskQueueManagerImpl @Inject constructor(
                 ?.let { id -> pipelines.firstOrNull { it.id == id } }
 
         if (activePipeline == null) {
-            val errState = AgentOrchestratorState.Error(
-                "No default pipeline configured. Set one in Settings or bind a pipeline to this chat.",
-            )
+            val message = "No default pipeline configured. Set one in Settings or bind a pipeline to this chat."
+            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, message)
+            val errState = AgentOrchestratorState.Error(message)
             stateFlow.emit(errState)
             _globalState.value = errState
             return
         }
 
-        // 3. Delegate to engine
+        // The run record turns RUNNING the moment the pipeline is resolved —
+        // this is also where the (previously unknown) pipeline id and the
+        // graph content hash become available and are captured for the
+        // checkpoint-invalidation contract.
+        pipelineRunRepository.markRunning(task.id, activePipeline.id, activePipeline.contentHash())
+
+        executeRun(task, activePipeline, resume = null)
+    }
+
+    /**
+     * Resume branch of the worker: drives a checkpoint resume of the
+     * interrupted run identified by [AgentTask.id] (flagged via
+     * [AgentTask.isResume]). Deliberately skips everything a fresh task does
+     * before engine start — the user message is already in the chat history,
+     * the QUEUED record already exists (`markResumed` flipped it back), and
+     * the pipeline resolves strictly by the run's recorded pipeline id, never
+     * through the session-binding → default chain (the run must continue on
+     * the exact graph it started with).
+     *
+     * The graph hash is re-validated here even though
+     * `ResumePipelineRunUseCase` already checked it: the user can save a
+     * pipeline edit in the window between that validation and this worker
+     * picking the task up. On a mismatch the run settles back to INTERRUPTED
+     * (a fresh resume attempt will then fail fast with `GraphChanged`), and
+     * the session surfaces an explicit error instead of executing a
+     * half-valid checkpoint.
+     */
+    private suspend fun processResumeTask(task: AgentTask) {
+        val stateFlow = getOrCreateStateFlow(task.sessionId)
+        val loadingState = AgentOrchestratorState.Loading
+        stateFlow.emit(loadingState)
+        _globalState.value = loadingState
+
+        val run = pipelineRunRepository.getRun(task.id)
+        val recordedHash = run?.graphContentHash
+        val graph = run?.pipelineId?.let { pipelineRepository.getPipelineById(it) }
+        if (run == null || graph == null || recordedHash == null || graph.contentHash() != recordedHash) {
+            val message = "Pipeline graph changed before resume could start. Restart the task instead."
+            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.INTERRUPTED, message)
+            val errState = AgentOrchestratorState.Error(message)
+            stateFlow.emit(errState)
+            _globalState.value = errState
+            return
+        }
+
+        // Rebuild the checkpoint from the persisted trace: the seq-ordered
+        // NodeIo prefix to replay, the latest memory snapshot (if the
+        // interrupted run ever resolved memory), and the first free seq for
+        // the records the resumed engine will append.
+        val trace = runTraceRepository.getTraceForRun(task.id)
+        val resume = ResumeContext(
+            records = trace.filterIsInstance<RunTraceRecord.NodeIo>().sortedBy { it.seq },
+            memorySnapshot = trace.filterIsInstance<RunTraceRecord.MemorySnapshot>()
+                .maxByOrNull { it.seq }
+                ?.entries,
+            nextSeq = (trace.maxOfOrNull { it.seq } ?: -1L) + 1,
+        )
+
+        pipelineRunRepository.markRunning(task.id, graph.id, recordedHash)
+        executeRun(task, graph, resume)
+    }
+
+    /**
+     * Shared engine-delegation tail of both worker branches: drives the
+     * engine over [pipeline], mirrors terminal states into the persistent run
+     * record, and resets the session flow in its `finally`. Identical for
+     * fresh and resumed runs — the only difference is the [resume] payload
+     * forwarded to the engine.
+     *
+     * @param task The task being processed ([AgentTask.id] is the run id).
+     * @param pipeline The resolved graph to execute.
+     * @param resume Checkpoint payload for a resumed run, `null` for a fresh one.
+     */
+    private suspend fun executeRun(task: AgentTask, pipeline: PipelineGraph, resume: ResumeContext?) {
+        val stateFlow = getOrCreateStateFlow(task.sessionId)
+        // Set when the engine parks the run in its persistent waiting phase:
+        // the flow then completes without a terminal state on purpose, and the
+        // `finally` below must not stamp the record CANCELLED — it stays in
+        // its WAITING_* status until the user responds or the approval window
+        // expires.
+        var runParked = false
         try {
-            graphExecutionEngine(task.sessionId, task.prompt, activePipeline).collect { state ->
+            graphExecutionEngine(task.sessionId, task.prompt, pipeline, task.id, resume).collect { state ->
+                // Terminal engine states are mirrored into the persistent run
+                // record as they pass through, so the record is already
+                // settled when the in-memory flow reaches its observers.
+                when (state) {
+                    is AgentOrchestratorState.Completed ->
+                        pipelineRunRepository.finishRun(task.id, PipelineRunStatus.COMPLETED)
+                    is AgentOrchestratorState.Error ->
+                        pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, state.message)
+                    is AgentOrchestratorState.SuspendedInBackground -> runParked = true
+                    else -> Unit
+                }
                 // `emit` (vs. `tryEmit`) back-pressures the engine if the
                 // buffer ever fills, so we never silently drop an event.
                 stateFlow.emit(state)
@@ -200,7 +312,9 @@ class TaskQueueManagerImpl @Inject constructor(
             // resets the session state.
             throw e
         } catch (e: Exception) {
-            val errState = AgentOrchestratorState.Error(e.message ?: "Execution failed")
+            val message = e.message ?: "Execution failed"
+            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, message)
+            val errState = AgentOrchestratorState.Error(message)
             stateFlow.emit(errState)
             _globalState.value = errState
         } finally {
@@ -210,9 +324,22 @@ class TaskQueueManagerImpl @Inject constructor(
             // re-throwing and leaving the UI stuck on a stale state.
             withContext(NonCancellable) {
                 val last = stateFlow.replayCache.lastOrNull()
-                if (last !is AgentOrchestratorState.Completed &&
+                if (runParked) {
+                    // A parked run is neither finished nor cancelled — its
+                    // record stays WAITING_* for the background response
+                    // path. Only the in-memory session state is reset so the
+                    // UI stops showing a live run.
+                    stateFlow.emit(AgentOrchestratorState.Idle)
+                } else if (last !is AgentOrchestratorState.Completed &&
                     last !is AgentOrchestratorState.Error
                 ) {
+                    // Terminal write with `finally` semantics: reaching here
+                    // without a terminal state means the engine neither
+                    // completed nor failed — the task was cancelled (user
+                    // Stop / scope teardown). Cancellation is NOT a failure,
+                    // so it maps to CANCELLED, and the repository's terminal
+                    // guard keeps any already-settled record untouched.
+                    pipelineRunRepository.finishRun(task.id, PipelineRunStatus.CANCELLED)
                     stateFlow.emit(AgentOrchestratorState.Idle)
                 }
                 _globalState.value = AgentOrchestratorState.Idle
@@ -221,9 +348,39 @@ class TaskQueueManagerImpl @Inject constructor(
     }
 
     /**
+     * Builds the initial QUEUED run record for this task. Shared by
+     * [enqueueTask] (off the critical path) and [processTask] (the ensure
+     * step) — both inserts are conflict-IGNOREs of the same row.
+     *
+     * @return The QUEUED [PipelineRun] keyed by the task id.
+     */
+    private fun AgentTask.toQueuedRun(): PipelineRun = PipelineRun(
+        id = id,
+        sessionId = sessionId,
+        pipelineId = pipelineId,
+        origin = origin,
+        status = PipelineRunStatus.QUEUED,
+        currentNodeId = null,
+        startedAt = timestamp,
+        finishedAt = null,
+        errorMessage = null,
+        graphContentHash = null,
+        userPrompt = prompt,
+    )
+
+    /**
      * Enqueues a new [AgentTask] for execution.
      * Atomically checks the current session state and adds the task to the queue
      * to prevent race conditions during state updates.
+     *
+     * A persistent [PipelineRun] record in [PipelineRunStatus.QUEUED] status
+     * is written *after* the task is offered and the worker signalled, so the
+     * encrypted-DB insert never delays queue entry or the Loading emit. If
+     * the worker overtakes this coroutine, [processTask]'s ensure step writes
+     * the identical record first and this insert becomes a conflict-IGNORE
+     * no-op. The pipeline id stored at this point is the session binding
+     * captured in the task (possibly `null`) — the resolved pipeline and
+     * graph hash are filled in when processing starts.
      *
      * @param task The task to be executed.
      */
@@ -242,6 +399,7 @@ class TaskQueueManagerImpl @Inject constructor(
                 taskQueue.offer(task)
             }
             taskSignal.trySend(Unit)
+            pipelineRunRepository.createRun(task.toQueuedRun())
         }
     }
 
@@ -251,6 +409,9 @@ class TaskQueueManagerImpl @Inject constructor(
     override fun resumeWithApproval(sessionId: String, isApproved: Boolean) {
         graphExecutionEngine.resumeWithApproval(sessionId, isApproved)
     }
+
+    override fun pendingApproval(sessionId: String): AgentOrchestratorState.WaitingForApproval? =
+        graphExecutionEngine.pendingApprovalFor(sessionId)
 
     private fun getOrCreateStateFlow(sessionId: String): MutableSharedFlow<AgentOrchestratorState> {
         synchronized(sessionStates) {

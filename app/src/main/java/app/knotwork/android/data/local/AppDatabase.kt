@@ -8,8 +8,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import app.knotwork.android.data.local.dao.ChatDao
 import app.knotwork.android.data.local.dao.LocalModelDao
 import app.knotwork.android.data.local.dao.MemoryDao
+import app.knotwork.android.data.local.dao.PendingInteractionDao
 import app.knotwork.android.data.local.dao.PipelineDao
 import app.knotwork.android.data.local.dao.PipelinePresetDao
+import app.knotwork.android.data.local.dao.PipelineRunDao
 import app.knotwork.android.data.local.dao.PromptPresetDao
 import app.knotwork.android.data.local.dao.PromptTemplateDao
 import app.knotwork.android.data.local.dao.TraceStepDao
@@ -19,8 +21,10 @@ import app.knotwork.android.data.local.models.ConnectionEntity
 import app.knotwork.android.data.local.models.LocalModelEntity
 import app.knotwork.android.data.local.models.MemoryChunkEntity
 import app.knotwork.android.data.local.models.NodeEntity
+import app.knotwork.android.data.local.models.PendingInteractionEntity
 import app.knotwork.android.data.local.models.PipelineEntity
 import app.knotwork.android.data.local.models.PipelinePresetEntity
+import app.knotwork.android.data.local.models.PipelineRunEntity
 import app.knotwork.android.data.local.models.PromptPresetEntity
 import app.knotwork.android.data.local.models.PromptTemplateEntity
 import app.knotwork.android.data.local.models.TraceStepEntity
@@ -50,8 +54,10 @@ import app.knotwork.android.data.local.models.TraceStepEntity
         TraceStepEntity::class,
         PipelinePresetEntity::class,
         PromptPresetEntity::class,
+        PipelineRunEntity::class,
+        PendingInteractionEntity::class,
     ],
-    version = 29,
+    version = 33,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -113,6 +119,22 @@ abstract class AppDatabase : RoomDatabase() {
      * @return The [PromptPresetDao] instance.
      */
     abstract fun promptPresetDao(): PromptPresetDao
+
+    /**
+     * Provides access to the [PipelineRunDao] backing the persistent
+     * pipeline-run records.
+     *
+     * @return The [PipelineRunDao] instance.
+     */
+    abstract fun pipelineRunDao(): PipelineRunDao
+
+    /**
+     * Provides access to the [PendingInteractionDao] backing the parked
+     * HITL interaction records of the two-phase waiting protocol.
+     *
+     * @return The [PendingInteractionDao] instance.
+     */
+    abstract fun pendingInteractionDao(): PendingInteractionDao
 
     companion object {
         /**
@@ -566,6 +588,167 @@ abstract class AppDatabase : RoomDatabase() {
                     floats[index] = parts[index].toFloatOrNull() ?: return ByteArray(0)
                 }
                 return EmbeddingBlobCodec.encode(floats)
+            }
+        }
+
+        /**
+         * Migration from version 29 to 30.
+         * Adds the `pipeline_runs` table — the persistent record of pipeline
+         * runs that survives process death (see `PipelineRunEntity`). Purely
+         * additive: no existing rows are touched. `sessionId` deliberately
+         * carries no foreign key (a run may be created before its session row
+         * exists — scheduler-originated sessions are materialised on first
+         * message save); the index pair backs the per-session queries and the
+         * status-driven orphan sweep.
+         */
+        val MIGRATION_29_30 = object : Migration(29, 30) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `pipeline_runs` (
+                        `id` TEXT NOT NULL,
+                        `sessionId` TEXT NOT NULL,
+                        `pipelineId` TEXT,
+                        `origin` TEXT NOT NULL,
+                        `status` TEXT NOT NULL,
+                        `currentNodeId` TEXT,
+                        `startedAt` INTEGER NOT NULL,
+                        `finishedAt` INTEGER,
+                        `errorMessage` TEXT,
+                        `graphContentHash` TEXT,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_pipeline_runs_sessionId` " +
+                        "ON `pipeline_runs` (`sessionId`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_pipeline_runs_status` " +
+                        "ON `pipeline_runs` (`status`)",
+                )
+            }
+        }
+
+        /**
+         * Migration from version 30 to 31 — persistent run trace.
+         *
+         * Extends `trace_steps` from per-session node outputs into the full
+         * per-run trace (see `TraceStepEntity`): `runId` (FK to `pipeline_runs`
+         * with CASCADE delete, indexed), `seq` (monotonic in-run position used
+         * by the console replay/live seam), `recordKind` (`NODE_IO` vs
+         * `CONSOLE_EVENT` discriminator), `consoleEventType`, `nodeId` and
+         * `inputText`.
+         *
+         * SQLite cannot add a foreign key to an existing table, so the
+         * migration recreates it: new table, `INSERT … SELECT` copy, drop,
+         * rename, then index recreation. Legacy rows are preserved with
+         * `runId = NULL` (no run attribution existed before this version),
+         * `seq = 0` and `recordKind = 'NODE_IO'` — every pre-31 row is a node
+         * output by construction.
+         */
+        val MIGRATION_30_31 = object : Migration(30, 31) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `trace_steps_new` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `sessionId` TEXT NOT NULL,
+                        `nodeName` TEXT NOT NULL,
+                        `outputText` TEXT NOT NULL,
+                        `timestamp` INTEGER NOT NULL,
+                        `durationMs` INTEGER NOT NULL,
+                        `tokenCount` INTEGER,
+                        `runId` TEXT,
+                        `seq` INTEGER NOT NULL,
+                        `recordKind` TEXT NOT NULL,
+                        `consoleEventType` TEXT,
+                        `nodeId` TEXT,
+                        `inputText` TEXT,
+                        FOREIGN KEY(`sessionId`) REFERENCES `chat_sessions`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                        FOREIGN KEY(`runId`) REFERENCES `pipeline_runs`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    INSERT INTO `trace_steps_new` (
+                        `id`, `sessionId`, `nodeName`, `outputText`, `timestamp`,
+                        `durationMs`, `tokenCount`, `runId`, `seq`, `recordKind`,
+                        `consoleEventType`, `nodeId`, `inputText`
+                    )
+                    SELECT
+                        `id`, `sessionId`, `nodeName`, `outputText`, `timestamp`,
+                        `durationMs`, `tokenCount`, NULL, 0, 'NODE_IO',
+                        NULL, NULL, NULL
+                    FROM `trace_steps`
+                    """.trimIndent(),
+                )
+                db.execSQL("DROP TABLE `trace_steps`")
+                db.execSQL("ALTER TABLE `trace_steps_new` RENAME TO `trace_steps`")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_trace_steps_sessionId` ON `trace_steps` (`sessionId`)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS `index_trace_steps_runId` ON `trace_steps` (`runId`)")
+            }
+        }
+
+        /**
+         * Migration from version 31 to 32 — checkpoint/resume support.
+         *
+         * Purely additive `ALTER TABLE … ADD COLUMN` statements; no existing
+         * rows are rewritten:
+         *
+         * - `trace_steps.conditionResult` / `routingKey` / `resolvedToolName`
+         *   — the recorded routing verdicts and tool attribution of `NODE_IO`
+         *   rows, needed to restore IF_CONDITION / INTENT_ROUTER / EVALUATION
+         *   branches and tool observations when an interrupted run is replayed
+         *   from its persisted trace (`NULL` for legacy rows: resume of runs
+         *   interrupted under the previous schema falls back gracefully —
+         *   branch restoration just lacks the recorded verdicts, exactly as if
+         *   the nodes had never recorded them).
+         * - `pipeline_runs.userPrompt` — the user message that started the
+         *   run, captured at enqueue time; resume feeds it back to the engine
+         *   as the immutable original prompt. `NULL` for legacy rows, which
+         *   are therefore not resumable.
+         */
+        val MIGRATION_31_32 = object : Migration(31, 32) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `trace_steps` ADD COLUMN `conditionResult` INTEGER")
+                db.execSQL("ALTER TABLE `trace_steps` ADD COLUMN `routingKey` TEXT")
+                db.execSQL("ALTER TABLE `trace_steps` ADD COLUMN `resolvedToolName` TEXT")
+                db.execSQL("ALTER TABLE `pipeline_runs` ADD COLUMN `userPrompt` TEXT")
+            }
+        }
+
+        /**
+         * Migration from version 32 to 33 — persistent background HITL.
+         *
+         * Adds the `pending_interactions` table holding the parked HITL
+         * interaction of a run whose live in-process waiting phase timed out
+         * (see `PendingInteractionEntity`). One row per run (`runId` primary
+         * key); indexed by `sessionId` for the chat reattach lookup.
+         */
+        val MIGRATION_32_33 = object : Migration(32, 33) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `pending_interactions` (" +
+                        "`runId` TEXT NOT NULL, " +
+                        "`sessionId` TEXT NOT NULL, " +
+                        "`kind` TEXT NOT NULL, " +
+                        "`toolName` TEXT, " +
+                        "`toolArgs` TEXT, " +
+                        "`risk` TEXT, " +
+                        "`question` TEXT, " +
+                        "`optionsJson` TEXT, " +
+                        "`decision` TEXT, " +
+                        "`answer` TEXT, " +
+                        "`requestedAt` INTEGER NOT NULL, " +
+                        "PRIMARY KEY(`runId`))",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_pending_interactions_sessionId` " +
+                        "ON `pending_interactions` (`sessionId`)",
+                )
             }
         }
     }

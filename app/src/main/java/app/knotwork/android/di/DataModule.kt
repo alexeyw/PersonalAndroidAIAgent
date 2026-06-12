@@ -26,8 +26,11 @@ import app.knotwork.android.data.repositories.MemoryRepositoryImpl
 import app.knotwork.android.data.repositories.MetricsRepositoryImpl
 import app.knotwork.android.data.repositories.NetworkActivityTrackerImpl
 import app.knotwork.android.data.repositories.NetworkStateRepositoryImpl
+import app.knotwork.android.data.repositories.PendingInteractionRepositoryImpl
+import app.knotwork.android.data.repositories.PipelineRunRepositoryImpl
 import app.knotwork.android.data.repositories.PowerStateRepositoryImpl
 import app.knotwork.android.data.repositories.PromptRepositoryImpl
+import app.knotwork.android.data.repositories.RunTraceRepositoryImpl
 import app.knotwork.android.data.repositories.ToolRepositoryImpl
 import app.knotwork.android.data.services.LongRunningTaskNotifierImpl
 import app.knotwork.android.data.services.WorkManagerMemoryReembedScheduler
@@ -46,11 +49,14 @@ import app.knotwork.android.domain.repositories.MetricsRepository
 import app.knotwork.android.domain.repositories.ModelDownloadManager
 import app.knotwork.android.domain.repositories.NetworkActivityTracker
 import app.knotwork.android.domain.repositories.NetworkStateRepository
+import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelinePresetRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
+import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.PowerStateRepository
 import app.knotwork.android.domain.repositories.PromptPresetRepository
 import app.knotwork.android.domain.repositories.PromptRepository
+import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.DatabaseResetService
@@ -152,6 +158,35 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindChatRepository(repository: ChatRepositoryImpl): ChatRepository
+
+    /**
+     * Binds the [PipelineRunRepositoryImpl] implementation to the
+     * [PipelineRunRepository] interface backing the persistent
+     * pipeline-run records.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindPipelineRunRepository(repository: PipelineRunRepositoryImpl): PipelineRunRepository
+
+    /**
+     * Binds the [PendingInteractionRepositoryImpl] implementation to the
+     * [PendingInteractionRepository] interface backing the parked HITL
+     * interaction records of the two-phase waiting protocol.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindPendingInteractionRepository(
+        repository: PendingInteractionRepositoryImpl,
+    ): PendingInteractionRepository
+
+    /**
+     * Binds the [RunTraceRepositoryImpl] implementation to the
+     * [RunTraceRepository] interface backing the buffered persistent
+     * pipeline-run trace.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindRunTraceRepository(repository: RunTraceRepositoryImpl): RunTraceRepository
 
     /**
      * Binds the [ToolRepositoryImpl] implementation to the [ToolRepository] interface.

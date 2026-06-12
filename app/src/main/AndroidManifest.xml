@@ -114,6 +114,23 @@
                 android:value="On-Device LLM Inference and Agent Orchestration" />
         </service>
 
+        <!--
+            WorkManager promotes long-running workers (AgentWorker during scheduled
+            inference) through its own SystemForegroundService. Android 14+ requires
+            the service entry to declare the foreground type the promotion uses —
+            merged here as `specialUse` with the same subtype the app's own
+            AgentForegroundService is declared for.
+        -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"
+            tools:node="merge">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="On-Device LLM Inference and Agent Orchestration" />
+        </service>
+
         <receiver
             android:name=".presentation.receivers.AgentApprovalReceiver"
             android:exported="false" />

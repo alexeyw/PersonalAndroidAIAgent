@@ -8,11 +8,17 @@ import app.knotwork.android.domain.models.ConsoleEvent
 import app.knotwork.android.domain.models.ConsoleEventType
 import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.PipelineGraph
+import app.knotwork.android.domain.models.PipelineRun
+import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Result
+import app.knotwork.android.domain.models.RunOrigin
+import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.ClarificationRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
+import app.knotwork.android.domain.repositories.PipelineRunRepository
+import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
@@ -29,6 +35,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -66,6 +73,8 @@ class ChatHomeConsoleStreamingTest {
     private lateinit var clarificationRepository: ClarificationRepository
     private lateinit var localModelRepository: LocalModelRepository
     private lateinit var loadModelUseCase: LoadModelUseCase
+    private lateinit var pipelineRunRepository: PipelineRunRepository
+    private lateinit var runTraceRepository: RunTraceRepository
 
     private lateinit var sessionsFlow: MutableStateFlow<List<ChatSession>>
     private lateinit var localModelsFlow: MutableStateFlow<List<LocalModel>>
@@ -92,6 +101,13 @@ class ChatHomeConsoleStreamingTest {
         localModelRepository = mockk(relaxed = true)
         loadModelUseCase = mockk()
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+        pipelineRunRepository = mockk()
+        runTraceRepository = mockk()
+        coEvery { pipelineRunRepository.getActiveRunForSession(any()) } returns null
+        coEvery { pipelineRunRepository.getLatestRunForSession(any()) } returns null
+        every { pipelineRunRepository.observeActiveRunSessionIds() } returns MutableStateFlow(emptySet())
+        every { pipelineRunRepository.observeRunsForSession(any()) } returns flowOf(emptyList())
+        coEvery { runTraceRepository.getTraceForRun(any()) } returns emptyList()
 
         sessionsFlow = MutableStateFlow(emptyList())
         localModelsFlow = MutableStateFlow(emptyList())
@@ -145,7 +161,17 @@ class ChatHomeConsoleStreamingTest {
         loadModelUseCase,
         mockk(relaxed = true),
         mockk(relaxed = true),
-    )
+        pipelineRunRepository,
+        runTraceRepository,
+        mockk(relaxed = true),
+        mockk(relaxed = true),
+        mockk(relaxed = true),
+        mockk(relaxed = true),
+    ).also { vm ->
+        // Keep the replay projection on the test scheduler so
+        // advanceUntilIdle() deterministically covers it.
+        vm.traceProjectionDispatcher = testDispatcher
+    }
 
     @Test
     fun `given ConsoleLog emissions when sendMessage then VM aggregates mapped lines in order`() =
@@ -318,5 +344,117 @@ class ChatHomeConsoleStreamingTest {
         advanceUntilIdle()
 
         assertEquals(ConsoleTab.Vars, viewModel.state.value.console.tab)
+    }
+
+    private fun completedRun(sessionId: String): PipelineRun = PipelineRun(
+        id = "run-replay",
+        sessionId = sessionId,
+        pipelineId = "p1",
+        origin = RunOrigin.CHAT,
+        status = PipelineRunStatus.COMPLETED,
+        currentNodeId = "output_1",
+        startedAt = 1_000L,
+        finishedAt = 2_000L,
+        errorMessage = null,
+        graphContentHash = "hash",
+    )
+
+    private fun replayTrace(): List<RunTraceRecord> = listOf(
+        RunTraceRecord.ConsoleEntry(
+            runId = "run-replay",
+            sessionId = SAVED_SESSION,
+            seq = 0,
+            timestamp = 10L,
+            type = ConsoleEventType.NodeExecution,
+            message = "▶ INPUT",
+        ),
+        RunTraceRecord.NodeIo(
+            runId = "run-replay", sessionId = SAVED_SESSION, seq = 1, timestamp = 20L,
+            nodeId = "llm_1", nodeType = "LITE_RT", inputText = "in", outputText = "out",
+            durationMs = 100L, tokenCount = 5,
+        ),
+        RunTraceRecord.ConsoleEntry(
+            runId = "run-replay",
+            sessionId = SAVED_SESSION,
+            seq = 2,
+            timestamp = 30L,
+            type = ConsoleEventType.NodeExecution,
+            message = "✓ LITE_RT in 100ms",
+        ),
+    )
+
+    @Test
+    fun `given finished run with persisted trace when session opens then console replays all three tabs`() =
+        runTest(testDispatcher) {
+            savedSessionIdFlow.value = SAVED_SESSION
+            coEvery { pipelineRunRepository.getActiveRunForSession(SAVED_SESSION) } returns null
+            coEvery { pipelineRunRepository.getLatestRunForSession(SAVED_SESSION) } returns
+                completedRun(SAVED_SESSION)
+            coEvery { runTraceRepository.getTraceForRun("run-replay") } returns replayTrace()
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            val console = viewModel.state.value.console
+            assertEquals(listOf("▶ INPUT", "✓ LITE_RT in 100ms"), console.logs.map { it.text })
+            assertEquals(2, console.vars.size)
+            assertEquals("\"in\"", console.vars[0].valueJson)
+            assertEquals("\"out\"", console.vars[1].valueJson)
+            assertEquals(1, console.traces.size)
+            assertEquals("LITE_RT", console.traces.single().name)
+            assertEquals(100L, console.traces.single().durationMs)
+        }
+
+    @Test
+    fun `given replayed baseline when a new run starts then live events replace the baseline without duplicates`() =
+        runTest(testDispatcher) {
+            savedSessionIdFlow.value = SAVED_SESSION
+            coEvery { pipelineRunRepository.getLatestRunForSession(SAVED_SESSION) } returns
+                completedRun(SAVED_SESSION)
+            coEvery { runTraceRepository.getTraceForRun("run-replay") } returns replayTrace()
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            assertEquals(2, viewModel.state.value.console.logs.size)
+
+            // A fresh send invalidates the baseline; the new run's cumulative
+            // snapshots (different runId, seq restarting at 0) must render
+            // alone — no stale replayed rows ahead of them.
+            viewModel.onComposerValueChange("next question")
+            viewModel.sendMessage()
+            advanceUntilIdle()
+            orchestratorStateFlow.emit(
+                AgentOrchestratorState.ConsoleLog(
+                    listOf(ConsoleEvent(50L, ConsoleEventType.NodeExecution, "▶ INPUT", seq = 0)),
+                    runId = "run-next",
+                ),
+            )
+            advanceUntilIdle()
+
+            val logs = viewModel.state.value.console.logs
+            assertEquals(1, logs.size)
+            assertEquals("▶ INPUT", logs.single().text)
+        }
+
+    @Test
+    fun `given replayed logs when user clears console then replayed rows stay hidden`() = runTest(testDispatcher) {
+        savedSessionIdFlow.value = SAVED_SESSION
+        coEvery { pipelineRunRepository.getLatestRunForSession(SAVED_SESSION) } returns
+            completedRun(SAVED_SESSION)
+        coEvery { runTraceRepository.getTraceForRun("run-replay") } returns replayTrace()
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        assertEquals(2, viewModel.state.value.console.logs.size)
+
+        viewModel.requestConsoleClear()
+        viewModel.confirmConsoleClear()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.console.logs.isEmpty())
+    }
+
+    private companion object {
+        const val SAVED_SESSION = "saved-session-replay"
     }
 }

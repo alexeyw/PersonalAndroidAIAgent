@@ -13,6 +13,9 @@ import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
+import app.knotwork.android.domain.models.PipelineRunStatus
+import app.knotwork.android.domain.models.ResumeContext
+import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.ToolInvocationResult
 import app.knotwork.android.domain.models.usesContextConfig
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
@@ -22,11 +25,16 @@ import app.knotwork.android.domain.repositories.CrashReportingRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.MetricsRepository
+import app.knotwork.android.domain.repositories.PipelineRunRepository
+import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -50,6 +58,8 @@ class GraphExecutionEngine @Inject constructor(
     private val crashReportingRepository: CrashReportingRepository,
     private val localModelRepository: LocalModelRepository,
     private val memoryRepository: MemoryRepository,
+    private val pipelineRunRepository: PipelineRunRepository,
+    private val runTraceRepository: RunTraceRepository,
 ) {
 
     /**
@@ -60,7 +70,46 @@ class GraphExecutionEngine @Inject constructor(
     }
 
     /**
+     * Returns the approval request the run of [sessionId] is currently
+     * suspended on, or `null` when no approval gate is active. Mirrors
+     * [resumeWithApproval] — both delegate to the [ToolNodeExecutor]
+     * singleton that owns the per-session suspension primitives. Used by the
+     * chat reattach protocol to restore the HITL confirmation card from the
+     * authoritative pending snapshot.
+     *
+     * @param sessionId chat session id whose pending approval is queried.
+     * @return the pending [AgentOrchestratorState.WaitingForApproval], or `null`.
+     */
+    fun pendingApprovalFor(sessionId: String): AgentOrchestratorState.WaitingForApproval? =
+        toolNodeExecutor.pendingApprovalFor(sessionId)
+
+    /**
      * Executes the graph by processing nodes sequentially.
+     *
+     * @param sessionId Id of the chat session the run belongs to.
+     * @param userPrompt The user message that started the run.
+     * @param graph The pipeline graph to execute.
+     * @param runId Id of the persistent pipeline-run record this execution
+     *   writes its progress into (the node currently executing and the
+     *   WAITING_APPROVAL / WAITING_CLARIFICATION suspension statuses) and
+     *   whose persistent trace receives every console event and per-node
+     *   I/O snapshot (buffered, force-flushed at suspension and terminal
+     *   points). `null` disables run persistence entirely — terminal statuses
+     *   and the RUNNING transition are owned by the task queue, never by the
+     *   engine.
+     * @param resume Checkpoint payload that switches the walk into resume
+     *   mode (see [ResumeContext]): while its seq-ordered record cursor is
+     *   not exhausted, each visited non-INPUT/OUTPUT node consumes the next
+     *   recorded snapshot instead of executing — the recorded output and
+     *   routing verdicts drive the very same control-flow code live results
+     *   would, so branches, queue iterations and inter-node inputs are
+     *   re-derived deterministically without re-running executors. The first
+     *   node without a record executes live; in particular a TOOL node the
+     *   run died on raises a fresh HITL approval (see the TOOL asymmetry
+     *   contract on [ResumeContext]). Requires a non-null [runId] — resuming
+     *   without the persistent record/trace to continue makes no sense.
+     *   `null` (the default) is a normal fresh run.
+     * @return A cold flow of orchestrator states describing the run.
      */
     // Reason: this is the agent's core orchestrator. It is a long single
     // state machine that walks the DAG, dispatches per node type, manages
@@ -69,131 +118,248 @@ class GraphExecutionEngine @Inject constructor(
     // historically obscured the linear flow; the method body is structured
     // and well-commented in place.
     @Suppress("LongMethod", "CyclomaticComplexMethod")
-    operator fun invoke(sessionId: String, userPrompt: String, graph: PipelineGraph): Flow<AgentOrchestratorState> =
-        flow {
-            // Buffer of console events accumulated for this run. The engine emits a
-            // fresh `ConsoleLog` snapshot on every append so the UI reactively
-            // updates the collapsed/expanded console panels.
-            val consoleEvents = mutableListOf<ConsoleEvent>()
+    operator fun invoke(
+        sessionId: String,
+        userPrompt: String,
+        graph: PipelineGraph,
+        runId: String? = null,
+        resume: ResumeContext? = null,
+    ): Flow<AgentOrchestratorState> = flow {
+        // Buffer of console events accumulated for this run. The engine emits a
+        // fresh `ConsoleLog` snapshot on every append so the UI reactively
+        // updates the collapsed/expanded console panels.
+        val consoleEvents = mutableListOf<ConsoleEvent>()
 
-            suspend fun pushConsole(type: ConsoleEventType, message: String) {
-                consoleEvents += ConsoleEvent(
-                    timestamp = System.currentTimeMillis(),
-                    type = type,
-                    message = message,
-                )
-                emit(AgentOrchestratorState.ConsoleLog(consoleEvents.toList()))
-            }
+        // Monotonic position of the next trace record within this run, shared
+        // by console events and per-node I/O snapshots. Uniqueness per run is
+        // what lets the console deduplicate the replay/live seam by seq. A
+        // resumed run continues the interrupted run's numbering instead of
+        // colliding with its persisted records.
+        var traceSeq = resume?.nextSeq ?: 0L
 
-            if (!graph.isValidDAG()) {
-                // Push the console event BEFORE the terminal Error so the Error
-                // remains the last value of the orchestrator state flow.
-                // `TaskQueueManagerImpl.processTask` resets the flow to `Idle` in
-                // its `finally` if the last value is anything other than
-                // `Completed` / `Error`, so a trailing `ConsoleLog` would mask the
-                // real failure for observers reading `stateFlow.value`.
-                pushConsole(ConsoleEventType.Error, "Pipeline graph contains cycles")
-                emit(AgentOrchestratorState.Error("Pipeline graph contains cycles and is invalid."))
-                return@flow
-            }
+        // Position of the next checkpoint record to replay; meaningful only
+        // in resume mode. Once it reaches the end of the recorded prefix the
+        // walk is live for the rest of the run.
+        var replayCursor = 0
 
-            val inputNode = graph.nodes.find { it.type == NodeType.INPUT }
-            if (inputNode == null) {
-                pushConsole(ConsoleEventType.Error, "Pipeline has no INPUT node")
-                emit(AgentOrchestratorState.Error("Pipeline has no INPUT node"))
-                return@flow
-            }
-
-            // Attach Crashlytics custom keys so any non-fatal recorded from
-            // node executors downstream carries the pipeline/model context.
-            // No-op when the user has not opted in to crash reporting.
-            crashReportingRepository.setCustomKey(CRASH_KEY_PIPELINE_ID, graph.id)
-            crashReportingRepository.setCustomKey(
-                CRASH_KEY_ACTIVE_MODEL,
-                localModelRepository.getActiveModel()?.name ?: ACTIVE_MODEL_NONE,
+        suspend fun pushConsole(type: ConsoleEventType, message: String) {
+            val event = ConsoleEvent(
+                timestamp = System.currentTimeMillis(),
+                type = type,
+                message = message,
+                seq = traceSeq++,
             )
-
-            val maxSteps = settingsRepository.pipelineMaxSteps.first()
-            // For deterministic graphs (no routing/queue nodes) the total is fixed from the start.
-            // For branching graphs it stays null until the active branch is resolved.
-            val hasBranching = graph.nodes.any {
-                it.type == NodeType.INTENT_ROUTER ||
-                    it.type == NodeType.IF_CONDITION ||
-                    it.type == NodeType.QUEUE_PROCESSOR
-            }
-            var estimatedTotalSteps: Int? = if (hasBranching) null else graph.nodes.size
-            var currentNode: NodeModel? = inputNode
-            var stepCount = 0
-            var currentInputText = userPrompt
-
-            val activeQueue = mutableListOf<String>()
-            var activeQueueProcessorId: String? = null
-            val queueResults = mutableListOf<String>()
-            val traceSteps = mutableListOf<AgentOrchestratorState.TraceStep>()
-
-            // Long-term memory is retrieved lazily and at most once per run, keyed
-            // off the immutable userPrompt. Only the first *executed* node that
-            // actually opts into the `--- Long-Term Memory ---` block
-            // (`contextConfig.longTermMemory`) triggers the query embedding. A
-            // graph where no executed node requests memory never embeds the prompt
-            // at all — sparing avoidable embedding-provider latency/cost and not
-            // shipping the prompt to a cloud embedding backend the user did not ask
-            // memory for.
-            var memoizedMemories: List<MemoryChunk>? = null
-            suspend fun resolveMemoriesOnce(): List<MemoryChunk> {
-                memoizedMemories?.let { return it }
-                val scored: List<Pair<MemoryChunk, Float>> = try {
-                    retrieveRelevantMemoryUseCase.retrieveScored(userPrompt)
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    // Memory retrieval suspends (embedding + DB lookup). Swallowing
-                    // cancellation here would let the parent flow keep running after
-                    // the caller cancelled, breaking structured concurrency.
-                    throw e
-                } catch (e: Exception) {
-                    Timber.tag("PipelineDebug").w(e, "Failed to retrieve long-term memories; continuing without them")
-                    emptyList()
-                }
-                val verbose = settingsRepository.verboseMemoryLoggingEnabled.first()
-                pushConsole(
-                    ConsoleEventType.MemoryAccess,
-                    MemoryAccessLogFormatter.format(query = userPrompt, hits = scored, verbose = verbose),
-                )
-                val hits = scored.map { it.first }
-                // Record that these chunks were injected into this run so the
-                // Memory detail sheet can show "Used in N replies". Best-effort:
-                // a failure here must never break the pipeline run.
-                try {
-                    memoryRepository.recordUsage(hits.map { it.id }, System.currentTimeMillis())
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Timber.tag("PipelineDebug").w(e, "Failed to record memory usage; continuing")
-                }
-                return hits.also { memoizedMemories = it }
-            }
-            // Tool invocations are accumulated as TOOL nodes complete and surfaced
-            // via the `--- Tool Results ---` block on later nodes that opt in.
-            val toolInvocationResults = mutableListOf<ToolInvocationResult>()
-
-            while (currentNode != null && stepCount < maxSteps) {
-                stepCount++
-
-                // Emit current step with dynamically estimated total (null = still unknown).
-                emit(
-                    AgentOrchestratorState.PipelineStage(
-                        AgentOrchestratorState.PipelineStepInfo(
-                            stepIndex = stepCount,
-                            totalSteps = estimatedTotalSteps,
-                            nodeName = currentNode.type.name,
-                        ),
+            consoleEvents += event
+            // Write-through into the persistent run trace. The repository
+            // buffers and batch-flushes, so this never costs a SQLCipher
+            // commit per streamed event.
+            if (runId != null) {
+                runTraceRepository.append(
+                    RunTraceRecord.ConsoleEntry(
+                        runId = runId,
+                        sessionId = sessionId,
+                        seq = event.seq,
+                        timestamp = event.timestamp,
+                        type = type,
+                        message = message,
                     ),
                 )
+            }
+            emit(AgentOrchestratorState.ConsoleLog(consoleEvents.toList(), runId))
+        }
+
+        if (!graph.isValidDAG()) {
+            // Push the console event BEFORE the terminal Error so the Error
+            // remains the last value of the orchestrator state flow.
+            // `TaskQueueManagerImpl.processTask` resets the flow to `Idle` in
+            // its `finally` if the last value is anything other than
+            // `Completed` / `Error`, so a trailing `ConsoleLog` would mask the
+            // real failure for observers reading `stateFlow.value`.
+            pushConsole(ConsoleEventType.Error, "Pipeline graph contains cycles")
+            emit(AgentOrchestratorState.Error("Pipeline graph contains cycles and is invalid."))
+            return@flow
+        }
+
+        val inputNode = graph.nodes.find { it.type == NodeType.INPUT }
+        if (inputNode == null) {
+            pushConsole(ConsoleEventType.Error, "Pipeline has no INPUT node")
+            emit(AgentOrchestratorState.Error("Pipeline has no INPUT node"))
+            return@flow
+        }
+
+        // Attach Crashlytics custom keys so any non-fatal recorded from
+        // node executors downstream carries the pipeline/model context.
+        // No-op when the user has not opted in to crash reporting.
+        crashReportingRepository.setCustomKey(CRASH_KEY_PIPELINE_ID, graph.id)
+        crashReportingRepository.setCustomKey(
+            CRASH_KEY_ACTIVE_MODEL,
+            localModelRepository.getActiveModel()?.name ?: ACTIVE_MODEL_NONE,
+        )
+
+        val maxSteps = settingsRepository.pipelineMaxSteps.first()
+        // For deterministic graphs (no routing/queue nodes) the total is fixed from the start.
+        // For branching graphs it stays null until the active branch is resolved.
+        val hasBranching = graph.nodes.any {
+            it.type == NodeType.INTENT_ROUTER ||
+                it.type == NodeType.IF_CONDITION ||
+                it.type == NodeType.QUEUE_PROCESSOR
+        }
+        var estimatedTotalSteps: Int? = if (hasBranching) null else graph.nodes.size
+        var currentNode: NodeModel? = inputNode
+        var stepCount = 0
+        var currentInputText = userPrompt
+
+        val activeQueue = mutableListOf<String>()
+        var activeQueueProcessorId: String? = null
+        val queueResults = mutableListOf<String>()
+        val traceSteps = mutableListOf<AgentOrchestratorState.TraceStep>()
+
+        // Long-term memory is retrieved lazily and at most once per run, keyed
+        // off the immutable userPrompt. Only the first *executed* node that
+        // actually opts into the `--- Long-Term Memory ---` block
+        // (`contextConfig.longTermMemory`) triggers the query embedding. A
+        // graph where no executed node requests memory never embeds the prompt
+        // at all — sparing avoidable embedding-provider latency/cost and not
+        // shipping the prompt to a cloud embedding backend the user did not ask
+        // memory for. A resumed run is seeded from the interrupted run's
+        // persisted snapshot, so it neither re-runs retrieval (the context
+        // must be identical to the interrupted one) nor re-counts usage.
+        var memoizedMemories: List<MemoryChunk>? = resume?.memorySnapshot
+        suspend fun resolveMemoriesOnce(): List<MemoryChunk> {
+            memoizedMemories?.let { return it }
+            val scored: List<Pair<MemoryChunk, Float>> = try {
+                retrieveRelevantMemoryUseCase.retrieveScored(userPrompt)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                // Memory retrieval suspends (embedding + DB lookup). Swallowing
+                // cancellation here would let the parent flow keep running after
+                // the caller cancelled, breaking structured concurrency.
+                throw e
+            } catch (e: Exception) {
+                Timber.tag("PipelineDebug").w(e, "Failed to retrieve long-term memories; continuing without them")
+                emptyList()
+            }
+            val verbose = settingsRepository.verboseMemoryLoggingEnabled.first()
+            pushConsole(
+                ConsoleEventType.MemoryAccess,
+                MemoryAccessLogFormatter.format(query = userPrompt, hits = scored, verbose = verbose),
+            )
+            val hits = scored.map { it.first }
+            // Record that these chunks were injected into this run so the
+            // Memory detail sheet can show "Used in N replies". Best-effort:
+            // a failure here must never break the pipeline run.
+            try {
+                memoryRepository.recordUsage(hits.map { it.id }, System.currentTimeMillis())
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.tag("PipelineDebug").w(e, "Failed to record memory usage; continuing")
+            }
+            // Persist the resolved chunks so a checkpoint resume of this run
+            // can seed its memory from the snapshot instead of re-running
+            // retrieval — the resumed context must be identical to this one.
+            if (runId != null) {
+                runTraceRepository.append(
+                    RunTraceRecord.MemorySnapshot(
+                        runId = runId,
+                        sessionId = sessionId,
+                        seq = traceSeq++,
+                        timestamp = System.currentTimeMillis(),
+                        entries = hits,
+                    ),
+                )
+            }
+            return hits.also { memoizedMemories = it }
+        }
+        // Tool invocations are accumulated as TOOL nodes complete and surfaced
+        // via the `--- Tool Results ---` block on later nodes that opt in.
+        val toolInvocationResults = mutableListOf<ToolInvocationResult>()
+
+        // Tracks whether the persistent run record currently sits in a
+        // WAITING_* suspension status, so the first state forwarded after
+        // the suspension resolves flips the record back to RUNNING.
+        var runSuspended = false
+
+        while (currentNode != null && stepCount < maxSteps) {
+            stepCount++
+
+            // Record the node about to execute so an interrupted run can
+            // report where it stopped. The repository is best-effort by
+            // contract — a storage failure never aborts the run itself.
+            if (runId != null) {
+                pipelineRunRepository.updateCurrentNode(runId, currentNode.id)
+            }
+
+            // Emit current step with dynamically estimated total (null = still unknown).
+            emit(
+                AgentOrchestratorState.PipelineStage(
+                    AgentOrchestratorState.PipelineStepInfo(
+                        stepIndex = stepCount,
+                        totalSteps = estimatedTotalSteps,
+                        nodeName = currentNode.type.name,
+                    ),
+                ),
+            )
+            // Checkpoint replay decision: while the resume cursor still holds
+            // records, the recorded snapshot of this node substitutes for
+            // execution. INPUT and OUTPUT nodes are never recorded (the trace
+            // skips them by design), so they always run their executors even
+            // mid-replay — INPUT is a pure passthrough, and a recorded OUTPUT
+            // cannot exist for an interrupted run.
+            val replayRecord = if (resume != null &&
+                replayCursor < resume.records.size &&
+                currentNode.type != NodeType.INPUT &&
+                currentNode.type != NodeType.OUTPUT
+            ) {
+                resume.records[replayCursor]
+            } else {
+                null
+            }
+            if (replayRecord != null && replayRecord.nodeId != currentNode.id) {
+                // The persisted prefix diverged from the graph walk: the trace
+                // cannot serve as a checkpoint (corruption, or an edit that
+                // slipped past hash validation). Failing loudly beats silently
+                // executing a half-replayed run on inconsistent inputs.
+                pushConsole(
+                    ConsoleEventType.Error,
+                    "Checkpoint trace diverged at ${currentNode.type.name}; resume aborted",
+                )
+                emit(
+                    AgentOrchestratorState.Error(
+                        "Recorded checkpoint no longer matches the pipeline graph. Restart the task instead.",
+                    ),
+                )
+                return@flow
+            }
+
+            var nodeResult: NodeExecutionResult? = null
+            val executorInput: String
+            val nodeDurationMs: Long
+
+            if (replayRecord != null) {
+                // Replay branch: the node completed before the interruption —
+                // its recorded output (and routing verdicts) feed the same
+                // control flow a live result would. No executor call, no
+                // metrics, no new NodeIo trace record; the compact console
+                // event below is the only addition to the persisted trace.
+                replayCursor++
+                nodeResult = NodeExecutionResult(
+                    outputText = replayRecord.outputText,
+                    conditionResult = replayRecord.conditionResult,
+                    routingKey = replayRecord.routingKey,
+                    tokenCount = replayRecord.tokenCount,
+                    resolvedToolName = replayRecord.resolvedToolName,
+                )
+                executorInput = replayRecord.inputText
+                nodeDurationMs = replayRecord.durationMs
+                pushConsole(
+                    ConsoleEventType.NodeExecution,
+                    "↻ ${currentNode.type.name} replayed from checkpoint",
+                )
+            } else {
                 pushConsole(ConsoleEventType.NodeExecution, "▶ ${currentNode.type.name}")
 
                 // Give UI time to render the stage before CPU-heavy inference starts
                 kotlinx.coroutines.delay(PipelineExecutionDefaults.LITE_RT_PREWARM_DELAY_MS)
-
-                var nodeResult: NodeExecutionResult? = null
 
                 val executor = nodeExecutorFactory.getExecutor(currentNode.type)
                 Timber.tag(
@@ -215,7 +381,7 @@ class GraphExecutionEngine @Inject constructor(
                 // wrapping them would corrupt routing/queue state. OUTPUT in echo mode
                 // (no systemPrompt) is also passed through so it forwards the upstream
                 // result verbatim instead of leaking context headers to the user.
-                val executorInput = if (shouldComposeContext(currentNode)) {
+                executorInput = if (shouldComposeContext(currentNode)) {
                     // Embed + search only when this node actually renders the
                     // memory block; otherwise pass an empty list so retrieval is
                     // never triggered on its behalf.
@@ -242,14 +408,53 @@ class GraphExecutionEngine @Inject constructor(
                 }
 
                 val nodeStartMs = System.currentTimeMillis()
+                var runParked = false
                 try {
-                    executor.execute(nodeForExecution, executorInput, sessionId, userPrompt)
+                    executor.execute(nodeForExecution, executorInput, sessionId, userPrompt, runId)
                         .collect { output ->
                             when (output) {
-                                is NodeOutput.State -> emit(output.state)
+                                is NodeOutput.State -> {
+                                    if (output.state is AgentOrchestratorState.SuspendedInBackground) {
+                                        // Bypass persistSuspensionTransition: its
+                                        // wasSuspended branch would flip the record
+                                        // back to RUNNING, but a parked run must
+                                        // keep its WAITING_* status.
+                                        runParked = true
+                                    } else if (runId != null) {
+                                        runSuspended =
+                                            persistSuspensionTransition(runId, output.state, runSuspended)
+                                    }
+                                    emit(output.state)
+                                }
                                 is NodeOutput.Result -> nodeResult = output.result
                             }
                         }
+
+                    // A parked run ends the walk without a terminal state: the
+                    // executor made the pending request durable and the run
+                    // record keeps its WAITING_* status — the user's response
+                    // resumes the run from its checkpoint later, possibly in
+                    // another process. Flush the buffered trace first so the
+                    // checkpoint is complete up to this exact node.
+                    if (runParked) {
+                        pushConsole(
+                            ConsoleEventType.NodeExecution,
+                            "⏸ ${currentNode.type.name} parked awaiting user response",
+                        )
+                        runTraceRepository.flush()
+                        return@flow
+                    }
+
+                    // The executor flow completing means any HITL suspension of
+                    // this node is definitively resolved — flip the record back
+                    // to RUNNING here instead of waiting for the next forwarded
+                    // state (a clarification node, for instance, emits no state
+                    // after its answer arrives, which would otherwise leave the
+                    // record stale-WAITING through the next node's model load).
+                    if (runId != null && runSuspended) {
+                        pipelineRunRepository.updateStatus(runId, PipelineRunStatus.RUNNING)
+                        runSuspended = false
+                    }
 
                     Timber.tag(
                         "PipelineDebug",
@@ -273,190 +478,222 @@ class GraphExecutionEngine @Inject constructor(
                     emit(AgentOrchestratorState.Error(e.message ?: "Unknown error"))
                     return@flow
                 }
-                val nodeDurationMs = System.currentTimeMillis() - nodeStartMs
-                val nodeTokenCount = nodeResult?.tokenCount
-                metricsRepository.recordNodeExecution(currentNode.type, nodeDurationMs, nodeTokenCount)
+                nodeDurationMs = System.currentTimeMillis() - nodeStartMs
+                metricsRepository.recordNodeExecution(currentNode.type, nodeDurationMs, nodeResult?.tokenCount)
+            }
+            val nodeTokenCount = nodeResult?.tokenCount
 
-                if (nodeResult?.error != null) {
-                    Timber.tag(
-                        "PipelineDebug",
-                    ).e("[NODE_ERR] type=${currentNode.type.name} id=${currentNode.id} error=${nodeResult?.error}")
-                    pushConsole(
-                        ConsoleEventType.Error,
-                        "${currentNode.type.name}: ${nodeResult?.error}",
-                    )
-                    emit(AgentOrchestratorState.Error(nodeResult?.error!!))
-                    return@flow
-                }
+            if (nodeResult?.error != null) {
+                Timber.tag(
+                    "PipelineDebug",
+                ).e("[NODE_ERR] type=${currentNode.type.name} id=${currentNode.id} error=${nodeResult?.error}")
+                pushConsole(
+                    ConsoleEventType.Error,
+                    "${currentNode.type.name}: ${nodeResult?.error}",
+                )
+                emit(AgentOrchestratorState.Error(nodeResult?.error!!))
+                return@flow
+            }
 
-                // Skip the "✓" event for OUTPUT — its own emitted Completed state
-                // already marks the end of the pipeline, and pushing a ConsoleLog
-                // after Completed would shift the terminal state away from the
-                // tail of the flow.
-                if (currentNode.type != NodeType.OUTPUT) {
-                    pushConsole(
-                        ConsoleEventType.NodeExecution,
-                        "✓ ${currentNode.type.name} in ${nodeDurationMs}ms",
-                    )
-                }
+            // Skip the "✓" event for OUTPUT — its own emitted Completed state
+            // already marks the end of the pipeline, and pushing a ConsoleLog
+            // after Completed would shift the terminal state away from the
+            // tail of the flow. Replayed nodes already pushed their compact
+            // "↻ replayed" event instead.
+            if (currentNode.type != NodeType.OUTPUT && replayRecord == null) {
+                pushConsole(
+                    ConsoleEventType.NodeExecution,
+                    "✓ ${currentNode.type.name} in ${nodeDurationMs}ms",
+                )
+            }
 
-                if (currentNode.type == NodeType.TOOL) {
-                    val toolOutput = nodeResult?.outputText ?: ""
-                    // Prefer the executor-resolved tool name so "auto"-configured TOOL
-                    // nodes attribute the observation to the tool that actually ran,
-                    // not the literal "auto" placeholder. Fall back to the node's
-                    // configured toolName, then the node label as a last resort.
-                    val toolName = nodeResult?.resolvedToolName
-                        ?: currentNode.toolName?.takeUnless { it.equals("auto", ignoreCase = true) }
-                        ?: currentNode.label
-                    toolInvocationResults += ToolInvocationResult(toolName = toolName, output = toolOutput)
-                    pushConsole(ConsoleEventType.ToolCall, toolName)
-                }
+            if (currentNode.type == NodeType.TOOL) {
+                val toolOutput = nodeResult?.outputText ?: ""
+                // Prefer the executor-resolved tool name so "auto"-configured TOOL
+                // nodes attribute the observation to the tool that actually ran,
+                // not the literal "auto" placeholder. Fall back to the node's
+                // configured toolName, then the node label as a last resort.
+                val toolName = nodeResult?.resolvedToolName
+                    ?: currentNode.toolName?.takeUnless { it.equals("auto", ignoreCase = true) }
+                    ?: currentNode.label
+                toolInvocationResults += ToolInvocationResult(toolName = toolName, output = toolOutput)
+                pushConsole(ConsoleEventType.ToolCall, toolName)
+            }
 
-                if (currentNode.type != NodeType.INPUT && currentNode.type != NodeType.OUTPUT) {
-                    val outputText = nodeResult?.outputText ?: currentInputText
-                    traceSteps.add(
-                        AgentOrchestratorState.TraceStep(
-                            nodeName = currentNode.type.name,
-                            outputText = outputText,
-                            durationMs = nodeDurationMs,
-                            tokenCount = nodeTokenCount,
-                        ),
-                    )
-                    chatRepository.saveTraceStep(
-                        sessionId = sessionId,
+            if (currentNode.type != NodeType.INPUT && currentNode.type != NodeType.OUTPUT) {
+                val outputText = nodeResult?.outputText ?: currentInputText
+                traceSteps.add(
+                    AgentOrchestratorState.TraceStep(
                         nodeName = currentNode.type.name,
                         outputText = outputText,
                         durationMs = nodeDurationMs,
                         tokenCount = nodeTokenCount,
-                    )
-                    emit(AgentOrchestratorState.PipelineTrace(traceSteps.toList()))
-                    // Surface the per-node I/O pair for the Vars tab of the
-                    // chat-home console pane. INPUT is skipped (its input is
-                    // the raw user prompt already surfaced as the latest chat
-                    // row) and OUTPUT is skipped
-                    // (already terminal; emitting after the `Completed` of
-                    // OUTPUT would shift the terminal state away from the
-                    // tail of the flow — same rule applied to the `✓`
-                    // console event upstream).
-                    emit(
-                        AgentOrchestratorState.NodeIO(
+                    ),
+                )
+                // Write-through into the persistent run trace: the NodeIo
+                // record carries the full input/output pair so the Vars and
+                // Traces console tabs can be rebuilt for a finished run, and
+                // the checkpoint/resume path can substitute the recorded
+                // output for re-execution (the routing verdicts and tool
+                // attribution ride along for exactly that replay). A replayed
+                // node appends nothing — its record is already in the trace.
+                if (runId != null && replayRecord == null) {
+                    runTraceRepository.append(
+                        RunTraceRecord.NodeIo(
+                            runId = runId,
+                            sessionId = sessionId,
+                            seq = traceSeq++,
+                            timestamp = System.currentTimeMillis(),
                             nodeId = currentNode.id,
                             nodeType = currentNode.type.name,
-                            input = executorInput,
-                            output = outputText,
+                            inputText = executorInput,
+                            outputText = outputText,
+                            durationMs = nodeDurationMs,
+                            tokenCount = nodeTokenCount,
+                            conditionResult = nodeResult?.conditionResult,
+                            routingKey = nodeResult?.routingKey,
+                            resolvedToolName = nodeResult?.resolvedToolName,
                         ),
                     )
                 }
-
-                if (currentNode.type == NodeType.OUTPUT) {
-                    return@flow
-                }
-
-                if (currentNode.type == NodeType.QUEUE_PROCESSOR) {
-                    val list = parseListFromText(nodeResult?.outputText ?: currentInputText)
-                    activeQueue.clear()
-                    activeQueue.addAll(list)
-                    queueResults.clear()
-                    activeQueueProcessorId = currentNode.id
-
-                    val edges = graph.connections.filter { it.sourceNodeId == currentNode.id }
-                    val itemNodeId = edges.find { it.label.equals("Item", ignoreCase = true) }?.targetNodeId
-                        ?: edges.firstOrNull()?.targetNodeId
-                    val doneNodeId = edges.find { it.label.equals("Done", ignoreCase = true) }?.targetNodeId
-
-                    if (activeQueue.isNotEmpty() && itemNodeId != null) {
-                        // Compute dynamic total: current steps already done + all queue iterations + tail after queue.
-                        val itemNode = graph.nodes.find { it.id == itemNodeId }
-                        val doneNode = graph.nodes.find { it.id == doneNodeId }
-                        val nodesPerItem = countNodesOnPath(itemNode, graph, stopNodeIds = setOf(currentNode.id))
-                        val nodesAfterQueue = countNodesOnPath(doneNode, graph)
-                        val totalItems = activeQueue.size // before removeAt — full queue size
-                        estimatedTotalSteps = stepCount + totalItems * nodesPerItem + nodesAfterQueue
-
-                        val nextItem = activeQueue.removeAt(0)
-                        val contextStr = queueResults.mapIndexed { i, res ->
-                            "Result of Subtask ${i + 1}:\n$res"
-                        }.joinToString("\n\n")
-                        val subtaskInstruction = DefaultPrompts.QueueProcessor.SUBTASK_INSTRUCTION
-                        currentInputText = if (contextStr.isNotEmpty()) {
-                            "PREVIOUS RESULTS CONTEXT:\n$contextStr\n\n---\n\n$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
-                        } else {
-                            "$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
-                        }
-                        currentNode = graph.nodes.find { it.id == itemNodeId }
-                        continue
-                    } else {
-                        activeQueueProcessorId = null
-                        currentNode = graph.nodes.find { it.id == doneNodeId }
-                        continue
-                    }
-                }
-
-                // INTENT_ROUTER's outputText is the routing key — a control signal, not a content payload.
-                // Preserve currentInputText so downstream nodes receive the original data, not the routing label.
-                currentInputText = if (currentNode.type == NodeType.INTENT_ROUTER) {
-                    currentInputText
-                } else {
-                    nodeResult?.outputText ?: currentInputText
-                }
-
-                val nextNodeId = findNextNodeId(currentNode, graph, nodeResult?.conditionResult, nodeResult?.routingKey)
-                val nextNode = graph.nodes.find { it.id == nextNodeId }
-
-                // After a branching node resolves its path, compute the estimated total for that branch.
-                if (currentNode.type == NodeType.INTENT_ROUTER || currentNode.type == NodeType.IF_CONDITION) {
-                    estimatedTotalSteps = stepCount + countNodesOnPath(nextNode, graph)
-                }
-
-                if (activeQueueProcessorId != null && (nextNode == null || nextNode.type == NodeType.QUEUE_PROCESSOR)) {
-                    queueResults.add(currentInputText)
-
-                    val edges = graph.connections.filter { it.sourceNodeId == activeQueueProcessorId }
-                    val itemNodeId = edges.find { it.label.equals("Item", ignoreCase = true) }?.targetNodeId
-                        ?: edges.firstOrNull()?.targetNodeId
-                    val doneNodeId = edges.find { it.label.equals("Done", ignoreCase = true) }?.targetNodeId
-
-                    if (activeQueue.isNotEmpty() && itemNodeId != null) {
-                        val nextItem = activeQueue.removeAt(0)
-                        val contextStr = queueResults.mapIndexed { i, res ->
-                            "Result of Subtask ${i + 1}:\n$res"
-                        }.joinToString("\n\n")
-                        val subtaskInstruction = DefaultPrompts.QueueProcessor.SUBTASK_INSTRUCTION
-                        if (contextStr.isNotEmpty()) {
-                            currentInputText =
-                                "PREVIOUS RESULTS CONTEXT:\n$contextStr\n\n---\n\n$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
-                        } else {
-                            currentInputText = "$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
-                        }
-                        currentNode = graph.nodes.find { it.id == itemNodeId }
-                        continue
-                    } else {
-                        currentInputText =
-                            "Queue execution completed.\nResults:\n" +
-                            queueResults.mapIndexed { i, res -> "${i + 1}. $res" }.joinToString("\n")
-                        activeQueueProcessorId = null
-                        currentNode = graph.nodes.find { it.id == doneNodeId }
-                        continue
-                    }
-                }
-
-                currentNode = nextNode
-            }
-
-            if (stepCount >= maxSteps) {
-                pushConsole(ConsoleEventType.Error, "Pipeline exceeded max steps ($maxSteps)")
-                emit(AgentOrchestratorState.Error("Pipeline execution exceeded maximum steps ($maxSteps)"))
-            } else {
-                // Loop exited because currentNode became null before reaching OUTPUT
-                pushConsole(ConsoleEventType.Error, "Pipeline terminated without OUTPUT")
+                emit(AgentOrchestratorState.PipelineTrace(traceSteps.toList()))
+                // Surface the per-node I/O pair for the Vars tab of the
+                // chat-home console pane. INPUT is skipped (its input is
+                // the raw user prompt already surfaced as the latest chat
+                // row) and OUTPUT is skipped
+                // (already terminal; emitting after the `Completed` of
+                // OUTPUT would shift the terminal state away from the
+                // tail of the flow — same rule applied to the `✓`
+                // console event upstream).
                 emit(
-                    AgentOrchestratorState.Error(
-                        "Pipeline execution terminated unexpectedly without reaching OUTPUT node.",
+                    AgentOrchestratorState.NodeIO(
+                        nodeId = currentNode.id,
+                        nodeType = currentNode.type.name,
+                        input = executorInput,
+                        output = outputText,
                     ),
                 )
             }
+
+            if (currentNode.type == NodeType.OUTPUT) {
+                return@flow
+            }
+
+            if (currentNode.type == NodeType.QUEUE_PROCESSOR) {
+                val list = parseListFromText(nodeResult?.outputText ?: currentInputText)
+                activeQueue.clear()
+                activeQueue.addAll(list)
+                queueResults.clear()
+                activeQueueProcessorId = currentNode.id
+
+                val edges = graph.connections.filter { it.sourceNodeId == currentNode.id }
+                val itemNodeId = edges.find { it.label.equals("Item", ignoreCase = true) }?.targetNodeId
+                    ?: edges.firstOrNull()?.targetNodeId
+                val doneNodeId = edges.find { it.label.equals("Done", ignoreCase = true) }?.targetNodeId
+
+                if (activeQueue.isNotEmpty() && itemNodeId != null) {
+                    // Compute dynamic total: current steps already done + all queue iterations + tail after queue.
+                    val itemNode = graph.nodes.find { it.id == itemNodeId }
+                    val doneNode = graph.nodes.find { it.id == doneNodeId }
+                    val nodesPerItem = countNodesOnPath(itemNode, graph, stopNodeIds = setOf(currentNode.id))
+                    val nodesAfterQueue = countNodesOnPath(doneNode, graph)
+                    val totalItems = activeQueue.size // before removeAt — full queue size
+                    estimatedTotalSteps = stepCount + totalItems * nodesPerItem + nodesAfterQueue
+
+                    val nextItem = activeQueue.removeAt(0)
+                    val contextStr = queueResults.mapIndexed { i, res ->
+                        "Result of Subtask ${i + 1}:\n$res"
+                    }.joinToString("\n\n")
+                    val subtaskInstruction = DefaultPrompts.QueueProcessor.SUBTASK_INSTRUCTION
+                    currentInputText = if (contextStr.isNotEmpty()) {
+                        "PREVIOUS RESULTS CONTEXT:\n$contextStr\n\n---\n\n$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
+                    } else {
+                        "$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
+                    }
+                    currentNode = graph.nodes.find { it.id == itemNodeId }
+                    continue
+                } else {
+                    activeQueueProcessorId = null
+                    currentNode = graph.nodes.find { it.id == doneNodeId }
+                    continue
+                }
+            }
+
+            // INTENT_ROUTER's outputText is the routing key — a control signal, not a content payload.
+            // Preserve currentInputText so downstream nodes receive the original data, not the routing label.
+            currentInputText = if (currentNode.type == NodeType.INTENT_ROUTER) {
+                currentInputText
+            } else {
+                nodeResult?.outputText ?: currentInputText
+            }
+
+            val nextNodeId = findNextNodeId(currentNode, graph, nodeResult?.conditionResult, nodeResult?.routingKey)
+            val nextNode = graph.nodes.find { it.id == nextNodeId }
+
+            // After a branching node resolves its path, compute the estimated total for that branch.
+            if (currentNode.type == NodeType.INTENT_ROUTER || currentNode.type == NodeType.IF_CONDITION) {
+                estimatedTotalSteps = stepCount + countNodesOnPath(nextNode, graph)
+            }
+
+            if (activeQueueProcessorId != null && (nextNode == null || nextNode.type == NodeType.QUEUE_PROCESSOR)) {
+                queueResults.add(currentInputText)
+
+                val edges = graph.connections.filter { it.sourceNodeId == activeQueueProcessorId }
+                val itemNodeId = edges.find { it.label.equals("Item", ignoreCase = true) }?.targetNodeId
+                    ?: edges.firstOrNull()?.targetNodeId
+                val doneNodeId = edges.find { it.label.equals("Done", ignoreCase = true) }?.targetNodeId
+
+                if (activeQueue.isNotEmpty() && itemNodeId != null) {
+                    val nextItem = activeQueue.removeAt(0)
+                    val contextStr = queueResults.mapIndexed { i, res ->
+                        "Result of Subtask ${i + 1}:\n$res"
+                    }.joinToString("\n\n")
+                    val subtaskInstruction = DefaultPrompts.QueueProcessor.SUBTASK_INSTRUCTION
+                    if (contextStr.isNotEmpty()) {
+                        currentInputText =
+                            "PREVIOUS RESULTS CONTEXT:\n$contextStr\n\n---\n\n$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
+                    } else {
+                        currentInputText = "$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
+                    }
+                    currentNode = graph.nodes.find { it.id == itemNodeId }
+                    continue
+                } else {
+                    currentInputText =
+                        "Queue execution completed.\nResults:\n" +
+                        queueResults.mapIndexed { i, res -> "${i + 1}. $res" }.joinToString("\n")
+                    activeQueueProcessorId = null
+                    currentNode = graph.nodes.find { it.id == doneNodeId }
+                    continue
+                }
+            }
+
+            currentNode = nextNode
         }
+
+        if (stepCount >= maxSteps) {
+            pushConsole(ConsoleEventType.Error, "Pipeline exceeded max steps ($maxSteps)")
+            emit(AgentOrchestratorState.Error("Pipeline execution exceeded maximum steps ($maxSteps)"))
+        } else {
+            // Loop exited because currentNode became null before reaching OUTPUT
+            pushConsole(ConsoleEventType.Error, "Pipeline terminated without OUTPUT")
+            emit(
+                AgentOrchestratorState.Error(
+                    "Pipeline execution terminated unexpectedly without reaching OUTPUT node.",
+                ),
+            )
+        }
+    }.onCompletion {
+        // Terminal flush: completion, failure and cancellation all land here,
+        // so the persisted trace is complete the moment the run ends — even
+        // when the process is about to die right after. The cancellation path
+        // arrives with the coroutine already cancelled, hence NonCancellable;
+        // the flush itself is best-effort and never throws storage failures.
+        if (runId != null) {
+            withContext(NonCancellable) {
+                runTraceRepository.flush()
+            }
+        }
+    }
 
     /**
      * Counts the number of nodes reachable from [startNode] by following the first outgoing edge
@@ -522,6 +759,48 @@ class GraphExecutionEngine @Inject constructor(
         val edgeLabel = edges.find { it.targetNodeId == targetNodeId }?.label ?: "null"
         Timber.tag("PipelineDebug").d("[ROUTE] from=${currentNode.id} label=$edgeLabel -> to=$targetNodeId")
         return targetNodeId
+    }
+
+    /**
+     * Mirrors a human-in-the-loop suspension (and its resolution) into the
+     * persistent run record. [AgentOrchestratorState.WaitingForApproval] and
+     * [AgentOrchestratorState.AwaitingClarification] move the record to the
+     * matching WAITING_* status; the first state forwarded *after* a
+     * suspension flips it back to [PipelineRunStatus.RUNNING] (the node-end
+     * flip in the main loop covers executors that emit no state after
+     * resolution). All other states leave the record untouched — the RUNNING
+     * transition itself and every terminal status are owned by the task
+     * queue. The repository is best-effort by contract, so no guard is
+     * needed here.
+     *
+     * @param runId Id of the persistent run record.
+     * @param state The orchestrator state about to be forwarded downstream.
+     * @param wasSuspended Whether the record currently sits in a WAITING_* status.
+     * @return The new suspension flag to carry into the next forwarded state.
+     */
+    private suspend fun persistSuspensionTransition(
+        runId: String,
+        state: AgentOrchestratorState,
+        wasSuspended: Boolean,
+    ): Boolean = when {
+        state is AgentOrchestratorState.WaitingForApproval -> {
+            pipelineRunRepository.updateStatus(runId, PipelineRunStatus.WAITING_APPROVAL)
+            // Suspension flush: the run may now wait indefinitely (and the
+            // process may die waiting), so the trace must be durable up to
+            // this exact point.
+            runTraceRepository.flush()
+            true
+        }
+        state is AgentOrchestratorState.AwaitingClarification -> {
+            pipelineRunRepository.updateStatus(runId, PipelineRunStatus.WAITING_CLARIFICATION)
+            runTraceRepository.flush()
+            true
+        }
+        wasSuspended -> {
+            pipelineRunRepository.updateStatus(runId, PipelineRunStatus.RUNNING)
+            false
+        }
+        else -> false
     }
 
     /**

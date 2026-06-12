@@ -3,13 +3,18 @@ package app.knotwork.android.domain.engine.executors
 import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AgentOrchestratorState
+import app.knotwork.android.domain.models.ClarificationOutcome
 import app.knotwork.android.domain.models.ClarificationRequest
 import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.NodeType
+import app.knotwork.android.domain.models.PendingInteraction
+import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.repositories.ClarificationRepository
+import app.knotwork.android.domain.repositories.PendingInteractionRepository
+import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -43,11 +48,25 @@ import javax.inject.Inject
  *    a reply or the configured timeout elapses.
  * 5. Emit [NodeExecutionResult] with the user's answer as `outputText` for the next
  *    node downstream.
+ *
+ * The live wait is only the first phase of a two-phase protocol. When it
+ * times out on a persisted run, the executor parks the run instead of
+ * fabricating an answer: the generated question becomes a durable
+ * `PendingInteraction`, an "Agent needs your input" notification deep-links
+ * back into the chat, and the flow ends with
+ * [AgentOrchestratorState.SuspendedInBackground] while the run record keeps
+ * its `WAITING_CLARIFICATION` status. The user's later answer is recorded
+ * onto the record and the run is resumed from its checkpoint; this executor
+ * then consumes the record one-shot — returning the recorded answer directly,
+ * without re-running question inference. Runs without a persistent record
+ * (editor test runs) keep the legacy default-answer timeout fallback.
  */
 class ClarificationNodeExecutor @Inject constructor(
     private val llmEngine: LlmInferenceEngine,
     private val loadModelUseCase: LoadModelUseCase,
     private val clarificationRepository: ClarificationRepository,
+    private val pendingInteractionRepository: PendingInteractionRepository,
+    private val clarificationNotifier: ClarificationNotifier,
 ) : NodeExecutor {
 
     override fun execute(
@@ -55,7 +74,19 @@ class ClarificationNodeExecutor @Inject constructor(
         inputText: String,
         sessionId: String,
         originalPrompt: String,
+        runId: String?,
     ): Flow<NodeOutput> = flow {
+        // A resumed run carries the user's one-shot answer for the question
+        // this node parked on — return it directly, without re-running
+        // question inference. The record never survives its first
+        // consumption attempt; an unanswered record (a resume that did not
+        // come through the answer path) falls through to a fresh question.
+        val parkedAnswer = consumeParkedAnswer(runId)
+        if (parkedAnswer != null) {
+            emit(NodeOutput.Result(NodeExecutionResult(outputText = parkedAnswer)))
+            return@flow
+        }
+
         val instruction = node.systemPrompt
             ?: DefaultPrompts.CLARIFICATION_PROMPT
         val fullPrompt = "$instruction\n\nCONTEXT FROM PREVIOUS NODE:\n$inputText\n\nRESPONSE (JSON only):\n"
@@ -98,15 +129,80 @@ class ClarificationNodeExecutor @Inject constructor(
 
         val request = ClarificationRequest(
             id = UUID.randomUUID().toString(),
+            sessionId = sessionId,
             question = question,
             options = options,
             timeoutMs = node.clarificationTimeoutMs ?: DEFAULT_TIMEOUT_MS,
         )
 
         emit(NodeOutput.State(AgentOrchestratorState.AwaitingClarification(request)))
-        val answer = clarificationRepository.requestAnswer(request)
+        when (val outcome = clarificationRepository.requestAnswer(request)) {
+            is ClarificationOutcome.Answered ->
+                emit(NodeOutput.Result(NodeExecutionResult(outputText = outcome.answer)))
+            is ClarificationOutcome.TimedOut -> {
+                if (runId != null && parkRun(runId, sessionId, question, options)) {
+                    // Two-phase wait, second phase: the run parks on its
+                    // durable pending record. No NodeOutput.Result on
+                    // purpose — the engine stops the walk and the run record
+                    // stays WAITING_CLARIFICATION.
+                    emit(
+                        NodeOutput.State(
+                            AgentOrchestratorState.SuspendedInBackground(PendingInteractionKind.CLARIFICATION),
+                        ),
+                    )
+                } else {
+                    // Non-persisted runs (editor test runs) and storage
+                    // failures keep the legacy default-answer fallback.
+                    val defaultAnswer = request.options?.firstOrNull().orEmpty()
+                    Timber.tag(TAG).w("Clarification timed out; using default answer: %s", defaultAnswer)
+                    emit(NodeOutput.Result(NodeExecutionResult(outputText = defaultAnswer)))
+                }
+            }
+        }
+    }
 
-        emit(NodeOutput.Result(NodeExecutionResult(outputText = answer)))
+    /**
+     * Consumes the parked clarification record of a resumed run, one-shot.
+     *
+     * @param runId Id of the executing run, or `null` for non-persisted runs.
+     * @return The recorded answer when present, or `null` when a fresh
+     *   question must be asked (no record, or an unanswered record).
+     */
+    private suspend fun consumeParkedAnswer(runId: String?): String? {
+        if (runId == null) return null
+        val parked = pendingInteractionRepository.getForRun(runId) ?: return null
+        if (parked.kind != PendingInteractionKind.CLARIFICATION) return null
+        pendingInteractionRepository.delete(runId)
+        return parked.answer
+    }
+
+    /**
+     * Parks the run in its persistent waiting phase: persists the generated
+     * question as a [PendingInteraction] and, when durable, posts the
+     * "Agent needs your input" notification deep-linking back into the chat.
+     *
+     * @param runId Id of the persisted run being parked.
+     * @param sessionId Id of the owning chat session.
+     * @param question The generated clarifying question.
+     * @param options Optional answer choices of the question.
+     * @return `true` when the park is durable; `false` when the caller must
+     *   fall back to the default answer.
+     */
+    private suspend fun parkRun(runId: String, sessionId: String, question: String, options: List<String>?): Boolean {
+        val saved = pendingInteractionRepository.save(
+            PendingInteraction(
+                runId = runId,
+                sessionId = sessionId,
+                kind = PendingInteractionKind.CLARIFICATION,
+                question = question,
+                options = options,
+                requestedAt = System.currentTimeMillis(),
+            ),
+        )
+        if (saved) {
+            clarificationNotifier.sendPersistentClarificationRequest(runId, sessionId, question)
+        }
+        return saved
     }
 
     /**

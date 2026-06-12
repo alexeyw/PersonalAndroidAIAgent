@@ -20,6 +20,15 @@ enum class ApprovalAction(val action: String) {
 
     /** User tapped "Deny" in the approval notification — cancel the pending tool call. */
     DENY("app.knotwork.android.ACTION_DENY"),
+
+    /**
+     * Delete-intent of a persistent (parked-run) notification fired by a user
+     * swipe — re-post the notification from the pending-interaction record.
+     * Android 14+ lets the user dismiss ongoing notifications, but a parked
+     * run's notification is its primary recovery surface and must persist
+     * until the request is settled or expires.
+     */
+    REPOST("app.knotwork.android.ACTION_REPOST_PENDING"),
     ;
 
     companion object {

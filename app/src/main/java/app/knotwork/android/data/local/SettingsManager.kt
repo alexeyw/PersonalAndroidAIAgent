@@ -104,6 +104,10 @@ class SettingsManager @Inject constructor(
         val LAST_INIT_BACKEND_ATTEMPT = stringPreferencesKey("last_init_backend_attempt")
         val TOOL_CALL_TIMEOUT_MS = androidx.datastore.preferences.core.longPreferencesKey("tool_call_timeout_ms")
         val PIPELINE_MAX_STEPS = intPreferencesKey("pipeline_max_steps")
+        val RESUME_MAX_AGE_HOURS = intPreferencesKey("resume_max_age_hours")
+        val BACKGROUND_APPROVAL_WINDOW_HOURS = intPreferencesKey("background_approval_window_hours")
+        val TRACE_RETENTION_RUNS_PER_SESSION = intPreferencesKey("trace_retention_runs_per_session")
+        val TRACE_RETENTION_MAX_AGE_DAYS = intPreferencesKey("trace_retention_max_age_days")
         val MEMORY_SUMMARY_DEFAULT_LIMIT = intPreferencesKey("memory_summary_default_limit")
         val DEFAULT_PIPELINE_ID = stringPreferencesKey("default_pipeline_id")
         val CRASH_REPORTING_ENABLED = booleanPreferencesKey("crash_reporting_enabled")
@@ -118,6 +122,7 @@ class SettingsManager @Inject constructor(
             "auto_summarize_threshold",
         )
         val LONG_RUNNING_TASKS_NOTIFICATIONS = booleanPreferencesKey("long_running_tasks_notifications")
+        val SCHEDULED_TASK_NOTIFICATIONS = booleanPreferencesKey("scheduled_task_notifications")
         val LAST_TEST_PROBE_RESULT = stringPreferencesKey("last_test_probe_result")
 
         // Embedding provider abstraction.
@@ -1008,6 +1013,97 @@ class SettingsManager @Inject constructor(
         }
     }
 
+    override val resumeMaxAgeHours: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.RESUME_MAX_AGE_HOURS] ?: SettingsDefaults.RESUME_MAX_AGE_HOURS_DEFAULT
+        }
+
+    override suspend fun setResumeMaxAgeHours(hours: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.RESUME_MAX_AGE_HOURS] = hours.coerceIn(
+                SettingsDefaults.RESUME_MAX_AGE_HOURS_MIN,
+                SettingsDefaults.RESUME_MAX_AGE_HOURS_MAX,
+            )
+        }
+    }
+
+    override val backgroundApprovalWindowHours: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.BACKGROUND_APPROVAL_WINDOW_HOURS]
+                ?: SettingsDefaults.BACKGROUND_APPROVAL_WINDOW_HOURS_DEFAULT
+        }
+
+    override suspend fun setBackgroundApprovalWindowHours(hours: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.BACKGROUND_APPROVAL_WINDOW_HOURS] = hours.coerceIn(
+                SettingsDefaults.BACKGROUND_APPROVAL_WINDOW_HOURS_MIN,
+                SettingsDefaults.BACKGROUND_APPROVAL_WINDOW_HOURS_MAX,
+            )
+        }
+    }
+
+    override val traceRetentionRunsPerSession: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.TRACE_RETENTION_RUNS_PER_SESSION]
+                ?: SettingsDefaults.TRACE_RETENTION_RUNS_PER_SESSION_DEFAULT
+        }
+
+    override suspend fun setTraceRetentionRunsPerSession(runs: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.TRACE_RETENTION_RUNS_PER_SESSION] = runs.coerceIn(
+                SettingsDefaults.TRACE_RETENTION_RUNS_PER_SESSION_MIN,
+                SettingsDefaults.TRACE_RETENTION_RUNS_PER_SESSION_MAX,
+            )
+        }
+    }
+
+    override val traceRetentionMaxAgeDays: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.TRACE_RETENTION_MAX_AGE_DAYS]
+                ?: SettingsDefaults.TRACE_RETENTION_MAX_AGE_DAYS_DEFAULT
+        }
+
+    override suspend fun setTraceRetentionMaxAgeDays(days: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.TRACE_RETENTION_MAX_AGE_DAYS] = days.coerceIn(
+                SettingsDefaults.TRACE_RETENTION_MAX_AGE_DAYS_MIN,
+                SettingsDefaults.TRACE_RETENTION_MAX_AGE_DAYS_MAX,
+            )
+        }
+    }
+
     override val crashReportingEnabled: Flow<Boolean> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -1177,6 +1273,25 @@ class SettingsManager @Inject constructor(
     override suspend fun setLongRunningTaskNotificationsEnabled(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.LONG_RUNNING_TASKS_NOTIFICATIONS] = enabled
+        }
+    }
+
+    override val scheduledTaskNotificationsEnabled: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.SCHEDULED_TASK_NOTIFICATIONS] ?: true
+        }
+
+    override suspend fun setScheduledTaskNotificationsEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.SCHEDULED_TASK_NOTIFICATIONS] = enabled
         }
     }
 

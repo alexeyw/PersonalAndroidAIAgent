@@ -25,6 +25,7 @@ class IfConditionNodeExecutor @Inject constructor(private val evaluateIfConditio
         inputText: String,
         sessionId: String,
         originalPrompt: String,
+        runId: String?,
     ): Flow<NodeOutput> = kotlinx.coroutines.flow.flow {
         val isTrue = evaluateIfConditionUseCase(node, inputText)
         emit(NodeOutput.Result(NodeExecutionResult(conditionResult = isTrue, outputText = inputText)))

@@ -1124,6 +1124,15 @@ private fun NotificationsCard(state: NotificationsCardState, callbacks: Settings
             checked = state.longRunningEnabled,
             onCheckedChange = callbacks.onLongRunningToggle,
         )
+        IconToggleRow(
+            icon = AppIcons.Check,
+            title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_notifications_scheduled_results),
+            subtitle = androidx.compose.ui.res.stringResource(
+                R.string.knotwork_settings_notifications_scheduled_results_subtitle,
+            ),
+            checked = state.scheduledResultsEnabled,
+            onCheckedChange = callbacks.onScheduledResultsToggle,
+        )
     }
 }
 
@@ -1148,6 +1157,17 @@ private fun PrivacyCard(state: PrivacyCardState, callbacks: SettingsCallbacks) {
             checked = state.verboseMemoryLoggingEnabled,
             onCheckedChange = callbacks.onVerboseMemoryLoggingToggle,
         )
+        state.retentionParams.forEach { param ->
+            KnotworkParamSlider(
+                label = param.title,
+                valueLabel = param.valueLabel,
+                value = param.value,
+                onValueChange = { newValue -> callbacks.onPrivacyParamChange(param.id, newValue) },
+                valueRange = param.valueRange,
+                steps = param.steps,
+                modifier = Modifier.testTag(PRIVACY_PARAM_ROW_TAG_PREFIX + param.id),
+            )
+        }
         KnotworkTextButton(
             text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_reset_button),
             onClick = callbacks.onResetSettingsClick,
@@ -1256,6 +1276,9 @@ const val PROVIDER_ROW_TAG_PREFIX: String = "settings_provider_row_"
 
 /** Test-tag prefix for the per-parameter Memory tuning slider rows. */
 const val MEMORY_PARAM_ROW_TAG_PREFIX: String = "settings_memory_param_"
+
+/** Test-tag prefix for the Privacy-section run-retention slider rows. */
+const val PRIVACY_PARAM_ROW_TAG_PREFIX: String = "settings_privacy_param_"
 
 /** Test tag for the Memory-section embedding-provider dropdown anchor row. */
 const val MEMORY_EMBEDDING_ROW_TAG: String = "settings_memory_embedding_row"

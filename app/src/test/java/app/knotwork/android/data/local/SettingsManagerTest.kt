@@ -72,6 +72,11 @@ class SettingsManagerTest {
     private val requiresUserConfirmationKey = booleanPreferencesKey("requires_user_confirmation")
     private val lastReembedProviderIdKey = stringPreferencesKey("last_reembed_provider_id")
     private val pipelineMaxStepsKey = androidx.datastore.preferences.core.intPreferencesKey("pipeline_max_steps")
+    private val resumeMaxAgeHoursKey = androidx.datastore.preferences.core.intPreferencesKey("resume_max_age_hours")
+    private val traceRetentionRunsPerSessionKey =
+        androidx.datastore.preferences.core.intPreferencesKey("trace_retention_runs_per_session")
+    private val traceRetentionMaxAgeDaysKey =
+        androidx.datastore.preferences.core.intPreferencesKey("trace_retention_max_age_days")
     private val crashReportingEnabledKey = booleanPreferencesKey("crash_reporting_enabled")
     private val appFunctionRiskOverridesKey = stringPreferencesKey("app_function_risk_overrides")
     private val hasCompletedOnboardingKey = booleanPreferencesKey("has_completed_onboarding")
@@ -389,6 +394,97 @@ class SettingsManagerTest {
         val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.pipelineMaxSteps.first()
         assertEquals(30, result)
+    }
+
+    @Test
+    fun `resumeMaxAgeHours returns default value of 48`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[resumeMaxAgeHoursKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, context, cipher)
+        assertEquals(48, settingsManager.resumeMaxAgeHours.first())
+    }
+
+    @Test
+    fun `resumeMaxAgeHours returns stored value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[resumeMaxAgeHoursKey] } returns 72
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, context, cipher)
+        assertEquals(72, settingsManager.resumeMaxAgeHours.first())
+    }
+
+    @Test
+    fun `setResumeMaxAgeHours coerces into the sanctioned 1-168 range`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setResumeMaxAgeHours(0)
+            assertEquals(1, manager.resumeMaxAgeHours.first())
+
+            manager.setResumeMaxAgeHours(9_000)
+            assertEquals(168, manager.resumeMaxAgeHours.first())
+
+            manager.setResumeMaxAgeHours(24)
+            assertEquals(24, manager.resumeMaxAgeHours.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `traceRetentionRunsPerSession returns default value of 20`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[traceRetentionRunsPerSessionKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, context, cipher)
+        assertEquals(20, settingsManager.traceRetentionRunsPerSession.first())
+    }
+
+    @Test
+    fun `traceRetentionMaxAgeDays returns default value of 30`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[traceRetentionMaxAgeDaysKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, context, cipher)
+        assertEquals(30, settingsManager.traceRetentionMaxAgeDays.first())
+    }
+
+    @Test
+    fun `setTraceRetentionRunsPerSession coerces into the sanctioned 5-100 range`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setTraceRetentionRunsPerSession(1)
+            assertEquals(5, manager.traceRetentionRunsPerSession.first())
+
+            manager.setTraceRetentionRunsPerSession(9_000)
+            assertEquals(100, manager.traceRetentionRunsPerSession.first())
+
+            manager.setTraceRetentionRunsPerSession(40)
+            assertEquals(40, manager.traceRetentionRunsPerSession.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `setTraceRetentionMaxAgeDays coerces into the sanctioned 7-180 range`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setTraceRetentionMaxAgeDays(1)
+            assertEquals(7, manager.traceRetentionMaxAgeDays.first())
+
+            manager.setTraceRetentionMaxAgeDays(9_000)
+            assertEquals(180, manager.traceRetentionMaxAgeDays.first())
+
+            manager.setTraceRetentionMaxAgeDays(60)
+            assertEquals(60, manager.traceRetentionMaxAgeDays.first())
+        } finally {
+            scope.cancel()
+        }
     }
 
     @Test

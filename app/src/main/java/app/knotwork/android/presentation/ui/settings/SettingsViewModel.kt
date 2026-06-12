@@ -187,6 +187,22 @@ class SettingsViewModel @Inject constructor(
             _uiState.update { it.copy(capAutonomousSteps = value) }
         }.launchIn(viewModelScope)
 
+        settingsRepository.resumeMaxAgeHours.onEach { value ->
+            _uiState.update { it.copy(resumeMaxAgeHours = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.backgroundApprovalWindowHours.onEach { value ->
+            _uiState.update { it.copy(backgroundApprovalWindowHours = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.traceRetentionRunsPerSession.onEach { value ->
+            _uiState.update { it.copy(traceRetentionRunsPerSession = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.traceRetentionMaxAgeDays.onEach { value ->
+            _uiState.update { it.copy(traceRetentionMaxAgeDays = value) }
+        }.launchIn(viewModelScope)
+
         settingsRepository.temperature.onEach { value ->
             _uiState.update { it.copy(temperature = value) }
         }.launchIn(viewModelScope)
@@ -272,6 +288,10 @@ class SettingsViewModel @Inject constructor(
 
         settingsRepository.longRunningTaskNotificationsEnabled.onEach { value ->
             _uiState.update { it.copy(longRunningTaskNotificationsEnabled = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.scheduledTaskNotificationsEnabled.onEach { value ->
+            _uiState.update { it.copy(scheduledTaskNotificationsEnabled = value) }
         }.launchIn(viewModelScope)
 
         settingsRepository.crashReportingEnabled.onEach { value ->
@@ -420,6 +440,49 @@ class SettingsViewModel @Inject constructor(
 
     fun setCapAutonomousSteps(steps: Int) {
         viewModelScope.launch { settingsRepository.setPipelineMaxSteps(steps) }
+    }
+
+    /**
+     * Persists the checkpoint-resume window (hours). The repository coerces
+     * the value into the sanctioned 1–168 range.
+     *
+     * @param hours The new window picked on the slider.
+     */
+    fun setResumeMaxAgeHours(hours: Int) {
+        viewModelScope.launch { settingsRepository.setResumeMaxAgeHours(hours) }
+    }
+
+    /**
+     * Persists the background-approval window (hours) during which a run
+     * parked on an unanswered HITL request waits for the user's response.
+     * The repository coerces the value into the sanctioned 1–168 range.
+     *
+     * @param hours The new window picked on the slider.
+     */
+    fun setBackgroundApprovalWindowHours(hours: Int) {
+        viewModelScope.launch { settingsRepository.setBackgroundApprovalWindowHours(hours) }
+    }
+
+    /**
+     * Persists how many most-recent pipeline runs the retention pass keeps
+     * per chat session. The repository coerces the value into the sanctioned
+     * 5–100 range.
+     *
+     * @param runs The new per-session count picked on the slider.
+     */
+    fun setTraceRetentionRunsPerSession(runs: Int) {
+        viewModelScope.launch { settingsRepository.setTraceRetentionRunsPerSession(runs) }
+    }
+
+    /**
+     * Persists the maximum age (days) a terminal pipeline run is kept before
+     * the retention pass deletes it. The repository coerces the value into
+     * the sanctioned 7–180 range.
+     *
+     * @param days The new age limit picked on the slider.
+     */
+    fun setTraceRetentionMaxAgeDays(days: Int) {
+        viewModelScope.launch { settingsRepository.setTraceRetentionMaxAgeDays(days) }
     }
 
     // ─── LLM parameters ────────────────────────────────────────────────────
@@ -808,6 +871,7 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.setBlockNetworkFromLocalModel(false)
             settingsRepository.setAutoSummarizeThreshold(SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_DEFAULT)
             settingsRepository.setLongRunningTaskNotificationsEnabled(true)
+            settingsRepository.setScheduledTaskNotificationsEnabled(true)
             settingsRepository.setSystemPromptPrefix("")
             resetMemoryTuningDefaults()
             emitSnackbar(appContext.getString(R.string.settings_reset_button))
@@ -835,6 +899,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setLongRunningTaskNotificationsEnabled(enabled: Boolean) {
         viewModelScope.launch { settingsRepository.setLongRunningTaskNotificationsEnabled(enabled) }
+    }
+
+    fun setScheduledTaskNotificationsEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setScheduledTaskNotificationsEnabled(enabled) }
     }
 
     fun setCrashReportingEnabled(enabled: Boolean) {

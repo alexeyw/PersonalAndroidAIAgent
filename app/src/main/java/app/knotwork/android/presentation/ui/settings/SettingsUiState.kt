@@ -26,6 +26,11 @@ import app.knotwork.android.domain.models.ToolApprovalPolicy
  * @property blockNetworkFromLocalModel Mirror of the persisted toggle.
  * @property capAutonomousSteps Renamed `pipelineMaxSteps`; trailing value
  *   in the restrictions card.
+ * @property resumeMaxAgeHours Window (hours) during which an interrupted
+ *   pipeline run can still be resumed from its checkpoint.
+ * @property backgroundApprovalWindowHours Window (hours) during which a run
+ *   parked on an unanswered background HITL request waits for the user's
+ *   response before failing.
  * @property temperature / [topK] / [topP] / [repetitionPenalty] /
  *   [maxContextLength] Sampling parameters mirrored from DataStore.
  * @property activeModelMeta Live snapshot of the active model card.
@@ -64,9 +69,15 @@ import app.knotwork.android.domain.models.ToolApprovalPolicy
  * @property reembedProgress `null` when no re-embed job is in flight;
  *   otherwise `0f..1f`.
  * @property longRunningTaskNotificationsEnabled Mirror of the toggle.
+ * @property scheduledTaskNotificationsEnabled Mirror of the "Scheduled task
+ *   results" notifications toggle.
  * @property crashReportingEnabled Mirror of the toggle.
  * @property verboseMemoryLoggingEnabled Mirror of the verbose memory logging
  *   toggle (Settings → Privacy).
+ * @property traceRetentionRunsPerSession How many most-recent pipeline runs
+ *   the retention pass preserves per chat session (Settings → Privacy).
+ * @property traceRetentionMaxAgeDays Maximum age (days) a terminal pipeline
+ *   run is kept before the retention pass deletes it (Settings → Privacy).
  * @property restartRequired `true` after the user changed an
  *   inference-backend / Ollama base URL that requires a process restart.
  * @property pendingDestructive Currently staged destructive action,
@@ -83,6 +94,8 @@ data class SettingsUiState(
     val blockDestructiveTools: Boolean = false,
     val blockNetworkFromLocalModel: Boolean = false,
     val capAutonomousSteps: Int = SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT,
+    val resumeMaxAgeHours: Int = SettingsDefaults.RESUME_MAX_AGE_HOURS_DEFAULT,
+    val backgroundApprovalWindowHours: Int = SettingsDefaults.BACKGROUND_APPROVAL_WINDOW_HOURS_DEFAULT,
     val temperature: Float = SettingsDefaults.TEMPERATURE_DEFAULT,
     val topK: Int = SettingsDefaults.TOP_K_DEFAULT,
     val topP: Float = SettingsDefaults.TOP_P_DEFAULT,
@@ -109,8 +122,11 @@ data class SettingsUiState(
     val memoryValidationError: MemoryValidationError? = null,
     val reembedProgress: Float? = null,
     val longRunningTaskNotificationsEnabled: Boolean = true,
+    val scheduledTaskNotificationsEnabled: Boolean = true,
     val crashReportingEnabled: Boolean = false,
     val verboseMemoryLoggingEnabled: Boolean = SettingsDefaults.VERBOSE_MEMORY_LOGGING_ENABLED_DEFAULT,
+    val traceRetentionRunsPerSession: Int = SettingsDefaults.TRACE_RETENTION_RUNS_PER_SESSION_DEFAULT,
+    val traceRetentionMaxAgeDays: Int = SettingsDefaults.TRACE_RETENTION_MAX_AGE_DAYS_DEFAULT,
     val restartRequired: Boolean = false,
     val pendingDestructive: PendingDestructiveAction? = null,
     val destructiveTypedInput: String = "",

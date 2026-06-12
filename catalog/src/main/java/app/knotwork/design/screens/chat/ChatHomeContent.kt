@@ -628,6 +628,8 @@ private fun ChatHomeMessageList(
                 onAllowAlways = callbacks.onHitlAllowAlways,
                 onReject = callbacks.onHitlReject,
                 onClarificationReply = callbacks.onClarificationReply,
+                onRunResume = callbacks.onResumeRun,
+                onRunDiscard = callbacks.onDiscardRun,
                 onErrorRetry = callbacks.onErrorRetry,
                 onContextAction = { action -> callbacks.onMessageContextAction(row.id, action) },
                 markdownRenderer = markdownRenderer,
@@ -855,6 +857,7 @@ private fun ChatHomeDrawerThreadRow(row: ChatHomeThreadRow, onClick: () -> Unit,
     } else {
         KnotworkTheme.extended.onSurfaceMuted
     }
+    val runningDescription = stringResource(R.string.knotwork_chat_home_drawer_running_cd)
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
@@ -900,6 +903,21 @@ private fun ChatHomeDrawerThreadRow(row: ChatHomeThreadRow, onClick: () -> Unit,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
+        }
+        if (row.running) {
+            // The design-system loader (not a raw Material spinner): it
+            // honours the reduced-motion contract by collapsing to a static
+            // glyph, and keeps the in-progress visual language consistent
+            // with the other inline-busy surfaces. The wrapper overrides
+            // the loader's generic "Loading" announcement with row-specific
+            // copy.
+            Box(
+                modifier = Modifier.semantics {
+                    contentDescription = runningDescription
+                },
+            ) {
+                KnotworkLoader()
+            }
         }
         IconButton(onClick = onEdit) {
             Icon(

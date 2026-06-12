@@ -54,6 +54,20 @@ sealed interface AgentOrchestratorState {
     data class AwaitingClarification(val request: ClarificationRequest) : AgentOrchestratorState
 
     /**
+     * The run has been parked in its persistent waiting phase: the live
+     * in-process HITL gate ([WaitingForApproval] or [AwaitingClarification])
+     * timed out, the pending request is durable in the pending-interaction
+     * store, and the engine coroutine is about to end without a terminal
+     * state. The run record keeps its WAITING_* status; the user's response
+     * later resumes the run from its checkpoint — possibly in a different
+     * process. Consumers treat this as "run no longer live" without mapping
+     * it to failure or cancellation.
+     *
+     * @property kind Which HITL gate the run is parked on.
+     */
+    data class SuspendedInBackground(val kind: PendingInteractionKind) : AgentOrchestratorState
+
+    /**
      * The tool execution finished.
      *
      * @property toolName The name of the tool.
@@ -132,8 +146,12 @@ sealed interface AgentOrchestratorState {
      *
      * @property events Append-only ordered list of console events for the
      *   current run. The engine emits a fresh immutable copy on every change.
+     * @property runId Id of the persistent pipeline run the events belong to,
+     *   or `null` when the run is not persisted (e.g. editor test runs). The
+     *   UI uses it at the console replay/live seam: a live snapshot of the
+     *   same run merges with the replayed baseline by [ConsoleEvent.seq].
      */
-    data class ConsoleLog(val events: List<ConsoleEvent>) : AgentOrchestratorState
+    data class ConsoleLog(val events: List<ConsoleEvent>, val runId: String? = null) : AgentOrchestratorState
 
     /**
      * Per-node input/output snapshot emitted by

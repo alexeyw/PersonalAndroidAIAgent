@@ -23,8 +23,8 @@ import org.robolectric.annotation.GraphicsMode
  * state of `compose/screens/README.md §C1`.
  *
  * Coverage:
- *  - 7 single-variant states × 2 themes (Empty / Idle / Generating /
- *    Clarification / Error / DrawerOpen / ConsoleExpanded).
+ *  - 8 single-variant states × 2 themes (Empty / Idle / Generating /
+ *    Clarification / Interrupted / Error / DrawerOpen / ConsoleExpanded).
  *  - HitlConfirm × 3 risk variants × 2 themes (Readonly / Sensitive /
  *    Destructive) — the destructive variant doubles as the typed-confirm
  *    gating snapshot.
@@ -111,6 +111,16 @@ class ChatHomeContentSnapshotTest {
     @Test
     fun chat_home_clarification_dark() = snapshot(name = "clarification", dark = true) {
         ChatHomeContent(state = ChatHomePreview.clarification())
+    }
+
+    @Test
+    fun chat_home_interrupted_light() = snapshot(name = "interrupted", dark = false) {
+        ChatHomeContent(state = ChatHomePreview.interrupted())
+    }
+
+    @Test
+    fun chat_home_interrupted_dark() = snapshot(name = "interrupted", dark = true) {
+        ChatHomeContent(state = ChatHomePreview.interrupted())
     }
 
     @Test

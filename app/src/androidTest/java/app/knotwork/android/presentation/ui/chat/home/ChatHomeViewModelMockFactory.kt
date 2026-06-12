@@ -141,6 +141,7 @@ internal fun mockChatHomeViewModel(
     every { vm.exportEvents } returns MutableSharedFlow()
     every { vm.importErrorEvents } returns MutableSharedFlow()
     every { vm.memorySaveEvents } returns MutableSharedFlow()
+    every { vm.resumeFeedbackEvents } returns MutableSharedFlow()
     every { vm.currentPipelineId() } returns null
 
     return vm to ChatHomeMockHandles(state = stateFlow)

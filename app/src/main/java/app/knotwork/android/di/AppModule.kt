@@ -14,15 +14,21 @@ import app.knotwork.android.data.local.EncryptedDbPassphraseProvider
 import app.knotwork.android.data.local.dao.ChatDao
 import app.knotwork.android.data.local.dao.LocalModelDao
 import app.knotwork.android.data.local.dao.MemoryDao
+import app.knotwork.android.data.local.dao.PendingInteractionDao
 import app.knotwork.android.data.local.dao.PipelineDao
 import app.knotwork.android.data.local.dao.PipelinePresetDao
+import app.knotwork.android.data.local.dao.PipelineRunDao
 import app.knotwork.android.data.local.dao.PromptPresetDao
 import app.knotwork.android.data.local.dao.PromptTemplateDao
 import app.knotwork.android.data.local.dao.TraceStepDao
 import app.knotwork.android.data.tools.local.AppFunctionDataCodec
 import app.knotwork.android.data.tools.local.LocalAppFunctionManager
 import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.services.ClarificationNotifier
+import app.knotwork.android.domain.services.ScheduledTaskNotifier
 import app.knotwork.android.presentation.notifications.ApprovalNotificationManager
+import app.knotwork.android.presentation.notifications.ClarificationNotificationManager
+import app.knotwork.android.presentation.notifications.ScheduledTaskNotifierImpl
 import app.knotwork.android.presentation.state.ActiveSessionTracker
 import com.google.firebase.FirebaseApp
 import com.google.firebase.analytics.FirebaseAnalytics
@@ -148,6 +154,10 @@ object AppModule {
                 AppDatabase.MIGRATION_26_27,
                 AppDatabase.MIGRATION_27_28,
                 AppDatabase.MIGRATION_28_29,
+                AppDatabase.MIGRATION_29_30,
+                AppDatabase.MIGRATION_30_31,
+                AppDatabase.MIGRATION_31_32,
+                AppDatabase.MIGRATION_32_33,
             )
             // No destructive fallback on upgrade: every version bump must supply an explicit
             // migration above so user data survives. Destructive recreation is kept only for the
@@ -205,6 +215,19 @@ object AppModule {
      */
     @Provides
     fun providePromptPresetDao(database: AppDatabase): PromptPresetDao = database.promptPresetDao()
+
+    /**
+     * Provides the [PipelineRunDao] backing the persistent pipeline-run records.
+     */
+    @Provides
+    fun providePipelineRunDao(database: AppDatabase): PipelineRunDao = database.pipelineRunDao()
+
+    /**
+     * Provides the [PendingInteractionDao] backing the parked HITL
+     * interaction records of the two-phase waiting protocol.
+     */
+    @Provides
+    fun providePendingInteractionDao(database: AppDatabase): PendingInteractionDao = database.pendingInteractionDao()
 
     /**
      * Provides the singleton instance of Converters for Room mapping.
@@ -297,4 +320,23 @@ object AppModule {
         @ApplicationContext appContext: Context,
         activeSessionTracker: ActiveSessionTracker,
     ): ApprovalNotifier = ApprovalNotificationManager(appContext, activeSessionTracker)
+
+    /**
+     * Binds the presentation-layer [ScheduledTaskNotifierImpl] (deep-links into
+     * `MainActivity`) to the domain-level [ScheduledTaskNotifier] consumed by
+     * the background `AgentWorker`.
+     */
+    @Provides
+    @Singleton
+    fun provideScheduledTaskNotifier(impl: ScheduledTaskNotifierImpl): ScheduledTaskNotifier = impl
+
+    /**
+     * Binds the presentation-layer [ClarificationNotificationManager]
+     * (deep-links into `MainActivity`) to the domain-level
+     * [ClarificationNotifier] consumed by the clarification node executor and
+     * the parked-run submission path.
+     */
+    @Provides
+    @Singleton
+    fun provideClarificationNotifier(impl: ClarificationNotificationManager): ClarificationNotifier = impl
 }

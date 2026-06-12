@@ -1,5 +1,7 @@
 package app.knotwork.android.domain.repositories
 
+import app.knotwork.android.domain.models.ToolExecutionContext
+
 /**
  * Strategy interface for executing a single locally-registered agent tool.
  *
@@ -22,7 +24,12 @@ interface LocalToolExecutor {
      * serialized result for the agent observation log.
      *
      * @param arguments JSON-encoded arguments matching the tool's parameter schema.
+     * @param context Engine-supplied [ToolExecutionContext] carrying trusted
+     *   environment values (e.g. the invoking chat session id). Arguments come
+     *   from the LLM and cannot be trusted for identifiers; executors that need
+     *   environment identity read it from here. Implementations that do not
+     *   care simply ignore the parameter.
      * @return The tool's textual result.
      */
-    suspend fun execute(arguments: String): String
+    suspend fun execute(arguments: String, context: ToolExecutionContext = ToolExecutionContext.EMPTY): String
 }

@@ -3,12 +3,17 @@ package app.knotwork.android.domain.usecases
 import app.knotwork.android.domain.engine.TaskQueueManager
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTask
+import app.knotwork.android.domain.models.RunOrigin
+import app.knotwork.android.domain.models.TaskPriority
+import app.knotwork.android.domain.models.ToolRisk
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -49,6 +54,31 @@ class AgentOrchestratorUseCaseTest {
         verify { taskQueueManager.resumeWithApproval(sessionId, true) }
     }
 
+    @Test
+    fun `observe subscribes to the session state without enqueueing a task`() = runTest {
+        every { taskQueueManager.observeTaskState(sessionId) } returns flowOf(
+            AgentOrchestratorState.Thinking("working"),
+        )
+
+        val states = useCase.observe(sessionId).toList()
+
+        assertTrue(states.single() is AgentOrchestratorState.Thinking)
+        verify(exactly = 0) { taskQueueManager.enqueueTask(any()) }
+    }
+
+    @Test
+    fun `pendingApprovalFor delegates to TaskQueueManager`() {
+        val pending = AgentOrchestratorState.WaitingForApproval(
+            toolName = "fs.delete_file",
+            arguments = "{}",
+            risk = ToolRisk.SENSITIVE,
+        )
+        every { taskQueueManager.pendingApproval(sessionId) } returns pending
+
+        assertTrue(useCase.pendingApprovalFor(sessionId) === pending)
+        verify { taskQueueManager.pendingApproval(sessionId) }
+    }
+
     /**
      * The use case must surface the per-chat `pipelineId` on the
      * enqueued [AgentTask] so the orchestrator runs the chat-bound pipeline,
@@ -78,5 +108,30 @@ class AgentOrchestratorUseCaseTest {
         useCase(sessionId, "hi").toList()
 
         verify { taskQueueManager.enqueueTask(match { it.pipelineId == null }) }
+    }
+
+    @Test
+    fun `enqueueScheduled enqueues a SCHEDULER-origin NORMAL-priority task and returns its id`() {
+        val enqueued = slot<AgentTask>()
+        every { taskQueueManager.enqueueTask(capture(enqueued)) } returns Unit
+
+        val runId = useCase.enqueueScheduled(sessionId, "morning summary")
+
+        assertEquals(enqueued.captured.id, runId)
+        assertEquals(sessionId, enqueued.captured.sessionId)
+        assertEquals("morning summary", enqueued.captured.prompt)
+        assertEquals(RunOrigin.SCHEDULER, enqueued.captured.origin)
+        assertEquals(TaskPriority.NORMAL, enqueued.captured.priority)
+    }
+
+    @Test
+    fun `enqueueScheduled never subscribes to the replaying session state flow`() {
+        every { taskQueueManager.enqueueTask(any()) } returns Unit
+
+        useCase.enqueueScheduled(sessionId, "morning summary")
+
+        // Background callers track completion via the persistent run record;
+        // touching the replaying flow here would reintroduce the stale-state race.
+        verify(exactly = 0) { taskQueueManager.observeTaskState(any()) }
     }
 }

@@ -399,6 +399,73 @@ interface SettingsRepository {
     suspend fun setPipelineMaxSteps(steps: Int)
 
     /**
+     * A [Flow] representing the window, in hours, during which an interrupted
+     * pipeline run can still be resumed from its checkpoint. Interrupted runs
+     * older than this only offer the regular discard path — their recorded
+     * context grows stale with time. Valid range: 1–168.
+     */
+    val resumeMaxAgeHours: Flow<Int>
+
+    /**
+     * Updates the checkpoint-resume window.
+     *
+     * @param hours The new window in hours. Will be coerced to the range 1–168.
+     */
+    suspend fun setResumeMaxAgeHours(hours: Int)
+
+    /**
+     * A [Flow] representing the window, in hours, during which a run parked
+     * on a persistent HITL request (background approval or clarification)
+     * waits for the user's response. Counted from the moment the live
+     * in-process waiting phase timed out; once elapsed, the maintenance pass
+     * fails the run with an "Approval window expired" message. Valid range:
+     * 1–168.
+     */
+    val backgroundApprovalWindowHours: Flow<Int>
+
+    /**
+     * Updates the background-approval window.
+     *
+     * @param hours The new window in hours. Will be coerced to the range 1–168.
+     */
+    suspend fun setBackgroundApprovalWindowHours(hours: Int)
+
+    /**
+     * A [Flow] representing how many most-recent pipeline runs the retention
+     * pass preserves per chat session. Terminal runs beyond this count are
+     * deleted (together with their persisted traces) during the daily
+     * maintenance window; non-terminal runs — including runs parked on a
+     * background approval or clarification — are never removed by retention.
+     * Valid range: 5–100.
+     */
+    val traceRetentionRunsPerSession: Flow<Int>
+
+    /**
+     * Updates the per-session run-retention count.
+     *
+     * @param runs The new count. Callers should keep it within the range
+     *   5–100 (validation of user-entered values lives in the Settings
+     *   ViewModel).
+     */
+    suspend fun setTraceRetentionRunsPerSession(runs: Int)
+
+    /**
+     * A [Flow] representing the maximum age, in days, a terminal pipeline run
+     * (and its trace) is kept before the retention pass deletes it regardless
+     * of the per-session count. Valid range: 7–180.
+     */
+    val traceRetentionMaxAgeDays: Flow<Int>
+
+    /**
+     * Updates the max-age run-retention window.
+     *
+     * @param days The new age limit in days. Callers should keep it within
+     *   the range 7–180 (validation of user-entered values lives in the
+     *   Settings ViewModel).
+     */
+    suspend fun setTraceRetentionMaxAgeDays(days: Int)
+
+    /**
      * A [Flow] representing the id of the pipeline the user has marked as
      * default. `null` means no explicit choice — chats without their own
      * binding then have no pipeline to execute against and the task queue
@@ -547,6 +614,23 @@ interface SettingsRepository {
      * @param enabled `true` to allow background notifications.
      */
     suspend fun setLongRunningTaskNotificationsEnabled(enabled: Boolean)
+
+    /**
+     * `true` when the user wants a system notification announcing the outcome
+     * of a scheduled background run ("Task completed" / "Task failed").
+     * Drives the "Scheduled task results" toggle in the Notifications card —
+     * gates `ScheduledTaskNotifier`, which posts to the dedicated
+     * default-importance channel with a deep-link into the session the run
+     * landed in. Defaults to `true`.
+     */
+    val scheduledTaskNotificationsEnabled: Flow<Boolean>
+
+    /**
+     * Persists the scheduled-task result notifications toggle.
+     *
+     * @param enabled `true` to announce scheduled run outcomes.
+     */
+    suspend fun setScheduledTaskNotificationsEnabled(enabled: Boolean)
 
     /**
      * Last persisted result of a `Test backend` run inside Settings.
