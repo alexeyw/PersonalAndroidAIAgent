@@ -89,6 +89,9 @@ object BrowserEditorConstantsGenerator {
         "search_tool" to "Search (Wikipedia)",
         "delegate_task" to "Delegate Task",
         "schedule_task" to "Schedule Task",
+        "read_file" to "Read File",
+        "list_files" to "List Files",
+        "find_files" to "Find Files",
     )
 
     /**

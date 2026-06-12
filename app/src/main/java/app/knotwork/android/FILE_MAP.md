@@ -130,6 +130,10 @@ This file maps the contents of the main application package.
         - `DelegateTaskExecutor.kt` - `LocalToolExecutor` bridging the `delegate_task` tool to `DelegateTaskTool`.
         - `ScheduleTaskExecutor.kt` - `LocalToolExecutor` bridging the `schedule_task` tool to `ScheduleTaskUseCase`.
         - `SearchToolExecutor.kt` - `LocalToolExecutor` bridging the `search_tool` tool to `SearchTool`.
+        - `ReadFileExecutor.kt` - `LocalToolExecutor` for the READ_ONLY `read_file` tool; reads a workspace text file with byte `offset`/`limit` paging, caps the served window to the per-read token budget (UTF-8-boundary-aligned so pages stitch without splitting a multi-byte char), and maps every `WorkspaceError` to a readable observation.
+        - `ListFilesExecutor.kt` - `LocalToolExecutor` for the READ_ONLY `list_files` tool; renders the (optionally sub-directory-scoped, containment-validated) workspace listing via `WorkspaceListingFormat`.
+        - `FindFilesExecutor.kt` - `LocalToolExecutor` for the READ_ONLY `find_files` tool; filters the workspace listing by a `WorkspaceGlob` pattern and renders matches via `WorkspaceListingFormat`.
+        - `WorkspaceListingFormat.kt` - Shared, capped line-per-file rendering (path + size + ISO-8601 UTC mtime) used by `list_files` and `find_files`.
 - `di/` - Dependency Injection configurations (Hilt).
   - `AppModule.kt` - General app-level DI module.
   - `DataModule.kt` - Data layer DI module.
@@ -273,6 +277,7 @@ This file maps the contents of the main application package.
     - `ToolRepository.kt` - Tool repository interface.
   - `services/` - Domain-level services.
     - `AgentWorkspace.kt` - Domain interface for the agent's jailed file sandbox (`resolve` / `readText` / `writeText` / `list`); the single trust boundary for agent file I/O (path containment + size quotas + text-only surface). Operations return typed `WorkspaceResult`/`WorkspaceError` instead of throwing. Data-layer impl: `AgentWorkspaceImpl`.
+    - `WorkspaceGlob.kt` - Pure, dependency-free glob→`Regex` matcher for workspace-relative paths (`*` within a segment, `**` across directories, `?` single char); backs the `find_files` tool.
     - `ApprovalNotifier.kt` - Notifier for approval requests: the transient live-phase prompt, the persistent parked-run variant (ongoing, runId-addressed actions, re-posted on dismissal), and the cancel used when the request settles elsewhere.
     - `ClarificationNotifier.kt` - Notifier for parked clarification questions ("Agent needs your input", deep-link back into the chat). Presentation-layer impl: `ClarificationNotificationManager`.
     - `DatabaseResetService.kt` - Domain seam for the explicit, user-confirmed full data wipe (encrypted DB + stored passphrase) offered by the splash data-locked recovery screen; data-layer impl: `DatabaseResetServiceImpl`.

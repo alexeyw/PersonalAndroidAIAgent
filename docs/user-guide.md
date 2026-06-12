@@ -714,6 +714,9 @@ The app ships with the following tools:
 | **search_tool**    | Looks up a topic on Wikipedia and returns a concise summary.                        |
 | **schedule_task**  | Schedules a task to run later in the background (one-off or recurring).             |
 | **delegate_task**  | Hands a hard subtask to a configured cloud LLM and stores the result in memory. Only appears when at least one cloud provider has an API key configured. |
+| **read_file**      | Reads a text file from the agent's private workspace, truncated to a token budget so a long file never overflows the model's context; supports byte `offset`/`limit` paging. |
+| **list_files**     | Lists files in the workspace (optionally under a sub-directory) with their size and last-modified time. |
+| **find_files**     | Finds workspace files whose path matches a glob pattern (`*.md`, `reports/**`).      |
 
 Each tool has a switch on the Tools screen. Turn a tool off to hide
 it from the agent for the next run; turn it on to make it available

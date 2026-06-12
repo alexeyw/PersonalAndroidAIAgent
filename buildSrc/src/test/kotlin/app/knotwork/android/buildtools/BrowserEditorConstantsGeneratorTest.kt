@@ -59,6 +59,12 @@ class BrowserEditorConstantsGeneratorTest {
             abstract fun bindDelegateTaskExecutor(executor: DelegateTaskExecutor): LocalToolExecutor
             @Binds @IntoMap @StringKey(SearchTool.TOOL_NAME)
             abstract fun bindSearchToolExecutor(executor: SearchToolExecutor): LocalToolExecutor
+            @Binds @IntoMap @StringKey(ReadFileExecutor.TOOL_NAME)
+            abstract fun bindReadFileExecutor(executor: ReadFileExecutor): LocalToolExecutor
+            @Binds @IntoMap @StringKey(ListFilesExecutor.TOOL_NAME)
+            abstract fun bindListFilesExecutor(executor: ListFilesExecutor): LocalToolExecutor
+            @Binds @IntoMap @StringKey(FindFilesExecutor.TOOL_NAME)
+            abstract fun bindFindFilesExecutor(executor: FindFilesExecutor): LocalToolExecutor
         }
     """.trimIndent()
 
@@ -90,6 +96,9 @@ class BrowserEditorConstantsGeneratorTest {
         "ScheduleTaskExecutor" to toolSource("schedule_task"),
         "DelegateTaskExecutor" to toolSource("delegate_task"),
         "SearchTool" to toolSource("search_tool"),
+        "ReadFileExecutor" to toolSource("read_file"),
+        "ListFilesExecutor" to toolSource("list_files"),
+        "FindFilesExecutor" to toolSource("find_files"),
     )
 
     private fun providerSource(key: String) = """
@@ -140,7 +149,14 @@ class BrowserEditorConstantsGeneratorTest {
     @Test
     fun `parseBoundToolClassNames returns referenced classes in order`() {
         assertEquals(
-            listOf("ScheduleTaskExecutor", "DelegateTaskExecutor", "SearchTool"),
+            listOf(
+                "ScheduleTaskExecutor",
+                "DelegateTaskExecutor",
+                "SearchTool",
+                "ReadFileExecutor",
+                "ListFilesExecutor",
+                "FindFilesExecutor",
+            ),
             BrowserEditorConstantsGenerator.parseBoundToolClassNames(toolsModuleSource),
         )
     }
@@ -218,11 +234,14 @@ class BrowserEditorConstantsGeneratorTest {
     @Test
     fun `emitAvailableTools emits display order`() {
         val js = BrowserEditorConstantsGenerator.emitAvailableTools(
-            listOf("schedule_task", "search_tool", "delegate_task"),
+            listOf("schedule_task", "search_tool", "delegate_task", "read_file", "list_files", "find_files"),
         )
-        // Display order from TOOL_META: search, delegate, schedule.
+        // Display order from TOOL_META: search, delegate, schedule, then the workspace tools.
         assertTrue(js.indexOf("search_tool") < js.indexOf("delegate_task"))
         assertTrue(js.indexOf("delegate_task") < js.indexOf("schedule_task"))
+        assertTrue(js.indexOf("schedule_task") < js.indexOf("read_file"))
+        assertTrue(js.indexOf("read_file") < js.indexOf("list_files"))
+        assertTrue(js.indexOf("list_files") < js.indexOf("find_files"))
     }
 
     @Test(expected = GenerationException::class)

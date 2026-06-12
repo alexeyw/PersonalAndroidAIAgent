@@ -52,6 +52,16 @@ object SettingsDefaults {
     const val WORKSPACE_MAX_TOTAL_BYTES_DEFAULT: Long = 100L * 1024 * 1024
 
     /**
+     * Default budget, in **tokens**, of file content the `read_file` tool will
+     * return in a single call. The tool converts this to a byte ceiling (≈ 4
+     * bytes per token) and truncates the served window to it, so a single read
+     * of a large file can never blow the local model's context window. Set to
+     * roughly half of [MAX_CONTEXT_LENGTH_DEFAULT] so one read leaves room for
+     * the prompt, chat history and other context blocks.
+     */
+    const val WORKSPACE_READ_TOKEN_BUDGET_DEFAULT: Int = 2_000
+
+    /**
      * Default wall-clock timeout for a `CLARIFICATION` node's outstanding question,
      * in milliseconds. Mirrors [TOOL_CALL_TIMEOUT_MS_DEFAULT] today but is exposed
      * as a separate constant so the two can diverge without code-wide impact.
