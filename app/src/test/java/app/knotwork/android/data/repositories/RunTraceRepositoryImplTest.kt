@@ -362,6 +362,27 @@ class RunTraceRepositoryImplTest {
 
     // endregion
 
+    // region Retention
+
+    @Test
+    fun `deleteLegacyTraceBefore delegates the cutoff and reports the count`() = runTest {
+        repository.dispatcher = StandardTestDispatcher(testScheduler)
+        coEvery { traceStepDao.deleteLegacyStepsBefore(777L) } returns 4
+
+        assertEquals(4, repository.deleteLegacyTraceBefore(777L))
+        coVerify(exactly = 1) { traceStepDao.deleteLegacyStepsBefore(777L) }
+    }
+
+    @Test
+    fun `given storage failure when deleteLegacyTraceBefore then absorbed as zero`() = runTest {
+        repository.dispatcher = StandardTestDispatcher(testScheduler)
+        coEvery { traceStepDao.deleteLegacyStepsBefore(any()) } throws IllegalStateException("locked")
+
+        assertEquals(0, repository.deleteLegacyTraceBefore(777L))
+    }
+
+    // endregion
+
     private companion object {
         const val RUN_ID = "run-1"
         const val SESSION_ID = "session-1"

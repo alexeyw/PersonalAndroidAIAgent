@@ -24,12 +24,13 @@ before the next release ships.
 1. [Getting started](#getting-started)
 2. [Chats](#chats)
 3. [Console](#console)
-4. [Pipelines](#pipelines)
-5. [Browser pipeline editor](#browser-pipeline-editor)
-6. [Tools and MCP](#tools-and-mcp)
-7. [Memory](#memory)
-8. [Settings](#settings)
-9. [Troubleshooting](#troubleshooting)
+4. [Background tasks](#background-tasks)
+5. [Pipelines](#pipelines)
+6. [Browser pipeline editor](#browser-pipeline-editor)
+7. [Tools and MCP](#tools-and-mcp)
+8. [Memory](#memory)
+9. [Settings](#settings)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -346,6 +347,67 @@ your input** notification that deep-links back to the chat. Parked
 requests expire after the **Settings → Approval window** period
 (default 24 hours); an expired run fails with *Approval window
 expired*.
+
+---
+
+## Background tasks
+
+A pipeline run does not need the screen. This section is the
+one-stop summary of what happens when the app goes away mid-run; the
+chat-level details live in [Chats](#chats).
+
+### What happens when you close the app during a run
+
+- **Backgrounding the app** keeps the run alive: a foreground service
+  (or, for scheduled tasks, the worker itself) holds the process while
+  inference continues, with a persistent status notification.
+- **Process death** (battery optimisation, memory pressure, swiping
+  the app away) cannot be survived in place — but every run writes its
+  progress to the encrypted database as it executes. On the next app
+  start the run is detected and marked **interrupted**, and its chat
+  shows a **Run interrupted** card with **Resume** / **Discard**.
+  *Resume* continues from the checkpoint — finished nodes replay their
+  recorded results instantly, only unfinished work re-executes (see
+  [Reopening a chat while a run is in flight](#reopening-a-chat-while-a-run-is-in-flight)).
+- **A run that finishes in the background** lands its answer in the
+  conversation as usual; open the chat and the full console trace is
+  there to replay.
+
+### Notifications
+
+| Notification | When | Actions |
+|---|---|---|
+| *Agent is working* (persistent) | While a run executes in the background | Opens the app |
+| *Approval required* | A sensitive/destructive tool call awaits your decision | **Approve** / **Deny** (destructive: **Deny** / **Review in chat**) |
+| *Agent needs your input* | A clarification question is waiting | Deep-links into the chat |
+| *Task completed* / *Task failed* | A scheduled task finished | Opens the conversation the result landed in |
+| *Still running* (optional ping) | A long backgrounded run is still going | Opens the app |
+
+Approval and clarification requests survive process death: the staged
+request is stored persistently, and acting on the notification resumes
+the run from its checkpoint even if the app was killed in between. An
+unanswered request waits for the **Approval window** setting (default
+24 hours, Settings → LLM parameters) and then fails the run with
+*Approval window expired*.
+
+### Run history and retention
+
+Every run's record and trace are kept in the encrypted local database
+so chats can reattach, traces can replay, and interrupted runs can
+resume. To keep that history from growing forever, a daily maintenance
+pass (it runs while the device is charging and idle) deletes old
+finished runs and their traces:
+
+- **Keep run history per chat** (Settings → Privacy, default 20) — each
+  conversation keeps its most recent runs; older finished ones are
+  removed.
+- **Run history max age** (Settings → Privacy, default 30 days) —
+  finished runs older than this are removed regardless of count.
+
+Runs still waiting on an approval or clarification are never removed by
+retention — they stay until you respond or their approval window
+expires. Deleting a conversation removes its runs and traces
+immediately.
 
 ---
 
@@ -1014,6 +1076,14 @@ The action trio:
   snippet and similarity score (see [Console](#console)), and the
   background compaction pass logs which chunks it merged. A local
   diagnostic only — nothing leaves the device.
+- **Keep run history per chat** — slider (5–100, default 20): how many
+  most-recent pipeline runs each conversation keeps. Older finished
+  runs and their traces are deleted by the daily maintenance pass (see
+  [Background tasks](#background-tasks)).
+- **Run history max age** — slider (7–180 days, default 30): finished
+  runs older than this are deleted regardless of the per-chat count.
+  Runs still waiting on an approval or clarification are never removed
+  by retention.
 - **Reset all settings** — typed-confirm dialog that restores
   every preference to defaults (API keys, downloaded models, and
   memory are untouched).

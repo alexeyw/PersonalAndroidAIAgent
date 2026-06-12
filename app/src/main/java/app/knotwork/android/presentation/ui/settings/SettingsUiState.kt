@@ -74,6 +74,10 @@ import app.knotwork.android.domain.models.ToolApprovalPolicy
  * @property crashReportingEnabled Mirror of the toggle.
  * @property verboseMemoryLoggingEnabled Mirror of the verbose memory logging
  *   toggle (Settings → Privacy).
+ * @property traceRetentionRunsPerSession How many most-recent pipeline runs
+ *   the retention pass preserves per chat session (Settings → Privacy).
+ * @property traceRetentionMaxAgeDays Maximum age (days) a terminal pipeline
+ *   run is kept before the retention pass deletes it (Settings → Privacy).
  * @property restartRequired `true` after the user changed an
  *   inference-backend / Ollama base URL that requires a process restart.
  * @property pendingDestructive Currently staged destructive action,
@@ -121,6 +125,8 @@ data class SettingsUiState(
     val scheduledTaskNotificationsEnabled: Boolean = true,
     val crashReportingEnabled: Boolean = false,
     val verboseMemoryLoggingEnabled: Boolean = SettingsDefaults.VERBOSE_MEMORY_LOGGING_ENABLED_DEFAULT,
+    val traceRetentionRunsPerSession: Int = SettingsDefaults.TRACE_RETENTION_RUNS_PER_SESSION_DEFAULT,
+    val traceRetentionMaxAgeDays: Int = SettingsDefaults.TRACE_RETENTION_MAX_AGE_DAYS_DEFAULT,
     val restartRequired: Boolean = false,
     val pendingDestructive: PendingDestructiveAction? = null,
     val destructiveTypedInput: String = "",

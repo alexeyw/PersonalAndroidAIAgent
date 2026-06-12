@@ -195,6 +195,14 @@ class SettingsViewModel @Inject constructor(
             _uiState.update { it.copy(backgroundApprovalWindowHours = value) }
         }.launchIn(viewModelScope)
 
+        settingsRepository.traceRetentionRunsPerSession.onEach { value ->
+            _uiState.update { it.copy(traceRetentionRunsPerSession = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.traceRetentionMaxAgeDays.onEach { value ->
+            _uiState.update { it.copy(traceRetentionMaxAgeDays = value) }
+        }.launchIn(viewModelScope)
+
         settingsRepository.temperature.onEach { value ->
             _uiState.update { it.copy(temperature = value) }
         }.launchIn(viewModelScope)
@@ -453,6 +461,28 @@ class SettingsViewModel @Inject constructor(
      */
     fun setBackgroundApprovalWindowHours(hours: Int) {
         viewModelScope.launch { settingsRepository.setBackgroundApprovalWindowHours(hours) }
+    }
+
+    /**
+     * Persists how many most-recent pipeline runs the retention pass keeps
+     * per chat session. The repository coerces the value into the sanctioned
+     * 5–100 range.
+     *
+     * @param runs The new per-session count picked on the slider.
+     */
+    fun setTraceRetentionRunsPerSession(runs: Int) {
+        viewModelScope.launch { settingsRepository.setTraceRetentionRunsPerSession(runs) }
+    }
+
+    /**
+     * Persists the maximum age (days) a terminal pipeline run is kept before
+     * the retention pass deletes it. The repository coerces the value into
+     * the sanctioned 7–180 range.
+     *
+     * @param days The new age limit picked on the slider.
+     */
+    fun setTraceRetentionMaxAgeDays(days: Int) {
+        viewModelScope.launch { settingsRepository.setTraceRetentionMaxAgeDays(days) }
     }
 
     // ─── LLM parameters ────────────────────────────────────────────────────

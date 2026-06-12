@@ -42,8 +42,16 @@ storage and credentials:
   - `chat_sessions` — chat metadata and pipeline bindings.
   - `memory_chunks` — fragments of long-term agent memory extracted from
     prior conversations.
-  - `trace_steps` — intermediate per-node outputs produced during pipeline
-    execution.
+  - `trace_steps` — the persistent pipeline-run trace: per-node inputs and
+    outputs, console events, and resolved long-term-memory snapshots recorded
+    while a run executes (this is what console replay and checkpoint resume
+    read back).
+  - `pipeline_runs` — persistent run records, including the original user
+    prompt of each run and per-node progress markers.
+  - `pending_interactions` — parked human-in-the-loop requests for runs that
+    wait in the background: each record stores the staged **tool name and the
+    exact arguments** awaiting approval (or the clarification question), so
+    they are protected at rest like the conversation that produced them.
 - The SQLCipher passphrase is a **32-byte random value** persisted in a
   Keystore-backed encrypted store: each value is encrypted with AES-256-GCM
   under a dedicated, non-exportable key held in the Android Keystore, and
@@ -99,6 +107,25 @@ storage and credentials:
   anything you want to keep first: chats and long-term memory through their
   in-app export actions, and any custom pipelines / saved presets via the
   pipeline-library and preset JSON-export actions.
+
+### Run-history retention (mitigating control)
+
+Pipeline runs and their traces accumulate content **derived from user
+input** — prompts, per-node inputs/outputs, tool observations — for as long
+as the rows exist. Encryption protects them at rest; retention bounds how
+much of that derived content exists at all:
+
+- A daily maintenance pass (WorkManager, charging + idle) deletes finished
+  runs that fall outside the **last N runs per chat** window or exceed the
+  **maximum age**, together with their traces. Both limits are user-tunable
+  in **Settings → Privacy** (defaults: 20 runs per chat, 30 days).
+- Only runs in a settled, terminal state are eligible. A run parked on a
+  background approval or clarification is never removed by retention while
+  it waits; its lifetime is bounded separately by the **approval window**
+  (default 24 hours), after which it is failed and becomes a regular
+  retention candidate.
+- Deleting a chat session removes its runs and traces immediately,
+  independent of the retention schedule.
 
 ### API keys for cloud providers
 

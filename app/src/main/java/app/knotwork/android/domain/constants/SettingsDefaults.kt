@@ -75,6 +75,36 @@ object SettingsDefaults {
     /** Upper bound enforced when the user edits the background-approval-window setting. */
     const val BACKGROUND_APPROVAL_WINDOW_HOURS_MAX: Int = 168
 
+    /**
+     * Default number of most-recent pipeline runs preserved per chat session
+     * by the retention pass. Terminal runs (and their persisted traces, via
+     * the `trace_steps` foreign-key cascade) beyond this count are deleted
+     * during the daily maintenance window. Non-terminal runs — including runs
+     * parked on a background approval or clarification — are never counted
+     * against, nor removed by, retention.
+     */
+    const val TRACE_RETENTION_RUNS_PER_SESSION_DEFAULT: Int = 20
+
+    /** Lower bound enforced when the user edits the runs-per-session retention setting. */
+    const val TRACE_RETENTION_RUNS_PER_SESSION_MIN: Int = 5
+
+    /** Upper bound enforced when the user edits the runs-per-session retention setting. */
+    const val TRACE_RETENTION_RUNS_PER_SESSION_MAX: Int = 100
+
+    /**
+     * Default maximum age, in days, a terminal pipeline run (and its trace)
+     * is kept before the retention pass deletes it regardless of the
+     * per-session count. Bounds how long derived user content (per-node
+     * inputs/outputs, console events) accumulates at rest.
+     */
+    const val TRACE_RETENTION_MAX_AGE_DAYS_DEFAULT: Int = 30
+
+    /** Lower bound enforced when the user edits the max-age retention setting. */
+    const val TRACE_RETENTION_MAX_AGE_DAYS_MIN: Int = 7
+
+    /** Upper bound enforced when the user edits the max-age retention setting. */
+    const val TRACE_RETENTION_MAX_AGE_DAYS_MAX: Int = 180
+
     /** Default maximum number of pipeline steps allowed per user request. */
     const val PIPELINE_MAX_STEPS_DEFAULT: Int = 15
 

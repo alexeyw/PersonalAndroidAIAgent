@@ -617,7 +617,10 @@ Encryption applies to every table that may hold user-derived content:
   input/output snapshots and console log events, all derived from
   user input.
 - `pipeline_runs` — run lifecycle records (status, current node,
-  graph content hash, error message).
+  graph content hash, error message, the original user prompt).
+- `pending_interactions` — parked background HITL requests: the staged
+  tool name and arguments awaiting approval, or the clarification
+  question awaiting an answer.
 
 Secrets — the SQLCipher passphrase, per-provider cloud API keys, and
 the HuggingFace access token —
@@ -694,6 +697,9 @@ idle. Three components coordinate that lifecycle:
 | `AgentIdleManager`         | Watches device idle / Doze state and signals when the agent can safely unload the model.     |
 | `AgentPowerManager`        | Watches charging and battery state; throttles or defers work on low battery.                  |
 | `ScheduledTaskNotifier`    | Announces scheduled-run outcomes ("Task completed" / "Task failed") with a deep-link into the session. |
+| `PendingInteractionMaintenanceWorker` | Periodic (6 h) expiry pass: fails runs whose parked approval / clarification outlived the approval window. |
+| `RunRetentionWorker`       | Daily (charging + idle) retention pass over `pipeline_runs` / `trace_steps` — see *Run retention* below. |
+| `MemoryCompactionWorker`   | Daily (charging + idle) long-term-memory compaction (see the memory lifecycle section).        |
 
 A scheduled task is not a separate execution path: `AgentWorker`
 enqueues the stored prompt through the same `TaskQueueManager` →
@@ -735,6 +741,92 @@ flowchart TD
     NewMsg -- yes --> Load
     NewMsg -- no --> Wait
 ```
+
+### 6.1. Pipeline run lifecycle
+
+Every execution — interactive or scheduled — is backed by a persistent
+record in `pipeline_runs`, written through `PipelineRunRepository` at
+each lifecycle point. The record is what survives process death: the
+in-memory state flow dies with the process, the row does not.
+
+```mermaid
+stateDiagram-v2
+    [*] --> QUEUED : enqueueTask
+    QUEUED --> RUNNING : pipeline resolved,<br/>graph hash captured
+    RUNNING --> WAITING_APPROVAL : HITL gate parked<br/>(live wait timed out)
+    RUNNING --> WAITING_CLARIFICATION : clarification parked
+    RUNNING --> COMPLETED : OUTPUT node reached
+    RUNNING --> FAILED : node error
+    RUNNING --> CANCELLED : user Stop
+    RUNNING --> INTERRUPTED : process died<br/>(orphan sweep at next start)
+    WAITING_APPROVAL --> QUEUED : decision recorded<br/>(checkpoint resume)
+    WAITING_CLARIFICATION --> QUEUED : answer recorded<br/>(checkpoint resume)
+    WAITING_APPROVAL --> FAILED : approval window expired
+    WAITING_CLARIFICATION --> FAILED : approval window expired
+    INTERRUPTED --> QUEUED : user taps Resume<br/>(within resume window)
+    INTERRUPTED --> FAILED : user taps Discard
+    COMPLETED --> [*]
+    FAILED --> [*]
+    CANCELLED --> [*]
+```
+
+Key invariants:
+
+- **Terminal guard.** Every status write carries a SQL-level
+  `status NOT IN (terminal)` guard, so a late writer can never flip a
+  settled run back to an active state. The only sanctioned
+  terminal-to-terminal transition is `INTERRUPTED → FAILED` (the user
+  discarded the resume offer).
+- **Orphan sweep.** On every cold start the app marks `INTERRUPTED`
+  every non-terminal run that is not owned by the current process and
+  not parked on a pending interaction — the in-memory machinery that
+  could finish such a run died with its process.
+- **Checkpoint resume.** A resumed run re-enters the queue as a
+  resume-flagged task. The engine rebuilds a `ResumeContext` from the
+  persisted trace and **replays** the recorded output of every node it
+  already completed instead of re-executing it; the first node without
+  a record continues live. `INPUT` and `OUTPUT` are re-executed (they
+  are trivial / terminal), and a `TOOL` node is **never replayed** —
+  it re-resolves its call and re-raises the HITL gate. The checkpoint
+  is invalidated when the pipeline graph changed between interruption
+  and resume (content-hash comparison) or when the run outlived the
+  resume window; both cases only offer a full restart.
+
+### 6.2. Two-phase HITL (background approvals)
+
+The human-in-the-loop gate on `SENSITIVE` / `DESTRUCTIVE` tools waits
+in two phases:
+
+1. **Live phase** — the run suspends on an in-process deferred; the
+   chat card or the approval notification completes it. This is the
+   only phase an interactive, foregrounded session normally sees.
+2. **Persistent phase (park)** — when the live wait times out (the UI
+   is gone, the user did not respond), the run **parks**: the staged
+   tool name and arguments are written to `pending_interactions`, the
+   run record settles into `WAITING_APPROVAL`, the engine flow ends
+   without a terminal state, and the foreground service is free to
+   stop. A high-importance notification stays actionable; approving or
+   denying from it — even after process death — records the decision
+   onto the parked record and resumes the run from its checkpoint, where
+   the `TOOL` node consumes the decision under a TOCTOU guard (the
+   re-resolved tool call must match the parked snapshot exactly).
+   Clarifications park the same way, answered via a deep link into the
+   chat. An unanswered park is failed by the maintenance pass once the
+   user-configurable **approval window** (default 24 h) elapses.
+
+### 6.3. Run retention
+
+`pipeline_runs` and `trace_steps` grow with every execution and hold
+content derived from user input, so a daily `RunRetentionWorker`
+(charging + idle + battery-not-low, alongside memory compaction)
+applies `CleanupPipelineRunsUseCase`: terminal runs beyond the **last N
+per session** window or older than the **max age** are deleted, their
+traces cascading via the `trace_steps.runId` foreign key; legacy trace
+rows that predate run attribution are aged out by the same cutoff.
+Both limits are user-tunable in **Settings → Privacy** (defaults: 20
+runs per chat, 30 days). Non-terminal runs — including parked
+`WAITING_*` runs — are never retention candidates; their lifetime is
+bounded by the approval window instead (see above).
 
 ---
 

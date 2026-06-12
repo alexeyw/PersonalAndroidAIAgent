@@ -13,7 +13,9 @@ import app.knotwork.android.data.local.models.TraceStepEntity
  * path would only invite per-event SQLCipher commits back onto the
  * streaming hot path. Per-session reads and deletes are likewise absent —
  * the trace is queried per run; session-scoped cleanup rides the
- * `chat_sessions` foreign-key cascade.
+ * `chat_sessions` foreign-key cascade, and run-scoped cleanup rides the
+ * `pipeline_runs` cascade (the only direct delete here targets legacy
+ * pre-run rows, see [deleteLegacyStepsBefore]).
  */
 @Dao
 interface TraceStepDao {
@@ -36,4 +38,18 @@ interface TraceStepDao {
      */
     @Query("SELECT * FROM trace_steps WHERE runId = :runId ORDER BY seq ASC")
     suspend fun getTraceStepsForRun(runId: String): List<TraceStepEntity>
+
+    /**
+     * Retention: deletes legacy trace rows written before run-trace
+     * persistence existed (`runId IS NULL`) once they age past [cutoff].
+     * Such rows belong to no run, so they are unreachable from any replay
+     * path and would otherwise survive until their whole session is deleted.
+     * Run-scoped rows are never touched here — they ride the
+     * `pipeline_runs` foreign-key cascade when retention deletes their run.
+     *
+     * @param cutoff Epoch millis; legacy rows older than it are deleted.
+     * @return The number of deleted rows.
+     */
+    @Query("DELETE FROM trace_steps WHERE runId IS NULL AND timestamp < :cutoff")
+    suspend fun deleteLegacyStepsBefore(cutoff: Long): Int
 }

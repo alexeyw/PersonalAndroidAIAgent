@@ -433,6 +433,31 @@ class PipelineRunRepositoryImplTest {
 
     // endregion
 
+    // region Retention
+
+    @Test
+    fun `applyRetention passes terminal guard to both deletes and sums the counts`() = runTest {
+        coEvery { pipelineRunDao.deleteTerminalRunsBeyondSessionLimit(20, terminalNames) } returns 3
+        coEvery { pipelineRunDao.deleteTerminalRunsFinishedBefore(1_234L, terminalNames) } returns 2
+
+        val deleted = repository.applyRetention(keepPerSession = 20, maxAgeCutoffEpochMs = 1_234L)
+
+        assertEquals(5, deleted)
+        coVerify(exactly = 1) { pipelineRunDao.deleteTerminalRunsBeyondSessionLimit(20, terminalNames) }
+        coVerify(exactly = 1) { pipelineRunDao.deleteTerminalRunsFinishedBefore(1_234L, terminalNames) }
+    }
+
+    @Test
+    fun `given DAO failure when applyRetention then absorbed as zero deletions`() = runTest {
+        coEvery {
+            pipelineRunDao.deleteTerminalRunsBeyondSessionLimit(any(), any())
+        } throws IllegalStateException("disk full")
+
+        assertEquals(0, repository.applyRetention(keepPerSession = 20, maxAgeCutoffEpochMs = 1_234L))
+    }
+
+    // endregion
+
     @Test
     fun `terminal flag covers exactly the four terminal statuses`() {
         val terminal = PipelineRunStatus.entries.filter { it.isTerminal }

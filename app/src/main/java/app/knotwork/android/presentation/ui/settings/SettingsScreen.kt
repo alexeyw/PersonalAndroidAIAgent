@@ -428,6 +428,31 @@ private fun buildViewState(uiState: SettingsUiState, context: android.content.Co
     val privacy = PrivacyCardState(
         crashReportingEnabled = uiState.crashReportingEnabled,
         verboseMemoryLoggingEnabled = uiState.verboseMemoryLoggingEnabled,
+        retentionParams = listOf(
+            MemoryParamSlider(
+                id = PRIVACY_PARAM_RETENTION_RUNS,
+                title = stringResource(R.string.settings_privacy_retention_runs_title),
+                valueLabel = uiState.traceRetentionRunsPerSession.toString(),
+                value = uiState.traceRetentionRunsPerSession.toFloat(),
+                valueRange = SettingsDefaults.TRACE_RETENTION_RUNS_PER_SESSION_MIN.toFloat()
+                    .rangeTo(SettingsDefaults.TRACE_RETENTION_RUNS_PER_SESSION_MAX.toFloat()),
+                steps = SettingsDefaults.TRACE_RETENTION_RUNS_PER_SESSION_MAX -
+                    SettingsDefaults.TRACE_RETENTION_RUNS_PER_SESSION_MIN - 1,
+            ),
+            MemoryParamSlider(
+                id = PRIVACY_PARAM_RETENTION_AGE,
+                title = stringResource(R.string.settings_privacy_retention_age_title),
+                valueLabel = stringResource(
+                    R.string.settings_memory_param_days_value,
+                    uiState.traceRetentionMaxAgeDays,
+                ),
+                value = uiState.traceRetentionMaxAgeDays.toFloat(),
+                valueRange = SettingsDefaults.TRACE_RETENTION_MAX_AGE_DAYS_MIN.toFloat()
+                    .rangeTo(SettingsDefaults.TRACE_RETENTION_MAX_AGE_DAYS_MAX.toFloat()),
+                steps = SettingsDefaults.TRACE_RETENTION_MAX_AGE_DAYS_MAX -
+                    SettingsDefaults.TRACE_RETENTION_MAX_AGE_DAYS_MIN - 1,
+            ),
+        ),
     )
     val destructive = uiState.pendingDestructive?.let { kind ->
         DestructiveActionState(
@@ -661,6 +686,12 @@ private fun buildCallbacks(
     onScheduledResultsToggle = viewModel::setScheduledTaskNotificationsEnabled,
     onCrashReportingToggle = viewModel::setCrashReportingEnabled,
     onVerboseMemoryLoggingToggle = viewModel::setVerboseMemoryLoggingEnabled,
+    onPrivacyParamChange = { id, value ->
+        when (id) {
+            PRIVACY_PARAM_RETENTION_RUNS -> viewModel.setTraceRetentionRunsPerSession(value.roundToInt())
+            PRIVACY_PARAM_RETENTION_AGE -> viewModel.setTraceRetentionMaxAgeDays(value.roundToInt())
+        }
+    },
     onResetSettingsClick = viewModel::stageResetSettings,
     onRestartClick = onRestart,
     onDestructiveTypedConfirmChange = viewModel::updateDestructiveTypedInput,
@@ -695,6 +726,10 @@ private fun formatTestProbe(uiState: SettingsUiState, context: android.content.C
 private const val MIME_JSON = "application/json"
 private const val MS_PER_SECOND_F = 1_000f
 private const val MAX_PERCENT = 100
+
+// Stable ids matching each Privacy retention slider row to its ViewModel setter.
+private const val PRIVACY_PARAM_RETENTION_RUNS = "trace_retention_runs"
+private const val PRIVACY_PARAM_RETENTION_AGE = "trace_retention_age"
 
 // Stable ids matching each Memory-tuning slider row to its ViewModel setter.
 private const val MEMORY_PARAM_TOP_K = "memory_top_k"

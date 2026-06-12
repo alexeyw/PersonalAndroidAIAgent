@@ -21,6 +21,7 @@ import androidx.navigation.compose.rememberNavController
 import app.knotwork.android.data.services.AgentForegroundService
 import app.knotwork.android.data.services.MemoryCompactionScheduler
 import app.knotwork.android.data.services.PendingInteractionMaintenanceScheduler
+import app.knotwork.android.data.services.RunRetentionScheduler
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.MemoryReembedScheduler
 import app.knotwork.android.presentation.state.TransientMessageRelay
@@ -49,6 +50,8 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var memoryReembedScheduler: MemoryReembedScheduler
 
     @Inject lateinit var pendingInteractionMaintenanceScheduler: PendingInteractionMaintenanceScheduler
+
+    @Inject lateinit var runRetentionScheduler: RunRetentionScheduler
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -94,6 +97,9 @@ class MainActivity : ComponentActivity() {
             // Expiry pass for runs parked on an unanswered background HITL
             // request — fails them once the approval window elapses.
             pendingInteractionMaintenanceScheduler.schedulePeriodic()
+            // Retention pass over persisted pipeline runs and their traces —
+            // same daily charging + idle window as memory compaction.
+            runRetentionScheduler.schedulePeriodic()
             // Self-heal: re-arm the import re-embed pass if a prior one-off was
             // lost or exhausted its retries. The check lives in the scheduler so
             // recovery isn't tied to this one entry point (the foreground service

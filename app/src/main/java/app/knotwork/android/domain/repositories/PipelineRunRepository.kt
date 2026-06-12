@@ -193,12 +193,33 @@ interface PipelineRunRepository {
      * that is actively executing (e.g. kept alive by the foreground service
      * or a WorkManager worker while no Activity exists).
      *
-     * WAITING_* runs from dead processes are included: the pending approval /
-     * clarification lives only in in-memory deferreds today, so after a
-     * process death nothing can ever settle them. Revisit when persistent
-     * background HITL ships and suspended runs become resumable.
+     * WAITING_* runs from dead processes are included in the returned list;
+     * the caller (the startup sweep) exempts the ones with a persisted
+     * pending interaction — those are parked, not orphaned, and stay
+     * resumable from their notification until the approval window expires.
      *
      * @return Runs whose owning process died mid-execution.
      */
     suspend fun getOrphanedRuns(): List<PipelineRun>
+
+    /**
+     * Applies the run-history retention policy: deletes every **terminal**
+     * run ([PipelineRunStatus.isTerminal]) that either falls outside the
+     * [keepPerSession] most recently started runs of its session or finished
+     * before [maxAgeCutoffEpochMs]. Non-terminal runs — including WAITING_*
+     * runs parked on a background approval or clarification — are never
+     * deleted; their expiry is owned by the pending-interaction maintenance
+     * pass, which settles them to FAILED first. Each deleted run's persisted
+     * trace is removed atomically via the storage-level cascade.
+     *
+     * Best-effort like every other method here: a storage failure is logged
+     * and reported as zero deletions.
+     *
+     * @param keepPerSession How many most-recent runs each session keeps.
+     * @param maxAgeCutoffEpochMs Epoch millis; terminal runs finished before
+     *   it are deleted regardless of the per-session count.
+     * @return The total number of deleted runs, `0` when nothing qualified
+     *   or the store failed.
+     */
+    suspend fun applyRetention(keepPerSession: Int, maxAgeCutoffEpochMs: Long): Int
 }

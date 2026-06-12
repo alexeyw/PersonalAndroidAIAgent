@@ -274,6 +274,22 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `setTraceRetentionRunsPerSession persists`() = runTest {
+        advanceUntilIdle()
+        viewModel.setTraceRetentionRunsPerSession(40)
+        advanceUntilIdle()
+        coVerify { settings.setTraceRetentionRunsPerSession(40) }
+    }
+
+    @Test
+    fun `setTraceRetentionMaxAgeDays persists`() = runTest {
+        advanceUntilIdle()
+        viewModel.setTraceRetentionMaxAgeDays(60)
+        advanceUntilIdle()
+        coVerify { settings.setTraceRetentionMaxAgeDays(60) }
+    }
+
+    @Test
     fun `setMaxMemoryChunks within range persists`() = runTest {
         advanceUntilIdle()
         viewModel.setMaxMemoryChunks(8_000)

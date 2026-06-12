@@ -204,4 +204,45 @@ interface PipelineRunDao {
             "WHERE id = :runId AND status = :fromStatus",
     )
     suspend fun discardInterruptedRun(runId: String, fromStatus: String, toStatus: String, errorMessage: String)
+
+    /**
+     * Retention: deletes every **terminal** run that is not among the
+     * [keepPerSession] most recently started runs of its own session. The
+     * per-session window counts runs of *any* status, so a session whose
+     * recent slots are filled by active runs keeps proportionally fewer old
+     * terminal ones — the window is a hard cap, not a terminal-only quota.
+     * Non-terminal runs (including WAITING_* runs parked on a background
+     * approval or clarification) are never deleted: their expiry is owned by
+     * the pending-interaction maintenance pass, which settles them to FAILED
+     * first. Persisted trace rows ride the `trace_steps.runId` foreign-key
+     * cascade.
+     *
+     * @param keepPerSession How many most-recent runs each session keeps.
+     * @param terminalStatuses Terminal status names — the only deletable ones.
+     * @return The number of deleted runs.
+     */
+    @Query(
+        "DELETE FROM pipeline_runs WHERE status IN (:terminalStatuses) AND id NOT IN (" +
+            "SELECT recent.id FROM pipeline_runs AS recent " +
+            "WHERE recent.sessionId = pipeline_runs.sessionId " +
+            "ORDER BY recent.startedAt DESC LIMIT :keepPerSession)",
+    )
+    suspend fun deleteTerminalRunsBeyondSessionLimit(keepPerSession: Int, terminalStatuses: List<String>): Int
+
+    /**
+     * Retention: deletes every **terminal** run whose terminal transition
+     * happened before [cutoff], regardless of the per-session count. Rows
+     * with a `NULL` `finishedAt` are left untouched (terminal rows always
+     * carry the timestamp; the guard is defence in depth). Persisted trace
+     * rows ride the `trace_steps.runId` foreign-key cascade.
+     *
+     * @param cutoff Epoch millis; runs finished strictly before it are deleted.
+     * @param terminalStatuses Terminal status names — the only deletable ones.
+     * @return The number of deleted runs.
+     */
+    @Query(
+        "DELETE FROM pipeline_runs WHERE status IN (:terminalStatuses) " +
+            "AND finishedAt IS NOT NULL AND finishedAt < :cutoff",
+    )
+    suspend fun deleteTerminalRunsFinishedBefore(cutoff: Long, terminalStatuses: List<String>): Int
 }
