@@ -5,6 +5,7 @@ import app.knotwork.android.data.engine.LiteRTLlmEngine
 import app.knotwork.android.data.engine.MediaPipeTextEmbeddingEngine
 import app.knotwork.android.data.engine.TaskQueueManagerImpl
 import app.knotwork.android.data.engine.TextEmbedderFactory
+import app.knotwork.android.data.local.AgentWorkspaceImpl
 import app.knotwork.android.data.local.ApiKeyManager
 import app.knotwork.android.data.local.DatabaseResetServiceImpl
 import app.knotwork.android.data.local.SettingsManager
@@ -59,6 +60,7 @@ import app.knotwork.android.domain.repositories.PromptRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
+import app.knotwork.android.domain.services.AgentWorkspace
 import app.knotwork.android.domain.services.DatabaseResetService
 import app.knotwork.android.domain.services.LongRunningTaskNotifier
 import app.knotwork.android.domain.services.MemoryReembedScheduler
@@ -322,4 +324,13 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindMemoryReembedScheduler(scheduler: WorkManagerMemoryReembedScheduler): MemoryReembedScheduler
+
+    /**
+     * Binds [AgentWorkspaceImpl] to [AgentWorkspace] — the agent's jailed file
+     * sandbox under `files/agent_workspace/`. Singleton so the cached total-size
+     * counter and the write mutex are shared across all callers.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindAgentWorkspace(workspace: AgentWorkspaceImpl): AgentWorkspace
 }
