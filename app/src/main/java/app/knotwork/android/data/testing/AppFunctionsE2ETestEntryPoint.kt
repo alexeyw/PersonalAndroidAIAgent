@@ -1,6 +1,7 @@
 package app.knotwork.android.data.testing
 
 import app.knotwork.android.domain.repositories.ChatRepository
+import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import dagger.hilt.EntryPoint
@@ -24,6 +25,10 @@ import dagger.hilt.components.SingletonComponent
  *    executor's tool-observation persistence side effect hits the real database (the
  *    test then has no need to verify the message body, only the executor's emitted
  *    flow).
+ *  - [pendingInteractionRepository] — the durable half of the two-phase HITL wait,
+ *    exercised by the background-approval scenario: the park must survive an executor
+ *    recreation (the process-death analog) and the recorded decision must be consumed
+ *    one-shot.
  *
  * Kept deliberately minimal: only the dependencies the e2e test actually consumes are
  * exposed. Adding more accessors here means accepting a wider test-only surface in
@@ -40,4 +45,5 @@ interface AppFunctionsE2ETestEntryPoint {
     fun toolRepository(): ToolRepository
     fun settingsRepository(): SettingsRepository
     fun chatRepository(): ChatRepository
+    fun pendingInteractionRepository(): PendingInteractionRepository
 }

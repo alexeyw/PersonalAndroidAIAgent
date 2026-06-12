@@ -105,6 +105,7 @@ class SettingsManager @Inject constructor(
         val TOOL_CALL_TIMEOUT_MS = androidx.datastore.preferences.core.longPreferencesKey("tool_call_timeout_ms")
         val PIPELINE_MAX_STEPS = intPreferencesKey("pipeline_max_steps")
         val RESUME_MAX_AGE_HOURS = intPreferencesKey("resume_max_age_hours")
+        val BACKGROUND_APPROVAL_WINDOW_HOURS = intPreferencesKey("background_approval_window_hours")
         val MEMORY_SUMMARY_DEFAULT_LIMIT = intPreferencesKey("memory_summary_default_limit")
         val DEFAULT_PIPELINE_ID = stringPreferencesKey("default_pipeline_id")
         val CRASH_REPORTING_ENABLED = booleanPreferencesKey("crash_reporting_enabled")
@@ -1028,6 +1029,29 @@ class SettingsManager @Inject constructor(
             preferences[PreferencesKeys.RESUME_MAX_AGE_HOURS] = hours.coerceIn(
                 SettingsDefaults.RESUME_MAX_AGE_HOURS_MIN,
                 SettingsDefaults.RESUME_MAX_AGE_HOURS_MAX,
+            )
+        }
+    }
+
+    override val backgroundApprovalWindowHours: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.BACKGROUND_APPROVAL_WINDOW_HOURS]
+                ?: SettingsDefaults.BACKGROUND_APPROVAL_WINDOW_HOURS_DEFAULT
+        }
+
+    override suspend fun setBackgroundApprovalWindowHours(hours: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.BACKGROUND_APPROVAL_WINDOW_HOURS] = hours.coerceIn(
+                SettingsDefaults.BACKGROUND_APPROVAL_WINDOW_HOURS_MIN,
+                SettingsDefaults.BACKGROUND_APPROVAL_WINDOW_HOURS_MAX,
             )
         }
     }

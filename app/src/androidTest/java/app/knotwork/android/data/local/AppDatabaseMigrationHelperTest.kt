@@ -305,14 +305,49 @@ class AppDatabaseMigrationHelperTest {
     }
 
     @Test
-    fun migrateFullChain23to32_preservesDataAndValidatesFinalSchema() {
+    fun migrate32to33_createsPendingInteractionsTableWithExpectedColumns() {
+        helper.createDatabase(TEST_DB, 32).use { db ->
+            db.execSQL(
+                "INSERT INTO pipeline_runs(id, sessionId, origin, status, startedAt) " +
+                    "VALUES('run-1', '$SESSION_ID', 'CHAT', 'WAITING_APPROVAL', $CHUNK_TS)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 33, true, AppDatabase.MIGRATION_32_33).use { db ->
+            // Pre-existing run rows survive untouched.
+            db.query("SELECT status FROM pipeline_runs WHERE id = 'run-1'").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals("WAITING_APPROVAL", c.getString(0))
+            }
+            // The new table accepts a full parked-approval row and reads it back.
+            db.execSQL(
+                "INSERT INTO pending_interactions(runId, sessionId, kind, toolName, toolArgs, " +
+                    "risk, decision, requestedAt) " +
+                    "VALUES('run-1', '$SESSION_ID', 'APPROVAL', 'send_email', '{}', " +
+                    "'SENSITIVE', NULL, $CHUNK_TS)",
+            )
+            db.query(
+                "SELECT kind, toolName, risk, decision, answer FROM pending_interactions WHERE runId = 'run-1'",
+            ).use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals("APPROVAL", c.getString(0))
+                assertEquals("send_email", c.getString(1))
+                assertEquals("SENSITIVE", c.getString(2))
+                assertTrue("decision starts unanswered", c.isNull(3))
+                assertTrue("answer starts unanswered", c.isNull(4))
+            }
+        }
+    }
+
+    @Test
+    fun migrateFullChain23to33_preservesDataAndValidatesFinalSchema() {
         helper.createDatabase(TEST_DB, 23).use { db ->
             seedMemoryChunkV23(db)
         }
 
         helper.runMigrationsAndValidate(
             TEST_DB,
-            32,
+            33,
             true,
             AppDatabase.MIGRATION_23_24,
             AppDatabase.MIGRATION_24_25,
@@ -323,6 +358,7 @@ class AppDatabaseMigrationHelperTest {
             AppDatabase.MIGRATION_29_30,
             AppDatabase.MIGRATION_30_31,
             AppDatabase.MIGRATION_31_32,
+            AppDatabase.MIGRATION_32_33,
         ).use { db ->
             // The original v23 row must survive every step with the new
             // columns filled by their documented defaults and the embedding

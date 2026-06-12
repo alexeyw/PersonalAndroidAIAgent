@@ -176,6 +176,7 @@ class AgentForegroundService : Service() {
         is AgentOrchestratorState.ExecutingTool -> "Using tool: ${state.toolName}..."
         is AgentOrchestratorState.WaitingForApproval -> "Awaiting user confirmation..."
         is AgentOrchestratorState.AwaitingClarification -> "Awaiting user clarification..."
+        is AgentOrchestratorState.SuspendedInBackground -> "Waiting for user response in background"
         is AgentOrchestratorState.ObservationResult -> "Processing tool result..."
         is AgentOrchestratorState.Answering -> "Answering..."
         is AgentOrchestratorState.Completed -> "Task completed"

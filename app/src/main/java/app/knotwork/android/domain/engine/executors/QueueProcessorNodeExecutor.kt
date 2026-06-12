@@ -22,5 +22,6 @@ class QueueProcessorNodeExecutor @Inject constructor() : NodeExecutor {
         inputText: String,
         sessionId: String,
         originalPrompt: String,
+        runId: String?,
     ): Flow<NodeOutput> = flowOf(NodeOutput.Result(NodeExecutionResult(outputText = inputText)))
 }

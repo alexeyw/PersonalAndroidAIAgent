@@ -9,6 +9,7 @@ import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.ClarificationRequest
 import app.knotwork.android.domain.models.ConsoleEvent
+import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Result
@@ -18,6 +19,7 @@ import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.ClarificationRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
+import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
@@ -26,10 +28,13 @@ import app.knotwork.android.domain.services.MemoryAutoExtractionCoordinator
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
+import app.knotwork.android.domain.usecases.PendingSubmissionOutcome
 import app.knotwork.android.domain.usecases.ResumeOutcome
 import app.knotwork.android.domain.usecases.ResumePipelineRunUseCase
 import app.knotwork.android.domain.usecases.SaveMessageToMemoryUseCase
 import app.knotwork.android.domain.usecases.SaveToMemoryOutcome
+import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
+import app.knotwork.android.domain.usecases.SubmitClarificationAnswerUseCase
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ChatMessageStatus
 import app.knotwork.design.components.chat.ChatMetadata
@@ -49,7 +54,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -130,6 +134,9 @@ class ChatHomeViewModel @Inject constructor(
     private val pipelineRunRepository: PipelineRunRepository,
     private val runTraceRepository: RunTraceRepository,
     private val resumePipelineRunUseCase: ResumePipelineRunUseCase,
+    private val pendingInteractionRepository: PendingInteractionRepository,
+    private val submitApprovalDecisionUseCase: SubmitApprovalDecisionUseCase,
+    private val submitClarificationAnswerUseCase: SubmitClarificationAnswerUseCase,
 ) : ViewModel() {
 
     private val _state: MutableStateFlow<ChatHomeScreenState> = MutableStateFlow(ChatHomeScreenState())
@@ -200,7 +207,6 @@ class ChatHomeViewModel @Inject constructor(
     private var messagesJob: Job? = null
     private var generationJob: Job? = null
     private var tokenCounterJob: Job? = null
-    private var clarificationTimeoutJob: Job? = null
     private var sessions: List<ChatSession> = emptyList()
     private var availablePipelinesObserved: Boolean = false
     private var defaultPipelineId: String? = null
@@ -310,7 +316,6 @@ class ChatHomeViewModel @Inject constructor(
         if (sessionId.isBlank()) return
         val pipelineId = sessions.firstOrNull { it.id == sessionId }?.pipelineId
 
-        cancelClarificationWatchdog()
         // Fresh run = fresh cumulative log upstream; the baseline carried
         // over from a previous run's mid-stream Clear no longer applies
         // (the engine restarts events from scratch), and an in-flight
@@ -398,7 +403,6 @@ class ChatHomeViewModel @Inject constructor(
     fun stopGeneration() {
         generationJob?.cancel()
         reattachJob?.cancel()
-        cancelClarificationWatchdog()
         _state.update { current ->
             val cleared = current.withPendingCleared()
             if (current.visual is ChatHomeUiState.Generating) {
@@ -440,7 +444,6 @@ class ChatHomeViewModel @Inject constructor(
         if (threadId.isBlank() || threadId == _state.value.thread.currentSessionId) return
         generationJob?.cancel()
         messagesJob?.cancel()
-        cancelClarificationWatchdog()
         resetConsoleCachesForNewRun()
         _state.update { current ->
             val cleared = current.withPendingCleared().withConsoleProjectionsCleared()
@@ -831,7 +834,6 @@ class ChatHomeViewModel @Inject constructor(
             is AgentOrchestratorState.Answering ->
                 updateStreamingTokens(state.partialText.length / TOKEN_CHARS_PER_TOKEN)
             is AgentOrchestratorState.Completed -> {
-                cancelClarificationWatchdog()
                 _state.update { current ->
                     current.withPendingCleared().copy(
                         tokens = current.tokens.copy(streaming = 0),
@@ -844,7 +846,6 @@ class ChatHomeViewModel @Inject constructor(
                 memoryAutoExtractionCoordinator.onPipelineCompleted(_state.value.thread.currentSessionId)
             }
             is AgentOrchestratorState.Error -> {
-                cancelClarificationWatchdog()
                 _state.update {
                     it.withPendingCleared().copy(
                         tokens = it.tokens.copy(streaming = 0),
@@ -1060,14 +1061,54 @@ class ChatHomeViewModel @Inject constructor(
     private suspend fun restoreSuspensionCard(sessionId: String, status: PipelineRunStatus) {
         when (status) {
             PipelineRunStatus.WAITING_APPROVAL -> {
-                agentOrchestratorUseCase.pendingApprovalFor(sessionId)?.let(::handleWaitingForApproval)
+                val live = agentOrchestratorUseCase.pendingApprovalFor(sessionId)
+                if (live != null) {
+                    handleWaitingForApproval(live)
+                } else {
+                    // Persistent phase (or a different process parked the
+                    // run): rebuild the card from the durable record. The
+                    // decision then routes through the parked-run submission
+                    // path — the live deferred is gone.
+                    pendingInteractionRepository.getForSession(sessionId)
+                        ?.takeIf { it.kind == PendingInteractionKind.APPROVAL }
+                        ?.let { parked ->
+                            handleWaitingForApproval(
+                                AgentOrchestratorState.WaitingForApproval(
+                                    toolName = parked.toolName.orEmpty(),
+                                    arguments = parked.toolArgs.orEmpty(),
+                                    risk = parked.risk ?: ToolRisk.SENSITIVE,
+                                ),
+                            )
+                        }
+                }
             }
             PipelineRunStatus.WAITING_CLARIFICATION -> {
-                clarificationRepository.pendingRequests.first()
+                val live = clarificationRepository.pendingRequests.first()
                     .lastOrNull { it.sessionId == sessionId }
+                if (live != null) {
                     // No watchdog on restore: the repository's authoritative
                     // timeout has been running since the request was raised.
-                    ?.let { handleAwaitingClarification(it, armWatchdog = false) }
+                    handleAwaitingClarification(live)
+                } else {
+                    // Persistent phase: re-render the persisted question. The
+                    // synthetic request id (run id) can never match a live
+                    // deferred, so the answer falls through to the parked-run
+                    // submission path. No watchdog — the approval window is
+                    // the authoritative clock now.
+                    pendingInteractionRepository.getForSession(sessionId)
+                        ?.takeIf { it.kind == PendingInteractionKind.CLARIFICATION }
+                        ?.let { parked ->
+                            handleAwaitingClarification(
+                                ClarificationRequest(
+                                    id = parked.runId,
+                                    sessionId = parked.sessionId,
+                                    question = parked.question.orEmpty(),
+                                    options = parked.options,
+                                    timeoutMs = 0L,
+                                ),
+                            )
+                        }
+                }
             }
             else -> Unit
         }
@@ -1305,13 +1346,42 @@ class ChatHomeViewModel @Inject constructor(
         if (pending.risk == ToolRisk.DESTRUCTIVE && !isTypedConfirmValid()) return
         val sessionId = _state.value.thread.currentSessionId
         if (sessionId.isBlank()) return
-        agentOrchestratorUseCase.resumeWithApproval(sessionId, true)
         _state.update {
             it.copy(
                 pending = it.pending.copy(tool = null),
                 composer = it.composer.copy(typedConfirm = ""),
                 visual = ChatHomeUiState.Generating,
             )
+        }
+        viewModelScope.launch { submitApprovalDecision(sessionId, isApproved = true) }
+    }
+
+    /**
+     * Routes the user's approve / deny decision through
+     * [SubmitApprovalDecisionUseCase] (live gate first, then the parked
+     * record) and maps the persistent-phase outcomes onto the existing
+     * resume plumbing: a resumed parked run attaches exactly like a resumed
+     * interrupted run; failures surface through [resumeFeedbackEvents] and
+     * settle the visual back to its resting state so the chat is not stuck
+     * on `Generating` for a run that will never emit.
+     *
+     * @param sessionId Id of the session whose gate is being answered.
+     * @param isApproved `true` to approve, `false` to deny.
+     */
+    private suspend fun submitApprovalDecision(sessionId: String, isApproved: Boolean) {
+        when (submitApprovalDecisionUseCase(sessionId, isApproved)) {
+            PendingSubmissionOutcome.LiveResumed -> Unit
+            PendingSubmissionOutcome.Resumed -> attachToLiveRun(sessionId, PipelineRunStatus.QUEUED)
+            PendingSubmissionOutcome.GraphChanged -> {
+                _resumeFeedbackEvents.tryEmit(ResumeFeedbackEvent.GraphChanged)
+                _state.update { it.copy(visual = it.restingVisual()) }
+            }
+            PendingSubmissionOutcome.Expired -> {
+                _resumeFeedbackEvents.tryEmit(ResumeFeedbackEvent.Expired)
+                _state.update { it.copy(visual = it.restingVisual()) }
+            }
+            PendingSubmissionOutcome.NothingPending ->
+                _state.update { it.copy(visual = it.restingVisual()) }
         }
     }
 
@@ -1327,7 +1397,6 @@ class ChatHomeViewModel @Inject constructor(
         val pending = _state.value.pending.tool ?: return
         val sessionId = _state.value.thread.currentSessionId
         if (sessionId.isBlank()) return
-        agentOrchestratorUseCase.resumeWithApproval(sessionId, false)
         // Resuming the pipeline restarts orchestrator emission — keep the
         // surface in `Generating` until the next state (or a terminal
         // Completed / Error) settles it, otherwise the chat appears idle
@@ -1340,6 +1409,7 @@ class ChatHomeViewModel @Inject constructor(
             )
         }
         viewModelScope.launch {
+            submitApprovalDecision(sessionId, isApproved = false)
             chatRepository.saveMessage(
                 ChatMessage(
                     sessionId = sessionId,
@@ -1374,7 +1444,6 @@ class ChatHomeViewModel @Inject constructor(
         // `""` as the timeout fallback for free-form requests, so an
         // intentional blank submit is a legitimate "skip" affordance.
         val trimmed = answer.trim()
-        cancelClarificationWatchdog()
         _state.update {
             it.copy(
                 pending = it.pending.copy(clarification = null),
@@ -1382,16 +1451,33 @@ class ChatHomeViewModel @Inject constructor(
             )
         }
         viewModelScope.launch {
-            val delivered = clarificationRepository.submitClarification(pending.id, trimmed)
-            if (!delivered && sessionId.isNotBlank()) {
-                chatRepository.saveMessage(
-                    ChatMessage(
-                        sessionId = sessionId,
-                        role = Role.SYSTEM,
-                        content = SYSTEM_MESSAGE_CLARIFICATION_REPLY_NOT_DELIVERED,
-                        timestamp = System.currentTimeMillis(),
-                    ),
-                )
+            when (submitClarificationAnswerUseCase(sessionId, pending.id, trimmed)) {
+                PendingSubmissionOutcome.LiveResumed -> Unit
+                PendingSubmissionOutcome.Resumed -> attachToLiveRun(sessionId, PipelineRunStatus.QUEUED)
+                PendingSubmissionOutcome.GraphChanged -> {
+                    _resumeFeedbackEvents.tryEmit(ResumeFeedbackEvent.GraphChanged)
+                    _state.update { it.copy(visual = it.restingVisual()) }
+                }
+                PendingSubmissionOutcome.Expired -> {
+                    _resumeFeedbackEvents.tryEmit(ResumeFeedbackEvent.Expired)
+                    _state.update { it.copy(visual = it.restingVisual()) }
+                }
+                PendingSubmissionOutcome.NothingPending -> {
+                    // Neither a live deferred nor a parked record consumed
+                    // the reply — record in-thread that the agent proceeded
+                    // without it, exactly like the legacy undelivered path.
+                    _state.update { it.copy(visual = it.restingVisual()) }
+                    if (sessionId.isNotBlank()) {
+                        chatRepository.saveMessage(
+                            ChatMessage(
+                                sessionId = sessionId,
+                                role = Role.SYSTEM,
+                                content = SYSTEM_MESSAGE_CLARIFICATION_REPLY_NOT_DELIVERED,
+                                timestamp = System.currentTimeMillis(),
+                            ),
+                        )
+                    }
+                }
             }
         }
     }
@@ -1414,74 +1500,22 @@ class ChatHomeViewModel @Inject constructor(
     }
 
     /**
-     * Captures the orchestrator's pending clarification, flips the UI to
-     * the Clarification state, and (for live emissions) arms the watchdog
-     * timer. The repository owns the authoritative timeout via
-     * `withTimeout`; this watchdog is a UI safety-net that ensures the
-     * surface flips back to a resting state even if the user backgrounds
-     * the app for longer than [ClarificationRequest.timeoutMs].
+     * Captures the orchestrator's pending clarification and flips the UI to
+     * the Clarification state. No UI-side timeout runs against the card:
+     * the repository owns the live waiting window via `withTimeout`, and
+     * when it elapses the run parks persistently (`WAITING_CLARIFICATION`)
+     * instead of consuming a fabricated default answer — the card stays
+     * answerable and the reply then routes through the parked-run
+     * submission path.
      *
      * @param request the pending clarification to surface.
-     * @param armWatchdog `false` on the reattach-restore path: the
-     *   repository's timeout has been running since the request was raised,
-     *   so re-arming a fresh full-length watchdog here would desynchronize
-     *   the two clocks — the stale watchdog would later fire a spurious
-     *   "timed out" fallback for a request the repository resolved long
-     *   before. The restored card is instead cleared by the live
-     *   subscription's terminal states (or the user's reply).
      */
-    private fun handleAwaitingClarification(request: ClarificationRequest, armWatchdog: Boolean = true) {
+    private fun handleAwaitingClarification(request: ClarificationRequest) {
         _state.update {
             it.copy(
                 pending = it.pending.copy(clarification = request),
                 visual = ChatHomeUiState.Clarification,
             )
-        }
-        clarificationTimeoutJob?.cancel()
-        if (armWatchdog && request.timeoutMs > 0) {
-            clarificationTimeoutJob = viewModelScope.launch {
-                delay(request.timeoutMs)
-                onClarificationTimeout(request)
-            }
-        }
-    }
-
-    /**
-     * Fires when the watchdog elapses without a user reply. Submits the
-     * default answer (first option, or empty for free-form) so the
-     * suspended pipeline coroutine resumes, drops the pending snapshot,
-     * appends a SYSTEM chat row recording the fallback, and keeps the
-     * surface in `Generating` while the agent produces the follow-up
-     * (terminal `Completed` / `Error` settles the resting state).
-     */
-    private fun onClarificationTimeout(request: ClarificationRequest) {
-        if (_state.value.pending.clarification?.id != request.id) return
-        val defaultAnswer = request.options?.firstOrNull().orEmpty()
-        val sessionId = _state.value.thread.currentSessionId
-        _state.update {
-            it.copy(
-                pending = it.pending.copy(clarification = null),
-                visual = ChatHomeUiState.Generating,
-            )
-        }
-        viewModelScope.launch {
-            val delivered = clarificationRepository.submitClarification(request.id, defaultAnswer)
-            // Only record the fallback when this watchdog actually supplied
-            // it — when the repository's own timeout (or an earlier reply)
-            // already resolved the request, a "timed out; default used" row
-            // here would narrate an event that never happened.
-            if (delivered && sessionId.isNotBlank()) {
-                chatRepository.saveMessage(
-                    ChatMessage(
-                        sessionId = sessionId,
-                        role = Role.SYSTEM,
-                        content = SYSTEM_MESSAGE_CLARIFICATION_TIMED_OUT.format(
-                            defaultAnswer.ifBlank { CLARIFICATION_DEFAULT_BLANK },
-                        ),
-                        timestamp = System.currentTimeMillis(),
-                    ),
-                )
-            }
         }
     }
 
@@ -1489,20 +1523,11 @@ class ChatHomeViewModel @Inject constructor(
     private fun isTypedConfirmValid(): Boolean =
         _state.value.composer.typedConfirm.trim().equals(DESTRUCTIVE_TYPED_CONFIRM_WORD, ignoreCase = true)
 
-    /** Cancels and drops the clarification watchdog timer. */
-    private fun cancelClarificationWatchdog() {
-        clarificationTimeoutJob?.cancel()
-        clarificationTimeoutJob = null
-    }
-
     /**
      * Pure transformer: drops every pending HITL / clarification snapshot
      * and resets the typed-confirm input. Composed into the caller's
      * `_state.update` block (never its own emission) so multi-field
-     * transitions remain a single atomic flow emission. Callers cancel the
-     * watchdog separately via [cancelClarificationWatchdog] — job
-     * cancellation is a side effect and must not live inside the `update`
-     * lambda, which may re-run on contention.
+     * transitions remain a single atomic flow emission.
      */
     private fun ChatHomeScreenState.withPendingCleared(): ChatHomeScreenState = copy(
         pending = ChatHomePendingState(),
@@ -1901,21 +1926,6 @@ class ChatHomeViewModel @Inject constructor(
          * replaced with the tool name.
          */
         const val SYSTEM_MESSAGE_TOOL_DENIED: String = "Tool '%s' denied by user."
-
-        /**
-         * Template of the SYSTEM chat row persisted when the clarification
-         * watchdog elapses without a user reply. `%s` is replaced with the
-         * default answer that the pipeline actually consumed.
-         */
-        const val SYSTEM_MESSAGE_CLARIFICATION_TIMED_OUT: String =
-            "Clarification timed out; default answer used: %s."
-
-        /**
-         * Placeholder inserted into the timeout SYSTEM message when the
-         * agent fell back to an empty default (free-form request with no
-         * options).
-         */
-        const val CLARIFICATION_DEFAULT_BLANK: String = "(blank)"
 
         /**
          * SYSTEM chat row persisted when the user's clarification reply was

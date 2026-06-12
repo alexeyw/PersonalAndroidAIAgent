@@ -414,6 +414,23 @@ interface SettingsRepository {
     suspend fun setResumeMaxAgeHours(hours: Int)
 
     /**
+     * A [Flow] representing the window, in hours, during which a run parked
+     * on a persistent HITL request (background approval or clarification)
+     * waits for the user's response. Counted from the moment the live
+     * in-process waiting phase timed out; once elapsed, the maintenance pass
+     * fails the run with an "Approval window expired" message. Valid range:
+     * 1–168.
+     */
+    val backgroundApprovalWindowHours: Flow<Int>
+
+    /**
+     * Updates the background-approval window.
+     *
+     * @param hours The new window in hours. Will be coerced to the range 1–168.
+     */
+    suspend fun setBackgroundApprovalWindowHours(hours: Int)
+
+    /**
      * A [Flow] representing the id of the pipeline the user has marked as
      * default. `null` means no explicit choice — chats without their own
      * binding then have no pipeline to execute against and the task queue

@@ -19,6 +19,7 @@ import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.ClarificationRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
+import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
@@ -26,10 +27,13 @@ import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
+import app.knotwork.android.domain.usecases.PendingSubmissionOutcome
 import app.knotwork.android.domain.usecases.ResumeOutcome
 import app.knotwork.android.domain.usecases.ResumePipelineRunUseCase
 import app.knotwork.android.domain.usecases.SaveMessageToMemoryUseCase
 import app.knotwork.android.domain.usecases.SaveToMemoryOutcome
+import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
+import app.knotwork.android.domain.usecases.SubmitClarificationAnswerUseCase
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ChatRole
 import app.knotwork.design.components.chips.Risk
@@ -100,6 +104,9 @@ class ChatHomeViewModelTest {
     private lateinit var pipelineRunRepository: PipelineRunRepository
     private lateinit var runTraceRepository: RunTraceRepository
     private lateinit var resumePipelineRunUseCase: ResumePipelineRunUseCase
+    private lateinit var pendingInteractionRepository: PendingInteractionRepository
+    private lateinit var submitApprovalDecisionUseCase: SubmitApprovalDecisionUseCase
+    private lateinit var submitClarificationAnswerUseCase: SubmitClarificationAnswerUseCase
 
     private lateinit var sessionsFlow: MutableStateFlow<List<ChatSession>>
     private lateinit var localModelsFlow: MutableStateFlow<List<LocalModel>>
@@ -129,6 +136,14 @@ class ChatHomeViewModelTest {
         pipelineRunRepository = mockk()
         runTraceRepository = mockk()
         resumePipelineRunUseCase = mockk()
+        pendingInteractionRepository = mockk(relaxed = true)
+        coEvery { pendingInteractionRepository.getForSession(any()) } returns null
+        submitApprovalDecisionUseCase = mockk(relaxed = true)
+        coEvery { submitApprovalDecisionUseCase(any(), any(), any()) } returns PendingSubmissionOutcome.LiveResumed
+        submitClarificationAnswerUseCase = mockk(relaxed = true)
+        coEvery {
+            submitClarificationAnswerUseCase(any(), any(), any())
+        } returns PendingSubmissionOutcome.LiveResumed
         coEvery { pipelineRunRepository.getActiveRunForSession(any()) } returns null
         coEvery { pipelineRunRepository.getLatestRunForSession(any()) } returns null
         coEvery { runTraceRepository.getTraceForRun(any()) } returns emptyList()
@@ -199,6 +214,9 @@ class ChatHomeViewModelTest {
         pipelineRunRepository,
         runTraceRepository,
         resumePipelineRunUseCase,
+        pendingInteractionRepository,
+        submitApprovalDecisionUseCase,
+        submitClarificationAnswerUseCase,
     ).also { vm ->
         // Keep the replay projection on the test scheduler so
         // advanceUntilIdle() deterministically covers it.
@@ -768,7 +786,7 @@ class ChatHomeViewModelTest {
     }
 
     @Test
-    fun `approveTool calls resumeWithApproval(true) and flips to Generating`() = runTest(testDispatcher) {
+    fun `approveTool routes the decision and flips to Generating`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
         val sessionId = viewModel.state.value.thread.currentSessionId
@@ -789,13 +807,13 @@ class ChatHomeViewModelTest {
         viewModel.approveTool()
         advanceUntilIdle()
 
-        verify { agentOrchestratorUseCase.resumeWithApproval(sessionId, true) }
+        coVerify { submitApprovalDecisionUseCase(sessionId, true, null) }
         assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
         assertNull(viewModel.state.value.pending.tool)
     }
 
     @Test
-    fun `rejectTool calls resumeWithApproval(false) and appends system denial message`() = runTest(testDispatcher) {
+    fun `rejectTool routes the denial and appends system denial message`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
         val sessionId = viewModel.state.value.thread.currentSessionId
@@ -816,7 +834,7 @@ class ChatHomeViewModelTest {
         viewModel.rejectTool()
         advanceUntilIdle()
 
-        verify { agentOrchestratorUseCase.resumeWithApproval(sessionId, false) }
+        coVerify { submitApprovalDecisionUseCase(sessionId, false, null) }
         coVerify {
             chatRepository.saveMessage(
                 match { msg ->
@@ -854,14 +872,14 @@ class ChatHomeViewModelTest {
         // Empty typed-confirm — Allow must be refused.
         viewModel.approveTool()
         advanceUntilIdle()
-        verify(exactly = 0) { agentOrchestratorUseCase.resumeWithApproval(any(), true) }
+        coVerify(exactly = 0) { submitApprovalDecisionUseCase(any(), true, any()) }
         assertTrue(viewModel.state.value.visual is ChatHomeUiState.HitlConfirm)
 
         // Typing the canonical magic word unlocks the gate.
         viewModel.onTypedConfirmChange("yes")
         viewModel.approveTool()
         advanceUntilIdle()
-        verify { agentOrchestratorUseCase.resumeWithApproval(sessionId, true) }
+        coVerify { submitApprovalDecisionUseCase(sessionId, true, null) }
         assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
     }
 
@@ -891,7 +909,7 @@ class ChatHomeViewModelTest {
     }
 
     @Test
-    fun `submitClarificationReply calls repository and flips to Generating`() = runTest(testDispatcher) {
+    fun `submitClarificationReply routes the answer and flips to Generating`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
         val sessionId = viewModel.state.value.thread.currentSessionId
@@ -913,13 +931,13 @@ class ChatHomeViewModelTest {
         viewModel.submitClarificationReply(" Yes  ")
         advanceUntilIdle()
 
-        coVerify { clarificationRepository.submitClarification("req-7", "Yes") }
+        coVerify { submitClarificationAnswerUseCase(sessionId, "req-7", "Yes") }
         assertNull(viewModel.state.value.pending.clarification)
         assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
     }
 
     @Test
-    fun `clarification watchdog submits default answer on timeout`() = runTest(testDispatcher) {
+    fun `clarification card outlives its live timeout without auto-submitting a default`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
         val sessionId = viewModel.state.value.thread.currentSessionId
@@ -936,28 +954,20 @@ class ChatHomeViewModelTest {
         }
         viewModel.onComposerValueChange("hi")
         viewModel.sendMessage()
-        // Use runCurrent() not advanceUntilIdle: the latter would skip past the
-        // 500ms watchdog delay and fire the timeout *before* this assertion.
         testScheduler.runCurrent()
         assertEquals(ChatHomeUiState.Clarification, viewModel.state.value.visual)
 
+        // Drive virtual time well past the live window: the repository owns
+        // that timeout (the run then parks persistently) — the UI must NOT
+        // fabricate a default answer, and the card must stay answerable so
+        // the reply can route through the parked-run submission path.
         testScheduler.advanceTimeBy(600L)
         testScheduler.runCurrent()
 
-        coVerify { clarificationRepository.submitClarification("req-timeout", "Alpha") }
-        coVerify {
-            chatRepository.saveMessage(
-                match { msg ->
-                    msg.role == Role.SYSTEM &&
-                        msg.content.contains("Alpha") &&
-                        msg.content.contains("timed out")
-                },
-            )
-        }
-        assertNull(viewModel.state.value.pending.clarification)
-        // Pipeline resumes after the default answer is submitted — keep Generating
-        // until the orchestrator's next state lands.
-        assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
+        coVerify(exactly = 0) { submitClarificationAnswerUseCase(any(), any(), any()) }
+        coVerify(exactly = 0) { clarificationRepository.submitClarification(any(), any()) }
+        assertEquals(request, viewModel.state.value.pending.clarification)
+        assertEquals(ChatHomeUiState.Clarification, viewModel.state.value.visual)
     }
 
     @Test
@@ -983,7 +993,7 @@ class ChatHomeViewModelTest {
         viewModel.submitClarificationReply("   ")
         advanceUntilIdle()
 
-        coVerify { clarificationRepository.submitClarification("req-blank", "") }
+        coVerify { submitClarificationAnswerUseCase(sessionId, "req-blank", "") }
         assertNull(viewModel.state.value.pending.clarification)
         assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
     }
@@ -1678,9 +1688,11 @@ class ChatHomeViewModelTest {
             emit(AgentOrchestratorState.AwaitingClarification(request))
             delay(10_000)
         }
-        // The request resolved on the repository side (timeout or an
-        // earlier answer) before the user's tap arrives.
-        coEvery { clarificationRepository.submitClarification("req-stale", "Work") } returns false
+        // Neither a live deferred nor a parked record consumed the reply —
+        // the request resolved before the user's tap arrived.
+        coEvery {
+            submitClarificationAnswerUseCase(sessionId, "req-stale", "Work")
+        } returns PendingSubmissionOutcome.NothingPending
         viewModel.onComposerValueChange("hi")
         viewModel.sendMessage()
         runCurrent()

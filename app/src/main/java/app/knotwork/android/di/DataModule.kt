@@ -26,6 +26,7 @@ import app.knotwork.android.data.repositories.MemoryRepositoryImpl
 import app.knotwork.android.data.repositories.MetricsRepositoryImpl
 import app.knotwork.android.data.repositories.NetworkActivityTrackerImpl
 import app.knotwork.android.data.repositories.NetworkStateRepositoryImpl
+import app.knotwork.android.data.repositories.PendingInteractionRepositoryImpl
 import app.knotwork.android.data.repositories.PipelineRunRepositoryImpl
 import app.knotwork.android.data.repositories.PowerStateRepositoryImpl
 import app.knotwork.android.data.repositories.PromptRepositoryImpl
@@ -48,6 +49,7 @@ import app.knotwork.android.domain.repositories.MetricsRepository
 import app.knotwork.android.domain.repositories.ModelDownloadManager
 import app.knotwork.android.domain.repositories.NetworkActivityTracker
 import app.knotwork.android.domain.repositories.NetworkStateRepository
+import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelinePresetRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
@@ -165,6 +167,17 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindPipelineRunRepository(repository: PipelineRunRepositoryImpl): PipelineRunRepository
+
+    /**
+     * Binds the [PendingInteractionRepositoryImpl] implementation to the
+     * [PendingInteractionRepository] interface backing the parked HITL
+     * interaction records of the two-phase waiting protocol.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindPendingInteractionRepository(
+        repository: PendingInteractionRepositoryImpl,
+    ): PendingInteractionRepository
 
     /**
      * Binds the [RunTraceRepositoryImpl] implementation to the

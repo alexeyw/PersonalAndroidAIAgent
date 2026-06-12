@@ -5,10 +5,13 @@ import app.knotwork.android.domain.models.AgentTask
 import app.knotwork.android.domain.models.ConnectionModel
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
+import app.knotwork.android.domain.models.PendingInteraction
+import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.RunOrigin
+import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
@@ -36,6 +39,7 @@ class ResumePipelineRunUseCaseTest {
     private lateinit var pipelineRepository: PipelineRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var taskQueueManager: TaskQueueManager
+    private lateinit var pendingInteractionRepository: PendingInteractionRepository
 
     private lateinit var useCase: ResumePipelineRunUseCase
 
@@ -55,15 +59,19 @@ class ResumePipelineRunUseCaseTest {
         pipelineRepository = mockk()
         settingsRepository = mockk()
         taskQueueManager = mockk(relaxed = true)
+        pendingInteractionRepository = mockk()
         useCase = ResumePipelineRunUseCase(
             pipelineRunRepository = pipelineRunRepository,
             pipelineRepository = pipelineRepository,
             settingsRepository = settingsRepository,
+            pendingInteractionRepository = pendingInteractionRepository,
             taskQueueManager = taskQueueManager,
         )
         every { settingsRepository.resumeMaxAgeHours } returns flowOf(48)
+        every { settingsRepository.backgroundApprovalWindowHours } returns flowOf(24)
         coEvery { pipelineRepository.getPipelineById("pipe-1") } returns graph
-        coEvery { pipelineRunRepository.markResumed(any()) } returns true
+        coEvery { pendingInteractionRepository.getForRun(any()) } returns null
+        coEvery { pipelineRunRepository.markResumed(any(), any()) } returns true
     }
 
     /** Interrupted run record matching [graph] and fresh enough to resume. */
@@ -94,7 +102,7 @@ class ResumePipelineRunUseCaseTest {
         val outcome = useCase("run-1")
 
         assertEquals(ResumeOutcome.Resumed, outcome)
-        coVerify { pipelineRunRepository.markResumed("run-1") }
+        coVerify { pipelineRunRepository.markResumed("run-1", PipelineRunStatus.INTERRUPTED) }
         val task = slot<AgentTask>()
         verify { taskQueueManager.enqueueTask(capture(task)) }
         assertEquals("run-1", task.captured.id)
@@ -164,9 +172,74 @@ class ResumePipelineRunUseCaseTest {
     @Test
     fun `given concurrent transition lost the markResumed race when invoked then NotResumable`() = runTest {
         coEvery { pipelineRunRepository.getRun("run-1") } returns interruptedRun()
-        coEvery { pipelineRunRepository.markResumed("run-1") } returns false
+        coEvery { pipelineRunRepository.markResumed("run-1", any()) } returns false
 
         assertEquals(ResumeOutcome.NotResumable, useCase("run-1"))
         verify(exactly = 0) { taskQueueManager.enqueueTask(any()) }
+    }
+
+    // ─── Parked (WAITING_*) resume ──────────────────────────────────────────
+
+    /** A parked pending-interaction record inside / outside the approval window. */
+    private fun parkedRecord(requestedAt: Long): PendingInteraction = PendingInteraction(
+        runId = "run-1",
+        sessionId = "session-1",
+        kind = PendingInteractionKind.APPROVAL,
+        toolName = "tool",
+        toolArgs = "{}",
+        requestedAt = requestedAt,
+    )
+
+    @Test
+    fun `given parked WAITING_APPROVAL run inside the window when invoked then resumes from its status`() = runTest {
+        coEvery { pipelineRunRepository.getRun("run-1") } returns
+            interruptedRun(status = PipelineRunStatus.WAITING_APPROVAL)
+        coEvery { pendingInteractionRepository.getForRun("run-1") } returns
+            parkedRecord(requestedAt = System.currentTimeMillis())
+
+        assertEquals(ResumeOutcome.Resumed, useCase("run-1"))
+        coVerify { pipelineRunRepository.markResumed("run-1", PipelineRunStatus.WAITING_APPROVAL) }
+        verify { taskQueueManager.enqueueTask(match { it.isResume && it.id == "run-1" }) }
+    }
+
+    @Test
+    fun `given parked WAITING_CLARIFICATION run inside the window when invoked then resumes`() = runTest {
+        coEvery { pipelineRunRepository.getRun("run-1") } returns
+            interruptedRun(status = PipelineRunStatus.WAITING_CLARIFICATION)
+        coEvery { pendingInteractionRepository.getForRun("run-1") } returns
+            parkedRecord(requestedAt = System.currentTimeMillis())
+
+        assertEquals(ResumeOutcome.Resumed, useCase("run-1"))
+        coVerify { pipelineRunRepository.markResumed("run-1", PipelineRunStatus.WAITING_CLARIFICATION) }
+    }
+
+    @Test
+    fun `given WAITING run without a parked record when invoked then NotResumable`() = runTest {
+        // No record = the wait is still live in-process; resume does not apply.
+        coEvery { pipelineRunRepository.getRun("run-1") } returns
+            interruptedRun(status = PipelineRunStatus.WAITING_APPROVAL)
+        coEvery { pendingInteractionRepository.getForRun("run-1") } returns null
+
+        assertEquals(ResumeOutcome.NotResumable, useCase("run-1"))
+        verify(exactly = 0) { taskQueueManager.enqueueTask(any()) }
+    }
+
+    @Test
+    fun `given parked run older than the approval window when invoked then Expired`() = runTest {
+        coEvery { pipelineRunRepository.getRun("run-1") } returns
+            interruptedRun(status = PipelineRunStatus.WAITING_APPROVAL)
+        coEvery { pendingInteractionRepository.getForRun("run-1") } returns
+            parkedRecord(requestedAt = System.currentTimeMillis() - 25 * 3_600_000L)
+
+        assertEquals(ResumeOutcome.Expired, useCase("run-1"))
+        verify(exactly = 0) { taskQueueManager.enqueueTask(any()) }
+    }
+
+    @Test
+    fun `given an actively RUNNING run when invoked then NotResumable`() = runTest {
+        coEvery { pipelineRunRepository.getRun("run-1") } returns
+            interruptedRun(status = PipelineRunStatus.RUNNING)
+
+        assertEquals(ResumeOutcome.NotResumable, useCase("run-1"))
     }
 }

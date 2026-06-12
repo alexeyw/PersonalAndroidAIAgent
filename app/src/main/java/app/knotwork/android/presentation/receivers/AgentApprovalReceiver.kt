@@ -4,23 +4,67 @@ import android.app.NotificationManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import androidx.annotation.VisibleForTesting
 import app.knotwork.android.domain.constants.TimeAndIdConstants
-import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
+import app.knotwork.android.domain.models.PendingInteractionKind
+import app.knotwork.android.domain.models.ToolRisk
+import app.knotwork.android.domain.repositories.PendingInteractionRepository
+import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.services.ClarificationNotifier
+import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
 import app.knotwork.android.presentation.notifications.ApprovalNotificationManager
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
- * BroadcastReceiver that handles the user's action from the approval notification.
+ * BroadcastReceiver that handles the user's action from the approval and
+ * clarification notifications.
+ *
+ * Works in both waiting phases of the two-phase HITL protocol — and, for the
+ * persistent phase, across process death: the receiver is manifest-declared,
+ * so tapping a notification action launches the app process if needed, and
+ * the routed [SubmitApprovalDecisionUseCase] falls through from the live
+ * in-process gate to the parked pending-interaction record. Persistent
+ * notifications additionally route their delete-intent here
+ * ([ApprovalAction.REPOST]) so a swiped-away notification is re-posted from
+ * the durable record — it is the user's primary path back to a parked run.
+ *
+ * The decision work suspends (Room + queue), which a `BroadcastReceiver`
+ * cannot do inline: the receiver bridges via [goAsync] and an own supervisor
+ * scope, keeping the process alive until the submission settles.
  */
 @AndroidEntryPoint
 class AgentApprovalReceiver : BroadcastReceiver() {
 
-    /**
-     * Use case for managing the orchestrator's state and actions.
-     */
+    /** Routes approve / deny to the live gate or the parked record. */
     @Inject
-    lateinit var orchestratorUseCase: AgentOrchestratorUseCase
+    lateinit var submitApprovalDecisionUseCase: SubmitApprovalDecisionUseCase
+
+    /** Source of the parked request snapshot for notification re-posts. */
+    @Inject
+    lateinit var pendingInteractionRepository: PendingInteractionRepository
+
+    /** Re-posts persistent approval notifications on [ApprovalAction.REPOST]. */
+    @Inject
+    lateinit var approvalNotifier: ApprovalNotifier
+
+    /** Re-posts persistent clarification notifications on [ApprovalAction.REPOST]. */
+    @Inject
+    lateinit var clarificationNotifier: ClarificationNotifier
+
+    /**
+     * Host scope of the suspending submission work bridged through
+     * [goAsync]. Visible for tests so they can substitute a test scope and
+     * await completion deterministically.
+     */
+    @VisibleForTesting
+    internal var scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     /**
      * Called when the BroadcastReceiver is receiving an Intent broadcast.
@@ -32,18 +76,83 @@ class AgentApprovalReceiver : BroadcastReceiver() {
      * @param intent The Intent being received.
      */
     override fun onReceive(context: Context, intent: Intent) {
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val sessionId = intent.getStringExtra("sessionId") ?: return
+        val sessionId = intent.getStringExtra(EXTRA_SESSION_ID) ?: return
+        val runId = intent.getStringExtra(EXTRA_RUN_ID)
+        val action = ApprovalAction.fromAction(intent.action) ?: return
 
-        notificationManager.cancel(
-            ApprovalNotificationManager.NOTIFICATION_ID +
-                sessionId.hashCode() % TimeAndIdConstants.NOTIFICATION_ID_RANGE,
-        )
-
-        when (ApprovalAction.fromAction(intent.action)) {
-            ApprovalAction.APPROVE -> orchestratorUseCase.resumeWithApproval(sessionId, true)
-            ApprovalAction.DENY -> orchestratorUseCase.resumeWithApproval(sessionId, false)
-            null -> Unit
+        when (action) {
+            ApprovalAction.APPROVE, ApprovalAction.DENY -> {
+                // Remove the notification immediately for responsive UX; the
+                // submission below settles the request itself.
+                val notificationManager =
+                    context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                notificationManager.cancel(
+                    ApprovalNotificationManager.NOTIFICATION_ID +
+                        sessionId.hashCode() % TimeAndIdConstants.NOTIFICATION_ID_RANGE,
+                )
+                launchAsync { submitApprovalDecisionUseCase(sessionId, action == ApprovalAction.APPROVE, runId) }
+            }
+            ApprovalAction.REPOST -> {
+                if (runId != null) {
+                    launchAsync { repostFromRecord(runId) }
+                }
+            }
         }
+    }
+
+    /**
+     * Re-posts the persistent notification of a parked run from its durable
+     * record. A missing record means the request settled between the swipe
+     * and this broadcast — nothing to re-post.
+     *
+     * @param runId Id of the parked run whose notification was dismissed.
+     */
+    private suspend fun repostFromRecord(runId: String) {
+        val pending = pendingInteractionRepository.getForRun(runId) ?: return
+        when (pending.kind) {
+            PendingInteractionKind.APPROVAL -> approvalNotifier.sendPersistentApprovalRequest(
+                runId = pending.runId,
+                sessionId = pending.sessionId,
+                toolName = pending.toolName.orEmpty(),
+                arguments = pending.toolArgs.orEmpty(),
+                risk = pending.risk ?: ToolRisk.SENSITIVE,
+            )
+            PendingInteractionKind.CLARIFICATION -> clarificationNotifier.sendPersistentClarificationRequest(
+                runId = pending.runId,
+                sessionId = pending.sessionId,
+                question = pending.question.orEmpty(),
+            )
+        }
+    }
+
+    /**
+     * Bridges suspending work out of `onReceive` via [goAsync]: the pending
+     * result keeps the (possibly freshly launched) process in the foreground
+     * priority band until `finish()` is called. Nullable because a directly
+     * invoked receiver (unit tests) has no framework-provided pending result.
+     *
+     * @param block The suspending work to run.
+     */
+    private fun launchAsync(block: suspend () -> Unit) {
+        val pendingResult: PendingResult? = goAsync()
+        scope.launch {
+            try {
+                block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "Notification action handling failed")
+            } finally {
+                pendingResult?.finish()
+            }
+        }
+    }
+
+    companion object {
+        /** Intent extra carrying the chat session id of the request. */
+        const val EXTRA_SESSION_ID: String = "sessionId"
+
+        /** Intent extra carrying the parked run id (persistent-phase notifications only). */
+        const val EXTRA_RUN_ID: String = "runId"
     }
 }

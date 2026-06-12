@@ -15,6 +15,26 @@ details.
 
 ### Added
 
+- **Background approvals and questions survive app death.** A run that
+  hits a tool-approval gate or a clarifying question no longer fails
+  when nobody answers within the live timeout: it parks in a persistent
+  waiting state instead. The pending request (tool name, arguments and
+  risk — or the generated question) is stored on-device, the engine and
+  foreground service are released, and an ongoing notification becomes
+  the way back to the run — swiping it away re-posts it from the stored
+  request. Approve / Deny act directly from the notification for
+  read-only and sensitive tools and work even after the process died:
+  the decision is recorded one-shot and the run resumes from its
+  checkpoint, re-validating the tool call so a stale approval can never
+  authorise different arguments. Destructive tools keep their typed
+  confirmation — the notification offers Deny plus a *Review in chat*
+  deep link. Clarifications park the same way under an *Agent needs
+  your input* notification, and the answer given in chat resumes the
+  run without re-generating the question. Unanswered requests expire
+  after the new **Settings → Approval window** period (default 24 h,
+  1–168 h): a periodic maintenance pass fails the run with *Approval
+  window expired*.
+
 - **Scheduled tasks land their results in chat.** A task created with
   `schedule_task` now executes through the exact same task-queue →
   engine path as an interactive message and is bound to the

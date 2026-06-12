@@ -59,6 +59,22 @@ object SettingsDefaults {
     /** Upper bound enforced when the user edits the resume-window setting. */
     const val RESUME_MAX_AGE_HOURS_MAX: Int = 168
 
+    /**
+     * Default window, in hours, during which a run parked on a persistent
+     * HITL request (background approval or clarification) waits for the
+     * user's response. The window counts from the moment the live in-process
+     * waiting phase timed out; once it elapses, the maintenance pass fails
+     * the run with an "Approval window expired" message — an unanswered
+     * request must not keep a run (and its notification) alive forever.
+     */
+    const val BACKGROUND_APPROVAL_WINDOW_HOURS_DEFAULT: Int = 24
+
+    /** Lower bound enforced when the user edits the background-approval-window setting. */
+    const val BACKGROUND_APPROVAL_WINDOW_HOURS_MIN: Int = 1
+
+    /** Upper bound enforced when the user edits the background-approval-window setting. */
+    const val BACKGROUND_APPROVAL_WINDOW_HOURS_MAX: Int = 168
+
     /** Default maximum number of pipeline steps allowed per user request. */
     const val PIPELINE_MAX_STEPS_DEFAULT: Int = 15
 

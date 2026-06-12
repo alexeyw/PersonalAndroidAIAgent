@@ -331,6 +331,22 @@ a colour-coded risk pill (`READ` / `SENS` / `DEST`), and **Approve** /
 tool name as a typed-confirm gate before the **Approve** button is
 enabled.
 
+An unanswered request does not fail the run. When the live waiting
+window elapses — say a scheduled run hits a sensitive tool at 6 a.m. —
+the run parks in a persistent waiting state and an ongoing notification
+becomes your way back to it; swiping the notification away simply
+re-posts it. For read-only and sensitive tools, **Approve** and
+**Deny** work straight from the notification, even if the app process
+has since been killed: the run resumes from its checkpoint and the
+tool call is re-validated before your stored decision is applied.
+Destructive tools never execute from a notification — it offers
+**Deny** and a **Review in chat** link to the regular typed-confirm
+card. Clarifying questions park the same way under an **Agent needs
+your input** notification that deep-links back to the chat. Parked
+requests expire after the **Settings → Approval window** period
+(default 24 hours); an expired run fails with *Approval window
+expired*.
+
 ---
 
 ## Pipelines
@@ -898,6 +914,9 @@ The "Reset to defaults" action restores every slider in this card.
   interrupted run stays resumable from its checkpoint. Older
   interrupted runs only offer **Discard** — their recorded context
   grows stale with time.
+- **Approval window** (1 – 168 hours, default 24) — how long a run
+  parked on an unanswered tool approval or clarifying question waits
+  for your response before failing with *Approval window expired*.
 
 ### Local Model
 

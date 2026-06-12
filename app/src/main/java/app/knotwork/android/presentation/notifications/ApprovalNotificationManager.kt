@@ -3,9 +3,11 @@ package app.knotwork.android.presentation.notifications
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.TaskStackBuilder
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
+import androidx.core.net.toUri
 import app.knotwork.android.R
 import app.knotwork.android.domain.constants.NotificationChannels
 import app.knotwork.android.domain.constants.TimeAndIdConstants
@@ -14,6 +16,8 @@ import app.knotwork.android.domain.services.ApprovalNotifier
 import app.knotwork.android.presentation.receivers.AgentApprovalReceiver
 import app.knotwork.android.presentation.receivers.ApprovalAction
 import app.knotwork.android.presentation.state.ActiveSessionTracker
+import app.knotwork.android.presentation.ui.MainActivity
+import app.knotwork.android.presentation.ui.navigation.NavRoutes
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
@@ -35,6 +39,15 @@ class ApprovalNotificationManager @Inject constructor(
 
     companion object {
         const val NOTIFICATION_ID = 201
+
+        /** Request-code offset of the Approve action within one request's intent family. */
+        private const val APPROVE_OFFSET = 0
+
+        /** Request-code offset of the Deny action within one request's intent family. */
+        private const val DENY_OFFSET = 1
+
+        /** Request-code offset of the repost delete-intent within one request's intent family. */
+        private const val REPOST_OFFSET = 2
     }
 
     /**
@@ -93,10 +106,99 @@ class ApprovalNotificationManager @Inject constructor(
             .build()
 
         // Use sessionId hashcode as notification ID so multiple requests can be shown if needed
-        notificationManager.notify(
-            NOTIFICATION_ID + sessionId.hashCode() % TimeAndIdConstants.NOTIFICATION_ID_RANGE,
-            notification,
+        notificationManager.notify(notificationId(sessionId), notification)
+    }
+
+    /**
+     * Sends the persistent-phase approval notification for a parked run.
+     *
+     * Differences from the live-phase [sendApprovalRequest]:
+     *  - posted unconditionally — the run is no longer live, so the in-chat
+     *    card alone cannot be relied on once the user navigates away;
+     *  - `ongoing` + a [ApprovalAction.REPOST] delete-intent: Android 14+
+     *    lets the user swipe ongoing notifications, so the receiver
+     *    re-posts it from the durable pending record (`onlyAlertOnce` keeps
+     *    the re-post silent);
+     *  - the body taps through to the chat session (deep link) where the
+     *    standard confirmation card is restored from the record;
+     *  - actions are risk-gated: [ToolRisk.DESTRUCTIVE] offers Deny plus a
+     *    "Review in chat" deep link instead of a direct Approve — a typed
+     *    confirmation cannot be collected from a notification.
+     *
+     * @param runId Id of the parked run the decision must address.
+     * @param sessionId The ID of the session that triggered the request.
+     * @param toolName The name of the tool to be executed.
+     * @param arguments The arguments to be passed to the tool.
+     * @param risk Risk classification, drives the channel / icon / title / actions.
+     */
+    override fun sendPersistentApprovalRequest(
+        runId: String,
+        sessionId: String,
+        toolName: String,
+        arguments: String,
+        risk: ToolRisk,
+    ) {
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        ensureChannelsRegistered(notificationManager)
+
+        val channelId = when (risk) {
+            ToolRisk.DESTRUCTIVE -> NotificationChannels.AGENT_APPROVAL_DESTRUCTIVE
+            ToolRisk.SENSITIVE, ToolRisk.READ_ONLY -> NotificationChannels.AGENT_APPROVAL
+        }
+        val smallIcon = when (risk) {
+            ToolRisk.DESTRUCTIVE -> android.R.drawable.stat_sys_warning
+            ToolRisk.SENSITIVE, ToolRisk.READ_ONLY -> android.R.drawable.ic_dialog_alert
+        }
+        val title = when (risk) {
+            ToolRisk.DESTRUCTIVE -> context.getString(R.string.approval_notification_title_destructive)
+            ToolRisk.SENSITIVE, ToolRisk.READ_ONLY -> context.getString(R.string.approval_notification_title_sensitive)
+        }
+        val contentText = context.getString(R.string.approval_notification_waiting_text, toolName)
+        val bigText = context.getString(R.string.approval_notification_big_text, toolName, arguments)
+        val deepLink = chatDeepLinkIntent(sessionId)
+
+        val builder = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(smallIcon)
+            .setContentTitle(title)
+            .setContentText(contentText)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(deepLink)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setAutoCancel(false)
+            .setDeleteIntent(persistentPendingIntent(sessionId, runId, ApprovalAction.REPOST, REPOST_OFFSET))
+
+        if (risk == ToolRisk.DESTRUCTIVE) {
+            builder.addAction(
+                android.R.drawable.ic_menu_view,
+                context.getString(R.string.approval_notification_review_in_chat),
+                deepLink,
+            )
+        } else {
+            builder.addAction(
+                android.R.drawable.ic_media_play,
+                context.getString(R.string.chat_thought_approve),
+                persistentPendingIntent(sessionId, runId, ApprovalAction.APPROVE, APPROVE_OFFSET),
+            )
+        }
+        builder.addAction(
+            android.R.drawable.ic_delete,
+            context.getString(R.string.chat_thought_deny),
+            persistentPendingIntent(sessionId, runId, ApprovalAction.DENY, DENY_OFFSET),
         )
+
+        notificationManager.notify(notificationId(sessionId), builder.build())
+    }
+
+    /**
+     * Removes the approval notification of [sessionId], if any is showing.
+     *
+     * @param sessionId The session whose approval notification to remove.
+     */
+    override fun cancelApprovalNotification(sessionId: String) {
+        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.cancel(notificationId(sessionId))
     }
 
     private fun ensureChannelsRegistered(notificationManager: NotificationManager) {
@@ -125,7 +227,7 @@ class ApprovalNotificationManager @Inject constructor(
     ): PendingIntent {
         val intent = Intent(context, AgentApprovalReceiver::class.java).apply {
             this.action = action.action
-            putExtra("sessionId", sessionId)
+            putExtra(AgentApprovalReceiver.EXTRA_SESSION_ID, sessionId)
         }
         return PendingIntent.getBroadcast(
             context,
@@ -134,4 +236,69 @@ class ApprovalNotificationManager @Inject constructor(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
     }
+
+    /**
+     * Builds a broadcast [PendingIntent] addressing a parked run. Request
+     * codes derive from the run id (not the session id, which the live-phase
+     * intents use) so the persistent intents of a run never overwrite — and
+     * are never overwritten by — live-phase intents whose extras differ but
+     * whose `Intent.filterEquals` identity matches.
+     *
+     * @param sessionId Id of the owning chat session.
+     * @param runId Id of the parked run carried to [AgentApprovalReceiver].
+     * @param action The wire action to emit.
+     * @param requestCodeOffset Disambiguates the actions of one run.
+     */
+    private fun persistentPendingIntent(
+        sessionId: String,
+        runId: String,
+        action: ApprovalAction,
+        requestCodeOffset: Int,
+    ): PendingIntent {
+        val intent = Intent(context, AgentApprovalReceiver::class.java).apply {
+            this.action = action.action
+            putExtra(AgentApprovalReceiver.EXTRA_SESSION_ID, sessionId)
+            putExtra(AgentApprovalReceiver.EXTRA_RUN_ID, runId)
+        }
+        return PendingIntent.getBroadcast(
+            context,
+            runId.hashCode() + requestCodeOffset,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    /**
+     * Builds the body-tap action: an activity [PendingIntent] whose
+     * `ACTION_VIEW` uri matches the `knotwork://chat/{threadId}` pattern
+     * registered on the chat destination, so Navigation routes straight into
+     * the session where the confirmation card is restored.
+     *
+     * @param sessionId Id of the chat session to open.
+     */
+    private fun chatDeepLinkIntent(sessionId: String): PendingIntent? {
+        val intent = Intent(
+            Intent.ACTION_VIEW,
+            "${NavRoutes.DEEP_LINK_SCHEME}://${NavRoutes.chatRoute(sessionId)}".toUri(),
+            context,
+            MainActivity::class.java,
+        )
+        return TaskStackBuilder.create(context).run {
+            addNextIntentWithParentStack(intent)
+            getPendingIntent(
+                notificationId(sessionId),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
+    }
+
+    /**
+     * Notification slot of [sessionId]: shared by the live and persistent
+     * phases so the persistent notification replaces the live one, and a
+     * single cancel clears whichever is showing.
+     *
+     * @param sessionId Id of the chat session owning the slot.
+     */
+    private fun notificationId(sessionId: String): Int =
+        NOTIFICATION_ID + sessionId.hashCode() % TimeAndIdConstants.NOTIFICATION_ID_RANGE
 }

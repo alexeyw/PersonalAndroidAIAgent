@@ -7,6 +7,7 @@ import app.knotwork.android.domain.models.ConsoleEventType
 import app.knotwork.android.domain.models.MemoryChunk
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
+import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
@@ -674,6 +675,38 @@ class TaskQueueManagerImplTest {
         verify(exactly = 0) { graphExecutionEngine.invoke(any(), any(), any(), any(), any()) }
         coVerify(exactly = 0) { chatRepository.saveMessage(any()) }
     }
+
+    // endregion
+
+    // region Parked (background-HITL) runs
+
+    /**
+     * A run that parks on its persistent waiting phase ends the engine flow
+     * with `SuspendedInBackground` and no terminal state. The queue must NOT
+     * stamp the record CANCELLED in its `finally` — the WAITING_* status is
+     * the durable park marker — while the in-memory session state still
+     * resets to Idle so the UI stops showing a live run.
+     */
+    @Test
+    fun `given engine parks the run then record is neither CANCELLED nor FAILED and state is Idle`() =
+        testScope.runTest {
+            val sessionId = "session_parked"
+            every { graphExecutionEngine.invoke(any(), any(), any(), any()) } returns flow {
+                emit(AgentOrchestratorState.Loading)
+                emit(
+                    AgentOrchestratorState.SuspendedInBackground(PendingInteractionKind.APPROVAL),
+                )
+            }
+
+            val task = AgentTask(sessionId = sessionId, prompt = "p")
+            taskQueueManager.enqueueTask(task)
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { pipelineRunRepository.finishRun(task.id, any(), any()) }
+            coVerify(exactly = 0) { pipelineRunRepository.finishRun(task.id, any()) }
+            val state = taskQueueManager.observeTaskState(sessionId).first()
+            assertTrue("Expected Idle after park, got $state", state is AgentOrchestratorState.Idle)
+        }
 
     // endregion
 }

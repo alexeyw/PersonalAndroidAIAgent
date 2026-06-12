@@ -1,5 +1,6 @@
 package app.knotwork.android.domain.repositories
 
+import app.knotwork.android.domain.models.ClarificationOutcome
 import app.knotwork.android.domain.models.ClarificationRequest
 import kotlinx.coroutines.flow.Flow
 
@@ -13,9 +14,9 @@ import kotlinx.coroutines.flow.Flow
  * 2. The repository appends the request to [pendingRequests] so the UI can render it.
  * 3. The UI calls [submitClarification] with the user's reply; [requestAnswer] resumes
  *    and returns that reply.
- * 4. If no reply arrives within [ClarificationRequest.timeoutMs], a default answer is
- *    used (first option, or empty string for free-form requests) and the timeout is
- *    logged.
+ * 4. If no reply arrives within [ClarificationRequest.timeoutMs], [requestAnswer]
+ *    returns [ClarificationOutcome.TimedOut] and the caller decides what the elapsed
+ *    live phase means (park the run persistently, or fall back to a default answer).
  *
  * Implementations must be thread-safe and must keep every pending request addressable
  * via [pendingRequests] — multiple concurrent pipelines may issue overlapping requests
@@ -39,15 +40,12 @@ interface ClarificationRepository {
      * Publishes [request] and suspends until the user submits an answer via
      * [submitClarification] or until [ClarificationRequest.timeoutMs] elapses.
      *
-     * On timeout the returned value is:
-     * - `request.options.first()` when [ClarificationRequest.options] is non-null and
-     *   non-empty;
-     * - an empty string otherwise (free-form input or empty options list).
-     *
      * @param request The clarification to ask the user.
-     * @return The user's answer, or the default value if the request timed out.
+     * @return [ClarificationOutcome.Answered] carrying the user's reply, or
+     *   [ClarificationOutcome.TimedOut] when the live waiting window elapsed
+     *   unanswered — the caller owns the timeout policy.
      */
-    suspend fun requestAnswer(request: ClarificationRequest): String
+    suspend fun requestAnswer(request: ClarificationRequest): ClarificationOutcome
 
     /**
      * Forwards the user's reply to the suspended [requestAnswer] call identified by
