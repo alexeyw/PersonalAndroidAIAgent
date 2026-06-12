@@ -106,6 +106,8 @@ class SettingsManager @Inject constructor(
         val PIPELINE_MAX_STEPS = intPreferencesKey("pipeline_max_steps")
         val RESUME_MAX_AGE_HOURS = intPreferencesKey("resume_max_age_hours")
         val BACKGROUND_APPROVAL_WINDOW_HOURS = intPreferencesKey("background_approval_window_hours")
+        val TRACE_RETENTION_RUNS_PER_SESSION = intPreferencesKey("trace_retention_runs_per_session")
+        val TRACE_RETENTION_MAX_AGE_DAYS = intPreferencesKey("trace_retention_max_age_days")
         val MEMORY_SUMMARY_DEFAULT_LIMIT = intPreferencesKey("memory_summary_default_limit")
         val DEFAULT_PIPELINE_ID = stringPreferencesKey("default_pipeline_id")
         val CRASH_REPORTING_ENABLED = booleanPreferencesKey("crash_reporting_enabled")
@@ -1052,6 +1054,52 @@ class SettingsManager @Inject constructor(
             preferences[PreferencesKeys.BACKGROUND_APPROVAL_WINDOW_HOURS] = hours.coerceIn(
                 SettingsDefaults.BACKGROUND_APPROVAL_WINDOW_HOURS_MIN,
                 SettingsDefaults.BACKGROUND_APPROVAL_WINDOW_HOURS_MAX,
+            )
+        }
+    }
+
+    override val traceRetentionRunsPerSession: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.TRACE_RETENTION_RUNS_PER_SESSION]
+                ?: SettingsDefaults.TRACE_RETENTION_RUNS_PER_SESSION_DEFAULT
+        }
+
+    override suspend fun setTraceRetentionRunsPerSession(runs: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.TRACE_RETENTION_RUNS_PER_SESSION] = runs.coerceIn(
+                SettingsDefaults.TRACE_RETENTION_RUNS_PER_SESSION_MIN,
+                SettingsDefaults.TRACE_RETENTION_RUNS_PER_SESSION_MAX,
+            )
+        }
+    }
+
+    override val traceRetentionMaxAgeDays: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.TRACE_RETENTION_MAX_AGE_DAYS]
+                ?: SettingsDefaults.TRACE_RETENTION_MAX_AGE_DAYS_DEFAULT
+        }
+
+    override suspend fun setTraceRetentionMaxAgeDays(days: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.TRACE_RETENTION_MAX_AGE_DAYS] = days.coerceIn(
+                SettingsDefaults.TRACE_RETENTION_MAX_AGE_DAYS_MIN,
+                SettingsDefaults.TRACE_RETENTION_MAX_AGE_DAYS_MAX,
             )
         }
     }

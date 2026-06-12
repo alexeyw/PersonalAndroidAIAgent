@@ -46,4 +46,17 @@ interface RunTraceRepository {
      *   no persisted trace or the read fails.
      */
     suspend fun getTraceForRun(runId: String): List<RunTraceRecord>
+
+    /**
+     * Retention: deletes legacy trace rows that predate run-trace persistence
+     * (they belong to no run, so no replay path can ever reach them) once
+     * they age past [cutoffEpochMs]. Run-scoped trace rows are not touched —
+     * they are removed by the storage-level cascade when the run-retention
+     * pass deletes their run.
+     *
+     * @param cutoffEpochMs Epoch millis; legacy rows older than it are deleted.
+     * @return The number of deleted rows, `0` when nothing qualified or the
+     *   store failed.
+     */
+    suspend fun deleteLegacyTraceBefore(cutoffEpochMs: Long): Int
 }

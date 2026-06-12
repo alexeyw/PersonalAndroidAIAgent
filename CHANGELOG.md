@@ -15,6 +15,19 @@ details.
 
 ### Added
 
+- **Run-history retention.** Persistent pipeline runs and their traces
+  no longer accumulate forever: a daily maintenance pass (WorkManager,
+  charging + idle — the same window as memory compaction) deletes
+  finished runs that fall outside the most-recent window of each chat
+  or exceed the maximum age, together with their traces (and legacy
+  pre-run trace rows). Two new **Settings → Privacy** sliders control
+  the limits: **Keep run history per chat** (5–100, default 20) and
+  **Run history max age** (7–180 days, default 30). Only settled runs
+  are eligible — a run parked on a background approval or clarification
+  is never removed while it waits; its lifetime stays bounded by the
+  approval window. Documented in `SECURITY.md` as a mitigating control
+  for the at-rest accumulation of user-derived content.
+
 - **Background approvals and questions survive app death.** A run that
   hits a tool-approval gate or a clarifying question no longer fails
   when nobody answers within the live timeout: it parks in a persistent

@@ -192,6 +192,21 @@ class PipelineRunRepositoryImpl @Inject constructor(private val pipelineRunDao: 
         }
     } ?: emptyList()
 
+    override suspend fun applyRetention(keepPerSession: Int, maxAgeCutoffEpochMs: Long): Int =
+        absorbing("applyRetention") {
+            withContext(Dispatchers.IO) {
+                val beyondLimit = pipelineRunDao.deleteTerminalRunsBeyondSessionLimit(
+                    keepPerSession = keepPerSession,
+                    terminalStatuses = TERMINAL_STATUS_NAMES,
+                )
+                val tooOld = pipelineRunDao.deleteTerminalRunsFinishedBefore(
+                    cutoff = maxAgeCutoffEpochMs,
+                    terminalStatuses = TERMINAL_STATUS_NAMES,
+                )
+                beyondLimit + tooOld
+            }
+        } ?: 0
+
     /**
      * Runs [block] under the best-effort contract via the shared
      * [absorbingStoreFailure] helper, branding the log line with the

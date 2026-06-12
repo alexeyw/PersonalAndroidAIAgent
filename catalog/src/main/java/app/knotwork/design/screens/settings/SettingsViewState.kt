@@ -188,13 +188,14 @@ data class MemoryStatCell(val label: String, val value: String)
 data class EmbeddingOptionRow(val id: String, val label: String)
 
 /**
- * One tunable numeric memory parameter rendered as a labelled slider row
- * (`ParamSliderRow`) inside the Memory card — the same density as the
- * LLM-parameters card.
+ * One tunable numeric parameter rendered as a labelled slider row
+ * (`ParamSliderRow`) — the same density as the LLM-parameters card. Used by
+ * the Memory card tuning sliders and by the Privacy card retention sliders.
  *
  * @property id Stable id for the row — used as the LazyColumn key, the test
  *   tag, and the discriminator passed back through
- *   [SettingsCallbacks.onMemoryParamChange].
+ *   [SettingsCallbacks.onMemoryParamChange] (Memory card) or
+ *   [SettingsCallbacks.onPrivacyParamChange] (Privacy card).
  * @property title Row label.
  * @property valueLabel Localised display value (e.g. `"5"`, `"0.55"`, `"30 d"`).
  * @property value Slider position.
@@ -263,14 +264,21 @@ data class MemoryCardState(
 data class NotificationsCardState(val longRunningEnabled: Boolean, val scheduledResultsEnabled: Boolean = true)
 
 /**
- * Privacy card slice. Carries the crash-reporting toggle and the verbose
- * memory-logging diagnostic toggle.
+ * Privacy card slice. Carries the crash-reporting toggle, the verbose
+ * memory-logging diagnostic toggle, and the run-history retention sliders.
  *
  * @property crashReportingEnabled Whether anonymous crash reporting is on.
  * @property verboseMemoryLoggingEnabled Whether verbose memory diagnostics
  *   (per-hit console snippets + scores, compaction membership logs) are on.
+ * @property retentionParams Tunable run-history retention limits (runs kept
+ *   per chat, max age) rendered as branded sliders; changes are reported
+ *   through [SettingsCallbacks.onPrivacyParamChange].
  */
-data class PrivacyCardState(val crashReportingEnabled: Boolean, val verboseMemoryLoggingEnabled: Boolean = false)
+data class PrivacyCardState(
+    val crashReportingEnabled: Boolean,
+    val verboseMemoryLoggingEnabled: Boolean = false,
+    val retentionParams: List<MemoryParamSlider> = emptyList(),
+)
 
 /**
  * Top-level input to `SettingsContent`. Carries every card slice plus the
@@ -403,6 +411,7 @@ class SettingsCallbacks(
     // Privacy.
     val onCrashReportingToggle: (Boolean) -> Unit = {},
     val onVerboseMemoryLoggingToggle: (Boolean) -> Unit = {},
+    val onPrivacyParamChange: (id: String, value: Float) -> Unit = { _, _ -> },
     val onResetSettingsClick: () -> Unit = {},
 
     // Surface-wide.

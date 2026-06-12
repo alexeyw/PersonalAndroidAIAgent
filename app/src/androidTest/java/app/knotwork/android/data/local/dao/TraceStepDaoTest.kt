@@ -167,6 +167,27 @@ class TraceStepDaoTest {
         assertEquals(1, countTraceRowsForSession("s"))
     }
 
+    @Test
+    fun deleteLegacyStepsBefore_deletesOnlyAgedRunlessRows() = runBlocking {
+        chatDao.insertSession(ChatSessionEntity(id = "s", name = "n", updatedAt = 0L))
+        insertRun(runId = "r1", sessionId = "s")
+        // Run-scoped row older than the cutoff: must survive (owned by its run).
+        traceStepDao.insertTraceSteps(listOf(consoleStep(runId = "r1", sessionId = "s", seq = 0L)))
+        // Legacy rows: one aged past the cutoff, one fresh.
+        traceStepDao.insertTraceSteps(
+            listOf(
+                TraceStepEntity(sessionId = "s", nodeName = "LEGACY", outputText = "old", timestamp = 1L),
+                TraceStepEntity(sessionId = "s", nodeName = "LEGACY", outputText = "new", timestamp = 100L),
+            ),
+        )
+
+        val deleted = traceStepDao.deleteLegacyStepsBefore(cutoff = 50L)
+
+        assertEquals(1, deleted)
+        assertEquals(1, traceStepDao.getTraceStepsForRun("r1").size)
+        assertEquals(2, countTraceRowsForSession("s"))
+    }
+
     /**
      * Counts every `trace_steps` row of a session through a raw cursor —
      * legacy rows carry no `runId`, so the per-run DAO query cannot see them.

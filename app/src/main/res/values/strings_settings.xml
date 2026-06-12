@@ -73,6 +73,10 @@
 
     <string name="settings_memory_embedding_title">Embedding model</string>
 
+    <!-- Privacy retention sliders. -->
+    <string name="settings_privacy_retention_runs_title">Keep run history per chat</string>
+    <string name="settings_privacy_retention_age_title">Run history max age</string>
+
     <!-- Memory tuning validation errors surfaced when an out-of-range value is rejected. -->
     <string name="settings_memory_validation_top_k" tools:ignore="PluralsCandidate">Top-K must be between %1$d and %2$d.</string>
     <string name="settings_memory_validation_threshold">Threshold must be between %1$s and %2$s.</string>

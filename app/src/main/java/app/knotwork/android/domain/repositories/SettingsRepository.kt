@@ -431,6 +431,41 @@ interface SettingsRepository {
     suspend fun setBackgroundApprovalWindowHours(hours: Int)
 
     /**
+     * A [Flow] representing how many most-recent pipeline runs the retention
+     * pass preserves per chat session. Terminal runs beyond this count are
+     * deleted (together with their persisted traces) during the daily
+     * maintenance window; non-terminal runs — including runs parked on a
+     * background approval or clarification — are never removed by retention.
+     * Valid range: 5–100.
+     */
+    val traceRetentionRunsPerSession: Flow<Int>
+
+    /**
+     * Updates the per-session run-retention count.
+     *
+     * @param runs The new count. Callers should keep it within the range
+     *   5–100 (validation of user-entered values lives in the Settings
+     *   ViewModel).
+     */
+    suspend fun setTraceRetentionRunsPerSession(runs: Int)
+
+    /**
+     * A [Flow] representing the maximum age, in days, a terminal pipeline run
+     * (and its trace) is kept before the retention pass deletes it regardless
+     * of the per-session count. Valid range: 7–180.
+     */
+    val traceRetentionMaxAgeDays: Flow<Int>
+
+    /**
+     * Updates the max-age run-retention window.
+     *
+     * @param days The new age limit in days. Callers should keep it within
+     *   the range 7–180 (validation of user-entered values lives in the
+     *   Settings ViewModel).
+     */
+    suspend fun setTraceRetentionMaxAgeDays(days: Int)
+
+    /**
      * A [Flow] representing the id of the pipeline the user has marked as
      * default. `null` means no explicit choice — chats without their own
      * binding then have no pipeline to execute against and the task queue

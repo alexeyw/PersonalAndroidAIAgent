@@ -106,6 +106,13 @@ class RunTraceRepositoryImpl @Inject constructor(private val traceStepDao: Trace
             }
         } ?: emptyList()
 
+    override suspend fun deleteLegacyTraceBefore(cutoffEpochMs: Long): Int =
+        absorbingStoreFailure({ "Run-trace store failure in deleteLegacyTraceBefore; skipping cleanup" }) {
+            withContext(dispatcher) {
+                traceStepDao.deleteLegacyStepsBefore(cutoffEpochMs)
+            }
+        } ?: 0
+
     /**
      * Drains the buffer and batch-inserts the drained records. Must be called
      * under [bufferMutex]. Cancels the pending timer — the work it was
