@@ -26,33 +26,38 @@ class ListFilesExecutor @Inject constructor(private val workspace: AgentWorkspac
     override suspend fun execute(arguments: String, context: ToolExecutionContext): String {
         val json = JSONObject(arguments)
         val rawPath = json.optString("path", "").trim()
-        val prefix = rawPath.takeUnless { it.isEmpty() || it == "." || it == "/" }
+        val requested = rawPath.takeUnless { it.isEmpty() || it == "." || it == "/" }
 
-        // When a sub-directory is requested, run it through the containment gate first
-        // so an out-of-workspace path is reported precisely instead of silently listing
-        // the whole tree.
-        if (prefix != null) {
-            when (val resolved = workspace.resolve(prefix)) {
-                is WorkspaceResult.Failure -> return errorMessage(prefix, resolved.error)
-                is WorkspaceResult.Success -> Unit
+        // When a sub-directory is requested, resolve it through the containment gate first —
+        // both to refuse an out-of-workspace path precisely, and to obtain the *canonical*
+        // relative path to filter by. The model's path may carry `./` or `..` segments
+        // (`./reports`, `sub/../reports`) that a raw string comparison against the always-
+        // canonical listing entries would never match; resolving normalises them. A path
+        // that canonicalises to the root itself yields an empty relative path, which we
+        // treat as "list the whole workspace".
+        val canonicalPrefix = if (requested != null) {
+            when (val resolved = workspace.resolve(requested)) {
+                is WorkspaceResult.Failure -> return errorMessage(requested, resolved.error)
+                is WorkspaceResult.Success -> resolved.value.relativePath.takeIf { it.isNotEmpty() }
             }
+        } else {
+            null
         }
 
         return when (val listing = workspace.list()) {
             is WorkspaceResult.Failure -> errorMessage(rawPath, listing.error)
             is WorkspaceResult.Success -> {
-                val files = if (prefix == null) {
+                val files = if (canonicalPrefix == null) {
                     listing.value
                 } else {
-                    val normalized = prefix.trimEnd('/')
                     listing.value.filter {
-                        it.relativePath == normalized || it.relativePath.startsWith("$normalized/")
+                        it.relativePath == canonicalPrefix || it.relativePath.startsWith("$canonicalPrefix/")
                     }
                 }
-                val emptyMessage = if (prefix == null) {
+                val emptyMessage = if (canonicalPrefix == null) {
                     "Workspace is empty."
                 } else {
-                    "No files under '$prefix'."
+                    "No files under '$requested'."
                 }
                 WorkspaceListingFormat.render(files, emptyMessage)
             }

@@ -50,6 +50,10 @@ class ReadFileExecutorTest {
     /** Strips the trailing truncation marker line, if present. */
     private fun body(output: String): String = output.substringBefore("\n[... truncated,")
 
+    /** Extracts the next byte offset advertised by the truncation marker. */
+    private fun nextOffset(output: String): Int =
+        Regex("use offset (\\d+) to continue").find(output)!!.groupValues[1].toInt()
+
     @Test
     fun `toolName is read_file`() {
         assertEquals("read_file", executor.toolName)
@@ -88,7 +92,7 @@ class ReadFileExecutorTest {
 
         val result = executor.execute("""{"path":"a.txt"}""")
 
-        assertEquals("01234567\n[... truncated, 2 bytes remain — use offset to continue]", result)
+        assertEquals("01234567\n[... truncated, 2 bytes remain — use offset 8 to continue]", result)
     }
 
     @Test
@@ -96,19 +100,15 @@ class ReadFileExecutorTest {
         val full = "0123456789"
         readReturns(full)
 
+        // Follow the offset advertised in each marker, exactly as the agent is told to.
         val r1 = executor.execute("""{"path":"a.txt","limit":4}""")
-        val b1 = body(r1)
-        val r2 = executor.execute("""{"path":"a.txt","offset":${b1.toByteArray().size},"limit":4}""")
-        val b2 = body(r2)
-        val r3 = executor.execute(
-            """{"path":"a.txt","offset":${(b1 + b2).toByteArray().size},"limit":4}""",
-        )
-        val b3 = body(r3)
+        val r2 = executor.execute("""{"path":"a.txt","offset":${nextOffset(r1)},"limit":4}""")
+        val r3 = executor.execute("""{"path":"a.txt","offset":${nextOffset(r2)},"limit":4}""")
 
-        assertEquals("0123", b1)
-        assertEquals("4567", b2)
-        assertEquals("89", b3)
-        assertEquals(full, b1 + b2 + b3)
+        assertEquals("0123", body(r1))
+        assertEquals("4567", body(r2))
+        assertEquals("89", body(r3))
+        assertEquals(full, body(r1) + body(r2) + body(r3))
         // The final chunk reaches EOF, so it carries no truncation marker.
         assertFalse(r3.contains("truncated"))
     }
@@ -118,20 +118,19 @@ class ReadFileExecutorTest {
         val full = "abécd" // bytes: a b C3 A9 c d  (é is 2 bytes)
         readReturns(full)
 
-        // limit 3 lands inside the 2-byte 'é'; the window backs up to before it.
+        // limit 3 lands inside the 2-byte 'é'; the window backs up to before it. The marker
+        // then advertises the exact byte offset to resume from — the agent never counts bytes.
         val r1 = executor.execute("""{"path":"a.txt","limit":3}""")
         val b1 = body(r1)
         assertEquals("ab", b1)
         assertFalse("decoded chunk must not contain the replacement char", b1.contains('�'))
+        // The next offset is the byte after "ab" (2), not the requested limit (3).
+        assertEquals(2, nextOffset(r1))
 
-        val r2 = executor.execute("""{"path":"a.txt","offset":${b1.toByteArray().size},"limit":3}""")
-        val b2 = body(r2)
-        val r3 = executor.execute(
-            """{"path":"a.txt","offset":${(b1 + b2).toByteArray().size},"limit":3}""",
-        )
-        val b3 = body(r3)
+        val r2 = executor.execute("""{"path":"a.txt","offset":${nextOffset(r1)},"limit":3}""")
+        val r3 = executor.execute("""{"path":"a.txt","offset":${nextOffset(r2)},"limit":3}""")
 
-        assertEquals(full, b1 + b2 + b3)
+        assertEquals(full, b1 + body(r2) + body(r3))
     }
 
     @Test
@@ -151,7 +150,7 @@ class ReadFileExecutorTest {
 
         val result = executor.execute("""{"path":"a.txt","limit":1000}""")
 
-        assertEquals("01234567\n[... truncated, 2 bytes remain — use offset to continue]", result)
+        assertEquals("01234567\n[... truncated, 2 bytes remain — use offset 8 to continue]", result)
     }
 
     @Test

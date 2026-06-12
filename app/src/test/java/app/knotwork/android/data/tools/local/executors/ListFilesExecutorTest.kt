@@ -76,6 +76,30 @@ class ListFilesExecutorTest {
     }
 
     @Test
+    fun `given dot-relative path when execute then filters by the canonical prefix`() = runTest {
+        // The model passes a non-canonical path; resolve() normalises it to "reports".
+        coEvery { workspace.resolve("./reports") } returns WorkspaceResult.Success(file("reports", 0L))
+        listReturns(file("a.txt"), file("reports/b.md"))
+
+        val result = executor.execute("""{"path":"./reports"}""")
+
+        assertTrue(result.contains("reports/b.md"))
+        assertTrue("top-level file must be excluded", !result.contains("a.txt"))
+    }
+
+    @Test
+    fun `given path that canonicalises to the root when execute then lists whole workspace`() = runTest {
+        // e.g. "reports/.." resolves back to the workspace root (empty relative path).
+        coEvery { workspace.resolve("reports/..") } returns WorkspaceResult.Success(file("", 0L))
+        listReturns(file("a.txt"), file("reports/b.md"))
+
+        val result = executor.execute("""{"path":"reports/.."}""")
+
+        assertTrue(result.contains("a.txt"))
+        assertTrue(result.contains("reports/b.md"))
+    }
+
+    @Test
     fun `given path filter with no matches when execute then reports empty subtree`() = runTest {
         coEvery { workspace.resolve("empty") } returns WorkspaceResult.Success(file("empty", 0L))
         listReturns(file("a.txt"))

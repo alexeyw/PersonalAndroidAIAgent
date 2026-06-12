@@ -26,9 +26,10 @@ import javax.inject.Inject
  *  - `offset` / `limit` are measured in **bytes**, enabling page-by-page reads
  *    of a long file. The window's trailing edge is backed up to the nearest
  *    UTF-8 character boundary so a multi-byte character is never split across a
- *    page (making consecutive pages stitch back together without loss); the
- *    caller continues by increasing `offset` by the byte length of the returned
- *    content.
+ *    page (making consecutive pages stitch back together without loss). Because
+ *    that backing-up means the served byte count is not derivable from the
+ *    returned text, the truncation marker reports the exact next `offset` to
+ *    pass — the caller never has to count bytes itself.
  *  - When content remains past the served window, a
  *    `[... truncated, N bytes remain — use offset to continue]` marker is
  *    appended so the model knows to read on.
@@ -82,7 +83,10 @@ class ReadFileExecutor @Inject constructor(
         val decoded = decodeUtf8Lossy(window)
         val remaining = total - end
         return if (remaining > 0) {
-            decoded + "\n[... truncated, $remaining bytes remain — use offset to continue]"
+            // Emit the exact next [offset] rather than asking the model to count bytes:
+            // the served window is character-aligned, so its decoded length in characters
+            // does not equal its byte length, and a model cannot reliably reconstruct it.
+            decoded + "\n[... truncated, $remaining bytes remain — use offset $end to continue]"
         } else {
             decoded
         }
@@ -163,9 +167,9 @@ class ReadFileExecutor @Inject constructor(
         const val DESCRIPTION: String =
             "Reads a UTF-8 text file from the agent's private workspace. Returns the file content, " +
                 "truncated to a token budget so long files do not overflow the context window. " +
-                "Use the byte 'offset' and 'limit' arguments to page through a long file: to read the " +
-                "next page, call again with 'offset' increased by the byte length of the content you " +
-                "just received. A trailing '[... truncated, N bytes remain ...]' marker means more content follows."
+                "Use the byte 'offset' and 'limit' arguments to page through a long file: when the result " +
+                "ends with a '[... truncated, N bytes remain — use offset M to continue]' marker, call again " +
+                "with 'offset' set to the exact value M from that marker to read the next page."
 
         /** JSON-schema of the accepted arguments. */
         val PARAMETERS: String = """
