@@ -1,5 +1,6 @@
 package app.knotwork.android.data.repositories
 
+import app.knotwork.android.domain.models.ClarificationOutcome
 import app.knotwork.android.domain.models.ClarificationRequest
 import app.knotwork.android.domain.repositories.ClarificationRepository
 import kotlinx.coroutines.CompletableDeferred
@@ -24,8 +25,11 @@ import javax.inject.Singleton
  * every active question — concurrent pipelines may issue overlapping requests and each
  * must remain answerable.
  *
- * No persistence: on process death any pending clarifications are lost; this is
- * intentional because the suspended pipeline coroutine is also lost in that case.
+ * No persistence: this class only hosts the **live in-process phase** of the
+ * two-phase clarification wait. On timeout it reports
+ * [ClarificationOutcome.TimedOut] and the clarification node executor decides
+ * whether to park the run on a durable pending-interaction record (persisted
+ * runs) or fall back to a default answer (editor test runs).
  */
 @Singleton
 class ClarificationRepositoryImpl @Inject constructor() : ClarificationRepository {
@@ -35,7 +39,7 @@ class ClarificationRepositoryImpl @Inject constructor() : ClarificationRepositor
 
     private val activeRequests = ConcurrentHashMap<String, CompletableDeferred<String>>()
 
-    override suspend fun requestAnswer(request: ClarificationRequest): String {
+    override suspend fun requestAnswer(request: ClarificationRequest): ClarificationOutcome {
         // Register the deferred BEFORE publishing the request so a fast UI submission
         // cannot be dropped between publish and registration.
         val deferred = CompletableDeferred<String>()
@@ -43,16 +47,14 @@ class ClarificationRepositoryImpl @Inject constructor() : ClarificationRepositor
         _pendingRequests.update { current -> current + request }
 
         return try {
-            withTimeout(request.timeoutMs) { deferred.await() }
+            ClarificationOutcome.Answered(withTimeout(request.timeoutMs) { deferred.await() })
         } catch (e: TimeoutCancellationException) {
-            val defaultAnswer = request.options?.firstOrNull().orEmpty()
             Timber.tag(TAG).w(
-                "Clarification request %s timed out after %d ms; using default answer: %s",
+                "Clarification request %s timed out after %d ms",
                 request.id,
                 request.timeoutMs,
-                defaultAnswer,
             )
-            defaultAnswer
+            ClarificationOutcome.TimedOut
         } finally {
             activeRequests.remove(request.id)
             _pendingRequests.update { current -> current.filterNot { it.id == request.id } }

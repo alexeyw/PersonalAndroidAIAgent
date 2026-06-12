@@ -1,5 +1,6 @@
 package app.knotwork.android.data.repositories
 
+import app.knotwork.android.domain.models.ClarificationOutcome
 import app.knotwork.android.domain.models.ClarificationRequest
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -19,8 +20,8 @@ import org.junit.Test
 /**
  * Unit tests for [ClarificationRepositoryImpl].
  *
- * Cover: happy path (submit resolves the suspended request), default-answer behaviour
- * on timeout for both option-list and free-form requests, the visible
+ * Cover: happy path (submit resolves the suspended request), the typed
+ * [ClarificationOutcome.TimedOut] result when the live window elapses, the visible
  * `pendingRequests` flow lifecycle, tolerance for stray submissions (unknown id,
  * submission before any request), and concurrent multi-request use where every
  * pending request must remain addressable.
@@ -52,11 +53,11 @@ class ClarificationRepositoryImplTest {
 
             repository.submitClarification("req-1", "blue")
 
-            assertEquals("blue", deferredAnswer.await())
+            assertEquals(ClarificationOutcome.Answered("blue"), deferredAnswer.await())
         }
 
     @Test
-    fun `given options non-empty and timeout elapses then returns first option`() = runTest {
+    fun `given options non-empty and timeout elapses then returns TimedOut`() = runTest {
         val request = ClarificationRequest(
             id = "req-2",
             sessionId = "session-1",
@@ -69,11 +70,11 @@ class ClarificationRepositoryImplTest {
         advanceTimeBy(150L)
         advanceUntilIdle()
 
-        assertEquals("red", deferredAnswer.await())
+        assertEquals(ClarificationOutcome.TimedOut, deferredAnswer.await())
     }
 
     @Test
-    fun `given options is null and timeout elapses then returns empty string`() = runTest {
+    fun `given options is null and timeout elapses then returns TimedOut`() = runTest {
         val request = ClarificationRequest(
             id = "req-3",
             sessionId = "session-1",
@@ -86,11 +87,11 @@ class ClarificationRepositoryImplTest {
         advanceTimeBy(150L)
         advanceUntilIdle()
 
-        assertEquals("", deferredAnswer.await())
+        assertEquals(ClarificationOutcome.TimedOut, deferredAnswer.await())
     }
 
     @Test
-    fun `given options is empty list and timeout elapses then returns empty string`() = runTest {
+    fun `given options is empty list and timeout elapses then returns TimedOut`() = runTest {
         val request = ClarificationRequest(
             id = "req-4",
             sessionId = "session-1",
@@ -103,7 +104,7 @@ class ClarificationRepositoryImplTest {
         advanceTimeBy(150L)
         advanceUntilIdle()
 
-        assertEquals("", deferredAnswer.await())
+        assertEquals(ClarificationOutcome.TimedOut, deferredAnswer.await())
     }
 
     @Test
@@ -139,7 +140,7 @@ class ClarificationRepositoryImplTest {
         val firstAnswer = async { repository.requestAnswer(firstRequest) }
         yield()
         repository.submitClarification("req-6a", "answer-a")
-        assertEquals("answer-a", firstAnswer.await())
+        assertEquals(ClarificationOutcome.Answered("answer-a"), firstAnswer.await())
 
         val secondRequest = ClarificationRequest(
             id = "req-6b",
@@ -151,7 +152,7 @@ class ClarificationRepositoryImplTest {
         val secondAnswer = async { repository.requestAnswer(secondRequest) }
         yield()
         repository.submitClarification("req-6b", "yes")
-        assertEquals("yes", secondAnswer.await())
+        assertEquals(ClarificationOutcome.Answered("yes"), secondAnswer.await())
     }
 
     @Test
@@ -172,8 +173,8 @@ class ClarificationRepositoryImplTest {
         advanceTimeBy(150L)
         advanceUntilIdle()
 
-        // Falls through to default (first option) because the real request still timed out.
-        assertEquals("a", deferredAnswer.await())
+        // Falls through to the typed timeout because the real request was never answered.
+        assertEquals(ClarificationOutcome.TimedOut, deferredAnswer.await())
     }
 
     @Test
@@ -192,7 +193,7 @@ class ClarificationRepositoryImplTest {
         yield()
         repository.submitClarification("req-8", "real-answer")
 
-        assertEquals("real-answer", deferredAnswer.await())
+        assertEquals(ClarificationOutcome.Answered("real-answer"), deferredAnswer.await())
     }
 
     @Test
@@ -245,8 +246,8 @@ class ClarificationRepositoryImplTest {
         repository.submitClarification("concurrent-b", "free-form-reply")
         repository.submitClarification("concurrent-a", "a2")
 
-        assertEquals("a2", firstAnswer.await())
-        assertEquals("free-form-reply", secondAnswer.await())
+        assertEquals(ClarificationOutcome.Answered("a2"), firstAnswer.await())
+        assertEquals(ClarificationOutcome.Answered("free-form-reply"), secondAnswer.await())
 
         assertEquals(emptyList<ClarificationRequest>(), repository.pendingRequests.first())
     }
@@ -267,7 +268,7 @@ class ClarificationRepositoryImplTest {
         val accepted = repository.submitClarification("ret-true", "a")
 
         assertTrue(accepted)
-        assertEquals("a", deferredAnswer.await())
+        assertEquals(ClarificationOutcome.Answered("a"), deferredAnswer.await())
     }
 
     @Test
@@ -291,8 +292,8 @@ class ClarificationRepositoryImplTest {
         // Drive the timeout to completion before submitting.
         advanceTimeBy(100L)
         advanceUntilIdle()
-        // The pipeline coroutine has already received the default answer.
-        assertEquals("default", deferredAnswer.await())
+        // The pipeline coroutine has already observed the typed timeout.
+        assertEquals(ClarificationOutcome.TimedOut, deferredAnswer.await())
 
         val accepted = repository.submitClarification("ret-late", "too-late")
 
@@ -326,13 +327,13 @@ class ClarificationRepositoryImplTest {
         advanceTimeBy(100L)
         runCurrent()
 
-        assertEquals("default-short", shortAnswer.await())
+        assertEquals(ClarificationOutcome.TimedOut, shortAnswer.await())
 
         // The long request must still be pending and answerable.
         val stillPending = repository.pendingRequests.first()
         assertEquals(listOf(longLived), stillPending)
 
         repository.submitClarification("long", "user-reply")
-        assertEquals("user-reply", longAnswer.await())
+        assertEquals(ClarificationOutcome.Answered("user-reply"), longAnswer.await())
     }
 }

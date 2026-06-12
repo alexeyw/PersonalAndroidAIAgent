@@ -30,6 +30,7 @@
     <string name="settings_row_max_context_title">Max context</string>
     <string name="settings_row_max_steps_title">Max steps</string>
     <string name="settings_row_resume_window_title">Resume window</string>
+    <string name="settings_row_approval_window_title">Approval window</string>
     <string name="settings_llm_reset_defaults">Sampling parameters reset to defaults.</string>
 
     <!-- Local model card -->

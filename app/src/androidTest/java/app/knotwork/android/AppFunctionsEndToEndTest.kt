@@ -19,6 +19,8 @@ import app.knotwork.android.domain.models.NodeContextConfig
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.NodeType
+import app.knotwork.android.domain.models.PendingDecision
+import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.services.ApprovalNotifier
 import app.knotwork.android.domain.usecases.LoadModelUseCase
@@ -627,6 +629,92 @@ class AppFunctionsEndToEndTest {
     }
 
     /**
+     * Scenario 5 — background approval consumed after process recreation.
+     *
+     * The two-phase HITL protocol across its process-death seam, at the
+     * executor level (the notification-receiver routing and the checkpoint
+     * re-enqueue around it are covered by JVM tests):
+     *
+     *  1. the live gate of a persisted run times out → the run parks: the flow
+     *     ends with [AgentOrchestratorState.SuspendedInBackground] and the
+     *     request snapshot is durable in Room;
+     *  2. the user's decision is recorded onto the durable record — exactly
+     *     what the notification action does after the original process died;
+     *  3. a *fresh* executor instance (its in-memory deferred map empty — the
+     *     recreated-process analog) re-executes the TOOL node with the same
+     *     run id: it must consume the one-shot APPROVED decision without
+     *     raising a new gate, execute the real `echo` AppFunction, and delete
+     *     the record.
+     */
+    @Test
+    fun background_approval_parks_and_fresh_executor_consumes_the_recorded_decision() = runBlocking {
+        val settings = entryPoint.settingsRepository()
+        val pendingRepo = entryPoint.pendingInteractionRepository()
+        val originalTimeout = settings.toolCallTimeoutMs.first()
+        settings.setToolCallTimeoutMs(1_500L)
+        try {
+            val sessionId = "test-${UUID.randomUUID()}"
+            val runId = "run-${UUID.randomUUID()}"
+            val node = newToolNode(toolName = qualifiedEchoName)
+            val llmResponse = """{"arguments":{"message":"hi"}}"""
+
+            // Phase 1 — the live window elapses with no decision: the run parks.
+            val executorBeforeDeath = newExecutor(llmResponse = llmResponse)
+            val parkedOutputs = withTimeout(EXECUTOR_TIMEOUT_MS) {
+                executorBeforeDeath
+                    .execute(
+                        node,
+                        inputText = "echo hi",
+                        sessionId = sessionId,
+                        originalPrompt = "echo hi",
+                        runId = runId,
+                    )
+                    .toList()
+            }
+            val lastState = (parkedOutputs.last() as NodeOutput.State).state
+            assertTrue(
+                "Timed-out gate of a persisted run must park, got $lastState",
+                lastState is AgentOrchestratorState.SuspendedInBackground,
+            )
+            val parked = pendingRepo.getForRun(runId)
+            assertNotNull("Park must be durable in Room", parked)
+            assertEquals(PendingInteractionKind.APPROVAL, parked!!.kind)
+
+            // The decision lands on the durable record — the in-memory gate died
+            // with the "process".
+            assertTrue(pendingRepo.recordDecision(runId, PendingDecision.APPROVED))
+
+            // Phase 2 — a fresh executor (empty deferred map) re-executes the node.
+            val executorAfterDeath = newExecutor(llmResponse = llmResponse)
+            val outputs = withTimeout(EXECUTOR_TIMEOUT_MS) {
+                executorAfterDeath
+                    .execute(
+                        node,
+                        inputText = "echo hi",
+                        sessionId = sessionId,
+                        originalPrompt = "echo hi",
+                        runId = runId,
+                    )
+                    .toList()
+            }
+
+            val waitingStates = outputs.filterIsInstance<NodeOutput.State>()
+                .map { it.state }
+                .filterIsInstance<AgentOrchestratorState.WaitingForApproval>()
+            assertTrue("The recorded decision must not raise a new gate", waitingStates.isEmpty())
+            val result = outputs.filterIsInstance<NodeOutput.Result>().single().result
+            assertNotNull("Tool must execute with the confirmed decision", result.outputText)
+            assertTrue(
+                "Echo result expected, got: ${result.outputText}",
+                result.outputText!!.contains("hi"),
+            )
+            assertEquals(null, pendingRepo.getForRun(runId))
+        } finally {
+            settings.setToolCallTimeoutMs(originalTimeout)
+        }
+    }
+
+    /**
      * Builds a fresh [ToolNodeExecutor] with real `ToolRepository`, `SettingsRepository`
      * and `ChatRepository` (so the AppFunctions IPC path and the persisted approval
      * settings are exercised end-to-end) and mocked `LlmInferenceEngine` /
@@ -648,6 +736,20 @@ class AppFunctionsEndToEndTest {
                 // via a system notification assertion. Swallowing here also keeps the test
                 // independent of the POST_NOTIFICATIONS runtime permission.
             }
+
+            override fun sendPersistentApprovalRequest(
+                runId: String,
+                sessionId: String,
+                toolName: String,
+                arguments: String,
+                risk: ToolRisk,
+            ) {
+                // Same rationale: the park is asserted through the durable record.
+            }
+
+            override fun cancelApprovalNotification(sessionId: String) {
+                // No notification was posted, nothing to cancel.
+            }
         }
 
         return ToolNodeExecutor(
@@ -657,6 +759,7 @@ class AppFunctionsEndToEndTest {
             settingsRepository = entryPoint.settingsRepository(),
             approvalNotifier = silentNotifier,
             chatRepository = entryPoint.chatRepository(),
+            pendingInteractionRepository = entryPoint.pendingInteractionRepository(),
         )
     }
 

@@ -10,4 +10,11 @@
     <string name="approval_notification_title_destructive">Destructive action requires approval</string>
     <string name="approval_notification_text">Agent wants to use %1$s. Allow?</string>
     <string name="approval_notification_big_text">Agent wants to use %1$s with args:\n%2$s</string>
+    <string name="approval_notification_waiting_text">Waiting for your approval to use %1$s.</string>
+    <string name="approval_notification_review_in_chat">Review in chat</string>
+
+    <!-- Clarification notification (background waiting for the user's answer) -->
+    <string name="clarification_channel_name">Agent Questions</string>
+    <string name="clarification_channel_description">Questions the agent needs answered to continue a paused task.</string>
+    <string name="clarification_notification_title">Agent needs your input</string>
 </resources>

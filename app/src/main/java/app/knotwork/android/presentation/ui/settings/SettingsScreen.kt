@@ -334,6 +334,14 @@ private fun buildViewState(uiState: SettingsUiState, context: android.content.Co
                 valueRange = 1f..168f,
                 steps = 166,
             ),
+            LlmParameterSlider(
+                id = "approval_window",
+                title = stringResource(R.string.settings_row_approval_window_title),
+                valueLabel = "${uiState.backgroundApprovalWindowHours} h",
+                value = uiState.backgroundApprovalWindowHours.toFloat(),
+                valueRange = 1f..168f,
+                steps = 166,
+            ),
         ),
     )
     val activeMeta = uiState.activeModelMeta
@@ -623,6 +631,7 @@ private fun buildCallbacks(
             "max_context" -> viewModel.setMaxContextLength(value.roundToInt())
             "max_steps" -> viewModel.setCapAutonomousSteps(value.roundToInt())
             "resume_window" -> viewModel.setResumeMaxAgeHours(value.roundToInt())
+            "approval_window" -> viewModel.setBackgroundApprovalWindowHours(value.roundToInt())
         }
     },
     onResetLlmDefaults = viewModel::resetSamplingDefaults,

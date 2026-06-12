@@ -54,4 +54,14 @@ object NotificationChannels {
      * posts to it when the user-controlled flag is on.
      */
     const val TASK_RESULTS: String = "TaskResultsChannel"
+
+    /**
+     * High-importance channel for "the agent needs your input" prompts of
+     * runs parked on an unanswered clarification question. Kept separate
+     * from the approval channels because it carries no approve / deny
+     * actions — only a deep link into the chat where the question is
+     * answered — and the user may want to tune the two interruption kinds
+     * independently.
+     */
+    const val AGENT_CLARIFICATION: String = "AgentClarificationChannel"
 }

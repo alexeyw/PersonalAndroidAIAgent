@@ -7,12 +7,16 @@ import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
+import app.knotwork.android.domain.models.PendingDecision
+import app.knotwork.android.domain.models.PendingInteraction
+import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.models.ToolApprovalPolicy
 import app.knotwork.android.domain.models.ToolExecutionContext
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.repositories.ChatRepository
+import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
@@ -53,7 +57,22 @@ import javax.inject.Singleton
  * 3. suspends on a [CompletableDeferred] keyed by `sessionId`, bounded by
  *    [SettingsRepository.toolCallTimeoutMs][app.knotwork.android.domain.repositories.SettingsRepository.toolCallTimeoutMs];
  * 4. resumes when [resumeWithApproval] is called from `MainActivity` /
- *    `AgentApprovalReceiver`, or fails fast on timeout.
+ *    `AgentApprovalReceiver`.
+ *
+ * The live deferred is only the first phase of a two-phase wait. When the
+ * live phase times out on a persisted run, the executor parks the run
+ * instead of failing it: the request snapshot becomes a durable
+ * [PendingInteraction], a persistent notification replaces the transient
+ * one, and the flow ends with
+ * [SuspendedInBackground][app.knotwork.android.domain.models.AgentOrchestratorState.SuspendedInBackground]
+ * while the run record keeps its `WAITING_APPROVAL` status. The user's later
+ * decision is recorded onto the pending record and the run is resumed from
+ * its checkpoint; this executor then consumes the record one-shot before
+ * raising a new gate. Consumption is TOCTOU-guarded: the recorded decision
+ * only applies when the re-resolved tool name and arguments match the parked
+ * snapshot exactly — anything else discards the stale record and raises a
+ * fresh approval. Runs without a persistent record (editor test runs) keep
+ * the legacy fail-fast timeout.
  *
  * Tool observations and "Execution denied by user" markers are persisted as
  * non-final [SYSTEM][app.knotwork.android.domain.models.Role.SYSTEM] chat messages so the
@@ -70,6 +89,7 @@ class ToolNodeExecutor @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val approvalNotifier: ApprovalNotifier,
     private val chatRepository: ChatRepository,
+    private val pendingInteractionRepository: PendingInteractionRepository,
 ) : NodeExecutor {
 
     private val activeApprovalDeferreds = ConcurrentHashMap<String, PendingApprovalHolder>()
@@ -149,6 +169,7 @@ class ToolNodeExecutor @Inject constructor(
         inputText: String,
         sessionId: String,
         originalPrompt: String,
+        runId: String?,
     ): Flow<NodeOutput> = flow {
         val toolNameConfig = node.toolName
         // A blank / null tool name is the "Auto" selection — the editor's empty
@@ -325,31 +346,54 @@ class ToolNodeExecutor @Inject constructor(
         var isApproved = true
 
         if (needsApproval) {
-            val approvalRequest = AgentOrchestratorState.WaitingForApproval(resolvedToolName, resolvedToolArgs, risk)
-            emit(NodeOutput.State(approvalRequest))
-            approvalNotifier.sendApprovalRequest(sessionId, resolvedToolName, resolvedToolArgs, risk)
+            val parkedDecision = consumeParkedDecision(runId, resolvedToolName, resolvedToolArgs)
+            if (parkedDecision != null) {
+                // A resumed run carries the user's one-shot decision for this
+                // exact request snapshot — apply it without raising a new gate.
+                isApproved = parkedDecision == PendingDecision.APPROVED
+            } else {
+                val approvalRequest =
+                    AgentOrchestratorState.WaitingForApproval(resolvedToolName, resolvedToolArgs, risk)
+                emit(NodeOutput.State(approvalRequest))
+                approvalNotifier.sendApprovalRequest(sessionId, resolvedToolName, resolvedToolArgs, risk)
 
-            // Register deferred before any suspension point so a fast approval is not dropped
-            val deferred = CompletableDeferred<Boolean>()
-            val holder = PendingApprovalHolder(deferred, approvalRequest)
-            activeApprovalDeferreds[sessionId] = holder
-            val timeoutMs = settingsRepository.toolCallTimeoutMs.first()
-            isApproved = try {
-                withTimeout(timeoutMs) { deferred.await() }
-            } catch (e: TimeoutCancellationException) {
-                Timber.tag("PipelineDebug").w("Approval timed out for session: $sessionId")
-                emit(NodeOutput.State(AgentOrchestratorState.Error("Approval request timed out")))
-                emit(NodeOutput.Result(NodeExecutionResult(error = "Approval request timed out")))
-                return@flow
-            } finally {
-                // Covers every exit: timeout, resume (already removed — the
-                // two-arg remove is then a no-op), and plain cancellation of
-                // the suspended gate (scope teardown, an abandoned editor
-                // test run). Without this, a leaked holder would keep
-                // serving pendingApprovalFor a request no coroutine can
-                // ever settle. remove(key, value) leaves a newer
-                // registration for the same session untouched.
-                activeApprovalDeferreds.remove(sessionId, holder)
+                // Register deferred before any suspension point so a fast approval is not dropped
+                val deferred = CompletableDeferred<Boolean>()
+                val holder = PendingApprovalHolder(deferred, approvalRequest)
+                activeApprovalDeferreds[sessionId] = holder
+                val timeoutMs = settingsRepository.toolCallTimeoutMs.first()
+                isApproved = try {
+                    withTimeout(timeoutMs) { deferred.await() }
+                } catch (e: TimeoutCancellationException) {
+                    Timber.tag("PipelineDebug").w("Live approval phase timed out for session: $sessionId")
+                    if (runId != null && parkRun(runId, sessionId, resolvedToolName, resolvedToolArgs, risk)) {
+                        // Two-phase wait, second phase: the run parks on its
+                        // durable pending record instead of failing. No
+                        // NodeOutput.Result on purpose — the engine stops the
+                        // walk and the run record stays WAITING_APPROVAL.
+                        emit(
+                            NodeOutput.State(
+                                AgentOrchestratorState.SuspendedInBackground(PendingInteractionKind.APPROVAL),
+                            ),
+                        )
+                    } else {
+                        // Non-persisted runs (editor test runs) and storage
+                        // failures keep the legacy fail-fast semantics: a park
+                        // without a durable record would be unrecoverable.
+                        emit(NodeOutput.State(AgentOrchestratorState.Error("Approval request timed out")))
+                        emit(NodeOutput.Result(NodeExecutionResult(error = "Approval request timed out")))
+                    }
+                    return@flow
+                } finally {
+                    // Covers every exit: timeout, resume (already removed — the
+                    // two-arg remove is then a no-op), and plain cancellation of
+                    // the suspended gate (scope teardown, an abandoned editor
+                    // test run). Without this, a leaked holder would keep
+                    // serving pendingApprovalFor a request no coroutine can
+                    // ever settle. remove(key, value) leaves a newer
+                    // registration for the same session untouched.
+                    activeApprovalDeferreds.remove(sessionId, holder)
+                }
             }
 
             if (!isApproved) {
@@ -407,6 +451,81 @@ class ToolNodeExecutor @Inject constructor(
             ),
         )
         emit(NodeOutput.Result(NodeExecutionResult(outputText = result, resolvedToolName = resolvedToolName)))
+    }
+
+    /**
+     * Consumes the parked approval record of a resumed run, one-shot.
+     *
+     * The record never survives its first consumption attempt: whatever the
+     * outcome, it is deleted so a stale decision can never authorise a later
+     * call. The recorded decision applies only under the TOCTOU guard — the
+     * re-resolved tool name and arguments must match the parked snapshot
+     * exactly; the auto-select / argument-generation LLM passes are not
+     * deterministic, and a decision the user gave for one concrete call must
+     * not leak onto a different one.
+     *
+     * @param runId Id of the executing run, or `null` for non-persisted runs.
+     * @param resolvedToolName Tool name resolved by this execution.
+     * @param resolvedToolArgs Argument string resolved by this execution.
+     * @return The user's decision when it may be applied, or `null` when a
+     *   fresh approval gate must be raised (no record, undecided record, or
+     *   TOCTOU mismatch).
+     */
+    private suspend fun consumeParkedDecision(
+        runId: String?,
+        resolvedToolName: String,
+        resolvedToolArgs: String,
+    ): PendingDecision? {
+        if (runId == null) return null
+        val parked = pendingInteractionRepository.getForRun(runId) ?: return null
+        if (parked.kind != PendingInteractionKind.APPROVAL) return null
+        pendingInteractionRepository.delete(runId)
+        val argsMatch = parked.toolName == resolvedToolName && parked.toolArgs == resolvedToolArgs
+        if (!argsMatch) {
+            Timber.tag("PipelineDebug").w(
+                "Parked approval of run %s resolved to a different call (%s) — raising a fresh gate",
+                runId,
+                resolvedToolName,
+            )
+        }
+        return parked.decision?.takeIf { argsMatch }
+    }
+
+    /**
+     * Parks the run in its persistent waiting phase: persists the approval
+     * request snapshot as a [PendingInteraction] and, when durable, replaces
+     * the transient approval notification with the persistent one.
+     *
+     * @param runId Id of the persisted run being parked.
+     * @param sessionId Id of the owning chat session.
+     * @param toolName Tool name of the staged call.
+     * @param arguments Argument string of the staged call.
+     * @param risk Risk classification of the staged call.
+     * @return `true` when the park is durable; `false` when the caller must
+     *   fall back to failing the run.
+     */
+    private suspend fun parkRun(
+        runId: String,
+        sessionId: String,
+        toolName: String,
+        arguments: String,
+        risk: ToolRisk,
+    ): Boolean {
+        val saved = pendingInteractionRepository.save(
+            PendingInteraction(
+                runId = runId,
+                sessionId = sessionId,
+                kind = PendingInteractionKind.APPROVAL,
+                toolName = toolName,
+                toolArgs = arguments,
+                risk = risk,
+                requestedAt = System.currentTimeMillis(),
+            ),
+        )
+        if (saved) {
+            approvalNotifier.sendPersistentApprovalRequest(runId, sessionId, toolName, arguments, risk)
+        }
+        return saved
     }
 
     @androidx.annotation.VisibleForTesting

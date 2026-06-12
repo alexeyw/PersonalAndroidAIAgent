@@ -34,6 +34,7 @@ This file maps the contents of the main application package.
       - `ChatDao.kt` - Chat messages DAO.
       - `LocalModelDao.kt` - Local models DAO.
       - `MemoryDao.kt` - Memory chunks DAO.
+      - `PendingInteractionDao.kt` - Parked HITL interaction DAO (`pending_interactions` table). Response-recording updates carry `IS NULL` guards so the first writer wins.
       - `PipelineDao.kt` - Pipelines DAO.
       - `PipelinePresetDao.kt` - User-saved pipeline-preset DAO. Backs the `pipeline_presets` table; bundled presets live in `assets/presets/pipelines/` and never reach this DAO.
       - `PipelineRunDao.kt` - Persistent pipeline-run records DAO (`pipeline_runs` table). Every mutating query carries a terminal-status `NOT IN` guard so a finished run can never be flipped back to an active status.
@@ -47,6 +48,7 @@ This file maps the contents of the main application package.
       - `LocalModelEntity.kt` - Local model entity.
       - `MemoryChunkEntity.kt` - Memory chunk entity.
       - `NodeEntity.kt` - Pipeline node entity.
+      - `PendingInteractionEntity.kt` - Parked HITL interaction row (`pending_interactions`): the durable request snapshot (tool name/args/risk or question/options) plus the one-shot recorded decision/answer of the two-phase background wait.
       - `PipelineEntity.kt` - Pipeline entity.
       - `PipelinePresetEntity.kt` - User-saved pipeline preset row. Stores `id`, `name`, `description`, `categoryKey`, `graphJson` (full preset payload serialised by `PipelinePresetJsonSerializer`), `tagsCsv`, `createdAt`.
       - `PipelineRunEntity.kt` - Persistent pipeline-run row (`pipeline_runs`). No FK onto `chat_sessions` (a run may be created before its session row exists); cleanup on session deletion happens inside the `ChatDao.deleteSessionCompletely` transaction.
@@ -88,6 +90,7 @@ This file maps the contents of the main application package.
     - `MetricsRepositoryImpl.kt` - Metrics repository implementation.
     - `NetworkActivityTrackerImpl.kt` - Records `System.currentTimeMillis()` on every outbound cloud-LLM and MCP call. Drives the More tab footer privacy pill via `NetworkActivityTracker.lastOutboundAt`.
     - `NetworkStateRepositoryImpl.kt` - Network state repository implementation.
+    - `PendingInteractionRepositoryImpl.kt` - Room-backed `PendingInteractionRepository`. Maps enums to `name` strings and answer options to a JSON array; `save` reports success explicitly (a park must not happen without a durable record), everything else is best-effort.
     - `PipelineRunRepositoryImpl.kt` - Room-backed `PipelineRunRepository`. Maps enums to `name` strings, enforces the terminal-status guard in SQL, absorbs storage failures per the best-effort contract, and keeps the in-memory live-run registry that makes the orphan sweep ownership-aware.
     - `RunTraceRepositoryImpl.kt` - Room-backed, write-buffered `RunTraceRepository`. Mutex-guarded buffer flushed by size (32), timer (500 ms) or force; batch inserts via `TraceStepDao.insertTraceSteps` with a per-run retry on batch failure (a poisoned run cannot destroy co-buffered records of healthy runs); maps both record kinds to/from `TraceStepEntity` (console type stored as a stable name, unreadable rows skipped on read).
     - `PowerStateRepositoryImpl.kt` - Power state repository implementation.
@@ -98,6 +101,8 @@ This file maps the contents of the main application package.
     - `AgentIdleManager.kt` - Manager for device idle state.
     - `AgentPowerManager.kt` - Manager for power states.
     - `AgentWorker.kt` - WorkManager worker executing scheduled agent tasks through the same task-queue → engine path as interactive messages; binds the run to its originating session (or a fresh auto-named one), tracks completion via the persistent run record, and hands the outcome to `ScheduledTaskNotifier`.
+    - `PendingInteractionMaintenanceScheduler.kt` - Schedules the periodic `PendingInteractionMaintenanceWorker` expiry pass (battery-not-low only — deliberately looser than the compaction window so expiry tracks its window, not the charger). Wired from `MainActivity.onCreate`.
+    - `PendingInteractionMaintenanceWorker.kt` - `@HiltWorker` expiring parked HITL interactions whose background-approval window elapsed: settles each through `ParkedRunResumer.failPark` ("Approval window expired") and doubles as zombie-record collection.
     - `MemoryCompactionScheduler.kt` - Owns the WorkManager scheduling of `MemoryCompactionWorker`: a daily periodic job (charging + device-idle) plus an out-of-schedule `startHardLimitWatch` that fires an immediate relaxed-constraint pass when the chunk count crosses `maxMemoryChunks`. Wired from `MainActivity.onCreate`.
     - `MemoryCompactionWorker.kt` - `@HiltWorker` that runs one long-term memory compaction pass. Gates on `SettingsRepository.memoryCompactionEnabled` and delegates clustering/consolidation to `MemoryCompactionUseCase`.
     - `MemoryReembedWorker.kt` - `@HiltWorker` that re-embeds memory chunks flagged `needsReembedding` (imported under a different provider) off the hot path, delegating to `RecomputePendingEmbeddingsUseCase`; `Result.retry()` on failure so WorkManager backs off and retries.
@@ -211,6 +216,8 @@ This file maps the contents of the main application package.
     - `NodeOutput.kt` - Sealed class wrapping `NodeExecutor.execute()` flow elements (`State` for orchestrator updates / `Result` for the terminal node result), replacing the legacy untyped `Flow<Any>` channel.
     - `NodeType.kt` - Node type enum.
     - `PipelineGraph.kt` - Pipeline graph model. Also hosts `contentHash()` — a stable SHA-256 over execution-relevant graph content (canvas coordinates / pipeline name / `updatedAt` excluded), captured into run records as the checkpoint-invalidation contract.
+    - `PendingInteraction.kt` - Domain model of one parked HITL interaction (`PendingInteractionKind`, `PendingDecision`): the durable request snapshot and the one-shot recorded response, TOCTOU-bound to the exact tool call it was given for.
+    - `ClarificationOutcome.kt` - Typed result of the live clarification wait (`Answered` / `TimedOut`) — moves the timeout policy to the clarification executor.
     - `PipelineRun.kt` - Persistent pipeline-run domain model plus `PipelineRunStatus` (QUEUED → RUNNING → WAITING_* → terminal, with `isTerminal`) and `RunOrigin` (CHAT / SCHEDULER). Carries the originating `userPrompt` for checkpoint resume.
     - `ResumeContext.kt` - Checkpoint payload switching `GraphExecutionEngine` into resume mode: seq-ordered `NodeIo` prefix to replay (cursor model — sound for QUEUE_PROCESSOR loops), optional memory snapshot, and the next free trace seq. Documents the TOOL-node replay asymmetry.
     - `RunTraceRecord.kt` - Sealed domain model of one persistent run-trace record: `NodeIo` (per-node input/output snapshot incl. recorded `conditionResult` / `routingKey` / `resolvedToolName` for checkpoint replay), `ConsoleEntry` (persisted console event) and `MemorySnapshot` (chunks resolved by the run's single lazy memory retrieval), all carrying `runId` / `sessionId` / per-run `seq` / `timestamp`.
@@ -252,13 +259,15 @@ This file maps the contents of the main application package.
     - `PromptPresetRepository.kt` - Domain gateway over the two-tier prompt-preset catalogue: bundled (read-only, from APK assets) + user-saved (mutable, Room-backed). Exposes a per-`NodeType` filtered flow used by the Prompt Library. Data-layer impl: `LocalPromptPresetRepositoryImpl`.
     - `PromptRepository.kt` - Prompt-template repository interface (CRUD over `PromptTemplate`). Data-layer impl: `PromptRepositoryImpl`.
     - `PipelineRepository.kt` - Pipeline repository interface.
+    - `PendingInteractionRepository.kt` - Parked HITL interaction store interface — the persistent half of the two-phase waiting protocol (durable request snapshot, first-writer-wins decision/answer recording, one-shot consumption). Data-layer impl: `PendingInteractionRepositoryImpl`.
     - `PipelineRunRepository.kt` - Persistent pipeline-run records interface: creation/RUNNING/terminal transitions are owned by the task queue, per-node progress and WAITING_* suspensions by the execution engine; terminal statuses are write-once; all methods are best-effort (storage failures absorbed); orphan detection is process-ownership-based. Data-layer impl: `PipelineRunRepositoryImpl`.
     - `RunTraceRepository.kt` - Buffered persistent run-trace interface (`append` / `flush` / `getTraceForRun`): writes are batched so trace persistence never costs a SQLCipher commit per streamed event; the engine force-flushes at suspension and terminal points. Best-effort contract. Data-layer impl: `RunTraceRepositoryImpl`.
     - `PowerStateRepository.kt` - Power state repository interface.
     - `SettingsRepository.kt` - Settings repository interface.
     - `ToolRepository.kt` - Tool repository interface.
   - `services/` - Domain-level services.
-    - `ApprovalNotifier.kt` - Notifier for approval requests.
+    - `ApprovalNotifier.kt` - Notifier for approval requests: the transient live-phase prompt, the persistent parked-run variant (ongoing, runId-addressed actions, re-posted on dismissal), and the cancel used when the request settles elsewhere.
+    - `ClarificationNotifier.kt` - Notifier for parked clarification questions ("Agent needs your input", deep-link back into the chat). Presentation-layer impl: `ClarificationNotificationManager`.
     - `DatabaseResetService.kt` - Domain seam for the explicit, user-confirmed full data wipe (encrypted DB + stored passphrase) offered by the splash data-locked recovery screen; data-layer impl: `DatabaseResetServiceImpl`.
     - `EmbeddingProvider.kt` - Text-embedding backend abstraction (`embed` / `dimension` / `id` / `displayName`) + provider-id constants and `EmbeddingException`.
     - `EmbeddingProviderResolver.kt` - Resolves the active `EmbeddingProvider` from the Hilt map and `SettingsRepository.activeEmbeddingProviderId`, falling back to on-device USE.
@@ -296,7 +305,10 @@ This file maps the contents of the main application package.
     - `ScheduleTaskUseCase.kt` - Use case to schedule tasks; carries the originating session id into the WorkManager input data so `AgentWorker` lands the result in the right chat.
     - `TaskRouterUseCase.kt` - Use case to route tasks.
     - `ResetSamplingDefaultsUseCase.kt` - Resets temperature / top-K / top-P / repetition penalty / max context / max steps to the documented defaults.
-    - `ResumePipelineRunUseCase.kt` - Validates and launches the checkpoint resume of an INTERRUPTED run (status / prompt presence / resume-window age / graph content-hash preconditions, guarded INTERRUPTED → QUEUED transition, resume-flagged `AgentTask` enqueue). Hosts the `ResumeOutcome` sealed result consumed by the chat UI.
+    - `ResumePipelineRunUseCase.kt` - Validates and launches the checkpoint resume of a non-live run — INTERRUPTED (resume-window age) or persistently waiting WAITING_* (parked record + approval window) — with graph content-hash preconditions and the guarded status → QUEUED transition. Hosts the `ResumeOutcome` sealed result.
+    - `ParkedRunResumer.kt` - Shared submission tail of the background-HITL decision use cases: notification teardown, lazy approval-window expiry, first-writer-wins response write, checkpoint resume, and the `failPark` settlement shared with the maintenance worker. Hosts `PendingSubmissionOutcome`.
+    - `SubmitApprovalDecisionUseCase.kt` - Single entry point of the user's approve / deny decision: live in-process gate first, then the parked pending-interaction record (notification actions address it by run id, the chat card by session).
+    - `SubmitClarificationAnswerUseCase.kt` - Single entry point of the user's clarification answer: live deferred first, then the parked record (the resumed node consumes the answer without re-running question inference).
     - `ClearAllMemoryUseCase.kt` - Wipes every memory chunk (pinned and unpinned). Gated behind the typed-confirm dialog.
     - `ExportMemoryBaseUseCase.kt` - Serialises the memory table to a portable `schemaVersion: 1` JSON blob via `MemoryJsonSerializer` (stamping the active `embeddingProviderId` + `exportedAt`). SAF-driven from `SettingsScreen` (full table) and from the Memory screen's multi-select "Export selected" action (optional `ids` subset). The import counterpart is `MemoryImportUseCase`.
     - `MemoryImportUseCase.kt` - Imports a memory export file: `parse` surfaces the `MemoryImportOutcome`; `import(document, strategy, activeProviderId)` reconciles under `Merge` (insert non-duplicate ids) / `Replace` (transactional wipe+load; no-op on an empty document), preserving each chunk's id / provenance / pin state / tags. On a provider mismatch it flags chunks for re-embedding and schedules the background pass via `MemoryReembedScheduler`.
@@ -310,11 +322,12 @@ This file maps the contents of the main application package.
   - `common/` - Cross-feature presentation utilities.
     - `DisplayFormat.kt` - Shared display formatters (`formatBytes` byte-size ladder, `approxTokenCount`, `CHARS_PER_TOKEN`) so byte sizes / token estimates render identically across Memory and Settings instead of drifting between per-screen copies.
   - `notifications/` - Notification handling.
-    - `ApprovalNotificationManager.kt` - Manager for approval notifications.
+    - `ApprovalNotificationManager.kt` - Manager for approval notifications: transient live-phase prompts plus the persistent parked-run variant (ongoing, `REPOST` delete-intent, chat deep-link; DESTRUCTIVE offers Deny + "Review in chat" instead of a direct Approve).
+    - `ClarificationNotificationManager.kt` - `ClarificationNotifier` impl posting the ongoing "Agent needs your input" notification for parked clarifications (chat deep-link, `REPOST` delete-intent, own `AgentClarificationChannel`).
     - `ScheduledTaskNotifierImpl.kt` - `ScheduledTaskNotifier` impl posting "Task completed" / "Task failed" on the `TaskResultsChannel` with a `knotwork://chat/{threadId}` deep-link tap action; double-gated on the settings toggle and POST_NOTIFICATIONS.
   - `receivers/` - Broadcast receivers.
-    - `AgentApprovalReceiver.kt` - Receiver for agent approvals; dispatches via the typed `ApprovalAction` enum.
-    - `ApprovalAction.kt` - Typed enum pairing the Approve/Deny notification actions with their wire `Intent.action` strings; owns `fromAction` parsing.
+    - `AgentApprovalReceiver.kt` - Receiver for approval / clarification notification actions; dispatches via the typed `ApprovalAction` enum, bridges suspending work through `goAsync`, routes decisions through `SubmitApprovalDecisionUseCase` (works across process death) and re-posts persistent notifications on `REPOST`.
+    - `ApprovalAction.kt` - Typed enum pairing the Approve/Deny/Repost notification intents with their wire `Intent.action` strings; owns `fromAction` parsing.
   - `state/` - State management components.
     - `ActiveSessionTracker.kt` - Tracker for active chat session.
     - `TransientMessageRelay.kt` - `@Singleton` one-shot snackbar bus consumed by the activity-level `SnackbarHost` in `AppShellScaffold`. Used by `OnboardingViewModel.skipOnboarding` to surface the "install a model from Settings → Models" hint *after* navigation pops onboarding off the back-stack.

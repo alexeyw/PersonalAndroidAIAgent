@@ -3,6 +3,7 @@ package app.knotwork.android.domain.usecases
 import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.engine.DefaultPipelineFactory
 import app.knotwork.android.domain.models.PipelineRunStatus
+import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
@@ -22,17 +23,20 @@ import javax.inject.Inject
  * by the live process — so re-running the sweep (Activity recreation, splash
  * retry) can never interrupt a run that is still executing in this process
  * (e.g. kept alive by the foreground service or a WorkManager worker).
- * WAITING_* runs from dead processes are swept too: their pending approval /
- * clarification lived in in-memory deferreds that died with the process, so
- * nothing can ever settle them — revisit when persistent background HITL
- * ships. The sweep is best-effort by the repository contract: a damaged run
- * store degrades to an empty sweep instead of failing app initialization.
+ * WAITING_* runs of dead processes are swept only while their wait was still
+ * in its live in-process phase (in-memory deferreds that died with the
+ * process). A run parked on a persistent pending-interaction record is
+ * exempt: it is waiting by design — the user's response or the
+ * approval-window expiry settles it, not the sweep. The sweep is best-effort
+ * by the repository contract: a damaged run store degrades to an empty sweep
+ * instead of failing app initialization.
  */
 class InitializeAppUseCase @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val pipelineRepository: PipelineRepository,
     private val loadPipelineFromPresetUseCase: LoadPipelineFromPresetUseCase,
     private val pipelineRunRepository: PipelineRunRepository,
+    private val pendingInteractionRepository: PendingInteractionRepository,
 ) {
     /**
      * Executes the initialization logic.
@@ -83,9 +87,16 @@ class InitializeAppUseCase @Inject constructor(
      * contract (failures log and degrade, never abort initialization).
      */
     private suspend fun sweepOrphanedRuns() {
-        pipelineRunRepository.getOrphanedRuns().forEach { run ->
-            pipelineRunRepository.finishRun(run.id, PipelineRunStatus.INTERRUPTED, ORPHANED_RUN_MESSAGE)
-        }
+        // Runs parked on a persistent pending-interaction record are not
+        // orphans: their machinery is *supposed* to be gone — the user's
+        // background response (or the approval-window expiry pass) is what
+        // settles them.
+        val parkedRunIds = pendingInteractionRepository.getAllRunIds()
+        pipelineRunRepository.getOrphanedRuns()
+            .filterNot { it.id in parkedRunIds }
+            .forEach { run ->
+                pipelineRunRepository.finishRun(run.id, PipelineRunStatus.INTERRUPTED, ORPHANED_RUN_MESSAGE)
+            }
     }
 
     /**

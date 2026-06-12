@@ -54,6 +54,20 @@ sealed interface AgentOrchestratorState {
     data class AwaitingClarification(val request: ClarificationRequest) : AgentOrchestratorState
 
     /**
+     * The run has been parked in its persistent waiting phase: the live
+     * in-process HITL gate ([WaitingForApproval] or [AwaitingClarification])
+     * timed out, the pending request is durable in the pending-interaction
+     * store, and the engine coroutine is about to end without a terminal
+     * state. The run record keeps its WAITING_* status; the user's response
+     * later resumes the run from its checkpoint — possibly in a different
+     * process. Consumers treat this as "run no longer live" without mapping
+     * it to failure or cancellation.
+     *
+     * @property kind Which HITL gate the run is parked on.
+     */
+    data class SuspendedInBackground(val kind: PendingInteractionKind) : AgentOrchestratorState
+
+    /**
      * The tool execution finished.
      *
      * @property toolName The name of the tool.

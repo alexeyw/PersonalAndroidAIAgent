@@ -5,6 +5,7 @@ import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.RunOrigin
+import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
@@ -24,11 +25,15 @@ class InitializeAppUseCaseTest {
     private val pipelineRepository: PipelineRepository = mockk(relaxed = true)
     private val loadPipelineFromPresetUseCase: LoadPipelineFromPresetUseCase = mockk(relaxed = true)
     private val pipelineRunRepository: PipelineRunRepository = mockk(relaxed = true)
+    private val pendingInteractionRepository: PendingInteractionRepository = mockk(relaxed = true) {
+        coEvery { getAllRunIds() } returns emptySet()
+    }
     private val useCase = InitializeAppUseCase(
         settingsRepository,
         pipelineRepository,
         loadPipelineFromPresetUseCase,
         pipelineRunRepository,
+        pendingInteractionRepository,
     )
 
     @Test
@@ -172,5 +177,22 @@ class InitializeAppUseCaseTest {
     private companion object {
         const val SHOWCASE_PRESET_ID = "showcase_full_agent"
         const val SEEDED_ID = "seeded-pipeline-id"
+    }
+
+    @Test
+    fun `invoke exempts runs parked on a pending interaction from the orphan sweep`() = runTest {
+        every { settingsRepository.isFirstLaunch } returns flowOf(false)
+        coEvery { pendingInteractionRepository.getAllRunIds() } returns setOf("run-parked")
+        coEvery { pipelineRunRepository.getOrphanedRuns() } returns listOf(
+            orphanRun("run-parked", PipelineRunStatus.WAITING_APPROVAL),
+            orphanRun("run-dead", PipelineRunStatus.RUNNING),
+        )
+
+        useCase()
+
+        coVerify(exactly = 0) { pipelineRunRepository.finishRun("run-parked", any(), any()) }
+        coVerify(exactly = 1) {
+            pipelineRunRepository.finishRun("run-dead", PipelineRunStatus.INTERRUPTED, any())
+        }
     }
 }

@@ -22,6 +22,7 @@ import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.ChatMessage
+import app.knotwork.android.domain.models.ClarificationOutcome
 import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.ConnectionModel
 import app.knotwork.android.domain.models.ConsoleEventType
@@ -47,11 +48,13 @@ import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.MetricsRepository
 import app.knotwork.android.domain.repositories.NetworkActivityTracker
+import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.usecases.EvaluateIfConditionUseCase
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
@@ -89,6 +92,8 @@ class GraphExecutionEngineTest {
     private lateinit var apiKeyRepository: ApiKeyRepository
     private lateinit var metricsRepository: MetricsRepository
     private lateinit var approvalNotifier: ApprovalNotifier
+    private lateinit var pendingInteractionRepository: PendingInteractionRepository
+    private lateinit var clarificationNotifier: ClarificationNotifier
     private lateinit var koogClientFactory: KoogClientFactory
     private lateinit var cloudLlmModelResolver: KoogCloudLlmModelResolver
     private lateinit var networkActivityTracker: NetworkActivityTracker
@@ -118,6 +123,10 @@ class GraphExecutionEngineTest {
         apiKeyRepository = mockk(relaxed = true)
         metricsRepository = mockk(relaxed = true)
         approvalNotifier = mockk(relaxed = true)
+        pendingInteractionRepository = mockk(relaxed = true)
+        coEvery { pendingInteractionRepository.getForRun(any()) } returns null
+        coEvery { pendingInteractionRepository.save(any()) } returns true
+        clarificationNotifier = mockk(relaxed = true)
         koogClientFactory = mockk()
         cloudLlmModelResolver = mockk()
         networkActivityTracker = mockk(relaxed = true)
@@ -155,6 +164,7 @@ class GraphExecutionEngineTest {
             settingsRepository,
             approvalNotifier,
             chatRepository,
+            pendingInteractionRepository,
         )
 
         val liteRtNodeExecutor = LiteRtNodeExecutor(
@@ -192,6 +202,8 @@ class GraphExecutionEngineTest {
             llmEngine,
             loadModelUseCase,
             clarificationRepository,
+            pendingInteractionRepository,
+            clarificationNotifier,
         )
 
         val nodeExecutorFactory = NodeExecutorFactory(
@@ -282,7 +294,7 @@ class GraphExecutionEngineTest {
         every { llmEngine.generateResponseStream(any()) } returns flowOf(
             "{\"question\":\"Confirm?\",\"options\":[\"yes\",\"no\"]}",
         )
-        coEvery { clarificationRepository.requestAnswer(any()) } returns "user reply"
+        coEvery { clarificationRepository.requestAnswer(any()) } returns ClarificationOutcome.Answered("user reply")
 
         // Act
         val states = engine(sessionId, "User prompt", graph).toList()
@@ -946,6 +958,7 @@ class GraphExecutionEngineTest {
                 settingsRepository,
                 approvalNotifier,
                 chatRepository,
+                pendingInteractionRepository,
             ),
             LiteRtNodeExecutor(
                 llmEngine,
@@ -968,7 +981,13 @@ class GraphExecutionEngineTest {
             SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
             QueueProcessorNodeExecutor(),
             SummaryNodeExecutor(llmEngine, loadModelUseCase),
-            ClarificationNodeExecutor(llmEngine, loadModelUseCase, clarificationRepository),
+            ClarificationNodeExecutor(
+                llmEngine,
+                loadModelUseCase,
+                clarificationRepository,
+                pendingInteractionRepository,
+                clarificationNotifier,
+            ),
         )
         val engineWithProvider = GraphExecutionEngine(
             realFactory,
@@ -979,6 +998,7 @@ class GraphExecutionEngineTest {
                 settingsRepository,
                 approvalNotifier,
                 chatRepository,
+                pendingInteractionRepository,
             ),
             chatRepository,
             settingsRepository,
@@ -1045,7 +1065,7 @@ class GraphExecutionEngineTest {
         every { llmEngine.generateResponseStream(any()) } returns flowOf(
             "{\"question\":\"Confirm?\",\"options\":[\"yes\",\"no\"]}",
         )
-        coEvery { clarificationRepository.requestAnswer(any()) } returns "user reply"
+        coEvery { clarificationRepository.requestAnswer(any()) } returns ClarificationOutcome.Answered("user reply")
 
         val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
         val clarificationNode = NodeModel(
@@ -1122,6 +1142,7 @@ class GraphExecutionEngineTest {
                     settingsRepository,
                     approvalNotifier,
                     chatRepository,
+                    pendingInteractionRepository,
                 ),
                 LiteRtNodeExecutor(
                     llmEngine,
@@ -1144,7 +1165,13 @@ class GraphExecutionEngineTest {
                 SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
                 QueueProcessorNodeExecutor(),
                 SummaryNodeExecutor(llmEngine, loadModelUseCase),
-                ClarificationNodeExecutor(llmEngine, loadModelUseCase, realClarificationRepository),
+                ClarificationNodeExecutor(
+                    llmEngine,
+                    loadModelUseCase,
+                    realClarificationRepository,
+                    pendingInteractionRepository,
+                    clarificationNotifier,
+                ),
             )
             val engineWithRealRepo = GraphExecutionEngine(
                 realFactory,
@@ -1155,6 +1182,7 @@ class GraphExecutionEngineTest {
                     settingsRepository,
                     approvalNotifier,
                     chatRepository,
+                    pendingInteractionRepository,
                 ),
                 chatRepository,
                 settingsRepository,
@@ -1944,7 +1972,7 @@ class GraphExecutionEngineTest {
         every { llmEngine.generateResponseStream(any()) } returns flowOf(
             "{\"question\":\"Confirm?\",\"options\":[\"yes\",\"no\"]}",
         )
-        coEvery { clarificationRepository.requestAnswer(any()) } returns "user reply"
+        coEvery { clarificationRepository.requestAnswer(any()) } returns ClarificationOutcome.Answered("user reply")
 
         engine(sessionId, "prompt", graph, "run-43").toList()
 
@@ -1988,8 +2016,11 @@ class GraphExecutionEngineTest {
         val job = launch {
             engine(sessionId, "prompt", graph, "run-44").toList()
         }
-        // Flush pending tasks WITHOUT advancing virtual time so the executor
-        // suspends inside the approval gate without firing the timeout.
+        // Advance past the per-node prewarm delays (but stay well below the
+        // 5s approval timeout) so the TOOL executor registers its deferred
+        // before the resume call — a resume issued earlier is silently
+        // dropped and the gate would then time out and park the run.
+        advanceTimeBy(2_000)
         runCurrent()
         engine.resumeWithApproval(sessionId, true)
         advanceUntilIdle()
@@ -2114,8 +2145,11 @@ class GraphExecutionEngineTest {
         val job = launch {
             engine(sessionId, "prompt", graph, "run-45").toList()
         }
-        // Flush pending tasks WITHOUT advancing virtual time so the executor
-        // suspends inside the approval gate without firing the timeout.
+        // Advance past the per-node prewarm delays (but stay well below the
+        // 5s approval timeout) so the TOOL executor registers its deferred
+        // before the resume call — a resume issued earlier is silently
+        // dropped and the gate would then time out and park the run.
+        advanceTimeBy(2_000)
         runCurrent()
         engine.resumeWithApproval(sessionId, true)
         advanceUntilIdle()

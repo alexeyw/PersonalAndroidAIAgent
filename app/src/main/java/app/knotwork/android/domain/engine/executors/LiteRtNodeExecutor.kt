@@ -45,6 +45,7 @@ class LiteRtNodeExecutor @Inject constructor(
         inputText: String,
         sessionId: String,
         originalPrompt: String,
+        runId: String?,
     ): Flow<NodeOutput> = flow {
         val systemPromptPrefix = settingsRepository.systemPromptPrefix.first()
         val nodeSystemPrompt = node.systemPrompt ?: DefaultPrompts.LiteRt.SYSTEM_FALLBACK

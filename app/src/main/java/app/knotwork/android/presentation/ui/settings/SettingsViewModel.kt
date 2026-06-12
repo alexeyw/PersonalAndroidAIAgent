@@ -191,6 +191,10 @@ class SettingsViewModel @Inject constructor(
             _uiState.update { it.copy(resumeMaxAgeHours = value) }
         }.launchIn(viewModelScope)
 
+        settingsRepository.backgroundApprovalWindowHours.onEach { value ->
+            _uiState.update { it.copy(backgroundApprovalWindowHours = value) }
+        }.launchIn(viewModelScope)
+
         settingsRepository.temperature.onEach { value ->
             _uiState.update { it.copy(temperature = value) }
         }.launchIn(viewModelScope)
@@ -438,6 +442,17 @@ class SettingsViewModel @Inject constructor(
      */
     fun setResumeMaxAgeHours(hours: Int) {
         viewModelScope.launch { settingsRepository.setResumeMaxAgeHours(hours) }
+    }
+
+    /**
+     * Persists the background-approval window (hours) during which a run
+     * parked on an unanswered HITL request waits for the user's response.
+     * The repository coerces the value into the sanctioned 1–168 range.
+     *
+     * @param hours The new window picked on the slider.
+     */
+    fun setBackgroundApprovalWindowHours(hours: Int) {
+        viewModelScope.launch { settingsRepository.setBackgroundApprovalWindowHours(hours) }
     }
 
     // ─── LLM parameters ────────────────────────────────────────────────────

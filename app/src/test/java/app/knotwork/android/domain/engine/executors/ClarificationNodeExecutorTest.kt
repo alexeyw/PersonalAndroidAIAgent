@@ -3,17 +3,24 @@ package app.knotwork.android.domain.engine.executors
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AppError
+import app.knotwork.android.domain.models.ClarificationOutcome
 import app.knotwork.android.domain.models.ClarificationRequest
 import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
+import app.knotwork.android.domain.models.PendingInteraction
+import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.repositories.ClarificationRepository
+import app.knotwork.android.domain.repositories.PendingInteractionRepository
+import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -43,6 +50,8 @@ class ClarificationNodeExecutorTest {
     private lateinit var llmEngine: LlmInferenceEngine
     private lateinit var loadModelUseCase: LoadModelUseCase
     private lateinit var clarificationRepository: ClarificationRepository
+    private lateinit var pendingInteractionRepository: PendingInteractionRepository
+    private lateinit var clarificationNotifier: ClarificationNotifier
     private lateinit var executor: ClarificationNodeExecutor
 
     @Before
@@ -50,10 +59,16 @@ class ClarificationNodeExecutorTest {
         llmEngine = mockk()
         loadModelUseCase = mockk()
         clarificationRepository = mockk()
+        pendingInteractionRepository = mockk(relaxed = true)
+        clarificationNotifier = mockk(relaxed = true)
+        coEvery { pendingInteractionRepository.getForRun(any()) } returns null
+        coEvery { pendingInteractionRepository.save(any()) } returns true
         executor = ClarificationNodeExecutor(
             llmEngine = llmEngine,
             loadModelUseCase = loadModelUseCase,
             clarificationRepository = clarificationRepository,
+            pendingInteractionRepository = pendingInteractionRepository,
+            clarificationNotifier = clarificationNotifier,
         )
     }
 
@@ -65,7 +80,8 @@ class ClarificationNodeExecutorTest {
             "{\"question\":\"Pick a color\",\"options\":[\"red\",\"blue\"]}",
         )
         val captured = slot<ClarificationRequest>()
-        coEvery { clarificationRepository.requestAnswer(capture(captured)) } returns "red"
+        coEvery { clarificationRepository.requestAnswer(capture(captured)) } returns
+            ClarificationOutcome.Answered("red")
 
         val states = executor.execute(node, "ctx", "session", "prompt").toList().unwrap()
 
@@ -92,7 +108,7 @@ class ClarificationNodeExecutorTest {
         every { llmEngine.generateResponseStream(any()) } returns flowOf(
             "{\"question\":\"Describe issue\",\"options\":[]}",
         )
-        coEvery { clarificationRepository.requestAnswer(any()) } returns "free text"
+        coEvery { clarificationRepository.requestAnswer(any()) } returns ClarificationOutcome.Answered("free text")
 
         val states = executor.execute(node, "ctx", "session", "prompt").toList().unwrap()
 
@@ -110,7 +126,7 @@ class ClarificationNodeExecutorTest {
         every { llmEngine.generateResponseStream(any()) } returns flowOf(
             "Sure, here is the JSON:\n```json\n{\"question\":\"Confirm?\",\"options\":[\"yes\"]}\n```\n",
         )
-        coEvery { clarificationRepository.requestAnswer(any()) } returns "yes"
+        coEvery { clarificationRepository.requestAnswer(any()) } returns ClarificationOutcome.Answered("yes")
 
         val states = executor.execute(node, "ctx", "session", "prompt").toList().unwrap()
 
@@ -126,7 +142,7 @@ class ClarificationNodeExecutorTest {
         every { llmEngine.generateResponseStream(any()) } returns flowOf(
             "Could not produce JSON. Please confirm.",
         )
-        coEvery { clarificationRepository.requestAnswer(any()) } returns ""
+        coEvery { clarificationRepository.requestAnswer(any()) } returns ClarificationOutcome.Answered("")
 
         val states = executor.execute(node, "ctx", "session", "prompt").toList().unwrap()
 
@@ -142,7 +158,7 @@ class ClarificationNodeExecutorTest {
         every { llmEngine.generateResponseStream(any()) } returns flowOf(
             "{\"question\":\"q\",\"options\":[]}",
         )
-        coEvery { clarificationRepository.requestAnswer(any()) } returns "a"
+        coEvery { clarificationRepository.requestAnswer(any()) } returns ClarificationOutcome.Answered("a")
 
         val states = executor.execute(node, "ctx", "session", "prompt").toList().unwrap()
 
@@ -202,7 +218,7 @@ class ClarificationNodeExecutorTest {
         every { llmEngine.generateResponseStream(any()) } returns flowOf(
             "{\"question\":\"q\",\"options\":[\"a\"]}",
         )
-        coEvery { clarificationRepository.requestAnswer(any()) } returns "a"
+        coEvery { clarificationRepository.requestAnswer(any()) } returns ClarificationOutcome.Answered("a")
 
         val states = executor.execute(node, "ctx", "session", "prompt").toList().unwrap()
 
@@ -221,4 +237,112 @@ class ClarificationNodeExecutorTest {
         systemPrompt = "Ask the user for clarification.",
         clarificationTimeoutMs = timeoutMs,
     )
+
+    // ─── Two-phase background waiting ───────────────────────────────────────
+
+    @Test
+    fun `given live timeout on a persisted run when execute then parks instead of defaulting`() = runTest {
+        val node = clarificationNode()
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf(
+            "{\"question\":\"Pick a color\",\"options\":[\"red\",\"blue\"]}",
+        )
+        coEvery { clarificationRepository.requestAnswer(any()) } returns ClarificationOutcome.TimedOut
+
+        val states = executor.execute(node, "ctx", "session", "prompt", runId = "run-1").toList().unwrap()
+
+        // The flow ends with the parked state and NO result.
+        val last = states.last() as AgentOrchestratorState.SuspendedInBackground
+        assertEquals(PendingInteractionKind.CLARIFICATION, last.kind)
+        assertTrue(states.filterIsInstance<NodeExecutionResult>().isEmpty())
+        coVerify {
+            pendingInteractionRepository.save(
+                match {
+                    it.runId == "run-1" &&
+                        it.kind == PendingInteractionKind.CLARIFICATION &&
+                        it.question == "Pick a color" &&
+                        it.options == listOf("red", "blue")
+                },
+            )
+        }
+        verify { clarificationNotifier.sendPersistentClarificationRequest("run-1", "session", "Pick a color") }
+    }
+
+    @Test
+    fun `given live timeout on a non-persisted run when execute then falls back to default answer`() = runTest {
+        val node = clarificationNode()
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf(
+            "{\"question\":\"Pick a color\",\"options\":[\"red\",\"blue\"]}",
+        )
+        coEvery { clarificationRepository.requestAnswer(any()) } returns ClarificationOutcome.TimedOut
+
+        val states = executor.execute(node, "ctx", "session", "prompt").toList().unwrap()
+
+        val result = states.filterIsInstance<NodeExecutionResult>().last()
+        assertEquals("red", result.outputText)
+        coVerify(exactly = 0) { pendingInteractionRepository.save(any()) }
+    }
+
+    @Test
+    fun `given live timeout and park persistence fails when execute then falls back to default answer`() = runTest {
+        val node = clarificationNode()
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf(
+            "{\"question\":\"Pick a color\",\"options\":[\"red\",\"blue\"]}",
+        )
+        coEvery { clarificationRepository.requestAnswer(any()) } returns ClarificationOutcome.TimedOut
+        coEvery { pendingInteractionRepository.save(any()) } returns false
+
+        val states = executor.execute(node, "ctx", "session", "prompt", runId = "run-1").toList().unwrap()
+
+        val result = states.filterIsInstance<NodeExecutionResult>().last()
+        assertEquals("red", result.outputText)
+        verify(exactly = 0) { clarificationNotifier.sendPersistentClarificationRequest(any(), any(), any()) }
+    }
+
+    @Test
+    fun `given parked record with recorded answer when execute then returns it without inference`() = runTest {
+        val node = clarificationNode()
+        coEvery { pendingInteractionRepository.getForRun("run-1") } returns PendingInteraction(
+            runId = "run-1",
+            sessionId = "session",
+            kind = PendingInteractionKind.CLARIFICATION,
+            question = "Pick a color",
+            options = listOf("red", "blue"),
+            answer = "blue",
+            requestedAt = 0L,
+        )
+
+        val states = executor.execute(node, "ctx", "session", "prompt", runId = "run-1").toList().unwrap()
+
+        val result = states.filterIsInstance<NodeExecutionResult>().last()
+        assertEquals("blue", result.outputText)
+        // One-shot consumption, and the LLM was never touched.
+        coVerify { pendingInteractionRepository.delete("run-1") }
+        verify(exactly = 0) { llmEngine.generateResponseStream(any()) }
+    }
+
+    @Test
+    fun `given parked record without an answer when execute then asks a fresh question`() = runTest {
+        val node = clarificationNode()
+        coEvery { pendingInteractionRepository.getForRun("run-1") } returns PendingInteraction(
+            runId = "run-1",
+            sessionId = "session",
+            kind = PendingInteractionKind.CLARIFICATION,
+            question = "Pick a color",
+            requestedAt = 0L,
+        )
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf(
+            "{\"question\":\"Pick a color\",\"options\":[\"red\"]}",
+        )
+        coEvery { clarificationRepository.requestAnswer(any()) } returns ClarificationOutcome.Answered("red")
+
+        val states = executor.execute(node, "ctx", "session", "prompt", runId = "run-1").toList().unwrap()
+
+        val result = states.filterIsInstance<NodeExecutionResult>().last()
+        assertEquals("red", result.outputText)
+        coVerify { pendingInteractionRepository.delete("run-1") }
+    }
 }

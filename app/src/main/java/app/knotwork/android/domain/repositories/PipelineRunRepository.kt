@@ -100,21 +100,28 @@ interface PipelineRunRepository {
     suspend fun getRun(runId: String): PipelineRun?
 
     /**
-     * Flips an interrupted run back to [PipelineRunStatus.QUEUED] for
-     * checkpoint resume, clearing the `finishedAt` / `errorMessage` markers
-     * stamped by the orphan sweep, and re-registers the run as owned by the
-     * current process (see [getOrphanedRuns]) — the resumed execution is
-     * hosted here, and a second interruption must again be detectable. This
-     * is the second sanctioned terminal-exit transition next to
-     * [discardInterruptedRun] and is equally guarded in SQL: a run in any
-     * other status is left untouched and the method reports failure.
+     * Flips a resumable run back to [PipelineRunStatus.QUEUED] for checkpoint
+     * resume, clearing the `finishedAt` / `errorMessage` markers a sweep may
+     * have stamped, and re-registers the run as owned by the current process
+     * (see [getOrphanedRuns]) — the resumed execution is hosted here, and a
+     * second interruption must again be detectable.
+     *
+     * Two starting points are sanctioned: [PipelineRunStatus.INTERRUPTED]
+     * (the terminal-exit transition next to [discardInterruptedRun]) and the
+     * persistent waiting statuses ([PipelineRunStatus.WAITING_APPROVAL] /
+     * [PipelineRunStatus.WAITING_CLARIFICATION]) of a parked run whose
+     * pending interaction was answered. The transition is guarded in SQL by
+     * the expected [fromStatus]: a run in any other status is left untouched
+     * and the method reports failure, which is what serialises racing
+     * resume / discard attempts.
      *
      * @param runId Id of the run to resume.
-     * @return `true` when the guarded INTERRUPTED → QUEUED transition was
-     *   applied; `false` when the run is missing, not INTERRUPTED, or the
-     *   store failed (best-effort contract).
+     * @param fromStatus The exact status the row must currently hold.
+     * @return `true` when the guarded [fromStatus] → QUEUED transition was
+     *   applied; `false` when the run is missing, in a different status, or
+     *   the store failed (best-effort contract).
      */
-    suspend fun markResumed(runId: String): Boolean
+    suspend fun markResumed(runId: String, fromStatus: PipelineRunStatus): Boolean
 
     /**
      * Returns the most recently started non-terminal run of [sessionId], or

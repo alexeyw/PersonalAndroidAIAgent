@@ -111,18 +111,20 @@ interface PipelineRunDao {
     suspend fun getRun(runId: String): PipelineRunEntity?
 
     /**
-     * Flips an interrupted run back to the QUEUED status for checkpoint
-     * resume, clearing the terminal markers ([PipelineRunEntity.finishedAt],
-     * [PipelineRunEntity.errorMessage]) the orphan sweep stamped. The
-     * `WHERE status = :fromStatus` guard pins the transition to INTERRUPTED
-     * rows only — the second sanctioned terminal-exit transition next to
-     * [discardInterruptedRun]; any other status leaves the row untouched.
+     * Flips a resumable run back to the QUEUED status for checkpoint resume,
+     * clearing the markers ([PipelineRunEntity.finishedAt],
+     * [PipelineRunEntity.errorMessage]) a sweep may have stamped. The
+     * `WHERE status = :fromStatus` guard pins the transition to the expected
+     * starting status — INTERRUPTED for the terminal-exit path next to
+     * [discardInterruptedRun], or a WAITING_* status for a parked run whose
+     * pending interaction was answered; any other status leaves the row
+     * untouched.
      *
      * @param runId Id of the run to resume.
-     * @param fromStatus The INTERRUPTED status name the row must currently hold.
+     * @param fromStatus The status name the row must currently hold.
      * @param toStatus The QUEUED status name to write.
      * @return The number of updated rows — `1` when the guarded transition
-     *   applied, `0` when the row was missing or not INTERRUPTED.
+     *   applied, `0` when the row was missing or in a different status.
      */
     @Query(
         "UPDATE pipeline_runs SET status = :toStatus, finishedAt = NULL, errorMessage = NULL " +

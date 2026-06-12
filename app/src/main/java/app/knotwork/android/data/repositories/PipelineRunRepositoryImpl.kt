@@ -122,7 +122,7 @@ class PipelineRunRepositoryImpl @Inject constructor(private val pipelineRunDao: 
         }
     }
 
-    override suspend fun markResumed(runId: String): Boolean {
+    override suspend fun markResumed(runId: String, fromStatus: PipelineRunStatus): Boolean {
         // Re-register ownership before the transition for the same reason
         // createRun does: from this moment the run's machinery lives in this
         // process, and a failed write must still keep the id invisible to
@@ -132,7 +132,7 @@ class PipelineRunRepositoryImpl @Inject constructor(private val pipelineRunDao: 
             withContext(Dispatchers.IO) {
                 pipelineRunDao.markResumed(
                     runId = runId,
-                    fromStatus = PipelineRunStatus.INTERRUPTED.name,
+                    fromStatus = fromStatus.name,
                     toStatus = PipelineRunStatus.QUEUED.name,
                 ) == 1
             }

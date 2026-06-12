@@ -393,7 +393,7 @@ class PipelineRunRepositoryImplTest {
     fun `markResumed issues the guarded INTERRUPTED to QUEUED transition and reports success`() = runTest {
         coEvery { pipelineRunDao.markResumed("run-1", "INTERRUPTED", "QUEUED") } returns 1
 
-        assertTrue(repository.markResumed("run-1"))
+        assertTrue(repository.markResumed("run-1", PipelineRunStatus.INTERRUPTED))
         coVerify { pipelineRunDao.markResumed("run-1", "INTERRUPTED", "QUEUED") }
     }
 
@@ -401,14 +401,22 @@ class PipelineRunRepositoryImplTest {
     fun `given row not INTERRUPTED when markResumed then reports failure`() = runTest {
         coEvery { pipelineRunDao.markResumed(any(), any(), any()) } returns 0
 
-        assertTrue(!repository.markResumed("run-1"))
+        assertTrue(!repository.markResumed("run-1", PipelineRunStatus.INTERRUPTED))
     }
 
     @Test
     fun `given DAO failure when markResumed then absorbed as failure`() = runTest {
         coEvery { pipelineRunDao.markResumed(any(), any(), any()) } throws IllegalStateException("io")
 
-        assertTrue(!repository.markResumed("run-1"))
+        assertTrue(!repository.markResumed("run-1", PipelineRunStatus.INTERRUPTED))
+    }
+
+    @Test
+    fun `markResumed from a WAITING status pins the guarded transition to it`() = runTest {
+        coEvery { pipelineRunDao.markResumed("run-1", "WAITING_APPROVAL", "QUEUED") } returns 1
+
+        assertTrue(repository.markResumed("run-1", PipelineRunStatus.WAITING_APPROVAL))
+        coVerify { pipelineRunDao.markResumed("run-1", "WAITING_APPROVAL", "QUEUED") }
     }
 
     @Test
@@ -418,7 +426,7 @@ class PipelineRunRepositoryImplTest {
             sampleEntity.copy(id = "run-1", status = "QUEUED"),
         )
 
-        repository.markResumed("run-1")
+        repository.markResumed("run-1", PipelineRunStatus.INTERRUPTED)
 
         assertEquals(emptyList<PipelineRun>(), repository.getOrphanedRuns())
     }

@@ -408,12 +408,19 @@ class GraphExecutionEngine @Inject constructor(
                 }
 
                 val nodeStartMs = System.currentTimeMillis()
+                var runParked = false
                 try {
-                    executor.execute(nodeForExecution, executorInput, sessionId, userPrompt)
+                    executor.execute(nodeForExecution, executorInput, sessionId, userPrompt, runId)
                         .collect { output ->
                             when (output) {
                                 is NodeOutput.State -> {
-                                    if (runId != null) {
+                                    if (output.state is AgentOrchestratorState.SuspendedInBackground) {
+                                        // Bypass persistSuspensionTransition: its
+                                        // wasSuspended branch would flip the record
+                                        // back to RUNNING, but a parked run must
+                                        // keep its WAITING_* status.
+                                        runParked = true
+                                    } else if (runId != null) {
                                         runSuspended =
                                             persistSuspensionTransition(runId, output.state, runSuspended)
                                     }
@@ -422,6 +429,21 @@ class GraphExecutionEngine @Inject constructor(
                                 is NodeOutput.Result -> nodeResult = output.result
                             }
                         }
+
+                    // A parked run ends the walk without a terminal state: the
+                    // executor made the pending request durable and the run
+                    // record keeps its WAITING_* status — the user's response
+                    // resumes the run from its checkpoint later, possibly in
+                    // another process. Flush the buffered trace first so the
+                    // checkpoint is complete up to this exact node.
+                    if (runParked) {
+                        pushConsole(
+                            ConsoleEventType.NodeExecution,
+                            "⏸ ${currentNode.type.name} parked awaiting user response",
+                        )
+                        runTraceRepository.flush()
+                        return@flow
+                    }
 
                     // The executor flow completing means any HITL suspension of
                     // this node is definitively resolved — flip the record back

@@ -280,6 +280,12 @@ class TaskQueueManagerImpl @Inject constructor(
      */
     private suspend fun executeRun(task: AgentTask, pipeline: PipelineGraph, resume: ResumeContext?) {
         val stateFlow = getOrCreateStateFlow(task.sessionId)
+        // Set when the engine parks the run in its persistent waiting phase:
+        // the flow then completes without a terminal state on purpose, and the
+        // `finally` below must not stamp the record CANCELLED — it stays in
+        // its WAITING_* status until the user responds or the approval window
+        // expires.
+        var runParked = false
         try {
             graphExecutionEngine(task.sessionId, task.prompt, pipeline, task.id, resume).collect { state ->
                 // Terminal engine states are mirrored into the persistent run
@@ -290,6 +296,7 @@ class TaskQueueManagerImpl @Inject constructor(
                         pipelineRunRepository.finishRun(task.id, PipelineRunStatus.COMPLETED)
                     is AgentOrchestratorState.Error ->
                         pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, state.message)
+                    is AgentOrchestratorState.SuspendedInBackground -> runParked = true
                     else -> Unit
                 }
                 // `emit` (vs. `tryEmit`) back-pressures the engine if the
@@ -317,7 +324,13 @@ class TaskQueueManagerImpl @Inject constructor(
             // re-throwing and leaving the UI stuck on a stale state.
             withContext(NonCancellable) {
                 val last = stateFlow.replayCache.lastOrNull()
-                if (last !is AgentOrchestratorState.Completed &&
+                if (runParked) {
+                    // A parked run is neither finished nor cancelled — its
+                    // record stays WAITING_* for the background response
+                    // path. Only the in-memory session state is reset so the
+                    // UI stops showing a live run.
+                    stateFlow.emit(AgentOrchestratorState.Idle)
+                } else if (last !is AgentOrchestratorState.Completed &&
                     last !is AgentOrchestratorState.Error
                 ) {
                     // Terminal write with `finally` semantics: reaching here
