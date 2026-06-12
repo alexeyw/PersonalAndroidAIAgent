@@ -83,9 +83,14 @@ class AgentWorkspaceImpl @Inject constructor(
 
     override suspend fun list(): WorkspaceResult<List<WorkspaceFile>> = withContext(Dispatchers.IO) {
         val root = rootDir()
+        // `walkTopDown` follows directory symlinks, so canonicalise each entry and drop
+        // any whose real path escapes the workspace — the same containment rule as the
+        // resolve gate, so a symlink pointing out can never appear in a listing.
         val files = root.walkTopDown()
             .filter { it.isFile }
-            .map { toWorkspaceFile(it.canonicalFile) }
+            .map { it.canonicalFile }
+            .filter { isInsideRoot(it, root) }
+            .map { toWorkspaceFile(it, root) }
             .sortedBy { it.relativePath }
             .toList()
         WorkspaceResult.Success(files)
@@ -107,13 +112,25 @@ class AgentWorkspaceImpl @Inject constructor(
         }
         val root = rootDir()
         val target = File(root, relativePath).canonicalFile
-        val rootPath = root.path
-        val inside = target.path == rootPath || target.path.startsWith(rootPath + File.separator)
-        return if (inside) {
+        return if (isInsideRoot(target, root)) {
             WorkspaceResult.Success(target)
         } else {
             WorkspaceResult.Failure(WorkspaceError.PathOutsideWorkspace)
         }
+    }
+
+    /**
+     * Containment predicate shared by [canonicalResolve] and [list]: a
+     * canonicalised path is in-bounds when it is the root itself or sits under
+     * it. The trailing [File.separator] stops a sibling directory such as
+     * `agent_workspace_evil` from passing the prefix check.
+     *
+     * @param canonical An already-canonicalised candidate path.
+     * @param root The canonicalised workspace root.
+     */
+    private fun isInsideRoot(canonical: File, root: File): Boolean {
+        val rootPath = root.path
+        return canonical.path == rootPath || canonical.path.startsWith(rootPath + File.separator)
     }
 
     /**
@@ -155,6 +172,10 @@ class AgentWorkspaceImpl @Inject constructor(
             return WorkspaceResult.Failure(WorkspaceError.QuotaExceeded)
         }
 
+        // Invalidate the cache before the risky write: if writeBytes throws partway
+        // (disk full, parent turned into a file) the next read recomputes from disk
+        // instead of trusting a stale total. The cache is set only on full success.
+        cachedTotalBytes = null
         target.parentFile?.mkdirs()
         target.writeBytes(newBytes)
         cachedTotalBytes = projectedTotal
@@ -184,8 +205,8 @@ class AgentWorkspaceImpl @Inject constructor(
     }
 
     /** Maps a canonical workspace [File] to its [WorkspaceFile] metadata snapshot. */
-    private fun toWorkspaceFile(file: File): WorkspaceFile {
-        val relativePath = file.toRelativeString(rootDir()).replace(File.separatorChar, '/')
+    private fun toWorkspaceFile(file: File, root: File = rootDir()): WorkspaceFile {
+        val relativePath = file.toRelativeString(root).replace(File.separatorChar, '/')
         val isFile = file.isFile
         return WorkspaceFile(
             relativePath = relativePath,
@@ -196,9 +217,25 @@ class AgentWorkspaceImpl @Inject constructor(
         )
     }
 
-    /** Reads [file]'s bytes and reports whether they decode as UTF-8 text. */
+    /**
+     * Reports whether [file] is text by sniffing only a bounded prefix — listing
+     * and resolving must not pull whole files into memory just to set the
+     * advisory `isText` flag (a full UTF-8 validation still happens in [readText],
+     * which is the authoritative path). If the sniff buffer fills, the last few
+     * bytes are dropped so a multi-byte UTF-8 sequence straddling the boundary is
+     * not misread as malformed.
+     */
     private fun looksLikeText(file: File): Boolean = try {
-        isUtf8Text(file.readBytes())
+        file.inputStream().use { input ->
+            val buffer = ByteArray(TEXT_SNIFF_BYTES)
+            val read = input.read(buffer)
+            if (read <= 0) {
+                true // empty file counts as text
+            } else {
+                val usable = if (read == TEXT_SNIFF_BYTES) read - MAX_UTF8_TAIL_BYTES else read
+                isUtf8Text(buffer.copyOf(usable))
+            }
+        }
     } catch (e: IOException) {
         // An unreadable file is treated as non-text rather than crashing a listing.
         Timber.w(e, "Failed to sample file for text detection: %s", file.path)
@@ -227,5 +264,14 @@ class AgentWorkspaceImpl @Inject constructor(
     private companion object {
         /** Name of the workspace directory inside [Context.filesDir]. */
         const val WORKSPACE_DIR_NAME = "agent_workspace"
+
+        /** Number of leading bytes sampled to classify a file as text or binary. */
+        const val TEXT_SNIFF_BYTES = 8 * 1024
+
+        /**
+         * Maximum length of a UTF-8 code point. Dropped from the tail of a filled
+         * sniff buffer so a sequence split across the boundary is not misjudged.
+         */
+        const val MAX_UTF8_TAIL_BYTES = 3
     }
 }

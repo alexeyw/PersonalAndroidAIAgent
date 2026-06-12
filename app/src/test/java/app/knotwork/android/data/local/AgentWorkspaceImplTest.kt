@@ -11,12 +11,14 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Assert.fail
 import org.junit.Assume.assumeNoException
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.io.IOException
 import java.nio.file.Files
 
 /**
@@ -256,8 +258,69 @@ class AgentWorkspaceImplTest {
         )
     }
 
+    @Test
+    fun `given a binary marker only beyond the sniff window when list then file still reports as text`() = runTest {
+        val workspace = workspaceWith()
+        // 8 KB of ASCII then a NUL: the NUL sits past the sniff window, so the advisory
+        // isText flag stays true. readText (full validation) remains authoritative.
+        putRawFile("long.txt", ByteArray(SNIFF_BYTES) { 'a'.code.toByte() } + byteArrayOf(0))
+
+        val entry = assertSuccess(workspace.list()).single { it.relativePath == "long.txt" }
+        assertTrue(entry.isText)
+    }
+
+    @Test
+    fun `given a binary marker beyond the sniff window when readText then NotAText`() = runTest {
+        val workspace = workspaceWith()
+        putRawFile("long.txt", ByteArray(SNIFF_BYTES) { 'a'.code.toByte() } + byteArrayOf(0))
+
+        // The authoritative read scans the whole file and catches the trailing NUL.
+        assertFailure(workspace.readText("long.txt"), WorkspaceError.NotAText)
+    }
+
+    @Test
+    fun `given a failed write when next write checks quota then the stale cache is not trusted`() = runTest {
+        val workspace = workspaceWith(maxFileSize = 100L, maxTotal = 30L)
+        assertSuccess(workspace.writeText("a", "12345")) // 5 bytes; primes the cache to 5
+        putRawFile("ext.txt", ByteArray(10) { 'x'.code.toByte() }) // +10 on disk, behind the cache's back
+
+        // Writing under "a" (a regular file, not a directory) throws partway; the fix
+        // invalidates the cache instead of leaving it stuck at 5.
+        try {
+            workspace.writeText("a/b.txt", "x")
+            fail("expected the parent-is-a-file write to throw")
+        } catch (expected: IOException) {
+            // The write into a path whose parent is a regular file is supposed to fail.
+        }
+
+        // The next quota check must recompute the true 15 bytes on disk: 15 + 20 = 35 > 30.
+        // A stale cache (5) would wrongly allow the write.
+        assertFailure(workspace.writeText("c.txt", "x".repeat(20)), WorkspaceError.QuotaExceeded)
+    }
+
+    @Test
+    fun `given a symlink to an outside directory when list then escaping entries are excluded`() = runTest {
+        val outside = tempFolder.newFolder("outside")
+        File(outside, "secret.txt").writeText("top secret")
+        workspaceRoot().mkdirs()
+        try {
+            Files.createSymbolicLink(File(workspaceRoot(), "link").toPath(), outside.toPath())
+        } catch (e: Exception) {
+            assumeNoException("Symlinks unsupported on this platform", e)
+        }
+        val workspace = workspaceWith()
+        assertSuccess(workspace.writeText("inside.txt", "ok"))
+
+        // `walkTopDown` descends through the symlink, but the containment filter drops
+        // anything whose canonical path escapes the workspace.
+        assertEquals(listOf("inside.txt"), assertSuccess(workspace.list()).map { it.relativePath })
+    }
+
     private companion object {
         const val DEFAULT_FILE_SIZE = 5L * 1024 * 1024
         const val DEFAULT_TOTAL = 100L * 1024 * 1024
+
+        /** Mirrors `AgentWorkspaceImpl.TEXT_SNIFF_BYTES`. */
+        const val SNIFF_BYTES = 8 * 1024
     }
 }
