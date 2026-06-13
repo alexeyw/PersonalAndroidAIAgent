@@ -15,7 +15,7 @@ This file maps the contents of the main application package.
     - `TaskQueueManagerImpl.kt` - Task queue manager implementation.
     - `TextEmbedderFactory.kt` - Factory for text embedders.
   - `local/` - Local database and data storage components (Room DB, DataStore).
-    - `AgentWorkspaceImpl.kt` - Filesystem-backed `AgentWorkspace` rooted at `files/agent_workspace/` (`Context.filesDir`); the single canonicalisation gate (`canonicalResolve`) enforces path containment (rejects `../` traversal / absolute paths / escaping symlinks via canonical-path prefix + `File.separator`), enforces per-file and total-size quotas (cached total-bytes counter under a write `Mutex`), and serves UTF-8 text read/write/list with binary files listable but not text-readable.
+    - `AgentWorkspaceImpl.kt` - Filesystem-backed `AgentWorkspace` rooted at `files/agent_workspace/` (`Context.filesDir`); the single canonicalisation gate (`canonicalResolve`) enforces path containment (rejects `../` traversal / absolute paths / escaping symlinks via canonical-path prefix + `File.separator`), enforces per-file and total-size quotas (cached total-bytes counter under a write `Mutex`), and serves UTF-8 text read/write/edit/delete/list with binary files listable but not text-readable. Writes are atomic (staged scratch file + rename, scratch hidden from listings/quota) and quota-checked before any bytes land; `editText` runs the anchored find-replace as one locked read-modify-write; `delete` keeps the cached total in step.
     - `ApiKeyManager.kt` - API key manager (`KeystoreBackedPrefsStore`-backed); an undecryptable value is dropped and reported as unset — keys are user re-enterable, opposite policy to the DB passphrase.
     - `AppDatabase.kt` - Room database definition.
     - `Converters.kt` - Type converters for Room.
@@ -134,6 +134,9 @@ This file maps the contents of the main application package.
         - `ListFilesExecutor.kt` - `LocalToolExecutor` for the READ_ONLY `list_files` tool; renders the (optionally sub-directory-scoped, containment-validated) workspace listing via `WorkspaceListingFormat`.
         - `FindFilesExecutor.kt` - `LocalToolExecutor` for the READ_ONLY `find_files` tool; filters the workspace listing by a `WorkspaceGlob` pattern and renders matches via `WorkspaceListingFormat`.
         - `WorkspaceListingFormat.kt` - Shared, capped line-per-file rendering (path + size + ISO-8601 UTC mtime) used by `list_files` and `find_files`.
+        - `WriteFileExecutor.kt` - `LocalToolExecutor` for the SENSITIVE `write_file` tool; writes UTF-8 content via `AgentWorkspace.writeText`, refusing an implicit overwrite (without `overwrite: true`) so existing content is never clobbered; maps every `WorkspaceError` to a readable observation.
+        - `EditFileExecutor.kt` - `LocalToolExecutor` for the SENSITIVE `edit_file` tool; replaces a uniquely-matching `oldText` anchor with `newText` via `AgentWorkspace.editText` (empty `oldText` rejected before I/O), surfacing the occurrence count when the anchor is ambiguous.
+        - `DeleteFileExecutor.kt` - `LocalToolExecutor` for the DESTRUCTIVE `delete_file` tool; removes a single workspace file via `AgentWorkspace.delete` (always behind the typed-confirm HITL gate by its risk classification).
 - `di/` - Dependency Injection configurations (Hilt).
   - `AppModule.kt` - General app-level DI module.
   - `DataModule.kt` - Data layer DI module.
@@ -248,7 +251,7 @@ This file maps the contents of the main application package.
     - `ToolInvocationResult.kt` - Snapshot of a single tool invocation (toolName + output) accumulated by `GraphExecutionEngine` during a pipeline run for the `--- Tool Results ---` block.
     - `ToolRisk.kt` - Per-tool risk classification (`READ_ONLY` / `SENSITIVE` / `DESTRUCTIVE`) consumed by the HITL gate; canonical resolution lives in `ToolRepository.getRisk`.
     - `UpdateMcpServerResult.kt` - Sealed outcome of `SettingsRepository.updateMcpServer` (`Success` / `UrlCollision(collidingUrl, collidingDisplayName)`). Lets the Edit-MCP-server form surface an inline error instead of silently overwriting a sibling row when the user types a URL that already belongs to another persisted server.
-    - `WorkspaceError.kt` - Typed failure modes of an `AgentWorkspace` operation (`PathOutsideWorkspace` / `NotFound` / `AlreadyExists` / `QuotaExceeded` / `NotAText` / `TooLarge`); lets the file tools map each cause to a precise LLM-readable observation without inspecting exception types.
+    - `WorkspaceError.kt` - Typed failure modes of an `AgentWorkspace` operation (`PathOutsideWorkspace` / `NotFound` / `AlreadyExists` / `QuotaExceeded` / `NotAText` / `TooLarge` / `AnchorNotFound` / `AnchorNotUnique(count)`); lets the file tools map each cause to a precise LLM-readable observation without inspecting exception types.
     - `WorkspaceFile.kt` - Immutable metadata snapshot of one workspace entry (relative path, size, mtime, isDirectory, isText); carries no filesystem handle so callers address entries only by relative path through the canonicalisation gate.
     - `WorkspaceResult.kt` - Sealed `Success(value)` / `Failure(WorkspaceError)` result for `AgentWorkspace` operations (typed-error analogue of `kotlin.Result`).
   - `repositories/` - Repository interfaces.
@@ -276,8 +279,9 @@ This file maps the contents of the main application package.
     - `SettingsRepository.kt` - Settings repository interface.
     - `ToolRepository.kt` - Tool repository interface.
   - `services/` - Domain-level services.
-    - `AgentWorkspace.kt` - Domain interface for the agent's jailed file sandbox (`resolve` / `readText` / `writeText` / `list`); the single trust boundary for agent file I/O (path containment + size quotas + text-only surface). Operations return typed `WorkspaceResult`/`WorkspaceError` instead of throwing. Data-layer impl: `AgentWorkspaceImpl`.
+    - `AgentWorkspace.kt` - Domain interface for the agent's jailed file sandbox (`resolve` / `readText` / `writeText` / `editText` / `delete` / `list`); the single trust boundary for agent file I/O (path containment + size quotas + text-only surface). Operations return typed `WorkspaceResult`/`WorkspaceError` instead of throwing. Data-layer impl: `AgentWorkspaceImpl`.
     - `WorkspaceGlob.kt` - Pure, dependency-free glob→`Regex` matcher for workspace-relative paths (`*` within a segment, `**` across directories, `?` single char); backs the `find_files` tool.
+    - `WorkspaceTextEdit.kt` - Pure, dependency-free anchored find-replace primitive backing `edit_file`: requires exactly one literal, non-overlapping occurrence of the anchor (`Replaced` / `AnchorNotFound` / `AnchorNotUnique(count)`); the I/O lives in `AgentWorkspace.editText`.
     - `ApprovalNotifier.kt` - Notifier for approval requests: the transient live-phase prompt, the persistent parked-run variant (ongoing, runId-addressed actions, re-posted on dismissal), and the cancel used when the request settles elsewhere.
     - `ClarificationNotifier.kt` - Notifier for parked clarification questions ("Agent needs your input", deep-link back into the chat). Presentation-layer impl: `ClarificationNotificationManager`.
     - `DatabaseResetService.kt` - Domain seam for the explicit, user-confirmed full data wipe (encrypted DB + stored passphrase) offered by the splash data-locked recovery screen; data-layer impl: `DatabaseResetServiceImpl`.

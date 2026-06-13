@@ -591,6 +591,58 @@ class ToolNodeExecutorTest {
     }
 
     @Test
+    fun `given a DESTRUCTIVE delete_file on a persisted run when live timeout then parks for background approval`() =
+        runTest {
+            // The workspace write tools carry no bespoke HITL code — they flow through
+            // the same risk-driven gate. This pins the background-approval path for the
+            // contour: delete_file is DESTRUCTIVE, so on a live-window timeout the run
+            // parks (rather than failing) with the exact call snapshot for later resume.
+            every { settingsRepository.toolCallTimeoutMs } returns flowOf(100L)
+            coEvery { toolRepository.getRisk("delete_file") } returns ToolRisk.DESTRUCTIVE
+            coEvery { toolRepository.getAvailableTools() } returns
+                listOf(AgentTool("delete_file", "Deletes a file", "Schema"))
+            every { llmEngine.generateResponseStream(any()) } returns
+                flowOf("""{"tool": "delete_file", "arguments": "{\"path\":\"reports/old.md\"}"}""")
+            val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = "delete_file")
+
+            val results = mutableListOf<Any>()
+            val job = launch {
+                executor.execute(node, "Delete it", "session-1", "", runId = "run-9").collect { output ->
+                    when (output) {
+                        is NodeOutput.State -> results.add(output.state)
+                        is NodeOutput.Result -> results.add(output.result)
+                    }
+                }
+            }
+            advanceTimeBy(200L)
+            advanceUntilIdle()
+
+            assertTrue(results.last() is AgentOrchestratorState.SuspendedInBackground)
+            coVerify {
+                pendingInteractionRepository.save(
+                    match {
+                        it.runId == "run-9" &&
+                            it.kind == PendingInteractionKind.APPROVAL &&
+                            it.toolName == "delete_file" &&
+                            it.toolArgs == """{"path":"reports/old.md"}""" &&
+                            it.risk == ToolRisk.DESTRUCTIVE
+                    },
+                )
+            }
+            verify {
+                approvalNotifier.sendPersistentApprovalRequest(
+                    "run-9",
+                    "session-1",
+                    "delete_file",
+                    """{"path":"reports/old.md"}""",
+                    ToolRisk.DESTRUCTIVE,
+                )
+            }
+            coVerify(exactly = 0) { toolRepository.executeTool(any(), any(), any()) }
+            job.cancel()
+        }
+
+    @Test
     fun `given live timeout and park persistence fails when execute then falls back to timeout error`() = runTest {
         armSensitiveGate()
         coEvery { pendingInteractionRepository.save(any()) } returns false

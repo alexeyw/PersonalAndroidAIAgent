@@ -15,6 +15,20 @@ details.
 
 ### Added
 
+- **Workspace write tools.** Three new built-in tools let the agent change
+  files in its workspace, each gated by its risk level: **write_file**
+  (writes a UTF-8 text file; creating is the default and replacing an
+  existing file needs an explicit `overwrite` flag, so content is never
+  clobbered silently — the write is atomic, staged and renamed into place,
+  and quota-checked before any bytes land), **edit_file** (replaces a single
+  uniquely-matching `oldText` anchor with `newText`; the anchor must occur
+  exactly once or the edit is refused with the occurrence count, and an
+  empty replacement deletes the matched fragment) and **delete_file**
+  (removes one file, irreversibly). write_file and edit_file are SENSITIVE
+  and delete_file is DESTRUCTIVE, so every mutating call passes through the
+  Human-in-the-Loop confirmation gate — interactive, notification, and the
+  persistent background-approval path alike — before it runs.
+
 - **Workspace read tools.** Three new built-in, read-only tools let the
   agent inspect its file workspace: **read_file** (reads a UTF-8 text file,
   truncated to a per-read token budget — default 2000 tokens — so a long

@@ -91,6 +91,53 @@ interface AgentWorkspace {
     ): WorkspaceResult<WorkspaceFile>
 
     /**
+     * Replaces the single occurrence of [oldText] with [newText] in an existing
+     * workspace file, anchoring the edit on a uniquely-matching fragment.
+     *
+     * The whole read-modify-write is performed atomically under the workspace's
+     * own lock so a concurrent operation can never observe (or interleave with)
+     * a half-applied edit. The anchor must address exactly one fragment:
+     *
+     *  - It must occur **exactly once** in the file — zero matches is
+     *    [WorkspaceError.AnchorNotFound], more than one is
+     *    [WorkspaceError.AnchorNotUnique] (carrying the count so the caller can
+     *    request a longer anchor). Matching is literal and non-overlapping.
+     *  - An empty [newText] deletes the matched fragment.
+     *
+     * The rewritten content is subject to the same per-file and total-size
+     * quotas as [writeText].
+     *
+     * @param relativePath Path of the file to edit, relative to the workspace
+     *   root.
+     * @param oldText The unique anchor fragment to replace. Must be non-empty.
+     * @param newText The replacement text; may be empty to delete the fragment.
+     * @return [WorkspaceResult.Success] with the resulting [WorkspaceFile]
+     *   metadata, or [WorkspaceResult.Failure] with
+     *   [WorkspaceError.PathOutsideWorkspace], [WorkspaceError.NotFound],
+     *   [WorkspaceError.NotAText], [WorkspaceError.AnchorNotFound],
+     *   [WorkspaceError.AnchorNotUnique], [WorkspaceError.TooLarge] or
+     *   [WorkspaceError.QuotaExceeded].
+     */
+    suspend fun editText(relativePath: String, oldText: String, newText: String): WorkspaceResult<WorkspaceFile>
+
+    /**
+     * Deletes a regular file from the workspace.
+     *
+     * Deletion is irreversible, so this is the workspace's most destructive
+     * operation; the file tool layered on top routes it through the strictest
+     * Human-in-the-Loop confirmation path. Only regular files are deletable: a
+     * path that resolves to a directory (or to nothing) is reported as
+     * [WorkspaceError.NotFound], never silently traversed.
+     *
+     * @param relativePath Path of the file to delete, relative to the workspace
+     *   root.
+     * @return [WorkspaceResult.Success] with [Unit] when the file was removed,
+     *   or [WorkspaceResult.Failure] with [WorkspaceError.PathOutsideWorkspace]
+     *   (escapes the sandbox) or [WorkspaceError.NotFound] (no such file).
+     */
+    suspend fun delete(relativePath: String): WorkspaceResult<Unit>
+
+    /**
      * Lists every file in the workspace, recursively.
      *
      * Returns a stable, path-sorted list of [WorkspaceFile] entries for the

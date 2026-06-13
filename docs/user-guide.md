@@ -717,6 +717,9 @@ The app ships with the following tools:
 | **read_file**      | Reads a text file from the agent's private workspace, truncated to a token budget so a long file never overflows the model's context; supports byte `offset`/`limit` paging. |
 | **list_files**     | Lists files in the workspace (optionally under a sub-directory) with their size and last-modified time. |
 | **find_files**     | Finds workspace files whose path matches a glob pattern (`*.md`, `reports/**`).      |
+| **write_file**     | Writes a text file to the workspace. Creating a new file is the default; replacing an existing one needs an explicit overwrite flag, so content is never clobbered by accident. Asks for confirmation before running. |
+| **edit_file**      | Makes a targeted change to an existing workspace file by replacing a unique snippet of text. The snippet must match exactly once, so an edit never lands in the wrong place. Asks for confirmation before running. |
+| **delete_file**    | Deletes a file from the workspace. This is irreversible and always asks you to confirm before it runs. |
 
 Each tool has a switch on the Tools screen. Turn a tool off to hide
 it from the agent for the next run; turn it on to make it available

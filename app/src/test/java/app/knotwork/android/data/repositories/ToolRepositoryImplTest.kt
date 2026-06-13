@@ -331,6 +331,45 @@ class ToolRepositoryImplTest {
     }
 
     @Test
+    fun `given builtin read_file when getRisk then returns READ_ONLY`() = runTest {
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        assertEquals(ToolRisk.READ_ONLY, repository.getRisk("read_file"))
+    }
+
+    @Test
+    fun `given builtin write_file when getRisk then returns SENSITIVE`() = runTest {
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        assertEquals(ToolRisk.SENSITIVE, repository.getRisk("write_file"))
+    }
+
+    @Test
+    fun `given builtin edit_file when getRisk then returns SENSITIVE`() = runTest {
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        assertEquals(ToolRisk.SENSITIVE, repository.getRisk("edit_file"))
+    }
+
+    @Test
+    fun `given builtin delete_file when getRisk then returns DESTRUCTIVE`() = runTest {
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        assertEquals(ToolRisk.DESTRUCTIVE, repository.getRisk("delete_file"))
+    }
+
+    @Test
+    fun `given no cloud keys when getAllLocalTools then write tools are published with their risk`() = runTest {
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        val tools = repository.getAllLocalTools().associateBy { it.name }
+
+        assertEquals(ToolRisk.SENSITIVE, tools.getValue("write_file").risk)
+        assertEquals(ToolRisk.SENSITIVE, tools.getValue("edit_file").risk)
+        assertEquals(ToolRisk.DESTRUCTIVE, tools.getValue("delete_file").risk)
+    }
+
+    @Test
     fun `given discovered AppFunction without override when getRisk then returns SENSITIVE`() = runTest {
         // Setup already mocks `localAppFunctionManager.getAvailableFunctions()` to return `get_system_time`
         // and `settingsRepository.appFunctionRiskOverrides` to emit an empty map.
