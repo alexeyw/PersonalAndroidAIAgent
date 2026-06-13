@@ -17,6 +17,8 @@ import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
@@ -529,6 +531,178 @@ class AgentWorkspaceImplTest {
         assertFailure(workspace.writeText("reports", "y"), WorkspaceError.IsDirectory)
         assertFailure(workspace.writeText("reports", "y", overwrite = true), WorkspaceError.IsDirectory)
         assertTrue(File(workspaceRoot(), "reports").isDirectory)
+    }
+
+    // endregion
+
+    // region usage
+
+    @Test
+    fun `given files when usage then reports summed bytes and the configured limit`() = runTest {
+        val workspace = workspaceWith(maxTotal = 1_000L)
+        assertSuccess(workspace.writeText("a.txt", "12345")) // 5 bytes
+        assertSuccess(workspace.writeText("dir/b.txt", "678")) // 3 bytes
+
+        val usage = assertSuccess(workspace.usage())
+
+        assertEquals(8L, usage.usedBytes)
+        assertEquals(1_000L, usage.limitBytes)
+    }
+
+    @Test
+    fun `given empty workspace when usage then reports zero used`() = runTest {
+        val usage = assertSuccess(workspaceWith().usage())
+        assertEquals(0L, usage.usedBytes)
+    }
+
+    // endregion
+
+    // region readTextPreview
+
+    @Test
+    fun `given a small text file when readTextPreview then returns full content untruncated`() = runTest {
+        val workspace = workspaceWith()
+        assertSuccess(workspace.writeText("note.txt", "hello world"))
+
+        val preview = assertSuccess(workspace.readTextPreview("note.txt", maxBytes = 1024))
+
+        assertEquals("hello world", preview.text)
+        assertEquals(11L, preview.totalBytes)
+        assertFalse(preview.truncated)
+    }
+
+    @Test
+    fun `given a file larger than the budget when readTextPreview then truncates at a boundary`() = runTest {
+        val workspace = workspaceWith()
+        val body = "x".repeat(500)
+        assertSuccess(workspace.writeText("big.txt", body))
+
+        val preview = assertSuccess(workspace.readTextPreview("big.txt", maxBytes = 100))
+
+        assertTrue(preview.truncated)
+        assertTrue("preview should be bounded by the budget", preview.text.length <= 100)
+        assertEquals(500L, preview.totalBytes)
+        assertTrue(body.startsWith(preview.text))
+    }
+
+    @Test
+    fun `given a binary file when readTextPreview then fails NotAText`() = runTest {
+        val workspace = workspaceWith()
+        putRawFile("blob.bin", byteArrayOf(0x00, 0x01, 0x02))
+
+        assertFailure(workspace.readTextPreview("blob.bin", maxBytes = 1024), WorkspaceError.NotAText)
+    }
+
+    @Test
+    fun `given a missing file when readTextPreview then fails NotFound`() = runTest {
+        assertFailure(workspaceWith().readTextPreview("nope.txt", maxBytes = 1024), WorkspaceError.NotFound)
+    }
+
+    @Test
+    fun `given an escaping path when readTextPreview then fails PathOutsideWorkspace`() = runTest {
+        assertFailure(
+            workspaceWith().readTextPreview("../escape.txt", maxBytes = 1024),
+            WorkspaceError.PathOutsideWorkspace,
+        )
+    }
+
+    // endregion
+
+    // region importBytes
+
+    @Test
+    fun `given a new path when importBytes then writes the bytes verbatim`() = runTest {
+        val workspace = workspaceWith()
+        val bytes = byteArrayOf(0x00, 0x10, 0x20, 0x7F) // binary content
+
+        val file = assertSuccess(workspace.importBytes("data.bin", ByteArrayInputStream(bytes), overwrite = false))
+
+        assertEquals("data.bin", file.relativePath)
+        assertTrue(File(workspaceRoot(), "data.bin").readBytes().contentEquals(bytes))
+    }
+
+    @Test
+    fun `given an existing path without overwrite when importBytes then fails AlreadyExists`() = runTest {
+        val workspace = workspaceWith()
+        assertSuccess(workspace.writeText("data.txt", "old"))
+
+        assertFailure(
+            workspace.importBytes("data.txt", ByteArrayInputStream("new".toByteArray()), overwrite = false),
+            WorkspaceError.AlreadyExists,
+        )
+    }
+
+    @Test
+    fun `given an existing path with overwrite when importBytes then replaces it`() = runTest {
+        val workspace = workspaceWith()
+        assertSuccess(workspace.writeText("data.txt", "old"))
+
+        assertSuccess(
+            workspace.importBytes("data.txt", ByteArrayInputStream("brand-new".toByteArray()), overwrite = true),
+        )
+
+        assertEquals("brand-new", assertSuccess(workspace.readText("data.txt")))
+    }
+
+    @Test
+    fun `given a source over the per-file limit when importBytes then fails TooLarge`() = runTest {
+        val workspace = workspaceWith(maxFileSize = 4L)
+
+        assertFailure(
+            workspace.importBytes("big.bin", ByteArrayInputStream(ByteArray(5)), overwrite = false),
+            WorkspaceError.TooLarge,
+        )
+    }
+
+    @Test
+    fun `given a source that would exceed the quota when importBytes then fails QuotaExceeded`() = runTest {
+        val workspace = workspaceWith(maxFileSize = 100L, maxTotal = 6L)
+        assertSuccess(workspace.writeText("a.txt", "1234")) // 4 bytes used, 2 left
+
+        assertFailure(
+            workspace.importBytes("b.bin", ByteArrayInputStream(ByteArray(3)), overwrite = false),
+            WorkspaceError.QuotaExceeded,
+        )
+    }
+
+    // endregion
+
+    // region exportTo
+
+    @Test
+    fun `given an existing file when exportTo then streams its full bytes to the sink`() = runTest {
+        val workspace = workspaceWith()
+        assertSuccess(workspace.writeText("report.md", "the whole thing"))
+        val sink = ByteArrayOutputStream()
+
+        assertSuccess(workspace.exportTo("report.md", sink))
+
+        assertEquals("the whole thing", sink.toString("UTF-8"))
+    }
+
+    @Test
+    fun `given a file over the read limit when exportTo then still streams it`() = runTest {
+        // exportTo must bypass the per-file read cap, unlike readText.
+        val workspace = workspaceWith(maxFileSize = 4L)
+        putRawFile("big.txt", "0123456789".toByteArray()) // 10 bytes, over the 4-byte cap
+        val sink = ByteArrayOutputStream()
+
+        assertSuccess(workspace.exportTo("big.txt", sink))
+
+        assertEquals("0123456789", sink.toString("UTF-8"))
+    }
+
+    @Test
+    fun `given a missing file when exportTo then fails NotFound`() = runTest {
+        assertFailure(workspaceWith().exportTo("nope.txt", ByteArrayOutputStream()), WorkspaceError.NotFound)
+    }
+
+    @Test
+    fun `given an escaping path when exportTo then fails PathOutsideWorkspace`() = runTest {
+        assertFailure(
+            workspaceWith().exportTo("../escape.txt", ByteArrayOutputStream()),
+            WorkspaceError.PathOutsideWorkspace,
+        )
     }
 
     // endregion

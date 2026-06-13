@@ -28,9 +28,10 @@ before the next release ships.
 5. [Pipelines](#pipelines)
 6. [Browser pipeline editor](#browser-pipeline-editor)
 7. [Tools and MCP](#tools-and-mcp)
-8. [Memory](#memory)
-9. [Settings](#settings)
-10. [Troubleshooting](#troubleshooting)
+8. [Files](#files)
+9. [Memory](#memory)
+10. [Settings](#settings)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -817,6 +818,73 @@ a tool from it is needed — and they are wrapped in error-handling
 so an unreachable server does not crash the chat. If a tool that
 relied on an MCP server stops responding, you will see an error
 event in the console rather than a silent failure.
+
+---
+
+## Files
+
+The agent has a small private **workspace** — a sandboxed directory it
+can read from and write to via the file tools (`read_file`,
+`write_file`, `list_files`, …). The **Files** screen, reached from
+**More → Files**, is your window into it: it is where the reports and
+exports the agent produces show up, and where you can hand it a file to
+read.
+
+### The listing and quota
+
+Files are shown in a flat, path-sorted list — a file saved under
+`reports/` reads as `reports/name.md`, with the directory dimmed and the
+name emphasised, so the layout is legible without a folder tree. Each
+row shows the file's size and when it was last modified; text files and
+binary files carry different icons.
+
+The header shows a **quota indicator** — how much of the workspace
+budget is used out of its limit, with a fill bar. As the workspace fills
+it ramps from neutral to amber (near the limit) to red. If it is full,
+a banner explains that the agent's writes are being refused until space
+is freed; delete files or raise the limit (Settings → Tools → workspace
+size) to recover.
+
+Pull down to refresh the listing.
+
+### Previewing a file
+
+Tap a text file to open a read-only, monospace **preview** in a bottom
+sheet. Very large files are shown truncated (the first part only) with a
+banner telling you so — use **Save as…** to get the whole file. Binary
+files are not previewable; use the row's overflow menu to share, save,
+or delete them.
+
+### Taking a file out
+
+From the preview sheet (or a row's overflow menu) you can:
+
+- **Share** — opens the system share sheet. The app stages a temporary
+  copy for sharing, so the workspace directory itself is never exposed
+  to other apps; the receiving app gets read access to that one copy
+  only.
+- **Save as…** — opens the system "create document" picker so you can
+  write the file out to a location of your choice (Downloads, Drive,
+  etc.).
+
+In multi-select mode you can share several files at once.
+
+### Putting a file in
+
+Tap **Import** (the button in the quota header, the floating action
+button, or the empty-state call to action) to pick a file with the
+system file picker and copy it into the workspace for the agent to read.
+Imports are subject to the same per-file and total-size limits as the
+agent's own writes. If a file with the same name already exists, you are
+asked whether to **keep both** (the import is saved under a numbered
+name like `report (1).md`) or **replace** the existing file.
+
+### Cleaning up
+
+Delete a single file from its preview or overflow menu, or long-press a
+row to enter multi-select and delete several at once. Deletion asks for
+confirmation and is **permanent** — files removed here cannot be
+recovered.
 
 ---
 

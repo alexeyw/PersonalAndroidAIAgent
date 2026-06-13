@@ -98,6 +98,9 @@ object NavRoutes {
     /** Long-term memory browser (under More). */
     const val MEMORY: String = "memory"
 
+    /** Agent workspace file browser (under More). */
+    const val FILES: String = "files"
+
     /** Live metrics monitoring screen (under More). */
     const val MONITORING: String = "monitoring"
 

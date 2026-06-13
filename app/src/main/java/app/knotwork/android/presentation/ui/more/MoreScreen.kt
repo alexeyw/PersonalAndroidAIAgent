@@ -32,6 +32,7 @@ fun MoreScreen(
     onNavigateToPrompts: () -> Unit,
     onNavigateToAbout: () -> Unit,
     onNavigateToLibrary: () -> Unit,
+    onNavigateToFiles: () -> Unit,
     viewModel: MoreViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -44,6 +45,7 @@ fun MoreScreen(
         titleSettings = stringResource(R.string.more_row_settings),
         titleAbout = stringResource(R.string.more_row_about),
         titleLibrary = stringResource(R.string.more_row_library),
+        titleFiles = stringResource(R.string.more_row_files),
         onMemory = onNavigateToMemory,
         onModels = onNavigateToModels,
         onPrompts = onNavigateToPrompts,
@@ -52,6 +54,7 @@ fun MoreScreen(
         onSettings = onNavigateToSettings,
         onAbout = onNavigateToAbout,
         onLibrary = onNavigateToLibrary,
+        onFiles = onNavigateToFiles,
     )
     MoreContent(
         state = state,
@@ -75,6 +78,7 @@ internal fun MoreUiState.toViewState(
     titleSettings: String,
     titleAbout: String,
     titleLibrary: String,
+    titleFiles: String,
     onMemory: () -> Unit,
     onModels: () -> Unit,
     onPrompts: () -> Unit,
@@ -83,6 +87,7 @@ internal fun MoreUiState.toViewState(
     onSettings: () -> Unit,
     onAbout: () -> Unit,
     onLibrary: () -> Unit,
+    onFiles: () -> Unit,
 ): MoreViewState = MoreViewState(
     rows = listOf(
         MoreRow(
@@ -91,6 +96,13 @@ internal fun MoreUiState.toViewState(
             subtitle = memorySubtitle,
             icon = AppIcons.Brain,
             onClick = onMemory,
+        ),
+        MoreRow(
+            id = "files",
+            title = titleFiles,
+            subtitle = filesSubtitle,
+            icon = AppIcons.Folder,
+            onClick = onFiles,
         ),
         MoreRow(
             id = "models",

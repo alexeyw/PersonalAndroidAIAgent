@@ -4,6 +4,8 @@ import android.content.Context
 import app.knotwork.android.domain.models.WorkspaceError
 import app.knotwork.android.domain.models.WorkspaceFile
 import app.knotwork.android.domain.models.WorkspaceResult
+import app.knotwork.android.domain.models.WorkspaceTextPreview
+import app.knotwork.android.domain.models.WorkspaceUsage
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.AgentWorkspace
 import app.knotwork.android.domain.services.WorkspaceTextEdit
@@ -16,6 +18,8 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
@@ -117,6 +121,92 @@ class AgentWorkspaceImpl @Inject constructor(
         WorkspaceResult.Success(files)
     }
 
+    override suspend fun usage(): WorkspaceResult<WorkspaceUsage> = withContext(Dispatchers.IO) {
+        val limit = settingsRepository.workspaceMaxTotalBytes.first()
+        val used = mutex.withLock { currentTotalBytesLocked() }
+        WorkspaceResult.Success(WorkspaceUsage(usedBytes = used, limitBytes = limit))
+    }
+
+    override suspend fun readTextPreview(relativePath: String, maxBytes: Int): WorkspaceResult<WorkspaceTextPreview> =
+        withContext(Dispatchers.IO) {
+            when (val resolved = canonicalResolve(relativePath)) {
+                is WorkspaceResult.Failure -> resolved
+                is WorkspaceResult.Success -> previewResolved(resolved.value, maxBytes)
+            }
+        }
+
+    override suspend fun importBytes(
+        relativePath: String,
+        source: InputStream,
+        overwrite: Boolean,
+    ): WorkspaceResult<WorkspaceFile> = withContext(Dispatchers.IO) {
+        // Read the stream up to one byte past the per-file ceiling: if the source is
+        // larger we can report TooLarge without ever holding more than the limit (+1)
+        // in memory. The quota-checked atomic write is then identical to writeText.
+        val limit = maxFileSizeBytes()
+        val bytes = readBounded(source, limit) ?: return@withContext WorkspaceResult.Failure(WorkspaceError.TooLarge)
+        when (val resolved = canonicalResolve(relativePath)) {
+            is WorkspaceResult.Failure -> resolved
+            is WorkspaceResult.Success -> mutex.withLock { writeBytesLocked(resolved.value, bytes, overwrite) }
+        }
+    }
+
+    override suspend fun exportTo(relativePath: String, sink: OutputStream): WorkspaceResult<Unit> =
+        withContext(Dispatchers.IO) {
+            when (val resolved = canonicalResolve(relativePath)) {
+                is WorkspaceResult.Failure -> resolved
+                is WorkspaceResult.Success -> exportResolved(resolved.value, sink)
+            }
+        }
+
+    /**
+     * Reads a bounded leading slice of an already-resolved (in-bounds) [target]
+     * for preview, enforcing existence and text-ness but never the size cap.
+     */
+    private fun previewResolved(target: File, maxBytes: Int): WorkspaceResult<WorkspaceTextPreview> {
+        if (!target.isFile) return WorkspaceResult.Failure(WorkspaceError.NotFound)
+        val totalBytes = target.length()
+        val slice = target.inputStream().use { input -> input.readNBytes(maxBytes) }
+        val fileLongerThanSlice = totalBytes > slice.size.toLong()
+        // When the slice fills the budget and more bytes remain, drop a few trailing
+        // bytes so a multi-byte UTF-8 sequence straddling the cut is not misread.
+        val usable = if (fileLongerThanSlice && slice.size >= MAX_UTF8_TAIL_BYTES) {
+            slice.copyOf(slice.size - MAX_UTF8_TAIL_BYTES)
+        } else {
+            slice
+        }
+        if (!isUtf8Text(usable)) return WorkspaceResult.Failure(WorkspaceError.NotAText)
+        return WorkspaceResult.Success(
+            WorkspaceTextPreview(
+                text = usable.toString(Charsets.UTF_8),
+                totalBytes = totalBytes,
+                truncated = fileLongerThanSlice,
+            ),
+        )
+    }
+
+    /**
+     * Streams an already-resolved (in-bounds) regular [target] to [sink]. Only
+     * regular files are exportable; a directory or missing path is [WorkspaceError.NotFound].
+     */
+    private fun exportResolved(target: File, sink: OutputStream): WorkspaceResult<Unit> {
+        if (!target.isFile) return WorkspaceResult.Failure(WorkspaceError.NotFound)
+        target.inputStream().use { input -> input.copyTo(sink) }
+        return WorkspaceResult.Success(Unit)
+    }
+
+    /**
+     * Reads [input] fully into a byte array, refusing to allocate more than
+     * [limit] bytes. Returns the bytes when the stream fits within [limit], or
+     * `null` when it would exceed it (so the caller maps that to [WorkspaceError.TooLarge]).
+     */
+    private fun readBounded(input: InputStream, limit: Long): ByteArray? {
+        // Read one byte past the limit: if anything beyond `limit` exists, the
+        // result is larger than `limit` and we bail without buffering the whole thing.
+        val capped = input.readNBytes((limit + 1).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+        return if (capped.size.toLong() > limit) null else capped
+    }
+
     /**
      * The single canonicalisation gate. Rejects absolute paths outright, then
      * canonicalises `root/relativePath` and accepts it only if it stays inside
@@ -185,6 +275,17 @@ class AgentWorkspaceImpl @Inject constructor(
         target: File,
         content: String,
         overwrite: Boolean,
+    ): WorkspaceResult<WorkspaceFile> = writeBytesLocked(target, content.toByteArray(Charsets.UTF_8), overwrite)
+
+    /**
+     * Performs the quota-checked atomic write of [newBytes] to an already-resolved
+     * (in-bounds) [target]. Shared by [writeTextLocked] (UTF-8 text) and
+     * [importBytes] (verbatim bytes). Must be called while holding [mutex].
+     */
+    private suspend fun writeBytesLocked(
+        target: File,
+        newBytes: ByteArray,
+        overwrite: Boolean,
     ): WorkspaceResult<WorkspaceFile> {
         // A directory can never be replaced by a file, even with `overwrite`. Report it
         // distinctly so the tool does not hand back a "retry with overwrite" hint that
@@ -193,7 +294,6 @@ class AgentWorkspaceImpl @Inject constructor(
         val exists = target.isFile
         if (exists && !overwrite) return WorkspaceResult.Failure(WorkspaceError.AlreadyExists)
 
-        val newBytes = content.toByteArray(Charsets.UTF_8)
         if (newBytes.size.toLong() > maxFileSizeBytes()) return WorkspaceResult.Failure(WorkspaceError.TooLarge)
 
         val existingSize = if (exists) target.length() else 0L

@@ -3,6 +3,10 @@ package app.knotwork.android.domain.services
 import app.knotwork.android.domain.models.WorkspaceError
 import app.knotwork.android.domain.models.WorkspaceFile
 import app.knotwork.android.domain.models.WorkspaceResult
+import app.knotwork.android.domain.models.WorkspaceTextPreview
+import app.knotwork.android.domain.models.WorkspaceUsage
+import java.io.InputStream
+import java.io.OutputStream
 
 /**
  * The agent's jailed file sandbox: a single, size-bounded directory the agent
@@ -152,4 +156,83 @@ interface AgentWorkspace {
      *   from an unexpected I/O fault.
      */
     suspend fun list(): WorkspaceResult<List<WorkspaceFile>>
+
+    /**
+     * Reports how much of the workspace's storage budget is currently consumed.
+     *
+     * This is the read-side view of the same total-size ceiling that [writeText]
+     * and [importBytes] enforce, surfaced so a UI can render a quota indicator.
+     *
+     * @return [WorkspaceResult.Success] with the [WorkspaceUsage] snapshot.
+     *   Computing usage never crosses the containment boundary, so a
+     *   [WorkspaceResult.Failure] only arises from an unexpected I/O fault.
+     */
+    suspend fun usage(): WorkspaceResult<WorkspaceUsage>
+
+    /**
+     * Reads a bounded leading slice of a workspace text file for on-screen
+     * preview.
+     *
+     * Unlike [readText], this never fails with [WorkspaceError.TooLarge]: a file
+     * larger than [maxBytes] is returned truncated (cut at a UTF-8 character
+     * boundary) with [WorkspaceTextPreview.truncated] set, so the UI can always
+     * show a leading view of any text file. Binary content is still refused with
+     * [WorkspaceError.NotAText].
+     *
+     * @param relativePath Path of the file to preview, relative to the workspace
+     *   root.
+     * @param maxBytes Maximum number of leading bytes to read. Must be positive.
+     * @return [WorkspaceResult.Success] with the [WorkspaceTextPreview], or
+     *   [WorkspaceResult.Failure] with [WorkspaceError.PathOutsideWorkspace],
+     *   [WorkspaceError.NotFound] or [WorkspaceError.NotAText].
+     */
+    suspend fun readTextPreview(relativePath: String, maxBytes: Int): WorkspaceResult<WorkspaceTextPreview>
+
+    /**
+     * Imports an external document into the workspace by streaming [source] to
+     * the file at [relativePath].
+     *
+     * This is the binary-faithful counterpart of [writeText]: it copies the raw
+     * bytes verbatim (so a non-text file the user wants to hand the agent is not
+     * corrupted) while enforcing exactly the same guarantees — containment, the
+     * per-file size limit ([WorkspaceError.TooLarge]), the workspace-wide quota
+     * ([WorkspaceError.QuotaExceeded]), and an explicit [overwrite] flag
+     * ([WorkspaceError.AlreadyExists]). The write is atomic. The caller owns
+     * [source] and is responsible for closing it.
+     *
+     * @param relativePath Destination path, relative to the workspace root.
+     * @param source The byte stream to import; read fully but not closed here.
+     * @param overwrite When `false` (the default), writing over an existing file
+     *   is refused with [WorkspaceError.AlreadyExists]; when `true`, it is
+     *   replaced.
+     * @return [WorkspaceResult.Success] with the resulting [WorkspaceFile]
+     *   metadata, or [WorkspaceResult.Failure] with
+     *   [WorkspaceError.PathOutsideWorkspace], [WorkspaceError.AlreadyExists],
+     *   [WorkspaceError.IsDirectory], [WorkspaceError.TooLarge] or
+     *   [WorkspaceError.QuotaExceeded].
+     */
+    suspend fun importBytes(
+        relativePath: String,
+        source: InputStream,
+        overwrite: Boolean = false,
+    ): WorkspaceResult<WorkspaceFile>
+
+    /**
+     * Exports a workspace file by streaming its full contents to [sink].
+     *
+     * Unlike [readText], this carries no per-file size cap and no text
+     * constraint: a binary file or one larger than the read limit can still be
+     * exported, because the bytes flow straight to the caller's stream rather
+     * than into memory and the local model's context. The caller owns [sink] and
+     * is responsible for closing it.
+     *
+     * @param relativePath Path of the file to export, relative to the workspace
+     *   root.
+     * @param sink The destination stream to write the file's bytes to; written
+     *   but not closed here.
+     * @return [WorkspaceResult.Success] with [Unit] when the file was streamed
+     *   out, or [WorkspaceResult.Failure] with
+     *   [WorkspaceError.PathOutsideWorkspace] or [WorkspaceError.NotFound].
+     */
+    suspend fun exportTo(relativePath: String, sink: OutputStream): WorkspaceResult<Unit>
 }
