@@ -124,6 +124,9 @@ fun KnotworkTextField(
     val textStyle = baseTextStyle(monospace = monospace, size = size, color = visuals.textColor)
 
     Box(
+        // Centre the content within the field's min-height: without this the row is
+        // pinned top-start, so single-line text floats in the top half of a taller field.
+        contentAlignment = Alignment.CenterStart,
         modifier = modifier
             .fillMaxWidth()
             .defaultMinSize(minHeight = visuals.height)

@@ -19,11 +19,16 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -70,11 +75,18 @@ fun AllowedDomainsContent(
     modifier: Modifier = Modifier,
     callbacks: AllowedDomainsCallbacks = noopAllowedDomainsCallbacks(),
 ) {
+    var infoVisible by remember { mutableStateOf(false) }
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
-        topBar = { AllowedDomainsTopBar(hostCount = state.hosts.size, callbacks = callbacks) },
+        topBar = {
+            AllowedDomainsTopBar(
+                hostCount = state.hosts.size,
+                callbacks = callbacks,
+                onInfo = { infoVisible = true },
+            )
+        },
     ) { padding ->
         Column(
             verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp4),
@@ -109,11 +121,14 @@ fun AllowedDomainsContent(
             }
         }
     }
+    if (infoVisible) {
+        AllowedDomainsInfoSheet(onDismiss = { infoVisible = false })
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AllowedDomainsTopBar(hostCount: Int, callbacks: AllowedDomainsCallbacks) {
+private fun AllowedDomainsTopBar(hostCount: Int, callbacks: AllowedDomainsCallbacks, onInfo: () -> Unit) {
     KnotworkTopAppBarShell {
         TopAppBar(
             title = {
@@ -144,7 +159,7 @@ private fun AllowedDomainsTopBar(hostCount: Int, callbacks: AllowedDomainsCallba
                 }
             },
             actions = {
-                IconButton(onClick = callbacks.onInfo) {
+                IconButton(onClick = onInfo) {
                     Icon(
                         imageVector = AppIcons.Info,
                         contentDescription = stringResource(R.string.knotwork_allowed_domains_info_cd),
@@ -157,6 +172,47 @@ private fun AllowedDomainsTopBar(hostCount: Int, callbacks: AllowedDomainsCallba
                 titleContentColor = MaterialTheme.colorScheme.onSurface,
             ),
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AllowedDomainsInfoSheet(onDismiss: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp4),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(
+                    start = KnotworkTheme.spacing.sp4,
+                    end = KnotworkTheme.spacing.sp4,
+                    bottom = KnotworkTheme.spacing.sp6,
+                ),
+        ) {
+            Text(
+                text = stringResource(R.string.knotwork_allowed_domains_info_title),
+                style = KnotworkTextStyles.TitleMd,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(R.string.knotwork_allowed_domains_explainer),
+                style = KnotworkTextStyles.BodySm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+            NoteTile(
+                icon = AppIcons.Warn,
+                iconTint = KnotworkTheme.extended.signalWarn,
+                container = KnotworkTheme.extended.signalWarn.copy(alpha = WARN_TILE_ALPHA),
+                border = KnotworkTheme.extended.signalWarn.copy(alpha = WARN_BORDER_ALPHA),
+                title = stringResource(R.string.knotwork_allowed_domains_empty_warn_title),
+                body = stringResource(R.string.knotwork_allowed_domains_empty_warn_body),
+            )
+            KnotworkPrimaryButton(
+                text = stringResource(R.string.knotwork_allowed_domains_info_close),
+                onClick = onDismiss,
+                modifier = Modifier.align(Alignment.End),
+            )
+        }
     }
 }
 

@@ -294,6 +294,9 @@
     </plurals>
     <string name="knotwork_allowed_domains_info_cd">About allowed domains</string>
     <string name="knotwork_allowed_domains_back_cd">Back to tools</string>
+    <!-- Info bottom sheet (top-bar info icon). -->
+    <string name="knotwork_allowed_domains_info_title">Allowed domains</string>
+    <string name="knotwork_allowed_domains_info_close">Got it</string>
     <!-- Empty state. -->
     <string name="knotwork_allowed_domains_empty_title">No domains yet</string>
     <string name="knotwork_allowed_domains_empty_body">The http_request tool stays hidden from the agent until you allow at least one host. Add a domain to turn it on.</string>
