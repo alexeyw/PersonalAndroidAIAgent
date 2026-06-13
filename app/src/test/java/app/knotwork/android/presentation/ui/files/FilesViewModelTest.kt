@@ -33,6 +33,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import java.io.ByteArrayInputStream
+import java.io.IOException
 import java.io.InputStream
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -272,6 +273,49 @@ class FilesViewModelTest {
         advanceUntilIdle()
 
         assertTrue(vm.exportTo("a.txt", sink))
+    }
+
+    @Test
+    fun `given listing throws when refreshing then the error state is set instead of crashing`() = runTest {
+        coEvery { listUseCase() } throws IOException("disk fault")
+        val vm = build()
+        advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.loadFailed)
+        assertFalse(vm.uiState.value.loading)
+    }
+
+    @Test
+    fun `given preview throws when opening then a failure message is emitted and no preview opens`() = runTest {
+        coEvery { previewUseCase("a.txt") } throws IOException("disk fault")
+        val vm = build()
+        advanceUntilIdle()
+        val events = mutableListOf<FilesEvent>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) { vm.events.collect { events += it } }
+
+        vm.onRowClick("a.txt")
+        advanceUntilIdle()
+
+        assertNull(vm.uiState.value.preview)
+        assertTrue(events.any { it is FilesEvent.ShowMessage && it.kind == FilesMessage.PreviewFailed })
+        job.cancel()
+    }
+
+    @Test
+    fun `given delete throws when confirming then the dialog closes and a failure message is emitted`() = runTest {
+        coEvery { deleteUseCase(any()) } throws IOException("disk fault")
+        val vm = build()
+        advanceUntilIdle()
+        val events = mutableListOf<FilesEvent>()
+        val job = launch(UnconfinedTestDispatcher(testScheduler)) { vm.events.collect { events += it } }
+        vm.requestDelete("a.txt")
+
+        vm.confirmDelete()
+        advanceUntilIdle()
+
+        assertNull(vm.uiState.value.pendingDelete)
+        assertTrue(events.any { it is FilesEvent.ShowMessage && it.kind == FilesMessage.DeletePartial })
+        job.cancel()
     }
 
     private fun streamOf(content: String = "data"): InputStream = ByteArrayInputStream(content.toByteArray())

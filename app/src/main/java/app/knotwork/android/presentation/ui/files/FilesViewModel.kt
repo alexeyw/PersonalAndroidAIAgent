@@ -69,20 +69,29 @@ class FilesViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             _uiState.update { it.copy(refreshing = !it.loading) }
-            when (val result = listUseCase()) {
-                is WorkspaceResult.Success -> _uiState.update {
-                    it.copy(
-                        files = result.value.files,
-                        usage = result.value.usage,
-                        loading = false,
-                        refreshing = false,
-                        loadFailed = false,
-                    )
+            try {
+                when (val result = listUseCase()) {
+                    is WorkspaceResult.Success -> _uiState.update {
+                        it.copy(
+                            files = result.value.files,
+                            usage = result.value.usage,
+                            loading = false,
+                            refreshing = false,
+                            loadFailed = false,
+                        )
+                    }
+                    is WorkspaceResult.Failure -> {
+                        Timber.w("Workspace listing failed: %s", result.error)
+                        _uiState.update { it.copy(loading = false, refreshing = false, loadFailed = true) }
+                    }
                 }
-                is WorkspaceResult.Failure -> {
-                    Timber.w("Workspace listing failed: %s", result.error)
-                    _uiState.update { it.copy(loading = false, refreshing = false, loadFailed = true) }
-                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // A filesystem fault (raw IOException / OutOfMemoryError) must surface as the
+                // error state, never crash the app via the viewModelScope default handler.
+                Timber.w(e, "Workspace listing threw")
+                _uiState.update { it.copy(loading = false, refreshing = false, loadFailed = true) }
             }
         }
     }
@@ -133,13 +142,20 @@ class FilesViewModel @Inject constructor(
 
     private fun openPreview(path: String) {
         viewModelScope.launch {
-            when (val result = previewUseCase(path)) {
-                is WorkspaceResult.Success ->
-                    _uiState.update { it.copy(preview = FilePreviewState(path = path, preview = result.value)) }
-                is WorkspaceResult.Failure -> {
-                    Timber.w("Workspace preview failed for %s: %s", path, result.error)
-                    emit(FilesEvent.ShowMessage(FilesMessage.PreviewFailed))
+            try {
+                when (val result = previewUseCase(path)) {
+                    is WorkspaceResult.Success ->
+                        _uiState.update { it.copy(preview = FilePreviewState(path = path, preview = result.value)) }
+                    is WorkspaceResult.Failure -> {
+                        Timber.w("Workspace preview failed for %s: %s", path, result.error)
+                        emit(FilesEvent.ShowMessage(FilesMessage.PreviewFailed))
+                    }
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "Workspace preview threw for %s", path)
+                emit(FilesEvent.ShowMessage(FilesMessage.PreviewFailed))
             }
         }
     }
@@ -171,8 +187,8 @@ class FilesViewModel @Inject constructor(
     fun confirmDelete() {
         val targets = _uiState.value.pendingDelete ?: return
         viewModelScope.launch {
-            val summary = deleteUseCase(targets)
-            // Closing the dialog and any open preview of a now-deleted file, then refreshing.
+            // Close the dialog, the selection, and any open preview of a now-deleted file
+            // up front so the UI never hangs even if the delete below fails.
             _uiState.update {
                 val previewGone = it.preview?.path in targets
                 it.copy(
@@ -182,7 +198,15 @@ class FilesViewModel @Inject constructor(
                     preview = if (previewGone) null else it.preview,
                 )
             }
-            if (!summary.allSucceeded) emit(FilesEvent.ShowMessage(FilesMessage.DeletePartial))
+            try {
+                val summary = deleteUseCase(targets)
+                if (!summary.allSucceeded) emit(FilesEvent.ShowMessage(FilesMessage.DeletePartial))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(e, "Workspace delete threw")
+                emit(FilesEvent.ShowMessage(FilesMessage.DeletePartial))
+            }
             refresh()
         }
     }

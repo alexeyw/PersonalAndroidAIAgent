@@ -36,6 +36,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+import java.util.UUID
 import kotlin.math.roundToInt
 
 /**
@@ -215,12 +216,22 @@ private fun Context.queryDisplayName(uri: Uri): String {
  * Stages [paths] into the share cache as real files and offers them to the
  * system share sheet via [FileProvider]. Staging a per-share copy (rather than
  * exposing the workspace directory directly) keeps the sandbox boundary intact.
+ *
+ * Each file is staged under its own freshly-created sub-directory so two selected
+ * files that share a basename (e.g. `reports/q2.md` and `archive/q2.md`) keep
+ * their original names and distinct content instead of one overwriting the other.
+ * The share cache is cleared first so stale copies from earlier shares do not
+ * accumulate. `file_paths.xml` already exposes `shared/` recursively, so the
+ * nested sub-directories need no extra path declaration.
  */
 private suspend fun Context.stageAndShare(paths: List<String>, viewModel: FilesViewModel) {
     val uris = withContext(Dispatchers.IO) {
-        val shareDir = File(cacheDir, SHARE_CACHE_DIR).apply { mkdirs() }
+        val shareDir = File(cacheDir, SHARE_CACHE_DIR)
+        shareDir.deleteRecursively()
+        shareDir.mkdirs()
         paths.mapNotNull { path ->
-            val staged = File(shareDir, path.substringAfterLast('/'))
+            val slot = File(shareDir, UUID.randomUUID().toString()).apply { mkdirs() }
+            val staged = File(slot, path.substringAfterLast('/'))
             val ok = FileOutputStream(staged).use { viewModel.exportTo(path, it) }
             if (ok) FileProvider.getUriForFile(this@stageAndShare, "$packageName.fileprovider", staged) else null
         }
