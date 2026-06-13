@@ -734,16 +734,23 @@ reads could contain instructions planted by someone else (a *prompt
 injection*), an HTTP tool that could reach any address would be a way to
 quietly send your data off the device. The allowlist is the safeguard:
 
-- The agent can only contact a domain you have added (and its
-  sub-domains). Any other host — including one reached through a
-  redirect — is refused before the request leaves the device.
+- The agent can only contact a host you have added. Matching is exact —
+  sub-domains are not implied, so adding `example.com` does not allow
+  `api.example.com`; add each host you need. Any other host — including
+  one reached through a redirect — is refused before the request leaves
+  the device.
 - Public domains must use `https`. Plain `http` is allowed only for
   local addresses (for example a home Ollama server).
 - A request is refused outright if it would carry one of your stored
   provider API keys, so a saved key can't be leaked to a remote host.
 
-Only add a domain you trust. Adding one lets the agent send data to it,
-so treat the list the way you would treat granting an app network
+To manage the list, open the **Tools** screen and tap **Allowed domains**
+under the http_request row. The editor shows the current hosts, lets you
+remove any of them, and previews how a typed entry will be stored before
+you add it (it normalises `HTTPS://Api.Example.com/v1` to
+`api.example.com`, and warns when an entry is invalid or already on the
+list). Only add a domain you trust. Adding one lets the agent send data to
+it, so treat the list the way you would treat granting an app network
 access to a specific site.
 
 For a marketing-style preview of this screen see

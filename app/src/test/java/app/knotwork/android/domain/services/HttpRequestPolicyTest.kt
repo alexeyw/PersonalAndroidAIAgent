@@ -64,11 +64,18 @@ class HttpRequestPolicyTest {
     }
 
     @Test
-    fun `given exact and subdomain hosts when isHostAllowed then true`() {
+    fun `given an exact host when isHostAllowed then true`() {
         val allowed = listOf("example.com", "test.org")
         assertTrue(HttpRequestPolicy.isHostAllowed("example.com", allowed))
-        assertTrue(HttpRequestPolicy.isHostAllowed("api.example.com", allowed))
-        assertTrue(HttpRequestPolicy.isHostAllowed("deep.api.example.com", allowed))
+        assertTrue(HttpRequestPolicy.isHostAllowed("test.org", allowed))
+    }
+
+    @Test
+    fun `given a subdomain of an allowlisted host when isHostAllowed then false`() {
+        // Matching is exact — sub-domains are NOT implied (least privilege).
+        val allowed = listOf("example.com")
+        assertFalse(HttpRequestPolicy.isHostAllowed("api.example.com", allowed))
+        assertFalse(HttpRequestPolicy.isHostAllowed("deep.api.example.com", allowed))
     }
 
     @Test

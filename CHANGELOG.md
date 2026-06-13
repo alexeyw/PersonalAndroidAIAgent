@@ -31,7 +31,12 @@ details.
   points outside it; a request that would carry a stored provider API key
   is refused; and the response body is capped (1 MB default) with a
   truncation marker so untrusted remote content can't overflow the local
-  model's context. The user-facing domain editor is tracked separately.
+  model's context. A standalone **Allowed domains** editor — reached from
+  the http_request row on the Tools screen — lets you add (with live
+  host-normalisation preview, invalid and duplicate feedback) and remove
+  hosts; matching is exact, so sub-domains are not implied. While the list
+  is empty the editor explains that the tool stays off until a host is
+  added.
 
 - **Workspace write tools.** Three new built-in tools let the agent change
   files in its workspace, each gated by its risk level: **write_file**

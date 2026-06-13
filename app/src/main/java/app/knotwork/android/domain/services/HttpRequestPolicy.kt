@@ -111,23 +111,22 @@ object HttpRequestPolicy {
     }
 
     /**
-     * Whether a request [host] is covered by the [allowed] list. A host matches
-     * an entry when it equals it (case-insensitive) or is a sub-domain of it
-     * (`api.example.com` matches the entry `example.com`). An empty allowlist
-     * matches nothing — the tool's "off" state.
+     * Whether a request [host] is covered by the [allowed] list. Matching is
+     * **exact** (case-insensitive): an entry `example.com` admits only
+     * `example.com`, **not** `api.example.com` — sub-domains are not implied.
+     * This is the least-privilege posture for an exfiltration-relevant control;
+     * the user must add each host they intend to reach explicitly. An empty
+     * allowlist matches nothing — the tool's "off" state.
      *
      * @param host The request target host (already scheme/port-free, as from
      *   `okhttp3.HttpUrl.host`).
      * @param allowed The configured allowlist of normalised hosts.
-     * @return `true` when [host] is admissible.
+     * @return `true` when [host] exactly equals an allowlist entry.
      */
     fun isHostAllowed(host: String, allowed: List<String>): Boolean {
         val h = host.trim().lowercase()
         if (h.isEmpty()) return false
-        return allowed.any { raw ->
-            val entry = raw.trim().lowercase()
-            entry.isNotEmpty() && (h == entry || h.endsWith(".$entry"))
-        }
+        return allowed.any { raw -> h == raw.trim().lowercase() }
     }
 
     /**

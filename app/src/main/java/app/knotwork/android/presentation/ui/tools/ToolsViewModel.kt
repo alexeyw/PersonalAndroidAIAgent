@@ -73,6 +73,13 @@ class ToolsViewModel @Inject constructor(
                 _uiState.update { it.copy(disabledMcpTools = disabled) }
             }
             .launchIn(viewModelScope)
+
+        // Drives the "Allowed domains · N hosts" sub-row count under http_request.
+        settingsRepository.allowedHttpDomains
+            .onEach { domains ->
+                _uiState.update { it.copy(allowedHttpDomainCount = domains.size) }
+            }
+            .launchIn(viewModelScope)
     }
 
     /**

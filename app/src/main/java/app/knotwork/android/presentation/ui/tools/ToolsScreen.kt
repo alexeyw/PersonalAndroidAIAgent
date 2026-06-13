@@ -36,6 +36,7 @@ fun ToolsScreen(
     onOpenToolDetail: (String) -> Unit = {},
     onAddMcpServer: () -> Unit = {},
     onEditMcpServer: (originalUrl: String) -> Unit = {},
+    onOpenAllowedDomains: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -48,6 +49,13 @@ fun ToolsScreen(
                     description = tool.description,
                     risk = (tool.risk ?: ToolRisk.READ_ONLY).toBuiltInToolRisk(),
                     enabled = tool.name !in uiState.disabledAppFunctions,
+                    // http_request owns a domain allowlist; surface the editor sub-row
+                    // (and its live host count) only under that tool.
+                    allowedDomainsCount = if (tool.name == HTTP_REQUEST_TOOL_NAME) {
+                        uiState.allowedHttpDomainCount
+                    } else {
+                        null
+                    },
                 )
             }
         }
@@ -90,6 +98,7 @@ fun ToolsScreen(
         onMcpToolToggle = { id, enabled -> viewModel.toggleMcpTool(toolId = id, isEnabled = enabled) },
         onMcpToolClick = onOpenToolDetail,
         onAddServerOpen = onAddMcpServer,
+        onOpenAllowedDomains = onOpenAllowedDomains,
         onErrorRetry = { /* unreachable: discovery errors surface per-server, not as a top-level state. */ },
         onOpenDrawer = { /* drawer ships post-v0.1. */ },
     )
@@ -141,6 +150,9 @@ private fun String.toFriendlyToolName(): String {
     val simple = beforeHash.substringAfterLast(delimiter = ".")
     return simple.ifBlank { this }
 }
+
+/** Built-in tool name that owns the domain allowlist editor sub-row. */
+private const val HTTP_REQUEST_TOOL_NAME = "http_request"
 
 /** TestTag applied to the tools screen root. */
 internal const val TOOLS_ROOT_TEST_TAG = "tools_screen_root"

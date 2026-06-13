@@ -278,6 +278,46 @@
     <!-- MCP server config screen title in Edit mode. -->
     <string name="knotwork_tools_form_title_edit">Edit MCP server</string>
 
+    <!-- ============ Allowed domains editor (http_request) ============ -->
+    <!-- Sub-row under the http_request tool linking to the allowlist editor. -->
+    <string name="knotwork_allowed_domains_entry_title">Allowed domains</string>
+    <plurals name="knotwork_allowed_domains_entry_count">
+        <item quantity="one">%1$d host</item>
+        <item quantity="other">%1$d hosts</item>
+    </plurals>
+    <string name="knotwork_allowed_domains_entry_cd">Open allowed domains for http_request</string>
+    <!-- Screen title + subtitle. -->
+    <string name="knotwork_allowed_domains_title">Allowed domains</string>
+    <plurals name="knotwork_allowed_domains_subtitle">
+        <item quantity="one">http_request · %1$d host</item>
+        <item quantity="other">http_request · %1$d hosts</item>
+    </plurals>
+    <string name="knotwork_allowed_domains_info_cd">About allowed domains</string>
+    <string name="knotwork_allowed_domains_back_cd">Back to tools</string>
+    <!-- Empty state. -->
+    <string name="knotwork_allowed_domains_empty_title">No domains yet</string>
+    <string name="knotwork_allowed_domains_empty_body">The http_request tool stays hidden from the agent until you allow at least one host. Add a domain to turn it on.</string>
+    <string name="knotwork_allowed_domains_empty_warn_title">Adding a host opts you into outbound HTTP</string>
+    <string name="knotwork_allowed_domains_empty_warn_body">Once a domain is on this list, the agent can send request data to it. Add only hosts you trust.</string>
+    <!-- Populated explainer tile. -->
+    <string name="knotwork_allowed_domains_explainer">The agent may send HTTP requests only to hosts on this list. Removing the last one hides the tool again.</string>
+    <!-- Add-a-host field. -->
+    <string name="knotwork_allowed_domains_add_label">ADD A HOST</string>
+    <string name="knotwork_allowed_domains_add_placeholder">example.com</string>
+    <string name="knotwork_allowed_domains_add_button">Add</string>
+    <string name="knotwork_allowed_domains_add_helper">Host only — no https://, path or port.</string>
+    <!-- Add-field helper states. -->
+    <string name="knotwork_allowed_domains_add_normalized">Will be added as %1$s</string>
+    <string name="knotwork_allowed_domains_add_invalid">Not a valid host. Enter a domain like api.example.com.</string>
+    <string name="knotwork_allowed_domains_add_duplicate">%1$s is already on the list.</string>
+    <!-- Host list. -->
+    <plurals name="knotwork_allowed_domains_list_label">
+        <item quantity="one">ALLOWED HOSTS · %1$d</item>
+        <item quantity="other">ALLOWED HOSTS · %1$d</item>
+    </plurals>
+    <string name="knotwork_allowed_domains_list_footer">Hosts are matched exactly — subdomains are not implied.</string>
+    <string name="knotwork_allowed_domains_remove_cd">Remove %1$s from the allowlist</string>
+
     <!-- ============ Settings screen (redesign) ============ -->
 
     <string name="knotwork_settings_title">Settings</string>
