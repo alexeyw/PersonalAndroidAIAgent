@@ -294,6 +294,9 @@
     </plurals>
     <string name="knotwork_allowed_domains_info_cd">About allowed domains</string>
     <string name="knotwork_allowed_domains_back_cd">Back to tools</string>
+    <!-- Info bottom sheet (top-bar info icon). -->
+    <string name="knotwork_allowed_domains_info_title">Allowed domains</string>
+    <string name="knotwork_allowed_domains_info_close">Got it</string>
     <!-- Empty state. -->
     <string name="knotwork_allowed_domains_empty_title">No domains yet</string>
     <string name="knotwork_allowed_domains_empty_body">The http_request tool stays hidden from the agent until you allow at least one host. Add a domain to turn it on.</string>
@@ -678,5 +681,72 @@
 
     <!-- Common content descriptions shared across catalog screens. -->
     <string name="knotwork_common_back">Back</string>
+
+    <!-- ============================ Files screen ============================ -->
+    <!-- Top bar. -->
+    <string name="knotwork_files_title">Files</string>
+    <string name="knotwork_files_subtitle">AGENT WORKSPACE</string>
+    <string name="knotwork_files_back_cd">Back</string>
+    <string name="knotwork_files_refresh_cd">Refresh</string>
+    <!-- Quota header. -->
+    <plurals name="knotwork_files_count">
+        <item quantity="one">file</item>
+        <item quantity="other">files</item>
+    </plurals>
+    <string name="knotwork_files_import">Import</string>
+    <string name="knotwork_files_quota_full_banner">Workspace full. The agent\'s writes are being refused — delete files or raise the cap to free space.</string>
+    <!-- List. -->
+    <plurals name="knotwork_files_list_label">
+        <item quantity="one">%1$d file · path-sorted</item>
+        <item quantity="other">%1$d files · path-sorted</item>
+    </plurals>
+    <string name="knotwork_files_badge_new">new</string>
+    <string name="knotwork_files_badge_binary">binary</string>
+    <string name="knotwork_files_row_menu_cd">Actions for %1$s</string>
+    <!-- Empty state. -->
+    <string name="knotwork_files_empty_title">Nothing here yet</string>
+    <string name="knotwork_files_empty_body">The workspace is a private sandbox the agent reads and writes — reports and exports it produces land here. Files only appear once the agent saves one, or you import your own for it to read.</string>
+    <string name="knotwork_files_empty_cta">Import a file</string>
+    <!-- Error state. -->
+    <string name="knotwork_files_error_title">Couldn\'t read the workspace</string>
+    <string name="knotwork_files_error_body">Listing the workspace failed (I/O error). Your files are safe — this only affects this view.</string>
+    <string name="knotwork_files_error_retry">Retry</string>
+    <!-- Per-row / preview actions. -->
+    <string name="knotwork_files_action_preview">Preview</string>
+    <string name="knotwork_files_action_share">Share</string>
+    <string name="knotwork_files_action_save_as">Save as…</string>
+    <string name="knotwork_files_action_delete">Delete</string>
+    <!-- Preview sheet. -->
+    <string name="knotwork_files_preview_close_cd">Close preview</string>
+    <string name="knotwork_files_preview_read_only">read-only</string>
+    <string name="knotwork_files_preview_truncation">Showing the first %1$s of %2$s. Save it out to read the whole file.</string>
+    <string name="knotwork_files_preview_truncation_marker">— truncated at %1$s —</string>
+    <!-- Selection bar. -->
+    <plurals name="knotwork_files_selected">
+        <item quantity="one">%1$d selected</item>
+        <item quantity="other">%1$d selected</item>
+    </plurals>
+    <string name="knotwork_files_select_all_cd">Select all</string>
+    <string name="knotwork_files_selection_share_cd">Share selected</string>
+    <string name="knotwork_files_selection_delete_cd">Delete selected</string>
+    <string name="knotwork_files_selection_close_cd">Exit selection</string>
+    <!-- Delete confirmation dialog. -->
+    <string name="knotwork_files_delete_title_one">Delete file?</string>
+    <plurals name="knotwork_files_delete_title_many">
+        <item quantity="one">Delete %1$d file?</item>
+        <item quantity="other">Delete %1$d files?</item>
+    </plurals>
+    <string name="knotwork_files_delete_body_one">Removes %1$s from the workspace permanently. This can\'t be undone.</string>
+    <string name="knotwork_files_delete_body_many">These are removed from the workspace permanently. This can\'t be undone.</string>
+    <string name="knotwork_files_delete_confirm">Delete</string>
+    <string name="knotwork_files_delete_cancel">Cancel</string>
+    <!-- Import-collision dialog. -->
+    <string name="knotwork_files_collision_title">Name already exists</string>
+    <string name="knotwork_files_collision_body">%1$s is already in the workspace. How should the import be handled?</string>
+    <string name="knotwork_files_collision_keep_both">Keep both</string>
+    <string name="knotwork_files_collision_keep_both_sub">Import as %1$s</string>
+    <string name="knotwork_files_collision_replace">Replace</string>
+    <string name="knotwork_files_collision_replace_sub">Overwrite the existing file</string>
+    <string name="knotwork_files_collision_cancel">Cancel</string>
 
 </resources>

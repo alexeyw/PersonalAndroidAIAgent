@@ -37,7 +37,6 @@ fun AllowedDomainsScreen(
 
     val callbacks = AllowedDomainsCallbacks(
         onBack = onBack,
-        onInfo = { /* The screen body already explains the allowlist; no extra sheet today. */ },
         onAddInputChange = viewModel::onAddInputChange,
         onAddSubmit = viewModel::onAddSubmit,
         onRemoveHost = viewModel::onRemoveHost,

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Files screen — app-side strings.
+
+    Most of the screen's text lives in the catalog (`knotwork_files_*`); these
+    are the few strings owned by the app layer, where the system share sheet and
+    snackbars are launched.
+-->
+<resources>
+    <!-- Title of the system share-sheet chooser when exporting workspace files. -->
+    <string name="files_share_chooser_title">Share file</string>
+</resources>

@@ -17,6 +17,7 @@ import app.knotwork.android.domain.models.ProviderId
 import app.knotwork.android.presentation.ui.about.AboutScreen
 import app.knotwork.android.presentation.ui.chat.home.ChatHomeScreen
 import app.knotwork.android.presentation.ui.chat.home.ChatHomeViewModel
+import app.knotwork.android.presentation.ui.files.FilesScreen
 import app.knotwork.android.presentation.ui.memory.MemoryScreen
 import app.knotwork.android.presentation.ui.models.ModelsScreen
 import app.knotwork.android.presentation.ui.monitoring.MonitoringScreen
@@ -274,6 +275,7 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                 onNavigateToPrompts = { navController.navigate(NavRoutes.PROMPTS) },
                 onNavigateToAbout = { navController.navigate(NavRoutes.ABOUT) },
                 onNavigateToLibrary = { navController.navigate(NavRoutes.PIPELINE_PRESETS) },
+                onNavigateToFiles = { navController.navigate(NavRoutes.FILES) },
             )
         }
         composable(NavRoutes.PIPELINE_PRESETS) {
@@ -281,6 +283,9 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
         }
         composable(NavRoutes.MEMORY) {
             MemoryScreen(onBack = { navController.popBackStack() })
+        }
+        composable(NavRoutes.FILES) {
+            FilesScreen(onBack = { navController.popBackStack() })
         }
         composable(NavRoutes.MODELS) {
             ModelsScreen(

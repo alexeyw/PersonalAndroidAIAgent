@@ -85,6 +85,20 @@
                 android:value="androidx.startup"
                 tools:node="remove" />
         </provider>
+
+        <!-- FileProvider for sharing exported workspace files. The Files screen
+             stages a per-share copy into cacheDir/shared and grants temporary
+             read access to the receiving app, so the workspace directory itself
+             is never exposed. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
         <activity
             android:name=".presentation.ui.MainActivity"
             android:exported="true"

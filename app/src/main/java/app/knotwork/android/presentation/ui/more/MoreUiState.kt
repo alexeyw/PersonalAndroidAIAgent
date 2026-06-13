@@ -15,6 +15,7 @@ package app.knotwork.android.presentation.ui.more
  * @property settingsSubtitle constant `"system prompt · LLM params · keys"`.
  * @property aboutSubtitle e.g. `"v0.1 · build 1"`.
  * @property librarySubtitle e.g. `"3 saved presets"` or `"no saved presets"`.
+ * @property filesSubtitle e.g. `"7 files · 1.5 MB"` or `"empty"`.
  * @property networkStatusText footer line, e.g. `"on-device · no network calls in last 14 m"`.
  * @property networkStatusOk drives the footer-dot colour.
  */
@@ -28,6 +29,7 @@ data class MoreUiState(
     val settingsSubtitle: String = "system prompt · LLM params · keys",
     val aboutSubtitle: String = "—",
     val librarySubtitle: String = "—",
+    val filesSubtitle: String = "—",
     val networkStatusText: String = "",
     val networkStatusOk: Boolean = true,
 )

@@ -4,6 +4,8 @@ import android.content.Context
 import app.knotwork.android.domain.models.WorkspaceError
 import app.knotwork.android.domain.models.WorkspaceFile
 import app.knotwork.android.domain.models.WorkspaceResult
+import app.knotwork.android.domain.models.WorkspaceTextPreview
+import app.knotwork.android.domain.models.WorkspaceUsage
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.AgentWorkspace
 import app.knotwork.android.domain.services.WorkspaceTextEdit
@@ -16,6 +18,8 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
 import java.io.IOException
+import java.io.InputStream
+import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
@@ -117,6 +121,88 @@ class AgentWorkspaceImpl @Inject constructor(
         WorkspaceResult.Success(files)
     }
 
+    override suspend fun usage(): WorkspaceResult<WorkspaceUsage> = withContext(Dispatchers.IO) {
+        val limit = settingsRepository.workspaceMaxTotalBytes.first()
+        val used = mutex.withLock { currentTotalBytesLocked() }
+        WorkspaceResult.Success(WorkspaceUsage(usedBytes = used, limitBytes = limit))
+    }
+
+    override suspend fun readTextPreview(relativePath: String, maxBytes: Int): WorkspaceResult<WorkspaceTextPreview> =
+        withContext(Dispatchers.IO) {
+            when (val resolved = canonicalResolve(relativePath)) {
+                is WorkspaceResult.Failure -> resolved
+                is WorkspaceResult.Success -> previewResolved(resolved.value, maxBytes)
+            }
+        }
+
+    override suspend fun importBytes(
+        relativePath: String,
+        source: InputStream,
+        overwrite: Boolean,
+    ): WorkspaceResult<WorkspaceFile> = withContext(Dispatchers.IO) {
+        // Read the stream up to one byte past the per-file ceiling: if the source is
+        // larger we can report TooLarge without ever holding more than the limit (+1)
+        // in memory. The quota-checked atomic write is then identical to writeText.
+        val limit = maxFileSizeBytes()
+        val bytes = readBounded(source, limit) ?: return@withContext WorkspaceResult.Failure(WorkspaceError.TooLarge)
+        when (val resolved = canonicalResolve(relativePath)) {
+            is WorkspaceResult.Failure -> resolved
+            is WorkspaceResult.Success -> mutex.withLock { writeBytesLocked(resolved.value, bytes, overwrite) }
+        }
+    }
+
+    override suspend fun exportTo(relativePath: String, sink: OutputStream): WorkspaceResult<Unit> =
+        withContext(Dispatchers.IO) {
+            when (val resolved = canonicalResolve(relativePath)) {
+                is WorkspaceResult.Failure -> resolved
+                is WorkspaceResult.Success -> exportResolved(resolved.value, sink)
+            }
+        }
+
+    /**
+     * Reads a bounded leading slice of an already-resolved (in-bounds) [target]
+     * for preview, enforcing existence and text-ness but never the size cap.
+     */
+    private fun previewResolved(target: File, maxBytes: Int): WorkspaceResult<WorkspaceTextPreview> {
+        if (!target.isFile) return WorkspaceResult.Failure(WorkspaceError.NotFound)
+        val totalBytes = target.length()
+        val slice = target.inputStream().use { input -> input.readNBytes(maxBytes) }
+        if (slice.any { it == 0.toByte() }) return WorkspaceResult.Failure(WorkspaceError.NotAText)
+        val fileLongerThanSlice = totalBytes > slice.size.toLong()
+        // Decode the full slice first; only when the budget cut the file mid-character do
+        // we tolerate dropping up to a few trailing bytes (an incomplete final char).
+        // Trimming unconditionally would slice a valid trailing character on a
+        // boundary-aligned window and wrongly report text as binary.
+        val maxTrim = if (fileLongerThanSlice) MAX_UTF8_TAIL_BYTES else 0
+        val text = (0..maxTrim).firstNotNullOfOrNull { trim -> decodeUtf8OrNull(slice, slice.size - trim) }
+            ?: return WorkspaceResult.Failure(WorkspaceError.NotAText)
+        return WorkspaceResult.Success(
+            WorkspaceTextPreview(text = text, totalBytes = totalBytes, truncated = fileLongerThanSlice),
+        )
+    }
+
+    /**
+     * Streams an already-resolved (in-bounds) regular [target] to [sink]. Only
+     * regular files are exportable; a directory or missing path is [WorkspaceError.NotFound].
+     */
+    private fun exportResolved(target: File, sink: OutputStream): WorkspaceResult<Unit> {
+        if (!target.isFile) return WorkspaceResult.Failure(WorkspaceError.NotFound)
+        target.inputStream().use { input -> input.copyTo(sink) }
+        return WorkspaceResult.Success(Unit)
+    }
+
+    /**
+     * Reads [input] fully into a byte array, refusing to allocate more than
+     * [limit] bytes. Returns the bytes when the stream fits within [limit], or
+     * `null` when it would exceed it (so the caller maps that to [WorkspaceError.TooLarge]).
+     */
+    private fun readBounded(input: InputStream, limit: Long): ByteArray? {
+        // Read one byte past the limit: if anything beyond `limit` exists, the
+        // result is larger than `limit` and we bail without buffering the whole thing.
+        val capped = input.readNBytes((limit + 1).coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+        return if (capped.size.toLong() > limit) null else capped
+    }
+
     /**
      * The single canonicalisation gate. Rejects absolute paths outright, then
      * canonicalises `root/relativePath` and accepts it only if it stays inside
@@ -185,6 +271,17 @@ class AgentWorkspaceImpl @Inject constructor(
         target: File,
         content: String,
         overwrite: Boolean,
+    ): WorkspaceResult<WorkspaceFile> = writeBytesLocked(target, content.toByteArray(Charsets.UTF_8), overwrite)
+
+    /**
+     * Performs the quota-checked atomic write of [newBytes] to an already-resolved
+     * (in-bounds) [target]. Shared by [writeTextLocked] (UTF-8 text) and
+     * [importBytes] (verbatim bytes). Must be called while holding [mutex].
+     */
+    private suspend fun writeBytesLocked(
+        target: File,
+        newBytes: ByteArray,
+        overwrite: Boolean,
     ): WorkspaceResult<WorkspaceFile> {
         // A directory can never be replaced by a file, even with `overwrite`. Report it
         // distinctly so the tool does not hand back a "retry with overwrite" hint that
@@ -193,7 +290,6 @@ class AgentWorkspaceImpl @Inject constructor(
         val exists = target.isFile
         if (exists && !overwrite) return WorkspaceResult.Failure(WorkspaceError.AlreadyExists)
 
-        val newBytes = content.toByteArray(Charsets.UTF_8)
         if (newBytes.size.toLong() > maxFileSizeBytes()) return WorkspaceResult.Failure(WorkspaceError.TooLarge)
 
         val existingSize = if (exists) target.length() else 0L
@@ -337,14 +433,11 @@ class AgentWorkspaceImpl @Inject constructor(
      */
     private fun looksLikeText(file: File): Boolean = try {
         file.inputStream().use { input ->
-            val buffer = ByteArray(TEXT_SNIFF_BYTES)
-            val read = input.read(buffer)
-            if (read <= 0) {
-                true // empty file counts as text
-            } else {
-                val usable = if (read == TEXT_SNIFF_BYTES) read - MAX_UTF8_TAIL_BYTES else read
-                isUtf8Text(buffer.copyOf(usable))
-            }
+            // Use readNBytes, not read(buffer): a single read() may return fewer bytes
+            // than requested (a short read) even when more exist. readNBytes fills the
+            // window up to the file's end deterministically.
+            val sniff = input.readNBytes(TEXT_SNIFF_BYTES)
+            prefixLooksLikeUtf8(sniff, windowMayBeTruncated = sniff.size == TEXT_SNIFF_BYTES)
         }
     } catch (e: IOException) {
         // An unreadable file is treated as non-text rather than crashing a listing.
@@ -353,21 +446,47 @@ class AgentWorkspaceImpl @Inject constructor(
     }
 
     /**
-     * Decides whether [bytes] is UTF-8 text: empty content counts as text, a NUL
-     * byte marks it binary, and otherwise a strict (report-on-error) UTF-8 decode
-     * must succeed.
+     * Heuristic UTF-8 text check over a sniffed [prefix]: empty counts as text, a NUL
+     * byte marks it binary, otherwise the prefix must decode as strict UTF-8.
+     *
+     * The full prefix is decoded **first**, so a window that ends exactly on a
+     * character boundary is never misjudged. Only when the sniff window may have cut a
+     * trailing multi-byte character ([windowMayBeTruncated], i.e. the file is longer
+     * than the window) are up to [MAX_UTF8_TAIL_BYTES] trailing bytes tolerated — an
+     * incomplete final character must not flag otherwise-valid non-ASCII text (e.g.
+     * Cyrillic Markdown/CSV) as binary.
+     */
+    private fun prefixLooksLikeUtf8(prefix: ByteArray, windowMayBeTruncated: Boolean): Boolean {
+        if (prefix.isEmpty()) return true
+        if (prefix.any { it == 0.toByte() }) return false
+        val maxTrim = if (windowMayBeTruncated) MAX_UTF8_TAIL_BYTES else 0
+        return (0..maxTrim).any { trim -> decodeUtf8OrNull(prefix, prefix.size - trim) != null }
+    }
+
+    /**
+     * Full-content UTF-8 text check (the authoritative path for [readText]): empty
+     * content counts as text, a NUL byte marks it binary, and otherwise the whole
+     * buffer must decode strictly with no tolerance for a truncated tail.
      */
     private fun isUtf8Text(bytes: ByteArray): Boolean {
         if (bytes.isEmpty()) return true
         if (bytes.any { it == 0.toByte() }) return false
+        return decodeUtf8OrNull(bytes, bytes.size) != null
+    }
+
+    /**
+     * Strictly decodes the first [length] bytes of [bytes] as UTF-8, returning the
+     * decoded text, or `null` if it contains a malformed or unmappable sequence.
+     */
+    private fun decodeUtf8OrNull(bytes: ByteArray, length: Int): String? {
+        if (length <= 0) return ""
         val decoder = Charsets.UTF_8.newDecoder()
             .onMalformedInput(CodingErrorAction.REPORT)
             .onUnmappableCharacter(CodingErrorAction.REPORT)
         return try {
-            decoder.decode(ByteBuffer.wrap(bytes))
-            true
+            decoder.decode(ByteBuffer.wrap(bytes, 0, length)).toString()
         } catch (e: CharacterCodingException) {
-            false
+            null
         }
     }
 

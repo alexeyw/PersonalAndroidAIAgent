@@ -49,14 +49,12 @@ data class AllowedDomainsViewState(
  * Callback bundle for `AllowedDomainsContent`.
  *
  * @property onBack navigate back to the Tools screen.
- * @property onInfo open the contextual explanation (top-bar info icon).
  * @property onAddInputChange the add-field text changed.
  * @property onAddSubmit commit the currently-previewed host to the allowlist.
  * @property onRemoveHost remove the given host from the allowlist.
  */
 class AllowedDomainsCallbacks(
     val onBack: () -> Unit = {},
-    val onInfo: () -> Unit = {},
     val onAddInputChange: (String) -> Unit = {},
     val onAddSubmit: () -> Unit = {},
     val onRemoveHost: (host: String) -> Unit = {},

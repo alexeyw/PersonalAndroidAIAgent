@@ -92,6 +92,11 @@ configured it.
 - **Prompt library** — `ScrollableTabRow` of categories, per-card
   edit / delete / duplicate actions, inline `$VAR` highlighting in
   the body, and a `ModalBottomSheet` editor with `INSERT` chip row.
+- **Files** screen (More → Files) — a window over the agent's file
+  workspace: a path-sorted listing with a used / limit quota
+  indicator, read-only text preview (truncated for large files),
+  share / "Save as…" export, import-with-collision-handling, and
+  single or multi-select delete.
 - **Task monitor** — filterable list of WorkManager background tasks
   and live chat sessions with swipe-to-cancel and a detail bottom
   sheet on row tap.

@@ -15,6 +15,19 @@ details.
 
 ### Added
 
+- **Files screen (agent workspace browser).** A new screen — reached from
+  **More → Files** — gives the agent's previously-invisible file workspace a
+  user-facing window. It lists the workspace's files (path-sorted, with size and
+  modified time) behind a quota indicator that ramps neutral → amber → red as
+  storage fills, and supports: a read-only monospace **preview** of text files
+  (large files are shown truncated with a "save it out to read the whole file"
+  banner); **export** of a file, either to the system share sheet (a per-share
+  copy is staged so the workspace directory itself is never exposed) or to a
+  chosen location via "Save as…"; **import** of an external file into the
+  workspace, with a name-collision chooser (keep both / replace) and the same
+  per-file and total quota enforcement the agent's own writes get; and
+  **delete** with a confirmation dialog, including multi-select bulk delete.
+
 - **Outbound HTTP tool (`http_request`).** A new built-in tool lets the
   agent call a remote HTTP(S) API (GET/POST/PUT/DELETE) — the most
   security-sensitive tool in the workspace set, designed conservatively

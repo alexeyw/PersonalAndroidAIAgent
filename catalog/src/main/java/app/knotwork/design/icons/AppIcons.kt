@@ -21,6 +21,7 @@ import app.knotwork.design.icons.imagevector.knotworkBranchIcon
 import app.knotwork.design.icons.imagevector.knotworkChatActiveIcon
 import app.knotwork.design.icons.imagevector.knotworkChatIcon
 import app.knotwork.design.icons.imagevector.knotworkCheckIcon
+import app.knotwork.design.icons.imagevector.knotworkCheckSquareIcon
 import app.knotwork.design.icons.imagevector.knotworkChipIcon
 import app.knotwork.design.icons.imagevector.knotworkCircleIcon
 import app.knotwork.design.icons.imagevector.knotworkCloudIcon
@@ -36,15 +37,21 @@ import app.knotwork.design.icons.imagevector.knotworkExtensionIcon
 import app.knotwork.design.icons.imagevector.knotworkExternalIcon
 import app.knotwork.design.icons.imagevector.knotworkEyeIcon
 import app.knotwork.design.icons.imagevector.knotworkEyeOffIcon
+import app.knotwork.design.icons.imagevector.knotworkFileBinIcon
+import app.knotwork.design.icons.imagevector.knotworkFileIcon
+import app.knotwork.design.icons.imagevector.knotworkFileTextIcon
 import app.knotwork.design.icons.imagevector.knotworkFilterIcon
 import app.knotwork.design.icons.imagevector.knotworkFlowActiveIcon
 import app.knotwork.design.icons.imagevector.knotworkFlowIcon
+import app.knotwork.design.icons.imagevector.knotworkFolderIcon
+import app.knotwork.design.icons.imagevector.knotworkFolderOpenIcon
 import app.knotwork.design.icons.imagevector.knotworkGlobeIcon
 import app.knotwork.design.icons.imagevector.knotworkGridIcon
 import app.knotwork.design.icons.imagevector.knotworkGridOffIcon
 import app.knotwork.design.icons.imagevector.knotworkHistoryIcon
 import app.knotwork.design.icons.imagevector.knotworkHourglassIcon
 import app.knotwork.design.icons.imagevector.knotworkHubIcon
+import app.knotwork.design.icons.imagevector.knotworkImportFileIcon
 import app.knotwork.design.icons.imagevector.knotworkInfoIcon
 import app.knotwork.design.icons.imagevector.knotworkKeyIcon
 import app.knotwork.design.icons.imagevector.knotworkLinkIcon
@@ -81,6 +88,7 @@ import app.knotwork.design.icons.imagevector.knotworkRefreshIcon
 import app.knotwork.design.icons.imagevector.knotworkSaveIcon
 import app.knotwork.design.icons.imagevector.knotworkSearchIcon
 import app.knotwork.design.icons.imagevector.knotworkSendIcon
+import app.knotwork.design.icons.imagevector.knotworkShareIcon
 import app.knotwork.design.icons.imagevector.knotworkShieldIcon
 import app.knotwork.design.icons.imagevector.knotworkSlidersIcon
 import app.knotwork.design.icons.imagevector.knotworkSparkIcon
@@ -397,4 +405,29 @@ object AppIcons {
 
     /** `I.ram` — memory / RAM (settings). */
     val Ram: ImageVector get() = knotworkRamIcon
+
+    // ── Files / workspace glyphs ──────────────────────────────────────────
+    /** `I.file` — generic file. */
+    val File: ImageVector get() = knotworkFileIcon
+
+    /** `I.fileText` — text / previewable file. */
+    val FileText: ImageVector get() = knotworkFileTextIcon
+
+    /** `I.fileBin` — binary / non-previewable file. */
+    val FileBin: ImageVector get() = knotworkFileBinIcon
+
+    /** `I.folder` — folder / Files navigation glyph. */
+    val Folder: ImageVector get() = knotworkFolderIcon
+
+    /** `I.folderOpen` — open folder (empty-workspace hero). */
+    val FolderOpen: ImageVector get() = knotworkFolderOpenIcon
+
+    /** `I.share` — share sheet. */
+    val Share: ImageVector get() = knotworkShareIcon
+
+    /** `I.checkSquare` — select all (checkbox tick). */
+    val CheckSquare: ImageVector get() = knotworkCheckSquareIcon
+
+    /** `I.importFile` — import a file into the workspace. */
+    val ImportFile: ImageVector get() = knotworkImportFileIcon
 }

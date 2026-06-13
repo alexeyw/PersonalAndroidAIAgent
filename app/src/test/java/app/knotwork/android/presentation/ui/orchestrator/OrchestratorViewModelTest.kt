@@ -38,6 +38,7 @@ import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -77,9 +78,13 @@ class OrchestratorViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
 
+    /** Drives the http allowlist so the TOOL-picker refresh can be exercised. */
+    private lateinit var allowedDomainsFlow: MutableStateFlow<List<String>>
+
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        allowedDomainsFlow = MutableStateFlow(emptyList())
         savePipelineUseCase = mockk()
         // Default to a successful save so the import-then-save pipeline used
         // by `importPipelineFromJson` round-trips without extra wiring.
@@ -105,6 +110,7 @@ class OrchestratorViewModelTest {
         localModelRepository = mockk()
         settingsRepository = mockk(relaxed = true) {
             every { defaultPipelineId } returns flowOf(null)
+            every { allowedHttpDomains } returns allowedDomainsFlow
         }
 
         every { loadPipelineUseCase.observeAllPipelines() } returns flowOf(emptyList())
@@ -165,6 +171,27 @@ class OrchestratorViewModelTest {
         assertEquals(false, state.providerKeys[CloudProvider.OPENAI])
         assertEquals(1, state.availableTools.size)
         assertEquals("Tool1", state.availableTools[0].name)
+    }
+
+    @Test
+    fun `adding an allowed domain refreshes the available tools in-session`() = runTest {
+        // The repository hides http_request while the allowlist is empty and un-hides it
+        // once a domain is added; the picker must reflect that in-session, not after a
+        // restart. Key the stub on the current allowlist so it is call-count independent.
+        coEvery { toolRepository.getAvailableTools() } answers {
+            if (allowedDomainsFlow.value.isEmpty()) {
+                listOf(AgentTool("Tool1", "Desc", "{}"))
+            } else {
+                listOf(AgentTool("Tool1", "Desc", "{}"), AgentTool("http_request", "Desc", "{}"))
+            }
+        }
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(false, viewModel.uiState.value.availableTools.any { it.name == "http_request" })
+
+        allowedDomainsFlow.value = listOf("api.example.com")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(true, viewModel.uiState.value.availableTools.any { it.name == "http_request" })
     }
 
     @Test
