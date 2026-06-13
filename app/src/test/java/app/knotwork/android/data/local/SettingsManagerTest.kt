@@ -89,6 +89,9 @@ class SettingsManagerTest {
     private val memoryCompactionAgeDaysKey =
         androidx.datastore.preferences.core.intPreferencesKey("memory_compaction_age_days")
     private val maxMemoryChunksKey = androidx.datastore.preferences.core.intPreferencesKey("max_memory_chunks")
+    private val allowedHttpDomainsKey = stringPreferencesKey("allowed_http_domains")
+    private val httpToolMaxResponseBytesKey =
+        androidx.datastore.preferences.core.longPreferencesKey("http_tool_max_response_bytes")
 
     @Test
     fun `isFirstLaunch returns true by default`() = runTest {
@@ -261,6 +264,72 @@ class SettingsManagerTest {
         try {
             manager.setMemorySearchThreshold(0.72f)
             assertEquals(0.72f, manager.memorySearchThreshold.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `allowedHttpDomains returns empty list by default`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[allowedHttpDomainsKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, context, cipher)
+        assertEquals(emptyList<String>(), settingsManager.allowedHttpDomains.first())
+    }
+
+    @Test
+    fun `allowedHttpDomains decodes newline-delimited entries preserving order and dropping blanks`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[allowedHttpDomainsKey] } returns "api.example.com\n\nb.test\n"
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, context, cipher)
+        assertEquals(listOf("api.example.com", "b.test"), settingsManager.allowedHttpDomains.first())
+    }
+
+    @Test
+    fun `setAllowedHttpDomains persists order and is read back`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setAllowedHttpDomains(listOf("z.example.com", "a.example.com"))
+            assertEquals(listOf("z.example.com", "a.example.com"), manager.allowedHttpDomains.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `setAllowedHttpDomains trims and drops blank entries before persisting`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setAllowedHttpDomains(listOf("  a.example.com  ", "", "   "))
+            assertEquals(listOf("a.example.com"), manager.allowedHttpDomains.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `httpToolMaxResponseBytes returns default value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[httpToolMaxResponseBytesKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, context, cipher)
+        assertEquals(
+            SettingsDefaults.HTTP_TOOL_MAX_RESPONSE_BYTES_DEFAULT,
+            settingsManager.httpToolMaxResponseBytes.first(),
+        )
+    }
+
+    @Test
+    fun `setHttpToolMaxResponseBytes persists and is read back`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setHttpToolMaxResponseBytes(2_048L)
+            assertEquals(2_048L, manager.httpToolMaxResponseBytes.first())
         } finally {
             scope.cancel()
         }

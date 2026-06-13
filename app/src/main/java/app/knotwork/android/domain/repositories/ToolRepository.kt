@@ -54,10 +54,20 @@ interface ToolRepository {
      * 3. MCP tools return a blanket [ToolRisk.SENSITIVE] until a finer-grained
      *    per-server policy is introduced.
      *
+     * Most tools have a single static risk and ignore [arguments]. The exception
+     * is `http_request`, whose risk depends on the HTTP method carried in the
+     * arguments (a read `GET` is [ToolRisk.SENSITIVE]; a state-changing
+     * `POST` / `PUT` / `DELETE` is [ToolRisk.DESTRUCTIVE]). The HITL gate passes
+     * the resolved argument string so the confirmation strength matches the
+     * concrete call; callers that do not have the arguments (or for whom risk is
+     * argument-independent) may rely on the empty default.
+     *
      * @param toolName The name of the tool to look up.
+     * @param arguments The resolved JSON argument string of the pending call,
+     *   used only by tools whose risk is argument-dependent. Defaults to empty.
      * @return The effective [ToolRisk].
      * @throws IllegalArgumentException if no tool with the given name is known to
      * any of the active sources.
      */
-    suspend fun getRisk(toolName: String): ToolRisk
+    suspend fun getRisk(toolName: String, arguments: String = ""): ToolRisk
 }

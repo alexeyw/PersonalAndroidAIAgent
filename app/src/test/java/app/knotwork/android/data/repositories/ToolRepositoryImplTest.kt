@@ -46,6 +46,8 @@ class ToolRepositoryImplTest {
         every { settingsRepository.disabledAppFunctions } returns flowOf(emptySet())
         every { settingsRepository.disabledMcpTools } returns flowOf(emptySet())
         every { settingsRepository.appFunctionRiskOverrides } returns flowOf(emptyMap())
+        // http_request stays hidden from getAvailableTools unless a test opts a domain in.
+        every { settingsRepository.allowedHttpDomains } returns flowOf(emptyList())
         coEvery { localAppFunctionManager.getAvailableFunctions() } returns
             listOf(AgentTool("get_system_time", "desc", "{}"))
         // mockk picks the most recent matching stub: default everything to "not discovered"
@@ -356,6 +358,55 @@ class ToolRepositoryImplTest {
         coEvery { mcpClient.getTools() } returns emptyList()
 
         assertEquals(ToolRisk.DESTRUCTIVE, repository.getRisk("delete_file"))
+    }
+
+    @Test
+    fun `given http_request GET when getRisk then returns SENSITIVE`() = runTest {
+        assertEquals(
+            ToolRisk.SENSITIVE,
+            repository.getRisk("http_request", """{"method":"GET","url":"https://example.com"}"""),
+        )
+    }
+
+    @Test
+    fun `given http_request POST when getRisk then returns DESTRUCTIVE`() = runTest {
+        assertEquals(
+            ToolRisk.DESTRUCTIVE,
+            repository.getRisk("http_request", """{"method":"POST","url":"https://example.com"}"""),
+        )
+    }
+
+    @Test
+    fun `given http_request with malformed args when getRisk then defaults to DESTRUCTIVE`() = runTest {
+        assertEquals(ToolRisk.DESTRUCTIVE, repository.getRisk("http_request", "not json"))
+    }
+
+    @Test
+    fun `given empty allowlist when getAvailableTools then http_request is hidden`() = runTest {
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        val result = repository.getAvailableTools()
+
+        assertFalse(result.any { it.name == "http_request" })
+    }
+
+    @Test
+    fun `given a configured allowlist when getAvailableTools then http_request is published`() = runTest {
+        every { settingsRepository.allowedHttpDomains } returns flowOf(listOf("example.com"))
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        val result = repository.getAvailableTools()
+
+        assertTrue(result.any { it.name == "http_request" })
+    }
+
+    @Test
+    fun `given empty allowlist when getAllLocalTools then http_request is still present`() = runTest {
+        // The full catalogue always contains http_request (so executeTool/getRisk can
+        // route to it); only the agent-facing getAvailableTools hides it.
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        assertTrue(repository.getAllLocalTools().any { it.name == "http_request" })
     }
 
     @Test

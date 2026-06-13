@@ -759,6 +759,8 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.work.testing)
+    // OkHttp 5 MockWebServer (mockwebserver3 namespace) for HttpRequestExecutor tests.
+    testImplementation(libs.okhttp.mockwebserver3)
     // Robolectric is needed for the foreground service,
     // notification builder, and Doze (`ShadowPowerManager`) paths under
     // `data.services`. The version is pinned in `gradle/libs.versions.toml`.

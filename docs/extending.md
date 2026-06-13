@@ -260,6 +260,17 @@ DataStore key `app_function_risk_overrides`. `ToolRepository.getRisk(name)`
 consults the override map first and falls back to the conservative
 default.
 
+Most tools have a single, static risk. A tool whose risk depends on the
+*call* rather than its name (the built-in `http_request`, whose `GET` is
+`SENSITIVE` but whose `POST`/`PUT`/`DELETE` are `DESTRUCTIVE`) resolves it
+through the argument-aware overload
+[`ToolRepository.getRisk(name, arguments)`](../app/src/main/java/app/knotwork/android/domain/repositories/ToolRepository.kt):
+the HITL gate passes the resolved argument string so the confirmation
+strength matches the concrete request. Keep the per-call decision in one pure
+helper that both the risk lookup and the executor's own enforcement read from
+(`http_request` uses `HttpRequestPolicy`), so the gate and the actual refusal
+can never diverge. An unparsable call must fall back to the strictest risk.
+
 ### 2.4. Tests
 
 - Unit test the executor with mocked dependencies. Cover the happy

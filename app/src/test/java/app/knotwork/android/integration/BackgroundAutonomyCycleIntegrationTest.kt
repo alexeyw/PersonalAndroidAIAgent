@@ -177,7 +177,7 @@ class BackgroundAutonomyCycleIntegrationTest {
         toolRepository = mockk(relaxed = true)
         coEvery { toolRepository.getAvailableTools() } returns
             listOf(AgentTool(TOOL_NAME, "Searches the web", "{}"))
-        coEvery { toolRepository.getRisk(TOOL_NAME) } returns ToolRisk.SENSITIVE
+        coEvery { toolRepository.getRisk(TOOL_NAME, any()) } returns ToolRisk.SENSITIVE
         coEvery { toolRepository.executeTool(TOOL_NAME, any(), any()) } returns TOOL_RESULT
     }
 
