@@ -1853,7 +1853,7 @@ class GraphExecutionEngineTest {
         // READ_ONLY + global override OFF must skip the HITL gate entirely: no
         // WaitingForApproval emission, no notifier call, and the pipeline
         // reaches OUTPUT without intervention.
-        coEvery { toolRepository.getRisk("web.search") } returns ToolRisk.READ_ONLY
+        coEvery { toolRepository.getRisk("web.search", any()) } returns ToolRisk.READ_ONLY
         coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool("web.search", "Search", "{}"))
         coEvery { toolRepository.executeTool("web.search", any(), any()) } returns "search-result"
 
@@ -1993,7 +1993,7 @@ class GraphExecutionEngineTest {
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.toolCallTimeoutMs } returns flowOf(5_000L)
-        coEvery { toolRepository.getRisk("sens.tool") } returns ToolRisk.SENSITIVE
+        coEvery { toolRepository.getRisk("sens.tool", any()) } returns ToolRisk.SENSITIVE
         coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool("sens.tool", "Desc", "{}"))
         coEvery { toolRepository.executeTool("sens.tool", any(), any()) } returns "tool-result"
 
@@ -2122,7 +2122,7 @@ class GraphExecutionEngineTest {
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.toolCallTimeoutMs } returns flowOf(5_000L)
-        coEvery { toolRepository.getRisk("sens.tool") } returns ToolRisk.SENSITIVE
+        coEvery { toolRepository.getRisk("sens.tool", any()) } returns ToolRisk.SENSITIVE
         coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool("sens.tool", "Desc", "{}"))
         coEvery { toolRepository.executeTool("sens.tool", any(), any()) } returns "tool-result"
 
@@ -2358,7 +2358,7 @@ class GraphExecutionEngineTest {
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.toolCallTimeoutMs } returns flowOf(5_000L)
-        coEvery { toolRepository.getRisk("sens.tool") } returns ToolRisk.SENSITIVE
+        coEvery { toolRepository.getRisk("sens.tool", any()) } returns ToolRisk.SENSITIVE
         coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool("sens.tool", "Desc", "{}"))
         coEvery { toolRepository.executeTool("sens.tool", any(), any()) } returns "fresh-result"
 

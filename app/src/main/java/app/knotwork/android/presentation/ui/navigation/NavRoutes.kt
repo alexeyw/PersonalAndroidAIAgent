@@ -84,6 +84,9 @@ object NavRoutes {
     fun mcpServerConfigEditRoute(originalUrl: String): String =
         "tools/mcp-config?originalUrl=${android.net.Uri.encode(originalUrl)}"
 
+    /** Allowed-domains editor for the `http_request` tool — `tools/allowed-domains`. */
+    const val ALLOWED_DOMAINS: String = "tools/allowed-domains"
+
     /** More tab — landing screen with secondary navigation. */
     const val MORE: String = "more"
 

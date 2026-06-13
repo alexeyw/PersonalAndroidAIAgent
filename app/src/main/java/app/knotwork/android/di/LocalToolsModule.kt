@@ -7,6 +7,7 @@ import app.knotwork.android.data.tools.local.executors.DelegateTaskExecutor
 import app.knotwork.android.data.tools.local.executors.DeleteFileExecutor
 import app.knotwork.android.data.tools.local.executors.EditFileExecutor
 import app.knotwork.android.data.tools.local.executors.FindFilesExecutor
+import app.knotwork.android.data.tools.local.executors.HttpRequestExecutor
 import app.knotwork.android.data.tools.local.executors.ListFilesExecutor
 import app.knotwork.android.data.tools.local.executors.ReadFileExecutor
 import app.knotwork.android.data.tools.local.executors.ScheduleTaskExecutor
@@ -81,6 +82,11 @@ abstract class LocalToolsModule {
     @IntoMap
     @StringKey(DeleteFileExecutor.TOOL_NAME)
     abstract fun bindDeleteFileExecutor(executor: DeleteFileExecutor): LocalToolExecutor
+
+    @Binds
+    @IntoMap
+    @StringKey(HttpRequestExecutor.TOOL_NAME)
+    abstract fun bindHttpRequestExecutor(executor: HttpRequestExecutor): LocalToolExecutor
 
     /**
      * Domain-level binding for the cloud client factory. The data-layer impl

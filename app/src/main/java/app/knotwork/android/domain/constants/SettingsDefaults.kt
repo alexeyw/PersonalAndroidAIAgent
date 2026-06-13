@@ -282,4 +282,28 @@ object SettingsDefaults {
 
     /** Upper bound enforced when the user edits the max-chunks hard limit. */
     const val MAX_MEMORY_CHUNKS_MAX: Int = 20_000
+
+    /**
+     * Default ceiling, in bytes, on the response body the `http_request` tool
+     * pulls into memory and surfaces to the agent (1 MB). A larger response is
+     * read up to this cap and a truncation marker is appended so the model knows
+     * the body was cut. Bounds how much untrusted remote content a single call
+     * can inject into the local model's context.
+     */
+    const val HTTP_TOOL_MAX_RESPONSE_BYTES_DEFAULT: Long = 1L * 1024 * 1024
+
+    /**
+     * Wall-clock connect / read timeout, in milliseconds, applied to every
+     * `http_request` call (60 s). Matches the cloud-LLM OkHttp timeout mandated
+     * by the API conventions so an unresponsive remote host cannot stall a
+     * pipeline run indefinitely.
+     */
+    const val HTTP_TOOL_TIMEOUT_MS_DEFAULT: Long = 60_000L
+
+    /**
+     * Maximum number of HTTP redirects the `http_request` tool follows manually.
+     * Each hop is re-validated against the domain allowlist before it is taken;
+     * the cap stops a redirect loop from spinning forever.
+     */
+    const val HTTP_TOOL_MAX_REDIRECTS: Int = 5
 }

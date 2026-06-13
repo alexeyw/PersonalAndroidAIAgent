@@ -15,6 +15,29 @@ details.
 
 ### Added
 
+- **Outbound HTTP tool (`http_request`).** A new built-in tool lets the
+  agent call a remote HTTP(S) API (GET/POST/PUT/DELETE) — the most
+  security-sensitive tool in the workspace set, designed conservatively
+  because in combination with the file tools an unrestricted HTTP
+  capability would be a data-exfiltration channel. It only reaches
+  domains the user has explicitly added to an **allowlist** (Settings →
+  Tools → Allowed domains, stored in DataStore); while the allowlist is
+  empty the tool is hidden from the agent entirely and a direct call is
+  refused. Risk is per-method — a `GET` is SENSITIVE, a
+  `POST`/`PUT`/`DELETE` is DESTRUCTIVE — so each call passes the matching
+  Human-in-the-Loop confirmation. Public hosts must use `https`
+  (cleartext only for local addresses); redirects are followed manually
+  and re-validated against the allowlist on every hop, aborting if one
+  points outside it; a request that would carry a stored provider API key
+  is refused; and the response body is capped (1 MB default) with a
+  truncation marker so untrusted remote content can't overflow the local
+  model's context. A standalone **Allowed domains** editor — reached from
+  the http_request row on the Tools screen — lets you add (with live
+  host-normalisation preview, invalid and duplicate feedback) and remove
+  hosts; matching is exact, so sub-domains are not implied. While the list
+  is empty the editor explains that the tool stays off until a host is
+  added.
+
 - **Workspace write tools.** Three new built-in tools let the agent change
   files in its workspace, each gated by its risk level: **write_file**
   (writes a UTF-8 text file; creating is the default and replacing an

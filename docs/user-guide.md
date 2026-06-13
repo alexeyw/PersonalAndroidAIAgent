@@ -720,10 +720,38 @@ The app ships with the following tools:
 | **write_file**     | Writes a text file to the workspace. Creating a new file is the default; replacing an existing one needs an explicit overwrite flag, so content is never clobbered by accident. Asks for confirmation before running. |
 | **edit_file**      | Makes a targeted change to an existing workspace file by replacing a unique snippet of text. The snippet must match exactly once, so an edit never lands in the wrong place. Asks for confirmation before running. |
 | **delete_file**    | Deletes a file from the workspace. This is irreversible and always asks you to confirm before it runs. |
+| **http_request**   | Calls a remote HTTP(S) API (GET/POST/PUT/DELETE). It can only reach domains you have explicitly added to the **Allowed domains** list — until you add one, the tool is hidden from the agent entirely. A GET asks for confirmation; a POST/PUT/DELETE asks for the stronger destructive-action confirmation. See the warning below before adding a domain. |
 
 Each tool has a switch on the Tools screen. Turn a tool off to hide
 it from the agent for the next run; turn it on to make it available
 again.
+
+#### Allowed domains for http_request
+
+The **http_request** tool is off by default: it stays invisible to the
+agent until you opt a specific destination in. Because a file the agent
+reads could contain instructions planted by someone else (a *prompt
+injection*), an HTTP tool that could reach any address would be a way to
+quietly send your data off the device. The allowlist is the safeguard:
+
+- The agent can only contact a host you have added. Matching is exact —
+  sub-domains are not implied, so adding `example.com` does not allow
+  `api.example.com`; add each host you need. Any other host — including
+  one reached through a redirect — is refused before the request leaves
+  the device.
+- Public domains must use `https`. Plain `http` is allowed only for
+  local addresses (for example a home Ollama server).
+- A request is refused outright if it would carry one of your stored
+  provider API keys, so a saved key can't be leaked to a remote host.
+
+To manage the list, open the **Tools** screen and tap **Allowed domains**
+under the http_request row. The editor shows the current hosts, lets you
+remove any of them, and previews how a typed entry will be stored before
+you add it (it normalises `HTTPS://Api.Example.com/v1` to
+`api.example.com`, and warns when an entry is invalid or already on the
+list). Only add a domain you trust. Adding one lets the agent send data to
+it, so treat the list the way you would treat granting an app network
+access to a specific site.
 
 For a marketing-style preview of this screen see
 [`docs/images/hero-tools.png`](images/hero-tools.png)

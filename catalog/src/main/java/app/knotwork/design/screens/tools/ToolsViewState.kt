@@ -36,6 +36,10 @@ enum class McpConnectionState {
  * @property description body text under the title.
  * @property risk risk tier rendered as the outline pill next to the name.
  * @property enabled toggle state — wired to the trailing Switch.
+ * @property allowedDomainsCount when non-null, an "Allowed domains · N hosts"
+ * sub-row is rendered directly beneath this tool, deep-linking into the
+ * allowlist editor (used by `http_request`). `null` for tools with no such
+ * affordance.
  */
 data class BuiltInToolRow(
     val id: String,
@@ -43,6 +47,7 @@ data class BuiltInToolRow(
     val description: String,
     val risk: BuiltInToolRisk,
     val enabled: Boolean,
+    val allowedDomainsCount: Int? = null,
 )
 
 /**
@@ -204,6 +209,7 @@ class ToolsCallbacks(
     val onMcpToolToggle: (toolId: String, enabled: Boolean) -> Unit = { _, _ -> },
     val onMcpToolClick: (toolId: String) -> Unit = {},
     val onAddServerOpen: () -> Unit = {},
+    val onOpenAllowedDomains: () -> Unit = {},
     val onErrorRetry: () -> Unit = {},
     val onOpenDrawer: () -> Unit = {},
 )

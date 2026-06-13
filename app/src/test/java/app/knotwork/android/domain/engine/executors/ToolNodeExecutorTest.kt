@@ -84,7 +84,7 @@ class ToolNodeExecutorTest {
         every { settingsRepository.toolCallTimeoutMs } returns flowOf(60_000L)
         // Default risk for tests that don't care about the HITL gate. Individual
         // tests override `getRisk(...)` to drive the gate explicitly.
-        coEvery { toolRepository.getRisk(any()) } returns ToolRisk.READ_ONLY
+        coEvery { toolRepository.getRisk(any(), any()) } returns ToolRisk.READ_ONLY
     }
 
     @Test
@@ -167,7 +167,7 @@ class ToolNodeExecutorTest {
     @Test
     fun `given approval times out when waiting for user response then emits timeout error`() = runTest {
         every { settingsRepository.toolCallTimeoutMs } returns flowOf(100L)
-        coEvery { toolRepository.getRisk(any()) } returns ToolRisk.SENSITIVE
+        coEvery { toolRepository.getRisk(any(), any()) } returns ToolRisk.SENSITIVE
 
         val toolName = "MyTool"
         val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName)
@@ -198,7 +198,7 @@ class ToolNodeExecutorTest {
     fun `given READ_ONLY tool and global override off when execute then no approval emitted`() = runTest {
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
-        coEvery { toolRepository.getRisk(any()) } returns ToolRisk.READ_ONLY
+        coEvery { toolRepository.getRisk(any(), any()) } returns ToolRisk.READ_ONLY
 
         val toolName = "ReadTool"
         val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName)
@@ -224,7 +224,7 @@ class ToolNodeExecutorTest {
             every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.AllCalls)
             every { settingsRepository.blockDestructiveTools } returns flowOf(false)
             every { settingsRepository.toolCallTimeoutMs } returns flowOf(100L)
-            coEvery { toolRepository.getRisk(any()) } returns ToolRisk.READ_ONLY
+            coEvery { toolRepository.getRisk(any(), any()) } returns ToolRisk.READ_ONLY
 
             val toolName = "ReadTool"
             val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName)
@@ -259,7 +259,7 @@ class ToolNodeExecutorTest {
             every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
             every { settingsRepository.blockDestructiveTools } returns flowOf(false)
             every { settingsRepository.toolCallTimeoutMs } returns flowOf(100L)
-            coEvery { toolRepository.getRisk(any()) } returns ToolRisk.SENSITIVE
+            coEvery { toolRepository.getRisk(any(), any()) } returns ToolRisk.SENSITIVE
 
             val toolName = "SensTool"
             val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName)
@@ -294,7 +294,7 @@ class ToolNodeExecutorTest {
             every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
             every { settingsRepository.blockDestructiveTools } returns flowOf(false)
             every { settingsRepository.toolCallTimeoutMs } returns flowOf(100L)
-            coEvery { toolRepository.getRisk(any()) } returns ToolRisk.DESTRUCTIVE
+            coEvery { toolRepository.getRisk(any(), any()) } returns ToolRisk.DESTRUCTIVE
 
             val toolName = "DestTool"
             val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName)
@@ -328,7 +328,7 @@ class ToolNodeExecutorTest {
         runTest {
             every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
             every { settingsRepository.blockDestructiveTools } returns flowOf(true)
-            coEvery { toolRepository.getRisk(any()) } returns ToolRisk.DESTRUCTIVE
+            coEvery { toolRepository.getRisk(any(), any()) } returns ToolRisk.DESTRUCTIVE
 
             val toolName = "DestTool"
             val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName)
@@ -353,7 +353,8 @@ class ToolNodeExecutorTest {
 
     @Test
     fun `given getRisk throws when execute then emits structured error result`() = runTest {
-        coEvery { toolRepository.getRisk(any()) } throws IllegalArgumentException("Unknown tool: HallucinatedTool")
+        coEvery { toolRepository.getRisk(any(), any()) } throws
+            IllegalArgumentException("Unknown tool: HallucinatedTool")
 
         val toolName = "HallucinatedTool"
         val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName)
@@ -376,7 +377,7 @@ class ToolNodeExecutorTest {
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.toolCallTimeoutMs } returns flowOf(5_000L)
-        coEvery { toolRepository.getRisk(any()) } returns ToolRisk.SENSITIVE
+        coEvery { toolRepository.getRisk(any(), any()) } returns ToolRisk.SENSITIVE
 
         val toolName = "SensTool"
         val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName)
@@ -411,7 +412,7 @@ class ToolNodeExecutorTest {
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.toolCallTimeoutMs } returns flowOf(5_000L)
-        coEvery { toolRepository.getRisk(any()) } returns ToolRisk.SENSITIVE
+        coEvery { toolRepository.getRisk(any(), any()) } returns ToolRisk.SENSITIVE
 
         val toolName = "SensTool"
         val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName)
@@ -446,7 +447,7 @@ class ToolNodeExecutorTest {
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.toolCallTimeoutMs } returns flowOf(60_000L)
-        coEvery { toolRepository.getRisk(any()) } returns ToolRisk.SENSITIVE
+        coEvery { toolRepository.getRisk(any(), any()) } returns ToolRisk.SENSITIVE
 
         val toolName = "SensTool"
         val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName)
@@ -474,7 +475,7 @@ class ToolNodeExecutorTest {
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.toolCallTimeoutMs } returns flowOf(1_000L)
-        coEvery { toolRepository.getRisk(any()) } returns ToolRisk.SENSITIVE
+        coEvery { toolRepository.getRisk(any(), any()) } returns ToolRisk.SENSITIVE
 
         val toolName = "SensTool"
         val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName)
@@ -542,7 +543,7 @@ class ToolNodeExecutorTest {
     /** Arms a SENSITIVE single-tool gate with a 100ms live window. */
     private fun armSensitiveGate(toolName: String = "MyTool") {
         every { settingsRepository.toolCallTimeoutMs } returns flowOf(100L)
-        coEvery { toolRepository.getRisk(any()) } returns ToolRisk.SENSITIVE
+        coEvery { toolRepository.getRisk(any(), any()) } returns ToolRisk.SENSITIVE
         coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool(toolName, "Desc", "Schema"))
         every { llmEngine.generateResponseStream(any()) } returns
             flowOf("""{"tool": "$toolName", "arguments": "args"}""")
@@ -598,7 +599,7 @@ class ToolNodeExecutorTest {
             // contour: delete_file is DESTRUCTIVE, so on a live-window timeout the run
             // parks (rather than failing) with the exact call snapshot for later resume.
             every { settingsRepository.toolCallTimeoutMs } returns flowOf(100L)
-            coEvery { toolRepository.getRisk("delete_file") } returns ToolRisk.DESTRUCTIVE
+            coEvery { toolRepository.getRisk("delete_file", any()) } returns ToolRisk.DESTRUCTIVE
             coEvery { toolRepository.getAvailableTools() } returns
                 listOf(AgentTool("delete_file", "Deletes a file", "Schema"))
             every { llmEngine.generateResponseStream(any()) } returns

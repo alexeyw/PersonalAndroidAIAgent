@@ -296,7 +296,7 @@ class ToolNodeExecutor @Inject constructor(
         // discovery and execution. Surface a structured `NodeExecutionResult`
         // error instead of letting the exception terminate the pipeline.
         val risk = try {
-            toolRepository.getRisk(resolvedToolName)
+            toolRepository.getRisk(resolvedToolName, resolvedToolArgs)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

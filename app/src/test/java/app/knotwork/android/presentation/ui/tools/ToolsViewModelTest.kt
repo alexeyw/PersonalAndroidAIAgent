@@ -40,6 +40,7 @@ class ToolsViewModelTest {
     private val mcpServersFlow = MutableStateFlow<List<McpServerConfig>>(emptyList())
     private val disabledAppFunctionsFlow = MutableStateFlow<Set<String>>(emptySet())
     private val disabledMcpToolsFlow = MutableStateFlow<Set<String>>(emptySet())
+    private val allowedHttpDomainsFlow = MutableStateFlow<List<String>>(emptyList())
     private val statusFlows = mutableMapOf<String, MutableStateFlow<McpConnectionStatus>>()
 
     private fun statusFlowFor(url: String): MutableStateFlow<McpConnectionStatus> =
@@ -51,6 +52,7 @@ class ToolsViewModelTest {
         every { settingsRepository.mcpServers } returns mcpServersFlow
         every { settingsRepository.disabledAppFunctions } returns disabledAppFunctionsFlow
         every { settingsRepository.disabledMcpTools } returns disabledMcpToolsFlow
+        every { settingsRepository.allowedHttpDomains } returns allowedHttpDomainsFlow
         coEvery { toolRepository.getAllLocalTools() } returns listOf(
             AgentTool(name = "get_system_time", description = "desc", parameters = "{}"),
         )
@@ -78,6 +80,14 @@ class ToolsViewModelTest {
         assertEquals(listOf("http://test.com"), state.mcpServers.map { it.url })
         assertEquals(setOf("get_system_time"), state.disabledAppFunctions)
         assertEquals("get_system_time", state.localTools.first().name)
+    }
+
+    @Test
+    fun `allowedHttpDomainCount reflects the settings flow`() = runTest {
+        allowedHttpDomainsFlow.value = listOf("api.openai.com", "api.github.com")
+        advanceUntilIdle()
+
+        assertEquals(2, viewModel.uiState.value.allowedHttpDomainCount)
     }
 
     @Test

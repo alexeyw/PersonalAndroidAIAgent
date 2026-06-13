@@ -252,6 +252,12 @@ private fun ToolsList(state: ToolsViewState, callbacks: ToolsCallbacks, padding:
         }
         items(items = state.builtInTools, key = { "builtin-${it.id}" }) { tool ->
             BuiltInToolRowView(tool = tool, callbacks = callbacks)
+            if (tool.allowedDomainsCount != null) {
+                AllowedDomainsEntryRow(
+                    hostCount = tool.allowedDomainsCount,
+                    onClick = callbacks.onOpenAllowedDomains,
+                )
+            }
             HorizontalDivider(color = KnotworkTheme.extended.divider)
         }
         item(key = "mcp-header") {
@@ -382,6 +388,63 @@ private fun BuiltInToolRowView(tool: BuiltInToolRow, callbacks: ToolsCallbacks) 
                 checkedBorderColor = MaterialTheme.colorScheme.primary,
             ),
             modifier = Modifier.scale(SWITCH_SCALE),
+        )
+    }
+}
+
+/**
+ * Deep-link sub-row rendered beneath a built-in tool that owns an allowlist
+ * (today only `http_request`). Mirrors the visual language of a settings row —
+ * leading shield, title + "N hosts" subtitle, trailing forward arrow — and
+ * opens the standalone `AllowedDomainsContent` editor on tap.
+ */
+@Composable
+private fun AllowedDomainsEntryRow(hostCount: Int, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp2)
+            .clip(KnotworkTheme.shapes.md)
+            .background(color = KnotworkTheme.extended.surface2)
+            .border(width = 1.dp, color = MaterialTheme.colorScheme.outline, shape = KnotworkTheme.shapes.md)
+            .clickable(
+                onClickLabel = stringResource(R.string.knotwork_allowed_domains_entry_cd),
+                onClick = onClick,
+            )
+            .padding(KnotworkTheme.spacing.sp3),
+    ) {
+        Icon(
+            imageVector = AppIcons.Shield,
+            contentDescription = null,
+            tint = KnotworkTheme.extended.onSurfaceMuted,
+            modifier = Modifier.size(LeadingIconSize),
+        )
+        Column(
+            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+            modifier = Modifier.weight(1f),
+        ) {
+            Text(
+                text = stringResource(R.string.knotwork_allowed_domains_entry_title),
+                style = KnotworkTextStyles.LabelLg.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = androidx.compose.ui.res.pluralStringResource(
+                    R.plurals.knotwork_allowed_domains_entry_count,
+                    hostCount,
+                    hostCount,
+                ),
+                style = KnotworkTextStyles.BodySm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+        Icon(
+            imageVector = AppIcons.ArrowR,
+            contentDescription = null,
+            tint = KnotworkTheme.extended.onSurfaceMuted,
+            modifier = Modifier.size(LeadingIconSize),
         )
     }
 }

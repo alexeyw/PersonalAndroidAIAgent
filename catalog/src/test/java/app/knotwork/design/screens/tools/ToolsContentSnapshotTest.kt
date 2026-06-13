@@ -174,6 +174,14 @@ internal object ToolsPreview {
             risk = BuiltInToolRisk.Destructive,
             enabled = false,
         ),
+        BuiltInToolRow(
+            id = "http_request",
+            name = "http_request",
+            description = "Fetch a URL on an allowed host · per-method HITL",
+            risk = BuiltInToolRisk.Sensitive,
+            enabled = true,
+            allowedDomainsCount = 5,
+        ),
     )
 
     private fun servers(): List<McpServerRow> = listOf(

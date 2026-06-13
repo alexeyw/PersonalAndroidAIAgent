@@ -34,6 +34,7 @@ import app.knotwork.android.presentation.ui.settings.provider.ProviderPickerScre
 import app.knotwork.android.presentation.ui.splash.SplashScreen
 import app.knotwork.android.presentation.ui.taskmonitor.TaskMonitorScreen
 import app.knotwork.android.presentation.ui.taskmonitor.TaskMonitorViewModel
+import app.knotwork.android.presentation.ui.tools.AllowedDomainsScreen
 import app.knotwork.android.presentation.ui.tools.McpServerConfigScreen
 import app.knotwork.android.presentation.ui.tools.ToolDetailScreen
 import app.knotwork.android.presentation.ui.tools.ToolsScreen
@@ -221,6 +222,13 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                     val encoded = android.net.Uri.encode(toolId)
                     navController.navigate(NavRoutes.TOOL_DETAIL.replace(oldValue = "{toolId}", newValue = encoded))
                 },
+                onOpenAllowedDomains = { navController.navigate(NavRoutes.ALLOWED_DOMAINS) },
+            )
+        }
+        composable(NavRoutes.ALLOWED_DOMAINS) {
+            AllowedDomainsScreen(
+                onBack = { navController.popBackStack() },
+                modifier = Modifier.fillMaxSize(),
             )
         }
         composable(
