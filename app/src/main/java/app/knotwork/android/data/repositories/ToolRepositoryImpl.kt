@@ -4,6 +4,9 @@ import app.knotwork.android.data.mcp.McpClient
 import app.knotwork.android.data.mcp.McpClientFactory
 import app.knotwork.android.data.tools.local.LocalAppFunctionManager
 import app.knotwork.android.data.tools.local.SearchTool
+import app.knotwork.android.data.tools.local.executors.FindFilesExecutor
+import app.knotwork.android.data.tools.local.executors.ListFilesExecutor
+import app.knotwork.android.data.tools.local.executors.ReadFileExecutor
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.McpServerConfig
@@ -96,6 +99,21 @@ class ToolRepositoryImpl @Inject constructor(
         val baseTools = mutableListOf(
             scheduleTool,
             searchTool.asAgentTool().copy(risk = ToolRisk.READ_ONLY),
+            workspaceReadTool(
+                name = ReadFileExecutor.TOOL_NAME,
+                description = ReadFileExecutor.DESCRIPTION,
+                parameters = ReadFileExecutor.PARAMETERS,
+            ),
+            workspaceReadTool(
+                name = ListFilesExecutor.TOOL_NAME,
+                description = ListFilesExecutor.DESCRIPTION,
+                parameters = ListFilesExecutor.PARAMETERS,
+            ),
+            workspaceReadTool(
+                name = FindFilesExecutor.TOOL_NAME,
+                description = FindFilesExecutor.DESCRIPTION,
+                parameters = FindFilesExecutor.PARAMETERS,
+            ),
         )
 
         if (availableModels.isEmpty()) {
@@ -124,6 +142,20 @@ class ToolRepositoryImpl @Inject constructor(
         baseTools.add(delegateTool)
         return baseTools
     }
+
+    /**
+     * Builds an [AgentTool] for a read-only workspace file tool (`read_file`,
+     * `list_files`, `find_files`). All three are [ToolRisk.READ_ONLY]: reading or
+     * listing the agent's own jailed sandbox neither mutates state nor reaches
+     * outside the device, so they pass the HITL gate without a confirmation under
+     * the default policy.
+     */
+    private fun workspaceReadTool(name: String, description: String, parameters: String): AgentTool = AgentTool(
+        name = name,
+        description = description,
+        parameters = parameters,
+        risk = ToolRisk.READ_ONLY,
+    )
 
     /**
      * Reconciles the [mcpClients] pool against [SettingsRepository.mcpServers].

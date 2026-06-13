@@ -417,6 +417,23 @@ interface SettingsRepository {
     suspend fun setWorkspaceMaxTotalBytes(bytes: Long)
 
     /**
+     * A [Flow] of the budget, in **tokens**, of file content the `read_file`
+     * tool returns in a single call. The tool converts this to an approximate
+     * byte ceiling and truncates the served window to it (appending a
+     * `[... truncated, N bytes remain — use offset to continue]` marker), so a
+     * single read of a large file can never overflow the local model's context
+     * window.
+     */
+    val workspaceReadTokenBudget: Flow<Int>
+
+    /**
+     * Updates the per-read token budget of the `read_file` tool.
+     *
+     * @param tokens The new budget, in tokens.
+     */
+    suspend fun setWorkspaceReadTokenBudget(tokens: Int)
+
+    /**
      * A [Flow] representing the maximum number of pipeline execution steps.
      * Prevents infinite loops in pipeline graphs. Valid range: 5–100.
      */

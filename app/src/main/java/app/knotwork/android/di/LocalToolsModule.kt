@@ -4,6 +4,9 @@ import app.knotwork.android.data.engine.KoogClientFactory
 import app.knotwork.android.data.engine.KoogCloudLlmModelResolver
 import app.knotwork.android.data.tools.local.SearchTool
 import app.knotwork.android.data.tools.local.executors.DelegateTaskExecutor
+import app.knotwork.android.data.tools.local.executors.FindFilesExecutor
+import app.knotwork.android.data.tools.local.executors.ListFilesExecutor
+import app.knotwork.android.data.tools.local.executors.ReadFileExecutor
 import app.knotwork.android.data.tools.local.executors.ScheduleTaskExecutor
 import app.knotwork.android.data.tools.local.executors.SearchToolExecutor
 import app.knotwork.android.domain.engine.CloudLlmClientFactory
@@ -45,6 +48,21 @@ abstract class LocalToolsModule {
     @IntoMap
     @StringKey(SearchTool.TOOL_NAME)
     abstract fun bindSearchToolExecutor(executor: SearchToolExecutor): LocalToolExecutor
+
+    @Binds
+    @IntoMap
+    @StringKey(ReadFileExecutor.TOOL_NAME)
+    abstract fun bindReadFileExecutor(executor: ReadFileExecutor): LocalToolExecutor
+
+    @Binds
+    @IntoMap
+    @StringKey(ListFilesExecutor.TOOL_NAME)
+    abstract fun bindListFilesExecutor(executor: ListFilesExecutor): LocalToolExecutor
+
+    @Binds
+    @IntoMap
+    @StringKey(FindFilesExecutor.TOOL_NAME)
+    abstract fun bindFindFilesExecutor(executor: FindFilesExecutor): LocalToolExecutor
 
     /**
      * Domain-level binding for the cloud client factory. The data-layer impl

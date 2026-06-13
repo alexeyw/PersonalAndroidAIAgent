@@ -107,6 +107,7 @@ class SettingsManager @Inject constructor(
             androidx.datastore.preferences.core.longPreferencesKey("workspace_max_file_size_bytes")
         val WORKSPACE_MAX_TOTAL_BYTES =
             androidx.datastore.preferences.core.longPreferencesKey("workspace_max_total_bytes")
+        val WORKSPACE_READ_TOKEN_BUDGET = intPreferencesKey("workspace_read_token_budget")
         val PIPELINE_MAX_STEPS = intPreferencesKey("pipeline_max_steps")
         val RESUME_MAX_AGE_HOURS = intPreferencesKey("resume_max_age_hours")
         val BACKGROUND_APPROVAL_WINDOW_HOURS = intPreferencesKey("background_approval_window_hours")
@@ -1032,6 +1033,26 @@ class SettingsManager @Inject constructor(
     override suspend fun setWorkspaceMaxTotalBytes(bytes: Long) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.WORKSPACE_MAX_TOTAL_BYTES] = bytes
+        }
+    }
+
+    override val workspaceReadTokenBudget: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.WORKSPACE_READ_TOKEN_BUDGET]
+                ?: SettingsDefaults.WORKSPACE_READ_TOKEN_BUDGET_DEFAULT
+        }
+
+    override suspend fun setWorkspaceReadTokenBudget(tokens: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.WORKSPACE_READ_TOKEN_BUDGET] = tokens
         }
     }
 

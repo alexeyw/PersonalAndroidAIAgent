@@ -15,6 +15,19 @@ details.
 
 ### Added
 
+- **Workspace read tools.** Three new built-in, read-only tools let the
+  agent inspect its file workspace: **read_file** (reads a UTF-8 text file,
+  truncated to a per-read token budget — default 2000 tokens — so a long
+  file never overflows the local model's context window, with byte
+  `offset`/`limit` paging that stitches consecutive pages back together
+  without splitting multi-byte characters), **list_files** (a stable,
+  path-sorted listing with size and modified time, optionally scoped to a
+  sub-directory) and **find_files** (glob search over relative paths, e.g.
+  `*.md` or `reports/**`). All three resolve through the jailed workspace
+  gate, so a path that escapes the sandbox is refused with a readable
+  error. A new **workspace read token budget** setting tunes the read
+  truncation limit.
+
 - **Agent file workspace (foundation).** Groundwork for letting the agent
   read and write files: a single, jailed directory (`files/agent_workspace/`
   in the app's private storage) with a strict containment boundary. Every
