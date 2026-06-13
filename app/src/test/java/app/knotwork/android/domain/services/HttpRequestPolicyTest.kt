@@ -55,6 +55,15 @@ class HttpRequestPolicyTest {
     }
 
     @Test
+    fun `given userinfo when normalizeDomain then strips credentials and keeps the host`() {
+        // Regression: without stripping userinfo, `user:pass@example.com` survives
+        // as the bogus host `user` (passes the single-label host pattern).
+        assertEquals("example.com", HttpRequestPolicy.normalizeDomain("user:pass@example.com"))
+        assertEquals("example.com", HttpRequestPolicy.normalizeDomain("https://user:pass@example.com:8443/path"))
+        assertEquals("example.com", HttpRequestPolicy.normalizeDomain("user@example.com"))
+    }
+
+    @Test
     fun `given invalid input when normalizeDomain then null`() {
         assertNull(HttpRequestPolicy.normalizeDomain(""))
         assertNull(HttpRequestPolicy.normalizeDomain("https://"))
@@ -109,6 +118,28 @@ class HttpRequestPolicyTest {
         assertFalse(HttpRequestPolicy.isLoopbackOrPrivateHost("172.32.0.1")) // just outside 16..31
         assertFalse(HttpRequestPolicy.isLoopbackOrPrivateHost("999.1.1.1"))
         assertFalse(HttpRequestPolicy.isLoopbackOrPrivateHost("10.0.0"))
+    }
+
+    @Test
+    fun `given a same-host redirect when headersForRedirect then headers are unchanged`() {
+        val headers = listOf("Authorization" to "Bearer x", "Accept" to "application/json")
+        assertEquals(headers, HttpRequestPolicy.headersForRedirect(headers, "example.com", "example.com"))
+        // Host comparison is case-insensitive.
+        assertEquals(headers, HttpRequestPolicy.headersForRedirect(headers, "Example.com", "example.com"))
+    }
+
+    @Test
+    fun `given a cross-host redirect when headersForRedirect then credential headers are dropped`() {
+        val headers = listOf(
+            "Authorization" to "Bearer x",
+            "Cookie" to "s=1",
+            "Proxy-Authorization" to "Basic y",
+            "Accept" to "application/json",
+        )
+        assertEquals(
+            listOf("Accept" to "application/json"),
+            HttpRequestPolicy.headersForRedirect(headers, "a.example.com", "b.example.com"),
+        )
     }
 
     @Test

@@ -41,6 +41,15 @@ object HttpRequestPolicy {
     /** Methods that carry a request body (the others must not). */
     private val METHODS_WITH_BODY: Set<String> = setOf("POST", "PUT", "DELETE")
 
+    /**
+     * Request headers dropped when a redirect crosses to a different host —
+     * mirrors OkHttp's automatic-redirect behaviour, which we lose by following
+     * redirects manually. Keeps a bearer token / cookie from leaking to a second
+     * host on the redirect chain (low risk here since both hosts are
+     * allowlisted, but free defence-in-depth). Compared case-insensitively.
+     */
+    private val SENSITIVE_REDIRECT_HEADERS = setOf("authorization", "cookie", "proxy-authorization")
+
     /** Hostname / IPv4 literal grammar used to validate an allowlist entry. */
     private val HOST_PATTERN = Regex(
         "^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$",
@@ -103,8 +112,15 @@ object HttpRequestPolicy {
         if (host.isEmpty()) return null
         val schemeIdx = host.indexOf("://")
         if (schemeIdx >= 0) host = host.substring(schemeIdx + SCHEME_SEPARATOR_LENGTH)
+        // Isolate the authority (drop path/query) BEFORE stripping userinfo, so an
+        // '@' inside a path can't be mistaken for a userinfo delimiter.
         host = host.substringBefore('/')
         host = host.substringBefore('?')
+        // Drop any `user:pass@` userinfo. Without this, `user:pass@example.com`
+        // would survive the next `substringBefore(':')` as the bogus host `user`.
+        // substringAfterLast returns the whole string when '@' is absent, so this
+        // is a no-op for a plain host.
+        host = host.substringAfterLast('@')
         host = host.substringBefore(':') // drop any :port
         if (host.isEmpty()) return null
         return if (HOST_PATTERN.matches(host)) host else null
@@ -127,6 +143,26 @@ object HttpRequestPolicy {
         val h = host.trim().lowercase()
         if (h.isEmpty()) return false
         return allowed.any { raw -> h == raw.trim().lowercase() }
+    }
+
+    /**
+     * Returns the headers to carry on a redirect hop from [fromHost] to
+     * [toHost]. When the host is unchanged the list is returned as-is; when the
+     * redirect crosses to a different host, [SENSITIVE_REDIRECT_HEADERS] are
+     * dropped so a credential header is not forwarded to the second host.
+     *
+     * @param headers the headers sent on the current hop.
+     * @param fromHost host of the current request.
+     * @param toHost host of the redirect target.
+     * @return the headers to send on the next hop.
+     */
+    fun headersForRedirect(
+        headers: List<Pair<String, String>>,
+        fromHost: String,
+        toHost: String,
+    ): List<Pair<String, String>> {
+        if (fromHost.equals(toHost, ignoreCase = true)) return headers
+        return headers.filterNot { it.first.trim().lowercase() in SENSITIVE_REDIRECT_HEADERS }
     }
 
     /**

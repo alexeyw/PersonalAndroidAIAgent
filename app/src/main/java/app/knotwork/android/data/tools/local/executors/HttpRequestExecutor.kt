@@ -99,7 +99,11 @@ class HttpRequestExecutor @Inject constructor(
         val headers = parseHeaders(json)
         val body = if (HttpRequestPolicy.methodAllowsBody(method)) json.optString("body", "") else null
 
-        val scanTexts = headers.map { it.second } + listOfNotNull(body?.takeIf { it.isNotEmpty() })
+        // Scan the URL too, not just headers/body: for a GET the query string and
+        // path are the easiest channel to smuggle a stored key out
+        // (`https://allowed.example/log?k=sk-…`), so leaving the URL unchecked
+        // would defeat the credential filter for the most common method.
+        val scanTexts = headers.map { it.second } + listOfNotNull(body?.takeIf { it.isNotEmpty() }, rawUrl)
         if (HttpRequestPolicy.leaksCredential(scanTexts, collectStoredSecrets())) {
             return "Error: request contains a stored credential — refusing to send a saved API key off-device."
         }
@@ -144,9 +148,10 @@ class HttpRequestExecutor @Inject constructor(
         var url = startUrl
         var method = startMethod
         var body = startBody
+        var currentHeaders = headers
         var hop = 0
         while (true) {
-            val response = client.newCall(buildRequest(url, method, body, headers)).execute()
+            val response = client.newCall(buildRequest(url, method, body, currentHeaders)).execute()
             val code = response.code
             if (response.isRedirect && hop < SettingsDefaults.HTTP_TOOL_MAX_REDIRECTS) {
                 val location = response.header("Location")
@@ -163,6 +168,13 @@ class HttpRequestExecutor @Inject constructor(
                     method = "GET"
                     body = null
                 }
+                // Drop credential headers when the redirect crosses to a different
+                // host, mirroring OkHttp's automatic-redirect behaviour we forgo here.
+                currentHeaders = HttpRequestPolicy.headersForRedirect(
+                    headers = currentHeaders,
+                    fromHost = url.host,
+                    toHost = next.host,
+                )
                 url = next
                 hop++
                 continue

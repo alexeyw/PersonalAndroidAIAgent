@@ -131,6 +131,19 @@ class HttpRequestExecutorTest {
     }
 
     @Test
+    fun `given a stored key in the url query when execute then refuses without a request`() = runTest {
+        allow(server.hostName)
+        every { apiKeys.getOpenAIKey() } returns flowOf("sk-leak-123")
+
+        // The easiest GET exfil channel: a key smuggled into the query string of
+        // an allowlisted host. Must be refused before any socket opens.
+        val result = run("""{"method":"GET","url":"${server.url("/log?k=sk-leak-123")}"}""")
+
+        assertTrue(result.contains("stored credential"))
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
     fun `given a stored key in the body when execute then refuses without a request`() = runTest {
         allow(server.hostName)
         every { apiKeys.getAnthropicKey() } returns flowOf("sk-ant-secret")

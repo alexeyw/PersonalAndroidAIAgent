@@ -436,7 +436,9 @@ interface SettingsRepository {
     /**
      * A [Flow] of the domain allowlist for the `http_request` tool, in the order
      * the user added them. Each entry is a normalised host (e.g. `api.example.com`)
-     * and matches that host plus any of its sub-domains.
+     * and is matched **exactly** — sub-domains are not implied, so the user must
+     * add each host they intend to reach (see
+     * [app.knotwork.android.domain.services.HttpRequestPolicy.isHostAllowed]).
      *
      * The allowlist is the tool's master switch: while it is **empty** the tool
      * is not published into [getAvailableTools] at all (the agent never sees it),
