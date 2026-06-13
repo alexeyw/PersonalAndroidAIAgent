@@ -296,6 +296,29 @@ class AgentWorkspaceImplTest {
     }
 
     @Test
+    fun `given non-ASCII text whose window ends on a char boundary when list then it reports as text`() = runTest {
+        val workspace = workspaceWith()
+        // 5 000 two-byte chars = 10 000 bytes; the 8 KB window ends exactly on a
+        // character boundary, so an unconditional tail-drop would slice a valid char and
+        // wrongly mark the file binary — this is the Cyrillic Markdown/CSV regression.
+        putRawFile("aligned-ru.md", "я".repeat(5_000).toByteArray(Charsets.UTF_8))
+
+        val entry = assertSuccess(workspace.list()).single { it.relativePath == "aligned-ru.md" }
+        assertTrue("boundary-aligned multi-byte text must stay text", entry.isText)
+    }
+
+    @Test
+    fun `given a large non-ASCII text file when readTextPreview then returns truncated text`() = runTest {
+        val workspace = workspaceWith()
+        putRawFile("aligned-ru.md", "я".repeat(5_000).toByteArray(Charsets.UTF_8))
+
+        val preview = assertSuccess(workspace.readTextPreview("aligned-ru.md", maxBytes = SNIFF_BYTES))
+
+        assertTrue("a large UTF-8 file must preview, not fail as binary", preview.text.isNotEmpty())
+        assertTrue(preview.truncated)
+    }
+
+    @Test
     fun `given a binary marker beyond the sniff window when readText then NotAText`() = runTest {
         val workspace = workspaceWith()
         putRawFile("long.txt", ByteArray(SNIFF_BYTES) { 'a'.code.toByte() } + byteArrayOf(0))

@@ -167,21 +167,17 @@ class AgentWorkspaceImpl @Inject constructor(
         if (!target.isFile) return WorkspaceResult.Failure(WorkspaceError.NotFound)
         val totalBytes = target.length()
         val slice = target.inputStream().use { input -> input.readNBytes(maxBytes) }
+        if (slice.any { it == 0.toByte() }) return WorkspaceResult.Failure(WorkspaceError.NotAText)
         val fileLongerThanSlice = totalBytes > slice.size.toLong()
-        // When the slice fills the budget and more bytes remain, drop a few trailing
-        // bytes so a multi-byte UTF-8 sequence straddling the cut is not misread.
-        val usable = if (fileLongerThanSlice && slice.size >= MAX_UTF8_TAIL_BYTES) {
-            slice.copyOf(slice.size - MAX_UTF8_TAIL_BYTES)
-        } else {
-            slice
-        }
-        if (!isUtf8Text(usable)) return WorkspaceResult.Failure(WorkspaceError.NotAText)
+        // Decode the full slice first; only when the budget cut the file mid-character do
+        // we tolerate dropping up to a few trailing bytes (an incomplete final char).
+        // Trimming unconditionally would slice a valid trailing character on a
+        // boundary-aligned window and wrongly report text as binary.
+        val maxTrim = if (fileLongerThanSlice) MAX_UTF8_TAIL_BYTES else 0
+        val text = (0..maxTrim).firstNotNullOfOrNull { trim -> decodeUtf8OrNull(slice, slice.size - trim) }
+            ?: return WorkspaceResult.Failure(WorkspaceError.NotAText)
         return WorkspaceResult.Success(
-            WorkspaceTextPreview(
-                text = usable.toString(Charsets.UTF_8),
-                totalBytes = totalBytes,
-                truncated = fileLongerThanSlice,
-            ),
+            WorkspaceTextPreview(text = text, totalBytes = totalBytes, truncated = fileLongerThanSlice),
         )
     }
 
@@ -438,20 +434,10 @@ class AgentWorkspaceImpl @Inject constructor(
     private fun looksLikeText(file: File): Boolean = try {
         file.inputStream().use { input ->
             // Use readNBytes, not read(buffer): a single read() may return fewer bytes
-            // than requested (a short read) even when more exist, and a short read that
-            // cuts a multi-byte UTF-8 sequence mid-character would make valid non-ASCII
-            // text (e.g. Cyrillic Markdown) fail the strict decode and be misflagged as
-            // binary. readNBytes fills the window up to the file's end deterministically.
+            // than requested (a short read) even when more exist. readNBytes fills the
+            // window up to the file's end deterministically.
             val sniff = input.readNBytes(TEXT_SNIFF_BYTES)
-            if (sniff.isEmpty()) {
-                true // empty file counts as text
-            } else {
-                // A full window may sit in the middle of a longer file, so drop a few
-                // trailing bytes in case a multi-byte sequence straddles the boundary; a
-                // shorter read means we have the whole file, so keep every byte.
-                val usable = if (sniff.size == TEXT_SNIFF_BYTES) sniff.size - MAX_UTF8_TAIL_BYTES else sniff.size
-                isUtf8Text(sniff.copyOf(usable))
-            }
+            prefixLooksLikeUtf8(sniff, windowMayBeTruncated = sniff.size == TEXT_SNIFF_BYTES)
         }
     } catch (e: IOException) {
         // An unreadable file is treated as non-text rather than crashing a listing.
@@ -460,21 +446,47 @@ class AgentWorkspaceImpl @Inject constructor(
     }
 
     /**
-     * Decides whether [bytes] is UTF-8 text: empty content counts as text, a NUL
-     * byte marks it binary, and otherwise a strict (report-on-error) UTF-8 decode
-     * must succeed.
+     * Heuristic UTF-8 text check over a sniffed [prefix]: empty counts as text, a NUL
+     * byte marks it binary, otherwise the prefix must decode as strict UTF-8.
+     *
+     * The full prefix is decoded **first**, so a window that ends exactly on a
+     * character boundary is never misjudged. Only when the sniff window may have cut a
+     * trailing multi-byte character ([windowMayBeTruncated], i.e. the file is longer
+     * than the window) are up to [MAX_UTF8_TAIL_BYTES] trailing bytes tolerated — an
+     * incomplete final character must not flag otherwise-valid non-ASCII text (e.g.
+     * Cyrillic Markdown/CSV) as binary.
+     */
+    private fun prefixLooksLikeUtf8(prefix: ByteArray, windowMayBeTruncated: Boolean): Boolean {
+        if (prefix.isEmpty()) return true
+        if (prefix.any { it == 0.toByte() }) return false
+        val maxTrim = if (windowMayBeTruncated) MAX_UTF8_TAIL_BYTES else 0
+        return (0..maxTrim).any { trim -> decodeUtf8OrNull(prefix, prefix.size - trim) != null }
+    }
+
+    /**
+     * Full-content UTF-8 text check (the authoritative path for [readText]): empty
+     * content counts as text, a NUL byte marks it binary, and otherwise the whole
+     * buffer must decode strictly with no tolerance for a truncated tail.
      */
     private fun isUtf8Text(bytes: ByteArray): Boolean {
         if (bytes.isEmpty()) return true
         if (bytes.any { it == 0.toByte() }) return false
+        return decodeUtf8OrNull(bytes, bytes.size) != null
+    }
+
+    /**
+     * Strictly decodes the first [length] bytes of [bytes] as UTF-8, returning the
+     * decoded text, or `null` if it contains a malformed or unmappable sequence.
+     */
+    private fun decodeUtf8OrNull(bytes: ByteArray, length: Int): String? {
+        if (length <= 0) return ""
         val decoder = Charsets.UTF_8.newDecoder()
             .onMalformedInput(CodingErrorAction.REPORT)
             .onUnmappableCharacter(CodingErrorAction.REPORT)
         return try {
-            decoder.decode(ByteBuffer.wrap(bytes))
-            true
+            decoder.decode(ByteBuffer.wrap(bytes, 0, length)).toString()
         } catch (e: CharacterCodingException) {
-            false
+            null
         }
     }
 

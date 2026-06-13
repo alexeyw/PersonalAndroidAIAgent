@@ -396,7 +396,7 @@ private fun FileRow(item: FileRowItem, selectionMode: Boolean, selected: Boolean
                 onClick = { callbacks.onRowClick(item.path) },
                 onLongClick = { callbacks.onRowLongClick(item.path) },
             )
-            .padding(horizontal = KnotworkTheme.spacing.sp2, vertical = KnotworkTheme.spacing.sp3),
+            .padding(horizontal = KnotworkTheme.spacing.sp2, vertical = KnotworkTheme.spacing.sp2),
     ) {
         if (selectionMode) {
             FileCheckbox(checked = selected)
@@ -495,7 +495,9 @@ private fun FileRowText(item: FileRowItem, modifier: Modifier = Modifier) {
 private fun FileRowMenu(item: FileRowItem, callbacks: FilesCallbacks) {
     var open by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { open = true }) {
+        // Constrain the overflow button so its default 48 dp min touch target does not
+        // inflate every row's height.
+        IconButton(onClick = { open = true }, modifier = Modifier.size(ROW_MENU_BUTTON_SIZE)) {
             Icon(
                 imageVector = AppIcons.More,
                 contentDescription = stringResource(R.string.knotwork_files_row_menu_cd, item.name),
@@ -766,6 +768,7 @@ private fun PreviewActions(path: String, callbacks: FilesCallbacks) {
 private val QUOTA_BAR_HEIGHT = 6.dp
 private val QUOTA_COUNT_BASELINE_PAD = 2.dp
 private val ROW_TILE_SIZE = 38.dp
+private val ROW_MENU_BUTTON_SIZE = 36.dp
 internal val ROW_ICON_SIZE = 19.dp
 private val CHECKBOX_SIZE = 22.dp
 private val CHECKBOX_TICK_SIZE = 14.dp
