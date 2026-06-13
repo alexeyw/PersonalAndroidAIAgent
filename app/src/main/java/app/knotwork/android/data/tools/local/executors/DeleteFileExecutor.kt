@@ -47,6 +47,7 @@ class DeleteFileExecutor @Inject constructor(private val workspace: AgentWorkspa
         WorkspaceError.TooLarge,
         WorkspaceError.AnchorNotFound,
         is WorkspaceError.AnchorNotUnique,
+        WorkspaceError.IsDirectory,
         -> "Error: '$path' could not be deleted."
     }
 

@@ -143,6 +143,7 @@ class ReadFileExecutor @Inject constructor(
         WorkspaceError.QuotaExceeded,
         WorkspaceError.AnchorNotFound,
         is WorkspaceError.AnchorNotUnique,
+        WorkspaceError.IsDirectory,
         -> "Error: '$path' could not be read."
     }
 

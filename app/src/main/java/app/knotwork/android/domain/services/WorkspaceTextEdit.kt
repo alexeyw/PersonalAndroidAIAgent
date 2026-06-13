@@ -62,6 +62,10 @@ object WorkspaceTextEdit {
      *   [Outcome.AnchorNotUnique] (with the count) when it is ambiguous.
      */
     fun apply(content: String, oldText: String, newText: String): Outcome {
+        // An empty anchor has no single target and would make countOccurrences spin
+        // forever (indexOf("") never advances). Callers reject it upstream; this guards
+        // the pure service against a future caller that forgets to.
+        require(oldText.isNotEmpty()) { "oldText anchor must not be empty" }
         val count = countOccurrences(content, oldText)
         return when {
             count == 0 -> Outcome.AnchorNotFound

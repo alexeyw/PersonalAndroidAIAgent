@@ -81,7 +81,9 @@ interface AgentWorkspace {
      *   file is replaced.
      * @return [WorkspaceResult.Success] with the resulting [WorkspaceFile]
      *   metadata, or [WorkspaceResult.Failure] with
-     *   [WorkspaceError.PathOutsideWorkspace], [WorkspaceError.AlreadyExists],
+     *   [WorkspaceError.PathOutsideWorkspace], [WorkspaceError.AlreadyExists]
+     *   (a file is already there and `overwrite` is `false`),
+     *   [WorkspaceError.IsDirectory] (the path is a directory),
      *   [WorkspaceError.TooLarge] or [WorkspaceError.QuotaExceeded].
      */
     suspend fun writeText(

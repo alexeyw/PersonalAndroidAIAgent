@@ -68,6 +68,13 @@ class WorkspaceTextEditTest {
         assertEquals(WorkspaceTextEdit.Outcome.Replaced("done"), outcome)
     }
 
+    @Test(expected = IllegalArgumentException::class)
+    fun `given empty anchor when apply then rejects instead of looping`() {
+        // An empty needle would make the occurrence scan spin forever; the pure
+        // service guards itself even though the executor also rejects it upstream.
+        WorkspaceTextEdit.apply("anything", "", "x")
+    }
+
     @Test
     fun `given replacement containing the anchor when apply then does not loop`() {
         // Replacing with text that itself contains the anchor must not re-trigger:

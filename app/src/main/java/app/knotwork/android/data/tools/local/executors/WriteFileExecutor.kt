@@ -48,6 +48,7 @@ class WriteFileExecutor @Inject constructor(private val workspace: AgentWorkspac
         WorkspaceError.PathOutsideWorkspace -> "Error: path '$path' is outside the workspace."
         WorkspaceError.AlreadyExists ->
             "Error: '$path' already exists. Pass \"overwrite\": true to replace it."
+        WorkspaceError.IsDirectory -> "Error: '$path' is a directory, not a file — choose a different path."
         WorkspaceError.TooLarge -> "Error: content for '$path' exceeds the per-file size limit."
         WorkspaceError.QuotaExceeded -> "Error: writing '$path' would exceed the workspace storage quota."
         WorkspaceError.NotFound,

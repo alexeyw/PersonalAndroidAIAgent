@@ -490,6 +490,49 @@ class AgentWorkspaceImplTest {
 
     // endregion
 
+    // region reserved scratch suffix
+
+    @Test
+    fun `given a reserved scratch-suffix path when writeText then refused and nothing is created`() = runTest {
+        val workspace = workspaceWith()
+
+        // The agent must not be able to address the reserved atomic-write suffix: such a
+        // file would be hidden from listings and excluded from quota accounting, so
+        // allowing it would open a quota-bypass / invisible-storage hole.
+        assertFailure(workspace.writeText("evil$RESERVED_TMP_SUFFIX", "x"), WorkspaceError.NotFound)
+        assertFalse(File(workspaceRoot(), "evil$RESERVED_TMP_SUFFIX").exists())
+    }
+
+    @Test
+    fun `given a reserved scratch-suffix path when readText or delete then reported NotFound`() = runTest {
+        val workspace = workspaceWith()
+        // Even if one already exists on disk (e.g. a crashed write's residue), it stays
+        // invisible and unaddressable through the gate.
+        putRawFile("residue$RESERVED_TMP_SUFFIX", "leftover".toByteArray())
+
+        assertFailure(workspace.readText("residue$RESERVED_TMP_SUFFIX"), WorkspaceError.NotFound)
+        assertFailure(workspace.delete("residue$RESERVED_TMP_SUFFIX"), WorkspaceError.NotFound)
+    }
+
+    // endregion
+
+    // region directory write
+
+    @Test
+    fun `given a directory path when writeText then fails IsDirectory regardless of overwrite`() = runTest {
+        val workspace = workspaceWith()
+        // Writing a nested file implicitly creates the 'reports' directory.
+        assertSuccess(workspace.writeText("reports/a.md", "x"))
+
+        // Targeting the directory itself must report IsDirectory — not AlreadyExists,
+        // which would (mis)invite an endless retry with overwrite:true.
+        assertFailure(workspace.writeText("reports", "y"), WorkspaceError.IsDirectory)
+        assertFailure(workspace.writeText("reports", "y", overwrite = true), WorkspaceError.IsDirectory)
+        assertTrue(File(workspaceRoot(), "reports").isDirectory)
+    }
+
+    // endregion
+
     private companion object {
         const val DEFAULT_FILE_SIZE = 5L * 1024 * 1024
         const val DEFAULT_TOTAL = 100L * 1024 * 1024

@@ -133,11 +133,17 @@ class AgentWorkspaceImpl @Inject constructor(
         }
         val root = rootDir()
         val target = File(root, relativePath).canonicalFile
-        return if (isInsideRoot(target, root)) {
-            WorkspaceResult.Success(target)
-        } else {
-            WorkspaceResult.Failure(WorkspaceError.PathOutsideWorkspace)
+        if (!isInsideRoot(target, root)) {
+            return WorkspaceResult.Failure(WorkspaceError.PathOutsideWorkspace)
         }
+        // Reject the reserved atomic-write scratch suffix: such files are hidden from
+        // listings and excluded from quota accounting, so letting the agent address one
+        // would let it write storage the quota never counts (and that it could never see
+        // or clean up). Reported as NotFound so the artifact stays invisible.
+        if (isScratchFile(target)) {
+            return WorkspaceResult.Failure(WorkspaceError.NotFound)
+        }
+        return WorkspaceResult.Success(target)
     }
 
     /**
@@ -180,7 +186,10 @@ class AgentWorkspaceImpl @Inject constructor(
         content: String,
         overwrite: Boolean,
     ): WorkspaceResult<WorkspaceFile> {
-        if (target.isDirectory) return WorkspaceResult.Failure(WorkspaceError.AlreadyExists)
+        // A directory can never be replaced by a file, even with `overwrite`. Report it
+        // distinctly so the tool does not hand back a "retry with overwrite" hint that
+        // would loop forever (the overwrite flag is checked only for an existing file).
+        if (target.isDirectory) return WorkspaceResult.Failure(WorkspaceError.IsDirectory)
         val exists = target.isFile
         if (exists && !overwrite) return WorkspaceResult.Failure(WorkspaceError.AlreadyExists)
 

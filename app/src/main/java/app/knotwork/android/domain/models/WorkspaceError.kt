@@ -67,4 +67,13 @@ sealed class WorkspaceError {
      * @property count The number of non-overlapping occurrences found.
      */
     data class AnchorNotUnique(val count: Int) : WorkspaceError()
+
+    /**
+     * A write (or edit) was attempted at a path that resolves to a directory.
+     * Distinct from [AlreadyExists] on purpose: a directory cannot be replaced
+     * by a file even with `overwrite`, so surfacing it as [AlreadyExists] would
+     * tempt the caller to retry with the overwrite flag forever. The file tool
+     * maps this to an error that carries no "retry with overwrite" hint.
+     */
+    data object IsDirectory : WorkspaceError()
 }

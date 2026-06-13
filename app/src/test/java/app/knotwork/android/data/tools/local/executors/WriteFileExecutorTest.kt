@@ -9,6 +9,7 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -89,6 +90,18 @@ class WriteFileExecutorTest {
 
         assertTrue(result.contains("already exists"))
         assertTrue(result.contains("overwrite"))
+    }
+
+    @Test
+    fun `given is-directory failure when execute then errors without an overwrite hint`() = runTest {
+        coEvery { workspace.writeText(any(), any(), any()) } returns
+            WorkspaceResult.Failure(WorkspaceError.IsDirectory)
+
+        val result = executor.execute("""{"path":"reports","content":"x"}""")
+
+        assertTrue(result.contains("is a directory"))
+        // The hint that would otherwise loop the agent must NOT appear for a directory.
+        assertFalse(result.contains("overwrite"))
     }
 
     @Test
