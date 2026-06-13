@@ -49,4 +49,31 @@ sealed class WorkspaceError {
      * file is too large to pull into memory wholesale).
      */
     data object TooLarge : WorkspaceError()
+
+    /**
+     * An [app.knotwork.android.domain.services.AgentWorkspace.editText] anchor
+     * (`oldText`) does not occur in the target file. An edit is refused unless
+     * its anchor addresses an existing fragment, so the agent cannot blindly
+     * mutate a file whose content does not match its expectation.
+     */
+    data object AnchorNotFound : WorkspaceError()
+
+    /**
+     * An [app.knotwork.android.domain.services.AgentWorkspace.editText] anchor
+     * (`oldText`) occurs more than once in the target file, so the edit target
+     * is ambiguous. The caller is told the [count] so it can supply a longer,
+     * uniquely-matching anchor.
+     *
+     * @property count The number of non-overlapping occurrences found.
+     */
+    data class AnchorNotUnique(val count: Int) : WorkspaceError()
+
+    /**
+     * A write (or edit) was attempted at a path that resolves to a directory.
+     * Distinct from [AlreadyExists] on purpose: a directory cannot be replaced
+     * by a file even with `overwrite`, so surfacing it as [AlreadyExists] would
+     * tempt the caller to retry with the overwrite flag forever. The file tool
+     * maps this to an error that carries no "retry with overwrite" hint.
+     */
+    data object IsDirectory : WorkspaceError()
 }

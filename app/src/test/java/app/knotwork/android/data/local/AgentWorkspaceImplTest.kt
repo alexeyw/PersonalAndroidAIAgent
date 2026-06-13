@@ -316,9 +316,229 @@ class AgentWorkspaceImplTest {
         assertEquals(listOf("inside.txt"), assertSuccess(workspace.list()).map { it.relativePath })
     }
 
+    // region editText
+
+    @Test
+    fun `given unique anchor when editText then replaces and round-trips`() = runTest {
+        val workspace = workspaceWith()
+        assertSuccess(workspace.writeText("notes.md", "hello world"))
+
+        val edited = assertSuccess(workspace.editText("notes.md", "world", "there"))
+        assertEquals("notes.md", edited.relativePath)
+
+        assertEquals("hello there", assertSuccess(workspace.readText("notes.md")))
+    }
+
+    @Test
+    fun `given empty newText when editText then deletes the fragment`() = runTest {
+        val workspace = workspaceWith()
+        assertSuccess(workspace.writeText("notes.md", "keep [drop] keep"))
+
+        assertSuccess(workspace.editText("notes.md", "[drop] ", ""))
+
+        assertEquals("keep keep", assertSuccess(workspace.readText("notes.md")))
+    }
+
+    @Test
+    fun `given anchor absent when editText then fails AnchorNotFound and leaves file intact`() = runTest {
+        val workspace = workspaceWith()
+        assertSuccess(workspace.writeText("notes.md", "hello world"))
+
+        assertFailure(workspace.editText("notes.md", "missing", "x"), WorkspaceError.AnchorNotFound)
+
+        assertEquals("hello world", assertSuccess(workspace.readText("notes.md")))
+    }
+
+    @Test
+    fun `given ambiguous anchor when editText then fails AnchorNotUnique with count`() = runTest {
+        val workspace = workspaceWith()
+        assertSuccess(workspace.writeText("notes.md", "a-a-a"))
+
+        assertFailure(workspace.editText("notes.md", "a", "b"), WorkspaceError.AnchorNotUnique(3))
+
+        assertEquals("a-a-a", assertSuccess(workspace.readText("notes.md")))
+    }
+
+    @Test
+    fun `given missing file when editText then fails NotFound`() = runTest {
+        val workspace = workspaceWith()
+
+        assertFailure(workspace.editText("ghost.md", "a", "b"), WorkspaceError.NotFound)
+    }
+
+    @Test
+    fun `given binary file when editText then fails NotAText`() = runTest {
+        val workspace = workspaceWith()
+        putRawFile("blob.bin", byteArrayOf(1, 0, 2, 3))
+
+        assertFailure(workspace.editText("blob.bin", "x", "y"), WorkspaceError.NotAText)
+    }
+
+    @Test
+    fun `given traversal path when editText then fails PathOutsideWorkspace`() = runTest {
+        val workspace = workspaceWith()
+
+        assertFailure(workspace.editText("../escape.md", "a", "b"), WorkspaceError.PathOutsideWorkspace)
+    }
+
+    @Test
+    fun `given edit growing past total quota when editText then fails QuotaExceeded and keeps original`() = runTest {
+        val workspace = workspaceWith(maxTotal = 10)
+        assertSuccess(workspace.writeText("a.txt", "abcde")) // 5 bytes, workspace cap is 10
+
+        // Replacing the single 'e' with 7 chars grows the file to 11 bytes, over the cap.
+        assertFailure(workspace.editText("a.txt", "e", "eeeeeee"), WorkspaceError.QuotaExceeded)
+
+        assertEquals("abcde", assertSuccess(workspace.readText("a.txt")))
+    }
+
+    // endregion
+
+    // region delete
+
+    @Test
+    fun `given existing file when delete then removed and gone from listing`() = runTest {
+        val workspace = workspaceWith()
+        assertSuccess(workspace.writeText("reports/old.md", "stale"))
+
+        assertSuccess(workspace.delete("reports/old.md"))
+
+        assertFalse(File(workspaceRoot(), "reports/old.md").exists())
+        assertFailure(workspace.readText("reports/old.md"), WorkspaceError.NotFound)
+    }
+
+    @Test
+    fun `given missing file when delete then fails NotFound`() = runTest {
+        val workspace = workspaceWith()
+
+        assertFailure(workspace.delete("ghost.md"), WorkspaceError.NotFound)
+    }
+
+    @Test
+    fun `given directory path when delete then fails NotFound and directory survives`() = runTest {
+        val workspace = workspaceWith()
+        assertSuccess(workspace.writeText("dir/inside.md", "x"))
+
+        // 'dir' resolves to a directory, not a regular file — refused, not traversed.
+        assertFailure(workspace.delete("dir"), WorkspaceError.NotFound)
+        assertTrue(File(workspaceRoot(), "dir").isDirectory)
+    }
+
+    @Test
+    fun `given traversal path when delete then fails PathOutsideWorkspace`() = runTest {
+        val workspace = workspaceWith()
+
+        assertFailure(workspace.delete("../../shared_prefs/keys.xml"), WorkspaceError.PathOutsideWorkspace)
+    }
+
+    @Test
+    fun `given a delete after hitting quota when delete then freed space allows a new write`() = runTest {
+        val workspace = workspaceWith(maxTotal = 10)
+        assertSuccess(workspace.writeText("a.txt", "aaaaa")) // 5 bytes
+        assertSuccess(workspace.writeText("b.txt", "bbbbb")) // 5 bytes → workspace full at 10
+        // No room left for a third file.
+        assertFailure(workspace.writeText("c.txt", "c"), WorkspaceError.QuotaExceeded)
+
+        assertSuccess(workspace.delete("a.txt")) // frees 5 bytes; cached total must follow
+
+        // The freed space is now usable, proving the delete updated the cached counter.
+        assertSuccess(workspace.writeText("c.txt", "ccccc"))
+    }
+
+    // endregion
+
+    // region atomic write
+
+    @Test
+    fun `given a successful overwrite when writeText then leaves no scratch file and replaces content exactly`() =
+        runTest {
+            val workspace = workspaceWith()
+            assertSuccess(workspace.writeText("a.txt", "a long original content"))
+
+            assertSuccess(workspace.writeText("a.txt", "short", overwrite = true))
+
+            // The whole file is replaced (no tail of the longer previous content survives).
+            assertEquals("short", assertSuccess(workspace.readText("a.txt")))
+            // No staging artifact is left behind on the happy path.
+            val names = workspaceRoot().listFiles()?.map { it.name }.orEmpty()
+            assertEquals(listOf("a.txt"), names)
+        }
+
+    @Test
+    fun `given the scratch path is occupied when overwrite then original survives and no garbage remains`() = runTest {
+        val workspace = workspaceWith()
+        assertSuccess(workspace.writeText("a.txt", "original"))
+
+        // Occupy the reserved scratch path with a directory so staging the new content
+        // fails before the rename — modelling a crash between stage and rename. The
+        // literal suffix mirrors AgentWorkspaceImpl.RESERVED_TMP_SUFFIX.
+        val scratch = File(workspaceRoot(), "a.txt$RESERVED_TMP_SUFFIX")
+        assertTrue(scratch.mkdirs())
+
+        try {
+            workspace.writeText("a.txt", "REPLACED", overwrite = true)
+            fail("expected the staged write to fail while the scratch path is occupied")
+        } catch (e: IOException) {
+            // expected: the staged write could not be created at the occupied scratch path.
+        }
+
+        // The original is untouched (the rename never happened) and no scratch garbage remains.
+        assertEquals("original", assertSuccess(workspace.readText("a.txt")))
+        val names = workspaceRoot().listFiles()?.map { it.name }.orEmpty()
+        assertEquals(listOf("a.txt"), names)
+    }
+
+    // endregion
+
+    // region reserved scratch suffix
+
+    @Test
+    fun `given a reserved scratch-suffix path when writeText then refused and nothing is created`() = runTest {
+        val workspace = workspaceWith()
+
+        // The agent must not be able to address the reserved atomic-write suffix: such a
+        // file would be hidden from listings and excluded from quota accounting, so
+        // allowing it would open a quota-bypass / invisible-storage hole.
+        assertFailure(workspace.writeText("evil$RESERVED_TMP_SUFFIX", "x"), WorkspaceError.NotFound)
+        assertFalse(File(workspaceRoot(), "evil$RESERVED_TMP_SUFFIX").exists())
+    }
+
+    @Test
+    fun `given a reserved scratch-suffix path when readText or delete then reported NotFound`() = runTest {
+        val workspace = workspaceWith()
+        // Even if one already exists on disk (e.g. a crashed write's residue), it stays
+        // invisible and unaddressable through the gate.
+        putRawFile("residue$RESERVED_TMP_SUFFIX", "leftover".toByteArray())
+
+        assertFailure(workspace.readText("residue$RESERVED_TMP_SUFFIX"), WorkspaceError.NotFound)
+        assertFailure(workspace.delete("residue$RESERVED_TMP_SUFFIX"), WorkspaceError.NotFound)
+    }
+
+    // endregion
+
+    // region directory write
+
+    @Test
+    fun `given a directory path when writeText then fails IsDirectory regardless of overwrite`() = runTest {
+        val workspace = workspaceWith()
+        // Writing a nested file implicitly creates the 'reports' directory.
+        assertSuccess(workspace.writeText("reports/a.md", "x"))
+
+        // Targeting the directory itself must report IsDirectory — not AlreadyExists,
+        // which would (mis)invite an endless retry with overwrite:true.
+        assertFailure(workspace.writeText("reports", "y"), WorkspaceError.IsDirectory)
+        assertFailure(workspace.writeText("reports", "y", overwrite = true), WorkspaceError.IsDirectory)
+        assertTrue(File(workspaceRoot(), "reports").isDirectory)
+    }
+
+    // endregion
+
     private companion object {
         const val DEFAULT_FILE_SIZE = 5L * 1024 * 1024
         const val DEFAULT_TOTAL = 100L * 1024 * 1024
+
+        /** Mirrors `AgentWorkspaceImpl.RESERVED_TMP_SUFFIX`. */
+        const val RESERVED_TMP_SUFFIX = ".knotwork-tmp"
 
         /** Mirrors `AgentWorkspaceImpl.TEXT_SNIFF_BYTES`. */
         const val SNIFF_BYTES = 8 * 1024

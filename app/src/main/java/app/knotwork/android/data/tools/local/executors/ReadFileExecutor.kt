@@ -139,8 +139,12 @@ class ReadFileExecutor @Inject constructor(
         WorkspaceError.NotFound -> "Error: file '$path' not found."
         WorkspaceError.NotAText -> "Error: '$path' is not a UTF-8 text file and cannot be read as text."
         WorkspaceError.TooLarge -> "Error: '$path' exceeds the per-file read limit."
-        WorkspaceError.AlreadyExists, WorkspaceError.QuotaExceeded ->
-            "Error: '$path' could not be read."
+        WorkspaceError.AlreadyExists,
+        WorkspaceError.QuotaExceeded,
+        WorkspaceError.AnchorNotFound,
+        is WorkspaceError.AnchorNotUnique,
+        WorkspaceError.IsDirectory,
+        -> "Error: '$path' could not be read."
     }
 
     companion object {

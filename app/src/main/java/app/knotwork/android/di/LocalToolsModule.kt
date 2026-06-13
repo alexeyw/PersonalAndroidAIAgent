@@ -4,11 +4,14 @@ import app.knotwork.android.data.engine.KoogClientFactory
 import app.knotwork.android.data.engine.KoogCloudLlmModelResolver
 import app.knotwork.android.data.tools.local.SearchTool
 import app.knotwork.android.data.tools.local.executors.DelegateTaskExecutor
+import app.knotwork.android.data.tools.local.executors.DeleteFileExecutor
+import app.knotwork.android.data.tools.local.executors.EditFileExecutor
 import app.knotwork.android.data.tools.local.executors.FindFilesExecutor
 import app.knotwork.android.data.tools.local.executors.ListFilesExecutor
 import app.knotwork.android.data.tools.local.executors.ReadFileExecutor
 import app.knotwork.android.data.tools.local.executors.ScheduleTaskExecutor
 import app.knotwork.android.data.tools.local.executors.SearchToolExecutor
+import app.knotwork.android.data.tools.local.executors.WriteFileExecutor
 import app.knotwork.android.domain.engine.CloudLlmClientFactory
 import app.knotwork.android.domain.engine.CloudLlmModelResolver
 import app.knotwork.android.domain.repositories.LocalToolExecutor
@@ -63,6 +66,21 @@ abstract class LocalToolsModule {
     @IntoMap
     @StringKey(FindFilesExecutor.TOOL_NAME)
     abstract fun bindFindFilesExecutor(executor: FindFilesExecutor): LocalToolExecutor
+
+    @Binds
+    @IntoMap
+    @StringKey(WriteFileExecutor.TOOL_NAME)
+    abstract fun bindWriteFileExecutor(executor: WriteFileExecutor): LocalToolExecutor
+
+    @Binds
+    @IntoMap
+    @StringKey(EditFileExecutor.TOOL_NAME)
+    abstract fun bindEditFileExecutor(executor: EditFileExecutor): LocalToolExecutor
+
+    @Binds
+    @IntoMap
+    @StringKey(DeleteFileExecutor.TOOL_NAME)
+    abstract fun bindDeleteFileExecutor(executor: DeleteFileExecutor): LocalToolExecutor
 
     /**
      * Domain-level binding for the cloud client factory. The data-layer impl

@@ -4,9 +4,12 @@ import app.knotwork.android.data.mcp.McpClient
 import app.knotwork.android.data.mcp.McpClientFactory
 import app.knotwork.android.data.tools.local.LocalAppFunctionManager
 import app.knotwork.android.data.tools.local.SearchTool
+import app.knotwork.android.data.tools.local.executors.DeleteFileExecutor
+import app.knotwork.android.data.tools.local.executors.EditFileExecutor
 import app.knotwork.android.data.tools.local.executors.FindFilesExecutor
 import app.knotwork.android.data.tools.local.executors.ListFilesExecutor
 import app.knotwork.android.data.tools.local.executors.ReadFileExecutor
+import app.knotwork.android.data.tools.local.executors.WriteFileExecutor
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.McpServerConfig
@@ -114,6 +117,29 @@ class ToolRepositoryImpl @Inject constructor(
                 description = FindFilesExecutor.DESCRIPTION,
                 parameters = FindFilesExecutor.PARAMETERS,
             ),
+            // Mutating workspace tools. write_file / edit_file are SENSITIVE (a
+            // scoped, reversible change inside the sandbox); delete_file is
+            // DESTRUCTIVE (irreversible) and always routes through the typed
+            // confirmation path. The risk here is the single source the HITL gate
+            // reads via `getRisk`.
+            workspaceWriteTool(
+                name = WriteFileExecutor.TOOL_NAME,
+                description = WriteFileExecutor.DESCRIPTION,
+                parameters = WriteFileExecutor.PARAMETERS,
+                risk = ToolRisk.SENSITIVE,
+            ),
+            workspaceWriteTool(
+                name = EditFileExecutor.TOOL_NAME,
+                description = EditFileExecutor.DESCRIPTION,
+                parameters = EditFileExecutor.PARAMETERS,
+                risk = ToolRisk.SENSITIVE,
+            ),
+            workspaceWriteTool(
+                name = DeleteFileExecutor.TOOL_NAME,
+                description = DeleteFileExecutor.DESCRIPTION,
+                parameters = DeleteFileExecutor.PARAMETERS,
+                risk = ToolRisk.DESTRUCTIVE,
+            ),
         )
 
         if (availableModels.isEmpty()) {
@@ -156,6 +182,21 @@ class ToolRepositoryImpl @Inject constructor(
         parameters = parameters,
         risk = ToolRisk.READ_ONLY,
     )
+
+    /**
+     * Builds an [AgentTool] for a mutating workspace file tool (`write_file`,
+     * `edit_file`, `delete_file`). Unlike the read tools these carry an explicit
+     * [risk] — [ToolRisk.SENSITIVE] for the reversible writes, [ToolRisk.DESTRUCTIVE]
+     * for the irreversible delete — which the HITL gate reads back through
+     * [getRisk] to decide whether (and how strictly) to confirm with the user.
+     */
+    private fun workspaceWriteTool(name: String, description: String, parameters: String, risk: ToolRisk): AgentTool =
+        AgentTool(
+            name = name,
+            description = description,
+            parameters = parameters,
+            risk = risk,
+        )
 
     /**
      * Reconciles the [mcpClients] pool against [SettingsRepository.mcpServers].

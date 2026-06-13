@@ -6,6 +6,7 @@ import app.knotwork.android.domain.models.WorkspaceFile
 import app.knotwork.android.domain.models.WorkspaceResult
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.AgentWorkspace
+import app.knotwork.android.domain.services.WorkspaceTextEdit
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -81,13 +82,33 @@ class AgentWorkspaceImpl @Inject constructor(
         }
     }
 
+    override suspend fun editText(
+        relativePath: String,
+        oldText: String,
+        newText: String,
+    ): WorkspaceResult<WorkspaceFile> = withContext(Dispatchers.IO) {
+        when (val resolved = canonicalResolve(relativePath)) {
+            is WorkspaceResult.Failure -> resolved
+            is WorkspaceResult.Success -> mutex.withLock { editTextLocked(resolved.value, oldText, newText) }
+        }
+    }
+
+    override suspend fun delete(relativePath: String): WorkspaceResult<Unit> = withContext(Dispatchers.IO) {
+        when (val resolved = canonicalResolve(relativePath)) {
+            is WorkspaceResult.Failure -> resolved
+            is WorkspaceResult.Success -> mutex.withLock { deleteLocked(resolved.value) }
+        }
+    }
+
     override suspend fun list(): WorkspaceResult<List<WorkspaceFile>> = withContext(Dispatchers.IO) {
         val root = rootDir()
         // `walkTopDown` follows directory symlinks, so canonicalise each entry and drop
         // any whose real path escapes the workspace — the same containment rule as the
-        // resolve gate, so a symlink pointing out can never appear in a listing.
+        // resolve gate, so a symlink pointing out can never appear in a listing. Transient
+        // atomic-write scratch files are filtered too so a crashed write's leftover never
+        // surfaces to the agent.
         val files = root.walkTopDown()
-            .filter { it.isFile }
+            .filter { it.isFile && !isScratchFile(it) }
             .map { it.canonicalFile }
             .filter { isInsideRoot(it, root) }
             .map { toWorkspaceFile(it, root) }
@@ -112,11 +133,17 @@ class AgentWorkspaceImpl @Inject constructor(
         }
         val root = rootDir()
         val target = File(root, relativePath).canonicalFile
-        return if (isInsideRoot(target, root)) {
-            WorkspaceResult.Success(target)
-        } else {
-            WorkspaceResult.Failure(WorkspaceError.PathOutsideWorkspace)
+        if (!isInsideRoot(target, root)) {
+            return WorkspaceResult.Failure(WorkspaceError.PathOutsideWorkspace)
         }
+        // Reject the reserved atomic-write scratch suffix: such files are hidden from
+        // listings and excluded from quota accounting, so letting the agent address one
+        // would let it write storage the quota never counts (and that it could never see
+        // or clean up). Reported as NotFound so the artifact stays invisible.
+        if (isScratchFile(target)) {
+            return WorkspaceResult.Failure(WorkspaceError.NotFound)
+        }
+        return WorkspaceResult.Success(target)
     }
 
     /**
@@ -159,7 +186,10 @@ class AgentWorkspaceImpl @Inject constructor(
         content: String,
         overwrite: Boolean,
     ): WorkspaceResult<WorkspaceFile> {
-        if (target.isDirectory) return WorkspaceResult.Failure(WorkspaceError.AlreadyExists)
+        // A directory can never be replaced by a file, even with `overwrite`. Report it
+        // distinctly so the tool does not hand back a "retry with overwrite" hint that
+        // would loop forever (the overwrite flag is checked only for an existing file).
+        if (target.isDirectory) return WorkspaceResult.Failure(WorkspaceError.IsDirectory)
         val exists = target.isFile
         if (exists && !overwrite) return WorkspaceResult.Failure(WorkspaceError.AlreadyExists)
 
@@ -172,14 +202,84 @@ class AgentWorkspaceImpl @Inject constructor(
             return WorkspaceResult.Failure(WorkspaceError.QuotaExceeded)
         }
 
-        // Invalidate the cache before the risky write: if writeBytes throws partway
+        // Invalidate the cache before the risky write: if the write throws partway
         // (disk full, parent turned into a file) the next read recomputes from disk
         // instead of trusting a stale total. The cache is set only on full success.
         cachedTotalBytes = null
         target.parentFile?.mkdirs()
-        target.writeBytes(newBytes)
+        writeAtomically(target, newBytes)
         cachedTotalBytes = projectedTotal
         return WorkspaceResult.Success(toWorkspaceFile(target))
+    }
+
+    /**
+     * Writes [bytes] to [target] atomically: the content is staged into a
+     * sibling scratch file and then [renamed][File.renameTo] onto [target].
+     * Because both paths sit in the same directory (one filesystem), the rename
+     * is a single atomic replace — a crash at any point leaves [target] either
+     * fully old or fully new, never half-written, and the `finally` clause drops
+     * any partial scratch file so no garbage is left behind.
+     *
+     * @param target The destination file (may or may not already exist).
+     * @param bytes The full content to write.
+     * @throws IOException When staging or the rename fails.
+     */
+    private fun writeAtomically(target: File, bytes: ByteArray) {
+        val scratch = File(target.parentFile, target.name + RESERVED_TMP_SUFFIX)
+        try {
+            scratch.writeBytes(bytes)
+            if (!scratch.renameTo(target)) {
+                throw IOException("Atomic rename failed for ${target.path}")
+            }
+        } finally {
+            // On success the scratch no longer exists (it became [target]); on any
+            // failure this removes the partial stage so a crash never leaves a stray file.
+            if (scratch.exists()) scratch.delete()
+        }
+    }
+
+    /**
+     * Performs the anchored find-replace edit of an already-resolved (in-bounds)
+     * [target]. Must be called while holding [mutex] so the read and the rewrite
+     * cannot be interleaved with another mutation.
+     */
+    private suspend fun editTextLocked(
+        target: File,
+        oldText: String,
+        newText: String,
+    ): WorkspaceResult<WorkspaceFile> {
+        val content = when (val read = readTextResolved(target)) {
+            is WorkspaceResult.Failure -> return read
+            is WorkspaceResult.Success -> read.value
+        }
+        return when (val outcome = WorkspaceTextEdit.apply(content, oldText, newText)) {
+            WorkspaceTextEdit.Outcome.AnchorNotFound -> WorkspaceResult.Failure(WorkspaceError.AnchorNotFound)
+            is WorkspaceTextEdit.Outcome.AnchorNotUnique ->
+                WorkspaceResult.Failure(WorkspaceError.AnchorNotUnique(outcome.count))
+            // Re-route through the quota-checked atomic write so an edit cannot
+            // grow the workspace past its limits and is applied in one replace.
+            is WorkspaceTextEdit.Outcome.Replaced ->
+                writeTextLocked(target, outcome.newContent, overwrite = true)
+        }
+    }
+
+    /**
+     * Deletes an already-resolved (in-bounds) [target] if it is a regular file,
+     * keeping the cached total-size counter in step. Must be called while
+     * holding [mutex].
+     */
+    private fun deleteLocked(target: File): WorkspaceResult<Unit> {
+        if (!target.isFile) return WorkspaceResult.Failure(WorkspaceError.NotFound)
+        val size = target.length()
+        val previousTotal = currentTotalBytesLocked()
+        // Invalidate before the mutation: if delete reports failure the next read
+        // recomputes from disk rather than trusting a counter that may be wrong.
+        cachedTotalBytes = null
+        if (!target.delete() || target.exists()) {
+            return WorkspaceResult.Failure(WorkspaceError.NotFound)
+        }
+        cachedTotalBytes = previousTotal - size
+        return WorkspaceResult.Success(Unit)
     }
 
     /** Returns the per-file size ceiling from settings. */
@@ -192,10 +292,20 @@ class AgentWorkspaceImpl @Inject constructor(
      */
     private fun currentTotalBytesLocked(): Long {
         cachedTotalBytes?.let { return it }
-        val total = rootDir().walkTopDown().filter { it.isFile }.sumOf { it.length() }
+        val total = rootDir().walkTopDown()
+            .filter { it.isFile && !isScratchFile(it) }
+            .sumOf { it.length() }
         cachedTotalBytes = total
         return total
     }
+
+    /**
+     * Reports whether [file] is a transient atomic-write scratch file. Such a
+     * file is excluded from listings and quota accounting because it only ever
+     * exists for the brief window between staging and rename (or as the residue
+     * of a crashed write, which the next write cleans up).
+     */
+    private fun isScratchFile(file: File): Boolean = file.name.endsWith(RESERVED_TMP_SUFFIX)
 
     /** Locates the workspace root, creating it on first use, and canonicalises it. */
     private fun rootDir(): File {
@@ -264,6 +374,13 @@ class AgentWorkspaceImpl @Inject constructor(
     private companion object {
         /** Name of the workspace directory inside [Context.filesDir]. */
         const val WORKSPACE_DIR_NAME = "agent_workspace"
+
+        /**
+         * Suffix of the sibling scratch file used to stage an atomic write before
+         * the rename. Reserved: files ending in it are hidden from listings and
+         * quota accounting, so the agent is never expected to create one itself.
+         */
+        const val RESERVED_TMP_SUFFIX = ".knotwork-tmp"
 
         /** Number of leading bytes sampled to classify a file as text or binary. */
         const val TEXT_SNIFF_BYTES = 8 * 1024

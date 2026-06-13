@@ -72,6 +72,9 @@ class ListFilesExecutor @Inject constructor(private val workspace: AgentWorkspac
         WorkspaceError.TooLarge,
         WorkspaceError.AlreadyExists,
         WorkspaceError.QuotaExceeded,
+        WorkspaceError.AnchorNotFound,
+        is WorkspaceError.AnchorNotUnique,
+        WorkspaceError.IsDirectory,
         -> "Error: could not list '$path'."
     }
 
