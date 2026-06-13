@@ -437,13 +437,20 @@ class AgentWorkspaceImpl @Inject constructor(
      */
     private fun looksLikeText(file: File): Boolean = try {
         file.inputStream().use { input ->
-            val buffer = ByteArray(TEXT_SNIFF_BYTES)
-            val read = input.read(buffer)
-            if (read <= 0) {
+            // Use readNBytes, not read(buffer): a single read() may return fewer bytes
+            // than requested (a short read) even when more exist, and a short read that
+            // cuts a multi-byte UTF-8 sequence mid-character would make valid non-ASCII
+            // text (e.g. Cyrillic Markdown) fail the strict decode and be misflagged as
+            // binary. readNBytes fills the window up to the file's end deterministically.
+            val sniff = input.readNBytes(TEXT_SNIFF_BYTES)
+            if (sniff.isEmpty()) {
                 true // empty file counts as text
             } else {
-                val usable = if (read == TEXT_SNIFF_BYTES) read - MAX_UTF8_TAIL_BYTES else read
-                isUtf8Text(buffer.copyOf(usable))
+                // A full window may sit in the middle of a longer file, so drop a few
+                // trailing bytes in case a multi-byte sequence straddles the boundary; a
+                // shorter read means we have the whole file, so keep every byte.
+                val usable = if (sniff.size == TEXT_SNIFF_BYTES) sniff.size - MAX_UTF8_TAIL_BYTES else sniff.size
+                isUtf8Text(sniff.copyOf(usable))
             }
         }
     } catch (e: IOException) {

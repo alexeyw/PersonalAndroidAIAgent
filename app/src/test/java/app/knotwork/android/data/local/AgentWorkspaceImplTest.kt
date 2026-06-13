@@ -272,6 +272,30 @@ class AgentWorkspaceImplTest {
     }
 
     @Test
+    fun `given a small non-ASCII text file when list then it reports as text`() = runTest {
+        val workspace = workspaceWith()
+        // Cyrillic Markdown: every character is a multi-byte UTF-8 sequence.
+        putRawFile("отчёт.md", "# Отчёт\n\nКраткое содержание исследования.".toByteArray(Charsets.UTF_8))
+
+        val entry = assertSuccess(workspace.list()).single { it.relativePath == "отчёт.md" }
+        assertTrue("non-ASCII Markdown must be detected as text", entry.isText)
+        // ...and it must therefore be previewable.
+        assertSuccess(workspace.readTextPreview("отчёт.md", maxBytes = SNIFF_BYTES))
+    }
+
+    @Test
+    fun `given non-ASCII text straddling the sniff window when list then it reports as text`() = runTest {
+        val workspace = workspaceWith()
+        // One ASCII byte then Cyrillic so the 8 KB sniff window ends mid-character;
+        // the boundary tail-drop must keep the file classified as text, not binary.
+        val content = "a" + "я".repeat(SNIFF_BYTES) // far larger than the sniff window
+        putRawFile("big-ru.md", content.toByteArray(Charsets.UTF_8))
+
+        val entry = assertSuccess(workspace.list()).single { it.relativePath == "big-ru.md" }
+        assertTrue("multi-byte text across the sniff boundary must stay text", entry.isText)
+    }
+
+    @Test
     fun `given a binary marker beyond the sniff window when readText then NotAText`() = runTest {
         val workspace = workspaceWith()
         putRawFile("long.txt", ByteArray(SNIFF_BYTES) { 'a'.code.toByte() } + byteArrayOf(0))
