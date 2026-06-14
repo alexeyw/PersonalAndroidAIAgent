@@ -71,6 +71,8 @@ class BrowserEditorConstantsGeneratorTest {
             abstract fun bindEditFileExecutor(executor: EditFileExecutor): LocalToolExecutor
             @Binds @IntoMap @StringKey(DeleteFileExecutor.TOOL_NAME)
             abstract fun bindDeleteFileExecutor(executor: DeleteFileExecutor): LocalToolExecutor
+            @Binds @IntoMap @StringKey(HttpRequestExecutor.TOOL_NAME)
+            abstract fun bindHttpRequestExecutor(executor: HttpRequestExecutor): LocalToolExecutor
         }
     """.trimIndent()
 
@@ -108,6 +110,7 @@ class BrowserEditorConstantsGeneratorTest {
         "WriteFileExecutor" to toolSource("write_file"),
         "EditFileExecutor" to toolSource("edit_file"),
         "DeleteFileExecutor" to toolSource("delete_file"),
+        "HttpRequestExecutor" to toolSource("http_request"),
     )
 
     private fun providerSource(key: String) = """
@@ -168,6 +171,7 @@ class BrowserEditorConstantsGeneratorTest {
                 "WriteFileExecutor",
                 "EditFileExecutor",
                 "DeleteFileExecutor",
+                "HttpRequestExecutor",
             ),
             BrowserEditorConstantsGenerator.parseBoundToolClassNames(toolsModuleSource),
         )
@@ -249,11 +253,11 @@ class BrowserEditorConstantsGeneratorTest {
             listOf(
                 "schedule_task", "search_tool", "delegate_task",
                 "read_file", "list_files", "find_files",
-                "write_file", "edit_file", "delete_file",
+                "write_file", "edit_file", "delete_file", "http_request",
             ),
         )
         // Display order from TOOL_META: search, delegate, schedule, then the read
-        // workspace tools, then the mutating ones.
+        // workspace tools, then the mutating ones, then the outbound HTTP tool.
         assertTrue(js.indexOf("search_tool") < js.indexOf("delegate_task"))
         assertTrue(js.indexOf("delegate_task") < js.indexOf("schedule_task"))
         assertTrue(js.indexOf("schedule_task") < js.indexOf("read_file"))
@@ -262,6 +266,7 @@ class BrowserEditorConstantsGeneratorTest {
         assertTrue(js.indexOf("find_files") < js.indexOf("write_file"))
         assertTrue(js.indexOf("write_file") < js.indexOf("edit_file"))
         assertTrue(js.indexOf("edit_file") < js.indexOf("delete_file"))
+        assertTrue(js.indexOf("delete_file") < js.indexOf("http_request"))
     }
 
     @Test(expected = GenerationException::class)
