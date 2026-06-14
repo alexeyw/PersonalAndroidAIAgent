@@ -4,6 +4,9 @@ name: Check
 # Runs the aggregate `./gradlew check` task, which itself triggers detekt,
 # ktlintCheck, lintDebug, testDebugUnitTest, koverVerifyDebug,
 # verifyBrowserEditorConstants, and the project-level `checkNoInternalFqn`.
+# `:buildSrc:test` is added explicitly because the build-logic module's own
+# unit tests (e.g. the browser-editor constants generator) are not reachable
+# from the app's `check` aggregate and would otherwise drift unnoticed.
 # Any one of them failing blocks the merge.
 #
 # Triggers: every pull request targeting `main`, and every push to `main`
@@ -51,7 +54,7 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       - name: Run ./gradlew check
-        run: ./gradlew check --stacktrace --no-daemon
+        run: ./gradlew check :buildSrc:test --stacktrace --no-daemon
 
       - name: Upload detekt report
         if: failure()
