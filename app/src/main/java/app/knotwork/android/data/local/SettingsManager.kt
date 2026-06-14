@@ -103,6 +103,20 @@ class SettingsManager @Inject constructor(
          */
         val LAST_INIT_BACKEND_ATTEMPT = stringPreferencesKey("last_init_backend_attempt")
         val TOOL_CALL_TIMEOUT_MS = androidx.datastore.preferences.core.longPreferencesKey("tool_call_timeout_ms")
+        val WORKSPACE_MAX_FILE_SIZE_BYTES =
+            androidx.datastore.preferences.core.longPreferencesKey("workspace_max_file_size_bytes")
+        val WORKSPACE_MAX_TOTAL_BYTES =
+            androidx.datastore.preferences.core.longPreferencesKey("workspace_max_total_bytes")
+        val WORKSPACE_READ_TOKEN_BUDGET = intPreferencesKey("workspace_read_token_budget")
+
+        /**
+         * Ordered `http_request` domain allowlist, stored newline-delimited
+         * (a `stringSet` would lose the user's ordering). Normalised hosts never
+         * contain a newline, so the delimiter is collision-free.
+         */
+        val ALLOWED_HTTP_DOMAINS = stringPreferencesKey("allowed_http_domains")
+        val HTTP_TOOL_MAX_RESPONSE_BYTES =
+            androidx.datastore.preferences.core.longPreferencesKey("http_tool_max_response_bytes")
         val PIPELINE_MAX_STEPS = intPreferencesKey("pipeline_max_steps")
         val RESUME_MAX_AGE_HOURS = intPreferencesKey("resume_max_age_hours")
         val BACKGROUND_APPROVAL_WINDOW_HOURS = intPreferencesKey("background_approval_window_hours")
@@ -988,6 +1002,110 @@ class SettingsManager @Inject constructor(
     override suspend fun setToolCallTimeoutMs(timeoutMs: Long) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.TOOL_CALL_TIMEOUT_MS] = timeoutMs
+        }
+    }
+
+    override val workspaceMaxFileSizeBytes: Flow<Long> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.WORKSPACE_MAX_FILE_SIZE_BYTES]
+                ?: SettingsDefaults.WORKSPACE_MAX_FILE_SIZE_BYTES_DEFAULT
+        }
+
+    override suspend fun setWorkspaceMaxFileSizeBytes(bytes: Long) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.WORKSPACE_MAX_FILE_SIZE_BYTES] = bytes
+        }
+    }
+
+    override val workspaceMaxTotalBytes: Flow<Long> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.WORKSPACE_MAX_TOTAL_BYTES]
+                ?: SettingsDefaults.WORKSPACE_MAX_TOTAL_BYTES_DEFAULT
+        }
+
+    override suspend fun setWorkspaceMaxTotalBytes(bytes: Long) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.WORKSPACE_MAX_TOTAL_BYTES] = bytes
+        }
+    }
+
+    override val workspaceReadTokenBudget: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.WORKSPACE_READ_TOKEN_BUDGET]
+                ?: SettingsDefaults.WORKSPACE_READ_TOKEN_BUDGET_DEFAULT
+        }
+
+    override suspend fun setWorkspaceReadTokenBudget(tokens: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.WORKSPACE_READ_TOKEN_BUDGET] = tokens
+        }
+    }
+
+    override val allowedHttpDomains: Flow<List<String>> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.ALLOWED_HTTP_DOMAINS]
+                ?.split('\n')
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                ?: emptyList()
+        }
+
+    override suspend fun setAllowedHttpDomains(domains: List<String>) {
+        val encoded = domains.map { it.trim() }.filter { it.isNotEmpty() }.joinToString(separator = "\n")
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.ALLOWED_HTTP_DOMAINS] = encoded
+        }
+    }
+
+    override val httpToolMaxResponseBytes: Flow<Long> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.HTTP_TOOL_MAX_RESPONSE_BYTES]
+                ?: SettingsDefaults.HTTP_TOOL_MAX_RESPONSE_BYTES_DEFAULT
+        }
+
+    override suspend fun setHttpToolMaxResponseBytes(bytes: Long) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.HTTP_TOOL_MAX_RESPONSE_BYTES] = bytes
         }
     }
 

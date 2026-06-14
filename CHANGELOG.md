@@ -13,7 +13,93 @@ details.
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-14
+
 ### Added
+
+- **"Research to file" bundled preset.** A new curated starter pipeline
+  (`showcase_research_to_file`, in the **+ From preset** picker's Bundled
+  tab and mirrored in the browser pipeline editor) demonstrates the
+  end-to-end "research → file in your hands" loop out of the box: the
+  local model turns the question into a Wikipedia lookup, distils the raw
+  extract into clean facts, writes a short Markdown report into the agent
+  workspace under `reports/`, and replies with the saved path. Plain-prose
+  prompts keep it runnable on the on-device 4B model.
+
+- **Files screen (agent workspace browser).** A new screen — reached from
+  **More → Files** — gives the agent's previously-invisible file workspace a
+  user-facing window. It lists the workspace's files (path-sorted, with size and
+  modified time) behind a quota indicator that ramps neutral → amber → red as
+  storage fills, and supports: a read-only monospace **preview** of text files
+  (large files are shown truncated with a "save it out to read the whole file"
+  banner); **export** of a file, either to the system share sheet (a per-share
+  copy is staged so the workspace directory itself is never exposed) or to a
+  chosen location via "Save as…"; **import** of an external file into the
+  workspace, with a name-collision chooser (keep both / replace) and the same
+  per-file and total quota enforcement the agent's own writes get; and
+  **delete** with a confirmation dialog, including multi-select bulk delete.
+
+- **Outbound HTTP tool (`http_request`).** A new built-in tool lets the
+  agent call a remote HTTP(S) API (GET/POST/PUT/DELETE) — the most
+  security-sensitive tool in the workspace set, designed conservatively
+  because in combination with the file tools an unrestricted HTTP
+  capability would be a data-exfiltration channel. It only reaches
+  domains the user has explicitly added to an **allowlist** (Settings →
+  Tools → Allowed domains, stored in DataStore); while the allowlist is
+  empty the tool is hidden from the agent entirely and a direct call is
+  refused. Risk is per-method — a `GET` is SENSITIVE, a
+  `POST`/`PUT`/`DELETE` is DESTRUCTIVE — so each call passes the matching
+  Human-in-the-Loop confirmation. Public hosts must use `https`
+  (cleartext only for local addresses); redirects are followed manually
+  and re-validated against the allowlist on every hop, aborting if one
+  points outside it; a request that would carry a stored provider API key
+  is refused; and the response body is capped (1 MB default) with a
+  truncation marker so untrusted remote content can't overflow the local
+  model's context. A standalone **Allowed domains** editor — reached from
+  the http_request row on the Tools screen — lets you add (with live
+  host-normalisation preview, invalid and duplicate feedback) and remove
+  hosts; matching is exact, so sub-domains are not implied. While the list
+  is empty the editor explains that the tool stays off until a host is
+  added.
+
+- **Workspace write tools.** Three new built-in tools let the agent change
+  files in its workspace, each gated by its risk level: **write_file**
+  (writes a UTF-8 text file; creating is the default and replacing an
+  existing file needs an explicit `overwrite` flag, so content is never
+  clobbered silently — the write is atomic, staged and renamed into place,
+  and quota-checked before any bytes land), **edit_file** (replaces a single
+  uniquely-matching `oldText` anchor with `newText`; the anchor must occur
+  exactly once or the edit is refused with the occurrence count, and an
+  empty replacement deletes the matched fragment) and **delete_file**
+  (removes one file, irreversibly). write_file and edit_file are SENSITIVE
+  and delete_file is DESTRUCTIVE, so every mutating call passes through the
+  Human-in-the-Loop confirmation gate — interactive, notification, and the
+  persistent background-approval path alike — before it runs.
+
+- **Workspace read tools.** Three new built-in, read-only tools let the
+  agent inspect its file workspace: **read_file** (reads a UTF-8 text file,
+  truncated to a per-read token budget — default 2000 tokens — so a long
+  file never overflows the local model's context window, with byte
+  `offset`/`limit` paging that stitches consecutive pages back together
+  without splitting multi-byte characters), **list_files** (a stable,
+  path-sorted listing with size and modified time, optionally scoped to a
+  sub-directory) and **find_files** (glob search over relative paths, e.g.
+  `*.md` or `reports/**`). All three resolve through the jailed workspace
+  gate, so a path that escapes the sandbox is refused with a readable
+  error. A new **workspace read token budget** setting tunes the read
+  truncation limit.
+
+- **Agent file workspace (foundation).** Groundwork for letting the agent
+  read and write files: a single, jailed directory (`files/agent_workspace/`
+  in the app's private storage) with a strict containment boundary. Every
+  path is canonicalised through one gate, so a relative path that tries to
+  escape the workspace (`../` traversal, an absolute path, or a symlink
+  pointing out) is refused before any file is touched. Two size quotas keep
+  it bounded — a per-file limit (default 5 MB) and a workspace-wide limit
+  (default 100 MB) — so a looping agent cannot exhaust device storage. This
+  release lands the internal foundation only (text read/write/list with
+  binary files listable but not text-readable); the file tools and the Files
+  screen build on top of it.
 
 - **Run-history retention.** Persistent pipeline runs and their traces
   no longer accumulate forever: a daily maintenance pass (WorkManager,
@@ -391,6 +477,23 @@ details.
   database opens and deletes the passphrase only after the database file
   is verifiably gone. The API-key store intentionally keeps its
   recreate-on-corruption recovery (keys can be re-entered by the user).
+- **The file-workspace and outbound-HTTP threat surface is now documented.**
+  `SECURITY.md` extends *Prompt injection via tool content* to treat a file
+  the agent reads (user-imported, or written from untrusted material) as
+  untrusted model input, and adds two threat-model sections: *Agent file
+  workspace (at-rest)* — the honest statement that workspace files are
+  protected by the device's file-based encryption and the app sandbox but,
+  unlike the database, are **not** SQLCipher-encrypted — and *Outbound HTTP
+  and the exfiltration chain*, which describes the `read_file → http_request`
+  data-exfiltration shape and the layered mitigations (empty allowlist by
+  default with the tool hidden until opt-in, exact-host matching, per-method
+  HITL, the stored-credential filter, redirect re-validation, and the
+  transport floor). Workspace quotas are documented as an availability
+  control. `docs/architecture.md` gains a storage-tier table
+  (SQLCipher / Keystore / DataStore / FBE-only) and a *File and HTTP tools*
+  section mapping the tools through `ToolRisk` → HITL; `docs/extending.md`
+  gains an *Add a workspace tool* recipe. No behaviour change — documentation
+  catching up to the shipped workspace + HTTP contour.
 
 ## [0.4.0] - 2026-06-07
 
@@ -3041,7 +3144,8 @@ that produced the initial 0.1.0 snapshot.
 - **Master key**: `EncryptedSharedPreferences` is rooted in the Android
   Keystore, so the master key is hardware-backed where available.
 
-[Unreleased]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.1.0...v0.2.0

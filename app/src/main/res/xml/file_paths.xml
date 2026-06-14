@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    FileProvider path map. Only the dedicated share-staging directory under the
+    app cache (cacheDir/shared/) is exposed; a workspace file is copied there per
+    share so the agent workspace itself is never shared directly.
+-->
+<paths>
+    <cache-path
+        name="shared"
+        path="shared/" />
+</paths>

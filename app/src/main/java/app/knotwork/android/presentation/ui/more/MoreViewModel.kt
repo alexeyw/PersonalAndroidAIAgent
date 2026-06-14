@@ -9,11 +9,14 @@ import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.MemoryStats
 import app.knotwork.android.domain.models.PipelinePreset
 import app.knotwork.android.domain.models.PromptPreset
+import app.knotwork.android.domain.models.WorkspaceListing
+import app.knotwork.android.domain.models.WorkspaceResult
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.NetworkActivityTracker
 import app.knotwork.android.domain.repositories.PipelinePresetRepository
 import app.knotwork.android.domain.repositories.PromptPresetRepository
+import app.knotwork.android.domain.usecases.workspace.ListWorkspaceUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -43,6 +46,7 @@ class MoreViewModel @Inject constructor(
     private val taskQueueManager: TaskQueueManager,
     private val networkActivityTracker: NetworkActivityTracker,
     pipelinePresetRepository: PipelinePresetRepository,
+    private val listWorkspaceUseCase: ListWorkspaceUseCase,
 ) : ViewModel() {
 
     val uiState: StateFlow<MoreUiState> = combine(
@@ -65,6 +69,7 @@ class MoreViewModel @Inject constructor(
         // memory / model / prompt / task / network-activity emission.
         statusTicker(),
         pipelinePresetRepository.getUserPresets(),
+        workspaceSummary(),
     ) { values -> reduceUiState(values = values) }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(STATE_STOP_TIMEOUT_MS),
@@ -87,6 +92,7 @@ class MoreViewModel @Inject constructor(
         val lastNetwork = values[4] as Long?
         val now = values[5] as Long
         val userPresets = values[6] as List<PipelinePreset>
+        val workspace = values[7] as WorkspaceResult<WorkspaceListing>
         val active = models.firstOrNull { it.isActive }
         val runningCount = activeSessions.values.count {
             it is AgentOrchestratorState.Thinking ||
@@ -108,6 +114,7 @@ class MoreViewModel @Inject constructor(
             tasksBadge = runningCount,
             aboutSubtitle = "v${BuildConfig.VERSION_NAME} · build ${BuildConfig.VERSION_CODE}",
             librarySubtitle = formatLibraryStats(userPresets.size),
+            filesSubtitle = formatWorkspaceStats(workspace),
             networkStatusText = formatNetworkStatus(now, lastNetwork),
             networkStatusOk = lastNetwork == null ||
                 (now - lastNetwork) > FRESH_NETWORK_WINDOW_MS,
@@ -132,6 +139,14 @@ class MoreViewModel @Inject constructor(
             delay(STATUS_TICK_INTERVAL_MS)
         }
     }
+
+    /**
+     * One-shot workspace listing used for the Files row subtitle. Emits a single
+     * snapshot on subscription; because `stateIn` uses
+     * `SharingStarted.WhileSubscribed`, re-entering the More tab re-subscribes
+     * and recomputes a fresh count, which is timely enough for a subtitle.
+     */
+    private fun workspaceSummary(): Flow<WorkspaceResult<WorkspaceListing>> = flow { emit(listWorkspaceUseCase()) }
 
     private companion object {
         /**
@@ -192,6 +207,29 @@ internal fun formatLibraryStats(userPresetCount: Int): String = when (userPreset
     0 -> "no saved presets"
     1 -> "1 saved preset"
     else -> "$userPresetCount saved presets"
+}
+
+/**
+ * Format the Files row subtitle from a workspace listing.
+ *
+ * @param result The one-shot workspace listing; a failure yields a neutral dash.
+ */
+internal fun formatWorkspaceStats(result: WorkspaceResult<WorkspaceListing>): String = when (result) {
+    is WorkspaceResult.Failure -> "—"
+    is WorkspaceResult.Success -> {
+        val count = result.value.files.size
+        if (count == 0) {
+            "empty"
+        } else {
+            val bytes = result.value.usage.usedBytes
+            val size = when {
+                bytes < MEGABYTE -> "${bytes / KILOBYTE} KB"
+                else -> String.format(Locale.US, "%.1f MB", bytes.toDouble() / MEGABYTE)
+            }
+            val noun = if (count == 1) "file" else "files"
+            "$count $noun · $size"
+        }
+    }
 }
 
 /**

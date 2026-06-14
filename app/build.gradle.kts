@@ -113,8 +113,8 @@ android {
         applicationId = "app.knotwork.android"
         minSdk = 36
         targetSdk = 37
-        versionCode = 4
-        versionName = "0.4.0"
+        versionCode = 5
+        versionName = "0.5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -658,6 +658,19 @@ val verifyBrowserEditorConstants by tasks.registering {
 }
 tasks.named("check") { dependsOn(verifyBrowserEditorConstants) }
 
+// Hilt/Dagger reads Kotlin metadata via `kotlin-metadata-jvm`, which is unshaded
+// since Dagger 2.57 and therefore resolved through Gradle. Each Kotlin bump raises
+// the emitted metadata version, so the processor must use a matching reader or it
+// fails with "Provided Metadata instance has version X, while maximum supported
+// version is Y". Pin it to the active Kotlin version across every configuration
+// (including the Hilt aggregating processor classpath) so a Kotlin bump never
+// outruns the metadata reader again.
+configurations.configureEach {
+    resolutionStrategy {
+        force("org.jetbrains.kotlin:kotlin-metadata-jvm:${libs.versions.kotlin.get()}")
+    }
+}
+
 dependencies {
     // Design-system module — `KnotworkTheme` (currently a `MaterialTheme`
     // pass-through) plus the ported foundations in Kotlin sources.
@@ -759,6 +772,8 @@ dependencies {
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.test)
     testImplementation(libs.work.testing)
+    // OkHttp 5 MockWebServer (mockwebserver3 namespace) for HttpRequestExecutor tests.
+    testImplementation(libs.okhttp.mockwebserver3)
     // Robolectric is needed for the foreground service,
     // notification builder, and Doze (`ShadowPowerManager`) paths under
     // `data.services`. The version is pinned in `gradle/libs.versions.toml`.

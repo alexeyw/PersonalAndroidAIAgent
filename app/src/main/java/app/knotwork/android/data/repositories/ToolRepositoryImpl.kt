@@ -4,6 +4,13 @@ import app.knotwork.android.data.mcp.McpClient
 import app.knotwork.android.data.mcp.McpClientFactory
 import app.knotwork.android.data.tools.local.LocalAppFunctionManager
 import app.knotwork.android.data.tools.local.SearchTool
+import app.knotwork.android.data.tools.local.executors.DeleteFileExecutor
+import app.knotwork.android.data.tools.local.executors.EditFileExecutor
+import app.knotwork.android.data.tools.local.executors.FindFilesExecutor
+import app.knotwork.android.data.tools.local.executors.HttpRequestExecutor
+import app.knotwork.android.data.tools.local.executors.ListFilesExecutor
+import app.knotwork.android.data.tools.local.executors.ReadFileExecutor
+import app.knotwork.android.data.tools.local.executors.WriteFileExecutor
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.McpServerConfig
@@ -14,9 +21,12 @@ import app.knotwork.android.domain.repositories.ApiKeyRepository
 import app.knotwork.android.domain.repositories.LocalToolExecutor
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
+import app.knotwork.android.domain.services.HttpRequestPolicy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
+import org.json.JSONException
+import org.json.JSONObject
 import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -96,6 +106,55 @@ class ToolRepositoryImpl @Inject constructor(
         val baseTools = mutableListOf(
             scheduleTool,
             searchTool.asAgentTool().copy(risk = ToolRisk.READ_ONLY),
+            workspaceReadTool(
+                name = ReadFileExecutor.TOOL_NAME,
+                description = ReadFileExecutor.DESCRIPTION,
+                parameters = ReadFileExecutor.PARAMETERS,
+            ),
+            workspaceReadTool(
+                name = ListFilesExecutor.TOOL_NAME,
+                description = ListFilesExecutor.DESCRIPTION,
+                parameters = ListFilesExecutor.PARAMETERS,
+            ),
+            workspaceReadTool(
+                name = FindFilesExecutor.TOOL_NAME,
+                description = FindFilesExecutor.DESCRIPTION,
+                parameters = FindFilesExecutor.PARAMETERS,
+            ),
+            // Mutating workspace tools. write_file / edit_file are SENSITIVE (a
+            // scoped, reversible change inside the sandbox); delete_file is
+            // DESTRUCTIVE (irreversible) and always routes through the typed
+            // confirmation path. The risk here is the single source the HITL gate
+            // reads via `getRisk`.
+            workspaceWriteTool(
+                name = WriteFileExecutor.TOOL_NAME,
+                description = WriteFileExecutor.DESCRIPTION,
+                parameters = WriteFileExecutor.PARAMETERS,
+                risk = ToolRisk.SENSITIVE,
+            ),
+            workspaceWriteTool(
+                name = EditFileExecutor.TOOL_NAME,
+                description = EditFileExecutor.DESCRIPTION,
+                parameters = EditFileExecutor.PARAMETERS,
+                risk = ToolRisk.SENSITIVE,
+            ),
+            workspaceWriteTool(
+                name = DeleteFileExecutor.TOOL_NAME,
+                description = DeleteFileExecutor.DESCRIPTION,
+                parameters = DeleteFileExecutor.PARAMETERS,
+                risk = ToolRisk.DESTRUCTIVE,
+            ),
+            // Outbound HTTP. Always present in the built-in set so executeTool and
+            // getRisk can route to it, but published to the agent (getAvailableTools)
+            // only when the domain allowlist is non-empty. The declared risk here is
+            // the conservative maximum for display; the HITL gate resolves the real
+            // per-method risk via getRisk (GET → SENSITIVE, writes → DESTRUCTIVE).
+            AgentTool(
+                name = HttpRequestExecutor.TOOL_NAME,
+                description = HttpRequestExecutor.DESCRIPTION,
+                parameters = HttpRequestExecutor.PARAMETERS,
+                risk = ToolRisk.DESTRUCTIVE,
+            ),
         )
 
         if (availableModels.isEmpty()) {
@@ -124,6 +183,35 @@ class ToolRepositoryImpl @Inject constructor(
         baseTools.add(delegateTool)
         return baseTools
     }
+
+    /**
+     * Builds an [AgentTool] for a read-only workspace file tool (`read_file`,
+     * `list_files`, `find_files`). All three are [ToolRisk.READ_ONLY]: reading or
+     * listing the agent's own jailed sandbox neither mutates state nor reaches
+     * outside the device, so they pass the HITL gate without a confirmation under
+     * the default policy.
+     */
+    private fun workspaceReadTool(name: String, description: String, parameters: String): AgentTool = AgentTool(
+        name = name,
+        description = description,
+        parameters = parameters,
+        risk = ToolRisk.READ_ONLY,
+    )
+
+    /**
+     * Builds an [AgentTool] for a mutating workspace file tool (`write_file`,
+     * `edit_file`, `delete_file`). Unlike the read tools these carry an explicit
+     * [risk] — [ToolRisk.SENSITIVE] for the reversible writes, [ToolRisk.DESTRUCTIVE]
+     * for the irreversible delete — which the HITL gate reads back through
+     * [getRisk] to decide whether (and how strictly) to confirm with the user.
+     */
+    private fun workspaceWriteTool(name: String, description: String, parameters: String, risk: ToolRisk): AgentTool =
+        AgentTool(
+            name = name,
+            description = description,
+            parameters = parameters,
+            risk = risk,
+        )
 
     /**
      * Reconciles the [mcpClients] pool against [SettingsRepository.mcpServers].
@@ -250,7 +338,15 @@ class ToolRepositoryImpl @Inject constructor(
         val configs = distinctMcpConfigs()
         val disabledLocal = settingsRepository.disabledAppFunctions.first()
         val disabledMcp = settingsRepository.disabledMcpTools.first()
-        val availableLocal = getAllLocalTools().filter { it.name !in disabledLocal }
+        // http_request is its own master switch: while no domain is allowlisted the
+        // tool is hidden from the agent entirely (a direct call is still refused by
+        // the executor). This keeps the read_file → http_request exfiltration channel
+        // closed by default until the user opts a destination in.
+        val httpDisabled = settingsRepository.allowedHttpDomains.first().isEmpty()
+        val availableLocal = getAllLocalTools().filter { tool ->
+            tool.name !in disabledLocal &&
+                !(httpDisabled && tool.name == HttpRequestExecutor.TOOL_NAME)
+        }
 
         // Walk persisted-config order, not `mcpClients.entries`. ConcurrentHashMap
         // iteration is non-deterministic; the user's ordering in Settings →
@@ -391,7 +487,16 @@ class ToolRepositoryImpl @Inject constructor(
      * device state on every call. The HITL gate executes this exactly once per tool
      * invocation, so the extra Flow read is not on a hot path.
      */
-    override suspend fun getRisk(toolName: String): ToolRisk {
+    override suspend fun getRisk(toolName: String, arguments: String): ToolRisk {
+        // http_request is the one tool whose risk depends on the call, not just
+        // the name: a read GET is SENSITIVE while a state-changing write is
+        // DESTRUCTIVE. Resolve it from the same source the executor enforces with
+        // (HttpRequestPolicy), falling back to the conservative DESTRUCTIVE when
+        // the method cannot be parsed so an ambiguous call never under-prompts.
+        if (toolName == HttpRequestExecutor.TOOL_NAME) {
+            return httpRequestRisk(arguments)
+        }
+
         val builtinRisk = getBuiltinTools().firstOrNull { it.name == toolName }?.risk
         if (builtinRisk != null) {
             return builtinRisk
@@ -428,5 +533,22 @@ class ToolRepositoryImpl @Inject constructor(
         throw e
     } catch (e: Throwable) {
         false
+    }
+
+    /**
+     * Resolves the per-method risk of an `http_request` call from its [arguments].
+     * Parses the `method` field and maps it via [HttpRequestPolicy.methodRisk];
+     * a missing, unknown, or malformed method falls back to
+     * [ToolRisk.DESTRUCTIVE] so an unparsable call is gated at the strictest
+     * level rather than slipping through with a weaker prompt.
+     */
+    private fun httpRequestRisk(arguments: String): ToolRisk {
+        val method = try {
+            JSONObject(arguments).optString("method", "GET")
+        } catch (e: JSONException) {
+            Timber.w(e, "http_request risk lookup: malformed arguments; defaulting to DESTRUCTIVE")
+            return ToolRisk.DESTRUCTIVE
+        }
+        return HttpRequestPolicy.methodRisk(method) ?: ToolRisk.DESTRUCTIVE
     }
 }

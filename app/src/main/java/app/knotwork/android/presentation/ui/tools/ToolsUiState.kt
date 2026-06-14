@@ -29,6 +29,7 @@ data class ToolsUiState(
     val disabledMcpTools: Set<String> = emptySet(),
     val localTools: List<AgentTool> = emptyList(),
     val expandedServerUrls: Set<String> = emptySet(),
+    val allowedHttpDomainCount: Int = 0,
 )
 
 /**

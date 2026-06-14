@@ -46,6 +46,8 @@ class ToolRepositoryImplTest {
         every { settingsRepository.disabledAppFunctions } returns flowOf(emptySet())
         every { settingsRepository.disabledMcpTools } returns flowOf(emptySet())
         every { settingsRepository.appFunctionRiskOverrides } returns flowOf(emptyMap())
+        // http_request stays hidden from getAvailableTools unless a test opts a domain in.
+        every { settingsRepository.allowedHttpDomains } returns flowOf(emptyList())
         coEvery { localAppFunctionManager.getAvailableFunctions() } returns
             listOf(AgentTool("get_system_time", "desc", "{}"))
         // mockk picks the most recent matching stub: default everything to "not discovered"
@@ -328,6 +330,94 @@ class ToolRepositoryImplTest {
         val risk = repository.getRisk("delegate_task")
 
         assertEquals(ToolRisk.SENSITIVE, risk)
+    }
+
+    @Test
+    fun `given builtin read_file when getRisk then returns READ_ONLY`() = runTest {
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        assertEquals(ToolRisk.READ_ONLY, repository.getRisk("read_file"))
+    }
+
+    @Test
+    fun `given builtin write_file when getRisk then returns SENSITIVE`() = runTest {
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        assertEquals(ToolRisk.SENSITIVE, repository.getRisk("write_file"))
+    }
+
+    @Test
+    fun `given builtin edit_file when getRisk then returns SENSITIVE`() = runTest {
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        assertEquals(ToolRisk.SENSITIVE, repository.getRisk("edit_file"))
+    }
+
+    @Test
+    fun `given builtin delete_file when getRisk then returns DESTRUCTIVE`() = runTest {
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        assertEquals(ToolRisk.DESTRUCTIVE, repository.getRisk("delete_file"))
+    }
+
+    @Test
+    fun `given http_request GET when getRisk then returns SENSITIVE`() = runTest {
+        assertEquals(
+            ToolRisk.SENSITIVE,
+            repository.getRisk("http_request", """{"method":"GET","url":"https://example.com"}"""),
+        )
+    }
+
+    @Test
+    fun `given http_request POST when getRisk then returns DESTRUCTIVE`() = runTest {
+        assertEquals(
+            ToolRisk.DESTRUCTIVE,
+            repository.getRisk("http_request", """{"method":"POST","url":"https://example.com"}"""),
+        )
+    }
+
+    @Test
+    fun `given http_request with malformed args when getRisk then defaults to DESTRUCTIVE`() = runTest {
+        assertEquals(ToolRisk.DESTRUCTIVE, repository.getRisk("http_request", "not json"))
+    }
+
+    @Test
+    fun `given empty allowlist when getAvailableTools then http_request is hidden`() = runTest {
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        val result = repository.getAvailableTools()
+
+        assertFalse(result.any { it.name == "http_request" })
+    }
+
+    @Test
+    fun `given a configured allowlist when getAvailableTools then http_request is published`() = runTest {
+        every { settingsRepository.allowedHttpDomains } returns flowOf(listOf("example.com"))
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        val result = repository.getAvailableTools()
+
+        assertTrue(result.any { it.name == "http_request" })
+    }
+
+    @Test
+    fun `given empty allowlist when getAllLocalTools then http_request is still present`() = runTest {
+        // The full catalogue always contains http_request (so executeTool/getRisk can
+        // route to it); only the agent-facing getAvailableTools hides it.
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        assertTrue(repository.getAllLocalTools().any { it.name == "http_request" })
+    }
+
+    @Test
+    fun `given no cloud keys when getAllLocalTools then write tools are published with their risk`() = runTest {
+        coEvery { mcpClient.getTools() } returns emptyList()
+
+        val tools = repository.getAllLocalTools().associateBy { it.name }
+
+        assertEquals(ToolRisk.SENSITIVE, tools.getValue("write_file").risk)
+        assertEquals(ToolRisk.SENSITIVE, tools.getValue("edit_file").risk)
+        assertEquals(ToolRisk.DESTRUCTIVE, tools.getValue("delete_file").risk)
     }
 
     @Test

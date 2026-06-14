@@ -17,6 +17,7 @@ import app.knotwork.android.domain.models.ProviderId
 import app.knotwork.android.presentation.ui.about.AboutScreen
 import app.knotwork.android.presentation.ui.chat.home.ChatHomeScreen
 import app.knotwork.android.presentation.ui.chat.home.ChatHomeViewModel
+import app.knotwork.android.presentation.ui.files.FilesScreen
 import app.knotwork.android.presentation.ui.memory.MemoryScreen
 import app.knotwork.android.presentation.ui.models.ModelsScreen
 import app.knotwork.android.presentation.ui.monitoring.MonitoringScreen
@@ -34,6 +35,7 @@ import app.knotwork.android.presentation.ui.settings.provider.ProviderPickerScre
 import app.knotwork.android.presentation.ui.splash.SplashScreen
 import app.knotwork.android.presentation.ui.taskmonitor.TaskMonitorScreen
 import app.knotwork.android.presentation.ui.taskmonitor.TaskMonitorViewModel
+import app.knotwork.android.presentation.ui.tools.AllowedDomainsScreen
 import app.knotwork.android.presentation.ui.tools.McpServerConfigScreen
 import app.knotwork.android.presentation.ui.tools.ToolDetailScreen
 import app.knotwork.android.presentation.ui.tools.ToolsScreen
@@ -221,6 +223,13 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                     val encoded = android.net.Uri.encode(toolId)
                     navController.navigate(NavRoutes.TOOL_DETAIL.replace(oldValue = "{toolId}", newValue = encoded))
                 },
+                onOpenAllowedDomains = { navController.navigate(NavRoutes.ALLOWED_DOMAINS) },
+            )
+        }
+        composable(NavRoutes.ALLOWED_DOMAINS) {
+            AllowedDomainsScreen(
+                onBack = { navController.popBackStack() },
+                modifier = Modifier.fillMaxSize(),
             )
         }
         composable(
@@ -266,6 +275,7 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                 onNavigateToPrompts = { navController.navigate(NavRoutes.PROMPTS) },
                 onNavigateToAbout = { navController.navigate(NavRoutes.ABOUT) },
                 onNavigateToLibrary = { navController.navigate(NavRoutes.PIPELINE_PRESETS) },
+                onNavigateToFiles = { navController.navigate(NavRoutes.FILES) },
             )
         }
         composable(NavRoutes.PIPELINE_PRESETS) {
@@ -273,6 +283,9 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
         }
         composable(NavRoutes.MEMORY) {
             MemoryScreen(onBack = { navController.popBackStack() })
+        }
+        composable(NavRoutes.FILES) {
+            FilesScreen(onBack = { navController.popBackStack() })
         }
         composable(NavRoutes.MODELS) {
             ModelsScreen(

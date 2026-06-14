@@ -7,11 +7,17 @@ import app.knotwork.android.domain.models.MemoryStats
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelinePreset
 import app.knotwork.android.domain.models.PromptPreset
+import app.knotwork.android.domain.models.WorkspaceFile
+import app.knotwork.android.domain.models.WorkspaceListing
+import app.knotwork.android.domain.models.WorkspaceResult
+import app.knotwork.android.domain.models.WorkspaceUsage
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.NetworkActivityTracker
 import app.knotwork.android.domain.repositories.PipelinePresetRepository
 import app.knotwork.android.domain.repositories.PromptPresetRepository
+import app.knotwork.android.domain.usecases.workspace.ListWorkspaceUseCase
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -54,6 +60,7 @@ class MoreViewModelTest {
     private lateinit var taskQueueManager: TaskQueueManager
     private lateinit var networkActivityTracker: NetworkActivityTracker
     private lateinit var pipelinePresetRepository: PipelinePresetRepository
+    private lateinit var listWorkspaceUseCase: ListWorkspaceUseCase
 
     private lateinit var memoryFlow: MutableStateFlow<MemoryStats>
     private lateinit var modelsFlow: MutableStateFlow<List<LocalModel>>
@@ -73,6 +80,9 @@ class MoreViewModelTest {
         taskQueueManager = mockk()
         networkActivityTracker = mockk()
         pipelinePresetRepository = mockk()
+        listWorkspaceUseCase = mockk()
+        coEvery { listWorkspaceUseCase() } returns
+            WorkspaceResult.Success(WorkspaceListing(emptyList(), WorkspaceUsage(usedBytes = 0L, limitBytes = 0L)))
 
         memoryFlow = MutableStateFlow(MemoryStats.EMPTY)
         modelsFlow = MutableStateFlow(emptyList())
@@ -103,6 +113,7 @@ class MoreViewModelTest {
         taskQueueManager = taskQueueManager,
         networkActivityTracker = networkActivityTracker,
         pipelinePresetRepository = pipelinePresetRepository,
+        listWorkspaceUseCase = listWorkspaceUseCase,
     )
 
     @Test
@@ -121,8 +132,32 @@ class MoreViewModelTest {
         assertEquals("none", state.tasksSubtitle)
         assertEquals(0, state.tasksBadge)
         assertEquals("no saved presets", state.librarySubtitle)
+        assertEquals("empty", state.filesSubtitle)
         assertEquals("on-device · no network calls yet", state.networkStatusText)
         assertTrue(state.networkStatusOk)
+
+        job.cancel()
+    }
+
+    @Test
+    fun `given workspace files when subscribed then files subtitle reflects count and size`() = runTest {
+        coEvery { listWorkspaceUseCase() } returns WorkspaceResult.Success(
+            WorkspaceListing(
+                files = listOf(
+                    WorkspaceFile("a.md", sizeBytes = 0, lastModified = 0, isDirectory = false, isText = true),
+                    WorkspaceFile("b.md", sizeBytes = 0, lastModified = 0, isDirectory = false, isText = true),
+                ),
+                usage = WorkspaceUsage(usedBytes = 2_000_000L, limitBytes = 64_000_000L),
+            ),
+        )
+
+        val viewModel = buildViewModel()
+        val job = backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.uiState.collect {}
+        }
+        testScheduler.runCurrent()
+
+        assertEquals("2 files · 1.9 MB", viewModel.uiState.value.filesSubtitle)
 
         job.cancel()
     }

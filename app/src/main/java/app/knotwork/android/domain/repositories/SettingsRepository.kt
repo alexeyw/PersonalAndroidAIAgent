@@ -386,6 +386,94 @@ interface SettingsRepository {
     suspend fun setToolCallTimeoutMs(timeoutMs: Long)
 
     /**
+     * A [Flow] of the maximum size, in bytes, of any single file the agent
+     * workspace will accept. Writes whose content exceeds this are refused
+     * ([app.knotwork.android.domain.models.WorkspaceError.TooLarge]); it also
+     * caps how large a file the workspace will pull into memory for a text read.
+     */
+    val workspaceMaxFileSizeBytes: Flow<Long>
+
+    /**
+     * Updates the per-file size limit of the agent workspace.
+     *
+     * @param bytes The new per-file ceiling, in bytes.
+     */
+    suspend fun setWorkspaceMaxFileSizeBytes(bytes: Long)
+
+    /**
+     * A [Flow] of the maximum total size, in bytes, the agent workspace may
+     * occupy across all files. A write that would push the workspace past this
+     * is refused
+     * ([app.knotwork.android.domain.models.WorkspaceError.QuotaExceeded]) so a
+     * looping pipeline cannot exhaust device storage.
+     */
+    val workspaceMaxTotalBytes: Flow<Long>
+
+    /**
+     * Updates the workspace-wide total-size limit.
+     *
+     * @param bytes The new workspace-wide ceiling, in bytes.
+     */
+    suspend fun setWorkspaceMaxTotalBytes(bytes: Long)
+
+    /**
+     * A [Flow] of the budget, in **tokens**, of file content the `read_file`
+     * tool returns in a single call. The tool converts this to an approximate
+     * byte ceiling and truncates the served window to it (appending a
+     * `[... truncated, N bytes remain — use offset to continue]` marker), so a
+     * single read of a large file can never overflow the local model's context
+     * window.
+     */
+    val workspaceReadTokenBudget: Flow<Int>
+
+    /**
+     * Updates the per-read token budget of the `read_file` tool.
+     *
+     * @param tokens The new budget, in tokens.
+     */
+    suspend fun setWorkspaceReadTokenBudget(tokens: Int)
+
+    /**
+     * A [Flow] of the domain allowlist for the `http_request` tool, in the order
+     * the user added them. Each entry is a normalised host (e.g. `api.example.com`)
+     * and is matched **exactly** — sub-domains are not implied, so the user must
+     * add each host they intend to reach (see
+     * [app.knotwork.android.domain.services.HttpRequestPolicy.isHostAllowed]).
+     *
+     * The allowlist is the tool's master switch: while it is **empty** the tool
+     * is not published into [getAvailableTools] at all (the agent never sees it),
+     * and any direct call is refused. A request whose target host matches no
+     * entry is refused before it leaves the device — the conservative default
+     * that keeps the read_file → http_request exfiltration channel closed until
+     * the user explicitly opens a destination.
+     */
+    val allowedHttpDomains: Flow<List<String>>
+
+    /**
+     * Persists the full `http_request` domain allowlist, replacing any previous
+     * value. Callers are expected to pass already-normalised, de-duplicated hosts
+     * (see the Settings → Tools editor); persistence preserves their order.
+     *
+     * @param domains The new allowlist of normalised hosts.
+     */
+    suspend fun setAllowedHttpDomains(domains: List<String>)
+
+    /**
+     * A [Flow] of the maximum size, in bytes, of the response body the
+     * `http_request` tool pulls into memory and returns to the agent. A larger
+     * response is read up to this cap and a truncation marker is appended.
+     * Bounds how much untrusted remote content one call can inject into context.
+     */
+    val httpToolMaxResponseBytes: Flow<Long>
+
+    /**
+     * Updates the `http_request` response-body byte ceiling.
+     *
+     * @param bytes The new ceiling, in bytes.
+     */
+    suspend fun setHttpToolMaxResponseBytes(bytes: Long)
+
+    /**
      * A [Flow] representing the maximum number of pipeline execution steps.
      * Prevents infinite loops in pipeline graphs. Valid range: 5–100.
      */

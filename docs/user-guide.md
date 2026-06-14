@@ -28,9 +28,10 @@ before the next release ships.
 5. [Pipelines](#pipelines)
 6. [Browser pipeline editor](#browser-pipeline-editor)
 7. [Tools and MCP](#tools-and-mcp)
-8. [Memory](#memory)
-9. [Settings](#settings)
-10. [Troubleshooting](#troubleshooting)
+8. [Files](#files)
+9. [Memory](#memory)
+10. [Settings](#settings)
+11. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -475,7 +476,10 @@ exist:
 
 - **Bundled** — a handful of curated starter presets that ship with the
   app (local-only Q&A, cloud assist, tool-using agent, multi-step
-  research, clarify-then-act, routed local/cloud). They are read-only.
+  research, clarify-then-act, routed local/cloud, and **research to
+  file** — a question turned into a Wikipedia lookup, distilled, written
+  out as a Markdown report under `reports/` in the agent workspace, with
+  the saved path returned). They are read-only.
 - **Mine** — presets you create yourself with **Save as preset** (from a
   pipeline's `⋮` menu). These live in the app's local database.
 
@@ -714,10 +718,44 @@ The app ships with the following tools:
 | **search_tool**    | Looks up a topic on Wikipedia and returns a concise summary.                        |
 | **schedule_task**  | Schedules a task to run later in the background (one-off or recurring).             |
 | **delegate_task**  | Hands a hard subtask to a configured cloud LLM and stores the result in memory. Only appears when at least one cloud provider has an API key configured. |
+| **read_file**      | Reads a text file from the agent's private workspace, truncated to a token budget so a long file never overflows the model's context; supports byte `offset`/`limit` paging. |
+| **list_files**     | Lists files in the workspace (optionally under a sub-directory) with their size and last-modified time. |
+| **find_files**     | Finds workspace files whose path matches a glob pattern (`*.md`, `reports/**`).      |
+| **write_file**     | Writes a text file to the workspace. Creating a new file is the default; replacing an existing one needs an explicit overwrite flag, so content is never clobbered by accident. Asks for confirmation before running. |
+| **edit_file**      | Makes a targeted change to an existing workspace file by replacing a unique snippet of text. The snippet must match exactly once, so an edit never lands in the wrong place. Asks for confirmation before running. |
+| **delete_file**    | Deletes a file from the workspace. This is irreversible and always asks you to confirm before it runs. |
+| **http_request**   | Calls a remote HTTP(S) API (GET/POST/PUT/DELETE). It can only reach domains you have explicitly added to the **Allowed domains** list — until you add one, the tool is hidden from the agent entirely. A GET asks for confirmation; a POST/PUT/DELETE asks for the stronger destructive-action confirmation. See the warning below before adding a domain. |
 
 Each tool has a switch on the Tools screen. Turn a tool off to hide
 it from the agent for the next run; turn it on to make it available
 again.
+
+#### Allowed domains for http_request
+
+The **http_request** tool is off by default: it stays invisible to the
+agent until you opt a specific destination in. Because a file the agent
+reads could contain instructions planted by someone else (a *prompt
+injection*), an HTTP tool that could reach any address would be a way to
+quietly send your data off the device. The allowlist is the safeguard:
+
+- The agent can only contact a host you have added. Matching is exact —
+  sub-domains are not implied, so adding `example.com` does not allow
+  `api.example.com`; add each host you need. Any other host — including
+  one reached through a redirect — is refused before the request leaves
+  the device.
+- Public domains must use `https`. Plain `http` is allowed only for
+  local addresses (for example a home Ollama server).
+- A request is refused outright if it would carry one of your stored
+  provider API keys, so a saved key can't be leaked to a remote host.
+
+To manage the list, open the **Tools** screen and tap **Allowed domains**
+under the http_request row. The editor shows the current hosts, lets you
+remove any of them, and previews how a typed entry will be stored before
+you add it (it normalises `HTTPS://Api.Example.com/v1` to
+`api.example.com`, and warns when an entry is invalid or already on the
+list). Only add a domain you trust. Adding one lets the agent send data to
+it, so treat the list the way you would treat granting an app network
+access to a specific site.
 
 For a marketing-style preview of this screen see
 [`docs/images/hero-tools.png`](images/hero-tools.png)
@@ -783,6 +821,73 @@ a tool from it is needed — and they are wrapped in error-handling
 so an unreachable server does not crash the chat. If a tool that
 relied on an MCP server stops responding, you will see an error
 event in the console rather than a silent failure.
+
+---
+
+## Files
+
+The agent has a small private **workspace** — a sandboxed directory it
+can read from and write to via the file tools (`read_file`,
+`write_file`, `list_files`, …). The **Files** screen, reached from
+**More → Files**, is your window into it: it is where the reports and
+exports the agent produces show up, and where you can hand it a file to
+read.
+
+### The listing and quota
+
+Files are shown in a flat, path-sorted list — a file saved under
+`reports/` reads as `reports/name.md`, with the directory dimmed and the
+name emphasised, so the layout is legible without a folder tree. Each
+row shows the file's size and when it was last modified; text files and
+binary files carry different icons.
+
+The header shows a **quota indicator** — how much of the workspace
+budget is used out of its limit, with a fill bar. As the workspace fills
+it ramps from neutral to amber (near the limit) to red. If it is full,
+a banner explains that the agent's writes are being refused until space
+is freed; delete files or raise the limit (Settings → Tools → workspace
+size) to recover.
+
+Pull down to refresh the listing.
+
+### Previewing a file
+
+Tap a text file to open a read-only, monospace **preview** in a bottom
+sheet. Very large files are shown truncated (the first part only) with a
+banner telling you so — use **Save as…** to get the whole file. Binary
+files are not previewable; use the row's overflow menu to share, save,
+or delete them.
+
+### Taking a file out
+
+From the preview sheet (or a row's overflow menu) you can:
+
+- **Share** — opens the system share sheet. The app stages a temporary
+  copy for sharing, so the workspace directory itself is never exposed
+  to other apps; the receiving app gets read access to that one copy
+  only.
+- **Save as…** — opens the system "create document" picker so you can
+  write the file out to a location of your choice (Downloads, Drive,
+  etc.).
+
+In multi-select mode you can share several files at once.
+
+### Putting a file in
+
+Tap **Import** (the button in the quota header, the floating action
+button, or the empty-state call to action) to pick a file with the
+system file picker and copy it into the workspace for the agent to read.
+Imports are subject to the same per-file and total-size limits as the
+agent's own writes. If a file with the same name already exists, you are
+asked whether to **keep both** (the import is saved under a numbered
+name like `report (1).md`) or **replace** the existing file.
+
+### Cleaning up
+
+Delete a single file from its preview or overflow menu, or long-press a
+row to enter multi-select and delete several at once. Deletion asks for
+confirmation and is **permanent** — files removed here cannot be
+recovered.
 
 ---
 

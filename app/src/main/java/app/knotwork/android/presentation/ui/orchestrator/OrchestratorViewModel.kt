@@ -263,13 +263,20 @@ class OrchestratorViewModel @Inject constructor(
 
     private fun loadAvailableTools() {
         viewModelScope.launch {
-            try {
-                val tools = toolRepository.getAvailableTools()
-                _uiState.update { it.copy(availableTools = tools) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _uiState.update { it.copy(errorMessage = throwableAsUiText(e)) }
+            // Re-query the available tools whenever the http allowlist changes, not just
+            // once at start-up: adding the first allowed domain un-hides `http_request`,
+            // and the TOOL-node picker must reflect that in the same session rather than
+            // only after an app restart. The flow also emits its current value on
+            // collection, so this still performs the initial load.
+            settingsRepository.allowedHttpDomains.collect {
+                try {
+                    val tools = toolRepository.getAvailableTools()
+                    _uiState.update { it.copy(availableTools = tools) }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    _uiState.update { it.copy(errorMessage = throwableAsUiText(e)) }
+                }
             }
         }
     }
