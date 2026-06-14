@@ -15,6 +15,15 @@ details.
 
 ### Added
 
+- **"Research to file" bundled preset.** A new curated starter pipeline
+  (`showcase_research_to_file`, in the **+ From preset** picker's Bundled
+  tab and mirrored in the browser pipeline editor) demonstrates the
+  end-to-end "research → file in your hands" loop out of the box: the
+  local model turns the question into a Wikipedia lookup, distils the raw
+  extract into clean facts, writes a short Markdown report into the agent
+  workspace under `reports/`, and replies with the saved path. Plain-prose
+  prompts keep it runnable on the on-device 4B model.
+
 - **Files screen (agent workspace browser).** A new screen — reached from
   **More → Files** — gives the agent's previously-invisible file workspace a
   user-facing window. It lists the workspace's files (path-sorted, with size and

@@ -476,7 +476,10 @@ exist:
 
 - **Bundled** — a handful of curated starter presets that ship with the
   app (local-only Q&A, cloud assist, tool-using agent, multi-step
-  research, clarify-then-act, routed local/cloud). They are read-only.
+  research, clarify-then-act, routed local/cloud, and **research to
+  file** — a question turned into a Wikipedia lookup, distilled, written
+  out as a Markdown report under `reports/` in the agent workspace, with
+  the saved path returned). They are read-only.
 - **Mine** — presets you create yourself with **Save as preset** (from a
   pipeline's `⋮` menu). These live in the app's local database.
 
