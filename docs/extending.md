@@ -193,7 +193,10 @@ class MyToolExecutor @Inject constructor(
 
     override val toolName: String = TOOL_NAME
 
-    override suspend fun execute(arguments: String): String {
+    // `context` carries trusted engine-supplied values (e.g. the invoking chat
+    // session id); ignore it if your tool needs none. The interface gives it a
+    // default, but an override may not repeat the default — list both params.
+    override suspend fun execute(arguments: String, context: ToolExecutionContext): String {
         // 1. parse `arguments` as JSON (kotlinx.serialization or JSONObject —
         //    never manual string splitting)
         // 2. perform the action
@@ -395,14 +398,26 @@ class CountLinesExecutor @Inject constructor(
 
     override val toolName: String = TOOL_NAME
 
-    override suspend fun execute(arguments: String): String {
-        val path = JSONObject(arguments).getString("path")   // never split strings by hand
+    // The interface declares execute(arguments, context = ToolExecutionContext.EMPTY);
+    // an override may not repeat the default, so both parameters are listed. Ignore
+    // `context` if your tool needs no trusted environment identity (e.g. the session id).
+    override suspend fun execute(arguments: String, context: ToolExecutionContext): String {
+        val path = JSONObject(arguments).optString("path", "")   // never split strings by hand
+        if (path.isBlank()) return "Error: missing 'path' argument."
         return when (val result = workspace.readText(path)) {
-            is WorkspaceResult.Success ->
-                "${result.value.lines().size} lines"
-            is WorkspaceResult.Failure ->
-                result.error.toReadableMessage()             // map the typed error, do not throw
+            is WorkspaceResult.Success -> "${result.value.lines().size} lines"
+            is WorkspaceResult.Failure -> errorMessage(path, result.error)  // map the typed error, never throw
         }
+    }
+
+    // WorkspaceError is a sealed class of data objects (+ AnchorNotUnique(count)),
+    // not an enum — there is no `.name`; map each case explicitly, as the real
+    // file executors do.
+    private fun errorMessage(path: String, error: WorkspaceError): String = when (error) {
+        WorkspaceError.PathOutsideWorkspace -> "Error: path '$path' is outside the workspace."
+        WorkspaceError.NotFound -> "Error: file '$path' not found."
+        WorkspaceError.NotAText -> "Error: '$path' is not a UTF-8 text file."
+        else -> "Error: '$path' could not be read."
     }
 
     companion object { const val TOOL_NAME = "count_lines" }
