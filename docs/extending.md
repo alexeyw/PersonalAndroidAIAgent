@@ -16,7 +16,7 @@ see [`docs/user-guide.md`](user-guide.md).
 
 1. [Add a new `NodeType`](#1-add-a-new-nodetype)
 2. [Add a new `Tool`](#2-add-a-new-tool) (includes §2.5 — exposing a
-   built-in as a callee-side AppFunction)
+   built-in as a callee-side AppFunction; §2.6 — adding a workspace tool)
 3. [Add a new cloud provider](#3-add-a-new-cloud-provider)
 4. [Add a new prompt variable](#4-add-a-new-prompt-variable)
 5. [Add a bundled preset](#5-add-a-bundled-preset) — pipeline (§5.1) and
@@ -368,6 +368,101 @@ The `:tools-probe` debug module is a deterministic peer for end-to-end
 checks: install it alongside the agent's instrumented tests and a
 single tap of its `MainActivity` button exercises the same callee path
 externally.
+
+### 2.6. Add a workspace tool
+
+A **workspace tool** is a `LocalToolExecutor` that reads or writes the agent's
+private file sandbox instead of calling the network. The six built-ins
+(`read_file`, `write_file`, `edit_file`, `delete_file`, `list_files`,
+`find_files`) all share one rule: **they never touch `java.io.File`
+directly** — every byte goes through the
+[`AgentWorkspace`](../app/src/main/java/app/knotwork/android/domain/services/AgentWorkspace.kt)
+interface, which is the single trust boundary for agent-driven file I/O.
+Reuse that boundary and the sandbox guarantees (containment, quotas, the
+typed error surface) come for free; bypass it and you reopen the path-traversal
+and storage-exhaustion holes it exists to close. The structural map of this
+contour is in [`architecture.md`](architecture.md) §4.5; the threat-model
+framing is in [`SECURITY.md`](../SECURITY.md).
+
+**Step 1 — inject `AgentWorkspace`, not a `File`.** Crib from an existing
+executor (`ReadFileExecutor`, `WriteFileExecutor`, `DeleteFileExecutor` in
+`data/tools/local/executors/`):
+
+```kotlin
+class CountLinesExecutor @Inject constructor(
+    private val workspace: AgentWorkspace,
+) : LocalToolExecutor {
+
+    override val toolName: String = TOOL_NAME
+
+    override suspend fun execute(arguments: String): String {
+        val path = JSONObject(arguments).getString("path")   // never split strings by hand
+        return when (val result = workspace.readText(path)) {
+            is WorkspaceResult.Success ->
+                "${result.value.lines().size} lines"
+            is WorkspaceResult.Failure ->
+                result.error.toReadableMessage()             // map the typed error, do not throw
+        }
+    }
+
+    companion object { const val TOOL_NAME = "count_lines" }
+}
+```
+
+Contract reminders specific to the workspace:
+
+- **Funnel every path through the gate.** `AgentWorkspace.resolve` is the one
+  canonicalisation point; `readText` / `writeText` / `editText` / `delete` /
+  `list` / `importBytes` / `exportTo` all enforce it internally. Pass the
+  caller's relative path straight in — do not pre-resolve, pre-join, or
+  canonicalise it yourself, or you risk re-introducing the escape the gate
+  blocks.
+- **Map the typed error, never throw for a refusable condition.** Workspace
+  calls return `WorkspaceResult.Failure` with a `WorkspaceError`
+  (`PathOutsideWorkspace`, `NotFound`, `NotAText`, `AlreadyExists`,
+  `IsDirectory`, `TooLarge`, `QuotaExceeded`, `AnchorNotFound`,
+  `AnchorNotUnique`). Turn each into a short, model-readable observation
+  string. A refused call must surface as a `ToolResult.Error` so the run
+  continues — it must not crash the pipeline.
+- **Respect the quotas; don't recompute them.** The per-file and workspace-wide
+  limits are enforced inside `writeText` / `importBytes`. Never stage bytes
+  outside the workspace to dodge them.
+
+**Step 2 — register it like any other tool.** Add the `@Binds @IntoMap
+@StringKey(CountLinesExecutor.TOOL_NAME)` entry to
+[`di/LocalToolsModule.kt`](../app/src/main/java/app/knotwork/android/di/LocalToolsModule.kt)
+(see §2.2). No other DI edit is needed.
+
+**Step 3 — pick the risk tier and declare it on the built-in.** Use the same
+read / mutate / destructive mapping as the existing workspace tools:
+
+| Your tool…                                   | `ToolRisk`     |
+|----------------------------------------------|----------------|
+| only reads or lists (`read_file`-shaped)     | `READ_ONLY`    |
+| creates or modifies a file (`write_file`/`edit_file`-shaped) | `SENSITIVE`    |
+| irreversibly removes data (`delete_file`-shaped) | `DESTRUCTIVE`  |
+
+Built-in workspace tools carry their risk in the built-in list inside
+[`ToolRepositoryImpl`](../app/src/main/java/app/knotwork/android/data/repositories/ToolRepositoryImpl.kt)
+(the `getRisk(name)` source of truth), alongside `search_tool` and friends —
+add your tool there with the tier from the table. If the risk depends on the
+*call* rather than the name (as it does for `http_request`), resolve it through
+the argument-aware `getRisk(name, arguments)` overload from one pure policy
+helper that the executor's own enforcement reads from too (§2.3), so the gate
+and the refusal cannot diverge.
+
+**Step 4 — surface it to the user (docs).** A new workspace tool is a
+user-visible capability: add a row to the built-in-tools table in
+[`docs/user-guide.md`](user-guide.md) (the *Tools and MCP* section). The
+**Files** screen already renders whatever files the tool produces — no UI work
+is needed unless the tool needs a bespoke surface.
+
+**Step 5 — tests.** Unit-test the executor against a **real** `AgentWorkspace`
+backed by a JUnit `@TempDir` (the cheapest faithful sandbox), not a mocked
+interface — the point is to prove the gate behaves. Cover the happy path, a
+`../` traversal (assert `PathOutsideWorkspace` is mapped, not thrown), and the
+relevant quota / not-found / anchor branch. Mirror the structure of the
+existing `*ExecutorTest` files.
 
 ---
 
@@ -917,6 +1012,7 @@ double-check it for every recipe in this guide.**
 |------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | A new `NodeType`             | `domain/models/NodeType.kt` · a new `NodeExecutor` implementation · `domain/engine/executors/NodeExecutorFactory.kt` · `domain/models/NodeContextConfig.kt` (`defaultForType`) · `domain/models/PipelineGraph.kt` (`validate`, if special invariants) · **`pipeline-editor.html`** (`NODE_TYPES`, `defaultContextConfig`, `NODE_TYPE_TOOLTIPS`, optional `DEFAULT_SYSTEM_PROMPTS`) · executor unit test · `GraphExecutionEngineTest` |
 | A new `Tool`                 | a new `LocalToolExecutor` implementation · `di/LocalToolsModule.kt` (`@Binds @IntoMap @StringKey`) · declare `ToolRisk` correctly · executor unit test · optional Compose test if new UI                                                                            |
+| A new **workspace tool**     | a new `LocalToolExecutor` that goes through `AgentWorkspace` (never raw `File`) · `di/LocalToolsModule.kt` (`@Binds @IntoMap @StringKey`) · risk tier in `ToolRepositoryImpl` built-in list · `docs/user-guide.md` (built-in-tools table) · executor unit test against a `@TempDir`-backed `AgentWorkspace` (happy path + `../` traversal + quota/not-found) |
 | A new callee-side AppFunction | a new `@AppFunction`-annotated wrapper under `data/tools/local/appfunctions/` (first param `AppFunctionContext`) · `App.appFunctionConfiguration` (`addEnclosingClassFactory(...)`) · wrapper unit test with a mocked `AppFunctionContext` · scenario in `AppFunctionsEndToEndTest` |
 | A new cloud provider         | `domain/models/CloudProvider.kt` · `data/engine/KoogClientFactory.kt` · `data/engine/KoogCloudLlmModelResolver.kt` · `data/local/ApiKeyManager.kt` · `presentation/ui/settings/SettingsScreen.kt` · factory / resolver unit tests                                    |
 | A new prompt variable        | a new `PromptVariableProvider` implementation · `di/PromptTemplateModule.kt` (`@Binds @IntoSet`) · **`pipeline-editor.html`** (`PROMPT_VARIABLES`) · `docs/user-guide.md` (variables table) · provider unit test · `PromptTemplateEngine` round-trip test           |
