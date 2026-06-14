@@ -63,4 +63,49 @@ sealed class PipelineValidationError {
      * the node label and surface a human-readable error to the user.
      */
     data class NodeEmptyContext(val nodeId: String) : PipelineValidationError()
+
+    /**
+     * Error indicating a [NodeType.PIPELINE] node has no target pipeline
+     * selected (its [NodeModel.targetPipelineId] is `null` or blank). This is a
+     * structural, single-graph check raised by [PipelineGraph.validate]; the
+     * cross-pipeline reference checks below come from `PipelineCompositionValidator`.
+     *
+     * @property nodeId The id of the PIPELINE node with no target, for deep-link
+     * from the editor's validation bar.
+     */
+    data class MissingTargetPipeline(val nodeId: String) : PipelineValidationError()
+
+    /**
+     * Error indicating a [NodeType.PIPELINE] node references a pipeline id that
+     * does not resolve to any stored pipeline (deleted or never existed).
+     *
+     * @property nodeId The id of the referencing PIPELINE node, for deep-link.
+     * @property targetPipelineId The unresolved pipeline id that was referenced.
+     */
+    data class TargetPipelineNotFound(val nodeId: String, val targetPipelineId: String) : PipelineValidationError()
+
+    /**
+     * Error indicating the pipeline composition contains a cycle: a chain of
+     * [NodeType.PIPELINE] references that returns to a pipeline already on the
+     * path (including a pipeline referencing itself). A cyclic composition can
+     * never terminate and is rejected before any run starts.
+     *
+     * @property pipelineChain The pipeline ids forming the cycle, in call order,
+     * with the repeated id appended last (e.g. `[A, B, A]`) so the UI can render
+     * the offending chain.
+     */
+    data class PipelineCycle(val pipelineChain: List<String>) : PipelineValidationError()
+
+    /**
+     * Error indicating the static nesting depth of the pipeline composition
+     * exceeds the configured ceiling
+     * ([app.knotwork.android.domain.repositories.SettingsRepository.pipelineMaxNestingDepth]).
+     * Computed over the acyclic call graph (a cycle is reported separately as
+     * [PipelineCycle]).
+     *
+     * @property pipelineChain The deepest chain of pipeline ids that breaches the
+     * limit, in call order.
+     * @property limit The configured maximum nesting depth.
+     */
+    data class PipelineNestingTooDeep(val pipelineChain: List<String>, val limit: Int) : PipelineValidationError()
 }

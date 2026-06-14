@@ -62,6 +62,7 @@ class CloudLlmNodeExecutor @Inject constructor(
         sessionId: String,
         originalPrompt: String,
         runId: String?,
+        depth: Int,
     ): Flow<NodeOutput> = flow {
         val systemPromptPrefix = settingsRepository.systemPromptPrefix.first()
         val nodeSystemPrompt = node.systemPrompt ?: DefaultPrompts.Cloud.SYSTEM_FALLBACK

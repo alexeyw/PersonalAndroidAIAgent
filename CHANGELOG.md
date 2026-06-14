@@ -13,6 +13,22 @@ details.
 
 ## [Unreleased]
 
+### Added
+
+- **Pipeline composition (`PIPELINE` node).** A new pipeline node type runs
+  another pipeline as a sub-step — the building block for turning a reusable
+  branch into a callable block. The node references its callee by id; at
+  runtime the engine feeds the node's input to the sub-pipeline's `INPUT` node
+  and the sub-pipeline's `OUTPUT` text becomes the node's output. Unbounded
+  recursion (a pipeline referencing itself or forming a cycle) and runaway
+  nesting are rejected **before a run starts** by a static cross-pipeline
+  validator, with a configurable runtime depth ceiling as a safety net. A new
+  `pipelineMaxNestingDepth` setting (default 3, range 1–5) bounds how deep a
+  composition may nest. The browser pipeline editor gains a matching
+  **Pipeline** palette entry. (Visual editor configuration of the node — target
+  picker, on-card target name, validation deep-links — and nested-run
+  observability land in follow-up changes.)
+
 ## [0.5.0] - 2026-06-14
 
 ### Added

@@ -15,6 +15,7 @@ import app.knotwork.android.domain.engine.executors.InputNodeExecutor
 import app.knotwork.android.domain.engine.executors.LiteRtNodeExecutor
 import app.knotwork.android.domain.engine.executors.NodeExecutorFactory
 import app.knotwork.android.domain.engine.executors.OutputNodeExecutor
+import app.knotwork.android.domain.engine.executors.PipelineNodeExecutor
 import app.knotwork.android.domain.engine.executors.QueueProcessorNodeExecutor
 import app.knotwork.android.domain.engine.executors.SummaryNodeExecutor
 import app.knotwork.android.domain.engine.executors.SystemNodeExecutor
@@ -49,6 +50,7 @@ import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.MetricsRepository
 import app.knotwork.android.domain.repositories.NetworkActivityTracker
 import app.knotwork.android.domain.repositories.PendingInteractionRepository
+import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
@@ -80,6 +82,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import javax.inject.Provider
 
 class GraphExecutionEngineTest {
 
@@ -105,6 +108,7 @@ class GraphExecutionEngineTest {
     private lateinit var memoryRepository: MemoryRepository
     private lateinit var pipelineRunRepository: PipelineRunRepository
     private lateinit var runTraceRepository: RunTraceRepository
+    private lateinit var pipelineRepository: PipelineRepository
 
     private lateinit var engine: GraphExecutionEngine
     private lateinit var promptTemplateEngine: PromptTemplateEngine
@@ -137,6 +141,7 @@ class GraphExecutionEngineTest {
         memoryRepository = mockk(relaxed = true)
         pipelineRunRepository = mockk(relaxed = true)
         runTraceRepository = mockk(relaxed = true)
+        pipelineRepository = mockk()
         clarificationRepository = mockk()
         // The resolver is exercised whenever a CLOUD node fires; default to a sensible
         // Koog model so each individual test does not have to wire it up.
@@ -206,11 +211,20 @@ class GraphExecutionEngineTest {
             clarificationNotifier,
         )
 
+        // The recursive engine reference is captured lazily via Provider: it is
+        // only dereferenced when a PIPELINE node actually executes, by which
+        // point `engine` below is assigned.
+        val pipelineNodeExecutor = PipelineNodeExecutor(
+            pipelineRepository,
+            settingsRepository,
+            Provider { engine },
+        )
+
         val nodeExecutorFactory = NodeExecutorFactory(
             inputNodeExecutor, outputNodeExecutor, ifConditionNodeExecutor,
             toolNodeExecutor, liteRtNodeExecutor, cloudLlmNodeExecutor,
             systemNodeExecutor, queueProcessorNodeExecutor, summaryNodeExecutor,
-            clarificationNodeExecutor,
+            clarificationNodeExecutor, pipelineNodeExecutor,
         )
 
         promptTemplateEngine = PromptTemplateEngine()
@@ -242,9 +256,47 @@ class GraphExecutionEngineTest {
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { settingsRepository.pipelineMaxNestingDepth } returns flowOf(3)
         coEvery { toolRepository.getAvailableTools() } returns emptyList()
 
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+    }
+
+    @Test
+    fun `PIPELINE node runs the target sub-pipeline and forwards its output`() = runTest {
+        // Sub-pipeline: INPUT -> OUTPUT (echo). Echoes its prompt back verbatim.
+        val subGraph = PipelineGraph(
+            id = "sub-pipe",
+            name = "Sub",
+            nodes = listOf(
+                NodeModel("sub_in", NodeType.INPUT, 0f, 0f),
+                NodeModel("sub_out", NodeType.OUTPUT, 10f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(ConnectionModel("sc", "sub_in", "sub_out")),
+        )
+        coEvery { pipelineRepository.getPipelineById("sub-pipe") } returns subGraph
+
+        // Main pipeline: INPUT -> PIPELINE(target = sub) -> OUTPUT (echo).
+        val mainGraph = PipelineGraph(
+            id = "main-pipe",
+            name = "Main",
+            nodes = listOf(
+                NodeModel("main_in", NodeType.INPUT, 0f, 0f),
+                NodeModel("pipe_node", NodeType.PIPELINE, 10f, 0f, targetPipelineId = "sub-pipe"),
+                NodeModel("main_out", NodeType.OUTPUT, 20f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("mc1", "main_in", "pipe_node"),
+                ConnectionModel("mc2", "pipe_node", "main_out"),
+            ),
+        )
+
+        val states = engine(sessionId, "echo me", mainGraph).toList()
+
+        val completed = states.last() as AgentOrchestratorState.Completed
+        assertEquals("echo me", completed.finalResponse)
+        // The sub-pipeline must have been loaded exactly once for the single PIPELINE node.
+        coVerify(exactly = 1) { pipelineRepository.getPipelineById("sub-pipe") }
     }
 
     @Test
@@ -988,6 +1040,7 @@ class GraphExecutionEngineTest {
                 pendingInteractionRepository,
                 clarificationNotifier,
             ),
+            PipelineNodeExecutor(pipelineRepository, settingsRepository, Provider { engine }),
         )
         val engineWithProvider = GraphExecutionEngine(
             realFactory,
@@ -1172,6 +1225,7 @@ class GraphExecutionEngineTest {
                     pendingInteractionRepository,
                     clarificationNotifier,
                 ),
+                PipelineNodeExecutor(pipelineRepository, settingsRepository, Provider { engine }),
             )
             val engineWithRealRepo = GraphExecutionEngine(
                 realFactory,

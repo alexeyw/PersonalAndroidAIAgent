@@ -487,6 +487,21 @@ interface SettingsRepository {
     suspend fun setPipelineMaxSteps(steps: Int)
 
     /**
+     * A [Flow] representing the maximum nesting depth allowed for PIPELINE-node
+     * composition (how many levels of sub-pipeline a run may descend into).
+     * Enforced statically by `PipelineCompositionValidator` and at runtime by
+     * `PipelineNodeExecutor`. Valid range: 1–5.
+     */
+    val pipelineMaxNestingDepth: Flow<Int>
+
+    /**
+     * Updates the maximum PIPELINE-node nesting depth.
+     *
+     * @param depth The new limit. Will be coerced to the range 1–5.
+     */
+    suspend fun setPipelineMaxNestingDepth(depth: Int)
+
+    /**
      * A [Flow] representing the window, in hours, during which an interrupted
      * pipeline run can still be resumed from its checkpoint. Interrupted runs
      * older than this only offer the regular discard path — their recorded

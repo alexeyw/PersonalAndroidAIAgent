@@ -109,6 +109,11 @@ class GraphExecutionEngine @Inject constructor(
      *   contract on [ResumeContext]). Requires a non-null [runId] — resuming
      *   without the persistent record/trace to continue makes no sense.
      *   `null` (the default) is a normal fresh run.
+     * @param depth Pipeline-nesting depth of this run: `0` for a top-level run,
+     *   and `parentDepth + 1` when `PipelineNodeExecutor` re-enters the engine to
+     *   run a sub-pipeline. The value is forwarded to every node executor; only
+     *   the PIPELINE executor consumes it (to enforce the runtime nesting ceiling
+     *   and to thread the next depth into its own recursive call).
      * @return A cold flow of orchestrator states describing the run.
      */
     // Reason: this is the agent's core orchestrator. It is a long single
@@ -124,6 +129,7 @@ class GraphExecutionEngine @Inject constructor(
         graph: PipelineGraph,
         runId: String? = null,
         resume: ResumeContext? = null,
+        depth: Int = 0,
     ): Flow<AgentOrchestratorState> = flow {
         // Buffer of console events accumulated for this run. The engine emits a
         // fresh `ConsoleLog` snapshot on every append so the UI reactively
@@ -410,7 +416,7 @@ class GraphExecutionEngine @Inject constructor(
                 val nodeStartMs = System.currentTimeMillis()
                 var runParked = false
                 try {
-                    executor.execute(nodeForExecution, executorInput, sessionId, userPrompt, runId)
+                    executor.execute(nodeForExecution, executorInput, sessionId, userPrompt, runId, depth)
                         .collect { output ->
                             when (output) {
                                 is NodeOutput.State -> {

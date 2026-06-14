@@ -61,6 +61,25 @@ enum class NodeType {
     CLARIFICATION,
 
     /**
+     * Node whose execution runs another pipeline graph — the composition
+     * primitive that turns a reusable branch into a callable block (analogous
+     * to a function call).
+     *
+     * The node references its callee by [NodeModel.targetPipelineId]. At
+     * runtime the engine feeds the node's input to the sub-pipeline's
+     * [INPUT] node as the user prompt, executes the sub-graph, and the text
+     * produced by the sub-pipeline's [OUTPUT] node becomes this node's output.
+     *
+     * Unbounded recursion (A → B → A) and runaway nesting depth are the two
+     * inherent hazards; both are rejected statically before a run starts
+     * (the call graph is known ahead of time — see
+     * `PipelineCompositionValidator`), with a runtime depth ceiling
+     * ([app.knotwork.android.domain.repositories.SettingsRepository.pipelineMaxNestingDepth])
+     * as a race-condition safety net.
+     */
+    PIPELINE,
+
+    /**
      * The starting point of the pipeline.
      */
     INPUT,
