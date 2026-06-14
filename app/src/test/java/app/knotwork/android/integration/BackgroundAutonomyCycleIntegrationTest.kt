@@ -352,7 +352,15 @@ class BackgroundAutonomyCycleIntegrationTest {
                 pendingRepository,
                 clarificationNotifier,
             ),
-            PipelineNodeExecutor(mockk(relaxed = true), mockk(relaxed = true), Provider { mockk(relaxed = true) }),
+            PipelineNodeExecutor(
+                mockk(relaxed = true),
+                mockk(relaxed = true),
+                mockk(relaxed = true),
+                mockk(relaxed = true),
+                Provider {
+                    mockk(relaxed = true)
+                },
+            ),
         )
         val engine = GraphExecutionEngine(
             nodeExecutorFactory,

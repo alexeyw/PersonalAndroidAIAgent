@@ -1,5 +1,6 @@
 package app.knotwork.android.domain.engine.executors
 
+import app.knotwork.android.domain.models.ExecutionScope
 import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
@@ -26,7 +27,7 @@ class IfConditionNodeExecutor @Inject constructor(private val evaluateIfConditio
         sessionId: String,
         originalPrompt: String,
         runId: String?,
-        depth: Int,
+        scope: ExecutionScope,
     ): Flow<NodeOutput> = kotlinx.coroutines.flow.flow {
         val isTrue = evaluateIfConditionUseCase(node, inputText)
         emit(NodeOutput.Result(NodeExecutionResult(conditionResult = isTrue, outputText = inputText)))

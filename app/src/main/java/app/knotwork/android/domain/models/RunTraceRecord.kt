@@ -50,6 +50,10 @@ sealed class RunTraceRecord {
      *   (relevant for "auto"-configured nodes), or `null` for non-TOOL nodes.
      *   Persisted so a replayed tool observation is attributed to the real
      *   tool in the `--- Tool Results ---` context block.
+     * @property depth Pipeline-nesting level of the run this node belongs to:
+     *   `0` for the top-level run, `1` for a direct sub-pipeline, and so on.
+     *   Projected back into the Traces/Vars console tabs so a sub-pipeline's
+     *   nodes render nested under the `PIPELINE` node that spawned them.
      */
     data class NodeIo(
         override val runId: String,
@@ -65,6 +69,7 @@ sealed class RunTraceRecord {
         val conditionResult: Boolean? = null,
         val routingKey: String? = null,
         val resolvedToolName: String? = null,
+        val depth: Int = 0,
     ) : RunTraceRecord()
 
     /**
@@ -73,6 +78,9 @@ sealed class RunTraceRecord {
      *
      * @property type Category of the event (drives line color and filtering).
      * @property message Pre-formatted human-readable console line.
+     * @property depth Pipeline-nesting level of the run that produced the event
+     *   (`0` top-level, `1` direct sub-pipeline, …). Drives the indented
+     *   replay rendering in the Logs tab.
      */
     data class ConsoleEntry(
         override val runId: String,
@@ -81,6 +89,7 @@ sealed class RunTraceRecord {
         override val timestamp: Long,
         val type: ConsoleEventType,
         val message: String,
+        val depth: Int = 0,
     ) : RunTraceRecord()
 
     /**

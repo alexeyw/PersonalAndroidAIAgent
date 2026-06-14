@@ -122,6 +122,44 @@ class PipelineRunRepositoryImpl @Inject constructor(private val pipelineRunDao: 
         }
     }
 
+    override suspend fun getDescendantRuns(rootRunId: String): List<PipelineRun> = absorbing("getDescendantRuns") {
+        withContext(Dispatchers.IO) {
+            // Breadth-first walk over the parentRunId links. The depth ceiling
+            // bounds the tree, and `visited` guards against a pathological
+            // self-referential row so the loop always terminates.
+            val collected = mutableListOf<PipelineRun>()
+            val visited = mutableSetOf(rootRunId)
+            val frontier = ArrayDeque(listOf(rootRunId))
+            while (frontier.isNotEmpty()) {
+                val parent = frontier.removeFirst()
+                pipelineRunDao.getChildRuns(parent).forEach { child ->
+                    if (visited.add(child.id)) {
+                        collected += child.toDomain()
+                        frontier.addLast(child.id)
+                    }
+                }
+            }
+            collected
+        }
+    } ?: emptyList()
+
+    override suspend fun getRootRunId(runId: String): String? = absorbing("getRootRunId") {
+        withContext(Dispatchers.IO) {
+            // Walk the parentRunId chain to the top. `visited` guards against a
+            // pathological self-referential / cyclic chain so the loop always
+            // terminates; nesting is shallow in practice (depth ceiling).
+            var current = pipelineRunDao.getRun(runId) ?: return@withContext null
+            val visited = mutableSetOf(current.id)
+            while (true) {
+                val parentId = current.parentRunId ?: break
+                val parent = pipelineRunDao.getRun(parentId) ?: break
+                if (!visited.add(parent.id)) break
+                current = parent
+            }
+            current.id
+        }
+    }
+
     override suspend fun markResumed(runId: String, fromStatus: PipelineRunStatus): Boolean {
         // Re-register ownership before the transition for the same reason
         // createRun does: from this moment the run's machinery lives in this
@@ -250,6 +288,7 @@ private fun PipelineRun.toEntity(): PipelineRunEntity = PipelineRunEntity(
     errorMessage = errorMessage,
     graphContentHash = graphContentHash,
     userPrompt = userPrompt,
+    parentRunId = parentRunId,
 )
 
 /**
@@ -272,4 +311,5 @@ private fun PipelineRunEntity.toDomain(): PipelineRun = PipelineRun(
     errorMessage = errorMessage,
     graphContentHash = graphContentHash,
     userPrompt = userPrompt,
+    parentRunId = parentRunId,
 )

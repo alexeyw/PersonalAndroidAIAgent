@@ -56,6 +56,10 @@ import androidx.room.PrimaryKey
  *   rows of those node types (`null` otherwise) — restores the picked edge on resume.
  * @property resolvedToolName The tool a TOOL node actually executed for `NODE_IO` rows of
  *   that node type (`null` otherwise) — attributes the replayed observation on resume.
+ * @property depth Pipeline-nesting level of the run that produced the record (`0` top-level,
+ *   `1` a direct sub-pipeline, …). Projected back into the console so a sub-pipeline's logs,
+ *   vars and trace spans render nested under the `PIPELINE` node that spawned them. Defaults
+ *   to `0` for legacy and top-level rows.
  */
 @Entity(
     tableName = "trace_steps",
@@ -93,6 +97,7 @@ data class TraceStepEntity(
     val conditionResult: Boolean? = null,
     val routingKey: String? = null,
     val resolvedToolName: String? = null,
+    val depth: Int = 0,
 ) {
     companion object {
         /** [recordKind] value of a per-node input/output record. */

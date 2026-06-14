@@ -4,6 +4,7 @@ import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.constants.PipelineExecutionDefaults
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AgentOrchestratorState
+import app.knotwork.android.domain.models.ExecutionScope
 import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
@@ -40,7 +41,7 @@ class SystemNodeExecutor @Inject constructor(
         sessionId: String,
         originalPrompt: String,
         runId: String?,
-        depth: Int,
+        scope: ExecutionScope,
     ): Flow<NodeOutput> = flow {
         val nodeSystemPrompt = node.systemPrompt ?: DefaultPrompts.System.SYSTEM_FALLBACK
         val fullPrompt = "$nodeSystemPrompt\n\nUSER: $inputText\nAGENT: "

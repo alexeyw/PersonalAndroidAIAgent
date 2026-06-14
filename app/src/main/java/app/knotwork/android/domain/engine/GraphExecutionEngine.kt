@@ -7,6 +7,7 @@ import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ConsoleEvent
 import app.knotwork.android.domain.models.ConsoleEventType
+import app.knotwork.android.domain.models.ExecutionScope
 import app.knotwork.android.domain.models.MemoryChunk
 import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
@@ -15,6 +16,7 @@ import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.ResumeContext
+import app.knotwork.android.domain.models.RunStepBudget
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.ToolInvocationResult
 import app.knotwork.android.domain.models.usesContextConfig
@@ -111,9 +113,18 @@ class GraphExecutionEngine @Inject constructor(
      *   `null` (the default) is a normal fresh run.
      * @param depth Pipeline-nesting depth of this run: `0` for a top-level run,
      *   and `parentDepth + 1` when `PipelineNodeExecutor` re-enters the engine to
-     *   run a sub-pipeline. The value is forwarded to every node executor; only
-     *   the PIPELINE executor consumes it (to enforce the runtime nesting ceiling
-     *   and to thread the next depth into its own recursive call).
+     *   run a sub-pipeline. The value is forwarded to every node executor (inside
+     *   [ExecutionScope]); only the PIPELINE executor consumes it (to enforce the
+     *   runtime nesting ceiling and to thread the next depth into its own
+     *   recursive call). It also stamps every console/trace record so the console
+     *   can render nested sub-pipeline output as a hierarchy.
+     * @param stepBudget The step budget shared across the whole run tree. `null`
+     *   (the default, used by top-level callers) makes the engine seed a fresh
+     *   [RunStepBudget] from [SettingsRepository.pipelineMaxSteps]; a sub-pipeline
+     *   invocation passes the parent's budget so the nested run decrements the
+     *   same ceiling instead of getting a private allowance. Exhaustion at any
+     *   depth fails the run with the max-steps error, which propagates up the
+     *   stack as the parent PIPELINE node's error.
      * @return A cold flow of orchestrator states describing the run.
      */
     // Reason: this is the agent's core orchestrator. It is a long single
@@ -130,6 +141,7 @@ class GraphExecutionEngine @Inject constructor(
         runId: String? = null,
         resume: ResumeContext? = null,
         depth: Int = 0,
+        stepBudget: RunStepBudget? = null,
     ): Flow<AgentOrchestratorState> = flow {
         // Buffer of console events accumulated for this run. The engine emits a
         // fresh `ConsoleLog` snapshot on every append so the UI reactively
@@ -149,11 +161,17 @@ class GraphExecutionEngine @Inject constructor(
         var replayCursor = 0
 
         suspend fun pushConsole(type: ConsoleEventType, message: String) {
+            // A nested sub-pipeline run prefixes its console lines with the
+            // sub-pipeline name so the merged console reads as `[Translator] ▶ …`
+            // even before indentation; [depth] additionally drives the indented
+            // rendering. Top-level runs keep the bare message.
+            val displayMessage = if (depth > 0) "[${graph.name}] $message" else message
             val event = ConsoleEvent(
                 timestamp = System.currentTimeMillis(),
                 type = type,
-                message = message,
+                message = displayMessage,
                 seq = traceSeq++,
+                depth = depth,
             )
             consoleEvents += event
             // Write-through into the persistent run trace. The repository
@@ -167,7 +185,8 @@ class GraphExecutionEngine @Inject constructor(
                         seq = event.seq,
                         timestamp = event.timestamp,
                         type = type,
-                        message = message,
+                        message = displayMessage,
+                        depth = depth,
                     ),
                 )
             }
@@ -203,6 +222,18 @@ class GraphExecutionEngine @Inject constructor(
         )
 
         val maxSteps = settingsRepository.pipelineMaxSteps.first()
+        // Step budget shared across the whole run tree. A top-level run seeds a
+        // fresh budget from the setting; a sub-pipeline run reuses the parent's
+        // instance (threaded in via [stepBudget]) so nested execution cannot
+        // side-step the parent's MAX_STEPS ceiling. Every node visited at any
+        // depth decrements it.
+        val budget = stepBudget ?: RunStepBudget(maxSteps)
+        // Per-`PIPELINE`-node visit counter. A PIPELINE node inside a loop
+        // (QUEUE_PROCESSOR) executes once per item; the index disambiguates the
+        // child run id of each visit and is re-derived deterministically on
+        // resume (it increments on replayed visits too), so the in-flight visit
+        // lands on the same index as on the interrupted run.
+        val pipelineVisitCounts = mutableMapOf<String, Int>()
         // For deterministic graphs (no routing/queue nodes) the total is fixed from the start.
         // For branching graphs it stays null until the active branch is resolved.
         val hasBranching = graph.nodes.any {
@@ -285,8 +316,23 @@ class GraphExecutionEngine @Inject constructor(
         // the suspension resolves flips the record back to RUNNING.
         var runSuspended = false
 
-        while (currentNode != null && stepCount < maxSteps) {
+        while (currentNode != null && budget.remaining > 0) {
+            // Charge this node against the shared run-tree budget before doing
+            // any work. Replayed nodes are charged too (the budget is not
+            // persisted across resume — see [RunStepBudget]).
+            budget.remaining--
             stepCount++
+
+            // Visit index of this node when it is a PIPELINE node — incremented
+            // on every entry (replayed or live) so the counter stays aligned
+            // through a resume replay and the live visit gets the right index.
+            val pipelineVisitIndex = if (currentNode.type == NodeType.PIPELINE) {
+                val idx = pipelineVisitCounts.getOrDefault(currentNode.id, 0)
+                pipelineVisitCounts[currentNode.id] = idx + 1
+                idx
+            } else {
+                0
+            }
 
             // Record the node about to execute so an interrupted run can
             // report where it stopped. The repository is best-effort by
@@ -416,7 +462,14 @@ class GraphExecutionEngine @Inject constructor(
                 val nodeStartMs = System.currentTimeMillis()
                 var runParked = false
                 try {
-                    executor.execute(nodeForExecution, executorInput, sessionId, userPrompt, runId, depth)
+                    executor.execute(
+                        nodeForExecution,
+                        executorInput,
+                        sessionId,
+                        userPrompt,
+                        runId,
+                        ExecutionScope(depth = depth, stepBudget = budget, pipelineVisitIndex = pipelineVisitIndex),
+                    )
                         .collect { output ->
                             when (output) {
                                 is NodeOutput.State -> {
@@ -534,6 +587,7 @@ class GraphExecutionEngine @Inject constructor(
                         outputText = outputText,
                         durationMs = nodeDurationMs,
                         tokenCount = nodeTokenCount,
+                        depth = depth,
                     ),
                 )
                 // Write-through into the persistent run trace: the NodeIo
@@ -559,6 +613,7 @@ class GraphExecutionEngine @Inject constructor(
                             conditionResult = nodeResult?.conditionResult,
                             routingKey = nodeResult?.routingKey,
                             resolvedToolName = nodeResult?.resolvedToolName,
+                            depth = depth,
                         ),
                     )
                 }
@@ -577,6 +632,7 @@ class GraphExecutionEngine @Inject constructor(
                         nodeType = currentNode.type.name,
                         input = executorInput,
                         output = outputText,
+                        depth = depth,
                     ),
                 )
             }
@@ -676,9 +732,17 @@ class GraphExecutionEngine @Inject constructor(
             currentNode = nextNode
         }
 
-        if (stepCount >= maxSteps) {
+        if (budget.remaining <= 0 && currentNode != null) {
+            // Shared run-tree budget exhausted. When this run is a sub-pipeline
+            // the Error becomes the parent PIPELINE node's error and terminates
+            // the whole stack — the message names the tree-wide ceiling so the
+            // failure is unambiguous regardless of which depth ran out.
             pushConsole(ConsoleEventType.Error, "Pipeline exceeded max steps ($maxSteps)")
-            emit(AgentOrchestratorState.Error("Pipeline execution exceeded maximum steps ($maxSteps)"))
+            emit(
+                AgentOrchestratorState.Error(
+                    "Pipeline execution exceeded the maximum of $maxSteps steps shared across the pipeline tree.",
+                ),
+            )
         } else {
             // Loop exited because currentNode became null before reaching OUTPUT
             pushConsole(ConsoleEventType.Error, "Pipeline terminated without OUTPUT")

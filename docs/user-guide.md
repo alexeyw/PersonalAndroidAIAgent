@@ -290,6 +290,33 @@ history. **Clear console** keeps working on top of a replayed trace —
 cleared rows stay hidden until you switch sessions or send a new
 message.
 
+### Sub-pipelines in the console
+
+When a pipeline calls another pipeline (a **Pipeline** node), the
+sub-pipeline's work is no longer hidden inside a single "Pipeline: 40 s"
+line. Its console log, variables and trace spans appear **indented**
+under the calling node and prefixed with the sub-pipeline's name (for
+example `[Translator] ▶ LITE_RT`), so you can read a nested run as a
+hierarchy — both live and when replaying a finished run. Each level of
+nesting adds one step of indentation.
+
+Two run-wide limits also span the whole call tree:
+
+- **Step budget.** The maximum-steps limit is shared across the parent
+  and every sub-pipeline it calls, so a composition cannot loop forever
+  by nesting. If the budget runs out deep inside a sub-pipeline, the
+  whole run stops with a clear "exceeded the maximum … steps shared
+  across the pipeline tree" message.
+- **Approvals and questions.** A tool approval or clarification raised
+  *inside* a sub-pipeline surfaces its card in the chat exactly like a
+  top-level one, and answering it continues the nested run in place.
+
+If the app is killed (or you step away from a background approval) while
+a sub-pipeline is mid-run, **Resume** restores the entire stack: the
+parent pipeline fast-forwards through the work it already finished, then
+continues the sub-pipeline from where it stopped — neither the parent
+nor the child re-runs a node that already completed.
+
 ### Reopening a chat while a run is in flight
 
 Closing the chat — or the whole app UI — no longer disconnects you from

@@ -5,6 +5,7 @@ import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ClarificationOutcome
 import app.knotwork.android.domain.models.ClarificationRequest
+import app.knotwork.android.domain.models.ExecutionScope
 import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
@@ -75,7 +76,7 @@ class ClarificationNodeExecutor @Inject constructor(
         sessionId: String,
         originalPrompt: String,
         runId: String?,
-        depth: Int,
+        scope: ExecutionScope,
     ): Flow<NodeOutput> = flow {
         // A resumed run carries the user's one-shot answer for the question
         // this node parked on — return it directly, without re-running

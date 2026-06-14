@@ -28,6 +28,26 @@ details.
   **Pipeline** palette entry. (Visual editor configuration of the node — target
   picker, on-card target name, validation deep-links — and nested-run
   observability land in follow-up changes.)
+- **Nested-pipeline observability, shared budgets and resume across the
+  boundary.** A sub-pipeline now runs as a first-class **child run** linked to
+  its parent (`pipeline_runs.parentRunId`), so its execution is no longer a
+  black box:
+  - **Nested console.** A sub-pipeline's log lines, variables and trace spans
+    surface in the console indented by nesting depth and prefixed with the
+    sub-pipeline name, both live and when replaying a finished run.
+  - **Shared step budget.** The `MAX_STEPS` ceiling is now shared across the
+    whole run tree — a sub-pipeline decrements the same allowance instead of
+    getting a fresh one, and exhausting it at any depth fails the whole stack
+    with a clear error.
+  - **Human-in-the-loop across the boundary.** An approval or clarification
+    raised *inside* a sub-pipeline now surfaces its card in chat and resumes
+    correctly (previously the request was swallowed and the parent node timed
+    out).
+  - **Resume across the boundary.** A run interrupted (process death) or parked
+    (background HITL) *inside* a sub-pipeline resumes by restoring the whole
+    stack: the parent replays to its `PIPELINE` node and continues the child
+    run from its checkpoint rather than restarting it; the recorded graph hash
+    is validated for every graph in the stack.
 
 ## [0.5.0] - 2026-06-14
 
