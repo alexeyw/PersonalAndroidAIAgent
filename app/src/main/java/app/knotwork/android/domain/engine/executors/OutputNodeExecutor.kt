@@ -48,6 +48,7 @@ class OutputNodeExecutor @Inject constructor(
         sessionId: String,
         originalPrompt: String,
         runId: String?,
+        depth: Int,
     ): Flow<NodeOutput> = flow {
         val nodeSystemPrompt = node.systemPrompt
         if (!nodeSystemPrompt.isNullOrBlank()) {

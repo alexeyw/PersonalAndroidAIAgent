@@ -100,6 +100,19 @@ class PipelineGraphContentHashTest {
     }
 
     @Test
+    fun `changing a target pipeline binding changes the hash`() {
+        val edited = baseGraph().let { graph ->
+            graph.copy(
+                nodes = graph.nodes.map {
+                    if (it.id == "llm_1") it.copy(targetPipelineId = "other-pipeline") else it
+                },
+            )
+        }
+
+        assertNotEquals(baseGraph().contentHash(), edited.contentHash())
+    }
+
+    @Test
     fun `adding a node changes the hash`() {
         val extended = baseGraph().let { graph ->
             graph.copy(
@@ -135,7 +148,7 @@ class PipelineGraphContentHashTest {
     @Test
     fun `contentHash enumeration tracks every model field`() {
         val hashedNodeFields = setOf(
-            "id", "type", "label", "toolName", "modelPath", "conditionComplexity",
+            "id", "type", "label", "toolName", "targetPipelineId", "modelPath", "conditionComplexity",
             "conditionKeywords", "conditionPrompt", "systemPrompt", "cloudProvider",
             "clarificationTimeoutMs", "contextConfig", "configJson",
         )

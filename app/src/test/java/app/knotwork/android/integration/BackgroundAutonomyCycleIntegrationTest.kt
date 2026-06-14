@@ -19,6 +19,7 @@ import app.knotwork.android.domain.engine.executors.InputNodeExecutor
 import app.knotwork.android.domain.engine.executors.LiteRtNodeExecutor
 import app.knotwork.android.domain.engine.executors.NodeExecutorFactory
 import app.knotwork.android.domain.engine.executors.OutputNodeExecutor
+import app.knotwork.android.domain.engine.executors.PipelineNodeExecutor
 import app.knotwork.android.domain.engine.executors.QueueProcessorNodeExecutor
 import app.knotwork.android.domain.engine.executors.SummaryNodeExecutor
 import app.knotwork.android.domain.engine.executors.SystemNodeExecutor
@@ -79,6 +80,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import javax.inject.Provider
 
 /**
  * End-to-end JVM integration test of the background-autonomy cycle:
@@ -350,6 +352,7 @@ class BackgroundAutonomyCycleIntegrationTest {
                 pendingRepository,
                 clarificationNotifier,
             ),
+            PipelineNodeExecutor(mockk(relaxed = true), mockk(relaxed = true), Provider { mockk(relaxed = true) }),
         )
         val engine = GraphExecutionEngine(
             nodeExecutorFactory,

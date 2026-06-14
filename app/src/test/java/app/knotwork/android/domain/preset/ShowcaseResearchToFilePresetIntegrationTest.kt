@@ -16,6 +16,7 @@ import app.knotwork.android.domain.engine.executors.InputNodeExecutor
 import app.knotwork.android.domain.engine.executors.LiteRtNodeExecutor
 import app.knotwork.android.domain.engine.executors.NodeExecutorFactory
 import app.knotwork.android.domain.engine.executors.OutputNodeExecutor
+import app.knotwork.android.domain.engine.executors.PipelineNodeExecutor
 import app.knotwork.android.domain.engine.executors.QueueProcessorNodeExecutor
 import app.knotwork.android.domain.engine.executors.SummaryNodeExecutor
 import app.knotwork.android.domain.engine.executors.SystemNodeExecutor
@@ -64,6 +65,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import javax.inject.Provider
 
 /**
  * End-to-end integration test for the bundled `showcase_research_to_file`
@@ -193,6 +195,7 @@ class ShowcaseResearchToFilePresetIntegrationTest {
                 pendingInteractionRepository,
                 clarificationNotifier,
             ),
+            PipelineNodeExecutor(mockk(relaxed = true), mockk(relaxed = true), Provider { mockk(relaxed = true) }),
         )
 
         engine = GraphExecutionEngine(

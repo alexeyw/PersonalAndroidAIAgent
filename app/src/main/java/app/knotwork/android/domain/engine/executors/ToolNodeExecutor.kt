@@ -170,6 +170,7 @@ class ToolNodeExecutor @Inject constructor(
         sessionId: String,
         originalPrompt: String,
         runId: String?,
+        depth: Int,
     ): Flow<NodeOutput> = flow {
         val toolNameConfig = node.toolName
         // A blank / null tool name is the "Auto" selection — the editor's empty

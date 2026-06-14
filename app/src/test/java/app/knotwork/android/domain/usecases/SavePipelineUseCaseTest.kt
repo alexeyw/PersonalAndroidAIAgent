@@ -8,6 +8,8 @@ import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineValidationError
 import app.knotwork.android.domain.models.PipelineValidationException
 import app.knotwork.android.domain.repositories.PipelineRepository
+import app.knotwork.android.domain.services.PipelineCompositionValidator
+import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -19,7 +21,13 @@ import org.junit.Test
 class SavePipelineUseCaseTest {
 
     private val pipelineRepository: PipelineRepository = mockk(relaxed = true)
-    private val useCase = SavePipelineUseCase(pipelineRepository)
+
+    // Composition validation has its own unit test; here it defaults to "no
+    // composition errors" so the structural-validation assertions stay isolated.
+    private val compositionValidator: PipelineCompositionValidator = mockk {
+        coEvery { validate(any()) } returns emptyList()
+    }
+    private val useCase = SavePipelineUseCase(pipelineRepository, compositionValidator)
 
     @Test
     fun `invoke should save valid DAG pipeline`() = runTest {
@@ -375,6 +383,82 @@ class SavePipelineUseCaseTest {
             errors.any { it is PipelineValidationError.NodeEmptyContext },
         )
         coVerify { pipelineRepository.savePipeline(pipeline) }
+    }
+
+    @Test
+    fun `validate flags a PIPELINE node with no target pipeline`() {
+        val pipeline = PipelineGraph(
+            id = "pp",
+            name = "PP",
+            nodes = listOf(
+                NodeModel("n1", NodeType.INPUT, 0f, 0f),
+                NodeModel("n2", NodeType.PIPELINE, 5f, 5f, targetPipelineId = null),
+                NodeModel("n3", NodeType.OUTPUT, 10f, 10f),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "n1", "n2"),
+                ConnectionModel("c2", "n2", "n3"),
+            ),
+        )
+
+        val errors = pipeline.validate()
+
+        assertTrue(
+            errors.any { it is PipelineValidationError.MissingTargetPipeline && it.nodeId == "n2" },
+        )
+    }
+
+    @Test
+    fun `validate does not flag a PIPELINE node that names a target`() {
+        // A PIPELINE node is a passthrough, so an empty context config is also fine.
+        val pipeline = PipelineGraph(
+            id = "pp2",
+            name = "PP2",
+            nodes = listOf(
+                NodeModel("n1", NodeType.INPUT, 0f, 0f),
+                NodeModel("n2", NodeType.PIPELINE, 5f, 5f, targetPipelineId = "sub"),
+                NodeModel("n3", NodeType.OUTPUT, 10f, 10f),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "n1", "n2"),
+                ConnectionModel("c2", "n2", "n3"),
+            ),
+        )
+
+        val errors = pipeline.validate()
+
+        assertFalse(errors.any { it is PipelineValidationError.MissingTargetPipeline })
+        assertFalse(errors.any { it is PipelineValidationError.NodeEmptyContext })
+    }
+
+    @Test
+    fun `invoke should return failure when composition validator reports an error`() = runTest {
+        // A structurally-valid graph whose cross-pipeline composition is unsound
+        // (e.g. a cycle) must be blocked from saving.
+        val pipeline = PipelineGraph(
+            id = "comp",
+            name = "Composed",
+            nodes = listOf(
+                NodeModel("n1", NodeType.INPUT, 0f, 0f),
+                NodeModel("n2", NodeType.PIPELINE, 5f, 5f, targetPipelineId = "comp"),
+                NodeModel("n3", NodeType.OUTPUT, 10f, 10f),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "n1", "n2"),
+                ConnectionModel("c2", "n2", "n3"),
+            ),
+        )
+        coEvery { compositionValidator.validate(pipeline) } returns
+            listOf(PipelineValidationError.PipelineCycle(listOf("comp", "comp")))
+
+        val result = useCase(pipeline)
+
+        assertTrue(result.isFailure)
+        val exception = result.exceptionOrNull() as? PipelineValidationException
+        assertTrue(
+            exception?.errors?.any { it is PipelineValidationError.PipelineCycle } == true,
+        )
+        coVerify(exactly = 0) { pipelineRepository.savePipeline(any()) }
     }
 
     @Test

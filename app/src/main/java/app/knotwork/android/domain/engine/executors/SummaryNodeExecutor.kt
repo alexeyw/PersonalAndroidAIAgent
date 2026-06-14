@@ -37,6 +37,7 @@ class SummaryNodeExecutor @Inject constructor(
         sessionId: String,
         originalPrompt: String,
         runId: String?,
+        depth: Int,
     ): Flow<NodeOutput> = flow {
         val nodeSystemPrompt = node.systemPrompt ?: DefaultPrompts.Summary.SYSTEM_FALLBACK
 

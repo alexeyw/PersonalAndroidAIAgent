@@ -28,6 +28,10 @@
     <string name="errors_orchestrator_validation_unreachable_node">Some nodes are unreachable from INPUT</string>
     <string name="errors_orchestrator_validation_dead_end">Some nodes do not reach OUTPUT</string>
     <string name="errors_orchestrator_validation_node_no_sources">Node \"%1$s\" will not receive any data — enable at least one source</string>
+    <string name="errors_orchestrator_validation_missing_target_pipeline">Pipeline node \"%1$s\" has no target pipeline selected</string>
+    <string name="errors_orchestrator_validation_target_pipeline_not_found">Pipeline node \"%1$s\" references a pipeline that no longer exists</string>
+    <string name="errors_orchestrator_validation_pipeline_cycle">Pipelines reference each other in a cycle: %1$s</string>
+    <string name="errors_orchestrator_validation_pipeline_nesting_too_deep">Pipeline nesting is deeper than the limit of %1$d</string>
 
     <!-- Settings feature -->
     <!--

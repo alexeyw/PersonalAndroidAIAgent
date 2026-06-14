@@ -770,6 +770,20 @@ class OrchestratorViewModel @Inject constructor(
                 .find { it.id == err.nodeId }?.label ?: err.nodeId
             UiText.of(R.string.errors_orchestrator_validation_node_no_sources, name)
         }
+        is PipelineValidationError.MissingTargetPipeline -> {
+            val name = _uiState.value.currentPipeline.nodes
+                .find { it.id == err.nodeId }?.label ?: err.nodeId
+            UiText.of(R.string.errors_orchestrator_validation_missing_target_pipeline, name)
+        }
+        is PipelineValidationError.TargetPipelineNotFound -> {
+            val name = _uiState.value.currentPipeline.nodes
+                .find { it.id == err.nodeId }?.label ?: err.nodeId
+            UiText.of(R.string.errors_orchestrator_validation_target_pipeline_not_found, name)
+        }
+        is PipelineValidationError.PipelineCycle ->
+            UiText.of(R.string.errors_orchestrator_validation_pipeline_cycle, err.pipelineChain.joinToString(" → "))
+        is PipelineValidationError.PipelineNestingTooDeep ->
+            UiText.of(R.string.errors_orchestrator_validation_pipeline_nesting_too_deep, err.limit)
     }
 
     /**

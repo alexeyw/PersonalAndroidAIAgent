@@ -80,6 +80,7 @@ data class NodeContextConfig(
         fun defaultForType(type: NodeType): NodeContextConfig = when (type) {
             NodeType.INPUT,
             NodeType.IF_CONDITION,
+            NodeType.PIPELINE,
             -> NodeContextConfig(
                 chatHistory = false,
                 originalTask = false,
@@ -136,10 +137,11 @@ data class NodeContextConfig(
 /**
  * Node types whose executor input is assembled by `NodeContextBuilder` from the
  * pipeline context blocks selected via [NodeContextConfig]. Control-flow types
- * ([NodeType.INPUT], [NodeType.IF_CONDITION], [NodeType.QUEUE_PROCESSOR]) and
- * the terminal [NodeType.OUTPUT] in echo mode (no `systemPrompt`) bypass
- * context composition and forward the raw upstream input verbatim — for those
- * nodes [NodeContextConfig] is ignored at runtime.
+ * ([NodeType.INPUT], [NodeType.IF_CONDITION], [NodeType.QUEUE_PROCESSOR]),
+ * the composition node [NodeType.PIPELINE] (which forwards its raw input to the
+ * sub-pipeline's INPUT node), and the terminal [NodeType.OUTPUT] in echo mode
+ * (no `systemPrompt`) bypass context composition and forward the raw upstream
+ * input verbatim — for those nodes [NodeContextConfig] is ignored at runtime.
  *
  * This single source of truth is consumed by both `GraphExecutionEngine`
  * (deciding whether to compose a node's input) and `PipelineGraph.validate()`

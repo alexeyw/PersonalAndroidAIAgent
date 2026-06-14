@@ -75,6 +75,7 @@ class ClarificationNodeExecutor @Inject constructor(
         sessionId: String,
         originalPrompt: String,
         runId: String?,
+        depth: Int,
     ): Flow<NodeOutput> = flow {
         // A resumed run carries the user's one-shot answer for the question
         // this node parked on — return it directly, without re-running

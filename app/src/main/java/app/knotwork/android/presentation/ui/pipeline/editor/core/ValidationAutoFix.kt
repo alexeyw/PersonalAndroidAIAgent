@@ -73,6 +73,12 @@ object ValidationAutoFix {
         PipelineValidationError.UnreachableNode -> graph
         PipelineValidationError.DeadEndNode -> graph
         is PipelineValidationError.NodeEmptyContext -> graph
+        // Composition errors need the user to re-pick a target / restructure
+        // the call graph — no safe automatic recipe.
+        is PipelineValidationError.MissingTargetPipeline -> graph
+        is PipelineValidationError.TargetPipelineNotFound -> graph
+        is PipelineValidationError.PipelineCycle -> graph
+        is PipelineValidationError.PipelineNestingTooDeep -> graph
     }
 
     private fun addInputNode(graph: PipelineGraph): PipelineGraph {
@@ -158,6 +164,10 @@ object ValidationAutoFix {
         PipelineValidationError.UnreachableNode -> ""
         PipelineValidationError.DeadEndNode -> ""
         is PipelineValidationError.NodeEmptyContext -> ""
+        is PipelineValidationError.MissingTargetPipeline -> ""
+        is PipelineValidationError.TargetPipelineNotFound -> ""
+        is PipelineValidationError.PipelineCycle -> ""
+        is PipelineValidationError.PipelineNestingTooDeep -> ""
     }
 
     private fun newNodeId(): String = "n-" + UUID.randomUUID().toString().substring(0, SHORT_ID_LEN)
@@ -189,6 +199,9 @@ private const val AUTO_FIX_VERTICAL_SPACING_PX = 160f
  */
 fun PipelineValidationError.focusableNodeId(graph: PipelineGraph): String? = when (this) {
     is PipelineValidationError.NodeEmptyContext -> nodeId
+    // Composition errors that pin to a specific PIPELINE node deep-link to it.
+    is PipelineValidationError.MissingTargetPipeline -> nodeId
+    is PipelineValidationError.TargetPipelineNotFound -> nodeId
     PipelineValidationError.DisconnectedInput -> graph.nodes.firstOrNull { it.type == NodeType.INPUT }?.id
     PipelineValidationError.DisconnectedOutput -> graph.nodes.firstOrNull { it.type == NodeType.OUTPUT }?.id
     PipelineValidationError.MultipleInputs -> graph.nodes.firstOrNull { it.type == NodeType.INPUT }?.id
@@ -198,5 +211,8 @@ fun PipelineValidationError.focusableNodeId(graph: PipelineGraph): String? = whe
     PipelineValidationError.HasCycles,
     PipelineValidationError.UnreachableNode,
     PipelineValidationError.DeadEndNode,
+    // A cycle / depth breach spans multiple pipelines — no single node to focus.
+    is PipelineValidationError.PipelineCycle,
+    is PipelineValidationError.PipelineNestingTooDeep,
     -> null
 }

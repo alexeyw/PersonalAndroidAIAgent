@@ -57,7 +57,7 @@ import app.knotwork.android.data.local.models.TraceStepEntity
         PipelineRunEntity::class,
         PendingInteractionEntity::class,
     ],
-    version = 33,
+    version = 34,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -749,6 +749,18 @@ abstract class AppDatabase : RoomDatabase() {
                     "CREATE INDEX IF NOT EXISTS `index_pending_interactions_sessionId` " +
                         "ON `pending_interactions` (`sessionId`)",
                 )
+            }
+        }
+
+        /**
+         * Adds the nullable `targetPipelineId` column to `pipeline_nodes`. It
+         * carries the callee id of a `PIPELINE` node (the composition primitive
+         * that runs another pipeline as a sub-step); `null` for every other node
+         * type, so existing rows need no backfill.
+         */
+        val MIGRATION_33_34 = object : Migration(33, 34) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `pipeline_nodes` ADD COLUMN `targetPipelineId` TEXT")
             }
         }
     }

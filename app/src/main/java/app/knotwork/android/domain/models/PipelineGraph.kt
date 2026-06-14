@@ -161,6 +161,12 @@ data class PipelineGraph(
             if (node.usesContextConfig() && node.contextConfig.isEmpty()) {
                 errors.add(PipelineValidationError.NodeEmptyContext(node.id))
             }
+            // Structural, single-graph check: a PIPELINE node must name a callee.
+            // Cross-pipeline resolution / cycle / depth checks need the repository
+            // and therefore live in `PipelineCompositionValidator`, not here.
+            if (node.type == NodeType.PIPELINE && node.targetPipelineId.isNullOrBlank()) {
+                errors.add(PipelineValidationError.MissingTargetPipeline(node.id))
+            }
         }
 
         return errors
@@ -177,7 +183,7 @@ data class PipelineGraph(
      *
      * Included: every node field that can influence execution or
      * LLM-visible content (id, type, label — it leaks into tool-result
-     * attribution, tool/model/provider bindings, condition fields, system
+     * attribution, tool/target-pipeline/model/provider bindings, condition fields, system
      * prompt, clarification timeout, context-config flags, per-node config
      * JSON) and every connection (id, endpoints, routing label). Nodes and
      * connections are sorted by id first, so persistence order never affects
@@ -196,6 +202,7 @@ data class PipelineGraph(
                 append(node.type.name).append(FIELD_SEPARATOR)
                 append(node.label).append(FIELD_SEPARATOR)
                 append(node.toolName.orEmpty()).append(FIELD_SEPARATOR)
+                append(node.targetPipelineId.orEmpty()).append(FIELD_SEPARATOR)
                 append(node.modelPath.orEmpty()).append(FIELD_SEPARATOR)
                 append(node.conditionComplexity?.toString().orEmpty()).append(FIELD_SEPARATOR)
                 append(node.conditionKeywords.orEmpty()).append(FIELD_SEPARATOR)

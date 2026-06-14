@@ -40,6 +40,7 @@ class SystemNodeExecutor @Inject constructor(
         sessionId: String,
         originalPrompt: String,
         runId: String?,
+        depth: Int,
     ): Flow<NodeOutput> = flow {
         val nodeSystemPrompt = node.systemPrompt ?: DefaultPrompts.System.SYSTEM_FALLBACK
         val fullPrompt = "$nodeSystemPrompt\n\nUSER: $inputText\nAGENT: "

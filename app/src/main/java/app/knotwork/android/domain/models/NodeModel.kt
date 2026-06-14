@@ -11,6 +11,11 @@ import app.knotwork.android.domain.constants.DefaultPrompts
  * @property y The Y coordinate of the node on the canvas.
  * @property label An optional label or name for the node.
  * @property toolName An optional name of the assigned tool if the node type is [NodeType.TOOL].
+ * @property targetPipelineId Id of the pipeline this node executes when its type is
+ * [NodeType.PIPELINE]; `null` for every other node type. The referenced graph is loaded and
+ * run as a sub-pipeline by `PipelineNodeExecutor`. Persisted as a flat column (mirroring the
+ * `toolName` pattern); cross-pipeline cycle / depth / dangling-reference checks live in
+ * `PipelineCompositionValidator`.
  * @property modelPath An optional path to a specific model file (.tflite) for this node.
  * @property conditionComplexity Threshold for task complexity if type is [NodeType.IF_CONDITION].
  * @property conditionKeywords Comma-separated keywords for condition if type is [NodeType.IF_CONDITION].
@@ -42,6 +47,7 @@ data class NodeModel(
     val y: Float,
     val label: String = type.name,
     val toolName: String? = null,
+    val targetPipelineId: String? = null,
     val modelPath: String? = null,
     val conditionComplexity: Int? = null,
     val conditionKeywords: String? = null,

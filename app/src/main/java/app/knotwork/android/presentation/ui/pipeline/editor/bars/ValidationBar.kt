@@ -211,6 +211,11 @@ private fun severityOf(error: PipelineValidationError): Severity = when (error) 
     PipelineValidationError.MultipleInputs,
     PipelineValidationError.MultipleOutputs,
     PipelineValidationError.HasCycles,
+    // A broken composition (missing/dangling target, cycle, over-depth) cannot run.
+    is PipelineValidationError.MissingTargetPipeline,
+    is PipelineValidationError.TargetPipelineNotFound,
+    is PipelineValidationError.PipelineCycle,
+    is PipelineValidationError.PipelineNestingTooDeep,
     -> Severity.Blocker
     PipelineValidationError.DisconnectedInput,
     PipelineValidationError.DisconnectedOutput,
@@ -236,5 +241,10 @@ private fun isAutoFixable(error: PipelineValidationError): Boolean = when (error
     PipelineValidationError.UnreachableNode,
     PipelineValidationError.DeadEndNode,
     is PipelineValidationError.NodeEmptyContext,
+    // Composition errors need the user to re-pick a target / restructure — no recipe.
+    is PipelineValidationError.MissingTargetPipeline,
+    is PipelineValidationError.TargetPipelineNotFound,
+    is PipelineValidationError.PipelineCycle,
+    is PipelineValidationError.PipelineNestingTooDeep,
     -> false
 }

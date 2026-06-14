@@ -34,6 +34,12 @@ internal object NodeTypeMapper {
         DomainNodeType.QUEUE_PROCESSOR -> CatalogNodeType.QUEUE_PROCESSOR
         DomainNodeType.EVALUATION -> CatalogNodeType.EVALUATION
         DomainNodeType.SUMMARY -> CatalogNodeType.SUMMARY
+        // The catalog has no PIPELINE counterpart yet: the visual editor surface
+        // for PIPELINE nodes (palette tile, config sheet, card) is a separate
+        // task. Until then no app code path maps a PIPELINE node into the editor,
+        // so reaching here is a programming error, not user input.
+        DomainNodeType.PIPELINE ->
+            error("PIPELINE node has no catalog editor representation yet")
     }
 
     /**

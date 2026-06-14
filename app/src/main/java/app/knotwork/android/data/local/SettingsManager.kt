@@ -118,6 +118,7 @@ class SettingsManager @Inject constructor(
         val HTTP_TOOL_MAX_RESPONSE_BYTES =
             androidx.datastore.preferences.core.longPreferencesKey("http_tool_max_response_bytes")
         val PIPELINE_MAX_STEPS = intPreferencesKey("pipeline_max_steps")
+        val PIPELINE_MAX_NESTING_DEPTH = intPreferencesKey("pipeline_max_nesting_depth")
         val RESUME_MAX_AGE_HOURS = intPreferencesKey("resume_max_age_hours")
         val BACKGROUND_APPROVAL_WINDOW_HOURS = intPreferencesKey("background_approval_window_hours")
         val TRACE_RETENTION_RUNS_PER_SESSION = intPreferencesKey("trace_retention_runs_per_session")
@@ -1131,6 +1132,29 @@ class SettingsManager @Inject constructor(
         }
     }
 
+    override val pipelineMaxNestingDepth: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.PIPELINE_MAX_NESTING_DEPTH]
+                ?: SettingsDefaults.PIPELINE_MAX_NESTING_DEPTH_DEFAULT
+        }
+
+    override suspend fun setPipelineMaxNestingDepth(depth: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.PIPELINE_MAX_NESTING_DEPTH] = depth.coerceIn(
+                SettingsDefaults.PIPELINE_MAX_NESTING_DEPTH_MIN,
+                SettingsDefaults.PIPELINE_MAX_NESTING_DEPTH_MAX,
+            )
+        }
+    }
+
     override val resumeMaxAgeHours: Flow<Int> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -1444,6 +1468,8 @@ class SettingsManager @Inject constructor(
             preferences[PreferencesKeys.REPETITION_PENALTY] = SettingsDefaults.REPETITION_PENALTY_DEFAULT
             preferences[PreferencesKeys.MAX_CONTEXT_LENGTH] = SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT
             preferences[PreferencesKeys.PIPELINE_MAX_STEPS] = SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT
+            preferences[PreferencesKeys.PIPELINE_MAX_NESTING_DEPTH] =
+                SettingsDefaults.PIPELINE_MAX_NESTING_DEPTH_DEFAULT
         }
     }
 

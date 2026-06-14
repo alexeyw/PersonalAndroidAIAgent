@@ -139,6 +139,19 @@ object SettingsDefaults {
     const val PIPELINE_MAX_STEPS_MAX: Int = 100
 
     /**
+     * Default maximum nesting depth for PIPELINE-node composition: how many
+     * levels of sub-pipeline a run may descend into before the recursion is
+     * refused. Keeps composed pipelines comprehensible and bounds recursion.
+     */
+    const val PIPELINE_MAX_NESTING_DEPTH_DEFAULT: Int = 3
+
+    /** Lower bound enforced when the user edits the pipeline-max-nesting-depth setting. */
+    const val PIPELINE_MAX_NESTING_DEPTH_MIN: Int = 1
+
+    /** Upper bound enforced when the user edits the pipeline-max-nesting-depth setting. */
+    const val PIPELINE_MAX_NESTING_DEPTH_MAX: Int = 5
+
+    /**
      * Default top-K for long-term memory retrieval: how many ranked chunks a
      * single search returns into a node's context block. The semantic search
      * itself always scans the full stored pool before ranking.

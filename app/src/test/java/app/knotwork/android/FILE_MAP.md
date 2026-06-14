@@ -10,6 +10,7 @@ This file maps the contents of the local unit test package.
     - `GraphExecutionEngineTest.kt` - Tests for GraphExecutionEngine.
     - `executors/`
       - `ToolNodeExecutorTest.kt` - Tests for ToolNodeExecutor.
+      - `PipelineNodeExecutorTest.kt` - Tests for PipelineNodeExecutor (sub-pipeline execution, depth ceiling, error mapping).
   - `models/`
     - `AppErrorTest.kt` - Tests for AppError.
     - `ResultTest.kt` - Tests for Result.
@@ -25,6 +26,8 @@ This file maps the contents of the local unit test package.
     - `SavePipelineUseCaseTest.kt` - Tests for SavePipelineUseCase.
     - `ScheduleTaskUseCaseTest.kt` - Tests for ScheduleTaskUseCase.
     - `TaskRouterUseCaseTest.kt` - Tests for TaskRouterUseCase.
+  - `services/`
+    - `PipelineCompositionValidatorTest.kt` - Tests for PipelineCompositionValidator (cycles, depth limit, dangling targets).
 - `data/`
   - `engine/`
     - `KoogClientFactoryTest.kt` - Tests for KoogClientFactory.

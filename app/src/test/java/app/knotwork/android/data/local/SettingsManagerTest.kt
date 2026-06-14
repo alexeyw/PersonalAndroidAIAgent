@@ -72,6 +72,8 @@ class SettingsManagerTest {
     private val requiresUserConfirmationKey = booleanPreferencesKey("requires_user_confirmation")
     private val lastReembedProviderIdKey = stringPreferencesKey("last_reembed_provider_id")
     private val pipelineMaxStepsKey = androidx.datastore.preferences.core.intPreferencesKey("pipeline_max_steps")
+    private val pipelineMaxNestingDepthKey =
+        androidx.datastore.preferences.core.intPreferencesKey("pipeline_max_nesting_depth")
     private val resumeMaxAgeHoursKey = androidx.datastore.preferences.core.intPreferencesKey("resume_max_age_hours")
     private val traceRetentionRunsPerSessionKey =
         androidx.datastore.preferences.core.intPreferencesKey("trace_retention_runs_per_session")
@@ -463,6 +465,43 @@ class SettingsManagerTest {
         val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.pipelineMaxSteps.first()
         assertEquals(30, result)
+    }
+
+    @Test
+    fun `pipelineMaxNestingDepth returns default value of 3`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[pipelineMaxNestingDepthKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, context, cipher)
+        assertEquals(3, settingsManager.pipelineMaxNestingDepth.first())
+    }
+
+    @Test
+    fun `pipelineMaxNestingDepth returns stored value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[pipelineMaxNestingDepthKey] } returns 5
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, context, cipher)
+        assertEquals(5, settingsManager.pipelineMaxNestingDepth.first())
+    }
+
+    @Test
+    fun `setPipelineMaxNestingDepth coerces into the sanctioned 1-5 range`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setPipelineMaxNestingDepth(0)
+            assertEquals(1, manager.pipelineMaxNestingDepth.first())
+
+            manager.setPipelineMaxNestingDepth(99)
+            assertEquals(5, manager.pipelineMaxNestingDepth.first())
+
+            manager.setPipelineMaxNestingDepth(4)
+            assertEquals(4, manager.pipelineMaxNestingDepth.first())
+        } finally {
+            scope.cancel()
+        }
     }
 
     @Test
