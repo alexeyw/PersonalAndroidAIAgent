@@ -108,6 +108,56 @@ storage and credentials:
   in-app export actions, and any custom pipelines / saved presets via the
   pipeline-library and preset JSON-export actions.
 
+### Agent file workspace (at-rest)
+
+The agent has a small private **workspace** — a single jailed directory
+(`files/agent_workspace/` inside the app's private `filesDir`) that the file
+tools (`read_file`, `write_file`, `edit_file`, `delete_file`, `list_files`,
+`find_files`) read from and write to, and that the **Files** screen surfaces
+to the user. Its at-rest posture is deliberately **weaker than the
+database's**, and this is the honest statement of that trade-off:
+
+- The workspace lives in app-private internal storage, so it is protected by
+  the device's **file-based encryption (FBE)** — the OS-level encryption that
+  covers every app's private data while the device is locked and the user has
+  not yet authenticated after boot. It is sandboxed from other apps by the
+  standard Android app-data permission boundary.
+- It is **not** additionally encrypted with SQLCipher the way the Room
+  database is. The database holds structured rows behind a single open
+  helper, which makes a transparent cipher layer cheap and natural; the
+  workspace holds arbitrary user/agent files streamed through file tools and
+  exported to other apps, where a second application-level cipher would add
+  cost and friction (every import/export/share would have to encrypt and
+  decrypt) for protection that overlaps what FBE already provides. So
+  workspace contents are protected by FBE and the app sandbox, **but not by
+  the app's own SQLCipher key** — a meaningful difference if your threat model
+  assumes an attacker who can read app-private storage on an unlocked,
+  post-authentication device (which is already out of scope below, but is
+  called out here so the asymmetry is not a surprise).
+- The single canonicalisation gate (`AgentWorkspace.resolve`, which every
+  other workspace operation funnels through) is the integrity boundary: every
+  relative path a tool supplies is resolved and checked for containment, so a
+  `../` traversal, an absolute path, or a symlink pointing out of the
+  directory is refused with a typed `WorkspaceError.PathOutsideWorkspace`
+  before any file is touched. A tool can therefore only ever read or write
+  **inside** the workspace, never the rest of the app's private storage.
+
+### Workspace quotas (availability control)
+
+Two size quotas and a per-read budget bound how much an autonomous — possibly
+injected or looping — agent can consume; they protect **availability**, not
+confidentiality:
+
+- A **per-file limit** (default 5 MB, `WorkspaceError.TooLarge`) and a
+  **workspace-wide total limit** (default 100 MB, `WorkspaceError.QuotaExceeded`,
+  pre-checked before any bytes are committed by the atomic stage-and-rename
+  write) keep a runaway `write_file` loop from exhausting device storage. User
+  imports through the Files screen are charged against the same limits.
+- A **per-read token budget** (default 2000 tokens) truncates `read_file`
+  output so a single large file cannot blow out the local model's context
+  window, and the `http_request` response is capped (1 MB default) so untrusted
+  remote content cannot do the same. Both limits are user-tunable.
+
 ### Run-history retention (mitigating control)
 
 Pipeline runs and their traces accumulate content **derived from user
@@ -146,6 +196,9 @@ much of that derived content exists at all:
     with their own API key.
   - Downloading a model file from a URL the user supplied (for example,
     Hugging Face).
+  - The `http_request` tool reaching a host the user has explicitly added
+    to the **allowed-domains allowlist** (empty by default; see *Outbound
+    HTTP and the exfiltration chain* below).
   - Anonymous crash reporting **after** the user has opted in (see below).
 
 ### Prompt injection via tool content (accepted risk)
@@ -155,12 +208,17 @@ not attempt to sanitize it. This is a deliberate, accepted trade-off — not an
 oversight — and it works as follows:
 
 - Text returned by any tool — Wikipedia extracts from the built-in
-  `search_tool`, results from user-configured **MCP servers**, and responses
-  from **AppFunctions** exposed by other installed apps — is fed back into
-  the context of subsequent pipeline nodes. That includes planning and
-  routing nodes (`DECOMPOSITION`, `INTENT_ROUTER`), so a crafted tool result
-  can steer which branch a pipeline takes and **influence the arguments of
-  later tool calls** in the same run.
+  `search_tool`, results from user-configured **MCP servers**, responses
+  from **AppFunctions** exposed by other installed apps, the body of an
+  `http_request` response, and **the contents of a file the agent reads from
+  its workspace** — is fed back into the context of subsequent pipeline
+  nodes. A file the user imported through the Files screen (or that an
+  earlier `write_file` produced from untrusted material) is therefore
+  **untrusted model input**, exactly like a network tool result: it may
+  contain text that reads as instructions to the model. That content reaches
+  planning and routing nodes (`DECOMPOSITION`, `INTENT_ROUTER`), so a crafted
+  tool result or file can steer which branch a pipeline takes and
+  **influence the arguments of later tool calls** in the same run.
 - The backstop is the **human-in-the-loop gate**: before any `SENSITIVE` or
   `DESTRUCTIVE` tool executes, the chat surfaces a confirmation card showing
   the **tool name and the exact arguments** the model produced, and the run
@@ -179,6 +237,55 @@ in **Settings → Restrictions** to require approval for **every** tool call,
 regardless of risk level. That closes the ungated read-only path for the
 price of one extra tap per call.
 
+### Outbound HTTP and the exfiltration chain
+
+The file tools and the `http_request` tool together create a concrete
+**data-exfiltration** shape that did not exist when the agent could only read
+the web and talk to a local model: an injected instruction (planted in a file
+the agent reads, or in any tool result — see above) tells the model to
+`read_file` something private and then `http_request` it to an
+attacker-controlled URL. `http_request` is the most security-sensitive tool in
+the workspace set and is designed conservatively around exactly this chain.
+The defences are layered so that no single one has to be perfect:
+
+- **Empty allowlist by default, tool hidden until opt-in.** `http_request`
+  can only reach a host the user has explicitly added to the allowed-domains
+  list (Settings → Tools → Allowed domains, persisted in DataStore). While the
+  list is empty the tool is **not published to the agent at all** — it never
+  appears in the tool catalogue — and a direct invocation is refused. There is
+  no default destination an injection could reach.
+- **Exact-host matching, no implied sub-domains.** Matching is exact and
+  case-insensitive: adding `example.com` does not authorise `api.example.com`.
+  An injection cannot widen the user's grant by guessing a neighbouring host.
+- **Human-in-the-loop on every call, by method.** Risk is resolved per
+  request through `HttpRequestPolicy`: a `GET` is `SENSITIVE` and a
+  `POST`/`PUT`/`DELETE` is `DESTRUCTIVE`, so every `http_request` passes the
+  HITL gate. The confirmation card shows the model-produced **URL and
+  arguments**, so a user who is paying attention sees the destination before
+  the data leaves the device. An unparsable call falls back to the strictest
+  risk.
+- **Stored-credential filter.** Before a request is sent, its URL, headers,
+  and body are scanned for any saved cloud-provider API key (OpenAI,
+  Anthropic, Google, DeepSeek). If a request would carry one, it is refused
+  outright — a saved key can never be exfiltrated through this tool, even with
+  user approval.
+- **Redirect re-validation.** Automatic redirects are disabled; each hop is
+  re-validated against the same allowlist (a redirect that points outside it
+  aborts the request), the chain is capped, and credential headers are
+  stripped when a redirect crosses to a different host. A redirect cannot be
+  used to slip past the allowlist.
+- **Transport floor.** Public hosts must use `https`; cleartext `http` is
+  permitted only for loopback / private-LAN addresses (the same exception the
+  network-security config makes for a local Ollama server).
+
+The residual risk is the honest one: a user who has **deliberately added a
+host to the allowlist** and then **approves** a `SENSITIVE`/`DESTRUCTIVE`
+`http_request` to it can still send workspace data to that host — the tool is
+doing exactly what the user authorised. The allowlist and the HITL gate make
+that an explicit, reviewable decision rather than a silent capability, which
+is the design goal; they do not (and cannot) override a user who chooses to
+trust a destination. The Files screen warns about this when adding a domain.
+
 ### Out of scope
 
 The threat model does not attempt to defend against:
@@ -191,9 +298,13 @@ The threat model does not attempt to defend against:
 - Prompt-injection attacks delivered through content the user feeds into the
   model. The agent confirms destructive or sensitive tool invocations with
   the user (human-in-the-loop), but it cannot prevent the model from
-  producing untrusted output. Injection through **tool-returned** content is
-  documented separately above (*Prompt injection via tool content*) — same
-  conclusion, same backstop.
+  producing untrusted output. Injection through **tool-returned** content and
+  through **files the agent reads** is documented separately above
+  (*Prompt injection via tool content*), as is the read-then-exfiltrate chain
+  it can drive (*Outbound HTTP and the exfiltration chain*) — same
+  conclusion, same backstop: the human-in-the-loop gate and the conservative
+  `http_request` allowlist bound what an injection can *do*, not what the
+  model can *be told*.
 - Vulnerabilities in third-party dependencies. Those should be reported to
   the respective upstream projects.
 

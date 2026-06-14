@@ -59,7 +59,7 @@ Each layer maps onto concrete packages:
 
 | Layer          | Packages                                                                                          |
 |----------------|---------------------------------------------------------------------------------------------------|
-| `presentation` | `presentation/ui/{about,chat,memory,models,monitoring,more,onboarding,orchestrator,pipeline/editor,prompts,settings,splash,taskmonitor,tools}`, `presentation/ui/navigation`, `presentation/{components,state,theme,notifications,receivers}` |
+| `presentation` | `presentation/ui/{about,chat,files,memory,models,monitoring,more,onboarding,orchestrator,pipeline/editor,prompts,settings,splash,taskmonitor,tools}`, `presentation/ui/navigation`, `presentation/{components,state,theme,notifications,receivers}` |
 | `domain`       | `domain/{usecases,engine,models,repositories,prompt,constants,services,pipelineio,promptio,memoryio}` |
 | `data`         | `data/{engine,local,repositories,prompt,mcp,services,tools,network,mappers,logging}`              |
 
@@ -555,6 +555,67 @@ and adding a new provider does not require touching the pipeline
 engine. API keys live in the Keystore-backed encrypted store (see §5.2)
 and are never serialized into DataStore or git.
 
+### 4.5. File and HTTP tools (the workspace contour)
+
+The agent has a private **workspace** — a single jailed directory
+(`files/agent_workspace/`) behind the domain interface `AgentWorkspace`
+(impl: `data/local/AgentWorkspaceImpl`) — plus an outbound `http_request`
+tool. These are ordinary `LocalToolExecutor`s, so they flow through the same
+`ToolRisk` → HITL machinery as every other tool (§4.2); what makes them a
+distinct *contour* is that, in combination, they form a read-then-exfiltrate
+path that the design deliberately constrains. The honest at-rest and
+threat-model framing lives in [`SECURITY.md`](../SECURITY.md); this section
+is the structural map.
+
+The six file tools and their effective risk:
+
+| Tool         | `ToolRisk`     | Touches                                              |
+|--------------|----------------|-----------------------------------------------------|
+| `read_file`  | `READ_ONLY`    | reads one text file (token-budget truncated)        |
+| `list_files` | `READ_ONLY`    | path-sorted listing with size / mtime               |
+| `find_files` | `READ_ONLY`    | glob search over relative paths                     |
+| `write_file` | `SENSITIVE`    | atomic create / overwrite, quota-checked            |
+| `edit_file`  | `SENSITIVE`    | unique-anchor find-replace in an existing file      |
+| `delete_file`| `DESTRUCTIVE`  | irreversible single-file delete                     |
+| `http_request` | `SENSITIVE` (GET) / `DESTRUCTIVE` (POST/PUT/DELETE) | outbound HTTP(S) to an allowlisted host |
+
+Two integrity boundaries sit underneath the risk gate:
+
+- **The canonicalisation gate.** Every relative path a file tool supplies is
+  resolved through `AgentWorkspace.resolve` — the single canonicalisation
+  point every other method funnels through — and checked for containment. A
+  `../` traversal, an absolute path, or a symlink that escapes the directory
+  is refused with a typed `WorkspaceError.PathOutsideWorkspace` before any I/O
+  — a tool can only ever act inside the workspace. Size quotas
+  (`WorkspaceError.TooLarge` / `QuotaExceeded`) are enforced in the same layer.
+- **The HTTP allowlist gate.** `http_request` is published to the agent only
+  when the user's allowed-domains allowlist is non-empty (Settings → Tools →
+  Allowed domains, persisted in DataStore under `allowed_http_domains`). The
+  per-call risk, the exact-host check, redirect re-validation, and the
+  stored-credential filter all live in the pure `HttpRequestPolicy`, which
+  both `ToolRepository.getRisk(name, arguments)` and the executor's own
+  enforcement read from, so the gate and the actual refusal cannot diverge.
+
+```mermaid
+flowchart LR
+    Untrusted["Untrusted input<br/>(imported file · tool result)"] --> Read[read_file<br/>READ_ONLY]
+    Read --> Model[Model in a pipeline node]
+    Model -->|proposes a call| Risk{ToolRepository<br/>.getRisk}
+    Risk -->|READ_ONLY| Run[Execute]
+    Risk -->|SENSITIVE / DESTRUCTIVE| HITL[HITL gate<br/>Approve / Deny]
+    HITL -->|approved| Policy{http_request?}
+    Policy -->|yes| Allow[HttpRequestPolicy<br/>allowlist · https · no stored key · redirect re-check]
+    Policy -->|no| WS[AgentWorkspace<br/>canonicalResolve · quota]
+    Allow -->|host allowed| Run
+    Allow -->|refused| Obs[ToolResult.Error<br/>→ observation log, run continues]
+    WS -->|inside sandbox| Run
+    WS -->|escapes / over quota| Obs
+```
+
+A refused tool call (path escape, quota exceeded, non-allowlisted host,
+stored-key leak) never crashes the run: it maps to a `ToolResult.Error` that
+lands in the observation log, and the pipeline keeps executing.
+
 ---
 
 ## 5. Persistence
@@ -674,6 +735,22 @@ instance per feature module. DataStore is not encrypted — it is
 explicitly reserved for non-sensitive preferences. Any value that is
 sensitive (an API key, a passphrase, a personal identifier) goes
 through a `KeystoreBackedPrefsStore` instead.
+
+#### Storage tiers at a glance
+
+The app keeps data in four tiers, each with a different at-rest posture.
+The split is deliberate: structured user-derived rows get the app's own
+cipher; secrets get the Keystore; non-sensitive knobs and bulk files rely on
+the OS sandbox plus file-based encryption (FBE). The asymmetry between the
+SQLCipher-encrypted database and the FBE-only workspace is called out
+explicitly in [`SECURITY.md`](../SECURITY.md) (*Agent file workspace*).
+
+| Tier                          | What it holds                                                                                                  | At-rest protection                                                        |
+|-------------------------------|---------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------|
+| **Room DB** (`agent_database.db`) | `chat_messages`, `chat_sessions`, `memory_chunks`, `trace_steps`, `pipeline_runs`, `pending_interactions`, pipelines / presets / prompt templates | **SQLCipher** (full-database AES) under the app's Keystore-held passphrase |
+| **Keystore-backed stores** (`KeystoreBackedPrefsStore`) | SQLCipher passphrase, cloud-provider API keys, HuggingFace access token                                        | **AES-256-GCM per value**, key non-exportable in the Android Keystore      |
+| **DataStore** (Preferences)   | Non-sensitive settings: sampling params, timeouts, default pipeline id, opt-in flags, `allowed_http_domains`, `app_function_risk_overrides` | **FBE + app sandbox only** (plaintext within the sandbox; no app cipher)   |
+| **Agent workspace** (`files/agent_workspace/`) | Agent-produced and user-imported files (reports, exports, inputs)                                              | **FBE + app sandbox only** — *not* SQLCipher-encrypted (see `SECURITY.md`) |
 
 ### 5.3. JSON parsing
 

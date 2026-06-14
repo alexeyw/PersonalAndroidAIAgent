@@ -466,6 +466,23 @@ details.
   database opens and deletes the passphrase only after the database file
   is verifiably gone. The API-key store intentionally keeps its
   recreate-on-corruption recovery (keys can be re-entered by the user).
+- **The file-workspace and outbound-HTTP threat surface is now documented.**
+  `SECURITY.md` extends *Prompt injection via tool content* to treat a file
+  the agent reads (user-imported, or written from untrusted material) as
+  untrusted model input, and adds two threat-model sections: *Agent file
+  workspace (at-rest)* — the honest statement that workspace files are
+  protected by the device's file-based encryption and the app sandbox but,
+  unlike the database, are **not** SQLCipher-encrypted — and *Outbound HTTP
+  and the exfiltration chain*, which describes the `read_file → http_request`
+  data-exfiltration shape and the layered mitigations (empty allowlist by
+  default with the tool hidden until opt-in, exact-host matching, per-method
+  HITL, the stored-credential filter, redirect re-validation, and the
+  transport floor). Workspace quotas are documented as an availability
+  control. `docs/architecture.md` gains a storage-tier table
+  (SQLCipher / Keystore / DataStore / FBE-only) and a *File and HTTP tools*
+  section mapping the tools through `ToolRisk` → HITL; `docs/extending.md`
+  gains an *Add a workspace tool* recipe. No behaviour change — documentation
+  catching up to the shipped workspace + HTTP contour.
 
 ## [0.4.0] - 2026-06-07
 
