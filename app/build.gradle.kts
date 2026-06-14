@@ -658,6 +658,19 @@ val verifyBrowserEditorConstants by tasks.registering {
 }
 tasks.named("check") { dependsOn(verifyBrowserEditorConstants) }
 
+// Hilt/Dagger reads Kotlin metadata via `kotlin-metadata-jvm`, which is unshaded
+// since Dagger 2.57 and therefore resolved through Gradle. Each Kotlin bump raises
+// the emitted metadata version, so the processor must use a matching reader or it
+// fails with "Provided Metadata instance has version X, while maximum supported
+// version is Y". Pin it to the active Kotlin version across every configuration
+// (including the Hilt aggregating processor classpath) so a Kotlin bump never
+// outruns the metadata reader again.
+configurations.configureEach {
+    resolutionStrategy {
+        force("org.jetbrains.kotlin:kotlin-metadata-jvm:${libs.versions.kotlin.get()}")
+    }
+}
+
 dependencies {
     // Design-system module — `KnotworkTheme` (currently a `MaterialTheme`
     // pass-through) plus the ported foundations in Kotlin sources.
