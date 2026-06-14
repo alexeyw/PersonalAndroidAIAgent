@@ -1,6 +1,7 @@
 package app.knotwork.android.data.local.models
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
@@ -31,12 +32,28 @@ import androidx.room.PrimaryKey
  * @property userPrompt The user message that started the run, captured at enqueue
  *   time for checkpoint resume; `null` only for rows written before the column
  *   existed (such runs cannot be resumed).
+ * @property parentRunId Id of the parent run when this row is a sub-pipeline run
+ *   spawned by a `PIPELINE` node; `null` for a top-level run. A self-referential
+ *   foreign key with `ON DELETE CASCADE` so deleting a parent (retention)
+ *   removes the whole sub-tree; indexed for the child-run lookups that build the
+ *   run tree. Session-level queries filter to `parentRunId IS NULL` so children
+ *   never surface as standalone runs in the reattach / status-card / activity
+ *   paths — children are internal and only ever resumed through their root.
  */
 @Entity(
     tableName = "pipeline_runs",
+    foreignKeys = [
+        ForeignKey(
+            entity = PipelineRunEntity::class,
+            parentColumns = arrayOf("id"),
+            childColumns = arrayOf("parentRunId"),
+            onDelete = ForeignKey.CASCADE,
+        ),
+    ],
     indices = [
         Index(value = ["sessionId"]),
         Index(value = ["status"]),
+        Index(value = ["parentRunId"]),
     ],
 )
 data class PipelineRunEntity(
@@ -52,4 +69,5 @@ data class PipelineRunEntity(
     val errorMessage: String?,
     val graphContentHash: String?,
     val userPrompt: String? = null,
+    val parentRunId: String? = null,
 )

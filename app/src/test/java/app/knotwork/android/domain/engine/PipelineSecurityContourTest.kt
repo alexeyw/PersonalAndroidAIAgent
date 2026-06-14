@@ -193,7 +193,15 @@ class PipelineSecurityContourTest {
                 pendingInteractionRepository,
                 clarificationNotifier,
             ),
-            PipelineNodeExecutor(mockk(relaxed = true), mockk(relaxed = true), Provider { mockk(relaxed = true) }),
+            PipelineNodeExecutor(
+                mockk(relaxed = true),
+                mockk(relaxed = true),
+                mockk(relaxed = true),
+                mockk(relaxed = true),
+                Provider {
+                    mockk(relaxed = true)
+                },
+            ),
         )
 
         engine = GraphExecutionEngine(

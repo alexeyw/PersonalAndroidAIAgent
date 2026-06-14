@@ -111,6 +111,17 @@ interface PipelineRunDao {
     suspend fun getRun(runId: String): PipelineRunEntity?
 
     /**
+     * Returns the direct child runs of [parentRunId] (the sub-pipeline runs a
+     * `PIPELINE` node spawned), oldest first. Building the full run tree walks
+     * this recursively in the repository — nesting is bounded by the runtime
+     * depth ceiling, so a Kotlin-side recursion is simpler than a SQL CTE.
+     *
+     * @param parentRunId Id of the parent run.
+     */
+    @Query("SELECT * FROM pipeline_runs WHERE parentRunId = :parentRunId ORDER BY startedAt ASC")
+    suspend fun getChildRuns(parentRunId: String): List<PipelineRunEntity>
+
+    /**
      * Flips a resumable run back to the QUEUED status for checkpoint resume,
      * clearing the markers ([PipelineRunEntity.finishedAt],
      * [PipelineRunEntity.errorMessage]) a sweep may have stamped. The
@@ -133,34 +144,46 @@ interface PipelineRunDao {
     suspend fun markResumed(runId: String, fromStatus: String, toStatus: String): Int
 
     /**
-     * Returns the most recently started run of [sessionId] whose status is in
-     * [activeStatuses], or `null` when the session has no active run.
+     * Returns the most recently started top-level run of [sessionId] whose
+     * status is in [activeStatuses], or `null` when the session has no active
+     * top-level run. The `parentRunId IS NULL` guard keeps sub-pipeline runs
+     * (which share the session and start *after* their parent) from masking the
+     * root the reattach protocol must surface.
      *
      * @param sessionId Id of the chat session to query.
      * @param activeStatuses Non-terminal status names to match.
      */
     @Query(
-        "SELECT * FROM pipeline_runs WHERE sessionId = :sessionId " +
+        "SELECT * FROM pipeline_runs WHERE sessionId = :sessionId AND parentRunId IS NULL " +
             "AND status IN (:activeStatuses) ORDER BY startedAt DESC LIMIT 1",
     )
     suspend fun getActiveRunForSession(sessionId: String, activeStatuses: List<String>): PipelineRunEntity?
 
     /**
-     * Returns the most recently started run of [sessionId] regardless of
-     * status, or `null` when the session has never had a run. Backs the
-     * console replay baseline for sessions whose last run already finished.
+     * Returns the most recently started top-level run of [sessionId] regardless
+     * of status, or `null` when the session has never had a top-level run.
+     * Backs the console replay baseline for sessions whose last run already
+     * finished; sub-pipeline runs are excluded (`parentRunId IS NULL`) — the
+     * console reconstructs the nested trace from the root's run tree.
      *
      * @param sessionId Id of the chat session to query.
      */
-    @Query("SELECT * FROM pipeline_runs WHERE sessionId = :sessionId ORDER BY startedAt DESC LIMIT 1")
+    @Query(
+        "SELECT * FROM pipeline_runs WHERE sessionId = :sessionId AND parentRunId IS NULL " +
+            "ORDER BY startedAt DESC LIMIT 1",
+    )
     suspend fun getLatestRunForSession(sessionId: String): PipelineRunEntity?
 
     /**
-     * Observes all runs of [sessionId], most recently started first.
+     * Observes all top-level runs of [sessionId], most recently started first.
+     * Sub-pipeline runs are excluded — they are internal to their root's tree.
      *
      * @param sessionId Id of the chat session to observe.
      */
-    @Query("SELECT * FROM pipeline_runs WHERE sessionId = :sessionId ORDER BY startedAt DESC")
+    @Query(
+        "SELECT * FROM pipeline_runs WHERE sessionId = :sessionId AND parentRunId IS NULL " +
+            "ORDER BY startedAt DESC",
+    )
     fun observeRunsForSession(sessionId: String): Flow<List<PipelineRunEntity>>
 
     /**
@@ -184,7 +207,9 @@ interface PipelineRunDao {
      *
      * @param statuses Status names to match.
      */
-    @Query("SELECT DISTINCT sessionId FROM pipeline_runs WHERE status IN (:statuses)")
+    @Query(
+        "SELECT DISTINCT sessionId FROM pipeline_runs WHERE parentRunId IS NULL AND status IN (:statuses)",
+    )
     fun observeSessionIdsByStatuses(statuses: List<String>): Flow<List<String>>
 
     /**
@@ -206,42 +231,48 @@ interface PipelineRunDao {
     suspend fun discardInterruptedRun(runId: String, fromStatus: String, toStatus: String, errorMessage: String)
 
     /**
-     * Retention: deletes every **terminal** run that is not among the
-     * [keepPerSession] most recently started runs of its own session. The
-     * per-session window counts runs of *any* status, so a session whose
-     * recent slots are filled by active runs keeps proportionally fewer old
-     * terminal ones — the window is a hard cap, not a terminal-only quota.
+     * Retention: deletes every **terminal top-level** run that is not among the
+     * [keepPerSession] most recently started top-level runs of its own session.
+     * Only top-level runs are counted and deleted (`parentRunId IS NULL`) — a
+     * deleted root takes its whole sub-pipeline tree with it through the
+     * self-referential `parentRunId` foreign-key cascade, and each run's
+     * persisted trace rides the `trace_steps.runId` cascade in turn. The
+     * per-session window counts top-level runs of *any* status, so a session
+     * whose recent slots are filled by active runs keeps proportionally fewer
+     * old terminal ones — the window is a hard cap, not a terminal-only quota.
      * Non-terminal runs (including WAITING_* runs parked on a background
      * approval or clarification) are never deleted: their expiry is owned by
      * the pending-interaction maintenance pass, which settles them to FAILED
-     * first. Persisted trace rows ride the `trace_steps.runId` foreign-key
-     * cascade.
+     * first.
      *
-     * @param keepPerSession How many most-recent runs each session keeps.
+     * @param keepPerSession How many most-recent top-level runs each session keeps.
      * @param terminalStatuses Terminal status names — the only deletable ones.
      * @return The number of deleted runs.
      */
     @Query(
-        "DELETE FROM pipeline_runs WHERE status IN (:terminalStatuses) AND id NOT IN (" +
+        "DELETE FROM pipeline_runs WHERE parentRunId IS NULL AND status IN (:terminalStatuses) AND id NOT IN (" +
             "SELECT recent.id FROM pipeline_runs AS recent " +
-            "WHERE recent.sessionId = pipeline_runs.sessionId " +
+            "WHERE recent.sessionId = pipeline_runs.sessionId AND recent.parentRunId IS NULL " +
             "ORDER BY recent.startedAt DESC LIMIT :keepPerSession)",
     )
     suspend fun deleteTerminalRunsBeyondSessionLimit(keepPerSession: Int, terminalStatuses: List<String>): Int
 
     /**
-     * Retention: deletes every **terminal** run whose terminal transition
-     * happened before [cutoff], regardless of the per-session count. Rows
-     * with a `NULL` `finishedAt` are left untouched (terminal rows always
-     * carry the timestamp; the guard is defence in depth). Persisted trace
-     * rows ride the `trace_steps.runId` foreign-key cascade.
+     * Retention: deletes every **terminal top-level** run whose terminal
+     * transition happened before [cutoff], regardless of the per-session count.
+     * Only top-level runs are targeted (`parentRunId IS NULL`); their
+     * sub-pipeline children ride the self-referential `parentRunId` cascade, so
+     * a child is never deleted out from under a parent that is still inside the
+     * window. Rows with a `NULL` `finishedAt` are left untouched (terminal rows
+     * always carry the timestamp; the guard is defence in depth). Persisted
+     * trace rows ride the `trace_steps.runId` foreign-key cascade.
      *
      * @param cutoff Epoch millis; runs finished strictly before it are deleted.
      * @param terminalStatuses Terminal status names — the only deletable ones.
      * @return The number of deleted runs.
      */
     @Query(
-        "DELETE FROM pipeline_runs WHERE status IN (:terminalStatuses) " +
+        "DELETE FROM pipeline_runs WHERE parentRunId IS NULL AND status IN (:terminalStatuses) " +
             "AND finishedAt IS NOT NULL AND finishedAt < :cutoff",
     )
     suspend fun deleteTerminalRunsFinishedBefore(cutoff: Long, terminalStatuses: List<String>): Int

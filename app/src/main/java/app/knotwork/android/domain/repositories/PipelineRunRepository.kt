@@ -100,6 +100,32 @@ interface PipelineRunRepository {
     suspend fun getRun(runId: String): PipelineRun?
 
     /**
+     * Returns every descendant run of [rootRunId] (its direct sub-pipeline
+     * children, their children, and so on) in start order, **excluding**
+     * [rootRunId] itself. Nesting is bounded by the runtime depth ceiling, so
+     * the tree is shallow and the walk terminates quickly. Used to project the
+     * nested console (merge each run's trace by timestamp) and by tests
+     * asserting the run tree after a nested execution. Degrades to an empty
+     * list on a store failure (best-effort contract).
+     *
+     * @param rootRunId Id of the run whose descendant sub-tree to collect.
+     * @return The descendant runs, nearest-first by start time.
+     */
+    suspend fun getDescendantRuns(rootRunId: String): List<PipelineRun>
+
+    /**
+     * Walks the [PipelineRun.parentRunId] links up from [runId] to the root of
+     * its run tree and returns the root id. A top-level run is its own root.
+     * Returns `null` when [runId] does not exist (or the store is unreadable —
+     * best-effort contract). Resume and park-settlement act on the root: a
+     * sub-run is never resumed or failed standalone, only through its root.
+     *
+     * @param runId Id of any run in the tree.
+     * @return The root run id, or `null` when [runId] is missing.
+     */
+    suspend fun getRootRunId(runId: String): String?
+
+    /**
      * Flips a resumable run back to [PipelineRunStatus.QUEUED] for checkpoint
      * resume, clearing the `finishedAt` / `errorMessage` markers a sweep may
      * have stamped, and re-registers the run as owned by the current process

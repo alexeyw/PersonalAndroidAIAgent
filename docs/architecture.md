@@ -868,6 +868,24 @@ Key invariants:
   is invalidated when the pipeline graph changed between interruption
   and resume (content-hash comparison) or when the run outlived the
   resume window; both cases only offer a full restart.
+- **Nested run tree.** A `PIPELINE` node runs its callee as a
+  first-class **child run** whose `pipeline_runs.parentRunId` points at
+  the parent (a self-referential `ON DELETE CASCADE` foreign key, so
+  retention of a root removes its whole sub-tree). The child run id is
+  *deterministic* — `"<parentRunId>::<nodeId>::<visitIndex>"` — which is
+  what lets resume continue the exact same child: the parent replays to
+  its `PIPELINE` node (its `NodeIo` was never recorded because the node
+  was in flight), recomputes the child id, and resumes the child run
+  from its own trace rather than restarting it. The recorded graph hash
+  is validated for every graph in the stack. Children are internal:
+  session-level queries (reattach, status card, activity badge) filter
+  to `parentRunId IS NULL`, and resume / park-settlement always act on
+  the **root** of the tree (resolved by walking `parentRunId` up). A
+  child's trace records carry a nesting `depth` so the console renders
+  them indented under the spawning node. The `MAX_STEPS` budget is a
+  single `RunStepBudget` threaded (via `ExecutionScope`) through the
+  whole tree, so a sub-pipeline decrements the parent's allowance and
+  exhaustion at any depth fails the entire stack.
 
 ### 6.2. Two-phase HITL (background approvals)
 

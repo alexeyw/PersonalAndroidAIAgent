@@ -33,16 +33,24 @@ import javax.inject.Inject
  *    recording the user's answer. Bounded by the
  *    `backgroundApprovalWindowHours` setting counted from the park.
  *
+ * **Run tree.** The acted-on run may be a sub-pipeline run (a background HITL
+ * park raised *inside* a sub-pipeline). Resume always re-enqueues the **root**
+ * of the tree — a sub-run is continued internally by its parent `PIPELINE` node
+ * when the root replays down to it, never as a standalone task. The window
+ * precondition is evaluated on the acted-on run; the graph precondition on the
+ * root (whose graph the re-enqueued task executes), and each deeper graph is
+ * re-validated by the PIPELINE executor as the stack is rebuilt.
+ *
  * Preconditions, in evaluation order:
- *  1. the run exists, is in a resumable status, and carries the original
- *     user prompt (legacy rows → [ResumeOutcome.NotResumable]); a WAITING_*
- *     run must additionally hold a pending-interaction record — without one
- *     the wait is still live in-process and resume does not apply;
- *  2. the run is younger than its window (older → [ResumeOutcome.Expired]);
- *  3. the run's pipeline still exists and its current content hash equals the
- *     hash captured when the run started (deleted or edited graph →
- *     [ResumeOutcome.GraphChanged]; only a full restart can help);
- *  4. the guarded status → QUEUED transition applies (a concurrent
+ *  1. the acted-on run exists and is in a resumable status; a WAITING_* run
+ *     must additionally hold a pending-interaction record — without one the
+ *     wait is still live in-process and resume does not apply;
+ *  2. the acted-on run is younger than its window (older → [ResumeOutcome.Expired]);
+ *  3. the root run exists, carries the original user prompt (legacy rows →
+ *     [ResumeOutcome.NotResumable]), and its pipeline still exists with a
+ *     content hash equal to the one captured when the run started (deleted or
+ *     edited graph → [ResumeOutcome.GraphChanged]; only a full restart helps);
+ *  4. the guarded root status → QUEUED transition applies (a concurrent
  *     discard/resume loses the race → [ResumeOutcome.NotResumable]).
  */
 class ResumePipelineRunUseCase @Inject constructor(
@@ -56,49 +64,82 @@ class ResumePipelineRunUseCase @Inject constructor(
     /**
      * Attempts to resume the run [runId].
      *
-     * @param runId Id of the persistent run record to resume.
-     * @return The typed outcome — [ResumeOutcome.Resumed] when the run was
+     * [runId] is the run the user / notification acted on — for a process-death
+     * interruption that is the (top-level) run shown on the status card; for a
+     * background HITL park it is the parked run carrying the pending
+     * interaction, which may be a **sub-pipeline run**. In either case the run
+     * actually re-enqueued is the **root** of the tree: a sub-run is resumed
+     * internally by its parent `PIPELINE` node when the root replays down to
+     * it, never as a standalone task. The window precondition is checked on the
+     * acted-on run (it carries the interruption timestamp / pending record); the
+     * graph precondition is checked on the root (whose graph the re-enqueued
+     * task executes — each deeper graph is re-validated by the PIPELINE executor
+     * as the stack is rebuilt).
+     *
+     * @param runId Id of the persistent run record the resume was triggered on.
+     * @return The typed outcome — [ResumeOutcome.Resumed] when the root run was
      *   re-enqueued, or the specific reason resume is unavailable.
      */
     suspend operator fun invoke(runId: String): ResumeOutcome {
-        val run = pipelineRunRepository.getRun(runId)
-        val userPrompt = run?.userPrompt
-        val pipelineId = run?.pipelineId
-        if (run == null || run.status !in RESUMABLE_STATUSES || userPrompt == null) {
+        val acted = pipelineRunRepository.getRun(runId)
+        if (acted == null || acted.status !in RESUMABLE_STATUSES) {
             return ResumeOutcome.NotResumable
         }
-        rejectionFor(run)?.let { return it }
+        // Window precondition on the acted-on run (interruption age, or the
+        // background-approval window counted from the park).
+        windowRejectionFor(acted)?.let { return it }
 
-        // The guarded transition is the concurrency gate: of two racing
-        // resume taps (or a resume racing a discard) exactly one wins. The
-        // pipeline-id null-check is for the compiler only — `rejectionFor`
-        // already rejected runs without one as GraphChanged.
-        if (pipelineId == null || !pipelineRunRepository.markResumed(runId, run.status)) {
+        // The run actually re-enqueued is the root of the tree; a sub-run is
+        // continued internally by its parent PIPELINE node on replay.
+        val root = resolveRoot(acted)
+        if (root == null || root.status !in RESUMABLE_STATUSES || root.userPrompt == null || root.pipelineId == null) {
             return ResumeOutcome.NotResumable
         }
+        // Graph precondition on the root graph the re-enqueued task executes.
+        graphRejectionFor(root)?.let { return it }
 
-        taskQueueManager.enqueueTask(
-            AgentTask(
-                id = runId,
-                sessionId = run.sessionId,
-                prompt = userPrompt,
-                pipelineId = pipelineId,
-                origin = run.origin,
-                isResume = true,
-            ),
-        )
-        return ResumeOutcome.Resumed
+        // The guarded transition is the concurrency gate: of two racing resume
+        // taps (or a resume racing a discard) exactly one wins.
+        return if (pipelineRunRepository.markResumed(root.id, root.status)) {
+            taskQueueManager.enqueueTask(
+                AgentTask(
+                    id = root.id,
+                    sessionId = root.sessionId,
+                    prompt = root.userPrompt,
+                    pipelineId = root.pipelineId,
+                    origin = root.origin,
+                    isResume = true,
+                ),
+            )
+            ResumeOutcome.Resumed
+        } else {
+            ResumeOutcome.NotResumable
+        }
     }
 
     /**
-     * Evaluates the age/window and graph-identity preconditions (items 2–3
-     * of the class contract) against the loaded run record.
+     * Resolves the root run of [acted]'s tree: [acted] itself when it is
+     * already top-level, otherwise the run reached by walking
+     * [PipelineRun.parentRunId] up. `null` when the root record cannot be
+     * loaded (a missing chain link, or a store failure).
      *
-     * @param run The resume candidate.
-     * @return The rejection outcome, or `null` when the run may resume.
+     * @param acted The run the resume was triggered on.
+     * @return The root run record, or `null`.
      */
-    private suspend fun rejectionFor(run: PipelineRun): ResumeOutcome? {
-        windowRejectionFor(run)?.let { return it }
+    private suspend fun resolveRoot(acted: PipelineRun): PipelineRun? {
+        val rootId = pipelineRunRepository.getRootRunId(acted.id) ?: return null
+        return if (rootId == acted.id) acted else pipelineRunRepository.getRun(rootId)
+    }
+
+    /**
+     * Evaluates the graph-identity precondition (item 3 of the class contract)
+     * against the root run record whose graph the re-enqueued task runs.
+     *
+     * @param run The root resume candidate.
+     * @return [ResumeOutcome.GraphChanged] when the graph was deleted or edited,
+     *   or `null` when the recorded hash still matches.
+     */
+    private suspend fun graphRejectionFor(run: PipelineRun): ResumeOutcome? {
         val recordedHash = run.graphContentHash ?: return ResumeOutcome.GraphChanged
         val graph = run.pipelineId?.let { pipelineRepository.getPipelineById(it) }
             ?: return ResumeOutcome.GraphChanged

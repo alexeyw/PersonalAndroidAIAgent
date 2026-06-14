@@ -226,4 +226,51 @@ class AppDatabaseMigrationTest {
             indexSql.contains("INDEX_TRACE_STEPS_RUNID"),
         )
     }
+
+    @Test
+    fun `MIGRATION_34_35 targets versions 34 to 35`() {
+        val migration = AppDatabase.MIGRATION_34_35
+
+        assertEquals(34, migration.startVersion)
+        assertEquals(35, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_34_35 adds parentRunId self-FK plus index and trace depth column`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val statements = mutableListOf<String>()
+
+        AppDatabase.MIGRATION_34_35.migrate(db)
+
+        // ALTER pipeline_runs + CREATE INDEX + ALTER trace_steps.
+        verify(exactly = 3) { db.execSQL(capture(statements)) }
+
+        val addParent = statements[0].uppercase()
+        assertTrue(
+            "Expected ALTER pipeline_runs ADD parentRunId, got: ${statements[0]}",
+            addParent.contains("ALTER TABLE") &&
+                addParent.contains("PIPELINE_RUNS") &&
+                addParent.contains("PARENTRUNID"),
+        )
+        assertTrue(
+            "parentRunId must be a self-referential CASCADE FK so retention cascades the sub-tree: ${statements[0]}",
+            addParent.contains("REFERENCES `PIPELINE_RUNS`") && addParent.contains("ON DELETE CASCADE"),
+        )
+
+        val index = statements[1].uppercase()
+        assertTrue(
+            "Missing parentRunId index (child-run tree lookups): ${statements[1]}",
+            index.contains("INDEX_PIPELINE_RUNS_PARENTRUNID"),
+        )
+
+        val depth = statements[2].uppercase()
+        assertTrue(
+            "Expected ALTER trace_steps ADD depth, got: ${statements[2]}",
+            depth.contains("ALTER TABLE") && depth.contains("TRACE_STEPS") && depth.contains("DEPTH"),
+        )
+        assertTrue(
+            "depth must be NOT NULL DEFAULT 0 so legacy rows render at the top level: ${statements[2]}",
+            depth.contains("NOT NULL") && depth.contains("DEFAULT 0"),
+        )
+    }
 }

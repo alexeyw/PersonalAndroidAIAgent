@@ -146,6 +146,7 @@ class ChatHomeViewModelTest {
         } returns PendingSubmissionOutcome.LiveResumed
         coEvery { pipelineRunRepository.getActiveRunForSession(any()) } returns null
         coEvery { pipelineRunRepository.getLatestRunForSession(any()) } returns null
+        coEvery { pipelineRunRepository.getDescendantRuns(any()) } returns emptyList()
         coEvery { runTraceRepository.getTraceForRun(any()) } returns emptyList()
         every { settingsRepository.resumeMaxAgeHours } returns
             MutableStateFlow(SettingsDefaults.RESUME_MAX_AGE_HOURS_DEFAULT)

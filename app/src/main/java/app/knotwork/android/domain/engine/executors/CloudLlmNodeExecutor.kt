@@ -10,6 +10,7 @@ import app.knotwork.android.domain.engine.CloudLlmClientFactory
 import app.knotwork.android.domain.engine.CloudLlmModelResolver
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.CloudProvider
+import app.knotwork.android.domain.models.ExecutionScope
 import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
@@ -62,7 +63,7 @@ class CloudLlmNodeExecutor @Inject constructor(
         sessionId: String,
         originalPrompt: String,
         runId: String?,
-        depth: Int,
+        scope: ExecutionScope,
     ): Flow<NodeOutput> = flow {
         val systemPromptPrefix = settingsRepository.systemPromptPrefix.first()
         val nodeSystemPrompt = node.systemPrompt ?: DefaultPrompts.Cloud.SYSTEM_FALLBACK

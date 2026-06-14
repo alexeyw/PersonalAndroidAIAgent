@@ -1,5 +1,6 @@
 package app.knotwork.android.domain.engine.executors
 
+import app.knotwork.android.domain.models.ExecutionScope
 import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
@@ -23,6 +24,6 @@ class QueueProcessorNodeExecutor @Inject constructor() : NodeExecutor {
         sessionId: String,
         originalPrompt: String,
         runId: String?,
-        depth: Int,
+        scope: ExecutionScope,
     ): Flow<NodeOutput> = flowOf(NodeOutput.Result(NodeExecutionResult(outputText = inputText)))
 }

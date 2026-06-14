@@ -189,6 +189,7 @@ private fun RunTraceRecord.toEntity(): TraceStepEntity = when (this) {
         conditionResult = conditionResult,
         routingKey = routingKey,
         resolvedToolName = resolvedToolName,
+        depth = depth,
     )
     is RunTraceRecord.ConsoleEntry -> TraceStepEntity(
         sessionId = sessionId,
@@ -199,6 +200,7 @@ private fun RunTraceRecord.toEntity(): TraceStepEntity = when (this) {
         seq = seq,
         recordKind = TraceStepEntity.KIND_CONSOLE_EVENT,
         consoleEventType = type.toStorageName(),
+        depth = depth,
     )
     is RunTraceRecord.MemorySnapshot -> TraceStepEntity(
         sessionId = sessionId,
@@ -235,6 +237,7 @@ private fun TraceStepEntity.toRecordOrNull(): RunTraceRecord? {
             conditionResult = conditionResult,
             routingKey = routingKey,
             resolvedToolName = resolvedToolName,
+            depth = depth,
         )
         TraceStepEntity.KIND_CONSOLE_EVENT -> consoleEventTypeFromStorage(consoleEventType)?.let { type ->
             RunTraceRecord.ConsoleEntry(
@@ -244,6 +247,7 @@ private fun TraceStepEntity.toRecordOrNull(): RunTraceRecord? {
                 timestamp = timestamp,
                 type = type,
                 message = outputText,
+                depth = depth,
             )
         }
         TraceStepEntity.KIND_MEMORY_SNAPSHOT -> deserializeMemoryEntries(outputText)?.let { entries ->

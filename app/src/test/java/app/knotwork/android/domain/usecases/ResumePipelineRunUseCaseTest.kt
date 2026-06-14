@@ -72,6 +72,8 @@ class ResumePipelineRunUseCaseTest {
         coEvery { pipelineRepository.getPipelineById("pipe-1") } returns graph
         coEvery { pendingInteractionRepository.getForRun(any()) } returns null
         coEvery { pipelineRunRepository.markResumed(any(), any()) } returns true
+        // Default: every run in these tests is top-level, so the root is itself.
+        coEvery { pipelineRunRepository.getRootRunId(any()) } returns "run-1"
     }
 
     /** Interrupted run record matching [graph] and fresh enough to resume. */
@@ -241,5 +243,42 @@ class ResumePipelineRunUseCaseTest {
             interruptedRun(status = PipelineRunStatus.RUNNING)
 
         assertEquals(ResumeOutcome.NotResumable, useCase("run-1"))
+    }
+
+    // ─── Nested resume (acted-on run is a sub-pipeline child) ───────────────
+
+    @Test
+    fun `given a parked sub-pipeline child when invoked then resumes the root not the child`() = runTest {
+        // The notification action addresses the parked child run; the window is
+        // checked on the child (it holds the pending record), but the run
+        // re-enqueued is the root — the child resumes internally when the root
+        // replays down to its PIPELINE node.
+        val child = PipelineRun(
+            id = "child-1",
+            sessionId = "session-1",
+            pipelineId = "sub",
+            origin = RunOrigin.CHAT,
+            status = PipelineRunStatus.WAITING_APPROVAL,
+            currentNodeId = "tool_1",
+            startedAt = 10L,
+            finishedAt = null,
+            errorMessage = null,
+            graphContentHash = "child-hash",
+            userPrompt = "subtask",
+            parentRunId = "run-1",
+        )
+        coEvery { pipelineRunRepository.getRun("child-1") } returns child
+        coEvery { pipelineRunRepository.getRun("run-1") } returns
+            interruptedRun(status = PipelineRunStatus.WAITING_APPROVAL)
+        coEvery { pipelineRunRepository.getRootRunId("child-1") } returns "run-1"
+        coEvery { pendingInteractionRepository.getForRun("child-1") } returns
+            parkedRecord(requestedAt = System.currentTimeMillis()).copy(runId = "child-1")
+
+        val outcome = useCase("child-1")
+
+        assertEquals(ResumeOutcome.Resumed, outcome)
+        // The ROOT is flipped and enqueued, never the child.
+        coVerify { pipelineRunRepository.markResumed("run-1", PipelineRunStatus.WAITING_APPROVAL) }
+        verify { taskQueueManager.enqueueTask(match { it.isResume && it.id == "run-1" }) }
     }
 }

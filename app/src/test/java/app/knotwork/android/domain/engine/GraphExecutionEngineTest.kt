@@ -217,6 +217,8 @@ class GraphExecutionEngineTest {
         val pipelineNodeExecutor = PipelineNodeExecutor(
             pipelineRepository,
             settingsRepository,
+            pipelineRunRepository,
+            runTraceRepository,
             Provider { engine },
         )
 
@@ -297,6 +299,87 @@ class GraphExecutionEngineTest {
         assertEquals("echo me", completed.finalResponse)
         // The sub-pipeline must have been loaded exactly once for the single PIPELINE node.
         coVerify(exactly = 1) { pipelineRepository.getPipelineById("sub-pipe") }
+    }
+
+    @Test
+    fun `PIPELINE sub-run shares the parent step budget so depth exhaustion fails the whole stack`() = runTest {
+        // Budget of 3, shared across the tree: main INPUT + main PIPELINE consume
+        // 2, leaving 1 for the sub-pipeline — not enough for its INPUT + LLM, so
+        // the sub-run exhausts the shared budget and the failure bubbles up.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(3)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("partial")
+        val subGraph = PipelineGraph(
+            id = "sub-pipe",
+            name = "Sub",
+            nodes = listOf(
+                NodeModel("sub_in", NodeType.INPUT, 0f, 0f),
+                NodeModel("sub_llm", NodeType.LITE_RT, 5f, 0f),
+                NodeModel("sub_out", NodeType.OUTPUT, 10f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("sc1", "sub_in", "sub_llm"),
+                ConnectionModel("sc2", "sub_llm", "sub_out"),
+            ),
+        )
+        coEvery { pipelineRepository.getPipelineById("sub-pipe") } returns subGraph
+        val mainGraph = PipelineGraph(
+            id = "main-pipe",
+            name = "Main",
+            nodes = listOf(
+                NodeModel("main_in", NodeType.INPUT, 0f, 0f),
+                NodeModel("pipe_node", NodeType.PIPELINE, 10f, 0f, targetPipelineId = "sub-pipe"),
+                NodeModel("main_out", NodeType.OUTPUT, 20f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("mc1", "main_in", "pipe_node"),
+                ConnectionModel("mc2", "pipe_node", "main_out"),
+            ),
+        )
+
+        val states = engine(sessionId, "go", mainGraph).toList()
+
+        val last = states.last()
+        assertTrue("Expected a run-level error, got: $last", last is AgentOrchestratorState.Error)
+        assertTrue((last as AgentOrchestratorState.Error).message.contains("shared across the pipeline tree"))
+    }
+
+    @Test
+    fun `persisted PIPELINE node creates a child run linked to the parent and settles it`() = runTest {
+        coEvery { pipelineRunRepository.getRun(any()) } returns null
+        val subGraph = PipelineGraph(
+            id = "sub-pipe",
+            name = "Sub",
+            nodes = listOf(
+                NodeModel("sub_in", NodeType.INPUT, 0f, 0f),
+                NodeModel("sub_out", NodeType.OUTPUT, 10f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(ConnectionModel("sc", "sub_in", "sub_out")),
+        )
+        coEvery { pipelineRepository.getPipelineById("sub-pipe") } returns subGraph
+        val mainGraph = PipelineGraph(
+            id = "main-pipe",
+            name = "Main",
+            nodes = listOf(
+                NodeModel("main_in", NodeType.INPUT, 0f, 0f),
+                NodeModel("pipe_node", NodeType.PIPELINE, 10f, 0f, targetPipelineId = "sub-pipe"),
+                NodeModel("main_out", NodeType.OUTPUT, 20f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("mc1", "main_in", "pipe_node"),
+                ConnectionModel("mc2", "pipe_node", "main_out"),
+            ),
+        )
+
+        engine(sessionId, "echo me", mainGraph, runId = "root").toList()
+
+        // The sub-run is persisted as a child of the parent run, keyed by the
+        // deterministic id, and settled COMPLETED by the executor.
+        coVerify {
+            pipelineRunRepository.createRun(
+                match { it.id == "root::pipe_node::0" && it.parentRunId == "root" && it.pipelineId == "sub-pipe" },
+            )
+            pipelineRunRepository.finishRun("root::pipe_node::0", PipelineRunStatus.COMPLETED, null)
+        }
     }
 
     @Test
@@ -568,14 +651,21 @@ class GraphExecutionEngineTest {
     fun `given maxSteps exceeded when pipeline loops then emits error`() = runTest {
         every { settingsRepository.pipelineMaxSteps } returns flowOf(2)
 
+        // A chain longer than the step budget: the budget exhausts while a node
+        // is still pending, so the run fails with the shared-budget error rather
+        // than running out of nodes.
         val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
         val llmNode = NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f)
+        val outputNode = NodeModel("output_1", NodeType.OUTPUT, 0f, 0f)
 
         val graph = PipelineGraph(
             id = "g1",
             name = "Long Graph",
-            nodes = listOf(inputNode, llmNode),
-            connections = listOf(ConnectionModel("c1", "input_1", "llm_1")),
+            nodes = listOf(inputNode, llmNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_1"),
+                ConnectionModel("c2", "llm_1", "output_1"),
+            ),
         )
         every { llmEngine.generateResponseStream(any()) } returns flowOf("response")
 
@@ -1040,7 +1130,13 @@ class GraphExecutionEngineTest {
                 pendingInteractionRepository,
                 clarificationNotifier,
             ),
-            PipelineNodeExecutor(pipelineRepository, settingsRepository, Provider { engine }),
+            PipelineNodeExecutor(
+                pipelineRepository,
+                settingsRepository,
+                pipelineRunRepository,
+                runTraceRepository,
+                Provider { engine },
+            ),
         )
         val engineWithProvider = GraphExecutionEngine(
             realFactory,
@@ -1225,7 +1321,13 @@ class GraphExecutionEngineTest {
                     pendingInteractionRepository,
                     clarificationNotifier,
                 ),
-                PipelineNodeExecutor(pipelineRepository, settingsRepository, Provider { engine }),
+                PipelineNodeExecutor(
+                    pipelineRepository,
+                    settingsRepository,
+                    pipelineRunRepository,
+                    runTraceRepository,
+                    Provider { engine },
+                ),
             )
             val engineWithRealRepo = GraphExecutionEngine(
                 realFactory,

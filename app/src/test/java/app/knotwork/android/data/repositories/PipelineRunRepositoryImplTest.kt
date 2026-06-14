@@ -459,6 +459,56 @@ class PipelineRunRepositoryImplTest {
     // endregion
 
     @Test
+    fun `given a child run when createRun then parentRunId is persisted`() = runTest {
+        val captured = slot<PipelineRunEntity>()
+        coEvery { pipelineRunDao.insertRun(capture(captured)) } returns Unit
+
+        repository.createRun(sampleRun.copy(id = "child", parentRunId = "root"))
+
+        assertEquals("root", captured.captured.parentRunId)
+    }
+
+    @Test
+    fun `given a run tree when getDescendantRuns then returns every descendant breadth-first`() = runTest {
+        coEvery { pipelineRunDao.getChildRuns("root") } returns listOf(
+            sampleEntity.copy(id = "a", parentRunId = "root"),
+            sampleEntity.copy(id = "b", parentRunId = "root"),
+        )
+        coEvery { pipelineRunDao.getChildRuns("a") } returns listOf(
+            sampleEntity.copy(id = "a1", parentRunId = "a"),
+        )
+        coEvery { pipelineRunDao.getChildRuns("b") } returns emptyList()
+        coEvery { pipelineRunDao.getChildRuns("a1") } returns emptyList()
+
+        val descendants = repository.getDescendantRuns("root").map { it.id }
+
+        assertEquals(listOf("a", "b", "a1"), descendants)
+    }
+
+    @Test
+    fun `given a nested run when getRootRunId then walks parentRunId up to the root`() = runTest {
+        coEvery { pipelineRunDao.getRun("a1") } returns sampleEntity.copy(id = "a1", parentRunId = "a")
+        coEvery { pipelineRunDao.getRun("a") } returns sampleEntity.copy(id = "a", parentRunId = "root")
+        coEvery { pipelineRunDao.getRun("root") } returns sampleEntity.copy(id = "root", parentRunId = null)
+
+        assertEquals("root", repository.getRootRunId("a1"))
+    }
+
+    @Test
+    fun `given a top-level run when getRootRunId then returns itself`() = runTest {
+        coEvery { pipelineRunDao.getRun("root") } returns sampleEntity.copy(id = "root", parentRunId = null)
+
+        assertEquals("root", repository.getRootRunId("root"))
+    }
+
+    @Test
+    fun `given a missing run when getRootRunId then null`() = runTest {
+        coEvery { pipelineRunDao.getRun("ghost") } returns null
+
+        assertNull(repository.getRootRunId("ghost"))
+    }
+
+    @Test
     fun `terminal flag covers exactly the four terminal statuses`() {
         val terminal = PipelineRunStatus.entries.filter { it.isTerminal }
         assertEquals(
