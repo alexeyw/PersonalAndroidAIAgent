@@ -288,6 +288,20 @@
             letter-spacing: 0.04em;
         }
 
+        /* Unresolved-reference badge on PIPELINE / SKILL nodes (see
+           refreshReferenceBadges). Amber chip that sits at the trailing edge
+           of the node body, mirroring the validation warning colour. */
+        .drawflow .drawflow-node .node-body .ref-badge {
+            margin-left: auto;
+            font-size: 10px;
+            font-weight: 600;
+            white-space: nowrap;
+            padding: 1px 6px;
+            border-radius: 8px;
+            color: #1a1205;
+            background: #FFB300;
+        }
+
         .drawflow .drawflow-node .input,
         .drawflow .drawflow-node .output {
             background: #11131a;
@@ -1182,7 +1196,7 @@
         { id: "EVALUATION", label: "Evaluation", color: "#009688", icon: "✅", inputs: 1, outputs: 3 },
         { id: "SUMMARY", label: "Summary", color: "#8BC34A", icon: "📝", inputs: 1, outputs: 1 },
         { id: "CLARIFICATION", label: "Clarification", color: "#9C27B0", icon: "💬", inputs: 1, outputs: 1 },
-        { id: "PIPELINE", label: "Pipeline", color: "#5C6BC0", icon: "📦", inputs: 1, outputs: 1 },
+        { id: "PIPELINE", label: "Pipeline", color: "#424DB2", icon: "📦", inputs: 1, outputs: 1 },
         { id: "SKILL", label: "Skill", color: "#FFB300", icon: "⭐", inputs: 1, outputs: 1 },
     ];
     /* /AUTO-GEN:NODE_TYPES */
@@ -3849,6 +3863,11 @@
             case 'EVALUATION':  return { ...base, criteriaPrompt: D.EVALUATION || '', maxRetries: 2 };
             case 'SUMMARY':     return { ...base, format: 'BULLETS', customPrompt: D.SUMMARY || null,
                 targetLengthChars: 600 };
+            // Composition nodes. Mirror the catalog PipelineConfig / SkillConfig
+            // (NodeConfig.kt): only the durable reference id (+ SKILL engine) is
+            // persisted; display names are resolved live by the host app.
+            case 'PIPELINE':    return { ...base, targetPipelineId: '' };
+            case 'SKILL':       return { ...base, skillId: '', engine: 'LITE_RT' };
             default:            return base;
         }
     }
@@ -3865,6 +3884,7 @@
     function richToFlat(typeId, cfg) {
         const flat = {
             systemPrompt: '', cloudProvider: '', modelPath: '', toolName: '',
+            targetPipelineId: '', skillId: '',
             conditionPrompt: '', conditionKeywords: '', conditionComplexity: null,
             clarificationTimeoutMs: null,
         };
@@ -3880,6 +3900,12 @@
                 flat.clarificationTimeoutMs = (cfg.timeoutMs ?? null); break;
             case 'IF_CONDITION':  flat.conditionPrompt = cfg.expression || ''; break;
             case 'TOOL':          flat.toolName = cfg.toolId || ''; break;
+            // SKILL engine maps onto the flat cloudProvider exactly as
+            // NodeConfigCodec.apply does: CLOUD → the "auto" sentinel, LITE_RT →
+            // blank (decoded back via engineFromProvider on the next open).
+            case 'PIPELINE':      flat.targetPipelineId = cfg.targetPipelineId || ''; break;
+            case 'SKILL':         flat.skillId = cfg.skillId || '';
+                flat.cloudProvider = cfg.engine === 'CLOUD' ? 'auto' : ''; break;
             default: break;
         }
         return flat;
@@ -3969,6 +3995,15 @@
                 if (cfg.customPrompt != null) env.customPrompt = cfg.customPrompt;
                 env.targetLengthChars = Number(cfg.targetLengthChars ?? 600);
                 break;
+            case 'PIPELINE':
+                // Mirror NodeConfigCodec.encodePipeline: only the target id.
+                env.targetPipelineId = cfg.targetPipelineId ?? '';
+                break;
+            case 'SKILL':
+                // Mirror NodeConfigCodec.encodeSkill: skill id + engine name.
+                env.skillId = cfg.skillId ?? '';
+                env.engine = cfg.engine || 'LITE_RT';
+                break;
             default: break;
         }
         return env;
@@ -4052,6 +4087,14 @@
                 cfg.customPrompt = env.customPrompt != null ? String(env.customPrompt) : null;
                 cfg.targetLengthChars = num(env.targetLengthChars, 600);
                 break;
+            case 'PIPELINE':
+                if (env.targetPipelineId != null) cfg.targetPipelineId = String(env.targetPipelineId);
+                break;
+            case 'SKILL':
+                if (env.skillId != null) cfg.skillId = String(env.skillId);
+                // Engine falls back to LITE_RT for rows written before the field.
+                cfg.engine = (env.engine === 'CLOUD' || env.engine === 'LITE_RT') ? env.engine : 'LITE_RT';
+                break;
             default: break;
         }
         return cfg;
@@ -4080,6 +4123,10 @@
             case 'DECOMPOSITION': cfg.planningPrompt = sp; break;
             case 'EVALUATION': cfg.criteriaPrompt = sp; break;
             case 'SUMMARY': cfg.customPrompt = sp.trim() ? sp : null; break;
+            case 'PIPELINE': cfg.targetPipelineId = flat.targetPipelineId || ''; break;
+            // engineFromProvider: any non-blank cloudProvider ⇒ CLOUD, else LITE_RT.
+            case 'SKILL': cfg.skillId = flat.skillId || '';
+                cfg.engine = (flat.cloudProvider && String(flat.cloudProvider).trim()) ? 'CLOUD' : 'LITE_RT'; break;
             default: break;
         }
         return cfg;
@@ -4327,10 +4374,120 @@
                 fields.push(prompt('customPrompt', 'Custom prompt (required when format = CUSTOM)', typeId, true));
                 fields.push(cfgNumber('targetLengthChars', 'Target length (chars, 200–4000)', cfg.targetLengthChars, { min: 200, max: 4000, step: 50, kind: 'int' }));
                 break;
+            case 'PIPELINE':
+                fields.push(cfgPipelinePicker(cfg));
+                break;
+            case 'SKILL':
+                fields.push(cfgText('skillId', 'Skill id', cfg.skillId ?? '', 'e.g. report-writer'));
+                fields.push(cfgSelect('engine', 'Inference engine', [
+                    { id: 'LITE_RT', label: 'On-device (LiteRT)' },
+                    { id: 'CLOUD', label: 'Cloud' },
+                ], cfg.engine || 'LITE_RT'));
+                fields.push(cfgHint(
+                    'The browser has no skill library, so the id is entered by hand. The host app ' +
+                    'resolves the skill name, instruction preview and tool allowlist, and flags an ' +
+                    'unknown id on import.',
+                ));
+                break;
         }
 
         fields.push(renderContextConfigSection(contextConfig));
         return fields;
+    }
+
+    /**
+     * Standalone read-only guidance line, appended to a form like a field but
+     * carrying no input. Used where a node type needs a caveat the user must
+     * see (e.g. SKILL ids cannot be resolved in the browser).
+     */
+    function cfgHint(text) {
+        const hint = document.createElement('div');
+        hint.className = 'hint';
+        hint.textContent = text;
+        return hint;
+    }
+
+    /**
+     * Known target-pipeline options for the PIPELINE picker: the bundled
+     * catalogue plus the per-browser "Mine" presets, de-duplicated by id and
+     * excluding the document's own id (a pipeline may not target itself).
+     * Returns `[{ id, name }]`.
+     */
+    function knownPipelineOptions() {
+        const seen = new Set();
+        const out = [];
+        const add = p => {
+            if (!p || typeof p.id !== 'string' || !p.id) return;
+            if (p.id === currentPipelineId) return; // self-reference is never a valid target
+            if (seen.has(p.id)) return;
+            seen.add(p.id);
+            out.push({ id: p.id, name: p.name || p.id });
+        };
+        BUILTIN_PIPELINE_PRESETS.forEach(add);
+        loadUserPipelinePresets().forEach(add);
+        return out;
+    }
+
+    /**
+     * Target-pipeline combobox bound live to [cfg].targetPipelineId (no
+     * `data-field`, so it mutates [cfg] directly like the list editors and is
+     * skipped by the harvest pass). Offers the known pipelines plus a manual
+     * "enter id" escape hatch; an id that is neither known nor blank opens in
+     * manual mode so an unresolved reference imported from JSON stays editable
+     * rather than being silently dropped.
+     */
+    function cfgPipelinePicker(cfg) {
+        const wrap = fieldWrap('Target pipeline');
+        const MANUAL = '__manual__';
+        const known = knownPipelineOptions();
+        const current = (cfg.targetPipelineId || '').trim();
+        const isKnown = current !== '' && known.some(o => o.id === current);
+        const useManual = current !== '' && !isKnown;
+
+        const sel = document.createElement('select');
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = known.length ? '— select a pipeline —' : '— no known pipelines —';
+        sel.appendChild(placeholder);
+        known.forEach(o => {
+            const opt = document.createElement('option');
+            opt.value = o.id;
+            opt.textContent = `${o.name} (${o.id})`;
+            sel.appendChild(opt);
+        });
+        const manualOpt = document.createElement('option');
+        manualOpt.value = MANUAL;
+        manualOpt.textContent = '✎ Enter id manually…';
+        sel.appendChild(manualOpt);
+        sel.value = useManual ? MANUAL : current;
+
+        const manual = document.createElement('input');
+        manual.type = 'text';
+        manual.placeholder = 'pipeline id';
+        manual.style.marginTop = '6px';
+        manual.value = useManual ? current : '';
+        manual.hidden = !useManual;
+
+        sel.addEventListener('change', () => {
+            if (sel.value === MANUAL) {
+                manual.hidden = false;
+                cfg.targetPipelineId = manual.value.trim();
+                manual.focus();
+            } else {
+                manual.hidden = true;
+                cfg.targetPipelineId = sel.value;
+            }
+        });
+        manual.addEventListener('input', () => { cfg.targetPipelineId = manual.value.trim(); });
+
+        wrap.appendChild(sel);
+        wrap.appendChild(manual);
+        wrap.appendChild(cfgHint(
+            'References another saved pipeline by id. Unknown ids import as “unresolved” (the node ' +
+            'shows a badge); the host app validates the full reference graph — transitive cycles and ' +
+            'the depth limit are checked there, not in the browser.',
+        ));
+        return wrap;
     }
 
     /* ---- cfg-bound field builders (scalar inputs carry data-field + data-kind) ---- */
@@ -4986,6 +5143,15 @@
                 if (!inRange(cfg.targetLengthChars, 200, 4000)) return 'Target length must be between 200 and 4000.';
                 if (cfg.format === 'CUSTOM' && (!cfg.customPrompt || !cfg.customPrompt.trim())) return 'A custom prompt is required for the CUSTOM format.';
                 break;
+            case 'PIPELINE': {
+                const target = (cfg.targetPipelineId || '').trim();
+                if (!target) return 'A target pipeline id is required.';
+                if (target === currentPipelineId) return 'A pipeline cannot reference itself.';
+                break;
+            }
+            case 'SKILL':
+                if (!cfg.skillId || !String(cfg.skillId).trim()) return 'A skill id is required.';
+                break;
         }
         return null;
     }
@@ -5598,6 +5764,44 @@
             }
         });
 
+        // Composition references. The browser holds a SINGLE document, so it can
+        // only detect a *direct* self-reference; full transitive cycle and
+        // depth-limit checking across the saved-pipeline graph stays in the app
+        // (PipelineGraph.validate + PipelineCompositionValidator, with
+        // FindPipelinesUsingSkillUseCase for skills). SKILL ids cannot be
+        // resolved here at all (no in-browser skill library), so a non-blank
+        // skill id is never auto-flagged — only a blank one (handled below).
+        const knownPipelineIds = new Set(knownPipelineOptions().map(o => o.id));
+        nodes.forEach(n => {
+            if (n.type === 'PIPELINE') {
+                const target = (n.data?.targetPipelineId || n.data?.cfg?.targetPipelineId || '').trim();
+                if (!target) {
+                    errors.push({
+                        kind: 'MissingTargetPipeline', level: 'error', nodeId: n.id,
+                        message: 'PIPELINE node has no target pipeline.',
+                    });
+                } else if (target === currentPipelineId) {
+                    errors.push({
+                        kind: 'SelfReference', level: 'error', nodeId: n.id,
+                        message: 'PIPELINE node references its own pipeline.',
+                    });
+                } else if (!knownPipelineIds.has(target)) {
+                    warnings.push({
+                        kind: 'UnresolvedReference', level: 'warning', nodeId: n.id,
+                        message: `Target pipeline "${target}" is not among the known pipelines.`,
+                    });
+                }
+            } else if (n.type === 'SKILL') {
+                const skill = (n.data?.skillId || n.data?.cfg?.skillId || '').trim();
+                if (!skill) {
+                    errors.push({
+                        kind: 'MissingSkill', level: 'error', nodeId: n.id,
+                        message: 'SKILL node has no skill selected.',
+                    });
+                }
+            }
+        });
+
         return { errors, warnings };
     }
 
@@ -5680,8 +5884,63 @@
         exportBtn.disabled = errors.length > 0;
     }
 
+    /**
+     * Classifies a node's composition reference for badge display.
+     * @returns {'unset'|'self'|'unresolved'|null} `null` when there is nothing
+     * to flag (resolved reference, or a non-composition node).
+     */
+    function referenceIssueFor(node) {
+        if (node.type === 'PIPELINE') {
+            const target = (node.data?.targetPipelineId || node.data?.cfg?.targetPipelineId || '').trim();
+            if (!target) return 'unset';
+            if (target === currentPipelineId) return 'self';
+            if (!knownPipelineOptions().some(o => o.id === target)) return 'unresolved';
+            return null;
+        }
+        if (node.type === 'SKILL') {
+            const skill = (node.data?.skillId || node.data?.cfg?.skillId || '').trim();
+            // A non-blank skill id cannot be resolved in the browser, so it is
+            // not flagged as "unresolved" — only a blank one is surfaced.
+            return skill ? null : 'unset';
+        }
+        return null;
+    }
+
+    /**
+     * Patches a visible "⚠ …" badge into the DOM of every PIPELINE / SKILL node
+     * whose reference is unset / self / unresolved, and removes it once the
+     * reference resolves. drawflow does not re-render node HTML on data change,
+     * so — like the label patch — we mutate the rendered node by hand. Called
+     * from runValidation, so it stays in step with every graph mutation and
+     * with import.
+     */
+    function refreshReferenceBadges() {
+        snapshotGraph().forEach(n => {
+            const body = document.querySelector(`#node-${n.id} .node-body`);
+            if (!body) return;
+            const issue = referenceIssueFor(n);
+            let badge = body.querySelector('.ref-badge');
+            if (!issue) { if (badge) badge.remove(); return; }
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'ref-badge';
+                body.appendChild(badge);
+            }
+            const label = n.type === 'SKILL' ? 'skill' : 'pipeline';
+            badge.textContent = issue === 'self' ? '⚠ self-ref'
+                : issue === 'unset' ? `⚠ no ${label}`
+                : '⚠ unresolved';
+            badge.title = issue === 'self'
+                ? 'This pipeline references itself.'
+                : issue === 'unset'
+                    ? `No ${label} selected — open the node to choose one.`
+                    : 'The referenced id is not among the known pipelines (resolved by the host app).';
+        });
+    }
+
     function runValidation() {
         renderValidation(validateGraph());
+        refreshReferenceBadges();
         // Welcome overlay visibility tracks the same lifecycle as
         // validation: every mutation refreshes it so the placeholder
         // shows when the graph is empty and hides as soon as the user
@@ -5926,6 +6185,12 @@
                     cloudProvider: flat.cloudProvider || null,
                     modelPath: flat.modelPath || null,
                     toolName: flat.toolName || null,
+                    // PIPELINE / SKILL reference ids — the runtime executors read
+                    // these flat fields, so they must travel in `config` (the rich
+                    // nodeConfig envelope carries them too). Matches Android
+                    // PipelineJsonSerializer.serializeNode.
+                    targetPipelineId: flat.targetPipelineId || null,
+                    skillId: flat.skillId || null,
                     clarificationTimeoutMs: flat.clarificationTimeoutMs ?? null,
                     conditionPrompt: flat.conditionPrompt || null,
                     conditionKeywords: flat.conditionKeywords || null,
@@ -6083,6 +6348,8 @@
                     cloudProvider: jn.config?.cloudProvider || (jn.type === 'CLOUD' ? 'auto' : ''),
                     modelPath: jn.config?.modelPath || '',
                     toolName: jn.config?.toolName || '',
+                    targetPipelineId: jn.config?.targetPipelineId || '',
+                    skillId: jn.config?.skillId || '',
                     clarificationTimeoutMs: jn.config?.clarificationTimeoutMs ?? null,
                     conditionPrompt: jn.config?.conditionPrompt || '',
                     conditionKeywords: jn.config?.conditionKeywords || '',

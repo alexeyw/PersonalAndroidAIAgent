@@ -173,6 +173,29 @@ If your node has a custom default system prompt, also add it to
 `DEFAULT_SYSTEM_PROMPTS` (around line 855) so the editor seeds new
 nodes with the same baseline as the Android app.
 
+If your node carries **typed config** (anything beyond name + system
+prompt), mirror the Android `NodeConfig` into the JS rich-config block:
+add a `case` to `defaultRichConfig`, `richToFlat`, `encodeRichEnvelope`,
+`decodeRichEnvelope`, `deriveRichFromFlat`, `renderFormFields`, and
+`validateRichConfig`. Keep the envelope keys byte-identical to the
+Kotlin `NodeConfigCodec` encoder so a document round-trips through both
+editors unchanged.
+
+If your node **references another entity by id** (like `PIPELINE` →
+target pipeline, `SKILL` → skill), there are two extra obligations:
+
+1. Carry the id in the **flat `config` block** of the export, not only in
+   the rich `nodeConfig` envelope — the runtime executors read the flat
+   `NodeModel` field (`targetPipelineId` / `skillId`), so
+   [`PipelineJsonSerializer`](../app/src/main/java/app/knotwork/android/domain/pipelineio/PipelineJsonSerializer.kt)
+   emits and reads it there, and the editor mirrors that in `exportToJson`
+   / `importFromJson`.
+2. The browser holds a **single document**, so it can only flag a *direct*
+   self-reference and an unset/unknown id (a node badge plus a validation
+   entry). The full transitive cycle and depth-limit checks stay in the
+   app's `PipelineCompositionValidator` — document that limitation in a
+   comment next to the editor check rather than pretending to replicate it.
+
 ### 1.7. Tests
 
 - A unit test for the executor that covers the happy path, at least
@@ -1037,7 +1060,8 @@ double-check it for every recipe in this guide.**
 
 | You changed …                | Files you must also update                                                                                                                                                                                                                                          |
 |------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| A new `NodeType`             | `domain/models/NodeType.kt` · a new `NodeExecutor` implementation · `domain/engine/executors/NodeExecutorFactory.kt` · `domain/models/NodeContextConfig.kt` (`defaultForType`) · `domain/models/PipelineGraph.kt` (`validate`, if special invariants) · **`pipeline-editor.html`** (`NODE_TYPES`, `defaultContextConfig`, `NODE_TYPE_TOOLTIPS`, optional `DEFAULT_SYSTEM_PROMPTS`) · executor unit test · `GraphExecutionEngineTest` |
+| A new `NodeType`             | `domain/models/NodeType.kt` · a new `NodeExecutor` implementation · `domain/engine/executors/NodeExecutorFactory.kt` · `domain/models/NodeContextConfig.kt` (`defaultForType`) · `domain/models/PipelineGraph.kt` (`validate`, if special invariants) · `buildtools/BrowserEditorConstantsGenerator.kt` (`NODE_TYPE_META`) + run `./gradlew :app:generateBrowserEditorConstants` · **`pipeline-editor.html`** (`defaultContextConfig`, `NODE_TYPE_TOOLTIPS`, optional `DEFAULT_SYSTEM_PROMPTS`; for typed config also `defaultRichConfig` / `richToFlat` / `encodeRichEnvelope` / `decodeRichEnvelope` / `deriveRichFromFlat` / `renderFormFields` / `validateRichConfig`) · executor unit test · `GraphExecutionEngineTest` |
+| A node type that **references another entity by id** (`PIPELINE` / `SKILL`) | the flat `NodeModel` field (`targetPipelineId` / `skillId`) · `domain/pipelineio/PipelineJsonSerializer.kt` (emit + read the id in the flat `config` block) · `domain/models/PipelineGraph.kt` (`validate` → `MissingTargetPipeline` / `MissingSkill`) · `domain/services/PipelineCompositionValidator.kt` (transitive cycle / depth) · **`pipeline-editor.html`** (flat `config` key in `exportToJson`/`importFromJson`, reference form, self-ref + unresolved-id validation, node badge) · `PipelineJsonSerializerTest` round-trip |
 | A new `Tool`                 | a new `LocalToolExecutor` implementation · `di/LocalToolsModule.kt` (`@Binds @IntoMap @StringKey`) · declare `ToolRisk` correctly · executor unit test · optional Compose test if new UI                                                                            |
 | A new **workspace tool**     | a new `LocalToolExecutor` that goes through `AgentWorkspace` (never raw `File`) · `di/LocalToolsModule.kt` (`@Binds @IntoMap @StringKey`) · risk tier in `ToolRepositoryImpl` built-in list · `docs/user-guide.md` (built-in-tools table) · executor unit test against a `@TempDir`-backed `AgentWorkspace` (happy path + `../` traversal + quota/not-found) |
 | A new callee-side AppFunction | a new `@AppFunction`-annotated wrapper under `data/tools/local/appfunctions/` (first param `AppFunctionContext`) · `App.appFunctionConfiguration` (`addEnclosingClassFactory(...)`) · wrapper unit test with a mocked `AppFunctionContext` · scenario in `AppFunctionsEndToEndTest` |

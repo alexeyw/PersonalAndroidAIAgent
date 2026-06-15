@@ -15,6 +15,20 @@ details.
 
 ### Added
 
+- **Browser editor: `PIPELINE` and `SKILL` configuration.** The standalone
+  browser pipeline editor can now configure composition nodes, not just place
+  them. A `PIPELINE` node gets a target-pipeline picker populated from the
+  bundled and per-browser preset catalogues, with a manual-id escape hatch; a
+  `SKILL` node gets a skill-id field and an on-device/cloud engine selector.
+  Both reference ids now travel in the **flat `config` block** of the exported
+  JSON (alongside the rich `nodeConfig` envelope), so a pipeline exported from
+  the app and imported into the browser — and back — preserves its references
+  exactly and stays runnable. Importing a reference to an unknown pipeline no
+  longer breaks silently: the node shows an "unresolved" badge and a validation
+  warning instead of vanishing. The editor flags a direct self-reference and an
+  unset reference as errors; full transitive cycle and nesting-depth validation
+  remains the app's responsibility.
+
 - **Skill execution (`SKILL` node).** A new pipeline node type runs a reusable
   skill as an inference step: the instruction, the visible-tool allowlist, and
   the default context all come from the skill rather than from the node. The

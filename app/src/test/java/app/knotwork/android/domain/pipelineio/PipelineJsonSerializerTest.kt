@@ -143,6 +143,103 @@ class PipelineJsonSerializerTest {
     }
 
     @Test
+    fun `serialize then parse round-trips PIPELINE and SKILL reference ids in the flat config block`() {
+        // PIPELINE / SKILL nodes carry their references in the flat `config`
+        // block (read by the runtime executors). A bare graph proves the ids
+        // survive a serialize → parse cycle without relying on the rich
+        // nodeConfig envelope.
+        val graph = PipelineGraph(
+            id = "composed-pipeline",
+            name = "Composed",
+            updatedAt = 1_700_000_000_000L,
+            nodes = listOf(
+                NodeModel(
+                    id = "node-input",
+                    type = NodeType.INPUT,
+                    x = 0f,
+                    y = 0f,
+                    label = "Start",
+                    systemPrompt = null,
+                    contextConfig = NodeContextConfig.defaultForType(NodeType.INPUT),
+                ),
+                NodeModel(
+                    id = "node-sub",
+                    type = NodeType.PIPELINE,
+                    x = 100f,
+                    y = 0f,
+                    label = "Sub-pipeline",
+                    targetPipelineId = "target-pipeline-uuid",
+                    contextConfig = NodeContextConfig.defaultForType(NodeType.PIPELINE),
+                ),
+                NodeModel(
+                    id = "node-skill",
+                    type = NodeType.SKILL,
+                    x = 200f,
+                    y = 0f,
+                    label = "Report Writer",
+                    skillId = "report-writer-skill",
+                    cloudProvider = "auto",
+                    contextConfig = NodeContextConfig.defaultForType(NodeType.SKILL),
+                ),
+                NodeModel(
+                    id = "node-output",
+                    type = NodeType.OUTPUT,
+                    x = 300f,
+                    y = 0f,
+                    label = "Reply",
+                    contextConfig = NodeContextConfig.ALL_ENABLED,
+                ),
+            ),
+            connections = listOf(
+                ConnectionModel(id = "c1", sourceNodeId = "node-input", targetNodeId = "node-sub", label = null),
+                ConnectionModel(id = "c2", sourceNodeId = "node-sub", targetNodeId = "node-skill", label = null),
+                ConnectionModel(id = "c3", sourceNodeId = "node-skill", targetNodeId = "node-output", label = null),
+            ),
+        )
+
+        val outcome = PipelineJsonSerializer.parse(PipelineJsonSerializer.serialize(graph))
+
+        assertTrue(outcome is PipelineImportOutcome.Success)
+        val parsed = (outcome as PipelineImportOutcome.Success).graph
+        val pipelineNode = parsed.nodes.first { it.type == NodeType.PIPELINE }
+        assertEquals("target-pipeline-uuid", pipelineNode.targetPipelineId)
+        assertNull(pipelineNode.skillId)
+        val skillNode = parsed.nodes.first { it.type == NodeType.SKILL }
+        assertEquals("report-writer-skill", skillNode.skillId)
+        assertEquals("auto", skillNode.cloudProvider)
+        assertNull(skillNode.targetPipelineId)
+    }
+
+    @Test
+    fun `serialize emits the flat reference ids inside the config block`() {
+        val graph = PipelineGraph(
+            id = "p",
+            name = "n",
+            updatedAt = 1L,
+            nodes = listOf(
+                NodeModel(
+                    id = "node-sub",
+                    type = NodeType.PIPELINE,
+                    x = 0f,
+                    y = 0f,
+                    label = "Sub",
+                    targetPipelineId = "target-uuid",
+                    contextConfig = NodeContextConfig.defaultForType(NodeType.PIPELINE),
+                ),
+            ),
+            connections = emptyList(),
+        )
+
+        val config = JSONObject(PipelineJsonSerializer.serialize(graph))
+            .getJSONArray("nodes")
+            .getJSONObject(0)
+            .getJSONObject("config")
+
+        assertEquals("target-uuid", config.getString("targetPipelineId"))
+        assertTrue(config.isNull("skillId"))
+    }
+
+    @Test
     fun `parse reports SchemaMismatch when schemaVersion differs`() {
         val json = """
             {
