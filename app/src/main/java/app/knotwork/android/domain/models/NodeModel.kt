@@ -16,6 +16,11 @@ import app.knotwork.android.domain.constants.DefaultPrompts
  * run as a sub-pipeline by `PipelineNodeExecutor`. Persisted as a flat column (mirroring the
  * `toolName` pattern); cross-pipeline cycle / depth / dangling-reference checks live in
  * `PipelineCompositionValidator`.
+ * @property skillId Id of the [app.knotwork.android.domain.models.Skill] this node runs when its
+ * type is [NodeType.SKILL]; `null` for every other node type. The referenced skill supplies the
+ * instruction, the visible-tool allowlist, and the default context selection consumed by
+ * `SkillNodeExecutor`. Persisted as a flat column (mirroring `targetPipelineId`); a dangling
+ * reference is surfaced as [PipelineValidationError.SkillNotFound] by `PipelineGraph.validate`.
  * @property modelPath An optional path to a specific model file (.tflite) for this node.
  * @property conditionComplexity Threshold for task complexity if type is [NodeType.IF_CONDITION].
  * @property conditionKeywords Comma-separated keywords for condition if type is [NodeType.IF_CONDITION].
@@ -48,6 +53,7 @@ data class NodeModel(
     val label: String = type.name,
     val toolName: String? = null,
     val targetPipelineId: String? = null,
+    val skillId: String? = null,
     val modelPath: String? = null,
     val conditionComplexity: Int? = null,
     val conditionKeywords: String? = null,

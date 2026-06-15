@@ -1,5 +1,6 @@
 package app.knotwork.android.domain.usecases
 
+import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.repositories.PipelineRepository
 import kotlinx.coroutines.flow.first
@@ -32,16 +33,11 @@ class FindPipelinesUsingSkillUseCase @Inject constructor(private val pipelineRep
 
 /**
  * Pure helper: the pipelines in [all] that reference [skillId] through a SKILL
- * node.
- *
- * Returns empty today because no [PipelineGraph] node can carry a skill
- * reference yet — `NodeModel.skillId` ships with `NodeType.SKILL` in the
- * execution task (5/7). When that field exists, this becomes:
- * `all.filter { p -> p.nodes.any { it.type == NodeType.SKILL && it.skillId == skillId } }`.
+ * node — the pipelines whose runs would break if the skill were deleted.
  *
  * @param skillId the skill about to be deleted.
  * @param all every saved pipeline.
- * @return the dependent pipelines (currently always empty).
+ * @return the dependent pipelines (empty when nothing references the skill).
  */
-@Suppress("UNUSED_PARAMETER")
-fun findPipelinesUsingSkill(skillId: String, all: List<PipelineGraph>): List<PipelineGraph> = emptyList()
+fun findPipelinesUsingSkill(skillId: String, all: List<PipelineGraph>): List<PipelineGraph> =
+    all.filter { pipeline -> pipeline.nodes.any { it.type == NodeType.SKILL && it.skillId == skillId } }

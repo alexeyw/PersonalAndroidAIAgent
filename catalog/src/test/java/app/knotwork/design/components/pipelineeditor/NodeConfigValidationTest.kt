@@ -375,4 +375,24 @@ class NodeConfigValidationTest {
 
         assertEquals(null, errors[FieldId.TARGET_PIPELINE_ID])
     }
+
+    @Test
+    fun `given SkillConfig with no skill when validate then TARGET_SKILL_MISSING`() {
+        val errors = NodeConfigValidation.validate(
+            config = SkillConfig(title = "translate", skillId = ""),
+            peerTitles = noPeers,
+        )
+
+        assertEquals(ValidationFailure.TARGET_SKILL_MISSING, errors[FieldId.SKILL_ID])
+    }
+
+    @Test
+    fun `given SkillConfig with a skill when validate then no skill error`() {
+        val errors = NodeConfigValidation.validate(
+            config = SkillConfig(title = "translate", skillId = "skill-1"),
+            peerTitles = noPeers,
+        )
+
+        assertEquals(null, errors[FieldId.SKILL_ID])
+    }
 }

@@ -19,6 +19,7 @@ import app.knotwork.android.domain.repositories.ApiKeyRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.PromptPresetRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.repositories.SkillRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.PipelineCompositionValidator
 import app.knotwork.android.domain.usecases.CreatePipelineUseCase
@@ -75,6 +76,7 @@ class OrchestratorViewModelTest {
     private lateinit var promptTemplateEngine: PromptTemplateEngine
     private lateinit var promptPresetRepository: PromptPresetRepository
     private lateinit var compositionValidator: PipelineCompositionValidator
+    private lateinit var skillRepository: SkillRepository
     private lateinit var providerDate: PromptVariableProvider
     private lateinit var providerTime: PromptVariableProvider
     private lateinit var viewModel: OrchestratorViewModel
@@ -109,6 +111,7 @@ class OrchestratorViewModelTest {
             every { getPresetsForType(any()) } returns flowOf(emptyList())
         }
         compositionValidator = mockk()
+        skillRepository = mockk(relaxed = true)
         apiKeyRepository = mockk()
         toolRepository = mockk()
         localModelRepository = mockk()
@@ -167,6 +170,7 @@ class OrchestratorViewModelTest {
         promptPresetRepository,
         compositionValidator,
         setOf(providerDate, providerTime),
+        skillRepository,
     )
 
     @After

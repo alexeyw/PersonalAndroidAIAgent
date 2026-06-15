@@ -79,6 +79,9 @@ object ValidationAutoFix {
         is PipelineValidationError.TargetPipelineNotFound -> graph
         is PipelineValidationError.PipelineCycle -> graph
         is PipelineValidationError.PipelineNestingTooDeep -> graph
+        // A SKILL node needs the user to pick a valid skill — no safe recipe.
+        is PipelineValidationError.MissingSkill -> graph
+        is PipelineValidationError.SkillNotFound -> graph
     }
 
     private fun addInputNode(graph: PipelineGraph): PipelineGraph {
@@ -168,6 +171,8 @@ object ValidationAutoFix {
         is PipelineValidationError.TargetPipelineNotFound -> ""
         is PipelineValidationError.PipelineCycle -> ""
         is PipelineValidationError.PipelineNestingTooDeep -> ""
+        is PipelineValidationError.MissingSkill -> ""
+        is PipelineValidationError.SkillNotFound -> ""
     }
 
     private fun newNodeId(): String = "n-" + UUID.randomUUID().toString().substring(0, SHORT_ID_LEN)
@@ -202,6 +207,9 @@ fun PipelineValidationError.focusableNodeId(graph: PipelineGraph): String? = whe
     // Composition errors that pin to a specific PIPELINE node deep-link to it.
     is PipelineValidationError.MissingTargetPipeline -> nodeId
     is PipelineValidationError.TargetPipelineNotFound -> nodeId
+    // SKILL errors pin to the offending SKILL node — deep-link to it.
+    is PipelineValidationError.MissingSkill -> nodeId
+    is PipelineValidationError.SkillNotFound -> nodeId
     PipelineValidationError.DisconnectedInput -> graph.nodes.firstOrNull { it.type == NodeType.INPUT }?.id
     PipelineValidationError.DisconnectedOutput -> graph.nodes.firstOrNull { it.type == NodeType.OUTPUT }?.id
     PipelineValidationError.MultipleInputs -> graph.nodes.firstOrNull { it.type == NodeType.INPUT }?.id

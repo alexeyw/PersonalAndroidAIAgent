@@ -167,6 +167,13 @@ data class PipelineGraph(
             if (node.type == NodeType.PIPELINE && node.targetPipelineId.isNullOrBlank()) {
                 errors.add(PipelineValidationError.MissingTargetPipeline(node.id))
             }
+            // Structural, single-graph check: a SKILL node must name a skill.
+            // Resolving the id against the skill registry (and surfacing
+            // `SkillNotFound`) needs the repository and therefore happens in
+            // `SkillNodeExecutor` / the editor's skill picker, not here.
+            if (node.type == NodeType.SKILL && node.skillId.isNullOrBlank()) {
+                errors.add(PipelineValidationError.MissingSkill(node.id))
+            }
         }
 
         return errors
@@ -183,7 +190,7 @@ data class PipelineGraph(
      *
      * Included: every node field that can influence execution or
      * LLM-visible content (id, type, label — it leaks into tool-result
-     * attribution, tool/target-pipeline/model/provider bindings, condition fields, system
+     * attribution, tool/target-pipeline/skill/model/provider bindings, condition fields, system
      * prompt, clarification timeout, context-config flags, per-node config
      * JSON) and every connection (id, endpoints, routing label). Nodes and
      * connections are sorted by id first, so persistence order never affects
@@ -203,6 +210,7 @@ data class PipelineGraph(
                 append(node.label).append(FIELD_SEPARATOR)
                 append(node.toolName.orEmpty()).append(FIELD_SEPARATOR)
                 append(node.targetPipelineId.orEmpty()).append(FIELD_SEPARATOR)
+                append(node.skillId.orEmpty()).append(FIELD_SEPARATOR)
                 append(node.modelPath.orEmpty()).append(FIELD_SEPARATOR)
                 append(node.conditionComplexity?.toString().orEmpty()).append(FIELD_SEPARATOR)
                 append(node.conditionKeywords.orEmpty()).append(FIELD_SEPARATOR)

@@ -432,6 +432,48 @@ class SavePipelineUseCaseTest {
     }
 
     @Test
+    fun `validate flags a SKILL node with no skill selected`() {
+        val pipeline = PipelineGraph(
+            id = "sk",
+            name = "SK",
+            nodes = listOf(
+                NodeModel("n1", NodeType.INPUT, 0f, 0f),
+                NodeModel("n2", NodeType.SKILL, 5f, 5f, skillId = null),
+                NodeModel("n3", NodeType.OUTPUT, 10f, 10f),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "n1", "n2"),
+                ConnectionModel("c2", "n2", "n3"),
+            ),
+        )
+
+        val errors = pipeline.validate()
+
+        assertTrue(errors.any { it is PipelineValidationError.MissingSkill && it.nodeId == "n2" })
+    }
+
+    @Test
+    fun `validate does not flag a SKILL node that names a skill`() {
+        val pipeline = PipelineGraph(
+            id = "sk2",
+            name = "SK2",
+            nodes = listOf(
+                NodeModel("n1", NodeType.INPUT, 0f, 0f),
+                NodeModel("n2", NodeType.SKILL, 5f, 5f, skillId = "skill-1"),
+                NodeModel("n3", NodeType.OUTPUT, 10f, 10f),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "n1", "n2"),
+                ConnectionModel("c2", "n2", "n3"),
+            ),
+        )
+
+        val errors = pipeline.validate()
+
+        assertFalse(errors.any { it is PipelineValidationError.MissingSkill })
+    }
+
+    @Test
     fun `invoke should return failure when composition validator reports an error`() = runTest {
         // A structurally-valid graph whose cross-pipeline composition is unsound
         // (e.g. a cycle) must be blocked from saving.

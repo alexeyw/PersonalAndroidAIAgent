@@ -17,6 +17,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.knotwork.android.R
+import app.knotwork.android.domain.models.NodeContextConfig
 import app.knotwork.design.theme.KnotworkTheme
 
 /**
@@ -49,6 +50,10 @@ import app.knotwork.design.theme.KnotworkTheme
  * @param onToolResultsChange Invoked when the user toggles the "Tool results"
  * checkbox; receives the new value.
  * @param modifier Modifier applied to the root [Column] of the section.
+ * @param inheritedBaseline When non-null (SKILL nodes), each editable row is
+ * tagged "inherited" while its value matches the baseline flag and "overridden"
+ * once the user diverges from it — the baseline is the skill's own default
+ * context. `null` (every other node type) renders no tags.
  */
 @Composable
 fun NodeContextConfigSection(
@@ -61,6 +66,7 @@ fun NodeContextConfigSection(
     onLongTermMemoryChange: (Boolean) -> Unit,
     onToolResultsChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    inheritedBaseline: NodeContextConfig? = null,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
@@ -83,6 +89,7 @@ fun NodeContextConfigSection(
             label = stringResource(R.string.orchestrator_context_original_task_label),
             hint = stringResource(R.string.orchestrator_context_original_task_hint),
             onCheckedChange = onOriginalTaskChange,
+            inheritedValue = inheritedBaseline?.originalTask,
         )
         ContextFlagRow(
             checked = chatHistory,
@@ -90,6 +97,7 @@ fun NodeContextConfigSection(
             label = stringResource(R.string.orchestrator_context_chat_history_label),
             hint = stringResource(R.string.orchestrator_context_chat_history_hint),
             onCheckedChange = onChatHistoryChange,
+            inheritedValue = inheritedBaseline?.chatHistory,
         )
         ContextFlagRow(
             checked = longTermMemory,
@@ -97,6 +105,7 @@ fun NodeContextConfigSection(
             label = stringResource(R.string.orchestrator_context_long_term_memory_label),
             hint = stringResource(R.string.orchestrator_context_long_term_memory_hint),
             onCheckedChange = onLongTermMemoryChange,
+            inheritedValue = inheritedBaseline?.longTermMemory,
         )
         ContextFlagRow(
             checked = toolResults,
@@ -104,6 +113,7 @@ fun NodeContextConfigSection(
             label = stringResource(R.string.orchestrator_context_tool_results_label),
             hint = stringResource(R.string.orchestrator_context_tool_results_hint),
             onCheckedChange = onToolResultsChange,
+            inheritedValue = inheritedBaseline?.toolResults,
         )
 
         Surface(
@@ -141,6 +151,9 @@ fun NodeContextConfigSection(
  * @param hint Subtitle explaining what the flag controls.
  * @param onCheckedChange Invoked with the new value on toggle. Pass `null`
  * for read-only rows; the click target then becomes inert.
+ * @param inheritedValue When non-null, the row shows an "inherited" tag while
+ * [checked] equals this baseline value and an "overridden" tag otherwise. `null`
+ * renders no tag.
  */
 @Composable
 private fun ContextFlagRow(
@@ -149,6 +162,7 @@ private fun ContextFlagRow(
     label: String,
     hint: String,
     onCheckedChange: ((Boolean) -> Unit)?,
+    inheritedValue: Boolean? = null,
 ) {
     val rowModifier = if (onCheckedChange != null && enabled) {
         Modifier
@@ -177,11 +191,26 @@ private fun ContextFlagRow(
             enabled = enabled,
         )
         Column(modifier = Modifier.padding(start = KnotworkTheme.spacing.sp1)) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                )
+                if (inheritedValue != null) {
+                    val tagRes = if (checked == inheritedValue) {
+                        R.string.orchestrator_context_inherited_tag
+                    } else {
+                        R.string.orchestrator_context_overridden_tag
+                    }
+                    Text(
+                        text = stringResource(tagRes),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = KnotworkTheme.spacing.sp1),
+                    )
+                }
+            }
             Text(
                 text = hint,
                 style = MaterialTheme.typography.labelSmall,

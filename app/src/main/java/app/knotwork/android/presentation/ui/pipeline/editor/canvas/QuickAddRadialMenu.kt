@@ -220,6 +220,7 @@ private fun quickAddShortLabel(type: CatalogNodeType): String = when (type) {
     CatalogNodeType.EVALUATION -> "Evaluate"
     CatalogNodeType.SUMMARY -> "Summary"
     CatalogNodeType.PIPELINE -> "Pipeline"
+    CatalogNodeType.SKILL -> "Skill"
 }
 
 private const val SCRIM_ALPHA = 0.5f

@@ -5,6 +5,7 @@ import app.knotwork.design.components.pipelineeditor.LocalModelOption
 import app.knotwork.design.components.pipelineeditor.NodeConfig
 import app.knotwork.design.components.pipelineeditor.NodeConfigSheet
 import app.knotwork.design.components.pipelineeditor.PipelineTargetOption
+import app.knotwork.design.components.pipelineeditor.SkillOption
 
 /**
  * Thin adapter around the catalog [NodeConfigSheet] that the pipeline editor uses to
@@ -38,6 +39,7 @@ internal fun NodeConfigSheetHost(
     onPickFromLibrary: (category: String, currentPrompt: String, apply: (String) -> Unit) -> Unit,
     onSavePreset: (category: String, currentPrompt: String) -> Unit,
     availablePipelines: List<PipelineTargetOption> = emptyList(),
+    availableSkills: List<SkillOption> = emptyList(),
     extraSection: (@Composable () -> Unit)? = null,
 ) {
     NodeConfigSheet(
@@ -49,6 +51,7 @@ internal fun NodeConfigSheetHost(
         availableToolIds = availableToolIds,
         availableModels = availableModels,
         availablePipelines = availablePipelines,
+        availableSkills = availableSkills,
         onPickFromLibrary = onPickFromLibrary,
         onSavePreset = onSavePreset,
         extraSection = extraSection,

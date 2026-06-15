@@ -148,7 +148,7 @@ class PipelineGraphContentHashTest {
     @Test
     fun `contentHash enumeration tracks every model field`() {
         val hashedNodeFields = setOf(
-            "id", "type", "label", "toolName", "targetPipelineId", "modelPath", "conditionComplexity",
+            "id", "type", "label", "toolName", "targetPipelineId", "skillId", "modelPath", "conditionComplexity",
             "conditionKeywords", "conditionPrompt", "systemPrompt", "cloudProvider",
             "clarificationTimeoutMs", "contextConfig", "configJson",
         )

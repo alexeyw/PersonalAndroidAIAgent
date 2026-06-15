@@ -52,4 +52,7 @@ enum class NodeType {
 
     /** Runs another saved pipeline as a nested sub-call (composition). */
     PIPELINE,
+
+    /** Runs a reusable skill (fixed instruction + tool allowlist) as an inference step. */
+    SKILL,
 }

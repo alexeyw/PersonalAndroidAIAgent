@@ -178,7 +178,10 @@ This file maps the contents of the main application package.
       - `OutputNodeExecutor.kt` - Terminal executor; optionally formats upstream text via the local model before persisting the final agent response.
       - `SummaryNodeExecutor.kt` - Executor for `SUMMARY` nodes; synthesises upstream subtask results into a coherent summary.
       - `SystemNodeExecutor.kt` - Shared system-prompt-driven executor for `INTENT_ROUTER`, `DECOMPOSITION`, and `EVALUATION` nodes.
-      - `ToolNodeExecutor.kt` - Executor for `TOOL` nodes; dispatches tool calls with the Human-in-the-Loop approval gate.
+      - `ToolNodeExecutor.kt` - Executor for `TOOL` nodes; resolves which tool to run (explicit or LLM auto-select) then hands the call to the shared `ToolInvocationGate`.
+      - `ToolInvocationGate.kt` - Shared `@Singleton` Human-in-the-Loop tool-dispatch gate (risk lookup → destructive-block → approval/park → execute → observation) used by both `ToolNodeExecutor` and `SkillNodeExecutor`; owns the per-session approval-deferred map and the `resumeWithApproval`/`pendingApprovalFor` reattach surface.
+      - `ToolCallParser.kt` - Shared lenient parser that recovers a `{tool, arguments}` tool call from free-form LLM output (fenced/embedded/bare JSON); used by `ToolNodeExecutor` and `SkillNodeExecutor`.
+      - `SkillNodeExecutor.kt` - Executor for `NodeType.SKILL`; loads the skill, renders its instruction via `PromptTemplateEngine` with `$TOOLS` scoped to the skill's allowlist, runs inference by delegating to `LiteRtNodeExecutor`/`CloudLlmNodeExecutor` (engine chosen by `cloudProvider`), and enforces the allowlist at executor level before dispatching any tool call through `ToolInvocationGate`.
       - `IfConditionNodeExecutor.kt` - Executor for `IF_CONDITION` branching nodes; evaluates the boolean condition and routes downstream.
       - `QueueProcessorNodeExecutor.kt` - Pass-through executor for the `QUEUE_PROCESSOR` routing marker consumed by `GraphExecutionEngine`.
       - `ClarificationNodeExecutor.kt` - Executor for `NodeType.CLARIFICATION` that asks the local LLM to generate a question/options JSON, suspends on `ClarificationRepository.requestAnswer`, and forwards the user's reply downstream.

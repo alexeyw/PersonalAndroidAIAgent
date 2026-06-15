@@ -17,6 +17,7 @@ import app.knotwork.android.domain.models.PipelineValidationException
 import app.knotwork.android.domain.models.PresetCategory
 import app.knotwork.android.domain.models.PromptPreset
 import app.knotwork.android.domain.models.PromptTemplate
+import app.knotwork.android.domain.models.Skill
 import app.knotwork.android.domain.pipelineio.PipelineJsonSerializer
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
 import app.knotwork.android.domain.prompt.PromptVariableProvider
@@ -24,6 +25,7 @@ import app.knotwork.android.domain.repositories.ApiKeyRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.PromptPresetRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.repositories.SkillRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.PipelineCompositionValidator
 import app.knotwork.android.domain.services.findDependentPipelines
@@ -50,6 +52,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -94,6 +97,7 @@ class OrchestratorViewModel @Inject constructor(
     private val promptPresetRepository: PromptPresetRepository,
     private val compositionValidator: PipelineCompositionValidator,
     private val promptVariableProviders: Set<@JvmSuppressWildcards PromptVariableProvider>,
+    private val skillRepository: SkillRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -789,6 +793,16 @@ class OrchestratorViewModel @Inject constructor(
             UiText.of(R.string.errors_orchestrator_validation_pipeline_cycle, err.pipelineChain.joinToString(" → "))
         is PipelineValidationError.PipelineNestingTooDeep ->
             UiText.of(R.string.errors_orchestrator_validation_pipeline_nesting_too_deep, err.limit)
+        is PipelineValidationError.MissingSkill -> {
+            val name = _uiState.value.currentPipeline.nodes
+                .find { it.id == err.nodeId }?.label ?: err.nodeId
+            UiText.of(R.string.errors_orchestrator_validation_missing_skill, name)
+        }
+        is PipelineValidationError.SkillNotFound -> {
+            val name = _uiState.value.currentPipeline.nodes
+                .find { it.id == err.nodeId }?.label ?: err.nodeId
+            UiText.of(R.string.errors_orchestrator_validation_skill_not_found, name)
+        }
     }
 
     /**
@@ -938,6 +952,24 @@ class OrchestratorViewModel @Inject constructor(
             Timber.w(e, "Failed to classify pipeline targets for %s", graph.id)
             emptyList()
         }
+    }
+
+    /**
+     * Loads the full skill library (bundled + user) for the SKILL-node picker.
+     * The screen maps the returned domain [Skill]s to the catalog `SkillOption`
+     * (resolving the localized allowlist summary), so the catalog stays free of
+     * skill-storage knowledge. Failures degrade to an empty list (the picker
+     * then shows its empty-state) rather than crashing the sheet.
+     *
+     * @return every skill, newest first; empty on failure.
+     */
+    suspend fun loadSkills(): List<Skill> = try {
+        skillRepository.getAllSkills().first()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Timber.w(e, "Failed to load skills for the SKILL node picker")
+        emptyList()
     }
 
     fun deletePipeline(pipelineId: String) {

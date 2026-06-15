@@ -17,8 +17,10 @@ import app.knotwork.android.domain.engine.executors.NodeExecutorFactory
 import app.knotwork.android.domain.engine.executors.OutputNodeExecutor
 import app.knotwork.android.domain.engine.executors.PipelineNodeExecutor
 import app.knotwork.android.domain.engine.executors.QueueProcessorNodeExecutor
+import app.knotwork.android.domain.engine.executors.SkillNodeExecutor
 import app.knotwork.android.domain.engine.executors.SummaryNodeExecutor
 import app.knotwork.android.domain.engine.executors.SystemNodeExecutor
+import app.knotwork.android.domain.engine.executors.ToolInvocationGate
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTool
@@ -29,7 +31,9 @@ import app.knotwork.android.domain.models.ConnectionModel
 import app.knotwork.android.domain.models.ConsoleEventType
 import app.knotwork.android.domain.models.MemoryChunk
 import app.knotwork.android.domain.models.NodeContextConfig
+import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
+import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRunStatus
@@ -114,6 +118,10 @@ class GraphExecutionEngineTest {
     private lateinit var promptTemplateEngine: PromptTemplateEngine
     private var promptVariableProviders: Set<PromptVariableProvider> = emptySet()
 
+    // Stubbable in tests that route a SKILL node through the engine; the real
+    // SkillNodeExecutor is covered by SkillNodeExecutorTest.
+    private lateinit var skillNodeExecutor: SkillNodeExecutor
+
     private val sessionId = "test-session"
 
     @Before
@@ -166,10 +174,13 @@ class GraphExecutionEngineTest {
             llmEngine,
             loadModelUseCase,
             toolRepository,
-            settingsRepository,
-            approvalNotifier,
-            chatRepository,
-            pendingInteractionRepository,
+            ToolInvocationGate(
+                toolRepository,
+                settingsRepository,
+                approvalNotifier,
+                chatRepository,
+                pendingInteractionRepository,
+            ),
         )
 
         val liteRtNodeExecutor = LiteRtNodeExecutor(
@@ -222,11 +233,14 @@ class GraphExecutionEngineTest {
             Provider { engine },
         )
 
+        skillNodeExecutor = mockk(relaxed = true)
+
         val nodeExecutorFactory = NodeExecutorFactory(
             inputNodeExecutor, outputNodeExecutor, ifConditionNodeExecutor,
             toolNodeExecutor, liteRtNodeExecutor, cloudLlmNodeExecutor,
             systemNodeExecutor, queueProcessorNodeExecutor, summaryNodeExecutor,
             clarificationNodeExecutor, pipelineNodeExecutor,
+            skillNodeExecutor,
         )
 
         promptTemplateEngine = PromptTemplateEngine()
@@ -468,6 +482,34 @@ class GraphExecutionEngineTest {
 
         val completedState = states.last() as AgentOrchestratorState.Completed
         assertEquals("LLM Response", completedState.finalResponse)
+    }
+
+    @Test
+    fun `SKILL node output is forwarded to OUTPUT`() = runTest {
+        val graph = PipelineGraph(
+            id = "g-skill",
+            name = "Skill Graph",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("skill_1", NodeType.SKILL, 0f, 0f, skillId = "skill-1"),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "skill_1"),
+                ConnectionModel("c2", "skill_1", "output_1"),
+            ),
+        )
+        every {
+            skillNodeExecutor.execute(any(), any(), any(), any(), any(), any())
+        } returns flowOf(
+            NodeOutput.State(AgentOrchestratorState.Thinking("…")),
+            NodeOutput.Result(NodeExecutionResult(outputText = "Translated text")),
+        )
+
+        val states = engine(sessionId, "Перевод", graph).toList()
+
+        val completed = states.last() as AgentOrchestratorState.Completed
+        assertEquals("Translated text", completed.finalResponse)
     }
 
     /**
@@ -1097,10 +1139,13 @@ class GraphExecutionEngineTest {
                 llmEngine,
                 loadModelUseCase,
                 toolRepository,
-                settingsRepository,
-                approvalNotifier,
-                chatRepository,
-                pendingInteractionRepository,
+                ToolInvocationGate(
+                    toolRepository,
+                    settingsRepository,
+                    approvalNotifier,
+                    chatRepository,
+                    pendingInteractionRepository,
+                ),
             ),
             LiteRtNodeExecutor(
                 llmEngine,
@@ -1137,6 +1182,7 @@ class GraphExecutionEngineTest {
                 runTraceRepository,
                 Provider { engine },
             ),
+            mockk<SkillNodeExecutor>(relaxed = true),
         )
         val engineWithProvider = GraphExecutionEngine(
             realFactory,
@@ -1144,10 +1190,13 @@ class GraphExecutionEngineTest {
                 llmEngine,
                 loadModelUseCase,
                 toolRepository,
-                settingsRepository,
-                approvalNotifier,
-                chatRepository,
-                pendingInteractionRepository,
+                ToolInvocationGate(
+                    toolRepository,
+                    settingsRepository,
+                    approvalNotifier,
+                    chatRepository,
+                    pendingInteractionRepository,
+                ),
             ),
             chatRepository,
             settingsRepository,
@@ -1288,10 +1337,13 @@ class GraphExecutionEngineTest {
                     llmEngine,
                     loadModelUseCase,
                     toolRepository,
-                    settingsRepository,
-                    approvalNotifier,
-                    chatRepository,
-                    pendingInteractionRepository,
+                    ToolInvocationGate(
+                        toolRepository,
+                        settingsRepository,
+                        approvalNotifier,
+                        chatRepository,
+                        pendingInteractionRepository,
+                    ),
                 ),
                 LiteRtNodeExecutor(
                     llmEngine,
@@ -1328,6 +1380,7 @@ class GraphExecutionEngineTest {
                     runTraceRepository,
                     Provider { engine },
                 ),
+                mockk<SkillNodeExecutor>(relaxed = true),
             )
             val engineWithRealRepo = GraphExecutionEngine(
                 realFactory,
@@ -1335,10 +1388,13 @@ class GraphExecutionEngineTest {
                     llmEngine,
                     loadModelUseCase,
                     toolRepository,
-                    settingsRepository,
-                    approvalNotifier,
-                    chatRepository,
-                    pendingInteractionRepository,
+                    ToolInvocationGate(
+                        toolRepository,
+                        settingsRepository,
+                        approvalNotifier,
+                        chatRepository,
+                        pendingInteractionRepository,
+                    ),
                 ),
                 chatRepository,
                 settingsRepository,

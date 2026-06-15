@@ -108,4 +108,22 @@ sealed class PipelineValidationError {
      * @property limit The configured maximum nesting depth.
      */
     data class PipelineNestingTooDeep(val pipelineChain: List<String>, val limit: Int) : PipelineValidationError()
+
+    /**
+     * Error indicating a [NodeType.SKILL] node has no skill selected (its
+     * [NodeModel.skillId] is `null` or blank). Raised by [PipelineGraph.validate].
+     *
+     * @property nodeId The id of the SKILL node with no skill, for deep-link
+     * from the editor's validation bar.
+     */
+    data class MissingSkill(val nodeId: String) : PipelineValidationError()
+
+    /**
+     * Error indicating a [NodeType.SKILL] node references a skill id that does
+     * not resolve to any stored skill (deleted or never existed).
+     *
+     * @property nodeId The id of the referencing SKILL node, for deep-link.
+     * @property skillId The unresolved skill id that was referenced.
+     */
+    data class SkillNotFound(val nodeId: String, val skillId: String) : PipelineValidationError()
 }

@@ -216,6 +216,9 @@ private fun severityOf(error: PipelineValidationError): Severity = when (error) 
     is PipelineValidationError.TargetPipelineNotFound,
     is PipelineValidationError.PipelineCycle,
     is PipelineValidationError.PipelineNestingTooDeep,
+    // A SKILL node with no / dangling skill has no instruction to run.
+    is PipelineValidationError.MissingSkill,
+    is PipelineValidationError.SkillNotFound,
     -> Severity.Blocker
     PipelineValidationError.DisconnectedInput,
     PipelineValidationError.DisconnectedOutput,
@@ -246,5 +249,8 @@ private fun isAutoFixable(error: PipelineValidationError): Boolean = when (error
     is PipelineValidationError.TargetPipelineNotFound,
     is PipelineValidationError.PipelineCycle,
     is PipelineValidationError.PipelineNestingTooDeep,
+    // A SKILL node needs the user to pick a valid skill — no auto-fix recipe.
+    is PipelineValidationError.MissingSkill,
+    is PipelineValidationError.SkillNotFound,
     -> false
 }

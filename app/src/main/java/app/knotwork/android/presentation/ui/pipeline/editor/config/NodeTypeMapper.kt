@@ -35,6 +35,7 @@ internal object NodeTypeMapper {
         DomainNodeType.EVALUATION -> CatalogNodeType.EVALUATION
         DomainNodeType.SUMMARY -> CatalogNodeType.SUMMARY
         DomainNodeType.PIPELINE -> CatalogNodeType.PIPELINE
+        DomainNodeType.SKILL -> CatalogNodeType.SKILL
     }
 
     /**
@@ -56,6 +57,7 @@ internal object NodeTypeMapper {
         CatalogNodeType.EVALUATION -> DomainNodeType.EVALUATION
         CatalogNodeType.SUMMARY -> DomainNodeType.SUMMARY
         CatalogNodeType.PIPELINE -> DomainNodeType.PIPELINE
+        CatalogNodeType.SKILL -> DomainNodeType.SKILL
     }
 }
 

@@ -25,4 +25,5 @@ fun NodeType.glyph(): ImageVector = when (this) {
     NodeType.EVALUATION -> AppIcons.NodeEval
     NodeType.SUMMARY -> AppIcons.NodeSummary
     NodeType.PIPELINE -> AppIcons.NodePipeline
+    NodeType.SKILL -> AppIcons.Skill
 }
