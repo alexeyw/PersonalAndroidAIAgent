@@ -2,7 +2,9 @@ package app.knotwork.android.presentation.ui.orchestrator
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
@@ -24,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -48,6 +51,7 @@ import app.knotwork.design.screens.pipelines.PipelineLibraryVisualState
 import app.knotwork.design.screens.pipelines.PipelineSecondaryLineKind
 import app.knotwork.design.screens.pipelines.isFabHidden
 import app.knotwork.design.theme.KnotworkTheme
+import app.knotwork.design.tokens.KnotworkTextStyles
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -315,21 +319,75 @@ fun PipelineLibraryScreen(
         )
     }
     deleteTarget?.let { target ->
+        // Pipelines that run `target` through a PIPELINE node. Deleting `target`
+        // leaves each with a dangling reference — surfaced here as an explicit
+        // warning (and, on confirm, as a normal deep-linkable validation error;
+        // there is no silent cascade delete).
+        val dependents = remember(target.id, uiState.savedPipelines) {
+            viewModel.dependentsOf(pipelineId = target.id)
+        }
+        val hasDependents = dependents.isNotEmpty()
         AlertDialog(
+            modifier = Modifier.testTag(tag = DELETE_DIALOG_TEST_TAG),
             onDismissRequest = { deleteTarget = null },
             title = { Text(stringResource(R.string.orchestrator_library_delete_pipeline_title)) },
             text = {
-                Text(stringResource(R.string.orchestrator_library_delete_confirm, target.name))
+                if (hasDependents) {
+                    Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2)) {
+                        Text(
+                            text = pluralStringResource(
+                                R.plurals.orchestrator_library_delete_dependents_warning,
+                                dependents.size,
+                                dependents.size,
+                            ),
+                            modifier = Modifier.testTag(tag = DELETE_DEPENDENTS_TEST_TAG),
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.orchestrator_library_delete_dependents_header,
+                                dependents.size,
+                            ),
+                            style = KnotworkTextStyles.LabelMd,
+                            color = KnotworkTheme.extended.signalError,
+                        )
+                        dependents.forEach { dependent ->
+                            Text(text = dependent.name.ifBlank { "untitled" })
+                        }
+                    }
+                } else {
+                    Text(stringResource(R.string.orchestrator_library_delete_confirm, target.name))
+                }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    viewModel.deletePipeline(pipelineId = target.id)
-                    deleteTarget = null
-                }) { Text(stringResource(R.string.common_delete)) }
+                TextButton(
+                    modifier = Modifier.testTag(tag = DELETE_CONFIRM_TEST_TAG),
+                    onClick = {
+                        viewModel.deletePipeline(pipelineId = target.id)
+                        deleteTarget = null
+                    },
+                ) {
+                    Text(
+                        stringResource(
+                            if (hasDependents) {
+                                R.string.orchestrator_library_delete_anyway
+                            } else {
+                                R.string.common_delete
+                            },
+                        ),
+                    )
+                }
             },
             dismissButton = {
                 TextButton(onClick = { deleteTarget = null }) {
-                    Text(stringResource(R.string.common_cancel))
+                    Text(
+                        stringResource(
+                            if (hasDependents) {
+                                R.string.orchestrator_library_delete_keep
+                            } else {
+                                R.string.common_cancel
+                            },
+                        ),
+                    )
                 }
             },
         )
@@ -449,6 +507,15 @@ private const val LEADING_TINT_PACKED: Long = 0xFFC48225
 
 /** TestTag applied to the screen root so Espresso / Compose tests can anchor. */
 internal const val LIBRARY_ROOT_TEST_TAG = "pipeline_library_root"
+
+/** TestTag on the delete-pipeline dialog root. */
+internal const val DELETE_DIALOG_TEST_TAG = "pipeline_delete_dialog"
+
+/** TestTag on the dependent-pipelines warning text (present only when dependents exist). */
+internal const val DELETE_DEPENDENTS_TEST_TAG = "pipeline_delete_dependents_warning"
+
+/** TestTag on the delete-dialog confirm button. */
+internal const val DELETE_CONFIRM_TEST_TAG = "pipeline_delete_confirm"
 
 /** Snackbar message shown when the user taps "Export JSON" — per-id export lands post-v0.1. */
 private const val EXPORT_COMING_SOON_MESSAGE = "Per-pipeline export ships in a follow-up."

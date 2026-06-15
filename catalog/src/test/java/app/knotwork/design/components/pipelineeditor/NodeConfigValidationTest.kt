@@ -355,4 +355,24 @@ class NodeConfigValidationTest {
 
         assertEquals(ValidationFailure.INVALID_JSON, errors[FieldId.SCHEMA_JSON])
     }
+
+    @Test
+    fun `given PipelineConfig with no target when validate then TARGET_PIPELINE_MISSING`() {
+        val errors = NodeConfigValidation.validate(
+            config = PipelineConfig(title = "run sub", targetPipelineId = ""),
+            peerTitles = noPeers,
+        )
+
+        assertEquals(ValidationFailure.TARGET_PIPELINE_MISSING, errors[FieldId.TARGET_PIPELINE_ID])
+    }
+
+    @Test
+    fun `given PipelineConfig with a target when validate then no target error`() {
+        val errors = NodeConfigValidation.validate(
+            config = PipelineConfig(title = "run sub", targetPipelineId = "target-1"),
+            peerTitles = noPeers,
+        )
+
+        assertEquals(null, errors[FieldId.TARGET_PIPELINE_ID])
+    }
 }

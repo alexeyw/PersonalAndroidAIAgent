@@ -17,6 +17,9 @@ import app.knotwork.design.components.pipelineeditor.LiteRtConfig
 import app.knotwork.design.components.pipelineeditor.NodeConfig
 import app.knotwork.design.components.pipelineeditor.NodeConfigSheetBody
 import app.knotwork.design.components.pipelineeditor.OutputConfig
+import app.knotwork.design.components.pipelineeditor.PipelineConfig
+import app.knotwork.design.components.pipelineeditor.PipelineTargetDisabledReason
+import app.knotwork.design.components.pipelineeditor.PipelineTargetOption
 import app.knotwork.design.components.pipelineeditor.ToolConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -198,6 +201,104 @@ class PipelineEditorNodeConfigSheetTest {
         composeTestRule.waitForIdle()
 
         assertEquals(initial, saved)
+    }
+
+    @Test
+    fun pipelineForm_rendersTargetPickerWithPlaceholder() {
+        val config: NodeConfig = PipelineConfig(title = "Run sub")
+        composeTestRule.setContent {
+            MaterialTheme {
+                NodeConfigSheetBody(
+                    config = config,
+                    errors = emptyMap(),
+                    onChange = {},
+                    onCancel = {},
+                    onSave = {},
+                    availablePipelines = listOf(
+                        PipelineTargetOption(id = "p1", name = "Lookup flow", selectable = true),
+                    ),
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithText(ctx.getString(KnotworkR.string.knotwork_node_field_target_pipeline))
+            .assertIsDisplayed()
+        composeTestRule
+            .onNodeWithText(ctx.getString(KnotworkR.string.knotwork_node_field_target_pipeline_none))
+            .assertIsDisplayed()
+    }
+
+    @Test
+    fun pipelineForm_selectingTarget_invokesOnChangeWithTargetId() {
+        var latest: NodeConfig? = null
+        composeTestRule.setContent {
+            var current by remember { mutableStateOf<NodeConfig>(PipelineConfig(title = "Run sub")) }
+            MaterialTheme {
+                NodeConfigSheetBody(
+                    config = current,
+                    errors = emptyMap(),
+                    onChange = {
+                        current = it
+                        latest = it
+                    },
+                    onCancel = {},
+                    onSave = {},
+                    availablePipelines = listOf(
+                        PipelineTargetOption(id = "p1", name = "Lookup flow", selectable = true),
+                    ),
+                )
+            }
+        }
+
+        // Open the dropdown (tap the read-only anchor showing the placeholder),
+        // then pick the only selectable row.
+        composeTestRule
+            .onNodeWithText(ctx.getString(KnotworkR.string.knotwork_node_field_target_pipeline_none))
+            .performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Lookup flow").performClick()
+        composeTestRule.waitForIdle()
+
+        val mutated = latest as? PipelineConfig
+        assertNotNull("expected onChange to fire with a PipelineConfig", mutated)
+        assertEquals("p1", mutated?.targetPipelineId)
+    }
+
+    @Test
+    fun pipelineForm_disabledCycleOption_showsReason() {
+        val config: NodeConfig = PipelineConfig(title = "Run sub")
+        composeTestRule.setContent {
+            MaterialTheme {
+                NodeConfigSheetBody(
+                    config = config,
+                    errors = emptyMap(),
+                    onChange = {},
+                    onCancel = {},
+                    onSave = {},
+                    availablePipelines = listOf(
+                        PipelineTargetOption(
+                            id = "p2",
+                            name = "Voice quick-reply",
+                            selectable = false,
+                            disabledReason = PipelineTargetDisabledReason.CYCLE,
+                            cycleCulprit = "Voice quick-reply",
+                        ),
+                    ),
+                )
+            }
+        }
+
+        composeTestRule
+            .onNodeWithText(ctx.getString(KnotworkR.string.knotwork_node_field_target_pipeline_none))
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        composeTestRule
+            .onNodeWithText(
+                ctx.getString(KnotworkR.string.knotwork_node_pipeline_picker_cycle, "Voice quick-reply"),
+            )
+            .assertIsDisplayed()
     }
 
     @Test

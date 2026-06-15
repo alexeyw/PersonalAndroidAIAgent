@@ -74,6 +74,7 @@ import app.knotwork.design.icons.imagevector.knotworkNodeInputIcon
 import app.knotwork.design.icons.imagevector.knotworkNodeIntentRouterIcon
 import app.knotwork.design.icons.imagevector.knotworkNodeLiteIcon
 import app.knotwork.design.icons.imagevector.knotworkNodeOutputIcon
+import app.knotwork.design.icons.imagevector.knotworkNodePipelineIcon
 import app.knotwork.design.icons.imagevector.knotworkNodeQueueIcon
 import app.knotwork.design.icons.imagevector.knotworkNodeSummaryIcon
 import app.knotwork.design.icons.imagevector.knotworkNodeToolIcon
@@ -165,6 +166,9 @@ object AppIcons {
 
     /** Pipeline `OUTPUT` node glyph. */
     val NodeOutput: ImageVector get() = knotworkNodeOutputIcon
+
+    /** Pipeline `PIPELINE` node glyph (nested sub-pipeline call). */
+    val NodePipeline: ImageVector get() = knotworkNodePipelineIcon
 
     /** Editor toolbar — auto-layout action. */
     val AutoLayout: ImageVector get() = knotworkAutoLayoutIcon

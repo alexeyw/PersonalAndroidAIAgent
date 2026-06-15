@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import app.knotwork.design.components.pipelineeditor.LocalModelOption
 import app.knotwork.design.components.pipelineeditor.NodeConfig
 import app.knotwork.design.components.pipelineeditor.NodeConfigSheet
+import app.knotwork.design.components.pipelineeditor.PipelineTargetOption
 
 /**
  * Thin adapter around the catalog [NodeConfigSheet] that the pipeline editor uses to
@@ -36,6 +37,7 @@ internal fun NodeConfigSheetHost(
     availableModels: List<LocalModelOption>,
     onPickFromLibrary: (category: String, currentPrompt: String, apply: (String) -> Unit) -> Unit,
     onSavePreset: (category: String, currentPrompt: String) -> Unit,
+    availablePipelines: List<PipelineTargetOption> = emptyList(),
     extraSection: (@Composable () -> Unit)? = null,
 ) {
     NodeConfigSheet(
@@ -46,6 +48,7 @@ internal fun NodeConfigSheetHost(
         onSave = onSave,
         availableToolIds = availableToolIds,
         availableModels = availableModels,
+        availablePipelines = availablePipelines,
         onPickFromLibrary = onPickFromLibrary,
         onSavePreset = onSavePreset,
         extraSection = extraSection,

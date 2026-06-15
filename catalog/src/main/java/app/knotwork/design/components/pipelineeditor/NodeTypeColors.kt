@@ -34,6 +34,7 @@ fun NodeType.headerTint(): Color {
         NodeType.QUEUE_PROCESSOR -> extended.nodeQueueProcessor
         NodeType.EVALUATION -> extended.nodeEvaluation
         NodeType.SUMMARY -> extended.nodeSummary
+        NodeType.PIPELINE -> extended.nodePipeline
     }
 }
 
@@ -86,4 +87,5 @@ fun NodeType.displayLabel(): String = when (this) {
     NodeType.QUEUE_PROCESSOR -> "QUEUE"
     NodeType.EVALUATION -> "EVAL"
     NodeType.SUMMARY -> "SUMMARY"
+    NodeType.PIPELINE -> "PIPELINE"
 }

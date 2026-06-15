@@ -327,3 +327,66 @@ data class SummaryConfig(
 ) : NodeConfig {
     override val type: NodeType get() = NodeType.SUMMARY
 }
+
+/**
+ * Why a candidate pipeline cannot be picked as a [PipelineConfig.targetPipelineId].
+ * Each reason maps to a distinct inline message because the user's remedy differs:
+ *
+ *  - [SELF] — pick a different pipeline.
+ *  - [CYCLE] — break the back-reference (the offending pipeline is named via
+ *    [PipelineTargetOption.cycleCulprit]).
+ *  - [DEPTH] — reduce the nesting depth (the ceiling is carried in
+ *    [PipelineTargetOption.depthLimit]).
+ */
+enum class PipelineTargetDisabledReason { SELF, CYCLE, DEPTH }
+
+/**
+ * One row in the [PipelineConfig] target picker. The app resolves the full
+ * catalogue of saved pipelines, classifies each against the pipeline being
+ * edited (reusing the domain composition validator), and hands the result
+ * down as a list of these options so the catalog stays free of any
+ * cross-pipeline reachability logic.
+ *
+ * @property id the candidate pipeline's stable id, written into
+ * [PipelineConfig.targetPipelineId] when picked.
+ * @property name the candidate pipeline's display name shown in the row.
+ * @property selectable `true` when the option may be chosen; `false` renders
+ * the row disabled with [disabledReason].
+ * @property disabledReason why the option is disabled; `null` when [selectable].
+ * @property cycleCulprit for [PipelineTargetDisabledReason.CYCLE], the display
+ * name of the pipeline that already calls the edited one (so the reason can
+ * name it). `null` for the other reasons.
+ * @property depthLimit for [PipelineTargetDisabledReason.DEPTH], the configured
+ * maximum nesting depth. `null` for the other reasons.
+ */
+data class PipelineTargetOption(
+    val id: String,
+    val name: String,
+    val selectable: Boolean = true,
+    val disabledReason: PipelineTargetDisabledReason? = null,
+    val cycleCulprit: String? = null,
+    val depthLimit: Int? = null,
+)
+
+/**
+ * Configuration for [NodeType.PIPELINE] — runs another saved pipeline as a
+ * nested sub-call (composition).
+ *
+ * @property title display title.
+ * @property description optional one-line note.
+ * @property targetPipelineId id of the pipeline this node runs. Blank means
+ * "no target chosen yet" — the validator surfaces [ValidationFailure.TARGET_PIPELINE_MISSING]
+ * and Save stays disabled until the user picks one.
+ * @property targetPipelineName resolved display name of [targetPipelineId],
+ * supplied by the app so the picker can show the current selection without the
+ * catalog resolving ids. `null` when no target is set or the id no longer
+ * resolves to a stored pipeline.
+ */
+data class PipelineConfig(
+    override val title: String,
+    override val description: String? = null,
+    val targetPipelineId: String = "",
+    val targetPipelineName: String? = null,
+) : NodeConfig {
+    override val type: NodeType get() = NodeType.PIPELINE
+}

@@ -7,8 +7,10 @@ import app.knotwork.design.components.pipelineeditor.CloudConfig
 import app.knotwork.design.components.pipelineeditor.CloudProvider
 import app.knotwork.design.components.pipelineeditor.IfConditionConfig
 import app.knotwork.design.components.pipelineeditor.LiteRtConfig
+import app.knotwork.design.components.pipelineeditor.PipelineConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import app.knotwork.design.components.pipelineeditor.NodeType as CatalogNodeType
@@ -176,5 +178,36 @@ class NodeConfigCodecTest {
         assertNotNull(patched.configJson)
         assertTrue(patched.configJson!!.contains("\"title\":\"New\""))
         assertEquals("sp", patched.systemPrompt)
+    }
+
+    @Test
+    fun `given Pipeline config when encode-then-decode then target id preserved`() {
+        val source = node(NodeType.PIPELINE, "Run sub")
+        val config = PipelineConfig(title = "Run sub", targetPipelineId = "target-123")
+        val applied = source.copy(configJson = NodeConfigCodec.encode(config))
+        val decoded = NodeConfigCodec.decode(applied) as PipelineConfig
+        assertEquals("Run sub", decoded.title)
+        assertEquals("target-123", decoded.targetPipelineId)
+    }
+
+    @Test
+    fun `given Pipeline config when apply then targetPipelineId is written onto the NodeModel`() {
+        val src = node(NodeType.PIPELINE, "Run sub")
+        val patched = NodeConfigCodec.apply(src, PipelineConfig(title = "Run sub", targetPipelineId = "target-123"))
+        assertEquals("target-123", patched.targetPipelineId)
+    }
+
+    @Test
+    fun `given Pipeline config with blank target when apply then targetPipelineId is null`() {
+        val src = node(NodeType.PIPELINE, "Run sub").copy(targetPipelineId = "stale")
+        val patched = NodeConfigCodec.apply(src, PipelineConfig(title = "Run sub", targetPipelineId = ""))
+        assertNull(patched.targetPipelineId)
+    }
+
+    @Test
+    fun `given pre-existing PIPELINE node when decode then derives target from the domain field`() {
+        val src = node(NodeType.PIPELINE, "Run sub").copy(targetPipelineId = "legacy-target")
+        val decoded = NodeConfigCodec.decode(src) as PipelineConfig
+        assertEquals("legacy-target", decoded.targetPipelineId)
     }
 }
