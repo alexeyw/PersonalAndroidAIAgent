@@ -15,6 +15,7 @@
         <item quantity="one">%1$d tool</item>
         <item quantity="other">%1$d tools</item>
     </plurals>
+    <string name="skills_menu_view">View</string>
     <string name="skills_menu_edit">Edit</string>
     <string name="skills_menu_duplicate">Duplicate</string>
     <string name="skills_menu_delete">Delete</string>
@@ -27,9 +28,11 @@
     <!-- Skill Library — full-screen editor -->
     <string name="skills_editor_title_new">New skill</string>
     <string name="skills_editor_title_edit">Edit skill</string>
+    <string name="skills_editor_title_view">View skill</string>
     <string name="skills_editor_subtitle_draft">draft</string>
     <string name="skills_editor_subtitle_mine">mine</string>
     <string name="skills_editor_subtitle_duplicated">editable copy · from bundled</string>
+    <string name="skills_editor_subtitle_readonly">bundled · read-only</string>
     <string name="skills_editor_close_cd">Close</string>
     <string name="skills_editor_required">required</string>
     <string name="skills_editor_skill_kicker">SKILL</string>

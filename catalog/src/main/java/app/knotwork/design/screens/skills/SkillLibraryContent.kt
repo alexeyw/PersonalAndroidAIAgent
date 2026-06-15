@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,7 +22,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -56,6 +57,9 @@ private val FabIconSize = 24.dp
 /** Side length of the per-row overflow icon button. */
 private val RowMenuButton = 36.dp
 
+/** Height of the active-tab underline indicator. */
+private val TabIndicatorHeight = 2.dp
+
 /**
  * Stateless Knotwork Skill Library surface — a 2-tab (Bundled / Mine) list of
  * reusable skills with per-row overflow actions and a "New skill" FAB.
@@ -87,20 +91,18 @@ fun SkillLibraryContent(
             if (state.visualState != SkillLibraryVisualState.Loading &&
                 state.visualState != SkillLibraryVisualState.Error
             ) {
-                ExtendedFloatingActionButton(
+                FloatingActionButton(
                     onClick = callbacks.onNewSkill,
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = KnotworkTheme.shapes.full,
-                    icon = {
-                        Icon(
-                            imageVector = AppIcons.Add,
-                            contentDescription = null,
-                            modifier = Modifier.size(FabIconSize),
-                        )
-                    },
-                    text = { Text(text = strings.fab, style = KnotworkTextStyles.LabelLg) },
-                )
+                    shape = KnotworkTheme.shapes.md,
+                ) {
+                    Icon(
+                        imageVector = AppIcons.Add,
+                        contentDescription = strings.fab,
+                        modifier = Modifier.size(FabIconSize),
+                    )
+                }
             }
         },
     ) { padding ->
@@ -149,15 +151,9 @@ private fun SkillsTopBar(
                 )
             }
         },
-        actions = {
-            IconButton(onClick = callbacks.onSearch) {
-                Icon(
-                    imageVector = AppIcons.Search,
-                    contentDescription = strings.searchCd,
-                    tint = MaterialTheme.colorScheme.onSurface,
-                )
-            }
-        },
+        // Actions slot intentionally empty — the library is browsed by the
+        // Bundled / Mine tabs, not a text search (matches the Prompt library).
+        actions = {},
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
@@ -194,13 +190,12 @@ private fun SkillsTabs(state: SkillLibraryViewState, strings: SkillLibraryString
 private fun SkillTab(label: String, count: Int, active: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val accent = MaterialTheme.colorScheme.primary
     val tint = if (active) accent else KnotworkTheme.extended.onSurfaceMuted
-    Box(
-        modifier = modifier
-            .clickable(onClick = onClick, role = Role.Tab)
-            .padding(vertical = KnotworkTheme.spacing.sp3),
-        contentAlignment = Alignment.Center,
+    Column(
+        modifier = modifier.clickable(onClick = onClick, role = Role.Tab),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Row(
+            modifier = Modifier.padding(vertical = KnotworkTheme.spacing.sp3),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
         ) {
@@ -224,16 +219,15 @@ private fun SkillTab(label: String, count: Int, active: Boolean, onClick: () -> 
                 Text(text = count.toString(), style = KnotworkTextStyles.MonoSm, color = tint)
             }
         }
-        if (active) {
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(horizontal = KnotworkTheme.spacing.sp6)
-                    .size(width = 1.dp, height = 2.dp)
-                    .background(accent),
-            )
-        }
+        // Full-width 2 dp indicator flush to the bottom of the tab — transparent
+        // when inactive so the row height never jumps. The sp3 bottom padding
+        // above keeps a clear gap between the label and this line.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(TabIndicatorHeight)
+                .background(if (active) accent else androidx.compose.ui.graphics.Color.Transparent),
+        )
     }
 }
 
@@ -291,6 +285,7 @@ private fun SkillRow(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .clickable(role = Role.Button) { callbacks.onRowClick(row.id) }
                     .padding(
                         horizontal = KnotworkTheme.spacing.sp4,
                         vertical = KnotworkTheme.spacing.sp3,
@@ -360,8 +355,14 @@ private fun SkillRowMenu(
         onDismissRequest = callbacks.onRowMenuDismiss,
         containerColor = KnotworkTheme.extended.surface1,
     ) {
-        // Bundled rows are read-only: only Duplicate is offered.
-        if (!row.isBundled) {
+        // Bundled rows are read-only: View (open the read-only viewer) +
+        // Duplicate. User rows: Edit + Duplicate + Delete.
+        if (row.isBundled) {
+            SkillMenuItem(label = strings.menuView, icon = AppIcons.Eye) {
+                callbacks.onRowMenuDismiss()
+                callbacks.onViewSkill(row.id)
+            }
+        } else {
             SkillMenuItem(label = strings.menuEdit, icon = AppIcons.Edit) {
                 callbacks.onRowMenuDismiss()
                 callbacks.onEditSkill(row.id)
@@ -512,6 +513,7 @@ data class SkillLibraryStrings(
     val toolsAll: String = "All tools",
     val toolsNone: String = "No tools",
     val toolsCountFormat: String = "%1\$d tools",
+    val menuView: String = "View",
     val menuEdit: String = "Edit",
     val menuDuplicate: String = "Duplicate",
     val menuDelete: String = "Delete",

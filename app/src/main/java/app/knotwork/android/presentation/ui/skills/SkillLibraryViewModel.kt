@@ -126,6 +126,7 @@ class SkillLibraryViewModel @Inject constructor(
                     id = null,
                     createdAt = 0L,
                     fromBundled = false,
+                    readOnly = false,
                     name = "",
                     description = "",
                     instruction = "",
@@ -139,11 +140,31 @@ class SkillLibraryViewModel @Inject constructor(
 
     /**
      * Opens the editor for the user skill with [id]. No-op for a bundled skill
-     * — bundled rows expose Duplicate, not Edit.
+     * — bundled rows expose View / Duplicate, not Edit.
      */
     fun openEditSkill(id: String) {
         val source = _uiState.value.userSkills.firstOrNull { it.id == id } ?: return
         _uiState.update { it.copy(openMenuSkillId = null, editor = source.toDraft(fromBundled = false)) }
+    }
+
+    /**
+     * Opens the editor as a **read-only viewer** for the skill with [id]
+     * (bundled or user) so its instruction, tools and context can be inspected
+     * without mutation.
+     */
+    fun openViewSkill(id: String) {
+        val source = (_uiState.value.bundledSkills + _uiState.value.userSkills).firstOrNull { it.id == id } ?: return
+        _uiState.update {
+            it.copy(openMenuSkillId = null, editor = source.toDraft(fromBundled = false, readOnly = true))
+        }
+    }
+
+    /**
+     * Whole-row tap: a bundled skill opens read-only (View), a user skill opens
+     * the editor (Edit).
+     */
+    fun onRowClick(id: String) {
+        if (_uiState.value.bundledSkills.any { it.id == id }) openViewSkill(id) else openEditSkill(id)
     }
 
     /** Closes the editor without persisting. */
@@ -283,10 +304,11 @@ class SkillLibraryViewModel @Inject constructor(
     // ── Mapping helpers ───────────────────────────────────────────────────────
 
     /** Builds an editor draft from an existing [Skill]. */
-    private fun Skill.toDraft(fromBundled: Boolean): SkillEditorDraft = SkillEditorDraft(
+    private fun Skill.toDraft(fromBundled: Boolean, readOnly: Boolean = false): SkillEditorDraft = SkillEditorDraft(
         id = id,
         createdAt = createdAt,
         fromBundled = fromBundled,
+        readOnly = readOnly,
         name = name,
         description = description,
         instruction = instruction,

@@ -123,6 +123,9 @@ data class SkillContextFlagUi(val key: String, val label: String, val descriptio
  * @property nameError `true` highlights the Name field as invalid.
  * @property instructionError `true` highlights the Instruction field as invalid.
  * @property canSave whether Save is enabled.
+ * @property readOnly `true` renders the editor as a read-only viewer (no Save /
+ *   Delete, non-editable fields, non-interactive controls) — used to inspect a
+ *   bundled skill the user cannot mutate.
  */
 data class SkillEditorUi(
     val id: String?,
@@ -138,6 +141,7 @@ data class SkillEditorUi(
     val nameError: Boolean,
     val instructionError: Boolean,
     val canSave: Boolean,
+    val readOnly: Boolean = false,
 ) {
     /** Number of tools currently selected (the `N` in `N/total`). */
     val selectedToolCount: Int get() = tools.count { it.selected }
@@ -191,8 +195,10 @@ class SkillLibraryCallbacks(
     val onSearch: () -> Unit = {},
     val onTabSelected: (SkillLibraryTab) -> Unit = {},
     val onNewSkill: () -> Unit = {},
+    val onRowClick: (String) -> Unit = {},
     val onRowMenuOpen: (String) -> Unit = {},
     val onRowMenuDismiss: () -> Unit = {},
+    val onViewSkill: (String) -> Unit = {},
     val onEditSkill: (String) -> Unit = {},
     val onDuplicateSkill: (String) -> Unit = {},
     val onDeleteSkill: (String) -> Unit = {},

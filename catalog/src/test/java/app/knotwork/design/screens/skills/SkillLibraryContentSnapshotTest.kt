@@ -99,6 +99,11 @@ class SkillLibraryContentSnapshotTest {
         SkillEditorContent(state = SkillLibraryPreview.editorInvalid())
     }
 
+    @Test
+    fun editor_view_light() = snapshot(name = "editor_view", dark = false) {
+        SkillEditorContent(state = SkillLibraryPreview.editorView())
+    }
+
     // ── Delete dialog ────────────────────────────────────────────────────
 
     @Test

@@ -113,6 +113,7 @@ fun SkillDeleteDialogContent(
                     .fillMaxWidth()
                     .padding(top = KnotworkTheme.spacing.sp5),
                 horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 KnotworkTextButton(
                     text = if (hasDependents) strings.keep else strings.cancel,

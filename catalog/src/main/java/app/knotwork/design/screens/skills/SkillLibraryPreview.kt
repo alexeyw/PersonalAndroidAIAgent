@@ -174,6 +174,24 @@ object SkillLibraryPreview {
 
     fun editorInvalid(): SkillEditorUi = editorCreate().copy(nameError = true, instructionError = true)
 
+    fun editorView(): SkillEditorUi = SkillEditorUi(
+        id = "report_writer",
+        fromBundled = false,
+        name = "Report Writer",
+        description = "Draft a structured report and save it to a file.",
+        instruction = "You are a report writer. Draft a structured report, then save it with " +
+            "write_file. Today is \$DATE.",
+        availableVariables = SAMPLE_VARIABLES,
+        toolMode = SkillToolMode.Restrict,
+        tools = SAMPLE_TOOLS.map { it.copy(selected = it.id == "write_file") },
+        toolTotal = SAMPLE_TOOLS.size,
+        contextFlags = contextFlags(allOn = false),
+        nameError = false,
+        instructionError = false,
+        canSave = false,
+        readOnly = true,
+    )
+
     fun editorDuplicatedBundled(): SkillEditorUi = SkillEditorUi(
         id = null,
         fromBundled = true,

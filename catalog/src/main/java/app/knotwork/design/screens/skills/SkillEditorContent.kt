@@ -29,6 +29,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -36,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.AnnotatedString
@@ -60,6 +62,9 @@ private val EditorTileGlyph = 22.dp
 /** Minimum height of the multi-line instruction field. */
 private val InstructionMinHeight = 132.dp
 
+/** Render scale for the context-flag switches, matching the Settings rows. */
+private const val CONTEXT_SWITCH_SCALE = 0.78f
+
 /**
  * Stateless full-screen Skill editor — create or edit a skill's name,
  * description, instruction, tool allowlist (tri-state) and context flags.
@@ -77,7 +82,7 @@ fun SkillEditorContent(
     strings: SkillEditorStrings = SkillEditorStrings(),
     callbacks: SkillEditorCallbacks = noopSkillEditorCallbacks(),
 ) {
-    val editing = state.id != null
+    val editing = state.id != null && !state.readOnly
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
@@ -100,32 +105,45 @@ fun SkillEditorContent(
         ) {
             IdentityStrip(strings = strings)
 
-            FieldLabel(label = strings.nameLabel, error = state.nameError, hint = strings.required)
+            FieldLabel(
+                label = strings.nameLabel,
+                error = state.nameError,
+                hint = if (state.readOnly) null else strings.required,
+            )
             EditorField(
                 value = state.name,
                 placeholder = strings.namePlaceholder,
                 onValueChange = callbacks.onNameChange,
                 error = state.nameError,
+                readOnly = state.readOnly,
             )
             if (state.nameError) FieldError(text = strings.nameError)
 
-            FieldLabel(label = strings.descriptionLabel, hint = strings.descriptionHint)
+            FieldLabel(label = strings.descriptionLabel, hint = if (state.readOnly) null else strings.descriptionHint)
             EditorField(
                 value = state.description,
                 placeholder = strings.descriptionPlaceholder,
                 onValueChange = callbacks.onDescriptionChange,
+                readOnly = state.readOnly,
             )
 
-            FieldLabel(label = strings.instructionLabel, error = state.instructionError, hint = strings.required)
+            FieldLabel(
+                label = strings.instructionLabel,
+                error = state.instructionError,
+                hint = if (state.readOnly) null else strings.required,
+            )
             InstructionField(
                 value = state.instruction,
                 placeholder = strings.instructionPlaceholder,
                 variables = state.availableVariables,
                 error = state.instructionError,
                 onValueChange = callbacks.onInstructionChange,
+                readOnly = state.readOnly,
             )
             if (state.instructionError) FieldError(text = strings.instructionError)
-            VariableInsertRow(variables = state.availableVariables, strings = strings, callbacks = callbacks)
+            if (!state.readOnly) {
+                VariableInsertRow(variables = state.availableVariables, strings = strings, callbacks = callbacks)
+            }
 
             ToolAllowlist(state = state, strings = strings, callbacks = callbacks)
             ContextFlags(state = state, strings = strings, callbacks = callbacks)
@@ -147,7 +165,13 @@ private fun EditorTopBar(
     strings: SkillEditorStrings,
     callbacks: SkillEditorCallbacks,
 ) {
+    val title = when {
+        state.readOnly -> strings.titleView
+        editing -> strings.titleEdit
+        else -> strings.titleNew
+    }
     val subtitle = when {
+        state.readOnly -> strings.subtitleReadOnly
         state.fromBundled -> strings.subtitleDuplicated
         editing -> strings.subtitleMine
         else -> strings.subtitleDraft
@@ -156,7 +180,7 @@ private fun EditorTopBar(
         title = {
             Column {
                 Text(
-                    text = if (editing) strings.titleEdit else strings.titleNew,
+                    text = title,
                     style = KnotworkTextStyles.TitleMd,
                     color = MaterialTheme.colorScheme.onSurface,
                 )
@@ -177,7 +201,9 @@ private fun EditorTopBar(
             }
         },
         actions = {
-            SaveButton(enabled = state.canSave, label = strings.save, onClick = callbacks.onSave)
+            if (!state.readOnly) {
+                SaveButton(enabled = state.canSave, label = strings.save, onClick = callbacks.onSave)
+            }
         },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
@@ -255,6 +281,7 @@ private fun ToolAllowlist(state: SkillEditorUi, strings: SkillEditorStrings, cal
             SkillToolMode.None -> 2
         },
         onSelect = { index ->
+            if (state.readOnly) return@KnotworkSegmentedControl
             callbacks.onToolModeChange(
                 when (index) {
                     0 -> SkillToolMode.All
@@ -302,17 +329,21 @@ private fun ToolSelector(state: SkillEditorUi, strings: SkillEditorStrings, call
                 color = KnotworkTheme.extended.onSurfaceMuted,
                 modifier = Modifier.weight(1f),
             )
-            KnotworkTextButton(text = strings.toolsClear, onClick = callbacks.onToolsClear)
+            if (!state.readOnly) KnotworkTextButton(text = strings.toolsClear, onClick = callbacks.onToolsClear)
         }
         state.tools.forEachIndexed { index, tool ->
             if (index > 0) HorizontalDivider(color = KnotworkTheme.extended.divider)
-            ToolSelectorRow(tool = tool, onToggle = { callbacks.onToolToggle(tool.id) })
+            ToolSelectorRow(
+                tool = tool,
+                readOnly = state.readOnly,
+                onToggle = { callbacks.onToolToggle(tool.id) },
+            )
         }
     }
 }
 
 @Composable
-private fun ToolSelectorRow(tool: SkillToolOptionUi, onToggle: () -> Unit) {
+private fun ToolSelectorRow(tool: SkillToolOptionUi, readOnly: Boolean, onToggle: () -> Unit) {
     val accent = MaterialTheme.colorScheme.primary
     Row(
         modifier = Modifier
@@ -320,7 +351,7 @@ private fun ToolSelectorRow(tool: SkillToolOptionUi, onToggle: () -> Unit) {
             .background(
                 if (tool.selected) accent.copy(alpha = 0.06f) else MaterialTheme.colorScheme.surface,
             )
-            .clickable(onClick = onToggle)
+            .then(if (readOnly) Modifier else Modifier.clickable(onClick = onToggle))
             .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp3),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
@@ -392,6 +423,15 @@ private fun ContextFlags(state: SkillEditorUi, strings: SkillEditorStrings, call
                 modifier = Modifier
                     .fillMaxWidth()
                     .background(MaterialTheme.colorScheme.surface)
+                    .then(
+                        if (state.readOnly) {
+                            Modifier
+                        } else {
+                            // Tap target on the whole row (the documented 48 dp
+                            // floor); the Switch itself is non-interactive.
+                            Modifier.clickable { callbacks.onContextToggle(flag.key) }
+                        },
+                    )
                     .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp3),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -407,7 +447,19 @@ private fun ContextFlags(state: SkillEditorUi, strings: SkillEditorStrings, call
                         color = KnotworkTheme.extended.onSurfaceMuted,
                     )
                 }
-                Switch(checked = flag.enabled, onCheckedChange = { callbacks.onContextToggle(flag.key) })
+                Switch(
+                    checked = flag.enabled,
+                    onCheckedChange = null,
+                    enabled = !state.readOnly,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                        checkedTrackColor = MaterialTheme.colorScheme.primary,
+                        checkedBorderColor = MaterialTheme.colorScheme.primary,
+                    ),
+                    // Material3's default Switch (52×32 dp) dwarfs the row title at
+                    // our 14sp scale — shrink to ~78% to match the Settings rows.
+                    modifier = Modifier.scale(CONTEXT_SWITCH_SCALE),
+                )
             }
         }
     }
@@ -508,7 +560,13 @@ private fun FieldError(text: String) {
 }
 
 @Composable
-private fun EditorField(value: String, placeholder: String, onValueChange: (String) -> Unit, error: Boolean = false) {
+private fun EditorField(
+    value: String,
+    placeholder: String,
+    onValueChange: (String) -> Unit,
+    error: Boolean = false,
+    readOnly: Boolean = false,
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -524,6 +582,7 @@ private fun EditorField(value: String, placeholder: String, onValueChange: (Stri
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
+            readOnly = readOnly,
             singleLine = true,
             textStyle = KnotworkTextStyles.BodyBase.copy(color = MaterialTheme.colorScheme.onSurface),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
@@ -542,6 +601,7 @@ private fun InstructionField(
     variables: List<String>,
     error: Boolean,
     onValueChange: (String) -> Unit,
+    readOnly: Boolean = false,
 ) {
     Box(
         modifier = Modifier
@@ -559,6 +619,7 @@ private fun InstructionField(
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
+            readOnly = readOnly,
             textStyle = KnotworkTextStyles.MonoSm.copy(color = MaterialTheme.colorScheme.onSurface),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
             modifier = Modifier.fillMaxWidth(),
@@ -642,9 +703,11 @@ private fun DangerButton(label: String, onClick: () -> Unit) {
 data class SkillEditorStrings(
     val titleNew: String = "New skill",
     val titleEdit: String = "Edit skill",
+    val titleView: String = "View skill",
     val subtitleDraft: String = "draft",
     val subtitleMine: String = "mine",
     val subtitleDuplicated: String = "editable copy · from bundled",
+    val subtitleReadOnly: String = "bundled · read-only",
     val closeCd: String = "Close",
     val save: String = "Save",
     val required: String = "required",

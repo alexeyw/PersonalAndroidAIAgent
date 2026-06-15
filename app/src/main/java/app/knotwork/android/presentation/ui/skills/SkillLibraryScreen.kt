@@ -95,8 +95,10 @@ fun SkillLibraryScreen(
             onSearch = {},
             onTabSelected = viewModel::selectTab,
             onNewSkill = viewModel::openNewSkill,
+            onRowClick = viewModel::onRowClick,
             onRowMenuOpen = viewModel::openRowMenu,
             onRowMenuDismiss = viewModel::dismissRowMenu,
+            onViewSkill = viewModel::openViewSkill,
             onEditSkill = viewModel::openEditSkill,
             onDuplicateSkill = viewModel::duplicateSkill,
             onDeleteSkill = viewModel::requestDelete,
@@ -198,6 +200,7 @@ private fun SkillLibraryUiState.toEditorUi(draft: SkillEditorDraft): SkillEditor
     nameError = false,
     instructionError = false,
     canSave = draft.canSave,
+    readOnly = draft.readOnly,
 )
 
 /** Builds the five context-flag rows from the draft's [SkillEditorDraft.contextConfig]. */
@@ -249,6 +252,7 @@ private fun skillLibraryStrings(): SkillLibraryStrings = SkillLibraryStrings(
     toolsNone = stringResource(R.string.skills_tools_none),
     // toolsCountFormat is left at its default — per-row labels arrive
     // pre-pluralised via SkillRowUi.toolCountLabel, so this fallback is unused.
+    menuView = stringResource(R.string.skills_menu_view),
     menuEdit = stringResource(R.string.skills_menu_edit),
     menuDuplicate = stringResource(R.string.skills_menu_duplicate),
     menuDelete = stringResource(R.string.skills_menu_delete),
@@ -262,9 +266,11 @@ private fun skillLibraryStrings(): SkillLibraryStrings = SkillLibraryStrings(
 private fun skillEditorStrings(): SkillEditorStrings = SkillEditorStrings(
     titleNew = stringResource(R.string.skills_editor_title_new),
     titleEdit = stringResource(R.string.skills_editor_title_edit),
+    titleView = stringResource(R.string.skills_editor_title_view),
     subtitleDraft = stringResource(R.string.skills_editor_subtitle_draft),
     subtitleMine = stringResource(R.string.skills_editor_subtitle_mine),
     subtitleDuplicated = stringResource(R.string.skills_editor_subtitle_duplicated),
+    subtitleReadOnly = stringResource(R.string.skills_editor_subtitle_readonly),
     closeCd = stringResource(R.string.skills_editor_close_cd),
     save = stringResource(R.string.common_save),
     required = stringResource(R.string.skills_editor_required),

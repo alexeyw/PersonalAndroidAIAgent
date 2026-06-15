@@ -29,6 +29,9 @@ data class SkillToolCatalogEntry(val id: String, val risk: Risk?, val descriptio
  *   (0 for a new draft — the repository stamps it on first save).
  * @property fromBundled `true` when this draft is an editable copy of a bundled
  *   skill (drives the editor subtitle).
+ * @property readOnly `true` when the editor is opened to *view* a bundled skill
+ *   (no save/delete, non-editable). `id` may be non-null (the bundled id) but
+ *   the draft is never persisted.
  * @property name current Name value.
  * @property description current Description value.
  * @property instruction current Instruction value.
@@ -41,6 +44,7 @@ data class SkillEditorDraft(
     val id: String?,
     val createdAt: Long,
     val fromBundled: Boolean,
+    val readOnly: Boolean = false,
     val name: String,
     val description: String,
     val instruction: String,
