@@ -15,6 +15,19 @@ details.
 
 ### Added
 
+- **Composed Showcase agent (bundled sub-pipelines).** The first-launch
+  **Showcase — full agent** pipeline now demonstrates composition: its task
+  loop's four subtask branches — *Clarify*, *Lookup*, *Act*, *Process* — are
+  shipped as four standalone bundled sub-pipelines, and the Showcase routes
+  each subtask to them through `PIPELINE` nodes instead of inlining the work.
+  When the Showcase is seeded (first launch) or spawned from **+ From preset**,
+  its bundled sub-pipelines are materialised under stable ids and persisted on
+  demand (create-if-absent, so a sub-pipeline you have edited is never
+  clobbered). A nested task run now shows each subtask as its own sub-pipeline
+  span in the console — indented under the calling node and resumable across
+  the boundary. The browser editor's bundled-preset catalogue carries the
+  composed Showcase and the four sub-pipelines too.
+
 - **Browser editor: `PIPELINE` and `SKILL` configuration.** The standalone
   browser pipeline editor can now configure composition nodes, not just place
   them. A `PIPELINE` node gets a target-pipeline picker populated from the

@@ -465,8 +465,13 @@ on-device reply for chat; a Wikipedia-grounded lookup for factual
 questions (with a complexity gate that can break hard questions into a
 small research loop); and a plan → subtask-loop → synthesis flow for
 actionable tasks, including a human-in-the-loop clarification step when
-a subtask needs your input. It runs entirely on-device. It is an
-ordinary pipeline: edit, duplicate, rename or delete it like any other.
+a subtask needs your input. The task loop is **composed**: each subtask
+runs as one of four bundled sub-pipelines (Clarify / Lookup / Act /
+Process) called through Pipeline nodes, so the showcase seeds a parent
+pipeline plus those four sub-pipelines into your library. It runs
+entirely on-device. Everything is an ordinary pipeline: edit, duplicate,
+rename or delete any of them like any other (see
+[Composing pipelines](#composing-pipelines-the-pipeline-node)).
 
 Tap the `⋮` button on a row, or long-press the row, to see the
 per-pipeline menu:
@@ -610,8 +615,9 @@ Reach a node's per-type configuration by either:
 The sheet is a modal bottom-sheet whose body is documented in
 `node-specs.md`. Every node type — Input, Output, LiteRt, Cloud,
 IntentRouter, IfCondition, Clarification, Tool, Decomposition,
-QueueProcessor, Evaluation, Summary — has its own form, with inline
-validation that disables Save until every required field is filled.
+QueueProcessor, Evaluation, Summary, Pipeline, Skill — has its own
+form, with inline validation that disables Save until every required
+field is filled.
 
 For the **IntentRouter** node, the Classes section in its config
 sheet lets you grow / shrink the class list: each row has a small
@@ -619,6 +625,43 @@ sheet lets you grow / shrink the class list: each row has a small
 **+ Add class** button under the list creates a new empty class row
 (disabled above the 6-class maximum). The new class shows up as an
 additional outbound port on the node card immediately on Save.
+
+### Composing pipelines (the Pipeline node)
+
+A pipeline can call **another pipeline** as a single step. Add a
+**Pipeline** node, open its configuration sheet, and pick the
+sub-pipeline to run from the **Target pipeline** picker — the list is
+every other saved pipeline. When the node runs, its input becomes the
+sub-pipeline's message, and the sub-pipeline's final answer becomes the
+node's output, so a composition reads like a function call between
+pipelines. This is the building block for reuse: describe a reusable
+sub-flow once and call it from several pipelines instead of copying
+nodes around. The bundled **Showcase — full agent** is the worked
+example — its task loop routes each subtask to one of four bundled
+sub-pipelines (Clarify / Lookup / Act / Process) through Pipeline nodes.
+
+A few rules keep compositions sound, all enforced before a pipeline can
+be saved:
+
+- **No target, no save.** A Pipeline node with no target selected is a
+  validation error, exactly like a dangling connection.
+- **No cycles.** A pipeline cannot call itself, directly or through a
+  chain that loops back to it. The target picker greys out any choice
+  that would close a cycle and tells you which pipeline causes it.
+- **Depth limit.** Compositions can only nest so deep (the picker greys
+  out a target that would exceed the limit). The same ceiling is
+  re-checked while the pipeline runs, so a graph edited after it was
+  validated can never recurse without bound.
+- **Editing a sub-pipeline.** A sub-pipeline is an ordinary pipeline —
+  edit, rename or duplicate it like any other. If you delete one that
+  another pipeline still calls, the deletion dialog lists the dependent
+  pipelines so you can repoint or remove the reference first.
+
+While a composed run executes, each sub-pipeline appears as its own
+**indented span** in the console — see
+[Sub-pipelines in the console](#sub-pipelines-in-the-console) for how
+nested traces, the shared step budget, approvals raised inside a
+sub-pipeline, and resuming across a sub-pipeline boundary all behave.
 
 ### Variables in system prompts
 

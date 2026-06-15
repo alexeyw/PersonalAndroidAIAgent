@@ -1,6 +1,8 @@
 package app.knotwork.android.domain.usecases
 
+import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
+import app.knotwork.android.domain.models.PipelinePreset
 import app.knotwork.android.domain.models.PipelineValidationException
 import app.knotwork.android.domain.repositories.PipelinePresetRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
@@ -48,6 +50,13 @@ class LoadPipelineFromPresetUseCase @Inject constructor(
      */
     suspend operator fun invoke(presetId: String): Result<String> = try {
         val pipeline = materialize(presetId).getOrElse { return Result.failure(it) }
+        // A composed preset (one whose PIPELINE nodes target bundled sub-pipeline
+        // presets) only runs if those sub-pipelines are persisted under the
+        // stable id its nodes reference. Seed any that are not already present,
+        // create-if-absent, before saving the parent — so first-launch seeding
+        // and a later "+ From preset" spawn both leave a runnable composition,
+        // while never clobbering a sub-pipeline the user has since edited.
+        ensureSubPipelineDependencies(pipeline)
         pipelineRepository.savePipeline(pipeline)
         Result.success(pipeline.id)
     } catch (e: CancellationException) {
@@ -73,7 +82,24 @@ class LoadPipelineFromPresetUseCase @Inject constructor(
     suspend fun materialize(presetId: String): Result<PipelineGraph> = try {
         val preset = pipelinePresetRepository.getPresetById(presetId)
             ?: return Result.failure(IllegalStateException("Preset not found: $presetId"))
+        buildGraph(preset, pipelineId = UUID.randomUUID().toString())
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
 
+    /**
+     * Instantiates [preset] into a validated [PipelineGraph] under [pipelineId].
+     *
+     * Every node and connection id is regenerated (fresh UUIDs) so an
+     * instantiated graph can coexist with the source preset, but the
+     * caller chooses the pipeline id: [materialize] passes a fresh UUID
+     * (a user-spawned copy), whereas [ensureSubPipelineDependencies] passes
+     * the preset's own stable id so a composed parent's `targetPipelineId`
+     * reference resolves to it.
+     */
+    private fun buildGraph(preset: PipelinePreset, pipelineId: String): Result<PipelineGraph> {
         val template = preset.graph
         val nodeIdMapping: Map<String, String> =
             template.nodes.associate { it.id to UUID.randomUUID().toString() }
@@ -97,7 +123,7 @@ class LoadPipelineFromPresetUseCase @Inject constructor(
         }
 
         val pipeline = PipelineGraph(
-            id = UUID.randomUUID().toString(),
+            id = pipelineId,
             name = truncateName(preset.name),
             nodes = instantiatedNodes,
             connections = instantiatedConnections,
@@ -105,15 +131,39 @@ class LoadPipelineFromPresetUseCase @Inject constructor(
         )
 
         val errors = pipeline.validate()
-        if (errors.isNotEmpty()) {
+        return if (errors.isNotEmpty()) {
             Result.failure(PipelineValidationException(errors))
         } else {
             Result.success(pipeline)
         }
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        Result.failure(e)
+    }
+
+    /**
+     * Seeds the bundled sub-pipelines a composed [pipeline] depends on.
+     *
+     * For every PIPELINE node target that is **not already a saved pipeline**
+     * but **is a bundled preset id**, the matching preset is materialised under
+     * that same stable id and persisted, then its own dependencies are seeded
+     * recursively. The order — persist the dependency, then recurse — together
+     * with the already-saved short-circuit makes the walk terminate even on a
+     * (malformed) cyclic catalogue, and idempotent: a sub-pipeline the user has
+     * already saved (or edited) is left untouched. A sub-preset that is missing
+     * or fails validation is skipped rather than failing the parent load — the
+     * dangling target then surfaces through the normal composition validation.
+     */
+    private suspend fun ensureSubPipelineDependencies(pipeline: PipelineGraph) {
+        val targets = pipeline.nodes
+            .filter { it.type == NodeType.PIPELINE }
+            .mapNotNull { it.targetPipelineId?.takeIf { id -> id.isNotBlank() } }
+            .toSet()
+
+        targets.forEach { targetId ->
+            if (pipelineRepository.getPipelineById(targetId) != null) return@forEach
+            val preset = pipelinePresetRepository.getPresetById(targetId) ?: return@forEach
+            val subPipeline = buildGraph(preset, pipelineId = preset.id).getOrNull() ?: return@forEach
+            pipelineRepository.savePipeline(subPipeline)
+            ensureSubPipelineDependencies(subPipeline)
+        }
     }
 
     /**

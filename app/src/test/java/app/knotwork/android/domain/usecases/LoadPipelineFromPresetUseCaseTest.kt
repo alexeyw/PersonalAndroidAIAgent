@@ -188,4 +188,114 @@ class LoadPipelineFromPresetUseCaseTest {
         assertTrue(result.isFailure)
         assertEquals("io", result.exceptionOrNull()?.message)
     }
+
+    /** Composed parent preset: INPUT → PIPELINE(target) → OUTPUT, validating cleanly. */
+    private fun composedPreset(targetId: String = "subtask_clarify"): PipelinePreset {
+        val graph = PipelineGraph(
+            id = "composed-tpl",
+            name = "Composed",
+            nodes = listOf(
+                NodeModel(
+                    id = "c-in",
+                    type = NodeType.INPUT,
+                    x = 0f,
+                    y = 0f,
+                    contextConfig = NodeContextConfig.defaultForType(NodeType.INPUT),
+                ),
+                NodeModel(
+                    id = "c-pipe",
+                    type = NodeType.PIPELINE,
+                    x = 50f,
+                    y = 0f,
+                    targetPipelineId = targetId,
+                    contextConfig = NodeContextConfig(
+                        chatHistory = false,
+                        originalTask = true,
+                        nodeInput = true,
+                        longTermMemory = false,
+                        toolResults = false,
+                    ),
+                ),
+                NodeModel(
+                    id = "c-out",
+                    type = NodeType.OUTPUT,
+                    x = 100f,
+                    y = 0f,
+                    contextConfig = NodeContextConfig.defaultForType(NodeType.OUTPUT),
+                ),
+            ),
+            connections = listOf(
+                ConnectionModel(id = "c1", sourceNodeId = "c-in", targetNodeId = "c-pipe"),
+                ConnectionModel(id = "c2", sourceNodeId = "c-pipe", targetNodeId = "c-out"),
+            ),
+        )
+        return PipelinePreset(
+            id = "showcase_full_agent",
+            name = "Showcase",
+            description = "d",
+            category = PresetCategory.OTHER,
+            graph = graph,
+            tags = emptyList(),
+            isBundled = true,
+        )
+    }
+
+    @Test
+    fun `given composed preset whose sub-pipeline is absent when invoke then seeds it under its stable preset id`() =
+        runTest {
+            coEvery { presetRepository.getPresetById("showcase_full_agent") } returns composedPreset()
+            coEvery { presetRepository.getPresetById("subtask_clarify") } returns
+                preset().copy(id = "subtask_clarify", name = "Subtask — Clarify")
+            coEvery { pipelineRepository.getPipelineById("subtask_clarify") } returns null
+            val saved = mutableListOf<PipelineGraph>()
+            coEvery { pipelineRepository.savePipeline(capture(saved)) } returns Unit
+
+            val result = useCase("showcase_full_agent")
+
+            assertTrue(result.isSuccess)
+            // The dependency is persisted under the stable preset id the parent references…
+            assertTrue("sub-pipeline must be seeded under its stable id", saved.any { it.id == "subtask_clarify" })
+            // …and the parent keeps the flat target reference, under its own fresh id.
+            val parent = saved.first { it.id == result.getOrNull() }
+            assertEquals(
+                "subtask_clarify",
+                parent.nodes.first { it.type == NodeType.PIPELINE }.targetPipelineId,
+            )
+        }
+
+    @Test
+    fun `given composed preset whose sub-pipeline already exists when invoke then does not reseed it`() = runTest {
+        coEvery { presetRepository.getPresetById("showcase_full_agent") } returns composedPreset()
+        coEvery { pipelineRepository.getPipelineById("subtask_clarify") } returns
+            validGraph().copy(id = "subtask_clarify")
+        val saved = mutableListOf<PipelineGraph>()
+        coEvery { pipelineRepository.savePipeline(capture(saved)) } returns Unit
+
+        val result = useCase("showcase_full_agent")
+
+        assertTrue(result.isSuccess)
+        // The already-present sub-pipeline is left untouched (only the parent is saved),
+        // and its preset is never even looked up because the saved-pipeline check wins first.
+        assertTrue("must not overwrite an existing sub-pipeline", saved.none { it.id == "subtask_clarify" })
+        coVerify(exactly = 0) { presetRepository.getPresetById("subtask_clarify") }
+    }
+
+    @Test
+    fun `given composed preset whose target is not a known preset when invoke then skips seeding and saves parent`() =
+        runTest {
+            coEvery { presetRepository.getPresetById("showcase_full_agent") } returns
+                composedPreset(targetId = "ghost_pipeline")
+            coEvery { pipelineRepository.getPipelineById("ghost_pipeline") } returns null
+            coEvery { presetRepository.getPresetById("ghost_pipeline") } returns null
+            val saved = mutableListOf<PipelineGraph>()
+            coEvery { pipelineRepository.savePipeline(capture(saved)) } returns Unit
+
+            val result = useCase("showcase_full_agent")
+
+            assertTrue(result.isSuccess)
+            // A dangling target is not seeded; the parent still persists (the missing
+            // target surfaces later through composition validation, not here).
+            assertTrue(saved.none { it.id == "ghost_pipeline" })
+            assertEquals(1, saved.size)
+        }
 }

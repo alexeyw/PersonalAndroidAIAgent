@@ -59,6 +59,10 @@ class PipelinePresetCatalogValidationTest {
         "routed_local_cloud.json",
         "showcase_full_agent.json",
         "showcase_research_to_file.json",
+        "subtask_clarify.json",
+        "subtask_lookup.json",
+        "subtask_act.json",
+        "subtask_process.json",
     )
 
     /**
