@@ -20,6 +20,7 @@ import app.knotwork.android.data.local.dao.PipelinePresetDao
 import app.knotwork.android.data.local.dao.PipelineRunDao
 import app.knotwork.android.data.local.dao.PromptPresetDao
 import app.knotwork.android.data.local.dao.PromptTemplateDao
+import app.knotwork.android.data.local.dao.SkillDao
 import app.knotwork.android.data.local.dao.TraceStepDao
 import app.knotwork.android.data.tools.local.AppFunctionDataCodec
 import app.knotwork.android.data.tools.local.LocalAppFunctionManager
@@ -160,6 +161,7 @@ object AppModule {
                 AppDatabase.MIGRATION_32_33,
                 AppDatabase.MIGRATION_33_34,
                 AppDatabase.MIGRATION_34_35,
+                AppDatabase.MIGRATION_35_36,
             )
             // No destructive fallback on upgrade: every version bump must supply an explicit
             // migration above so user data survives. Destructive recreation is kept only for the
@@ -230,6 +232,13 @@ object AppModule {
      */
     @Provides
     fun providePendingInteractionDao(database: AppDatabase): PendingInteractionDao = database.pendingInteractionDao()
+
+    /**
+     * Provides the [SkillDao] backing the skill catalogue (bundled + user
+     * skills).
+     */
+    @Provides
+    fun provideSkillDao(database: AppDatabase): SkillDao = database.skillDao()
 
     /**
      * Provides the singleton instance of Converters for Room mapping.

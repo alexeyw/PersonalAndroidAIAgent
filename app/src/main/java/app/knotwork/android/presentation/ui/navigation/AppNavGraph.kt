@@ -32,6 +32,7 @@ import app.knotwork.android.presentation.ui.prompts.PromptLibraryScreen
 import app.knotwork.android.presentation.ui.settings.SettingsScreen
 import app.knotwork.android.presentation.ui.settings.provider.ProviderDetailScreen
 import app.knotwork.android.presentation.ui.settings.provider.ProviderPickerScreen
+import app.knotwork.android.presentation.ui.skills.SkillLibraryScreen
 import app.knotwork.android.presentation.ui.splash.SplashScreen
 import app.knotwork.android.presentation.ui.taskmonitor.TaskMonitorScreen
 import app.knotwork.android.presentation.ui.taskmonitor.TaskMonitorViewModel
@@ -273,6 +274,7 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                 onNavigateToTaskMonitor = { navController.navigate(NavRoutes.TASK_MONITOR) },
                 onNavigateToSettings = { navController.navigate(NavRoutes.SETTINGS) },
                 onNavigateToPrompts = { navController.navigate(NavRoutes.PROMPTS) },
+                onNavigateToSkills = { navController.navigate(NavRoutes.SKILLS) },
                 onNavigateToAbout = { navController.navigate(NavRoutes.ABOUT) },
                 onNavigateToLibrary = { navController.navigate(NavRoutes.PIPELINE_PRESETS) },
                 onNavigateToFiles = { navController.navigate(NavRoutes.FILES) },
@@ -368,6 +370,12 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
         }
         composable(NavRoutes.PROMPTS) {
             PromptLibraryScreen(
+                modifier = Modifier.fillMaxSize(),
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(NavRoutes.SKILLS) {
+            SkillLibraryScreen(
                 modifier = Modifier.fillMaxSize(),
                 onBack = { navController.popBackStack() },
             )

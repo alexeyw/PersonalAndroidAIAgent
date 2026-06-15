@@ -15,6 +15,20 @@ details.
 
 ### Added
 
+- **Skill entity & library.** A **skill** is a reusable bundle of *instruction
+  + tool restriction + context configuration* — describe a capability once and
+  reuse it instead of copying a system prompt between nodes. The new **Skill
+  library** (More → Skill library) lists bundled and user skills in a
+  Bundled / Mine 2-tab layout, with a full-screen editor: a monospace,
+  `$VARIABLE`-aware instruction field; a tri-state tool allowlist master
+  control (**All tools** = unrestricted · **Restrict** = an explicit subset
+  with per-tool risk pills · **No tools** = an explicit empty allowlist, kept
+  visually distinct from "unrestricted"); and per-context-block toggles. Three
+  bundled skills ship and are seeded idempotently on every launch (Summarizer
+  and Translator use no tools; Report Writer is allowed `write_file`). Bundled
+  skills are read-only but can be duplicated into an editable copy; deleting a
+  user skill warns about dependent pipelines. (Skill *execution* as a `SKILL`
+  pipeline node lands in a follow-up change.)
 - **Pipeline composition (`PIPELINE` node).** A new pipeline node type runs
   another pipeline as a sub-step — the building block for turning a reusable
   branch into a callable block. The node references its callee by id; at

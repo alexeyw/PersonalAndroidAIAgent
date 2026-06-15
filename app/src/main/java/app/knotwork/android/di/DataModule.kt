@@ -14,6 +14,8 @@ import app.knotwork.android.data.local.crypto.AndroidKeystoreAeadCipher
 import app.knotwork.android.data.mcp.KoogMcpClientFactory
 import app.knotwork.android.data.mcp.McpClientFactory
 import app.knotwork.android.data.network.AndroidModelDownloadManager
+import app.knotwork.android.data.repositories.AssetBundledSkillSource
+import app.knotwork.android.data.repositories.BundledSkillSource
 import app.knotwork.android.data.repositories.ChatRepositoryImpl
 import app.knotwork.android.data.repositories.ClarificationRepositoryImpl
 import app.knotwork.android.data.repositories.FirebaseCrashReportingRepositoryImpl
@@ -32,6 +34,7 @@ import app.knotwork.android.data.repositories.PipelineRunRepositoryImpl
 import app.knotwork.android.data.repositories.PowerStateRepositoryImpl
 import app.knotwork.android.data.repositories.PromptRepositoryImpl
 import app.knotwork.android.data.repositories.RunTraceRepositoryImpl
+import app.knotwork.android.data.repositories.SkillRepositoryImpl
 import app.knotwork.android.data.repositories.ToolRepositoryImpl
 import app.knotwork.android.data.services.LongRunningTaskNotifierImpl
 import app.knotwork.android.data.services.WorkManagerMemoryReembedScheduler
@@ -59,6 +62,7 @@ import app.knotwork.android.domain.repositories.PromptPresetRepository
 import app.knotwork.android.domain.repositories.PromptRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.repositories.SkillRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.AgentWorkspace
 import app.knotwork.android.domain.services.DatabaseResetService
@@ -272,6 +276,22 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindPromptPresetRepository(repository: LocalPromptPresetRepositoryImpl): PromptPresetRepository
+
+    /**
+     * Binds [SkillRepositoryImpl] to [SkillRepository] — the `skills` table
+     * holding both the seeded bundled skills and the user-authored ones.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindSkillRepository(repository: SkillRepositoryImpl): SkillRepository
+
+    /**
+     * Binds [AssetBundledSkillSource] to [BundledSkillSource] — reads the
+     * bundled skills shipped under `assets/presets/skills`.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindBundledSkillSource(source: AssetBundledSkillSource): BundledSkillSource
 
     /**
      * Binds the [PromptRepositoryImpl] implementation to the [PromptRepository] interface.
