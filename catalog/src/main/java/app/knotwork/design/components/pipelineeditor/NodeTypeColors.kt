@@ -35,6 +35,10 @@ fun NodeType.headerTint(): Color {
         NodeType.EVALUATION -> extended.nodeEvaluation
         NodeType.SUMMARY -> extended.nodeSummary
         NodeType.PIPELINE -> extended.nodePipeline
+        // Skills have no dedicated node hue: they are branded with the amber
+        // `primary` everywhere in the app (Skill library, AppIcons.Skill), so
+        // the editor header strip reuses it rather than introducing a 13th hue.
+        NodeType.SKILL -> MaterialTheme.colorScheme.primary
     }
 }
 
@@ -88,4 +92,5 @@ fun NodeType.displayLabel(): String = when (this) {
     NodeType.EVALUATION -> "EVAL"
     NodeType.SUMMARY -> "SUMMARY"
     NodeType.PIPELINE -> "PIPELINE"
+    NodeType.SKILL -> "SKILL"
 }

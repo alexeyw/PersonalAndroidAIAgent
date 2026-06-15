@@ -207,6 +207,7 @@ private fun sampleSubtitle(type: NodeType): String? = when (type) {
     NodeType.EVALUATION -> "retries = 2"
     NodeType.SUMMARY -> "bullets"
     NodeType.PIPELINE -> "→ Multi-step research"
+    NodeType.SKILL -> "★ Translator"
 }
 
 /** Idle [LiteRtConfig] used by the catalog form preview. */

@@ -76,6 +76,11 @@ data class NodeContextConfig(
          * - [NodeType.INTENT_ROUTER] / [NodeType.DECOMPOSITION]: classifiers
          *   that benefit from the user's intent and (for the router) the
          *   recent chat to disambiguate references.
+         * - [NodeType.SKILL]: an inference step driven by a reusable skill.
+         *   This per-type default is only the fallback for a SKILL node with
+         *   no skill resolved yet; once a skill is picked the editor seeds the
+         *   node's context from the skill's own `contextConfig`, and an explicit
+         *   toggle in the node config overrides that inherited default.
          */
         fun defaultForType(type: NodeType): NodeContextConfig = when (type) {
             NodeType.INPUT,
@@ -93,6 +98,7 @@ data class NodeContextConfig(
             NodeType.CLARIFICATION,
             NodeType.QUEUE_PROCESSOR,
             NodeType.DECOMPOSITION,
+            NodeType.SKILL,
             -> NodeContextConfig(
                 chatHistory = false,
                 originalTask = true,
@@ -157,6 +163,7 @@ private val CONTEXT_AWARE_NODE_TYPES: Set<NodeType> = setOf(
     NodeType.EVALUATION,
     NodeType.CLARIFICATION,
     NodeType.TOOL,
+    NodeType.SKILL,
 )
 
 /**

@@ -14,8 +14,10 @@ import app.knotwork.android.domain.engine.executors.NodeExecutorFactory
 import app.knotwork.android.domain.engine.executors.OutputNodeExecutor
 import app.knotwork.android.domain.engine.executors.PipelineNodeExecutor
 import app.knotwork.android.domain.engine.executors.QueueProcessorNodeExecutor
+import app.knotwork.android.domain.engine.executors.SkillNodeExecutor
 import app.knotwork.android.domain.engine.executors.SummaryNodeExecutor
 import app.knotwork.android.domain.engine.executors.SystemNodeExecutor
+import app.knotwork.android.domain.engine.executors.ToolInvocationGate
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.PipelineGraph
@@ -145,10 +147,13 @@ class PipelinePresetIntegrationTest {
             llmEngine,
             loadModelUseCase,
             toolRepository,
-            settingsRepository,
-            approvalNotifier,
-            chatRepository,
-            pendingInteractionRepository,
+            ToolInvocationGate(
+                toolRepository,
+                settingsRepository,
+                approvalNotifier,
+                chatRepository,
+                pendingInteractionRepository,
+            ),
         )
         val nodeExecutorFactory = NodeExecutorFactory(
             InputNodeExecutor(),
@@ -192,6 +197,7 @@ class PipelinePresetIntegrationTest {
                     mockk(relaxed = true)
                 },
             ),
+            mockk<SkillNodeExecutor>(relaxed = true),
         )
 
         engine = GraphExecutionEngine(

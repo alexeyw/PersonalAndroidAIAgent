@@ -76,7 +76,7 @@ configured it.
 - Knotwork **pipeline editor** with pan / pinch-zoom canvas, snap-to-grid
   drag-and-drop, long-press radial node picker, Sugiyama auto-layout,
   inline validation bar with focus-on-error, run-trace bar, undo / redo,
-  and per-type configuration sheets for all 12 node types.
+  and per-type configuration sheets for all 14 node types.
 - Pipeline library with per-chat binding, plus rename / duplicate / delete.
 - Prompt variables (`$DATE`, `$TIME`, `$TOOLS`, `$MODEL`, `$MEMORY_SUMMARY`,
   `$LANG`, `$LOCATION`, `$USER`, `$DEVICE`) rendered fresh on every
@@ -99,7 +99,11 @@ configured it.
   instruction field, a tri-state tool allowlist (**All tools** /
   **Restrict** / **No tools** — an explicit empty allowlist is distinct
   from unrestricted), and per-context-block toggles. Bundled skills are
-  read-only but can be duplicated into an editable copy.
+  read-only but can be duplicated into an editable copy. A **Skill** node
+  runs a skill as a pipeline step (on-device or cloud engine); its tool
+  allowlist is enforced at the executor level — a call outside the list is
+  refused rather than run, and allowed calls keep the normal confirmation
+  gate.
 - **Files** screen (More → Files) — a window over the agent's file
   workspace: a path-sorted listing with a used / limit quota
   indicator, read-only text preview (truncated for large files),

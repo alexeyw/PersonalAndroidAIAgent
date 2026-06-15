@@ -79,6 +79,7 @@ object BrowserEditorConstantsGenerator {
         NodeTypeMeta("SUMMARY", "Summary", "#8BC34A", "📝", 1, 1),
         NodeTypeMeta("CLARIFICATION", "Clarification", "#9C27B0", "💬", 1, 1),
         NodeTypeMeta("PIPELINE", "Pipeline", "#5C6BC0", "📦", 1, 1),
+        NodeTypeMeta("SKILL", "Skill", "#FFB300", "⭐", 1, 1),
     )
 
     /**

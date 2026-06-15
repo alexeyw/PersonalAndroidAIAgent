@@ -29,6 +29,7 @@ class NodeExecutorFactory @Inject constructor(
     private val summaryNodeExecutor: SummaryNodeExecutor,
     private val clarificationNodeExecutor: ClarificationNodeExecutor,
     private val pipelineNodeExecutor: PipelineNodeExecutor,
+    private val skillNodeExecutor: SkillNodeExecutor,
 ) {
     /**
      * Returns the [NodeExecutor] responsible for nodes of the given [type].
@@ -49,5 +50,6 @@ class NodeExecutorFactory @Inject constructor(
         NodeType.QUEUE_PROCESSOR -> queueProcessorNodeExecutor
         NodeType.CLARIFICATION -> clarificationNodeExecutor
         NodeType.PIPELINE -> pipelineNodeExecutor
+        NodeType.SKILL -> skillNodeExecutor
     }
 }

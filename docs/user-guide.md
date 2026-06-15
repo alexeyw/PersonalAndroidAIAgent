@@ -1308,6 +1308,30 @@ Deleting a user skill asks for confirmation; if any pipelines reference
 it the dialog lists them so you can repoint or remove the reference
 first.
 
+### Using a skill in a pipeline (the SKILL node)
+
+In the pipeline editor, add a **Skill** node to run a skill as one step
+of a pipeline. The node configuration sheet offers:
+
+- **Skill** — a picker over your whole library (bundled + your own).
+  Until you choose one, the node is flagged invalid and the pipeline
+  won't save.
+- **Instruction (read-only)** — a preview of the chosen skill's
+  instruction. It's edited in the Skill library, not here.
+- **Tool allowlist** — an indicator showing the skill's restriction
+  (All tools / N tools / No tools).
+- **Inference engine** — run the skill **on-device** or in the **cloud**.
+- **Context toggles** — these start **inherited** from the skill's own
+  default context; change any one and it's marked **overridden** so you
+  can see at a glance where the node diverges from the skill.
+
+The tool allowlist is a real boundary, not a hint: when the skill runs,
+`$TOOLS` in its instruction lists only the allowed tools, and if the
+model still tries to call a tool outside the allowlist the node refuses
+it and reports the refusal instead of running it. Allowed tool calls go
+through the same confirmation prompts as any other tool — a skill never
+lowers a tool's risk or skips a confirmation.
+
 ## Active tasks
 
 **More → Active tasks** lists everything the agent is running right

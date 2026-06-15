@@ -80,6 +80,27 @@ enum class NodeType {
     PIPELINE,
 
     /**
+     * Node whose execution runs a reusable [app.knotwork.android.domain.models.Skill]
+     * as an inference step — the capability primitive that bundles a fixed
+     * instruction, a visible-tool allowlist, and a default context selection
+     * behind a single, named block.
+     *
+     * The node references its skill by [NodeModel.skillId]. At runtime
+     * `SkillNodeExecutor` loads the skill, renders its instruction through
+     * `PromptTemplateEngine` (all built-in variables are available, but
+     * `$TOOLS` expands only to the skill's allowlist), and runs inference on
+     * the node's selected engine ([NodeType.LITE_RT] when [NodeModel.cloudProvider]
+     * is `null`, otherwise [NodeType.CLOUD]).
+     *
+     * The skill's tool allowlist is a substantive constraint, not a prompt
+     * hint: any tool call the skill initiates is checked against the allowlist
+     * at the executor level before dispatch, so a call outside the list is
+     * rejected with a typed error observation rather than executed. The
+     * tool risk / Human-in-the-Loop contract is never weakened by the skill.
+     */
+    SKILL,
+
+    /**
      * The starting point of the pipeline.
      */
     INPUT,

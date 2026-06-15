@@ -47,6 +47,7 @@ import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineTargetAvailability
+import app.knotwork.android.domain.models.Skill
 import app.knotwork.android.presentation.ui.common.resolve
 import app.knotwork.android.presentation.ui.components.PromptPreviewBottomSheet
 import app.knotwork.android.presentation.ui.orchestrator.OrchestratorViewModel
@@ -74,6 +75,8 @@ import app.knotwork.design.components.pipelineeditor.LocalModelOption
 import app.knotwork.design.components.pipelineeditor.PipelineTargetDisabledReason
 import app.knotwork.design.components.pipelineeditor.PipelineTargetOption
 import app.knotwork.design.components.pipelineeditor.RunStatus
+import app.knotwork.design.components.pipelineeditor.SkillConfig
+import app.knotwork.design.components.pipelineeditor.SkillOption
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import kotlinx.coroutines.delay
@@ -739,10 +742,36 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                         emptyList()
                     }
                 }
+                // For a SKILL node, load the skill library when the sheet opens
+                // so the picker can offer every bundled + user skill. Other node
+                // types never read this list.
+                var skillsForNode by remember(node.id) { mutableStateOf(emptyList<Skill>()) }
+                val isSkillNode = node.type == NodeType.SKILL
+                LaunchedEffect(node.id, isSkillNode) {
+                    skillsForNode = if (isSkillNode) viewModel.loadSkills() else emptyList()
+                }
+                val skillOptions = rememberSkillOptions(skillsForNode)
+                // Baseline for the context section's inherited / overridden tags:
+                // the selected skill's own default context.
+                val skillContextBaseline = (workingConfig as? SkillConfig)
+                    ?.skillId
+                    ?.let { id -> skillsForNode.firstOrNull { it.id == id }?.contextConfig }
                 NodeConfigSheetHost(
                     config = workingConfig,
                     peerTitles = peerTitles,
-                    onChange = { next -> editor.workingConfig = next },
+                    onChange = { next ->
+                        // When the user picks a *different* skill, reseed the
+                        // node's context from that skill's default so the node
+                        // inherits the skill's context out of the box; explicit
+                        // toggles the user makes afterwards still win.
+                        val previousSkillId = (editor.workingConfig as? SkillConfig)?.skillId
+                        if (next is SkillConfig && next.skillId != previousSkillId) {
+                            skillsForNode.firstOrNull { it.id == next.skillId }?.let { skill ->
+                                editor.workingContextConfig = skill.contextConfig
+                            }
+                        }
+                        editor.workingConfig = next
+                    },
                     onCancel = {
                         editor.configuringNodeId = null
                         editor.workingConfig = null
@@ -803,6 +832,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                         }
                     },
                     availablePipelines = pipelineTargets,
+                    availableSkills = skillOptions,
                     extraSection = {
                         // Bind the legacy `NodeContextConfigSection` ("Input
                         // Data" checkboxes) to `editor.workingContextConfig`
@@ -834,6 +864,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                                 editor.workingContextConfig =
                                     ctx.copy(toolResults = next)
                             },
+                            inheritedBaseline = skillContextBaseline,
                         )
                     },
                 )
@@ -1134,3 +1165,38 @@ private fun PipelineTargetAvailability.toCatalogOption(): PipelineTargetOption =
     cycleCulprit = (reason as? PipelineTargetAvailability.Reason.Cycle)?.culpritPipelineName,
     depthLimit = (reason as? PipelineTargetAvailability.Reason.Depth)?.limit,
 )
+
+/**
+ * Maps the domain [Skill] library to catalog [SkillOption]s for the SKILL-node
+ * picker, resolving the localized tool-allowlist summary here (the catalog
+ * stays free of skill-storage and string-plural knowledge). The tri-state
+ * allowlist maps to "All tools" (`null`), "No tools" (empty), or an "N tools"
+ * plural (subset).
+ */
+@Composable
+private fun rememberSkillOptions(skills: List<Skill>): List<SkillOption> {
+    val allLabel = stringResource(R.string.pipeline_editor_skill_allowlist_all)
+    val noneLabel = stringResource(R.string.pipeline_editor_skill_allowlist_none)
+    val options = ArrayList<SkillOption>(skills.size)
+    for (skill in skills) {
+        val allowlist = skill.toolAllowlist
+        val summary = when {
+            allowlist == null -> allLabel
+            allowlist.isEmpty() -> noneLabel
+            else -> pluralStringResource(
+                R.plurals.pipeline_editor_skill_allowlist_subset,
+                allowlist.size,
+                allowlist.size,
+            )
+        }
+        options.add(
+            SkillOption(
+                id = skill.id,
+                name = skill.name,
+                instructionPreview = skill.instruction,
+                toolRestrictionSummary = summary,
+            ),
+        )
+    }
+    return options
+}

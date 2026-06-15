@@ -95,6 +95,7 @@ object NodeConfigForms {
         availableToolIds: List<String> = emptyList(),
         availableModels: List<LocalModelOption> = emptyList(),
         availablePipelines: List<PipelineTargetOption> = emptyList(),
+        availableSkills: List<SkillOption> = emptyList(),
         onPickFromLibrary: ((category: String, currentPrompt: String, apply: (String) -> Unit) -> Unit)? = null,
         onSavePreset: ((category: String, currentPrompt: String) -> Unit)? = null,
     ) {
@@ -162,6 +163,7 @@ object NodeConfigForms {
                 )
                 is SummaryConfig -> SummaryFormBody(config, errors, onChange, onPickFromLibrary, onSavePreset)
                 is PipelineConfig -> PipelineFormBody(config, errors, onChange, availablePipelines)
+                is SkillConfig -> SkillFormBody(config, errors, onChange, availableSkills)
             }
         }
     }
@@ -1518,6 +1520,157 @@ private fun EmptyPipelinePickerNote() {
     }
 }
 
+/**
+ * Form body for [NodeType.SKILL]. Three controls: the skill [SkillPicker], a
+ * read-only instruction preview + allowlist indicator for the chosen skill, and
+ * the inference-engine segmented control. The instruction and allowlist are
+ * edited in the Skill library, never here; the form only chooses *which* skill
+ * and *which engine* runs it.
+ *
+ * @param config the working SKILL configuration.
+ * @param errors validator output; the picker reads [FieldId.SKILL_ID].
+ * @param onChange emits the next config when the user picks a skill or engine.
+ * @param availableSkills the skill library rows supplied by the app.
+ */
+@Composable
+private fun SkillFormBody(
+    config: SkillConfig,
+    errors: Map<FieldId, ValidationFailure>,
+    onChange: (NodeConfig) -> Unit,
+    availableSkills: List<SkillOption>,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2)) {
+        SkillPicker(
+            config = config,
+            error = errors[FieldId.SKILL_ID],
+            availableSkills = availableSkills,
+            onChange = onChange,
+        )
+        if (config.skillId.isNotBlank()) {
+            SkillReadOnlyDetails(config)
+        }
+        SegmentedChipRow(
+            label = stringResource(R.string.knotwork_node_field_skill_engine),
+            values = listOf(
+                SkillEngine.LITE_RT to stringResource(R.string.knotwork_node_skill_engine_lite_rt),
+                SkillEngine.CLOUD to stringResource(R.string.knotwork_node_skill_engine_cloud),
+            ),
+            selected = config.engine,
+            onSelect = { engine -> onChange(config.copy(engine = engine)) },
+        )
+    }
+}
+
+/**
+ * Skill selector for [SkillFormBody]. An `ExposedDropdownMenu` over
+ * [availableSkills]; selecting a row commits the skill id, name, instruction
+ * preview, and allowlist summary into the [SkillConfig] in one step so the
+ * read-only details below update immediately. Shows an empty-state note when
+ * the library is empty.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SkillPicker(
+    config: SkillConfig,
+    error: ValidationFailure?,
+    availableSkills: List<SkillOption>,
+    onChange: (NodeConfig) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
+        FieldLabel(text = stringResource(R.string.knotwork_node_field_skill))
+        if (availableSkills.isEmpty()) {
+            EmptySkillPickerNote()
+        } else {
+            var menuExpanded by remember { mutableStateOf(false) }
+            val placeholder = stringResource(R.string.knotwork_node_field_skill_none)
+            val selectedLabel = config.skillName
+                ?: availableSkills.firstOrNull { it.id == config.skillId }?.name
+                ?: config.skillId.ifBlank { placeholder }
+            ExposedDropdownMenuBox(
+                expanded = menuExpanded,
+                onExpandedChange = { menuExpanded = it },
+            ) {
+                OutlinedTextField(
+                    value = selectedLabel,
+                    onValueChange = {},
+                    readOnly = true,
+                    singleLine = true,
+                    isError = error != null,
+                    textStyle = KnotworkTextStyles.MonoBase,
+                    trailingIcon = {
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = menuExpanded)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+                )
+                ExposedDropdownMenu(
+                    expanded = menuExpanded,
+                    onDismissRequest = { menuExpanded = false },
+                ) {
+                    availableSkills.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(text = option.name, style = KnotworkTextStyles.MonoBase) },
+                            onClick = {
+                                onChange(
+                                    config.copy(
+                                        skillId = option.id,
+                                        skillName = option.name,
+                                        instructionPreview = option.instructionPreview,
+                                        toolRestrictionSummary = option.toolRestrictionSummary,
+                                    ),
+                                )
+                                menuExpanded = false
+                            },
+                        )
+                    }
+                }
+            }
+        }
+        FieldCaption(text = stringResource(R.string.knotwork_node_field_skill_help))
+        InlineError(failure = error)
+    }
+}
+
+/** Read-only instruction preview + allowlist indicator for the chosen skill. */
+@Composable
+private fun SkillReadOnlyDetails(config: SkillConfig) {
+    Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
+        config.toolRestrictionSummary?.let { summary ->
+            FieldLabel(text = stringResource(R.string.knotwork_node_field_skill_allowlist))
+            KnotworkChip(
+                label = summary,
+                selected = false,
+                onClick = null,
+                style = ChipStyle.Outline,
+                leadingIcon = AppIcons.Skill,
+            )
+        }
+        FieldLabel(text = stringResource(R.string.knotwork_node_field_skill_instruction))
+        OutlinedTextField(
+            value = config.instructionPreview.orEmpty(),
+            onValueChange = {},
+            readOnly = true,
+            textStyle = KnotworkTextStyles.MonoBase,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        FieldCaption(text = stringResource(R.string.knotwork_node_field_skill_instruction_help))
+    }
+}
+
+/** Empty-state note shown when the skill library has no skills to pick. */
+@Composable
+private fun EmptySkillPickerNote() {
+    Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
+        Text(
+            text = stringResource(R.string.knotwork_node_skill_picker_empty_title),
+            style = KnotworkTextStyles.LabelMd,
+            color = KnotworkTheme.extended.onSurface2,
+        )
+        FieldCaption(text = stringResource(R.string.knotwork_node_skill_picker_empty_body))
+    }
+}
+
 /** Leading reason-icon diameter in a disabled picker row. */
 private const val PICKER_REASON_ICON_DP: Float = 16f
 
@@ -1540,4 +1693,5 @@ private fun NodeConfig.withTitle(title: String): NodeConfig = when (this) {
     is EvaluationConfig -> copy(title = title)
     is SummaryConfig -> copy(title = title)
     is PipelineConfig -> copy(title = title)
+    is SkillConfig -> copy(title = title)
 }

@@ -631,6 +631,19 @@
     <string name="knotwork_node_pipeline_picker_empty_title">No eligible pipelines</string>
     <string name="knotwork_node_pipeline_picker_empty_body">Every other pipeline would create a loop or exceed the nesting limit. Create or repoint one, then come back.</string>
 
+    <!-- SKILL node — skill picker, instruction preview, allowlist indicator, engine. -->
+    <string name="knotwork_node_field_skill">Skill</string>
+    <string name="knotwork_node_field_skill_none">Choose a skill…</string>
+    <string name="knotwork_node_field_skill_help">The skill this node runs: its instruction, tool allowlist, and default context.</string>
+    <string name="knotwork_node_skill_picker_empty_title">No skills yet</string>
+    <string name="knotwork_node_skill_picker_empty_body">Create a skill in the Skill library first, then pick it here.</string>
+    <string name="knotwork_node_field_skill_instruction">Instruction (read-only)</string>
+    <string name="knotwork_node_field_skill_instruction_help">Edited in the Skill library, not here.</string>
+    <string name="knotwork_node_field_skill_allowlist">Tool allowlist</string>
+    <string name="knotwork_node_field_skill_engine">Inference engine</string>
+    <string name="knotwork_node_skill_engine_lite_rt">On-device</string>
+    <string name="knotwork_node_skill_engine_cloud">Cloud</string>
+
     <!-- Validation messages. -->
     <string name="knotwork_node_validation_title_empty">Title must not be empty</string>
     <string name="knotwork_node_validation_title_duplicate">Title must be unique within the pipeline</string>
@@ -643,6 +656,7 @@
     <string name="knotwork_node_validation_class_duplicate">Class names must be unique</string>
     <string name="knotwork_node_validation_arg_key_duplicate">Argument keys must be unique</string>
     <string name="knotwork_node_validation_target_pipeline_missing">Choose a pipeline to run</string>
+    <string name="knotwork_node_validation_target_skill_missing">Choose a skill to run</string>
 
     <!-- ============ ChatHomeScreen ============ -->
 

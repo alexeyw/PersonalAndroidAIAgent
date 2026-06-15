@@ -390,3 +390,63 @@ data class PipelineConfig(
 ) : NodeConfig {
     override val type: NodeType get() = NodeType.PIPELINE
 }
+
+/** Inference engine a [SkillConfig] node runs the skill on. */
+enum class SkillEngine { LITE_RT, CLOUD }
+
+/**
+ * One row in the [SkillConfig] skill picker. The app resolves the full skill
+ * library (bundled + user) and hands the rows down so the catalog stays free
+ * of any skill-storage knowledge.
+ *
+ * @property id the skill's stable id, written into [SkillConfig.skillId] when picked.
+ * @property name the skill's display name shown in the row.
+ * @property instructionPreview the skill's instruction text, copied into
+ * [SkillConfig.instructionPreview] on pick so the read-only preview updates
+ * immediately without a round-trip to the app.
+ * @property toolRestrictionSummary one-line allowlist summary (e.g. "All tools",
+ * "No tools", "3 tools"), copied into [SkillConfig.toolRestrictionSummary] on pick.
+ */
+data class SkillOption(
+    val id: String,
+    val name: String,
+    val instructionPreview: String,
+    val toolRestrictionSummary: String,
+)
+
+/**
+ * Configuration for [NodeType.SKILL] — runs a reusable skill (fixed
+ * instruction + visible-tool allowlist + default context) as an inference step.
+ *
+ * The skill supplies the instruction, the allowlist, and the default context;
+ * the node only chooses *which* skill and *which engine* to run it on. The
+ * instruction preview and allowlist summary are read-only — they are edited in
+ * the Skill library, not here.
+ *
+ * @property title display title.
+ * @property description optional one-line note.
+ * @property skillId id of the skill this node runs. Blank means "no skill chosen
+ * yet" — the validator surfaces [ValidationFailure.TARGET_SKILL_MISSING] and Save
+ * stays disabled until the user picks one.
+ * @property skillName resolved display name of [skillId], supplied by the app so
+ * the picker can show the current selection. `null` when no skill is set or the id
+ * no longer resolves to a stored skill.
+ * @property instructionPreview resolved instruction text of the selected skill,
+ * shown read-only. `null` when no skill is selected.
+ * @property toolRestrictionSummary resolved one-line summary of the selected
+ * skill's tool allowlist (e.g. "All tools", "No tools", "3 tools"), shown as the
+ * allowlist indicator. `null` when no skill is selected.
+ * @property engine which inference engine runs the skill ([SkillEngine.LITE_RT]
+ * local or [SkillEngine.CLOUD]).
+ */
+data class SkillConfig(
+    override val title: String,
+    override val description: String? = null,
+    val skillId: String = "",
+    val skillName: String? = null,
+    val instructionPreview: String? = null,
+    val toolRestrictionSummary: String? = null,
+    val engine: SkillEngine = SkillEngine.LITE_RT,
+) : NodeConfig {
+    override val type: NodeType get() = NodeType.SKILL
+}

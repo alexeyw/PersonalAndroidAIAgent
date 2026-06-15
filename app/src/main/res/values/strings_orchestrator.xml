@@ -73,6 +73,9 @@
     <string name="orchestrator_context_tool_results_label">Tool results</string>
     <string name="orchestrator_context_tool_results_hint">Data returned by tools in the current step</string>
     <string name="orchestrator_context_hint">Fewer inputs make the node faster and cheaper. Enable only what\'s needed.</string>
+    <!-- SKILL node — per-row tag showing whether the context flag still matches the skill default. -->
+    <string name="orchestrator_context_inherited_tag">inherited</string>
+    <string name="orchestrator_context_overridden_tag">overridden</string>
 
     <!-- Pipeline presets UI -->
     <!-- Library speed-dial -->

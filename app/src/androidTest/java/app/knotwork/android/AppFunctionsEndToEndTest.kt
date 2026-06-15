@@ -13,6 +13,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import app.knotwork.android.data.testing.AppFunctionsE2ETestEntryPoint
 import app.knotwork.android.domain.engine.LlmInferenceEngine
+import app.knotwork.android.domain.engine.executors.ToolInvocationGate
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.NodeContextConfig
@@ -756,10 +757,13 @@ class AppFunctionsEndToEndTest {
             llmEngine = fakeEngine,
             loadModelUseCase = fakeLoadModel,
             toolRepository = entryPoint.toolRepository(),
-            settingsRepository = entryPoint.settingsRepository(),
-            approvalNotifier = silentNotifier,
-            chatRepository = entryPoint.chatRepository(),
-            pendingInteractionRepository = entryPoint.pendingInteractionRepository(),
+            toolInvocationGate = ToolInvocationGate(
+                toolRepository = entryPoint.toolRepository(),
+                settingsRepository = entryPoint.settingsRepository(),
+                approvalNotifier = silentNotifier,
+                chatRepository = entryPoint.chatRepository(),
+                pendingInteractionRepository = entryPoint.pendingInteractionRepository(),
+            ),
         )
     }
 

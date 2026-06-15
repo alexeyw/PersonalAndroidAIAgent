@@ -15,6 +15,19 @@ details.
 
 ### Added
 
+- **Skill execution (`SKILL` node).** A new pipeline node type runs a reusable
+  skill as an inference step: the instruction, the visible-tool allowlist, and
+  the default context all come from the skill rather than from the node. The
+  node picks its inference engine (on-device or cloud); the skill's instruction
+  is rendered with every built-in `$VARIABLE`, but `$TOOLS` expands only to the
+  skill's allowlist. Tool restriction is enforced **at the executor level**, not
+  just in the prompt: a tool call outside the allowlist is rejected with a typed
+  error observation and is never executed, and any allowed call still passes
+  through the unchanged tool risk / Human-in-the-Loop confirmation gate (a skill
+  can never weaken it). The visual editor's SKILL node gains a skill picker, a
+  read-only instruction preview, an allowlist indicator, an engine selector, and
+  context toggles tagged *inherited* / *overridden* against the skill's default.
+  The browser pipeline editor gains a matching **Skill** palette entry.
 - **Skill entity & library.** A **skill** is a reusable bundle of *instruction
   + tool restriction + context configuration* — describe a capability once and
   reuse it instead of copying a system prompt between nodes. The new **Skill

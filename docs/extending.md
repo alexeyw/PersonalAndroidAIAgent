@@ -143,10 +143,10 @@ an `OUTPUT`".
 `validate()` is a pure function on a single graph, so it cannot enforce
 rules that depend on *other* graphs or on settings. When a node type
 references another entity by id (as `PIPELINE` references a target
-pipeline), put the single-graph check in `validate()` (e.g.
-`MissingTargetPipeline` for an unset target) and the cross-entity checks
-in a dedicated repository-backed validator invoked from the relevant use
-case. [`PipelineCompositionValidator`](../app/src/main/java/app/knotwork/android/domain/services/PipelineCompositionValidator.kt)
+pipeline and `SKILL` references a skill), put the single-graph check in
+`validate()` (e.g. `MissingTargetPipeline` / `MissingSkill` for an unset
+reference) and the cross-entity checks in a dedicated repository-backed
+validator invoked from the relevant use case. [`PipelineCompositionValidator`](../app/src/main/java/app/knotwork/android/domain/services/PipelineCompositionValidator.kt)
 is the reference example: `SavePipelineUseCase` runs it alongside
 `validate()` to reject reference cycles, dangling targets, and chains
 nested deeper than `SettingsRepository.pipelineMaxNestingDepth` before a
