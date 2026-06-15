@@ -1,6 +1,5 @@
 package app.knotwork.android.domain.engine.executors
 
-import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 import timber.log.Timber
@@ -34,16 +33,10 @@ object ToolCallParser {
         return try {
             val jsonObject = JSONObject(jsonBlock)
             val tool = if (jsonObject.has("tool")) jsonObject.getString("tool") else null
-            val args = if (jsonObject.has("arguments")) {
-                val argsObj = jsonObject.get("arguments")
-                if (argsObj is JSONObject || argsObj is JSONArray) {
-                    argsObj.toString()
-                } else {
-                    argsObj.toString()
-                }
-            } else {
-                null
-            }
+            // `toString()` is polymorphic: a JSONObject / JSONArray serialises to its
+            // compact JSON form, a primitive to its raw value — so a single call covers
+            // every `arguments` shape the model might emit.
+            val args = if (jsonObject.has("arguments")) jsonObject.get("arguments").toString() else null
 
             if (tool != null && args != null) Pair(tool, args) else null
         } catch (e: JSONException) {
