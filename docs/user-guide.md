@@ -46,7 +46,7 @@ The bottom of the screen always shows the four navigation tabs:
 - **Pipelines** — browse and edit the agent's reasoning pipelines.
 - **Tools** — manage AppFunctions and connected MCP servers.
 - **More** — secondary screens (Memory, Models, Prompt library,
-  Active tasks, Live metrics, Settings, About).
+  Skill library, Active tasks, Live metrics, Settings, About).
 
 The Back gesture returns you up the inner stack of the current tab.
 While you are on the start screen of a tab, Back closes the app — it
@@ -1269,6 +1269,44 @@ The FAB at the bottom-right opens the editor sheet. Inside, you can
 edit the name and category and tap any chip in the `INSERT` row to
 append the matching `$VARIABLE` to the prompt body. Save persists
 the change immediately; the next pipeline run picks it up.
+
+## Skill library
+
+**More → Skill library** stores **skills** — reusable bundles of
+*instruction + tool restriction + context configuration*. Instead of
+copying a system prompt between nodes and pipelines, you describe a
+capability once and reuse it.
+
+The screen has two tabs:
+
+- **Bundled** — read-only skills that ship with the app (Summarizer,
+  Translator, Report Writer). Their row menu offers only **Duplicate**,
+  which drops an editable copy named `… (copy)` into your **Mine** tab.
+- **Mine** — your own skills, with full **Edit / Duplicate / Delete**.
+
+Each row shows the skill name, a one-line description, and a
+**tool-restriction** pill that is always one of three visually distinct
+states: **All tools** (unrestricted — every tool, including ones added
+later), **N tools** (an explicit subset), or **No tools** (an explicit
+empty allowlist — *not* the same as unrestricted).
+
+Tap the FAB (**New skill**) or **Edit** to open the full-screen editor:
+
+- **Name** and **Description**.
+- **Instruction** — a monospace field. Use `$VARIABLE` placeholders
+  (e.g. `$DATE`, `$LANG`) for runtime values; they're substituted when
+  the skill runs. Tap a chip in the **INSERT** row to append one.
+- **Tools** — a master control selects **All tools**, **Restrict**, or
+  **No tools**. In **Restrict** mode a checklist of the available tools
+  appears, each with its risk pill, so you can pick exactly which tools
+  the skill may use.
+- **Context the skill sees** — five toggles (chat history, original
+  task, node input, long-term memory, tool results) that become the
+  skill's default context.
+
+Deleting a user skill asks for confirmation; if any pipelines reference
+it the dialog lists them so you can repoint or remove the reference
+first.
 
 ## Active tasks
 

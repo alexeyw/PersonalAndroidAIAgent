@@ -37,6 +37,7 @@ class InitializeAppUseCase @Inject constructor(
     private val loadPipelineFromPresetUseCase: LoadPipelineFromPresetUseCase,
     private val pipelineRunRepository: PipelineRunRepository,
     private val pendingInteractionRepository: PendingInteractionRepository,
+    private val seedBundledSkillsUseCase: SeedBundledSkillsUseCase,
 ) {
     /**
      * Executes the initialization logic.
@@ -53,6 +54,11 @@ class InitializeAppUseCase @Inject constructor(
      */
     suspend operator fun invoke() {
         sweepOrphanedRuns()
+
+        // Idempotently seed the bundled skills on every launch (not gated on
+        // first launch) so users upgrading from a build without skills still
+        // receive the bundled catalogue. Upsert-by-stable-id makes repeats safe.
+        seedBundledSkillsUseCase()
 
         val isFirstLaunch = settingsRepository.isFirstLaunch.first()
 

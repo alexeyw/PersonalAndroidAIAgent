@@ -14,6 +14,7 @@ import app.knotwork.android.data.local.dao.PipelinePresetDao
 import app.knotwork.android.data.local.dao.PipelineRunDao
 import app.knotwork.android.data.local.dao.PromptPresetDao
 import app.knotwork.android.data.local.dao.PromptTemplateDao
+import app.knotwork.android.data.local.dao.SkillDao
 import app.knotwork.android.data.local.dao.TraceStepDao
 import app.knotwork.android.data.local.models.ChatMessageEntity
 import app.knotwork.android.data.local.models.ChatSessionEntity
@@ -27,6 +28,7 @@ import app.knotwork.android.data.local.models.PipelinePresetEntity
 import app.knotwork.android.data.local.models.PipelineRunEntity
 import app.knotwork.android.data.local.models.PromptPresetEntity
 import app.knotwork.android.data.local.models.PromptTemplateEntity
+import app.knotwork.android.data.local.models.SkillEntity
 import app.knotwork.android.data.local.models.TraceStepEntity
 
 /**
@@ -56,8 +58,9 @@ import app.knotwork.android.data.local.models.TraceStepEntity
         PromptPresetEntity::class,
         PipelineRunEntity::class,
         PendingInteractionEntity::class,
+        SkillEntity::class,
     ],
-    version = 35,
+    version = 36,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -135,6 +138,14 @@ abstract class AppDatabase : RoomDatabase() {
      * @return The [PendingInteractionDao] instance.
      */
     abstract fun pendingInteractionDao(): PendingInteractionDao
+
+    /**
+     * Provides access to the [SkillDao] backing the skill catalogue (bundled +
+     * user skills).
+     *
+     * @return The [SkillDao] instance.
+     */
+    abstract fun skillDao(): SkillDao
 
     companion object {
         /**
@@ -797,6 +808,34 @@ abstract class AppDatabase : RoomDatabase() {
                         "ON `pipeline_runs` (`parentRunId`)",
                 )
                 db.execSQL("ALTER TABLE `trace_steps` ADD COLUMN `depth` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * v35 → v36: adds the `skills` table backing the skill catalogue
+         * (bundled + user skills). Additive — no existing data is touched.
+         * `toolAllowlistCsv` is nullable on purpose: `NULL` encodes the
+         * "all tools" (unrestricted) state, distinct from an empty string
+         * which encodes "no tools".
+         */
+        val MIGRATION_35_36 = object : Migration(35, 36) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `skills` (
+                        `id` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `instruction` TEXT NOT NULL,
+                        `toolAllowlistCsv` TEXT,
+                        `contextConfig` TEXT NOT NULL,
+                        `isBundled` INTEGER NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
             }
         }
     }

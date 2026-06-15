@@ -28,12 +28,14 @@ class InitializeAppUseCaseTest {
     private val pendingInteractionRepository: PendingInteractionRepository = mockk(relaxed = true) {
         coEvery { getAllRunIds() } returns emptySet()
     }
+    private val seedBundledSkillsUseCase: SeedBundledSkillsUseCase = mockk(relaxed = true)
     private val useCase = InitializeAppUseCase(
         settingsRepository,
         pipelineRepository,
         loadPipelineFromPresetUseCase,
         pipelineRunRepository,
         pendingInteractionRepository,
+        seedBundledSkillsUseCase,
     )
 
     @Test
@@ -89,6 +91,19 @@ class InitializeAppUseCaseTest {
         coVerify(exactly = 0) { pipelineRepository.savePipeline(any()) }
         coVerify(exactly = 0) { settingsRepository.setDefaultPipelineId(any()) }
         coVerify(exactly = 0) { settingsRepository.setFirstLaunch(any()) }
+    }
+
+    @Test
+    fun `invoke seeds bundled skills on every launch regardless of first launch`() = runTest {
+        // Given — NOT a first launch (the first-launch gate must not apply to
+        // the skill seed, so upgrading users still receive the bundled set).
+        every { settingsRepository.isFirstLaunch } returns flowOf(false)
+
+        // When
+        useCase()
+
+        // Then — the idempotent seed runs anyway.
+        coVerify(exactly = 1) { seedBundledSkillsUseCase() }
     }
 
     @Test

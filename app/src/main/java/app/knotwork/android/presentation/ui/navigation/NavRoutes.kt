@@ -113,6 +113,9 @@ object NavRoutes {
     /** Prompt-template library (under More). */
     const val PROMPTS: String = "prompts"
 
+    /** Skill library (under More). */
+    const val SKILLS: String = "skills"
+
     /** Pipeline-preset manager (under More → Library). */
     const val PIPELINE_PRESETS: String = "pipeline-presets"
 

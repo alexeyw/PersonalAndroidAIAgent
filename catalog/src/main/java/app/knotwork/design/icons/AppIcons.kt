@@ -91,6 +91,7 @@ import app.knotwork.design.icons.imagevector.knotworkSearchIcon
 import app.knotwork.design.icons.imagevector.knotworkSendIcon
 import app.knotwork.design.icons.imagevector.knotworkShareIcon
 import app.knotwork.design.icons.imagevector.knotworkShieldIcon
+import app.knotwork.design.icons.imagevector.knotworkSkillIcon
 import app.knotwork.design.icons.imagevector.knotworkSlidersIcon
 import app.knotwork.design.icons.imagevector.knotworkSparkIcon
 import app.knotwork.design.icons.imagevector.knotworkStarIcon
@@ -300,6 +301,9 @@ object AppIcons {
 
     /** `I.globe` — network / locale. */
     val Globe: ImageVector get() = knotworkGlobeIcon
+
+    /** `I.skill` — Skill library entry (framed star, mixed glyph). */
+    val Skill: ImageVector get() = knotworkSkillIcon
 
     /** `I.branch` — branch / IF. */
     val Branch: ImageVector get() = knotworkBranchIcon

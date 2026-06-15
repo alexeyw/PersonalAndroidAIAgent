@@ -92,6 +92,14 @@ configured it.
 - **Prompt library** — `ScrollableTabRow` of categories, per-card
   edit / delete / duplicate actions, inline `$VAR` highlighting in
   the body, and a `ModalBottomSheet` editor with `INSERT` chip row.
+- **Skill library** (More → Skill library) — reusable bundles of
+  *instruction + tool restriction + context configuration*. A
+  Bundled / Mine 2-tab list (bundled: Summarizer, Translator, Report
+  Writer), a full-screen editor with a monospace `$VAR`-aware
+  instruction field, a tri-state tool allowlist (**All tools** /
+  **Restrict** / **No tools** — an explicit empty allowlist is distinct
+  from unrestricted), and per-context-block toggles. Bundled skills are
+  read-only but can be duplicated into an editable copy.
 - **Files** screen (More → Files) — a window over the agent's file
   workspace: a path-sorted listing with a used / limit quota
   indicator, read-only text preview (truncated for large files),
