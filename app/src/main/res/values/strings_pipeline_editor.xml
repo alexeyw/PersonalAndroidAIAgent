@@ -2,6 +2,12 @@
 <resources>
     <!-- Pipeline editor strings. -->
 
+    <!-- PIPELINE node card subtitle (target sub-pipeline). %1$s is the target
+         pipeline's display name. -->
+    <string name="pipeline_editor_node_pipeline_target">→ %1$s</string>
+    <string name="pipeline_editor_node_pipeline_no_target">No target pipeline</string>
+    <string name="pipeline_editor_node_pipeline_missing">Pipeline not found</string>
+
     <!-- Quick-add radial menu (long-press on canvas) -->
     <string name="pipeline_editor_quick_add_title">Add node</string>
     <string name="pipeline_editor_quick_add_close">Close add-node menu</string>

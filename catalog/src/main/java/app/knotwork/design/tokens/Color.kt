@@ -37,7 +37,7 @@ object KnotworkPalette {
     val SignalWarn = Color(0xFFD5A13C)
     val SignalError = Color(0xFFD55753)
 
-    // Per-NodeType hues (12) — identical in both themes so pipelines read
+    // Per-NodeType hues (13) — identical in both themes so pipelines read
     // identically in light and dark.
     val NodeInput = Color(0xFFC48225)
     val NodeIntentRouter = Color(0xFF9283DC)
@@ -52,6 +52,13 @@ object KnotworkPalette {
     val NodeEvaluation = Color(0xFFD5725A)
     val NodeSummary = Color(0xFF359BD9)
     val NodeOutput = Color(0xFF81520A)
+
+    // Deep indigo for `NodeType.PIPELINE` — occupies the empty slot between
+    // IntentRouter violet (~290°) and Summary/Cloud blue (~220°). Darker and
+    // more saturated than its neighbours (L 0.47, oklch(0.47 0.16 274)) so it
+    // reads as a separate family at a glance; the lower lightness also keeps
+    // `headerOnColor` firmly in the white-foreground band (L < 0.5, 7.16:1).
+    val NodePipeline = Color(0xFF424DB2)
 }
 
 /**

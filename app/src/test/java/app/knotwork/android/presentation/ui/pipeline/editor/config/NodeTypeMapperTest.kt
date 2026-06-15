@@ -10,19 +10,18 @@ import app.knotwork.design.components.pipelineeditor.NodeType as CatalogNodeType
 class NodeTypeMapperTest {
 
     @Test
-    fun `given every editor-representable domain node type when toCatalog round-trip then identity`() {
-        // PIPELINE has no catalog counterpart yet (the visual editor surface for
-        // PIPELINE nodes is a separate task), so it is excluded from the round-trip.
-        DomainNodeType.entries.filterNot { it == DomainNodeType.PIPELINE }.forEach { type ->
+    fun `given every domain node type when toCatalog round-trip then identity`() {
+        DomainNodeType.entries.forEach { type ->
             val catalog = NodeTypeMapper.toCatalog(type)
             val back = NodeTypeMapper.toDomain(catalog)
             assertEquals(type, back)
         }
     }
 
-    @Test(expected = IllegalStateException::class)
-    fun `given PIPELINE domain node type when toCatalog then throws until editor support lands`() {
-        NodeTypeMapper.toCatalog(DomainNodeType.PIPELINE)
+    @Test
+    fun `given PIPELINE domain node type when toCatalog then maps to catalog PIPELINE`() {
+        assertEquals(CatalogNodeType.PIPELINE, NodeTypeMapper.toCatalog(DomainNodeType.PIPELINE))
+        assertEquals(DomainNodeType.PIPELINE, NodeTypeMapper.toDomain(CatalogNodeType.PIPELINE))
     }
 
     @Test

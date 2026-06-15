@@ -68,6 +68,9 @@ private const val DIMMED_ALPHA = 0.40f
  * @param dimmed `true` for nodes that are NOT the currently-running step during a
  * live run — drops opacity to ~0.4 so the active node visually pops. Only meaningful
  * while a run is in progress; the canvas passes `false` outside of run mode.
+ * @param subtitle optional one-line secondary text shown under the title on the
+ * card (`null` hides it). Used by PIPELINE nodes to surface the target pipeline
+ * name (or a "no target" / "not found" note); every other type passes `null`.
  * @param onSelect invoked on tap when the node is **not** currently selected. This is the
  * canonical "select this node" entry point — the screen then highlights it via the catalog
  * `NodeCard.selected` flag and re-renders.
@@ -112,6 +115,7 @@ internal fun EditorNode(
     ports: NodePorts,
     reducedMotion: Boolean,
     dimmed: Boolean,
+    subtitle: String? = null,
     onSelect: () -> Unit,
     onOpenConfig: () -> Unit,
     onLongPress: () -> Unit,
@@ -183,7 +187,7 @@ internal fun EditorNode(
         NodeCard(
             type = NodeTypeMapper.toCatalog(node.type),
             title = node.label.ifBlank { node.type.name },
-            subtitle = null,
+            subtitle = subtitle,
             selected = selected,
             error = error,
             running = running,

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineValidationError
@@ -102,6 +103,7 @@ internal fun PipelineEditorContent(
     onMultiSelectDelete: () -> Unit,
     activeRunningEdgeIds: Set<String>,
     modifier: Modifier = Modifier,
+    subtitleForNode: (NodeModel) -> String? = { null },
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         if (editor.multiSelectMode && editor.selection.isNotEmpty()) {
@@ -152,6 +154,7 @@ internal fun PipelineEditorContent(
             onLongPressEdge = onLongPressEdge,
             onStartWithInput = onStartWithInput,
             onFromTemplate = onFromTemplate,
+            subtitleForNode = subtitleForNode,
             modifier = Modifier.weight(1f),
         )
 

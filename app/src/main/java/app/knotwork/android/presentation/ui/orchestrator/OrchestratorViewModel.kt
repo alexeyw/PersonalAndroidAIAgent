@@ -11,6 +11,7 @@ import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineImportOutcome
+import app.knotwork.android.domain.models.PipelineTargetAvailability
 import app.knotwork.android.domain.models.PipelineValidationError
 import app.knotwork.android.domain.models.PipelineValidationException
 import app.knotwork.android.domain.models.PresetCategory
@@ -24,6 +25,8 @@ import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.PromptPresetRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
+import app.knotwork.android.domain.services.PipelineCompositionValidator
+import app.knotwork.android.domain.services.findDependentPipelines
 import app.knotwork.android.domain.usecases.CreatePipelineUseCase
 import app.knotwork.android.domain.usecases.DeletePipelineUseCase
 import app.knotwork.android.domain.usecases.DuplicatePipelineUseCase
@@ -50,6 +53,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
 
@@ -88,6 +92,7 @@ class OrchestratorViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val promptTemplateEngine: PromptTemplateEngine,
     private val promptPresetRepository: PromptPresetRepository,
+    private val compositionValidator: PipelineCompositionValidator,
     private val promptVariableProviders: Set<@JvmSuppressWildcards PromptVariableProvider>,
 ) : ViewModel() {
 
@@ -899,6 +904,42 @@ class OrchestratorViewModel @Inject constructor(
      *
      * @param pipelineId Unique identifier of the pipeline to delete.
      */
+    /**
+     * The saved pipelines that run [pipelineId] through a `NodeType.PIPELINE`
+     * node — i.e. the dependents that would be left with a dangling target if
+     * [pipelineId] were deleted. Read straight off the current library snapshot;
+     * the library delete dialog uses it to warn the user (and to confirm there is
+     * no silent cascade — dependents become a normal, deep-linkable validation
+     * error, not an automatic delete).
+     *
+     * @param pipelineId the pipeline the user is about to delete.
+     * @return the dependent pipelines (empty when nothing references it).
+     */
+    fun dependentsOf(pipelineId: String): List<PipelineGraph> =
+        findDependentPipelines(pipelineId, _uiState.value.savedPipelines)
+
+    /**
+     * Classifies every saved pipeline as a candidate target for a PIPELINE node
+     * in the pipeline currently open in the editor. Delegates to
+     * [PipelineCompositionValidator.classifyTargets] so the picker disables the
+     * same cycle / self / depth options a save would reject. Failures degrade to
+     * an empty list (the picker then shows its empty-state) rather than crashing
+     * the sheet.
+     *
+     * @return one availability row per saved pipeline, sorted by name.
+     */
+    suspend fun classifyPipelineTargets(): List<PipelineTargetAvailability> {
+        val graph = _uiState.value.currentPipeline
+        return try {
+            compositionValidator.classifyTargets(editingPipelineId = graph.id, editingGraph = graph)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to classify pipeline targets for %s", graph.id)
+            emptyList()
+        }
+    }
+
     fun deletePipeline(pipelineId: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }

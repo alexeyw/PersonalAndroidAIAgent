@@ -82,6 +82,7 @@ internal fun EditorCanvas(
     onStartWithInput: () -> Unit,
     onFromTemplate: () -> Unit,
     modifier: Modifier = Modifier,
+    subtitleForNode: (NodeModel) -> String? = { null },
 ) {
     val density = LocalDensity.current
     var viewportSize by remember { mutableStateOf(IntPair(0, 0)) }
@@ -247,6 +248,7 @@ internal fun EditorCanvas(
                 error = errorsByNodeId[node.id],
                 ports = ports,
                 reducedMotion = reducedMotion,
+                subtitle = subtitleForNode(originalNode),
                 // While a run is live AND the orchestrator has reported an
                 // active node, dim every OTHER node so the user's eye snaps to
                 // the running card. Outside of run mode — or while the active

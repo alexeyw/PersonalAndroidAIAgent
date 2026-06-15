@@ -43,8 +43,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import app.knotwork.android.R
 import app.knotwork.android.domain.models.NodeContextConfig
+import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
+import app.knotwork.android.domain.models.PipelineTargetAvailability
 import app.knotwork.android.presentation.ui.common.resolve
 import app.knotwork.android.presentation.ui.components.PromptPreviewBottomSheet
 import app.knotwork.android.presentation.ui.orchestrator.OrchestratorViewModel
@@ -69,6 +71,8 @@ import app.knotwork.design.components.controls.KnotworkField
 import app.knotwork.design.components.controls.KnotworkTextField
 import app.knotwork.design.components.pipelineeditor.EditorPrimaryAction
 import app.knotwork.design.components.pipelineeditor.LocalModelOption
+import app.knotwork.design.components.pipelineeditor.PipelineTargetDisabledReason
+import app.knotwork.design.components.pipelineeditor.PipelineTargetOption
 import app.knotwork.design.components.pipelineeditor.RunStatus
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
@@ -368,6 +372,37 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
             viewModel.replaceCurrentPipeline(pipeline.copy(nodes = nextNodes))
         }
 
+        // PIPELINE-node card subtitle: resolve the target pipeline id to its
+        // display name from the saved-pipeline catalogue (or a "no target" /
+        // "not found" note). Built here in the composable so the strings come
+        // from `stringResource`; every other node type resolves to `null`.
+        val pipelineNamesById = remember(uiState.savedPipelines) {
+            uiState.savedPipelines.associate { it.id to it.name }
+        }
+        val noTargetSubtitle = stringResource(R.string.pipeline_editor_node_pipeline_no_target)
+        val missingTargetSubtitle = stringResource(R.string.pipeline_editor_node_pipeline_missing)
+        val targetSubtitleFormat = stringResource(R.string.pipeline_editor_node_pipeline_target)
+        val subtitleForNode = remember(
+            pipelineNamesById,
+            noTargetSubtitle,
+            missingTargetSubtitle,
+            targetSubtitleFormat,
+        ) {
+            { candidate: NodeModel ->
+                if (candidate.type == NodeType.PIPELINE) {
+                    val target = candidate.targetPipelineId
+                    when {
+                        target.isNullOrBlank() -> noTargetSubtitle
+                        else -> pipelineNamesById[target]
+                            ?.let { name -> targetSubtitleFormat.format(name) }
+                            ?: missingTargetSubtitle
+                    }
+                } else {
+                    null
+                }
+            }
+        }
+
         PipelineEditorContent(
             graph = pipeline,
             editor = editor,
@@ -495,6 +530,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                 editor.multiSelectMode = false
             },
             activeRunningEdgeIds = activeRunningEdges(runState.activeNodeId, pipeline),
+            subtitleForNode = subtitleForNode,
             modifier = Modifier.fillMaxSize(),
         )
 
@@ -690,6 +726,19 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                         .map { it.label }
                         .toSet()
                 }
+                // For a PIPELINE node, classify every saved pipeline as a
+                // candidate target (cycle / self / depth disabled with a reason)
+                // off the main thread when the sheet opens. Other node types
+                // never read this list, so the work is skipped for them.
+                var pipelineTargets by remember(node.id) { mutableStateOf(emptyList<PipelineTargetOption>()) }
+                val isPipelineNode = node.type == NodeType.PIPELINE
+                LaunchedEffect(node.id, isPipelineNode) {
+                    pipelineTargets = if (isPipelineNode) {
+                        viewModel.classifyPipelineTargets().map { it.toCatalogOption() }
+                    } else {
+                        emptyList()
+                    }
+                }
                 NodeConfigSheetHost(
                     config = workingConfig,
                     peerTitles = peerTitles,
@@ -753,6 +802,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                             )
                         }
                     },
+                    availablePipelines = pipelineTargets,
                     extraSection = {
                         // Bind the legacy `NodeContextConfigSection` ("Input
                         // Data" checkboxes) to `editor.workingContextConfig`
@@ -1064,3 +1114,23 @@ private val AUTO_LAYOUT_SIBLING_GAP = 240.dp
  * once inbound / outbound port labels inset it, so 216 dp leaves ~90 dp between layers.
  */
 private val AUTO_LAYOUT_LAYER_GAP = 216.dp
+
+/**
+ * Maps a domain [PipelineTargetAvailability] (the validator's classification)
+ * onto the catalog [PipelineTargetOption] the picker renders. Keeps the catalog
+ * free of the domain reason hierarchy while carrying the per-reason detail
+ * (cycle culprit name / depth limit) the picker messages need.
+ */
+private fun PipelineTargetAvailability.toCatalogOption(): PipelineTargetOption = PipelineTargetOption(
+    id = pipelineId,
+    name = name,
+    selectable = selectable,
+    disabledReason = when (reason) {
+        PipelineTargetAvailability.Reason.Self -> PipelineTargetDisabledReason.SELF
+        is PipelineTargetAvailability.Reason.Cycle -> PipelineTargetDisabledReason.CYCLE
+        is PipelineTargetAvailability.Reason.Depth -> PipelineTargetDisabledReason.DEPTH
+        null -> null
+    },
+    cycleCulprit = (reason as? PipelineTargetAvailability.Reason.Cycle)?.culpritPipelineName,
+    depthLimit = (reason as? PipelineTargetAvailability.Reason.Depth)?.limit,
+)

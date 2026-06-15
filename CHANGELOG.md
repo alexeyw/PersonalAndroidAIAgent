@@ -28,6 +28,17 @@ details.
   **Pipeline** palette entry. (Visual editor configuration of the node — target
   picker, on-card target name, validation deep-links — and nested-run
   observability land in follow-up changes.)
+- **`PIPELINE` node in the visual editor.** The in-app pipeline editor now
+  renders and configures `PIPELINE` nodes: a deep-indigo node card showing the
+  target pipeline's name (or a "No target pipeline" / "Pipeline not found"
+  note), and a config-sheet **target picker** listing every other saved
+  pipeline. Choices that would create a cycle (self-reference or a pipeline
+  that already runs this one) or exceed the nesting ceiling appear disabled
+  with the reason — reusing the same cross-pipeline validator that gates a
+  save. Deleting a pipeline that other pipelines reference now warns with the
+  list of dependents (which become a normal, deep-linkable validation error —
+  no silent cascade). Composition errors (missing target, cycle, depth) surface
+  in the validation bar with a one-tap deep-link to the offending node.
 - **Nested-pipeline observability, shared budgets and resume across the
   boundary.** A sub-pipeline now runs as a first-class **child run** linked to
   its parent (`pipeline_runs.parentRunId`), so its execution is no longer a

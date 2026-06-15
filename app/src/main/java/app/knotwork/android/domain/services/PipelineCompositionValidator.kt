@@ -2,6 +2,7 @@ package app.knotwork.android.domain.services
 
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
+import app.knotwork.android.domain.models.PipelineTargetAvailability
 import app.knotwork.android.domain.models.PipelineValidationError
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
@@ -100,4 +101,130 @@ class PipelineCompositionValidator @Inject constructor(
         visit(graph, listOf(graph.id), depth = 0)
         return errors.toList()
     }
+
+    /**
+     * Classifies every saved pipeline as a candidate target for a
+     * [NodeType.PIPELINE] node in [editingGraph]. Reuses the same call-graph
+     * reachability the [validate] pass relies on, so the editor's target picker
+     * disables exactly the options a subsequent save would reject — and names
+     * the reason so the user knows the remedy.
+     *
+     * A candidate is **not** selectable when:
+     *  - it is [editingPipelineId] itself ([PipelineTargetAvailability.Reason.Self]);
+     *  - its call graph transitively runs [editingPipelineId], which would close a
+     *    cycle ([PipelineTargetAvailability.Reason.Cycle], naming the back-reference);
+     *  - nesting it under the edited pipeline would exceed
+     *    [SettingsRepository.pipelineMaxNestingDepth]
+     *    ([PipelineTargetAvailability.Reason.Depth]).
+     *
+     * The depth check measures the candidate's own subtree as if the edited
+     * pipeline were the run root; the full transitive depth across every ancestor
+     * that references the edited pipeline remains enforced by [validate] at save.
+     *
+     * @param editingPipelineId id of the pipeline being edited.
+     * @param editingGraph the in-memory (possibly unsaved) edited graph; it
+     *   overrides the persisted copy of its own id during reachability so an edit
+     *   that would close a cycle is detected before it is saved.
+     * @return one [PipelineTargetAvailability] per saved pipeline, sorted by name.
+     */
+    suspend fun classifyTargets(
+        editingPipelineId: String,
+        editingGraph: PipelineGraph,
+    ): List<PipelineTargetAvailability> {
+        val all = pipelineRepository.getAllPipelines().first()
+        val maxDepth = settingsRepository.pipelineMaxNestingDepth.first()
+        // Resolve ids through the persisted set, but let the in-memory edited
+        // graph win for its own id so unsaved edits drive the classification.
+        val byId = all.associateByTo(mutableMapOf()) { it.id }
+        byId[editingGraph.id] = editingGraph
+
+        return all
+            .sortedBy { it.name.lowercase() }
+            .map { candidate ->
+                val reason = when {
+                    candidate.id == editingPipelineId -> PipelineTargetAvailability.Reason.Self
+                    else -> {
+                        val culprit = cycleCulpritName(candidate.id, editingPipelineId, byId)
+                        when {
+                            culprit != null -> PipelineTargetAvailability.Reason.Cycle(culprit)
+                            1 + subtreeDepth(candidate.id, byId) > maxDepth ->
+                                PipelineTargetAvailability.Reason.Depth(maxDepth)
+                            else -> null
+                        }
+                    }
+                }
+                PipelineTargetAvailability(
+                    pipelineId = candidate.id,
+                    name = candidate.name,
+                    selectable = reason == null,
+                    reason = reason,
+                )
+            }
+    }
 }
+
+/** PIPELINE-node target ids declared by [pipeline] (non-blank only). */
+private fun pipelineTargets(pipeline: PipelineGraph): List<String> = pipeline.nodes
+    .filter { it.type == NodeType.PIPELINE }
+    .mapNotNull { it.targetPipelineId?.takeIf { id -> id.isNotBlank() } }
+
+/**
+ * Returns the display name of a pipeline in [candidateId]'s call graph
+ * (including the candidate itself) that directly runs [targetId], or `null`
+ * when [targetId] is unreachable from [candidateId]. A non-null result means
+ * picking the candidate would close a cycle back to the edited pipeline.
+ */
+private fun cycleCulpritName(candidateId: String, targetId: String, byId: Map<String, PipelineGraph>): String? {
+    val visited = mutableSetOf<String>()
+    val stack = ArrayDeque<String>().apply { addLast(candidateId) }
+    while (stack.isNotEmpty()) {
+        val id = stack.removeLast()
+        if (!visited.add(id)) continue
+        val pipeline = byId[id] ?: continue
+        val targets = pipelineTargets(pipeline)
+        if (targetId in targets) return pipeline.name
+        targets.forEach { stack.addLast(it) }
+    }
+    return null
+}
+
+/**
+ * Maximum number of PIPELINE hops below [rootId] in the call graph. Back-edges
+ * (cycles within the subtree) are treated as depth 0 so the walk always
+ * terminates; such cycles are reported separately by the full [validate] pass.
+ */
+private fun subtreeDepth(rootId: String, byId: Map<String, PipelineGraph>): Int {
+    val memo = mutableMapOf<String, Int>()
+    val onPath = mutableSetOf<String>()
+
+    fun depthOf(id: String): Int {
+        memo[id]?.let { return it }
+        if (!onPath.add(id)) return 0
+        val pipeline = byId[id]
+        val depth = if (pipeline == null) {
+            0
+        } else {
+            pipelineTargets(pipeline).maxOfOrNull { 1 + depthOf(it) } ?: 0
+        }
+        onPath.remove(id)
+        memo[id] = depth
+        return depth
+    }
+
+    return depthOf(rootId)
+}
+
+/**
+ * Pure helper: the pipelines in [all] that run [targetPipelineId] through a
+ * [NodeType.PIPELINE] node — the dependents that would be left with a dangling
+ * target if [targetPipelineId] were deleted. The target itself is excluded.
+ *
+ * @param targetPipelineId the pipeline about to be deleted.
+ * @param all every saved pipeline.
+ * @return the dependent pipelines, in the order they appear in [all].
+ */
+fun findDependentPipelines(targetPipelineId: String, all: List<PipelineGraph>): List<PipelineGraph> =
+    all.filter { pipeline ->
+        pipeline.id != targetPipelineId &&
+            pipeline.nodes.any { it.type == NodeType.PIPELINE && it.targetPipelineId == targetPipelineId }
+    }

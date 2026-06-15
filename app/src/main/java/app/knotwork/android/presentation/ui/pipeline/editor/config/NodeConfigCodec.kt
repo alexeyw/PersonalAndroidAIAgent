@@ -1,4 +1,4 @@
-@file:Suppress("TooManyFunctions") // 12 node types -> 12 encode/decode pairs by design.
+@file:Suppress("TooManyFunctions") // 13 node types -> 13 encode/decode pairs by design.
 
 package app.knotwork.android.presentation.ui.pipeline.editor.config
 
@@ -17,6 +17,7 @@ import app.knotwork.design.components.pipelineeditor.LiteRtConfig
 import app.knotwork.design.components.pipelineeditor.NodeConfig
 import app.knotwork.design.components.pipelineeditor.OutputConfig
 import app.knotwork.design.components.pipelineeditor.OutputFormat
+import app.knotwork.design.components.pipelineeditor.PipelineConfig
 import app.knotwork.design.components.pipelineeditor.QueueProcessorConfig
 import app.knotwork.design.components.pipelineeditor.SummaryConfig
 import app.knotwork.design.components.pipelineeditor.SummaryFormat
@@ -99,6 +100,7 @@ internal object NodeConfigCodec {
             is QueueProcessorConfig -> encodeQueueProcessor(json, config)
             is EvaluationConfig -> encodeEvaluation(json, config)
             is SummaryConfig -> encodeSummary(json, config)
+            is PipelineConfig -> encodePipeline(json, config)
         }
         return json.toString()
     }
@@ -148,6 +150,12 @@ internal object NodeConfigCodec {
             // Empty string is allowed
             // and the executor reads it as "echo upstream verbatim".
             is OutputConfig -> withJson.copy(systemPrompt = config.systemPrompt)
+            // Persist the chosen sub-pipeline id onto the domain row so
+            // `PipelineNodeExecutor` resolves the target at run time; blank
+            // means "no target chosen" and round-trips as `null`.
+            is PipelineConfig -> withJson.copy(
+                targetPipelineId = config.targetPipelineId.takeIf { it.isNotBlank() },
+            )
             is IntentRouterConfig,
             is DecompositionConfig,
             is QueueProcessorConfig,
@@ -209,6 +217,9 @@ internal object NodeConfigCodec {
             customPrompt = DefaultPrompts
                 .getDefaultPromptForNodeType(DomainNodeType.SUMMARY),
         )
+        // A fresh PIPELINE node has no target yet — the picker forces the
+        // choice and the validator blocks Save until one is made.
+        CatalogNodeType.PIPELINE -> PipelineConfig(title = title)
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -231,6 +242,7 @@ internal object NodeConfigCodec {
             CatalogNodeType.QUEUE_PROCESSOR -> decodeQueueProcessor(payload, title, description, fallback)
             CatalogNodeType.EVALUATION -> decodeEvaluation(payload, title, description, fallback)
             CatalogNodeType.SUMMARY -> decodeSummary(payload, title, description, fallback)
+            CatalogNodeType.PIPELINE -> decodePipeline(payload, title, description, fallback)
         }
     }
 
@@ -297,6 +309,10 @@ internal object NodeConfigCodec {
             CatalogNodeType.SUMMARY -> SummaryConfig(
                 title = title,
                 customPrompt = systemPromptOrDefault.takeIf { it.isNotBlank() },
+            )
+            CatalogNodeType.PIPELINE -> PipelineConfig(
+                title = title,
+                targetPipelineId = node.targetPipelineId.orEmpty(),
             )
         }
     }
@@ -392,6 +408,12 @@ internal object NodeConfigCodec {
         json.put("format", c.format.name)
         c.customPrompt?.let { json.put("customPrompt", it) }
         json.put("targetLengthChars", c.targetLengthChars)
+    }
+
+    // Only the target id is persisted; the display name is resolved live by
+    // the editor from the saved-pipeline catalogue, never stored on the node.
+    private fun encodePipeline(json: JSONObject, c: PipelineConfig) {
+        json.put("targetPipelineId", c.targetPipelineId)
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -544,6 +566,13 @@ internal object NodeConfigCodec {
             format = enumOrDefault(p.optStringOrNull("format"), SummaryFormat.BULLETS),
             customPrompt = p.optStringOrNull("customPrompt") ?: fb.systemPrompt,
             targetLengthChars = p.optInt("targetLengthChars", DEFAULT_SUMMARY_LENGTH),
+        )
+
+    private fun decodePipeline(p: JSONObject, title: String, description: String?, fb: NodeModel): PipelineConfig =
+        PipelineConfig(
+            title = title,
+            description = description,
+            targetPipelineId = p.optString("targetPipelineId").ifBlank { fb.targetPipelineId.orEmpty() },
         )
 
     // ─────────────────────────────────────────────────────────────────────

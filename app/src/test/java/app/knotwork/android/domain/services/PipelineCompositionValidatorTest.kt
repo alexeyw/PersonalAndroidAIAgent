@@ -3,6 +3,7 @@ package app.knotwork.android.domain.services
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
+import app.knotwork.android.domain.models.PipelineTargetAvailability
 import app.knotwork.android.domain.models.PipelineValidationError
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
@@ -146,6 +147,76 @@ class PipelineCompositionValidatorTest {
         val tooDeep = errors.filterIsInstance<PipelineValidationError.PipelineNestingTooDeep>().single()
         assertEquals(listOf("root", "a", "b", "c", "d"), tooDeep.pipelineChain)
         assertEquals(MAX_DEPTH, tooDeep.limit)
+    }
+
+    // ── classifyTargets ────────────────────────────────────────────────────
+
+    /** Registers every graph and exposes them through `getAllPipelines()`. */
+    private fun setAllPipelines(vararg gs: PipelineGraph) {
+        gs.forEach { register(it) }
+        every { pipelineRepository.getAllPipelines() } returns flowOf(gs.toList())
+    }
+
+    @Test
+    fun `given candidates when classifyTargets then marks self, cycle, depth and selectable`() = runTest {
+        val root = graph("root") // the pipeline being edited (a leaf)
+        val leaf = graph("leaf") // safe target
+        val caller = graph("caller", "root") // already runs root -> picking it loops
+        // deep -> d1 -> d2 -> d3 : subtree depth 3, so nesting under root would hit 4 > limit 3.
+        val deep = graph("deep", "d1")
+        val d1 = graph("d1", "d2")
+        val d2 = graph("d2", "d3")
+        val d3 = graph("d3")
+        setAllPipelines(root, leaf, caller, deep, d1, d2, d3)
+
+        val byId = validator.classifyTargets(editingPipelineId = "root", editingGraph = root)
+            .associateBy { it.pipelineId }
+
+        assertEquals(PipelineTargetAvailability.Reason.Self, byId.getValue("root").reason)
+        assertTrue(byId.getValue("leaf").selectable)
+        assertEquals(PipelineTargetAvailability.Reason.Cycle("caller"), byId.getValue("caller").reason)
+        assertEquals(PipelineTargetAvailability.Reason.Depth(MAX_DEPTH), byId.getValue("deep").reason)
+    }
+
+    @Test
+    fun `given an in-memory edit closing a loop when classifyTargets then the candidate is a cycle`() = runTest {
+        // Persisted: root has no targets; "b" runs root. The in-memory edit adds
+        // root -> (about to pick) — picking b must be rejected as a cycle even
+        // though the persisted root is still a leaf.
+        val persistedRoot = graph("root")
+        val b = graph("b", "root")
+        setAllPipelines(persistedRoot, b)
+
+        val result = validator.classifyTargets(editingPipelineId = "root", editingGraph = persistedRoot)
+
+        assertEquals(
+            PipelineTargetAvailability.Reason.Cycle("b"),
+            result.single { it.pipelineId == "b" }.reason,
+        )
+    }
+
+    @Test
+    fun `given saved pipelines when classifyTargets then results are sorted by name`() = runTest {
+        setAllPipelines(graph("zeta"), graph("alpha"), graph("mid"))
+
+        val names = validator.classifyTargets(editingPipelineId = "none", editingGraph = graph("none"))
+            .map { it.name }
+
+        assertEquals(listOf("alpha", "mid", "zeta"), names)
+    }
+
+    // ── findDependentPipelines ─────────────────────────────────────────────
+
+    @Test
+    fun `given pipelines referencing a target when findDependentPipelines then returns only the dependents`() {
+        val a = graph("a", "x") // depends on x
+        val b = graph("b", "y") // unrelated
+        val c = graph("c", "x", "z") // depends on x (among others)
+        val x = graph("x") // the target itself — excluded even if it self-referenced
+
+        val deps = findDependentPipelines(targetPipelineId = "x", all = listOf(a, b, c, x))
+
+        assertEquals(listOf("a", "c"), deps.map { it.id })
     }
 
     private companion object {

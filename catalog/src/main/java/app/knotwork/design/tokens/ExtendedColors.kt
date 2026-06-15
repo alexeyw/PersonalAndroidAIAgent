@@ -60,6 +60,7 @@ import androidx.compose.ui.graphics.Color
  * @property nodeEvaluation hue for `NodeType.EVALUATION` cards.
  * @property nodeSummary hue for `NodeType.SUMMARY` cards.
  * @property nodeOutput hue for `NodeType.OUTPUT` cards.
+ * @property nodePipeline hue for `NodeType.PIPELINE` cards (deep indigo).
  */
 data class KnotworkExtendedColors(
     val surface1: Color,
@@ -107,6 +108,7 @@ data class KnotworkExtendedColors(
     val nodeEvaluation: Color,
     val nodeSummary: Color,
     val nodeOutput: Color,
+    val nodePipeline: Color,
 )
 
 /**
@@ -164,6 +166,7 @@ fun knotworkExtendedColorsLight() = KnotworkExtendedColors(
     nodeEvaluation = KnotworkPalette.NodeEvaluation,
     nodeSummary = KnotworkPalette.NodeSummary,
     nodeOutput = KnotworkPalette.NodeOutput,
+    nodePipeline = KnotworkPalette.NodePipeline,
 )
 
 /**
@@ -224,6 +227,7 @@ fun knotworkExtendedColorsDark() = KnotworkExtendedColors(
     nodeEvaluation = KnotworkPalette.NodeEvaluation,
     nodeSummary = KnotworkPalette.NodeSummary,
     nodeOutput = KnotworkPalette.NodeOutput,
+    nodePipeline = KnotworkPalette.NodePipeline,
 )
 
 /**
