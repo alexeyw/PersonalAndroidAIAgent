@@ -19,8 +19,8 @@ see [`docs/user-guide.md`](user-guide.md).
    built-in as a callee-side AppFunction; §2.6 — adding a workspace tool)
 3. [Add a new cloud provider](#3-add-a-new-cloud-provider)
 4. [Add a new prompt variable](#4-add-a-new-prompt-variable)
-5. [Add a bundled preset](#5-add-a-bundled-preset) — pipeline (§5.1) and
-   prompt (§5.2)
+5. [Add a bundled preset](#5-add-a-bundled-preset) — pipeline (§5.1),
+   prompt (§5.2) and skill (§5.3)
 6. [Add a new `EmbeddingProvider`](#6-add-a-new-embeddingprovider)
 7. [Use input atoms and chip atoms](#7-use-input-atoms-and-chip-atoms)
 8. [Synchronization table — "if you change X, also touch Y"](#8-synchronization-table)
@@ -709,9 +709,9 @@ test, and — for pipeline presets — a mirror entry in the browser editor.
 A pipeline preset wraps the same pipeline-graph JSON the app exports, plus
 three preset-only fields (`category`, `tags`, `description`). The canonical
 contract is `domain/pipelineio/PipelinePresetJsonSerializer.kt` (schema
-version 1); the seven shipped files under `assets/presets/pipelines/` are the
-reference examples. The broadest of them, `showcase_full_agent.json`, is a
-22-node on-device agent: an `INTENT_ROUTER` triages every message into
+version 1); the shipped files under `assets/presets/pipelines/` are the
+reference examples. The broadest of them, `showcase_full_agent.json`, is the
+on-device agent: an `INTENT_ROUTER` triages every message into
 **chat / factual / task**, and each intent runs a tailored branch —
 
 - *chat* → a direct `LITE_RT` reply;
@@ -721,14 +721,30 @@ reference examples. The broadest of them, `showcase_full_agent.json`, is a
   per-topic `TOOL` loop → `SUMMARY`);
 - *task* → a plan-and-loop flow (`DECOMPOSITION` → `QUEUE_PROCESSOR` → a
   second `INTENT_ROUTER` routing each subtask over clarify / lookup / act /
-  process, with a human-in-the-loop `CLARIFICATION` node → `SUMMARY`).
+  process — but each branch now runs as a composed **`PIPELINE` node**
+  calling one of four bundled sub-pipelines (`subtask_clarify`,
+  `subtask_lookup`, `subtask_act`, `subtask_process`), looping back to the
+  `QUEUE_PROCESSOR` → `SUMMARY`).
 
 It exercises intent routing, IF-condition branching, decomposition,
 queue-processor loops (via QUEUE_PROCESSOR back-edges), tool calls, HITL
-clarification and summary synthesis, with a broad mix of context flags and
-`$VARIABLE` placeholders. It is also the pipeline `InitializeAppUseCase`
-materialises as the first-launch seed, so treat it as the canonical
-"kitchen-sink" template.
+clarification (inside `subtask_clarify`), pipeline composition and summary
+synthesis, with a broad mix of context flags and `$VARIABLE` placeholders. It
+is also the pipeline `InitializeAppUseCase` materialises as the first-launch
+seed, so treat it as the canonical "kitchen-sink" template.
+
+> **Composed presets.** A preset whose `PIPELINE` nodes target *other*
+> bundled presets (as the showcase targets the four `subtask_*` sub-pipelines)
+> needs those sub-pipelines persisted under the **stable id** the node's flat
+> `targetPipelineId` references — the runtime resolves a `PIPELINE` target by
+> *pipeline id*, but materialising a preset mints a fresh random pipeline id.
+> `LoadPipelineFromPresetUseCase` bridges the gap: when it materialises a
+> preset, it walks the `PIPELINE` targets and, for any that are not already a
+> saved pipeline but *are* a bundled preset id, materialises that preset under
+> its own stable id and persists it (create-if-absent, recursively). So a
+> sub-pipeline preset simply ships as another JSON file whose **filename stem
+> equals the id the parent references**; first-launch seeding and a later
+> **+ From preset** spawn both leave a runnable composition.
 
 **Step 1 — drop a JSON file under `assets/presets/pipelines/`.** The
 filename stem becomes the preset `id`, so it must be unique across the
@@ -886,6 +902,74 @@ You don't need to add a per-file test — the catalogue test runs once
 over the whole directory, and `PromptPresetIntegrationTest` proves every
 bundled prompt renders cleanly through `PromptTemplateEngine` with all
 registered variables substituted.
+
+### 5.3. Add a bundled skill
+
+A **skill** is a reusable bundle of *instruction + tool restriction +
+context configuration* — described once and reused from a `SKILL` node
+instead of copying a system prompt between pipelines. Bundled skills ship
+inside the APK as JSON, are seeded into the `skills` table idempotently on
+**every** launch (`SeedBundledSkillsUseCase` → `SkillRepository.seedBundledSkills`,
+upsert-by-stable-id so users upgrading from a build without a given skill
+still receive it), and are read-only in the **Skill library** (the user can
+duplicate one into an editable copy).
+
+**Step 1 — drop a JSON file under `assets/presets/skills/`.** The filename
+stem becomes the skill `id`, so it must be unique across the directory
+(e.g. `report_writer.json` → id `report_writer`). The contract is
+`domain/skillio/SkillJsonSerializer.kt` (schema version 1); the three shipped
+files (`summarizer.json`, `translator.json`, `report_writer.json`) are the
+reference examples.
+
+```json
+{
+  "schemaVersion": 1,
+  "id": "report_writer",
+  "name": "Report Writer",
+  "description": "Writes a short Markdown report to a workspace file.",
+  "instruction": "You are a report writer. Today is $DATE. Write the report, then save it with the write_file tool ...",
+  "toolAllowlist": ["write_file"],
+  "contextConfig": {
+    "chatHistory": false,
+    "originalTask": true,
+    "nodeInput": true,
+    "longTermMemory": false,
+    "toolResults": false
+  },
+  "createdAt": 1748304000000,
+  "updatedAt": 1748304000000
+}
+```
+
+Rules:
+
+- **`toolAllowlist` is tri-state** — the same null / empty / subset contract
+  the domain `Skill.toolAllowlist` carries, and it is a real boundary, not a
+  hint (the `SKILL` executor refuses an out-of-allowlist call):
+  - **field absent or JSON `null`** → unrestricted (every tool, including
+    tools added later);
+  - **`[]`** → an explicit *empty* allowlist (no tools — instruction-only);
+  - **`["a", "b"]`** → only those tools. List a tool by the same id the agent
+    uses (`write_file`, `search_tool`, …).
+- `instruction` may reference any registered `$VARIABLE` placeholder; `$TOOLS`
+  expands only to the skill's allowlist when the skill runs (not the global
+  tool set).
+- `name` must not exceed `MAX_NAME_LENGTH` (60 chars).
+- `contextConfig` is the skill's **default** context; a `SKILL` node starts
+  *inherited* from it and can override per-node.
+
+**Step 2 — use it from a `SKILL` node.** No registration step is needed — the
+seed picks the file up by directory scan. In a pipeline, add a **Skill** node,
+choose the skill in its picker, and (optionally) the on-device / cloud engine.
+The instruction, the visible-tool allowlist, and the default context all come
+from the skill rather than the node (see the *Skill library* and *SKILL node*
+sections of [`docs/user-guide.md`](user-guide.md)).
+
+**Tests.** `SkillJsonSerializerTest` covers the round-trip and the null/empty
+allowlist distinction; `SeedBundledSkillsUseCaseTest` and `SkillRepositoryImplTest`
+cover idempotent seeding. A new bundled skill needs no per-file test, but if it
+allows tools, add a `SkillNodeExecutorTest` case asserting an allowed call
+dispatches and an out-of-allowlist call is refused.
 
 ---
 
@@ -1069,6 +1153,8 @@ double-check it for every recipe in this guide.**
 | A new prompt variable        | a new `PromptVariableProvider` implementation · `di/PromptTemplateModule.kt` (`@Binds @IntoSet`) · **`pipeline-editor.html`** (`PROMPT_VARIABLES`) · `docs/user-guide.md` (variables table) · provider unit test · `PromptTemplateEngine` round-trip test           |
 | A new bundled pipeline preset | a JSON file under `assets/presets/pipelines/` · `PipelinePresetCatalogValidationTest.expectedFileNames` · **`pipeline-editor.html`** (`BUILTIN_PIPELINE_PRESETS`, **📚 Presets → Bundled** tab — maintained by hand) · catalogue + `PipelinePresetIntegrationTest` already cover the directory |
 | A new bundled prompt preset  | a JSON file under `assets/presets/prompts/` · `PromptPresetCatalogValidationTest.expectedFileNames` · catalogue + `PromptPresetIntegrationTest` already cover the directory                                                                                          |
+| A new **composed** bundled pipeline preset (its `PIPELINE` nodes target other bundled presets) | the parent JSON + one JSON per sub-pipeline under `assets/presets/pipelines/` (each sub-pipeline's **filename stem = the `targetPipelineId` the parent references**) · `PipelinePresetCatalogValidationTest.expectedFileNames` (every file) · **`pipeline-editor.html`** (`BUILTIN_PIPELINE_PRESETS` — parent *and* every sub-pipeline) · `LoadPipelineFromPresetUseCase` seeds the sub-pipelines under stable ids on demand (no edit needed unless the resolution policy changes) |
+| A new bundled skill          | a JSON file under `assets/presets/skills/` (filename stem = id) · no registration (seed is a directory scan, idempotent upsert) · `SkillJsonSerializerTest` round-trip already covers the format; add a `SkillNodeExecutorTest` allowlist case if the skill allows tools |
 | A new `EmbeddingProvider`    | a new `EmbeddingProvider` implementation under `data/services/embedding/` · `EmbeddingProvider.kt` (`ID_*` constant) · `di/EmbeddingModule.kt` (`@Binds @IntoMap @StringKey`) · provider unit test · `EmbeddingProviderResolver` resolve/fallback test (Settings dropdown is automatic) |
 
 When in doubt, search the repository for the exact identifier you
