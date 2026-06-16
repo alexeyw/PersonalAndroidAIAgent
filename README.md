@@ -247,6 +247,7 @@ After installing:
 | Architecture     | Clean Architecture + MVVM                               |
 | DI               | Hilt                                                    |
 | Async            | Coroutines / Flow                                       |
+| Serialization    | kotlinx.serialization (structured-output validation)    |
 | Network          | OkHttp + Ktor (via Koog)                                |
 | Local storage    | Room + DataStore                                        |
 | Testing          | JUnit + MockK                                           |

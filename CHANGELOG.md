@@ -15,6 +15,19 @@ details.
 
 ### Added
 
+- **Structured-output validate-and-repair gate.** A new domain component
+  validates an LLM-driven node's output against the shape the node expects — a
+  JSON object or array (deserialized with `kotlinx.serialization`) or one of a
+  constrained set of tokens (e.g. `True`/`False`, `Pass`/`Retry`/`Fail`, router
+  keys) — and, when the local model emits malformed output, hands it back its own
+  invalid reply plus the validation error and asks it to correct itself, at a
+  lowered sampling temperature. The number of repair attempts is configurable
+  (default 2, range 0–4). JSON payload extraction (fenced / bare /
+  embedded-in-prose, object or array) is consolidated in one place. Repairs are
+  surfaced on the agent console as a muted warning line and counted per node in
+  the run metrics. (Wiring the gate into the engine's structured consumers
+  follows in a subsequent change.)
+
 - **Composed Showcase agent (bundled sub-pipelines).** The first-launch
   **Showcase — full agent** pipeline now demonstrates composition: its task
   loop's four subtask branches — *Clarify*, *Lookup*, *Act*, *Process* — are

@@ -57,4 +57,13 @@ sealed interface ConsoleEventType {
 
     /** A failure surfaced from any pipeline subsystem. Rendered in error color. */
     data object Error : ConsoleEventType
+
+    /**
+     * The structured-output gate had to repair a node's malformed model output
+     * (e.g. `"Output repair 1/2 for node Router"`). Rendered as a muted
+     * warning-style line so the user can see the model stumbled before
+     * recovering. Emitted by the gate's consumers via
+     * [app.knotwork.android.domain.engine.structured.RepairListener].
+     */
+    data object StructuredOutputRepair : ConsoleEventType
 }

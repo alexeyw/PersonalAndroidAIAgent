@@ -282,6 +282,7 @@ private fun ConsoleEventType.toStorageName(): String = when (this) {
     ConsoleEventType.MemoryAccess -> "MEMORY_ACCESS"
     ConsoleEventType.SystemMessage -> "SYSTEM_MESSAGE"
     ConsoleEventType.Error -> "ERROR"
+    ConsoleEventType.StructuredOutputRepair -> "STRUCTURED_OUTPUT_REPAIR"
 }
 
 /**
@@ -296,6 +297,7 @@ private fun consoleEventTypeFromStorage(name: String?): ConsoleEventType? = when
     "MEMORY_ACCESS" -> ConsoleEventType.MemoryAccess
     "SYSTEM_MESSAGE" -> ConsoleEventType.SystemMessage
     "ERROR" -> ConsoleEventType.Error
+    "STRUCTURED_OUTPUT_REPAIR" -> ConsoleEventType.StructuredOutputRepair
     else -> {
         Timber.w("Unknown stored console event type '%s'; skipping row", name)
         null

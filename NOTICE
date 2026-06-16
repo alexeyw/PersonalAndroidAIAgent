@@ -27,6 +27,7 @@ required for their redistribution beyond this acknowledgment:
   * Room — The Android Open Source Project
   * AppFunctions — The Android Open Source Project
   * Kotlin Coroutines — JetBrains s.r.o. and Kotlin Programming Language contributors
+  * Kotlin Serialization — JetBrains s.r.o. and Kotlin Programming Language contributors
   * Hilt / Dagger — Google LLC
   * LiteRT-LM — Google LLC
   * MediaPipe — Google LLC
