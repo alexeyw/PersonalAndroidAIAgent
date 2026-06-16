@@ -26,6 +26,7 @@ import app.knotwork.android.domain.engine.executors.SummaryNodeExecutor
 import app.knotwork.android.domain.engine.executors.SystemNodeExecutor
 import app.knotwork.android.domain.engine.executors.ToolInvocationGate
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
+import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ConnectionModel
@@ -177,6 +178,7 @@ class BackgroundAutonomyCycleIntegrationTest {
         every { settingsRepository.resumeMaxAgeHours } returns flowOf(48)
         every { settingsRepository.backgroundApprovalWindowHours } returns flowOf(24)
         every { settingsRepository.defaultPipelineId } returns flowOf(GRAPH_ID)
+        every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(2)
 
         toolRepository = mockk(relaxed = true)
         coEvery { toolRepository.getAvailableTools() } returns
@@ -324,6 +326,8 @@ class BackgroundAutonomyCycleIntegrationTest {
             loadModelUseCase,
             toolRepository,
             toolInvocationGate,
+            StructuredOutputGate(),
+            settingsRepository,
         )
         val nodeExecutorFactory = NodeExecutorFactory(
             InputNodeExecutor(),
@@ -348,7 +352,7 @@ class BackgroundAutonomyCycleIntegrationTest {
                 mockk<KoogCloudLlmModelResolver>(),
                 mockk(relaxed = true),
             ),
-            SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+            SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository, StructuredOutputGate(), settingsRepository),
             QueueProcessorNodeExecutor(),
             SummaryNodeExecutor(llmEngine, loadModelUseCase),
             ClarificationNodeExecutor(

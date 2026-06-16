@@ -104,6 +104,7 @@ class SkillNodeExecutor @Inject constructor(
             .collect { output ->
                 when (output) {
                     is NodeOutput.State -> emit(output)
+                    is NodeOutput.Console -> emit(output)
                     is NodeOutput.Result -> {
                         inferenceText = output.result.outputText
                         inferenceError = output.result.error

@@ -19,6 +19,7 @@ import app.knotwork.android.domain.engine.executors.SummaryNodeExecutor
 import app.knotwork.android.domain.engine.executors.SystemNodeExecutor
 import app.knotwork.android.domain.engine.executors.ToolInvocationGate
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
+import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelinePreset
@@ -154,6 +155,8 @@ class PipelinePresetIntegrationTest {
                 chatRepository,
                 pendingInteractionRepository,
             ),
+            StructuredOutputGate(),
+            settingsRepository,
         )
         val nodeExecutorFactory = NodeExecutorFactory(
             InputNodeExecutor(),
@@ -178,7 +181,7 @@ class PipelinePresetIntegrationTest {
                 cloudLlmModelResolver,
                 networkActivityTracker,
             ),
-            SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+            SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository, StructuredOutputGate(), settingsRepository),
             QueueProcessorNodeExecutor(),
             SummaryNodeExecutor(llmEngine, loadModelUseCase),
             ClarificationNodeExecutor(
@@ -226,6 +229,7 @@ class PipelinePresetIntegrationTest {
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(2)
         coEvery { toolRepository.getAvailableTools() } returns emptyList()
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
         coEvery { localModelRepository.getActiveModel() } returns null

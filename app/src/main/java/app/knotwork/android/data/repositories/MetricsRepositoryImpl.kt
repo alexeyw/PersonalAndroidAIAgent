@@ -49,4 +49,13 @@ class MetricsRepositoryImpl @Inject constructor() : MetricsRepository {
             )
         }
     }
+
+    override fun recordStructuredOutputRepair(nodeName: String) {
+        _metrics.update { current ->
+            val updatedRepairs = current.repairAttemptsPerNode.toMutableMap().apply {
+                put(nodeName, (getOrDefault(nodeName, 0)) + 1)
+            }
+            current.copy(repairAttemptsPerNode = updatedRepairs)
+        }
+    }
 }

@@ -23,6 +23,7 @@ import app.knotwork.android.domain.engine.executors.SummaryNodeExecutor
 import app.knotwork.android.domain.engine.executors.SystemNodeExecutor
 import app.knotwork.android.domain.engine.executors.ToolInvocationGate
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
+import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.PipelineGraph
@@ -166,6 +167,8 @@ class ShowcaseResearchToFilePresetIntegrationTest {
                 chatRepository,
                 pendingInteractionRepository,
             ),
+            StructuredOutputGate(),
+            settingsRepository,
         )
         val nodeExecutorFactory = NodeExecutorFactory(
             InputNodeExecutor(),
@@ -190,7 +193,7 @@ class ShowcaseResearchToFilePresetIntegrationTest {
                 cloudLlmModelResolver,
                 networkActivityTracker,
             ),
-            SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+            SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository, StructuredOutputGate(), settingsRepository),
             QueueProcessorNodeExecutor(),
             SummaryNodeExecutor(llmEngine, loadModelUseCase),
             ClarificationNodeExecutor(
@@ -229,8 +232,10 @@ class ShowcaseResearchToFilePresetIntegrationTest {
             mockk(relaxed = true),
         )
 
-        // Scripted LLM: one canned answer per node / arg-generation pass.
-        every { llmEngine.generateResponseStream(any()) } answers {
+        // Scripted LLM: one canned answer per node / arg-generation pass. The second
+        // (temperature) argument is matched so structured-output repair re-inferences are
+        // answered too.
+        every { llmEngine.generateResponseStream(any(), any()) } answers {
             flowOf(scriptFor(firstArg()))
         }
         coEvery { getContextWindowUseCase(any()) } returns ""
@@ -242,6 +247,7 @@ class ShowcaseResearchToFilePresetIntegrationTest {
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.NeverPrompt)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(2)
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
         coEvery { localModelRepository.getActiveModel() } returns null
 

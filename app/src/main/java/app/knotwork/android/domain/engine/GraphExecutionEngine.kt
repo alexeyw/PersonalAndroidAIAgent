@@ -4,6 +4,7 @@ import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.constants.PipelineExecutionDefaults
 import app.knotwork.android.domain.engine.executors.NodeExecutorFactory
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
+import app.knotwork.android.domain.engine.structured.JsonPayloadExtractor
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ConsoleEvent
 import app.knotwork.android.domain.models.ConsoleEventType
@@ -37,6 +38,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.Json
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -461,6 +465,18 @@ class GraphExecutionEngine @Inject constructor(
 
                 val nodeStartMs = System.currentTimeMillis()
                 var runParked = false
+                // A routing node validates its key against the labels of its own
+                // outgoing edges, which only the graph knows — surface them through
+                // the scope so the executor can constrain (and repair towards) a key
+                // that actually matches a branch. Empty for every other node type.
+                val routingChoices = if (currentNode.type == NodeType.INTENT_ROUTER) {
+                    graph.connections
+                        .filter { it.sourceNodeId == currentNode.id && !it.label.isNullOrBlank() }
+                        .map { it.label!! }
+                        .distinct()
+                } else {
+                    emptyList()
+                }
                 try {
                     executor.execute(
                         nodeForExecution,
@@ -468,7 +484,12 @@ class GraphExecutionEngine @Inject constructor(
                         sessionId,
                         userPrompt,
                         runId,
-                        ExecutionScope(depth = depth, stepBudget = budget, pipelineVisitIndex = pipelineVisitIndex),
+                        ExecutionScope(
+                            depth = depth,
+                            stepBudget = budget,
+                            pipelineVisitIndex = pipelineVisitIndex,
+                            routingChoices = routingChoices,
+                        ),
                     )
                         .collect { output ->
                             when (output) {
@@ -486,6 +507,17 @@ class GraphExecutionEngine @Inject constructor(
                                     emit(output.state)
                                 }
                                 is NodeOutput.Result -> nodeResult = output.result
+                                is NodeOutput.Console -> {
+                                    // The node has no console sink of its own; the
+                                    // engine owns `seq`/`depth` stamping. A repair
+                                    // attempt additionally bumps the per-node repair
+                                    // counter so the statistics surface reflects how
+                                    // often this node's structured output stumbled.
+                                    pushConsole(output.type, output.message)
+                                    if (output.type == ConsoleEventType.StructuredOutputRepair) {
+                                        metricsRepository.recordStructuredOutputRepair(nodeForExecution.label)
+                                    }
+                                }
                             }
                         }
 
@@ -899,23 +931,34 @@ class GraphExecutionEngine @Inject constructor(
         return node.copy(systemPrompt = rendered)
     }
 
+    /**
+     * Parses a list of items from a node's text output, used to seed a
+     * `QUEUE_PROCESSOR` from an upstream `DECOMPOSITION` (or any list-producing
+     * node).
+     *
+     * JSON isolation is delegated to the shared [JsonPayloadExtractor] and the
+     * array is deserialized with `kotlinx.serialization`, so this no longer
+     * carries its own ```json regex or `org.json` walk — a `DECOMPOSITION` node
+     * already validated and re-encoded its list through the structured-output
+     * gate, so the common case is a clean array. The Markdown-list fallback (and
+     * the single-item fallback) remain for nodes that emit a plain bulleted or
+     * numbered list rather than JSON.
+     *
+     * @param text The upstream node output to parse.
+     * @return The parsed items, or a single-element list of [text] when nothing
+     *   list-shaped is found.
+     */
     private fun parseListFromText(text: String): List<String> {
-        try {
-            val blockRegex = """```json\s*(\[.*?\])\s*```""".toRegex(RegexOption.DOT_MATCHES_ALL)
-            val blockMatch = blockRegex.find(text)
-            val jsonString = blockMatch?.groups?.get(1)?.value ?: text.trim()
-
-            if (jsonString.startsWith("[")) {
-                val jsonArray = org.json.JSONArray(jsonString)
-                val list = mutableListOf<String>()
-                for (i in 0 until jsonArray.length()) {
-                    list.add(jsonArray.getString(i))
-                }
+        val payload = JsonPayloadExtractor.extract(text)
+        if (payload.startsWith("[")) {
+            try {
+                val list = listJson.decodeFromString(ListSerializer(String.serializer()), payload)
                 if (list.isNotEmpty()) return list
+            } catch (e: IllegalArgumentException) {
+                // Not a valid string array — fall through to the Markdown-list parsing.
+                // `decodeFromString` is non-suspend, so this cannot mask a CancellationException.
+                Timber.tag("PipelineDebug").e(e, "Error parsing JSON list")
             }
-        } catch (e: Exception) {
-            // Ignore JSON parse errors and fallback
-            Timber.tag("PipelineDebug").e(e, "Error parsing JSON list")
         }
 
         val lines = text.lines().map { it.trim() }.filter { it.matches(Regex("""^(\d+\.|-|\*)\s+.*""")) }
@@ -927,6 +970,12 @@ class GraphExecutionEngine @Inject constructor(
     }
 
     private companion object {
+        /** Lenient JSON used to parse a `QUEUE_PROCESSOR` seed list (see [parseListFromText]). */
+        val listJson = Json {
+            ignoreUnknownKeys = true
+            isLenient = true
+        }
+
         /**
          * Node types whose `systemPrompt` is forwarded to an LLM engine and
          * therefore needs `$VARIABLE` placeholders resolved before execution.

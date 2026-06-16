@@ -1,6 +1,7 @@
 package app.knotwork.android.domain.usecases
 
 import app.knotwork.android.domain.engine.LlmInferenceEngine
+import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.MemoryChunk
@@ -9,6 +10,8 @@ import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
 import app.knotwork.android.domain.repositories.MemoryRepository
+import app.knotwork.android.domain.repositories.MetricsRepository
+import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.EmbeddingProvider
 import app.knotwork.android.domain.services.EmbeddingProviderResolver
 import app.knotwork.android.domain.services.MemorySearchStatsTracker
@@ -38,6 +41,8 @@ class MemoryExtractionUseCaseTest {
     private lateinit var embeddingProvider: EmbeddingProvider
     private lateinit var memoryRepository: MemoryRepository
     private lateinit var memorySearchStatsTracker: MemorySearchStatsTracker
+    private lateinit var settingsRepository: SettingsRepository
+    private lateinit var metricsRepository: MetricsRepository
     private lateinit var useCase: MemoryExtractionUseCase
 
     private val sessionId = "session-1"
@@ -55,6 +60,11 @@ class MemoryExtractionUseCaseTest {
         embeddingProvider = mockk()
         memoryRepository = mockk()
         memorySearchStatsTracker = mockk(relaxed = true)
+        settingsRepository = mockk()
+        metricsRepository = mockk(relaxed = true)
+        // Default: no repairs, so each test's single stubbed reply is the only inference.
+        // The repair-path test overrides this.
+        every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(0)
 
         // Default happy-path plumbing; individual tests override the model reply.
         coEvery { loadModelUseCase.invoke(any()) } returns Result.Success(Unit)
@@ -78,11 +88,14 @@ class MemoryExtractionUseCaseTest {
             embeddingProviderResolver = embeddingProviderResolver,
             memoryRepository = memoryRepository,
             memorySearchStatsTracker = memorySearchStatsTracker,
+            structuredOutputGate = StructuredOutputGate(),
+            settingsRepository = settingsRepository,
+            metricsRepository = metricsRepository,
         )
     }
 
     private fun stubReply(reply: String) {
-        every { llmInferenceEngine.generateResponseStream(any()) } returns flowOf(reply)
+        every { llmInferenceEngine.generateResponseStream(any(), any()) } returns flowOf(reply)
     }
 
     @Test
@@ -263,5 +276,20 @@ class MemoryExtractionUseCaseTest {
         assertEquals(2, outcome.parsed)
         assertEquals(0, outcome.saved)
         coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `given malformed then valid reply when invoke then repairs and records the repair metric`() = runTest {
+        every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(1)
+        every { llmInferenceEngine.generateResponseStream(any(), any()) } returnsMany listOf(
+            flowOf("here you go:"), // no JSON array → triggers a repair
+            flowOf("""[{"type": "preference", "text": "Prefers dark mode"}]"""),
+        )
+
+        val outcome = useCase(sessionId, messages)
+
+        assertEquals(1, outcome.parsed)
+        assertEquals(1, outcome.saved)
+        coVerify(exactly = 1) { metricsRepository.recordStructuredOutputRepair("MEMORY_EXTRACTION") }
     }
 }

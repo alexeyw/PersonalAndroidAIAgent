@@ -13,10 +13,13 @@ import app.knotwork.android.domain.models.NodeOutput
  * directly. This extension preserves those assertion patterns without smuggling the
  * `Any` channel back into production code.
  */
-internal fun List<NodeOutput>.unwrap(): List<Any> = map { output ->
+internal fun List<NodeOutput>.unwrap(): List<Any> = mapNotNull { output ->
     when (output) {
         is NodeOutput.State -> output.state as Any
         is NodeOutput.Result -> output.result as Any
+        // Console lines are observability side-channel, not part of the
+        // state/result stream these legacy assertions inspect — drop them.
+        is NodeOutput.Console -> null
     }
 }
 
@@ -24,5 +27,8 @@ internal fun List<NodeOutput>.unwrap(): List<Any> = map { output ->
 internal inline fun <reified T : AgentOrchestratorState> List<NodeOutput>.filterStates(): List<T> =
     filterIsInstance<NodeOutput.State>().map { it.state }.filterIsInstance<T>()
 
+/** Returns the [NodeOutput.Console] events emitted by an executor flow. */
+internal fun List<NodeOutput>.consoleEvents(): List<NodeOutput.Console> = filterIsInstance<NodeOutput.Console>()
+
 /** Returns the single terminal [NodeExecutionResult] emitted by an executor flow. */
-internal fun List<NodeOutput>.lastResult(): NodeExecutionResult = (last() as NodeOutput.Result).result
+internal fun List<NodeOutput>.lastResult(): NodeExecutionResult = filterIsInstance<NodeOutput.Result>().last().result

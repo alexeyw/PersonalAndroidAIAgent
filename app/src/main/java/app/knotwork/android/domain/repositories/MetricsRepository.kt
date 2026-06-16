@@ -32,4 +32,19 @@ interface MetricsRepository {
      * @param tokenCount Approximate tokens produced by the node, or `null` for non-LLM nodes.
      */
     fun recordNodeExecution(nodeType: NodeType, durationMs: Long, tokenCount: Int?)
+
+    /**
+     * Records one structured-output repair re-inference for the named consumer.
+     *
+     * Increments the [AgentMetrics.repairAttemptsPerNode] counter keyed by
+     * [nodeName] (a node's display label, or a synthetic key such as
+     * `"MEMORY_EXTRACTION"` for an off-graph consumer). Called once per repair
+     * attempt by the structured-output gate's consumers, so the statistics
+     * surface can show how often the local model stumbled before emitting valid
+     * structured output.
+     *
+     * @param nodeName Display label of the node (or synthetic key) whose
+     *   structured output was repaired.
+     */
+    fun recordStructuredOutputRepair(nodeName: String)
 }

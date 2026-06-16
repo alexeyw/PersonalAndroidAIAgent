@@ -22,6 +22,7 @@ import app.knotwork.android.domain.engine.executors.SummaryNodeExecutor
 import app.knotwork.android.domain.engine.executors.SystemNodeExecutor
 import app.knotwork.android.domain.engine.executors.ToolInvocationGate
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
+import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.ConnectionModel
@@ -141,6 +142,7 @@ class SkillReportWriterIntegrationTest {
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
         every { settingsRepository.pipelineMaxNestingDepth } returns flowOf(3)
         every { settingsRepository.verboseMemoryLoggingEnabled } returns flowOf(false)
+        every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(2)
 
         workspace = AgentWorkspaceImpl(context, settingsRepository)
         writeFileExecutor = WriteFileExecutor(workspace)
@@ -247,7 +249,14 @@ class SkillReportWriterIntegrationTest {
             chatRepository,
             mockk<PendingInteractionRepository>(relaxed = true),
         )
-        val toolNodeExecutor = ToolNodeExecutor(llmEngine, loadModelUseCase, toolRepository, toolInvocationGate)
+        val toolNodeExecutor = ToolNodeExecutor(
+            llmEngine,
+            loadModelUseCase,
+            toolRepository,
+            toolInvocationGate,
+            StructuredOutputGate(),
+            settingsRepository,
+        )
         val liteRtNodeExecutor =
             LiteRtNodeExecutor(
                 llmEngine,
@@ -284,7 +293,7 @@ class SkillReportWriterIntegrationTest {
             toolNodeExecutor,
             liteRtNodeExecutor,
             cloudLlmNodeExecutor,
-            SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+            SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository, StructuredOutputGate(), settingsRepository),
             QueueProcessorNodeExecutor(),
             SummaryNodeExecutor(llmEngine, loadModelUseCase),
             ClarificationNodeExecutor(

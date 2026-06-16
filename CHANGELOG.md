@@ -25,8 +25,7 @@ details.
   (default 2, range 0–4). JSON payload extraction (fenced / bare /
   embedded-in-prose, object or array) is consolidated in one place. Repairs are
   surfaced on the agent console as a muted warning line and counted per node in
-  the run metrics. (Wiring the gate into the engine's structured consumers
-  follows in a subsequent change.)
+  the run metrics.
 
 - **Composed Showcase agent (bundled sub-pipelines).** The first-launch
   **Showcase — full agent** pipeline now demonstrates composition: its task
@@ -126,6 +125,30 @@ details.
     stack: the parent replays to its `PIPELINE` node and continues the child
     run from its checkpoint rather than restarting it; the recorded graph hash
     is validated for every graph in the stack.
+
+### Changed
+
+- **Structured-output gate wired into every LLM-driven consumer.** The engine's
+  structured consumers now route their model output through the validate-and-repair
+  gate instead of ad-hoc parsing, and each silent fallback becomes observable:
+  - `IF_CONDITION` (a `True`/`False` token) and `INTENT_ROUTER` (a routing key
+    constrained to the node's own outgoing edge labels) keep their default branch
+    when the gate exhausts its repairs, but now emit a console error and count the
+    repair attempts — there are no more silent forks.
+  - `EVALUATION` (a `Pass`/`Retry`/`Fail` verdict) behaves the same: default port
+    on failure, but observable.
+  - `DECOMPOSITION` (a JSON array of sub-tasks) now **fails the run with a clear
+    error** when no valid list can be produced — a corrupted sub-task list is worse
+    than stopping.
+  - `TOOL` argument generation validates the `{tool, arguments}` envelope (auto
+    select) or the arguments object (fixed tool), repairing malformed JSON before
+    falling back to the previous error-observation path.
+  - Background memory extraction validates its `{type, text}` fact array, repairing
+    once before honouring its best-effort (zero-result) contract.
+  - Repairs are an internal node mechanic: they consume the node's repair budget,
+    never pipeline steps. Repair re-inferences run at a lowered, deterministic-leaning
+    sampling temperature. The duplicate per-consumer JSON extractors and regex parsers
+    left over from the previous change have been removed.
 
 ## [0.5.0] - 2026-06-14
 

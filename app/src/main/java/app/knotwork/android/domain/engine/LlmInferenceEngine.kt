@@ -35,9 +35,17 @@ interface LlmInferenceEngine {
      * Generates a response stream from the LLM based on the provided prompt.
      *
      * @param prompt The input text prompt for the LLM.
+     * @param temperature Optional sampling-temperature override for this single
+     *   generation. When `null` (the default for every ordinary call) the engine
+     *   leaves the model's built-in sampler untouched, so normal generation is
+     *   unaffected. When non-`null` the engine drives a deterministic-leaning
+     *   sampler at the requested temperature — used by the structured-output
+     *   repair loop (see
+     *   [app.knotwork.android.domain.engine.structured.StructuredOutputGate.REPAIR_TEMPERATURE])
+     *   to nudge a stumbling model towards a schema-obedient retry.
      * @return A [Flow] of strings representing the generated tokens as they are produced.
      */
-    fun generateResponseStream(prompt: String): Flow<String>
+    fun generateResponseStream(prompt: String, temperature: Float? = null): Flow<String>
 
     /**
      * Closes the engine and releases any underlying resources.

@@ -29,4 +29,23 @@ sealed class NodeOutput {
         /** Final [NodeExecutionResult] consumed by `GraphExecutionEngine`. */
         val result: NodeExecutionResult,
     ) : NodeOutput()
+
+    /**
+     * A console line the node wants surfaced through the agent console.
+     *
+     * An executor has no direct access to the engine's console sink, so it emits
+     * this variant and [app.knotwork.android.domain.engine.GraphExecutionEngine]
+     * translates it into a `pushConsole(type, message)` call (assigning the run's
+     * monotonic `seq` and nesting `depth`). The structured-output gate uses it to
+     * announce each repair attempt
+     * ([ConsoleEventType.StructuredOutputRepair][ConsoleEventType.StructuredOutputRepair])
+     * and to surface a per-node failure ([ConsoleEventType.Error][ConsoleEventType.Error])
+     * when a structured consumer falls back to its default branch.
+     */
+    data class Console(
+        /** Category of the console event, driving its colour and filter chip. */
+        val type: ConsoleEventType,
+        /** Pre-formatted human-readable console line. */
+        val message: String,
+    ) : NodeOutput()
 }
