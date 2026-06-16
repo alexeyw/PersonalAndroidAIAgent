@@ -231,6 +231,34 @@ class RunTraceRepositoryImplTest {
     }
 
     @Test
+    fun `given a structured-output repair console entry then its discriminator round-trips`() = runTest {
+        repository.dispatcher = StandardTestDispatcher(testScheduler)
+        val batches = mutableListOf<List<TraceStepEntity>>()
+        coEvery { traceStepDao.insertTraceSteps(capture(batches)) } returns Unit
+
+        repository.append(
+            RunTraceRecord.ConsoleEntry(
+                runId = RUN_ID,
+                sessionId = SESSION_ID,
+                seq = 0,
+                timestamp = 1_000L,
+                type = ConsoleEventType.StructuredOutputRepair,
+                message = "Output repair 1/2 for node Router",
+            ),
+        )
+        repository.flush()
+        runCurrent()
+
+        val stored = batches.single().single()
+        assertEquals("STRUCTURED_OUTPUT_REPAIR", stored.consoleEventType)
+
+        // And the stored discriminator maps back to the same domain type.
+        coEvery { traceStepDao.getTraceStepsForRun(RUN_ID) } returns listOf(stored)
+        val restored = repository.getTraceForRun(RUN_ID).single() as RunTraceRecord.ConsoleEntry
+        assertEquals(ConsoleEventType.StructuredOutputRepair, restored.type)
+    }
+
+    @Test
     fun `given unreadable rows when getTraceForRun then they are skipped not fatal`() = runTest {
         repository.dispatcher = StandardTestDispatcher(testScheduler)
         coEvery { traceStepDao.getTraceStepsForRun(RUN_ID) } returns listOf(

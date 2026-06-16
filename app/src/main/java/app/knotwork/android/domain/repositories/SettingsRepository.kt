@@ -502,6 +502,21 @@ interface SettingsRepository {
     suspend fun setPipelineMaxNestingDepth(depth: Int)
 
     /**
+     * A [Flow] representing the number of corrective re-inferences the
+     * structured-output gate may spend on a single node's malformed output
+     * before giving up. Consumed by the gate's engine-side integration; the gate
+     * treats `0` as "validate once, never repair". Valid range: 0–4.
+     */
+    val structuredOutputMaxRepairs: Flow<Int>
+
+    /**
+     * Updates the structured-output repair budget.
+     *
+     * @param count The new repair ceiling. Will be coerced to the range 0–4.
+     */
+    suspend fun setStructuredOutputMaxRepairs(count: Int)
+
+    /**
      * A [Flow] representing the window, in hours, during which an interrupted
      * pipeline run can still be resumed from its checkpoint. Interrupted runs
      * older than this only offer the regular discard path — their recorded

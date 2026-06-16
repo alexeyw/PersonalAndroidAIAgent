@@ -186,6 +186,23 @@ class DefaultPromptsTest {
     }
 
     @Test
+    fun `given a repair context when repairPrompt then all placeholders are substituted`() {
+        val rendered = DefaultPrompts.StructuredOutput.repairPrompt(
+            originalPrompt = "Classify the intent.",
+            previousOutput = "uh, maybe weather?",
+            error = "no recognised token",
+        )
+
+        assertTrue(rendered.contains("Classify the intent."))
+        assertTrue(rendered.contains("uh, maybe weather?"))
+        assertTrue(rendered.contains("no recognised token"))
+        // No unsubstituted placeholders remain.
+        assertTrue(!rendered.contains("\$ORIGINAL_PROMPT"))
+        assertTrue(!rendered.contains("\$PREVIOUS_OUTPUT"))
+        assertTrue(!rendered.contains("\$ERROR"))
+    }
+
+    @Test
     fun `given every NodeType when queried then resolver does not throw`() {
         // Catches the case where a new NodeType is added without considering the default-prompt mapping;
         // either branch (mapped value or null) is acceptable, but the function must remain exhaustive.

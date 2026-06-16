@@ -319,4 +319,20 @@ object SettingsDefaults {
      * the cap stops a redirect loop from spinning forever.
      */
     const val HTTP_TOOL_MAX_REDIRECTS: Int = 5
+
+    /**
+     * Default number of corrective re-inferences the structured-output gate
+     * ([app.knotwork.android.domain.engine.structured.StructuredOutputGate])
+     * may spend on a single node before giving up and returning a
+     * [app.knotwork.android.domain.engine.structured.GateResult.Failed]. `2`
+     * recovers the common single-malformed-reply case without letting a
+     * persistently confused model stall a run.
+     */
+    const val STRUCTURED_OUTPUT_MAX_REPAIRS_DEFAULT: Int = 2
+
+    /** Lower bound (no repairs — fail fast) for the structured-output repair budget. */
+    const val STRUCTURED_OUTPUT_MAX_REPAIRS_MIN: Int = 0
+
+    /** Upper bound for the structured-output repair budget. */
+    const val STRUCTURED_OUTPUT_MAX_REPAIRS_MAX: Int = 4
 }

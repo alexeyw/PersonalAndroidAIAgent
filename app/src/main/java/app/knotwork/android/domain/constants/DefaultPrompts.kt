@@ -451,6 +451,45 @@ object DefaultPrompts {
     }
 
     /**
+     * Prompts driving the structured-output repair loop
+     * ([app.knotwork.android.domain.engine.structured.StructuredOutputGate]).
+     */
+    object StructuredOutput {
+        /**
+         * Fixed-format feedback prompt sent on each repair re-inference. Restates
+         * the original task, shows the model its own rejected output and the exact
+         * validation error, and demands a corrected payload with no surrounding
+         * prose or fences (the gate then re-extracts and re-validates).
+         *
+         * Placeholders (literal `${'$'}KEY`, substituted via [renderTemplate]):
+         *  - `${'$'}ORIGINAL_PROMPT` — the prompt whose output failed validation.
+         *  - `${'$'}PREVIOUS_OUTPUT` — the model's last, invalid output verbatim.
+         *  - `${'$'}ERROR` — the human-readable validation error.
+         */
+        const val REPAIR_TEMPLATE = "Your previous output was invalid: \$ERROR\n\n" +
+            "Here is the original request again:\n\$ORIGINAL_PROMPT\n\n" +
+            "Your invalid output was:\n\$PREVIOUS_OUTPUT\n\n" +
+            "Output ONLY the corrected result, with no explanation, no commentary, and no markdown code fences."
+
+        /**
+         * Renders [REPAIR_TEMPLATE] for one repair attempt.
+         *
+         * @param originalPrompt The prompt whose output failed validation.
+         * @param previousOutput The model's last invalid output, included verbatim.
+         * @param error The validation error explaining why it was rejected.
+         * @return The fully-substituted repair prompt.
+         */
+        fun repairPrompt(originalPrompt: String, previousOutput: String, error: String): String = renderTemplate(
+            REPAIR_TEMPLATE,
+            mapOf(
+                "ORIGINAL_PROMPT" to originalPrompt,
+                "PREVIOUS_OUTPUT" to previousOutput,
+                "ERROR" to error,
+            ),
+        )
+    }
+
+    /**
      * Returns the default user-facing system prompt for a specific node type — the
      * value pre-seeded into `node.systemPrompt` by `DefaultPipelineFactory`.
      *
