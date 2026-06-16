@@ -2,7 +2,6 @@ package app.knotwork.android.domain.engine.structured
 
 import app.knotwork.android.domain.constants.DefaultPrompts
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -74,11 +73,16 @@ class StructuredOutputGate @Inject constructor() {
         val payload = JsonPayloadExtractor.extract(raw)
         try {
             Validation.Valid(json.decodeFromString(serializer, payload))
-        } catch (e: SerializationException) {
-            // Deserialization failures are not cancellation: `decodeFromString`
-            // is non-suspend, so catching here cannot swallow a coroutine
-            // cancellation (the only suspend call — `inference.infer` — runs
-            // outside this block).
+        } catch (e: IllegalArgumentException) {
+            // `decodeFromString` documents two failure modes: `SerializationException`
+            // (which itself extends `IllegalArgumentException`) for shape/encoding
+            // errors, and a plain `IllegalArgumentException` for cases like an invalid
+            // number or an unmappable enum value. Catching the supertype routes *every*
+            // format problem into the repair loop instead of letting it tear down the
+            // coroutine. This is safe w.r.t. cancellation: `decodeFromString` is
+            // non-suspend, so it cannot raise a coroutine `CancellationException` (the
+            // only suspend call — `inference.infer` — runs outside this block, and
+            // `CancellationException` is an `IllegalStateException`, not caught here).
             Validation.Invalid(e.message ?: "Output did not match the requested JSON schema")
         }
     }

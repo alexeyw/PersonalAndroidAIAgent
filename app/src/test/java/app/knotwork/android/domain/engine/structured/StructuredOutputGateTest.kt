@@ -3,8 +3,14 @@ package app.knotwork.android.domain.engine.structured
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.descriptors.SerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -23,6 +29,22 @@ class StructuredOutputGateTest {
 
     @Serializable
     private data class Verdict(val name: String, val count: Int)
+
+    /**
+     * Serializer whose `deserialize` throws a *bare* [IllegalArgumentException]
+     * (not a `SerializationException`) over otherwise well-formed JSON — mimics
+     * the invalid-number / unmappable-enum decode paths `kotlinx.serialization`
+     * surfaces as a plain `IllegalArgumentException`. Confirms the gate routes
+     * those into the repair loop rather than letting them tear down the run.
+     */
+    private object ThrowingStringSerializer : KSerializer<String> {
+        override val descriptor: SerialDescriptor =
+            PrimitiveSerialDescriptor("ThrowingString", PrimitiveKind.STRING)
+
+        override fun deserialize(decoder: Decoder): String = throw IllegalArgumentException("decode rejected the value")
+
+        override fun serialize(encoder: Encoder, value: String): Unit = error("unused in tests")
+    }
 
     /**
      * Scripted [StructuredInferenceClient] that returns queued responses in
@@ -161,6 +183,21 @@ class StructuredOutputGateTest {
         assertTrue(result is GateResult.Failed)
         assertEquals(0, (result as GateResult.Failed).repairs)
         assertEquals(1, client.calls)
+    }
+
+    @Test
+    fun `given decode throws a bare IllegalArgumentException then it is treated as invalid not fatal`() = runTest {
+        // Both attempts feed well-formed JSON, so extraction and JSON parsing
+        // succeed and the failure comes solely from the serializer's deserialize.
+        val client = FakeInference(listOf("\"hello\"", "\"world\""))
+
+        val result = gate.runJson(client, "prompt", ThrowingStringSerializer, "Node", maxRepairs = 1)
+
+        assertTrue(result is GateResult.Failed)
+        result as GateResult.Failed
+        assertEquals("\"world\"", result.lastRaw)
+        assertEquals(1, result.repairs)
+        assertTrue(result.lastError.contains("decode rejected the value"))
     }
 
     @Test
