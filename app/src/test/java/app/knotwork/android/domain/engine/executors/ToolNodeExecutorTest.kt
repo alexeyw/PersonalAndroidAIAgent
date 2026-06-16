@@ -1,8 +1,10 @@
 package app.knotwork.android.domain.engine.executors
 
 import app.knotwork.android.domain.engine.LlmInferenceEngine
+import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTool
+import app.knotwork.android.domain.models.ConsoleEventType
 import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
@@ -79,58 +81,18 @@ class ToolNodeExecutorTest {
                 chatRepository = chatRepository,
                 pendingInteractionRepository = pendingInteractionRepository,
             ),
+            structuredOutputGate = StructuredOutputGate(),
+            settingsRepository = settingsRepository,
         )
 
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+        every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(2)
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.toolCallTimeoutMs } returns flowOf(60_000L)
         // Default risk for tests that don't care about the HITL gate. Individual
         // tests override `getRisk(...)` to drive the gate explicitly.
         coEvery { toolRepository.getRisk(any(), any()) } returns ToolRisk.READ_ONLY
-    }
-
-    @Test
-    fun `parseToolSelection returns pair for valid JSON`() {
-        val response = """{"tool": "search", "arguments": "how to build android app"}"""
-        val parsed = executor.parseToolSelection(response)
-        assertEquals("search", parsed?.first)
-        assertEquals("how to build android app", parsed?.second)
-    }
-
-    @Test
-    fun `parseToolArguments extracts string arguments correctly`() {
-        val response = """
-            ```json
-            {
-                "tool": "search",
-                "arguments": "how to build android app"
-            }
-            ```
-        """.trimIndent()
-        assertEquals("how to build android app", executor.parseToolArguments(response))
-    }
-
-    @Test
-    fun `parseToolSelection extracts nested json object arguments correctly`() {
-        val response = """
-            I will use the tool now.
-            ```json
-            {
-                "tool": "create_event",
-                "arguments": {
-                    "title": "Meeting",
-                    "time": "10:00 AM"
-                }
-            }
-            ```
-            Hope this works.
-        """.trimIndent()
-        val result = executor.parseToolSelection(response)
-        assertEquals("create_event", result?.first)
-        val resultObj = org.json.JSONObject(result?.second!!)
-        assertEquals("Meeting", resultObj.getString("title"))
-        assertEquals("10:00 AM", resultObj.getString("time"))
     }
 
     @Test
@@ -183,6 +145,7 @@ class ToolNodeExecutorTest {
                 when (output) {
                     is NodeOutput.State -> results.add(output.state)
                     is NodeOutput.Result -> results.add(output.result)
+                    is NodeOutput.Console -> Unit
                 }
             }
         }
@@ -241,6 +204,7 @@ class ToolNodeExecutorTest {
                     when (output) {
                         is NodeOutput.State -> results.add(output.state)
                         is NodeOutput.Result -> results.add(output.result)
+                        is NodeOutput.Console -> Unit
                     }
                 }
             }
@@ -276,6 +240,7 @@ class ToolNodeExecutorTest {
                     when (output) {
                         is NodeOutput.State -> results.add(output.state)
                         is NodeOutput.Result -> results.add(output.result)
+                        is NodeOutput.Console -> Unit
                     }
                 }
             }
@@ -311,6 +276,7 @@ class ToolNodeExecutorTest {
                     when (output) {
                         is NodeOutput.State -> results.add(output.state)
                         is NodeOutput.Result -> results.add(output.result)
+                        is NodeOutput.Console -> Unit
                     }
                 }
             }
@@ -394,6 +360,7 @@ class ToolNodeExecutorTest {
                 when (output) {
                     is NodeOutput.State -> results.add(output.state)
                     is NodeOutput.Result -> results.add(output.result)
+                    is NodeOutput.Console -> Unit
                 }
             }
         }
@@ -563,6 +530,7 @@ class ToolNodeExecutorTest {
                 when (output) {
                     is NodeOutput.State -> results.add(output.state)
                     is NodeOutput.Result -> results.add(output.result)
+                    is NodeOutput.Console -> Unit
                 }
             }
         }
@@ -615,6 +583,7 @@ class ToolNodeExecutorTest {
                     when (output) {
                         is NodeOutput.State -> results.add(output.state)
                         is NodeOutput.Result -> results.add(output.result)
+                        is NodeOutput.Console -> Unit
                     }
                 }
             }
@@ -658,6 +627,7 @@ class ToolNodeExecutorTest {
                 when (output) {
                     is NodeOutput.State -> results.add(output.state)
                     is NodeOutput.Result -> results.add(output.result)
+                    is NodeOutput.Console -> Unit
                 }
             }
         }
@@ -743,6 +713,7 @@ class ToolNodeExecutorTest {
                 when (output) {
                     is NodeOutput.State -> results.add(output.state)
                     is NodeOutput.Result -> results.add(output.result)
+                    is NodeOutput.Console -> Unit
                 }
             }
         }
@@ -753,5 +724,39 @@ class ToolNodeExecutorTest {
         coVerify { pendingInteractionRepository.delete("run-1") }
         coVerify(exactly = 0) { toolRepository.executeTool(any(), any(), any()) }
         job.cancel()
+    }
+
+    // ─── Structured-output gate ─────────────────────────────────────────────
+
+    @Test
+    fun `given malformed then valid tool arguments when execute then repairs and runs the tool`() = runTest {
+        val toolName = "MyTool"
+        val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName)
+        coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool(toolName, "Desc", "Schema"))
+        every { llmEngine.generateResponseStream(any(), any()) } returnsMany listOf(
+            flowOf("sorry, here is the json"), // not a JSON object → triggers repair
+            flowOf("""{"tool": "MyTool", "arguments": "good_args"}"""),
+        )
+        coEvery { toolRepository.executeTool(toolName, "good_args", any()) } returns "Tool Success"
+
+        val outputs = executor.execute(node, "Do something", "session-1", "").toList()
+
+        assertEquals("Tool Success", outputs.lastResult().outputText)
+        assertEquals(1, outputs.consoleEvents().count { it.type == ConsoleEventType.StructuredOutputRepair })
+    }
+
+    @Test
+    fun `given auto-select reply never parses when execute then emits a parse error after repairs`() = runTest {
+        every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(0)
+        val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = "auto")
+        coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool("ToolA", "DescA", "SchemaA"))
+        every { llmEngine.generateResponseStream(any(), any()) } returns flowOf("I cannot decide")
+
+        val outputs = executor.execute(node, "Do", "session-1", "").toList()
+
+        val result = outputs.lastResult()
+        assertNotNull(result.error)
+        assertTrue(result.error!!.contains("Failed to parse tool selection", ignoreCase = true))
+        coVerify(exactly = 0) { toolRepository.executeTool(any(), any(), any()) }
     }
 }

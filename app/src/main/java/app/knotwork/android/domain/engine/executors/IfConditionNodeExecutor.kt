@@ -1,5 +1,7 @@
 package app.knotwork.android.domain.engine.executors
 
+import app.knotwork.android.domain.engine.structured.CollectingRepairListener
+import app.knotwork.android.domain.models.ConsoleEventType
 import app.knotwork.android.domain.models.ExecutionScope
 import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
@@ -18,6 +20,15 @@ import javax.inject.Inject
  * the original payload. The branch decision is published via
  * [NodeExecutionResult.conditionResult][app.knotwork.android.domain.models.NodeExecutionResult.conditionResult],
  * which `GraphExecutionEngine` reads to pick the next connection.
+ *
+ * **Structured-output policy.** The LLM path runs through the validate-and-repair
+ * gate inside the use case. Each repair attempt is surfaced as a
+ * [ConsoleEventType.StructuredOutputRepair] console line (which the engine also
+ * counts in the repair metric). When the gate ultimately fails, the node keeps
+ * its `False` default branch — a graceful fork rather than a halted run — but
+ * emits a [ConsoleEventType.Error] line so the fallback is observable instead of
+ * silent. Repairs are an internal node mechanic: they consume repair budget, not
+ * pipeline steps.
  */
 class IfConditionNodeExecutor @Inject constructor(private val evaluateIfConditionUseCase: EvaluateIfConditionUseCase) :
     NodeExecutor {
@@ -29,7 +40,23 @@ class IfConditionNodeExecutor @Inject constructor(private val evaluateIfConditio
         runId: String?,
         scope: ExecutionScope,
     ): Flow<NodeOutput> = kotlinx.coroutines.flow.flow {
-        val isTrue = evaluateIfConditionUseCase(node, inputText)
-        emit(NodeOutput.Result(NodeExecutionResult(conditionResult = isTrue, outputText = inputText)))
+        val repairListener = CollectingRepairListener()
+        val outcome = evaluateIfConditionUseCase(node, inputText, repairListener)
+
+        // Surface each buffered repair attempt; the engine renders it and bumps
+        // the per-node repair counter.
+        repairListener.attempts.forEach { attempt ->
+            emit(NodeOutput.Console(ConsoleEventType.StructuredOutputRepair, attempt.consoleMessage()))
+        }
+        if (outcome.gateFailed) {
+            emit(
+                NodeOutput.Console(
+                    ConsoleEventType.Error,
+                    "IF_CONDITION '${node.label}' could not classify input; defaulting to the False branch",
+                ),
+            )
+        }
+
+        emit(NodeOutput.Result(NodeExecutionResult(conditionResult = outcome.value, outputText = inputText)))
     }
 }

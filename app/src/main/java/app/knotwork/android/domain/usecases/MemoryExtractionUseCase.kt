@@ -2,6 +2,10 @@ package app.knotwork.android.domain.usecases
 
 import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.engine.LlmInferenceEngine
+import app.knotwork.android.domain.engine.structured.EngineStructuredInferenceClient
+import app.knotwork.android.domain.engine.structured.GateResult
+import app.knotwork.android.domain.engine.structured.RepairListener
+import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.MemorySource
 import app.knotwork.android.domain.models.Result
@@ -9,14 +13,16 @@ import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
 import app.knotwork.android.domain.prompt.PromptVariableProvider
 import app.knotwork.android.domain.repositories.MemoryRepository
+import app.knotwork.android.domain.repositories.MetricsRepository
+import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.EmbeddingProviderResolver
 import app.knotwork.android.domain.services.MemorySearchStatsTracker
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONException
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -52,6 +58,11 @@ import javax.inject.Inject
  * @property memoryRepository Persistence + similarity search over stored chunks.
  * @property memorySearchStatsTracker Records the dedup-search scores so the
  *   Settings AVG SCORE stat cell keeps reflecting every similarity search.
+ * @property structuredOutputGate Validate-and-repair gate the JSON-array reply
+ *   is run through before parsing.
+ * @property settingsRepository Source of the configured repair ceiling
+ *   ([SettingsRepository.structuredOutputMaxRepairs]).
+ * @property metricsRepository Sink for the per-pass repair-attempt counter.
  */
 class MemoryExtractionUseCase @Inject constructor(
     private val llmInferenceEngine: LlmInferenceEngine,
@@ -61,6 +72,9 @@ class MemoryExtractionUseCase @Inject constructor(
     private val embeddingProviderResolver: EmbeddingProviderResolver,
     private val memoryRepository: MemoryRepository,
     private val memorySearchStatsTracker: MemorySearchStatsTracker,
+    private val structuredOutputGate: StructuredOutputGate,
+    private val settingsRepository: SettingsRepository,
+    private val metricsRepository: MetricsRepository,
 ) {
 
     /**
@@ -89,8 +103,7 @@ class MemoryExtractionUseCase @Inject constructor(
                 return@withContext MemoryExtractionOutcome.EMPTY
             }
 
-            val rawReply = runInference(recent)
-            val facts = parseFacts(rawReply)
+            val facts = extractFacts(recent)
             if (facts.isEmpty()) {
                 return@withContext MemoryExtractionOutcome(parsed = 0, saved = 0, skippedDuplicates = 0)
             }
@@ -99,14 +112,25 @@ class MemoryExtractionUseCase @Inject constructor(
         }
 
     /**
-     * Builds the full extraction prompt from the rendered system prompt and the
-     * role-labelled dialogue, then runs it through the local model and joins the
-     * streamed tokens into a single reply.
+     * Builds the extraction prompt, runs it through the structured-output gate,
+     * and maps the validated JSON array into the recognised facts.
+     *
+     * The gate validates the reply as a JSON array of `{type, text}` objects and,
+     * on a malformed reply, hands the model its own output back with the parse
+     * error for up to [SettingsRepository.structuredOutputMaxRepairs] corrective
+     * re-inferences. Each repair attempt bumps the off-graph `MEMORY_EXTRACTION`
+     * repair counter so the cost of a stumbling model is observable.
+     *
+     * This pass is **best-effort**: a gate failure (repairs exhausted), a
+     * non-cancellation inference error, or a reply with no recognised facts all
+     * yield an empty list rather than throwing, so a background extraction can
+     * never break a conversation. Only elements with a non-blank `text` and a
+     * recognised `type` ([VALID_FACT_TYPES]) survive.
      *
      * @param messages Trailing slice of the conversation to embed in the prompt.
-     * @return The model's raw textual reply (expected to be a JSON array).
+     * @return The recognised facts (possibly empty).
      */
-    private suspend fun runInference(messages: List<ChatMessage>): String {
+    private suspend fun extractFacts(messages: List<ChatMessage>): List<ExtractedFact> {
         val systemPrompt = promptTemplateEngine.render(
             DefaultPrompts.MemoryExtraction.SYSTEM_FALLBACK,
             promptVariableProviders.toList(),
@@ -115,16 +139,40 @@ class MemoryExtractionUseCase @Inject constructor(
             "${message.role.label()}: ${message.content}"
         }
         val fullPrompt = "$systemPrompt\n\nCONVERSATION:\n$dialogue\n\nJSON OUTPUT: "
+        val maxRepairs = settingsRepository.structuredOutputMaxRepairs.first()
 
-        return try {
-            llmInferenceEngine.generateResponseStream(fullPrompt).toList().joinToString(separator = "")
+        val result = try {
+            structuredOutputGate.runJson(
+                inference = EngineStructuredInferenceClient(llmInferenceEngine),
+                prompt = fullPrompt,
+                serializer = ListSerializer(ExtractedFactDto.serializer()),
+                nodeName = METRICS_KEY,
+                maxRepairs = maxRepairs,
+                listener = RepairListener { _, _, _ -> metricsRepository.recordStructuredOutputRepair(METRICS_KEY) },
+            )
         } catch (e: CancellationException) {
             // Preserve structured-concurrency cancellation: a broad catch would
             // otherwise let the calling scope believe the pass finished cleanly.
             throw e
         } catch (e: Exception) {
             Timber.tag(TAG).w(e, "Memory extraction inference failed")
-            ""
+            return emptyList()
+        }
+
+        return when (result) {
+            is GateResult.Success -> result.value.mapNotNull { dto ->
+                val type = dto.type.trim().lowercase()
+                val text = dto.text.trim()
+                if (text.isNotEmpty() && type in VALID_FACT_TYPES) ExtractedFact(type = type, text = text) else null
+            }
+            is GateResult.Failed -> {
+                // Repairs exhausted — honour the best-effort contract and drop the
+                // pass silently (repair attempts were already counted by the listener).
+                Timber.tag(
+                    TAG,
+                ).w("Memory extraction gate failed after %d repairs: %s", result.repairs, result.lastError)
+                emptyList()
+            }
         }
     }
 
@@ -210,56 +258,23 @@ class MemoryExtractionUseCase @Inject constructor(
     }
 
     /**
-     * Parses the model reply into a list of fact texts.
-     *
-     * Accepts a bare JSON array or one fenced in a ```json block, mirroring the
-     * defensive parsing the orchestrator applies to LLM list output. Only
-     * elements with a non-blank `text` and a recognised `type`
-     * ([VALID_FACT_TYPES]) are kept; everything else is dropped. Never throws —
-     * a malformed reply yields an empty list.
-     *
-     * @param reply Raw model output.
-     * @return The extracted fact texts (possibly empty).
-     */
-    private fun parseFacts(reply: String): List<ExtractedFact> {
-        val jsonArrayText = extractJsonArray(reply) ?: return emptyList()
-        return try {
-            val array = JSONArray(jsonArrayText)
-            buildList {
-                for (i in 0 until array.length()) {
-                    val obj = array.optJSONObject(i) ?: continue
-                    val type = obj.optString(KEY_TYPE).trim().lowercase()
-                    val text = obj.optString(KEY_TEXT).trim()
-                    if (text.isNotEmpty() && type in VALID_FACT_TYPES) {
-                        add(ExtractedFact(type = type, text = text))
-                    }
-                }
-            }
-        } catch (e: JSONException) {
-            Timber.tag(TAG).w(e, "Failed to parse extracted facts JSON")
-            emptyList()
-        }
-    }
-
-    /**
      * One parsed extraction fact: its [type] (a [VALID_FACT_TYPES] member,
      * persisted as a tag) and its durable [text].
      */
     private data class ExtractedFact(val type: String, val text: String)
 
     /**
-     * Isolates the JSON array substring from a model reply, tolerating
-     * surrounding prose or a ```json fence.
+     * Wire shape of one fact in the model's JSON-array reply, deserialized by the
+     * structured-output gate. Both fields default to empty so a partial object
+     * (missing `type` or `text`) deserializes successfully and is then dropped by
+     * the [VALID_FACT_TYPES] / non-blank filter in [extractFacts] rather than
+     * failing the whole array.
      *
-     * @param reply Raw model output.
-     * @return The `[...]` substring, or `null` if none is present.
+     * @property type Raw fact category as emitted by the model.
+     * @property text Raw fact text as emitted by the model.
      */
-    private fun extractJsonArray(reply: String): String? {
-        val start = reply.indexOf('[')
-        val end = reply.lastIndexOf(']')
-        if (start == -1 || end == -1 || end < start) return null
-        return reply.substring(start, end + 1)
-    }
+    @Serializable
+    private data class ExtractedFactDto(val type: String = "", val text: String = "")
 
     /**
      * Cosine similarity between two equal-length vectors, used for the
@@ -305,8 +320,13 @@ class MemoryExtractionUseCase @Inject constructor(
          */
         const val DEDUP_SIMILARITY_THRESHOLD = 0.92f
 
-        const val KEY_TYPE = "type"
-        const val KEY_TEXT = "text"
+        /**
+         * Synthetic node key under which this off-graph consumer records its
+         * structured-output repair attempts in
+         * [app.knotwork.android.domain.models.AgentMetrics.repairAttemptsPerNode]
+         * (memory extraction is not a pipeline node).
+         */
+        const val METRICS_KEY = "MEMORY_EXTRACTION"
 
         /** Recognised fact categories emitted by the extraction prompt. */
         val VALID_FACT_TYPES = setOf("preference", "event", "relation")

@@ -30,5 +30,17 @@ package app.knotwork.android.domain.models
  *   re-derived deterministically on resume and the in-flight visit lands on the
  *   same index as on the original run — letting `PipelineNodeExecutor` find the
  *   exact child run to resume. `0` for every non-`PIPELINE` node.
+ * @property routingChoices Labels of the node's outgoing connections, supplied
+ *   by the engine only for routing nodes ([NodeType.INTENT_ROUTER]). The node's
+ *   executor passes them to the structured-output gate as the constrained set of
+ *   accepted routing keys, so the gate can validate (and repair towards) a key
+ *   that actually matches an outgoing edge. Empty for every other node — and for
+ *   a routing node with no labelled edges, in which case the executor skips the
+ *   gate and the engine falls back to the first outgoing edge.
  */
-data class ExecutionScope(val depth: Int = 0, val stepBudget: RunStepBudget? = null, val pipelineVisitIndex: Int = 0)
+data class ExecutionScope(
+    val depth: Int = 0,
+    val stepBudget: RunStepBudget? = null,
+    val pipelineVisitIndex: Int = 0,
+    val routingChoices: List<String> = emptyList(),
+)

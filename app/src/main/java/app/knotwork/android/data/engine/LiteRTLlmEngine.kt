@@ -11,8 +11,10 @@ import app.knotwork.android.domain.repositories.SettingsRepository
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Conversation
+import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
+import com.google.ai.edge.litertlm.SamplerConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -187,9 +189,14 @@ class LiteRTLlmEngine @Inject constructor(
      * Generates a response stream from the LLM based on the provided prompt.
      *
      * @param prompt The input text prompt for the LLM.
+     * @param temperature Optional sampling-temperature override. When `null` the
+     *   conversation is opened with no [SamplerConfig] so LiteRT-LM keeps the
+     *   model's native sampler (the ordinary, unchanged path). When non-`null`
+     *   the conversation is opened with a deterministic-leaning [SamplerConfig]
+     *   at the requested temperature — used by the structured-output repair loop.
      * @return A [Flow] of strings representing the generated tokens as they are produced.
      */
-    override fun generateResponseStream(prompt: String): Flow<String> = flow {
+    override fun generateResponseStream(prompt: String, temperature: Float?): Flow<String> = flow {
         val currentEngine = engine
         if (currentEngine == null) {
             Timber.e("Engine is not initialized")
@@ -208,7 +215,17 @@ class LiteRTLlmEngine @Inject constructor(
                 // supplies the full history context every time, we must close the old conversation
                 // and create a fresh one to prevent token accumulation and OOM crashes.
                 conversation?.close()
-                conversation = currentEngine.createConversation()
+                // A temperature override replaces the whole sampler (LiteRT-LM
+                // has no "override one field" path), so the override case supplies
+                // conventional top-k / top-p alongside the requested temperature;
+                // the low repair temperature does the determinism work. The
+                // default (`null`) path passes no config, leaving the native
+                // sampler exactly as before.
+                conversation = if (temperature == null) {
+                    currentEngine.createConversation()
+                } else {
+                    currentEngine.createConversation(repairConversationConfig(temperature))
+                }
 
                 // Stream the tokens directly from the LiteRT-LM conversation
                 conversation?.let { conversation ->
@@ -283,5 +300,47 @@ class LiteRTLlmEngine @Inject constructor(
             Timber.w("onTrimMemory called with critical level \$level, unloading engine")
             unload()
         }
+    }
+
+    /**
+     * Builds a [ConversationConfig] whose [SamplerConfig] applies [temperature]
+     * over conventional top-k / top-p values.
+     *
+     * LiteRT-LM exposes the sampler only as an all-or-nothing [SamplerConfig], so
+     * a temperature override cannot leave the model's other native sampler fields
+     * in place — they must be re-specified here. The chosen top-k / top-p are the
+     * conventional Gemma-family decode values; the override is only ever used for
+     * the structured-output repair loop, where the low [temperature] already
+     * biases generation towards near-deterministic, schema-obedient output.
+     *
+     * @param temperature The repair sampling temperature to apply.
+     * @return A conversation config carrying the repair [SamplerConfig].
+     */
+    private fun repairConversationConfig(temperature: Float): ConversationConfig = ConversationConfig(
+        samplerConfig = SamplerConfig(
+            topK = REPAIR_SAMPLER_TOP_K,
+            topP = REPAIR_SAMPLER_TOP_P,
+            temperature = temperature.toDouble(),
+            seed = REPAIR_SAMPLER_SEED,
+        ),
+    )
+
+    private companion object {
+        /**
+         * Top-k for the temperature-override (repair) sampler. Conventional
+         * Gemma-family value; paired with [REPAIR_SAMPLER_TOP_P] it is only ever
+         * exercised by the structured-output repair loop.
+         */
+        const val REPAIR_SAMPLER_TOP_K: Int = 64
+
+        /** Top-p (nucleus) for the temperature-override (repair) sampler. */
+        const val REPAIR_SAMPLER_TOP_P: Double = 0.95
+
+        /**
+         * Fixed seed for the repair sampler so a corrective re-inference is
+         * reproducible for a given prompt — desirable when chasing down a model
+         * that keeps emitting the same malformed shape.
+         */
+        const val REPAIR_SAMPLER_SEED: Int = 0
     }
 }

@@ -22,6 +22,7 @@ import app.knotwork.android.domain.engine.executors.SummaryNodeExecutor
 import app.knotwork.android.domain.engine.executors.SystemNodeExecutor
 import app.knotwork.android.domain.engine.executors.ToolInvocationGate
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
+import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.ChatMessage
@@ -181,6 +182,8 @@ class GraphExecutionEngineTest {
                 chatRepository,
                 pendingInteractionRepository,
             ),
+            StructuredOutputGate(),
+            settingsRepository,
         )
 
         val liteRtNodeExecutor = LiteRtNodeExecutor(
@@ -207,6 +210,8 @@ class GraphExecutionEngineTest {
             llmEngine,
             loadModelUseCase,
             chatRepository,
+            StructuredOutputGate(),
+            settingsRepository,
         )
 
         val summaryNodeExecutor = SummaryNodeExecutor(
@@ -265,6 +270,7 @@ class GraphExecutionEngineTest {
         coEvery { getContextWindowUseCase(sessionId) } returns ""
         coEvery { retrieveRelevantMemoryUseCase(any()) } returns emptyList()
         coEvery { retrieveRelevantMemoryUseCase.retrieveScored(any()) } returns emptyList()
+        every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(2)
         every { settingsRepository.verboseMemoryLoggingEnabled } returns flowOf(false)
         every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
@@ -572,7 +578,8 @@ class GraphExecutionEngineTest {
         )
 
         // Evaluate to true
-        coEvery { evaluateIfConditionUseCase(ifNode, "Test prompt") } returns true
+        coEvery { evaluateIfConditionUseCase(ifNode, "Test prompt", any()) } returns
+            EvaluateIfConditionUseCase.Outcome(value = true)
         every { llmEngine.generateResponseStream(any()) } returns flowOf("Test prompt")
 
         val statesTrue = engine(sessionId, "Test prompt", graph).toList()
@@ -1146,6 +1153,8 @@ class GraphExecutionEngineTest {
                     chatRepository,
                     pendingInteractionRepository,
                 ),
+                StructuredOutputGate(),
+                settingsRepository,
             ),
             LiteRtNodeExecutor(
                 llmEngine,
@@ -1165,7 +1174,7 @@ class GraphExecutionEngineTest {
                 cloudLlmModelResolver,
                 networkActivityTracker,
             ),
-            SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+            SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository, StructuredOutputGate(), settingsRepository),
             QueueProcessorNodeExecutor(),
             SummaryNodeExecutor(llmEngine, loadModelUseCase),
             ClarificationNodeExecutor(
@@ -1197,6 +1206,8 @@ class GraphExecutionEngineTest {
                     chatRepository,
                     pendingInteractionRepository,
                 ),
+                StructuredOutputGate(),
+                settingsRepository,
             ),
             chatRepository,
             settingsRepository,
@@ -1344,6 +1355,8 @@ class GraphExecutionEngineTest {
                         chatRepository,
                         pendingInteractionRepository,
                     ),
+                    StructuredOutputGate(),
+                    settingsRepository,
                 ),
                 LiteRtNodeExecutor(
                     llmEngine,
@@ -1363,7 +1376,13 @@ class GraphExecutionEngineTest {
                     cloudLlmModelResolver,
                     networkActivityTracker,
                 ),
-                SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+                SystemNodeExecutor(
+                    llmEngine,
+                    loadModelUseCase,
+                    chatRepository,
+                    StructuredOutputGate(),
+                    settingsRepository,
+                ),
                 QueueProcessorNodeExecutor(),
                 SummaryNodeExecutor(llmEngine, loadModelUseCase),
                 ClarificationNodeExecutor(
@@ -1395,6 +1414,8 @@ class GraphExecutionEngineTest {
                         chatRepository,
                         pendingInteractionRepository,
                     ),
+                    StructuredOutputGate(),
+                    settingsRepository,
                 ),
                 chatRepository,
                 settingsRepository,
