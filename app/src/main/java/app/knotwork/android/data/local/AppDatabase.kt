@@ -14,6 +14,7 @@ import app.knotwork.android.data.local.dao.PipelinePresetDao
 import app.knotwork.android.data.local.dao.PipelineRunDao
 import app.knotwork.android.data.local.dao.PromptPresetDao
 import app.knotwork.android.data.local.dao.PromptTemplateDao
+import app.knotwork.android.data.local.dao.SkillDao
 import app.knotwork.android.data.local.dao.TraceStepDao
 import app.knotwork.android.data.local.models.ChatMessageEntity
 import app.knotwork.android.data.local.models.ChatSessionEntity
@@ -27,6 +28,7 @@ import app.knotwork.android.data.local.models.PipelinePresetEntity
 import app.knotwork.android.data.local.models.PipelineRunEntity
 import app.knotwork.android.data.local.models.PromptPresetEntity
 import app.knotwork.android.data.local.models.PromptTemplateEntity
+import app.knotwork.android.data.local.models.SkillEntity
 import app.knotwork.android.data.local.models.TraceStepEntity
 
 /**
@@ -56,8 +58,9 @@ import app.knotwork.android.data.local.models.TraceStepEntity
         PromptPresetEntity::class,
         PipelineRunEntity::class,
         PendingInteractionEntity::class,
+        SkillEntity::class,
     ],
-    version = 33,
+    version = 37,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -135,6 +138,14 @@ abstract class AppDatabase : RoomDatabase() {
      * @return The [PendingInteractionDao] instance.
      */
     abstract fun pendingInteractionDao(): PendingInteractionDao
+
+    /**
+     * Provides access to the [SkillDao] backing the skill catalogue (bundled +
+     * user skills).
+     *
+     * @return The [SkillDao] instance.
+     */
+    abstract fun skillDao(): SkillDao
 
     companion object {
         /**
@@ -749,6 +760,94 @@ abstract class AppDatabase : RoomDatabase() {
                     "CREATE INDEX IF NOT EXISTS `index_pending_interactions_sessionId` " +
                         "ON `pending_interactions` (`sessionId`)",
                 )
+            }
+        }
+
+        /**
+         * Adds the nullable `targetPipelineId` column to `pipeline_nodes`. It
+         * carries the callee id of a `PIPELINE` node (the composition primitive
+         * that runs another pipeline as a sub-step); `null` for every other node
+         * type, so existing rows need no backfill.
+         */
+        val MIGRATION_33_34 = object : Migration(33, 34) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `pipeline_nodes` ADD COLUMN `targetPipelineId` TEXT")
+            }
+        }
+
+        /**
+         * Migration from version 34 to 35 — nested-pipeline run tree and trace
+         * nesting level.
+         *
+         * Purely additive `ALTER TABLE … ADD COLUMN` statements; no existing
+         * rows are rewritten:
+         *
+         * - `pipeline_runs.parentRunId` — the parent run of a sub-pipeline run
+         *   spawned by a `PIPELINE` node (`NULL` for top-level runs, including
+         *   every legacy row). Declared as a self-referential foreign key with
+         *   `ON DELETE CASCADE` so retention of a root run removes its whole
+         *   sub-tree; indexed for the child-run lookups that rebuild the tree.
+         *   SQLite permits adding a column with a `REFERENCES` clause in place
+         *   precisely because the default value is `NULL`, so no table rebuild
+         *   (and no risky drop of the `trace_steps` foreign-key parent) is
+         *   needed.
+         * - `trace_steps.depth` — pipeline-nesting level of the run that
+         *   produced the record (`0` top-level, `1` a direct sub-pipeline, …),
+         *   so the console can render a sub-pipeline's logs/vars/trace spans
+         *   nested under the spawning `PIPELINE` node. Backfilled to `0` for
+         *   every existing row, matching the entity column default.
+         */
+        val MIGRATION_34_35 = object : Migration(34, 35) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `pipeline_runs` ADD COLUMN `parentRunId` TEXT " +
+                        "REFERENCES `pipeline_runs`(`id`) ON DELETE CASCADE",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_pipeline_runs_parentRunId` " +
+                        "ON `pipeline_runs` (`parentRunId`)",
+                )
+                db.execSQL("ALTER TABLE `trace_steps` ADD COLUMN `depth` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * v35 → v36: adds the `skills` table backing the skill catalogue
+         * (bundled + user skills). Additive — no existing data is touched.
+         * `toolAllowlistCsv` is nullable on purpose: `NULL` encodes the
+         * "all tools" (unrestricted) state, distinct from an empty string
+         * which encodes "no tools".
+         */
+        val MIGRATION_35_36 = object : Migration(35, 36) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `skills` (
+                        `id` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `description` TEXT NOT NULL,
+                        `instruction` TEXT NOT NULL,
+                        `toolAllowlistCsv` TEXT,
+                        `contextConfig` TEXT NOT NULL,
+                        `isBundled` INTEGER NOT NULL,
+                        `createdAt` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+            }
+        }
+
+        /**
+         * Adds the nullable `skillId` column to `pipeline_nodes`, backing
+         * [NodeType.SKILL][app.knotwork.android.domain.models.NodeType.SKILL]
+         * nodes. Additive and nullable, so existing rows (every node predates
+         * the skill feature) default to `NULL` — "no skill referenced".
+         */
+        val MIGRATION_36_37 = object : Migration(36, 37) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `pipeline_nodes` ADD COLUMN `skillId` TEXT")
             }
         }
     }

@@ -1,8 +1,9 @@
-@file:Suppress("TooManyFunctions") // 12 node types -> 12 encode/decode pairs by design.
+@file:Suppress("TooManyFunctions") // 13 node types -> 13 encode/decode pairs by design.
 
 package app.knotwork.android.presentation.ui.pipeline.editor.config
 
 import app.knotwork.android.domain.constants.DefaultPrompts
+import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.design.components.pipelineeditor.ClarificationConfig
 import app.knotwork.design.components.pipelineeditor.CloudConfig
@@ -17,7 +18,10 @@ import app.knotwork.design.components.pipelineeditor.LiteRtConfig
 import app.knotwork.design.components.pipelineeditor.NodeConfig
 import app.knotwork.design.components.pipelineeditor.OutputConfig
 import app.knotwork.design.components.pipelineeditor.OutputFormat
+import app.knotwork.design.components.pipelineeditor.PipelineConfig
 import app.knotwork.design.components.pipelineeditor.QueueProcessorConfig
+import app.knotwork.design.components.pipelineeditor.SkillConfig
+import app.knotwork.design.components.pipelineeditor.SkillEngine
 import app.knotwork.design.components.pipelineeditor.SummaryConfig
 import app.knotwork.design.components.pipelineeditor.SummaryFormat
 import app.knotwork.design.components.pipelineeditor.ToolArgument
@@ -99,6 +103,8 @@ internal object NodeConfigCodec {
             is QueueProcessorConfig -> encodeQueueProcessor(json, config)
             is EvaluationConfig -> encodeEvaluation(json, config)
             is SummaryConfig -> encodeSummary(json, config)
+            is PipelineConfig -> encodePipeline(json, config)
+            is SkillConfig -> encodeSkill(json, config)
         }
         return json.toString()
     }
@@ -148,6 +154,20 @@ internal object NodeConfigCodec {
             // Empty string is allowed
             // and the executor reads it as "echo upstream verbatim".
             is OutputConfig -> withJson.copy(systemPrompt = config.systemPrompt)
+            // Persist the chosen sub-pipeline id onto the domain row so
+            // `PipelineNodeExecutor` resolves the target at run time; blank
+            // means "no target chosen" and round-trips as `null`.
+            is PipelineConfig -> withJson.copy(
+                targetPipelineId = config.targetPipelineId.takeIf { it.isNotBlank() },
+            )
+            // Persist the chosen skill id onto the domain row so
+            // `SkillNodeExecutor` resolves it at run time; the engine choice is
+            // carried via `cloudProvider` (the "auto" sentinel for CLOUD, `null`
+            // for the on-device LiteRT engine) so no new flat column is needed.
+            is SkillConfig -> withJson.copy(
+                skillId = config.skillId.takeIf { it.isNotBlank() },
+                cloudProvider = if (config.engine == SkillEngine.CLOUD) CloudProvider.AUTO_KEY else null,
+            )
             is IntentRouterConfig,
             is DecompositionConfig,
             is QueueProcessorConfig,
@@ -209,6 +229,12 @@ internal object NodeConfigCodec {
             customPrompt = DefaultPrompts
                 .getDefaultPromptForNodeType(DomainNodeType.SUMMARY),
         )
+        // A fresh PIPELINE node has no target yet — the picker forces the
+        // choice and the validator blocks Save until one is made.
+        CatalogNodeType.PIPELINE -> PipelineConfig(title = title)
+        // A fresh SKILL node has no skill yet — the picker forces the choice
+        // and the validator blocks Save until one is made.
+        CatalogNodeType.SKILL -> SkillConfig(title = title)
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -231,6 +257,8 @@ internal object NodeConfigCodec {
             CatalogNodeType.QUEUE_PROCESSOR -> decodeQueueProcessor(payload, title, description, fallback)
             CatalogNodeType.EVALUATION -> decodeEvaluation(payload, title, description, fallback)
             CatalogNodeType.SUMMARY -> decodeSummary(payload, title, description, fallback)
+            CatalogNodeType.PIPELINE -> decodePipeline(payload, title, description, fallback)
+            CatalogNodeType.SKILL -> decodeSkill(payload, title, description, fallback)
         }
     }
 
@@ -297,6 +325,15 @@ internal object NodeConfigCodec {
             CatalogNodeType.SUMMARY -> SummaryConfig(
                 title = title,
                 customPrompt = systemPromptOrDefault.takeIf { it.isNotBlank() },
+            )
+            CatalogNodeType.PIPELINE -> PipelineConfig(
+                title = title,
+                targetPipelineId = node.targetPipelineId.orEmpty(),
+            )
+            CatalogNodeType.SKILL -> SkillConfig(
+                title = title,
+                skillId = node.skillId.orEmpty(),
+                engine = engineFromProvider(node.cloudProvider),
             )
         }
     }
@@ -392,6 +429,21 @@ internal object NodeConfigCodec {
         json.put("format", c.format.name)
         c.customPrompt?.let { json.put("customPrompt", it) }
         json.put("targetLengthChars", c.targetLengthChars)
+    }
+
+    // Only the target id is persisted; the display name is resolved live by
+    // the editor from the saved-pipeline catalogue, never stored on the node.
+    private fun encodePipeline(json: JSONObject, c: PipelineConfig) {
+        json.put("targetPipelineId", c.targetPipelineId)
+    }
+
+    // Only the durable choices are persisted: the skill id and the engine.
+    // `skillName` / `instructionPreview` / `toolRestrictionSummary` are
+    // resolved from the live skill library when the sheet opens, so persisting
+    // them would only risk going stale when the skill is edited.
+    private fun encodeSkill(json: JSONObject, c: SkillConfig) {
+        json.put("skillId", c.skillId)
+        json.put("engine", c.engine.name)
     }
 
     // ─────────────────────────────────────────────────────────────────────
@@ -545,6 +597,31 @@ internal object NodeConfigCodec {
             customPrompt = p.optStringOrNull("customPrompt") ?: fb.systemPrompt,
             targetLengthChars = p.optInt("targetLengthChars", DEFAULT_SUMMARY_LENGTH),
         )
+
+    private fun decodePipeline(p: JSONObject, title: String, description: String?, fb: NodeModel): PipelineConfig =
+        PipelineConfig(
+            title = title,
+            description = description,
+            targetPipelineId = p.optString("targetPipelineId").ifBlank { fb.targetPipelineId.orEmpty() },
+        )
+
+    private fun decodeSkill(p: JSONObject, title: String, description: String?, fb: NodeModel): SkillConfig =
+        SkillConfig(
+            title = title,
+            description = description,
+            skillId = p.optString("skillId").ifBlank { fb.skillId.orEmpty() },
+            // Prefer the persisted engine; fall back to deriving it from the
+            // node's `cloudProvider` for rows written before the field existed.
+            engine = enumOrNull<SkillEngine>(p.optStringOrNull("engine")) ?: engineFromProvider(fb.cloudProvider),
+        )
+
+    /**
+     * Maps a node's `cloudProvider` to the SKILL engine choice: any non-blank
+     * provider (including the "auto" sentinel) means the cloud engine; `null`
+     * means the on-device LiteRT engine.
+     */
+    private fun engineFromProvider(cloudProvider: String?): SkillEngine =
+        if (cloudProvider.isNullOrBlank()) SkillEngine.LITE_RT else SkillEngine.CLOUD
 
     // ─────────────────────────────────────────────────────────────────────
     // JSON helpers

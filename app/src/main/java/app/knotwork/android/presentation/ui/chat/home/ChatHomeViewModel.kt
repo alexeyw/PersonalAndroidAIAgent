@@ -255,6 +255,23 @@ class ChatHomeViewModel @Inject constructor(
     private var replayedBaseline: ReplayedBaseline? = null
 
     /**
+     * Latest merged (replay baseline + live) console events of the **top-level**
+     * run (depth 0). Held separately from [nestedConsoleByRun] so the merged
+     * Logs list can be recomputed whenever either the root or a sub-pipeline
+     * emits, without re-deriving the root's replay/live seam each time.
+     */
+    private var rootConsoleEvents: List<ConsoleEvent> = emptyList()
+
+    /**
+     * Latest cumulative console events of each **sub-pipeline** run (depth > 0),
+     * keyed by child run id. A nested run's [AgentOrchestratorState.ConsoleLog]
+     * is forwarded up by `PipelineNodeExecutor` carrying the child run id and a
+     * depth-stamped event list; the merged Logs list interleaves these with the
+     * root events by timestamp, and each event renders indented by its depth.
+     */
+    private val nestedConsoleByRun: LinkedHashMap<String, List<ConsoleEvent>> = LinkedHashMap()
+
+    /**
      * Dispatcher carrying the CPU-bound projection of a replayed trace
      * (filtering and mapping the full record list to console rows). Off-main
      * by default so a long run's one-shot projection cannot jank the session
@@ -872,7 +889,28 @@ class ChatHomeViewModel @Inject constructor(
      * next session switch / send.
      */
     private fun handleConsoleLog(events: List<ConsoleEvent>, runId: String?) {
-        val merged = mergeWithReplayedBaseline(events, runId)
+        // Each ConsoleLog snapshot belongs to exactly one run, so all of its
+        // events share one nesting depth. Depth 0 is the top-level run; a
+        // forwarded sub-pipeline snapshot (depth > 0) is bucketed by its child
+        // run id and interleaved with the root by timestamp on recompute.
+        val depth = events.firstOrNull()?.depth ?: 0
+        if (depth == 0) {
+            rootConsoleEvents = mergeWithReplayedBaseline(events, runId)
+        } else if (runId != null) {
+            nestedConsoleByRun[runId] = events
+        }
+        recomputeConsoleLogs()
+    }
+
+    /**
+     * Recomputes the Logs tab from the top-level run's events plus every
+     * sub-pipeline run's events, ordered by wall-clock time (then in-run seq
+     * for ties) so a nested run's lines fall between the `▶`/`✓` of the
+     * `PIPELINE` node that spawned them, and trimmed by the clear baseline.
+     */
+    private fun recomputeConsoleLogs() {
+        val merged = (rootConsoleEvents + nestedConsoleByRun.values.flatten())
+            .sortedWith(compareBy({ it.timestamp }, { it.seq }))
         val trimmed = applyConsoleClearBaseline(merged)
         _state.update { it.copy(console = it.console.copy(logs = trimmed.map(ConsoleEvent::toConsoleLine))) }
     }
@@ -906,38 +944,53 @@ class ChatHomeViewModel @Inject constructor(
      * subscribes (see the ordering note on [reattachToRun]).
      */
     private suspend fun replayConsoleTrace(run: PipelineRun) {
-        val trace = runTraceRepository.getTraceForRun(run.id)
-        if (trace.isEmpty()) return
-        // Snapshot the main-confined clear baseline before hopping off
-        // the main dispatcher; the projection applies it as a plain drop
-        // (the equivalent of applyConsoleClearBaseline for a fresh list).
-        val clearBaseline = consoleClearBaseline
+        // Project the whole run tree, not just the top-level run: a finished
+        // (or reattached) run with sub-pipelines stored its nested execution in
+        // descendant run records, so the console rebuilds the hierarchy by
+        // merging each run's persisted trace. Descendant traces ride the same
+        // depth-stamped records, so they render indented under their parent.
+        val descendants = pipelineRunRepository.getDescendantRuns(run.id)
+        val rootTrace = runTraceRepository.getTraceForRun(run.id)
+        val childTraces = descendants.map { it.id to runTraceRepository.getTraceForRun(it.id) }
+        if (rootTrace.isEmpty() && childTraces.all { it.second.isEmpty() }) return
         val projection = withContext(traceProjectionDispatcher) {
-            val consoleEvents = trace
+            val rootEvents = rootTrace
                 .filterIsInstance<RunTraceRecord.ConsoleEntry>()
                 .map(::consoleEntryToConsoleEvent)
-            val nodeIoRecords = trace.filterIsInstance<RunTraceRecord.NodeIo>()
-            val snapshots = nodeIoRecords.map { it.nodeId to nodeIoRecordToNodeIo(it) }
+            val nestedEvents = childTraces
+                .map { (id, t) ->
+                    id to
+                        t.filterIsInstance<RunTraceRecord.ConsoleEntry>().map(::consoleEntryToConsoleEvent)
+                }
+                .filter { it.second.isNotEmpty() }
+            // All runs' node I/O, ordered by wall-clock time so the Vars and
+            // Traces tabs interleave a sub-pipeline's nodes between the start
+            // and end of the PIPELINE node that spawned them.
+            val allNodeIo = (rootTrace + childTraces.flatMap { it.second })
+                .filterIsInstance<RunTraceRecord.NodeIo>()
+                .sortedBy { it.timestamp }
+            val snapshots = allNodeIo.map { it.nodeId to nodeIoRecordToNodeIo(it) }
             ReplayProjection(
-                baseline = ReplayedBaseline(runId = run.id, events = consoleEvents),
+                baseline = ReplayedBaseline(runId = run.id, events = rootEvents),
+                rootEvents = rootEvents,
+                nestedConsoleByRun = nestedEvents,
                 nodeIoSnapshots = snapshots,
-                logs = consoleEvents.drop(clearBaseline).map(ConsoleEvent::toConsoleLine),
                 vars = snapshots.flatMap { (_, io) -> nodeIoToVarRows(io) },
-                traces = nodeIoRecords.map(::nodeIoRecordToConsoleSpan),
+                traces = allNodeIo.map(::nodeIoRecordToConsoleSpan),
             )
         }
         replayedBaseline = projection.baseline
+        rootConsoleEvents = projection.rootEvents
+        nestedConsoleByRun.clear()
+        projection.nestedConsoleByRun.forEach { (id, events) -> nestedConsoleByRun[id] = events }
         nodeIoSnapshots.clear()
         projection.nodeIoSnapshots.forEach { (nodeId, io) -> nodeIoSnapshots[nodeId] = io }
         _state.update {
-            it.copy(
-                console = it.console.copy(
-                    logs = projection.logs,
-                    vars = projection.vars,
-                    traces = projection.traces,
-                ),
-            )
+            it.copy(console = it.console.copy(vars = projection.vars, traces = projection.traces))
         }
+        // Logs are the merge of root + nested buckets; recompute once both are
+        // installed (also applies the clear baseline).
+        recomputeConsoleLogs()
     }
 
     /**
@@ -1268,10 +1321,20 @@ class ChatHomeViewModel @Inject constructor(
         while (traceStepStartMs.size < steps.size) {
             traceStepStartMs.add(nowMs)
         }
-        val spans = steps.mapIndexed { index, step ->
+        val rootSpans = steps.mapIndexed { index, step ->
             traceStepToConsoleSpan(step, traceStepStartMs[index])
         }
-        _state.update { it.copy(console = it.console.copy(traces = spans)) }
+        // A live PipelineTrace carries only the top-level run's steps (a
+        // sub-pipeline's trace is not forwarded live — see
+        // `PipelineNodeExecutor.forwardIfObservable`). Preserve any nested
+        // (depth > 0) spans restored from a replay projection so reattaching to
+        // an active nested run does not drop the sub-pipeline span hierarchy;
+        // they are re-merged by start time.
+        _state.update { state ->
+            val nested = state.console.traces.filter { it.depth > 0 }
+            val merged = (rootSpans + nested).sortedBy { it.startedAt }
+            state.copy(console = state.console.copy(traces = merged))
+        }
     }
 
     /**
@@ -1307,6 +1370,8 @@ class ChatHomeViewModel @Inject constructor(
         consoleClearBaseline = 0
         nodeIoSnapshots.clear()
         traceStepStartMs.clear()
+        rootConsoleEvents = emptyList()
+        nestedConsoleByRun.clear()
         // A new run (or a thread switch) invalidates the replayed baseline:
         // the next live snapshot belongs to a different run, and a thread
         // switch reloads its own baseline via reattachToRun. The reattach
@@ -1861,17 +1926,22 @@ class ChatHomeViewModel @Inject constructor(
      * off the main dispatcher by [replayConsoleTrace] and installed on the
      * main dispatcher in one step.
      *
-     * @property baseline The replay/live merge baseline.
-     * @property nodeIoSnapshots Per-node I/O snapshots in trace order,
-     *   ready to seed [ChatHomeViewModel.nodeIoSnapshots].
-     * @property logs Pre-rendered Logs-tab rows (clear baseline applied).
-     * @property vars Pre-rendered Vars-tab rows.
-     * @property traces Pre-rendered Traces-tab spans.
+     * @property baseline The top-level run's replay/live merge baseline.
+     * @property rootEvents The top-level run's replayed console events, used to
+     *   seed [ChatHomeViewModel.rootConsoleEvents].
+     * @property nestedConsoleByRun Each sub-pipeline run's replayed console
+     *   events, keyed by child run id, used to seed
+     *   [ChatHomeViewModel.nestedConsoleByRun].
+     * @property nodeIoSnapshots Per-node I/O snapshots across the whole run
+     *   tree in trace order, ready to seed [ChatHomeViewModel.nodeIoSnapshots].
+     * @property vars Pre-rendered Vars-tab rows (whole tree).
+     * @property traces Pre-rendered Traces-tab spans (whole tree, depth-stamped).
      */
     private data class ReplayProjection(
         val baseline: ReplayedBaseline,
+        val rootEvents: List<ConsoleEvent>,
+        val nestedConsoleByRun: List<Pair<String, List<ConsoleEvent>>>,
         val nodeIoSnapshots: List<Pair<String, AgentOrchestratorState.NodeIO>>,
-        val logs: List<ConsoleLine>,
         val vars: List<ConsoleVarRow>,
         val traces: List<ConsoleTraceSpan>,
     )

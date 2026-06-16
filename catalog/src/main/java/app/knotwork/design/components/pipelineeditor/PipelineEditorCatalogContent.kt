@@ -101,7 +101,7 @@ private fun SectionLabel(text: String) {
 /** Rotation policy for the per-type [NodeCard] grid in the catalog. */
 private enum class NodeCardRotation { Idle, StateMatrix }
 
-/** 12-entry [NodeCard] grid; every type rendered in its idle state. */
+/** 13-entry [NodeCard] grid; every type rendered in its idle state. */
 @Composable
 private fun NodeCardGrid(rotation: NodeCardRotation) {
     FlowRow(
@@ -206,6 +206,8 @@ private fun sampleSubtitle(type: NodeType): String? = when (type) {
     NodeType.QUEUE_PROCESSOR -> "parallelism = 2"
     NodeType.EVALUATION -> "retries = 2"
     NodeType.SUMMARY -> "bullets"
+    NodeType.PIPELINE -> "→ Multi-step research"
+    NodeType.SKILL -> "★ Translator"
 }
 
 /** Idle [LiteRtConfig] used by the catalog form preview. */

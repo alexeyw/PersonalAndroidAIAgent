@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "id": "subtask_process",
+  "name": "Subtask — Process",
+  "description": "Sub-pipeline for a task subtask the model can complete on its own — reasoning, writing, transforming or calculating from what is already available. Used by the Showcase agent's Subtask Router.",
+  "category": "other",
+  "tags": [
+    "showcase",
+    "subtask",
+    "composition"
+  ],
+  "updatedAt": 1748304000000,
+  "nodes": [
+    {
+      "id": "node-1",
+      "type": "INPUT",
+      "position": {
+        "x": 80,
+        "y": 200
+      },
+      "label": "Input",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "INPUT",
+        "title": "Input",
+        "inputName": "user.message"
+      }
+    },
+    {
+      "id": "node-2",
+      "type": "LITE_RT",
+      "position": {
+        "x": 420,
+        "y": 200
+      },
+      "label": "Process",
+      "config": {
+        "systemPrompt": "You are completing ONE subtask from a larger plan. It is a reasoning, writing, transformation, calculation or composition step — everything it needs is already available to you; you are not searching for facts, using tools, or asking the user.\n\nToday is $DATE. Work in the user's language ($LANG).\n\nHow to work:\n- Do exactly what the current subtask asks — no more, no less. Ignore any surrounding workflow instructions and do not try to solve the overall task or future steps.\n- If results of earlier subtasks appear in your input, use them as the inputs to this step rather than redoing that work.\n- Produce the concrete result the subtask calls for (the rewritten text, the answer, the computed value, the drafted content) — not a description of how you would do it.\n- If the subtask genuinely cannot be completed from the information available, say so briefly and state what is missing, instead of inventing facts.\n- Output only the result of this subtask, as plain text, with no preamble, no restating of the subtask, and no commentary.\n\nOutput the subtask result only.",
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "LITE_RT",
+        "title": "Process",
+        "modelId": "",
+        "systemPrompt": "You are completing ONE subtask from a larger plan. It is a reasoning, writing, transformation, calculation or composition step — everything it needs is already available to you; you are not searching for facts, using tools, or asking the user.\n\nToday is $DATE. Work in the user's language ($LANG).\n\nHow to work:\n- Do exactly what the current subtask asks — no more, no less. Ignore any surrounding workflow instructions and do not try to solve the overall task or future steps.\n- If results of earlier subtasks appear in your input, use them as the inputs to this step rather than redoing that work.\n- Produce the concrete result the subtask calls for (the rewritten text, the answer, the computed value, the drafted content) — not a description of how you would do it.\n- If the subtask genuinely cannot be completed from the information available, say so briefly and state what is missing, instead of inventing facts.\n- Output only the result of this subtask, as plain text, with no preamble, no restating of the subtask, and no commentary.\n\nOutput the subtask result only.",
+        "temperature": 0.7,
+        "topP": 0.9,
+        "maxNewTokens": 2048,
+        "stopTokens": []
+      }
+    },
+    {
+      "id": "node-3",
+      "type": "OUTPUT",
+      "position": {
+        "x": 760,
+        "y": 200
+      },
+      "label": "Output",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "OUTPUT",
+        "title": "Output",
+        "format": "PLAIN_TEXT",
+        "systemPrompt": ""
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "conn-1-2",
+      "fromNodeId": "node-1",
+      "toNodeId": "node-2",
+      "label": null
+    },
+    {
+      "id": "conn-2-3",
+      "fromNodeId": "node-2",
+      "toNodeId": "node-3",
+      "label": null
+    }
+  ]
+}

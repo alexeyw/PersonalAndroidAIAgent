@@ -74,6 +74,7 @@ import app.knotwork.design.icons.imagevector.knotworkNodeInputIcon
 import app.knotwork.design.icons.imagevector.knotworkNodeIntentRouterIcon
 import app.knotwork.design.icons.imagevector.knotworkNodeLiteIcon
 import app.knotwork.design.icons.imagevector.knotworkNodeOutputIcon
+import app.knotwork.design.icons.imagevector.knotworkNodePipelineIcon
 import app.knotwork.design.icons.imagevector.knotworkNodeQueueIcon
 import app.knotwork.design.icons.imagevector.knotworkNodeSummaryIcon
 import app.knotwork.design.icons.imagevector.knotworkNodeToolIcon
@@ -90,6 +91,7 @@ import app.knotwork.design.icons.imagevector.knotworkSearchIcon
 import app.knotwork.design.icons.imagevector.knotworkSendIcon
 import app.knotwork.design.icons.imagevector.knotworkShareIcon
 import app.knotwork.design.icons.imagevector.knotworkShieldIcon
+import app.knotwork.design.icons.imagevector.knotworkSkillIcon
 import app.knotwork.design.icons.imagevector.knotworkSlidersIcon
 import app.knotwork.design.icons.imagevector.knotworkSparkIcon
 import app.knotwork.design.icons.imagevector.knotworkStarIcon
@@ -165,6 +167,9 @@ object AppIcons {
 
     /** Pipeline `OUTPUT` node glyph. */
     val NodeOutput: ImageVector get() = knotworkNodeOutputIcon
+
+    /** Pipeline `PIPELINE` node glyph (nested sub-pipeline call). */
+    val NodePipeline: ImageVector get() = knotworkNodePipelineIcon
 
     /** Editor toolbar — auto-layout action. */
     val AutoLayout: ImageVector get() = knotworkAutoLayoutIcon
@@ -296,6 +301,9 @@ object AppIcons {
 
     /** `I.globe` — network / locale. */
     val Globe: ImageVector get() = knotworkGlobeIcon
+
+    /** `I.skill` — Skill library entry (framed star, mixed glyph). */
+    val Skill: ImageVector get() = knotworkSkillIcon
 
     /** `I.branch` — branch / IF. */
     val Branch: ImageVector get() = knotworkBranchIcon

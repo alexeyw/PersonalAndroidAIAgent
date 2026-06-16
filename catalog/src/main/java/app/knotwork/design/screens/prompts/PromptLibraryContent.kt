@@ -593,8 +593,8 @@ private fun FieldLabel(label: String) {
 }
 
 /**
- * Read-only field whose tap opens a `DropdownMenu` listing the 12
- * catalog `NodeType` values. Used for the prompt category field so
+ * Read-only field whose tap opens a `DropdownMenu` listing the catalog
+ * `NodeType` values. Used for the prompt category field so
  * users can only pick a valid node type instead of typing free-form
  * text that wouldn't match any node in the editor.
  */

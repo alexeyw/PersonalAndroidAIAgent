@@ -46,7 +46,7 @@ The bottom of the screen always shows the four navigation tabs:
 - **Pipelines** — browse and edit the agent's reasoning pipelines.
 - **Tools** — manage AppFunctions and connected MCP servers.
 - **More** — secondary screens (Memory, Models, Prompt library,
-  Active tasks, Live metrics, Settings, About).
+  Skill library, Active tasks, Live metrics, Settings, About).
 
 The Back gesture returns you up the inner stack of the current tab.
 While you are on the start screen of a tab, Back closes the app — it
@@ -290,6 +290,33 @@ history. **Clear console** keeps working on top of a replayed trace —
 cleared rows stay hidden until you switch sessions or send a new
 message.
 
+### Sub-pipelines in the console
+
+When a pipeline calls another pipeline (a **Pipeline** node), the
+sub-pipeline's work is no longer hidden inside a single "Pipeline: 40 s"
+line. Its console log, variables and trace spans appear **indented**
+under the calling node and prefixed with the sub-pipeline's name (for
+example `[Translator] ▶ LITE_RT`), so you can read a nested run as a
+hierarchy — both live and when replaying a finished run. Each level of
+nesting adds one step of indentation.
+
+Two run-wide limits also span the whole call tree:
+
+- **Step budget.** The maximum-steps limit is shared across the parent
+  and every sub-pipeline it calls, so a composition cannot loop forever
+  by nesting. If the budget runs out deep inside a sub-pipeline, the
+  whole run stops with a clear "exceeded the maximum … steps shared
+  across the pipeline tree" message.
+- **Approvals and questions.** A tool approval or clarification raised
+  *inside* a sub-pipeline surfaces its card in the chat exactly like a
+  top-level one, and answering it continues the nested run in place.
+
+If the app is killed (or you step away from a background approval) while
+a sub-pipeline is mid-run, **Resume** restores the entire stack: the
+parent pipeline fast-forwards through the work it already finished, then
+continues the sub-pipeline from where it stopped — neither the parent
+nor the child re-runs a node that already completed.
+
 ### Reopening a chat while a run is in flight
 
 Closing the chat — or the whole app UI — no longer disconnects you from
@@ -438,8 +465,13 @@ on-device reply for chat; a Wikipedia-grounded lookup for factual
 questions (with a complexity gate that can break hard questions into a
 small research loop); and a plan → subtask-loop → synthesis flow for
 actionable tasks, including a human-in-the-loop clarification step when
-a subtask needs your input. It runs entirely on-device. It is an
-ordinary pipeline: edit, duplicate, rename or delete it like any other.
+a subtask needs your input. The task loop is **composed**: each subtask
+runs as one of four bundled sub-pipelines (Clarify / Lookup / Act /
+Process) called through Pipeline nodes, so the showcase seeds a parent
+pipeline plus those four sub-pipelines into your library. It runs
+entirely on-device. Everything is an ordinary pipeline: edit, duplicate,
+rename or delete any of them like any other (see
+[Composing pipelines](#composing-pipelines-the-pipeline-node)).
 
 Tap the `⋮` button on a row, or long-press the row, to see the
 per-pipeline menu:
@@ -583,8 +615,9 @@ Reach a node's per-type configuration by either:
 The sheet is a modal bottom-sheet whose body is documented in
 `node-specs.md`. Every node type — Input, Output, LiteRt, Cloud,
 IntentRouter, IfCondition, Clarification, Tool, Decomposition,
-QueueProcessor, Evaluation, Summary — has its own form, with inline
-validation that disables Save until every required field is filled.
+QueueProcessor, Evaluation, Summary, Pipeline, Skill — has its own
+form, with inline validation that disables Save until every required
+field is filled.
 
 For the **IntentRouter** node, the Classes section in its config
 sheet lets you grow / shrink the class list: each row has a small
@@ -592,6 +625,43 @@ sheet lets you grow / shrink the class list: each row has a small
 **+ Add class** button under the list creates a new empty class row
 (disabled above the 6-class maximum). The new class shows up as an
 additional outbound port on the node card immediately on Save.
+
+### Composing pipelines (the Pipeline node)
+
+A pipeline can call **another pipeline** as a single step. Add a
+**Pipeline** node, open its configuration sheet, and pick the
+sub-pipeline to run from the **Target pipeline** picker — the list is
+every other saved pipeline. When the node runs, its input becomes the
+sub-pipeline's message, and the sub-pipeline's final answer becomes the
+node's output, so a composition reads like a function call between
+pipelines. This is the building block for reuse: describe a reusable
+sub-flow once and call it from several pipelines instead of copying
+nodes around. The bundled **Showcase — full agent** is the worked
+example — its task loop routes each subtask to one of four bundled
+sub-pipelines (Clarify / Lookup / Act / Process) through Pipeline nodes.
+
+A few rules keep compositions sound, all enforced before a pipeline can
+be saved:
+
+- **No target, no save.** A Pipeline node with no target selected is a
+  validation error, exactly like a dangling connection.
+- **No cycles.** A pipeline cannot call itself, directly or through a
+  chain that loops back to it. The target picker greys out any choice
+  that would close a cycle and tells you which pipeline causes it.
+- **Depth limit.** Compositions can only nest so deep (the picker greys
+  out a target that would exceed the limit). The same ceiling is
+  re-checked while the pipeline runs, so a graph edited after it was
+  validated can never recurse without bound.
+- **Editing a sub-pipeline.** A sub-pipeline is an ordinary pipeline —
+  edit, rename or duplicate it like any other. If you delete one that
+  another pipeline still calls, the deletion dialog lists the dependent
+  pipelines so you can repoint or remove the reference first.
+
+While a composed run executes, each sub-pipeline appears as its own
+**indented span** in the console — see
+[Sub-pipelines in the console](#sub-pipelines-in-the-console) for how
+nested traces, the shared step budget, approvals raised inside a
+sub-pipeline, and resuming across a sub-pipeline boundary all behave.
 
 ### Variables in system prompts
 
@@ -1242,6 +1312,68 @@ The FAB at the bottom-right opens the editor sheet. Inside, you can
 edit the name and category and tap any chip in the `INSERT` row to
 append the matching `$VARIABLE` to the prompt body. Save persists
 the change immediately; the next pipeline run picks it up.
+
+## Skill library
+
+**More → Skill library** stores **skills** — reusable bundles of
+*instruction + tool restriction + context configuration*. Instead of
+copying a system prompt between nodes and pipelines, you describe a
+capability once and reuse it.
+
+The screen has two tabs:
+
+- **Bundled** — read-only skills that ship with the app (Summarizer,
+  Translator, Report Writer). Their row menu offers only **Duplicate**,
+  which drops an editable copy named `… (copy)` into your **Mine** tab.
+- **Mine** — your own skills, with full **Edit / Duplicate / Delete**.
+
+Each row shows the skill name, a one-line description, and a
+**tool-restriction** pill that is always one of three visually distinct
+states: **All tools** (unrestricted — every tool, including ones added
+later), **N tools** (an explicit subset), or **No tools** (an explicit
+empty allowlist — *not* the same as unrestricted).
+
+Tap the FAB (**New skill**) or **Edit** to open the full-screen editor:
+
+- **Name** and **Description**.
+- **Instruction** — a monospace field. Use `$VARIABLE` placeholders
+  (e.g. `$DATE`, `$LANG`) for runtime values; they're substituted when
+  the skill runs. Tap a chip in the **INSERT** row to append one.
+- **Tools** — a master control selects **All tools**, **Restrict**, or
+  **No tools**. In **Restrict** mode a checklist of the available tools
+  appears, each with its risk pill, so you can pick exactly which tools
+  the skill may use.
+- **Context the skill sees** — five toggles (chat history, original
+  task, node input, long-term memory, tool results) that become the
+  skill's default context.
+
+Deleting a user skill asks for confirmation; if any pipelines reference
+it the dialog lists them so you can repoint or remove the reference
+first.
+
+### Using a skill in a pipeline (the SKILL node)
+
+In the pipeline editor, add a **Skill** node to run a skill as one step
+of a pipeline. The node configuration sheet offers:
+
+- **Skill** — a picker over your whole library (bundled + your own).
+  Until you choose one, the node is flagged invalid and the pipeline
+  won't save.
+- **Instruction (read-only)** — a preview of the chosen skill's
+  instruction. It's edited in the Skill library, not here.
+- **Tool allowlist** — an indicator showing the skill's restriction
+  (All tools / N tools / No tools).
+- **Inference engine** — run the skill **on-device** or in the **cloud**.
+- **Context toggles** — these start **inherited** from the skill's own
+  default context; change any one and it's marked **overridden** so you
+  can see at a glance where the node diverges from the skill.
+
+The tool allowlist is a real boundary, not a hint: when the skill runs,
+`$TOOLS` in its instruction lists only the allowed tools, and if the
+model still tries to call a tool outside the allowlist the node refuses
+it and reports the refusal instead of running it. Allowed tool calls go
+through the same confirmation prompts as any other tool — a skill never
+lowers a tool's risk or skips a confirmation.
 
 ## Active tasks
 

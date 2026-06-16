@@ -72,10 +72,13 @@ class ToolNodeExecutorTest {
             llmEngine = llmEngine,
             loadModelUseCase = loadModelUseCase,
             toolRepository = toolRepository,
-            settingsRepository = settingsRepository,
-            approvalNotifier = approvalNotifier,
-            chatRepository = chatRepository,
-            pendingInteractionRepository = pendingInteractionRepository,
+            toolInvocationGate = ToolInvocationGate(
+                toolRepository = toolRepository,
+                settingsRepository = settingsRepository,
+                approvalNotifier = approvalNotifier,
+                chatRepository = chatRepository,
+                pendingInteractionRepository = pendingInteractionRepository,
+            ),
         )
 
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)

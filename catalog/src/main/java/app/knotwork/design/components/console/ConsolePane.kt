@@ -71,6 +71,13 @@ private const val SOURCE_CHIP_OFF_ALPHA = 0.10f
 private val TraceBarHeight = 4.dp
 
 /**
+ * Leading indent applied per pipeline-nesting level across the Logs, Vars and
+ * Traces tabs, so a sub-pipeline's rows read as nested under the row that
+ * spawned them.
+ */
+private val ConsoleNestingIndent = 14.dp
+
+/**
  * Knotwork agent console — bottom-sheet container with three snap points
  * (`Peek` / `Partial` / `Full`) and three tabs (`Logs` / `Vars` / `Traces`).
  *
@@ -500,7 +507,12 @@ private fun ConsoleLineRow(line: ConsoleLine, onCopyLine: () -> Unit, onFilterBy
                 horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp1),
+                    .padding(
+                        start = KnotworkTheme.spacing.sp3 + ConsoleNestingIndent * line.depth,
+                        end = KnotworkTheme.spacing.sp3,
+                        top = KnotworkTheme.spacing.sp1,
+                        bottom = KnotworkTheme.spacing.sp1,
+                    ),
             ) {
                 Text(
                     text = line.timestamp,
@@ -569,6 +581,9 @@ private fun ConsoleVarsBody(rows: List<ConsoleVarRow>) {
     val groups = rows.groupBy { it.node }
     LazyColumn(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
         groups.forEach { (node, entries) ->
+            // A node group shares one nesting depth; indent the header and its
+            // rows so a sub-pipeline's vars sit under the spawning node.
+            val groupIndent = ConsoleNestingIndent * (entries.firstOrNull()?.depth ?: 0)
             item {
                 Text(
                     text = node,
@@ -577,8 +592,10 @@ private fun ConsoleVarsBody(rows: List<ConsoleVarRow>) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(
-                            horizontal = KnotworkTheme.spacing.sp3,
-                            vertical = KnotworkTheme.spacing.sp1,
+                            start = KnotworkTheme.spacing.sp3 + groupIndent,
+                            end = KnotworkTheme.spacing.sp3,
+                            top = KnotworkTheme.spacing.sp1,
+                            bottom = KnotworkTheme.spacing.sp1,
                         ),
                 )
             }
@@ -593,8 +610,10 @@ private fun ConsoleVarsBody(rows: List<ConsoleVarRow>) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(
-                            horizontal = KnotworkTheme.spacing.sp4,
-                            vertical = KnotworkTheme.spacing.sp1,
+                            start = KnotworkTheme.spacing.sp4 + groupIndent,
+                            end = KnotworkTheme.spacing.sp4,
+                            top = KnotworkTheme.spacing.sp1,
+                            bottom = KnotworkTheme.spacing.sp1,
                         ),
                 ) {
                     Text(
@@ -624,8 +643,10 @@ private fun ConsoleTracesBody(spans: List<ConsoleTraceSpan>) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(
-                        horizontal = KnotworkTheme.spacing.sp3,
-                        vertical = KnotworkTheme.spacing.sp1,
+                        start = KnotworkTheme.spacing.sp3 + ConsoleNestingIndent * span.depth,
+                        end = KnotworkTheme.spacing.sp3,
+                        top = KnotworkTheme.spacing.sp1,
+                        bottom = KnotworkTheme.spacing.sp1,
                     ),
             ) {
                 Row(

@@ -121,12 +121,16 @@ sealed interface AgentOrchestratorState {
      * @property durationMs Wall-clock time the node took to execute, in milliseconds.
      * @property tokenCount Approximate number of tokens produced by the node, or `null`
      *   for non-LLM nodes (routers, IF-conditions, tool nodes, queue processors).
+     * @property depth Pipeline-nesting level of the run this step belongs to
+     *   (`0` top-level, `1` direct sub-pipeline, …). The Traces tab nests a
+     *   sub-pipeline's spans under the `PIPELINE` node that spawned them.
      */
     data class TraceStep(
         val nodeName: String,
         val outputText: String,
         val durationMs: Long = 0,
         val tokenCount: Int? = null,
+        val depth: Int = 0,
     )
 
     /**
@@ -169,7 +173,15 @@ sealed interface AgentOrchestratorState {
      *   (already-composed context if the node opted into
      *   `NodeContextConfig`, otherwise the upstream node's raw output).
      * @property output executor result observed at the end of the step.
+     * @property depth Pipeline-nesting level of the run this node belongs to
+     *   (`0` top-level, `1` direct sub-pipeline, …). The Vars tab renders a
+     *   sub-pipeline's rows indented under the spawning `PIPELINE` node.
      */
-    data class NodeIO(val nodeId: String, val nodeType: String, val input: String, val output: String) :
-        AgentOrchestratorState
+    data class NodeIO(
+        val nodeId: String,
+        val nodeType: String,
+        val input: String,
+        val output: String,
+        val depth: Int = 0,
+    ) : AgentOrchestratorState
 }

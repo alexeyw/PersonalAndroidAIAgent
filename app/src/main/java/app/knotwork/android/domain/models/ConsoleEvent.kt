@@ -23,8 +23,19 @@ package app.knotwork.android.domain.models
  * @property seq Zero-based monotonic position of the event within its pipeline
  *   run. The console replay/live seam deduplicates by this number, so it is
  *   unique within a run; `0` for events emitted outside a persisted run.
+ * @property depth Pipeline-nesting level of the run that produced the event:
+ *   `0` for the top-level run, `1` for a direct sub-pipeline, and so on. The
+ *   console renders the event indented by this level so nested sub-pipeline
+ *   output reads as a hierarchy; the event [message] of a nested run is also
+ *   already prefixed with `[<sub-pipeline name>]` by the engine.
  */
-data class ConsoleEvent(val timestamp: Long, val type: ConsoleEventType, val message: String, val seq: Long = 0)
+data class ConsoleEvent(
+    val timestamp: Long,
+    val type: ConsoleEventType,
+    val message: String,
+    val seq: Long = 0,
+    val depth: Int = 0,
+)
 
 /**
  * Category of a [ConsoleEvent]. Modelled as a sealed interface with `data

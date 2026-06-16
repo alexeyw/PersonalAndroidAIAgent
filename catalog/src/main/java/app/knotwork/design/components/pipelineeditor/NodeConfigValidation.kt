@@ -50,6 +50,8 @@ enum class FieldId {
     MAX_RETRIES,
     CUSTOM_PROMPT,
     TARGET_LENGTH_CHARS,
+    TARGET_PIPELINE_ID,
+    SKILL_ID,
 }
 
 /**
@@ -102,6 +104,19 @@ enum class ValidationFailure(val stringRes: Int) {
      * fires on `FieldId.ARGUMENT_MAPPING`.
      */
     KEY_DUPLICATE(app.knotwork.design.R.string.knotwork_node_validation_arg_key_duplicate),
+
+    /**
+     * A [PipelineConfig] has no target pipeline selected (its
+     * `targetPipelineId` is blank). Fires on `FieldId.TARGET_PIPELINE_ID`
+     * so the picker disables Save until the user chooses a sub-pipeline.
+     */
+    TARGET_PIPELINE_MISSING(app.knotwork.design.R.string.knotwork_node_validation_target_pipeline_missing),
+
+    /**
+     * A [SkillConfig] has no skill selected (its `skillId` is blank). Fires on
+     * `FieldId.SKILL_ID` so the picker disables Save until the user chooses a skill.
+     */
+    TARGET_SKILL_MISSING(app.knotwork.design.R.string.knotwork_node_validation_target_skill_missing),
 }
 
 /** Allowed range for [LiteRtConfig.temperature]. */
@@ -163,7 +178,7 @@ object NodeConfigValidation {
      * @return a map of failing fields. Save should be disabled when the
      * map is non-empty.
      */
-    // 12-arm `when` mirrors 12 node types; further split would only hide structure.
+    // 13-arm `when` mirrors 13 node types; further split would only hide structure.
     @Suppress("CyclomaticComplexMethod")
     fun validate(config: NodeConfig, peerTitles: Set<String>): Map<FieldId, ValidationFailure> {
         val errors = mutableMapOf<FieldId, ValidationFailure>()
@@ -181,6 +196,8 @@ object NodeConfigValidation {
             is QueueProcessorConfig -> errors += validateQueueProcessor(config)
             is EvaluationConfig -> errors += validateEvaluation(config)
             is SummaryConfig -> errors += validateSummary(config)
+            is PipelineConfig -> errors += validatePipeline(config)
+            is SkillConfig -> errors += validateSkill(config)
         }
         return errors
     }
@@ -340,6 +357,31 @@ object NodeConfigValidation {
         }
         if (config.targetLengthChars !in TARGET_LENGTH_RANGE) {
             errors[FieldId.TARGET_LENGTH_CHARS] = ValidationFailure.OUT_OF_RANGE
+        }
+        return errors
+    }
+
+    private fun validatePipeline(config: PipelineConfig): Map<FieldId, ValidationFailure> {
+        val errors = mutableMapOf<FieldId, ValidationFailure>()
+        // A blank target is the "not chosen yet" state. Unlike TOOL's blank
+        // "Auto" id (a meaningful runtime choice), a PIPELINE node with no
+        // target can never run, so it blocks Save. Cross-pipeline reference
+        // validity (cycles / missing / depth) is owned by the domain
+        // composition validator at persist time, not here.
+        if (config.targetPipelineId.isBlank()) {
+            errors[FieldId.TARGET_PIPELINE_ID] = ValidationFailure.TARGET_PIPELINE_MISSING
+        }
+        return errors
+    }
+
+    private fun validateSkill(config: SkillConfig): Map<FieldId, ValidationFailure> {
+        val errors = mutableMapOf<FieldId, ValidationFailure>()
+        // A blank skill id is the "not chosen yet" state: a SKILL node with no
+        // skill has no instruction to run, so it blocks Save. Whether the id
+        // still resolves to a stored skill is checked at run time
+        // (`SkillNodeExecutor`) / by `PipelineGraph.validate`, not here.
+        if (config.skillId.isBlank()) {
+            errors[FieldId.SKILL_ID] = ValidationFailure.TARGET_SKILL_MISSING
         }
         return errors
     }

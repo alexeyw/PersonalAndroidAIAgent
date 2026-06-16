@@ -327,3 +327,126 @@ data class SummaryConfig(
 ) : NodeConfig {
     override val type: NodeType get() = NodeType.SUMMARY
 }
+
+/**
+ * Why a candidate pipeline cannot be picked as a [PipelineConfig.targetPipelineId].
+ * Each reason maps to a distinct inline message because the user's remedy differs:
+ *
+ *  - [SELF] — pick a different pipeline.
+ *  - [CYCLE] — break the back-reference (the offending pipeline is named via
+ *    [PipelineTargetOption.cycleCulprit]).
+ *  - [DEPTH] — reduce the nesting depth (the ceiling is carried in
+ *    [PipelineTargetOption.depthLimit]).
+ */
+enum class PipelineTargetDisabledReason { SELF, CYCLE, DEPTH }
+
+/**
+ * One row in the [PipelineConfig] target picker. The app resolves the full
+ * catalogue of saved pipelines, classifies each against the pipeline being
+ * edited (reusing the domain composition validator), and hands the result
+ * down as a list of these options so the catalog stays free of any
+ * cross-pipeline reachability logic.
+ *
+ * @property id the candidate pipeline's stable id, written into
+ * [PipelineConfig.targetPipelineId] when picked.
+ * @property name the candidate pipeline's display name shown in the row.
+ * @property selectable `true` when the option may be chosen; `false` renders
+ * the row disabled with [disabledReason].
+ * @property disabledReason why the option is disabled; `null` when [selectable].
+ * @property cycleCulprit for [PipelineTargetDisabledReason.CYCLE], the display
+ * name of the pipeline that already calls the edited one (so the reason can
+ * name it). `null` for the other reasons.
+ * @property depthLimit for [PipelineTargetDisabledReason.DEPTH], the configured
+ * maximum nesting depth. `null` for the other reasons.
+ */
+data class PipelineTargetOption(
+    val id: String,
+    val name: String,
+    val selectable: Boolean = true,
+    val disabledReason: PipelineTargetDisabledReason? = null,
+    val cycleCulprit: String? = null,
+    val depthLimit: Int? = null,
+)
+
+/**
+ * Configuration for [NodeType.PIPELINE] — runs another saved pipeline as a
+ * nested sub-call (composition).
+ *
+ * @property title display title.
+ * @property description optional one-line note.
+ * @property targetPipelineId id of the pipeline this node runs. Blank means
+ * "no target chosen yet" — the validator surfaces [ValidationFailure.TARGET_PIPELINE_MISSING]
+ * and Save stays disabled until the user picks one.
+ * @property targetPipelineName resolved display name of [targetPipelineId],
+ * supplied by the app so the picker can show the current selection without the
+ * catalog resolving ids. `null` when no target is set or the id no longer
+ * resolves to a stored pipeline.
+ */
+data class PipelineConfig(
+    override val title: String,
+    override val description: String? = null,
+    val targetPipelineId: String = "",
+    val targetPipelineName: String? = null,
+) : NodeConfig {
+    override val type: NodeType get() = NodeType.PIPELINE
+}
+
+/** Inference engine a [SkillConfig] node runs the skill on. */
+enum class SkillEngine { LITE_RT, CLOUD }
+
+/**
+ * One row in the [SkillConfig] skill picker. The app resolves the full skill
+ * library (bundled + user) and hands the rows down so the catalog stays free
+ * of any skill-storage knowledge.
+ *
+ * @property id the skill's stable id, written into [SkillConfig.skillId] when picked.
+ * @property name the skill's display name shown in the row.
+ * @property instructionPreview the skill's instruction text, copied into
+ * [SkillConfig.instructionPreview] on pick so the read-only preview updates
+ * immediately without a round-trip to the app.
+ * @property toolRestrictionSummary one-line allowlist summary (e.g. "All tools",
+ * "No tools", "3 tools"), copied into [SkillConfig.toolRestrictionSummary] on pick.
+ */
+data class SkillOption(
+    val id: String,
+    val name: String,
+    val instructionPreview: String,
+    val toolRestrictionSummary: String,
+)
+
+/**
+ * Configuration for [NodeType.SKILL] — runs a reusable skill (fixed
+ * instruction + visible-tool allowlist + default context) as an inference step.
+ *
+ * The skill supplies the instruction, the allowlist, and the default context;
+ * the node only chooses *which* skill and *which engine* to run it on. The
+ * instruction preview and allowlist summary are read-only — they are edited in
+ * the Skill library, not here.
+ *
+ * @property title display title.
+ * @property description optional one-line note.
+ * @property skillId id of the skill this node runs. Blank means "no skill chosen
+ * yet" — the validator surfaces [ValidationFailure.TARGET_SKILL_MISSING] and Save
+ * stays disabled until the user picks one.
+ * @property skillName resolved display name of [skillId], supplied by the app so
+ * the picker can show the current selection. `null` when no skill is set or the id
+ * no longer resolves to a stored skill.
+ * @property instructionPreview resolved instruction text of the selected skill,
+ * shown read-only. `null` when no skill is selected.
+ * @property toolRestrictionSummary resolved one-line summary of the selected
+ * skill's tool allowlist (e.g. "All tools", "No tools", "3 tools"), shown as the
+ * allowlist indicator. `null` when no skill is selected.
+ * @property engine which inference engine runs the skill ([SkillEngine.LITE_RT]
+ * local or [SkillEngine.CLOUD]).
+ */
+data class SkillConfig(
+    override val title: String,
+    override val description: String? = null,
+    val skillId: String = "",
+    val skillName: String? = null,
+    val instructionPreview: String? = null,
+    val toolRestrictionSummary: String? = null,
+    val engine: SkillEngine = SkillEngine.LITE_RT,
+) : NodeConfig {
+    override val type: NodeType get() = NodeType.SKILL
+}

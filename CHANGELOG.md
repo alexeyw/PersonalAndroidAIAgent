@@ -13,6 +13,107 @@ details.
 
 ## [Unreleased]
 
+### Added
+
+- **Composed Showcase agent (bundled sub-pipelines).** The first-launch
+  **Showcase — full agent** pipeline now demonstrates composition: its task
+  loop's four subtask branches — *Clarify*, *Lookup*, *Act*, *Process* — are
+  shipped as four standalone bundled sub-pipelines, and the Showcase routes
+  each subtask to them through `PIPELINE` nodes instead of inlining the work.
+  When the Showcase is seeded (first launch) or spawned from **+ From preset**,
+  its bundled sub-pipelines are materialised under stable ids and persisted on
+  demand (create-if-absent, so a sub-pipeline you have edited is never
+  clobbered). A nested task run now shows each subtask as its own sub-pipeline
+  span in the console — indented under the calling node and resumable across
+  the boundary. The browser editor's bundled-preset catalogue carries the
+  composed Showcase and the four sub-pipelines too.
+
+- **Browser editor: `PIPELINE` and `SKILL` configuration.** The standalone
+  browser pipeline editor can now configure composition nodes, not just place
+  them. A `PIPELINE` node gets a target-pipeline picker populated from the
+  bundled and per-browser preset catalogues, with a manual-id escape hatch; a
+  `SKILL` node gets a skill-id field and an on-device/cloud engine selector.
+  Both reference ids now travel in the **flat `config` block** of the exported
+  JSON (alongside the rich `nodeConfig` envelope), so a pipeline exported from
+  the app and imported into the browser — and back — preserves its references
+  exactly and stays runnable. Importing a reference to an unknown pipeline no
+  longer breaks silently: the node shows an "unresolved" badge and a validation
+  warning instead of vanishing. The editor flags a direct self-reference and an
+  unset reference as errors; full transitive cycle and nesting-depth validation
+  remains the app's responsibility.
+
+- **Skill execution (`SKILL` node).** A new pipeline node type runs a reusable
+  skill as an inference step: the instruction, the visible-tool allowlist, and
+  the default context all come from the skill rather than from the node. The
+  node picks its inference engine (on-device or cloud); the skill's instruction
+  is rendered with every built-in `$VARIABLE`, but `$TOOLS` expands only to the
+  skill's allowlist. Tool restriction is enforced **at the executor level**, not
+  just in the prompt: a tool call outside the allowlist is rejected with a typed
+  error observation and is never executed, and any allowed call still passes
+  through the unchanged tool risk / Human-in-the-Loop confirmation gate (a skill
+  can never weaken it). The visual editor's SKILL node gains a skill picker, a
+  read-only instruction preview, an allowlist indicator, an engine selector, and
+  context toggles tagged *inherited* / *overridden* against the skill's default.
+  The browser pipeline editor gains a matching **Skill** palette entry.
+- **Skill entity & library.** A **skill** is a reusable bundle of *instruction
+  + tool restriction + context configuration* — describe a capability once and
+  reuse it instead of copying a system prompt between nodes. The new **Skill
+  library** (More → Skill library) lists bundled and user skills in a
+  Bundled / Mine 2-tab layout, with a full-screen editor: a monospace,
+  `$VARIABLE`-aware instruction field; a tri-state tool allowlist master
+  control (**All tools** = unrestricted · **Restrict** = an explicit subset
+  with per-tool risk pills · **No tools** = an explicit empty allowlist, kept
+  visually distinct from "unrestricted"); and per-context-block toggles. Three
+  bundled skills ship and are seeded idempotently on every launch (Summarizer
+  and Translator use no tools; Report Writer is allowed `write_file`). Bundled
+  skills are read-only but can be duplicated into an editable copy; deleting a
+  user skill warns about dependent pipelines. (Skill *execution* as a `SKILL`
+  pipeline node lands in a follow-up change.)
+- **Pipeline composition (`PIPELINE` node).** A new pipeline node type runs
+  another pipeline as a sub-step — the building block for turning a reusable
+  branch into a callable block. The node references its callee by id; at
+  runtime the engine feeds the node's input to the sub-pipeline's `INPUT` node
+  and the sub-pipeline's `OUTPUT` text becomes the node's output. Unbounded
+  recursion (a pipeline referencing itself or forming a cycle) and runaway
+  nesting are rejected **before a run starts** by a static cross-pipeline
+  validator, with a configurable runtime depth ceiling as a safety net. A new
+  `pipelineMaxNestingDepth` setting (default 3, range 1–5) bounds how deep a
+  composition may nest. The browser pipeline editor gains a matching
+  **Pipeline** palette entry. (Visual editor configuration of the node — target
+  picker, on-card target name, validation deep-links — and nested-run
+  observability land in follow-up changes.)
+- **`PIPELINE` node in the visual editor.** The in-app pipeline editor now
+  renders and configures `PIPELINE` nodes: a deep-indigo node card showing the
+  target pipeline's name (or a "No target pipeline" / "Pipeline not found"
+  note), and a config-sheet **target picker** listing every other saved
+  pipeline. Choices that would create a cycle (self-reference or a pipeline
+  that already runs this one) or exceed the nesting ceiling appear disabled
+  with the reason — reusing the same cross-pipeline validator that gates a
+  save. Deleting a pipeline that other pipelines reference now warns with the
+  list of dependents (which become a normal, deep-linkable validation error —
+  no silent cascade). Composition errors (missing target, cycle, depth) surface
+  in the validation bar with a one-tap deep-link to the offending node.
+- **Nested-pipeline observability, shared budgets and resume across the
+  boundary.** A sub-pipeline now runs as a first-class **child run** linked to
+  its parent (`pipeline_runs.parentRunId`), so its execution is no longer a
+  black box:
+  - **Nested console.** A sub-pipeline's log lines, variables and trace spans
+    surface in the console indented by nesting depth and prefixed with the
+    sub-pipeline name, both live and when replaying a finished run.
+  - **Shared step budget.** The `MAX_STEPS` ceiling is now shared across the
+    whole run tree — a sub-pipeline decrements the same allowance instead of
+    getting a fresh one, and exhausting it at any depth fails the whole stack
+    with a clear error.
+  - **Human-in-the-loop across the boundary.** An approval or clarification
+    raised *inside* a sub-pipeline now surfaces its card in chat and resumes
+    correctly (previously the request was swallowed and the parent node timed
+    out).
+  - **Resume across the boundary.** A run interrupted (process death) or parked
+    (background HITL) *inside* a sub-pipeline resumes by restoring the whole
+    stack: the parent replays to its `PIPELINE` node and continues the child
+    run from its checkpoint rather than restarting it; the recorded graph hash
+    is validated for every graph in the stack.
+
 ## [0.5.0] - 2026-06-14
 
 ### Added

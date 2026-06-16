@@ -211,6 +211,14 @@ private fun severityOf(error: PipelineValidationError): Severity = when (error) 
     PipelineValidationError.MultipleInputs,
     PipelineValidationError.MultipleOutputs,
     PipelineValidationError.HasCycles,
+    // A broken composition (missing/dangling target, cycle, over-depth) cannot run.
+    is PipelineValidationError.MissingTargetPipeline,
+    is PipelineValidationError.TargetPipelineNotFound,
+    is PipelineValidationError.PipelineCycle,
+    is PipelineValidationError.PipelineNestingTooDeep,
+    // A SKILL node with no / dangling skill has no instruction to run.
+    is PipelineValidationError.MissingSkill,
+    is PipelineValidationError.SkillNotFound,
     -> Severity.Blocker
     PipelineValidationError.DisconnectedInput,
     PipelineValidationError.DisconnectedOutput,
@@ -236,5 +244,13 @@ private fun isAutoFixable(error: PipelineValidationError): Boolean = when (error
     PipelineValidationError.UnreachableNode,
     PipelineValidationError.DeadEndNode,
     is PipelineValidationError.NodeEmptyContext,
+    // Composition errors need the user to re-pick a target / restructure — no recipe.
+    is PipelineValidationError.MissingTargetPipeline,
+    is PipelineValidationError.TargetPipelineNotFound,
+    is PipelineValidationError.PipelineCycle,
+    is PipelineValidationError.PipelineNestingTooDeep,
+    // A SKILL node needs the user to pick a valid skill — no auto-fix recipe.
+    is PipelineValidationError.MissingSkill,
+    is PipelineValidationError.SkillNotFound,
     -> false
 }

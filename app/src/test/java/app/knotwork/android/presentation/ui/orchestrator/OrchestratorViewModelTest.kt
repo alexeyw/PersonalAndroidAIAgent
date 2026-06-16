@@ -7,6 +7,7 @@ import app.knotwork.android.domain.models.NodeContextConfig
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
+import app.knotwork.android.domain.models.PipelineTargetAvailability
 import app.knotwork.android.domain.models.PipelineValidationError
 import app.knotwork.android.domain.models.PipelineValidationException
 import app.knotwork.android.domain.models.PresetCategory
@@ -18,7 +19,9 @@ import app.knotwork.android.domain.repositories.ApiKeyRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.PromptPresetRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.repositories.SkillRepository
 import app.knotwork.android.domain.repositories.ToolRepository
+import app.knotwork.android.domain.services.PipelineCompositionValidator
 import app.knotwork.android.domain.usecases.CreatePipelineUseCase
 import app.knotwork.android.domain.usecases.DeletePipelineUseCase
 import app.knotwork.android.domain.usecases.DuplicatePipelineUseCase
@@ -72,6 +75,8 @@ class OrchestratorViewModelTest {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var promptTemplateEngine: PromptTemplateEngine
     private lateinit var promptPresetRepository: PromptPresetRepository
+    private lateinit var compositionValidator: PipelineCompositionValidator
+    private lateinit var skillRepository: SkillRepository
     private lateinit var providerDate: PromptVariableProvider
     private lateinit var providerTime: PromptVariableProvider
     private lateinit var viewModel: OrchestratorViewModel
@@ -105,6 +110,8 @@ class OrchestratorViewModelTest {
         promptPresetRepository = mockk(relaxed = true) {
             every { getPresetsForType(any()) } returns flowOf(emptyList())
         }
+        compositionValidator = mockk()
+        skillRepository = mockk(relaxed = true)
         apiKeyRepository = mockk()
         toolRepository = mockk()
         localModelRepository = mockk()
@@ -134,28 +141,37 @@ class OrchestratorViewModelTest {
             coEvery { resolve() } returns "15:30"
         }
 
-        viewModel = OrchestratorViewModel(
-            savePipelineUseCase,
-            loadPipelineUseCase,
-            importPipelineUseCase,
-            loadPipelineFromPresetUseCase,
-            renamePipelineUseCase,
-            duplicatePipelineUseCase,
-            deletePipelineUseCase,
-            createPipelineUseCase,
-            getPromptTemplatesUseCase,
-            savePromptTemplateUseCase,
-            savePipelineAsPresetUseCase,
-            savePromptAsPresetUseCase,
-            apiKeyRepository,
-            toolRepository,
-            localModelRepository,
-            settingsRepository,
-            promptTemplateEngine,
-            promptPresetRepository,
-            setOf(providerDate, providerTime),
-        )
+        viewModel = buildViewModel()
     }
+
+    /**
+     * Constructs an [OrchestratorViewModel] from the current mock fields. Pulled
+     * out of [setUp] so a test can re-stub a dependency (e.g. the saved-pipeline
+     * flow) and rebuild the VM before exercising it.
+     */
+    private fun buildViewModel(): OrchestratorViewModel = OrchestratorViewModel(
+        savePipelineUseCase,
+        loadPipelineUseCase,
+        importPipelineUseCase,
+        loadPipelineFromPresetUseCase,
+        renamePipelineUseCase,
+        duplicatePipelineUseCase,
+        deletePipelineUseCase,
+        createPipelineUseCase,
+        getPromptTemplatesUseCase,
+        savePromptTemplateUseCase,
+        savePipelineAsPresetUseCase,
+        savePromptAsPresetUseCase,
+        apiKeyRepository,
+        toolRepository,
+        localModelRepository,
+        settingsRepository,
+        promptTemplateEngine,
+        promptPresetRepository,
+        compositionValidator,
+        setOf(providerDate, providerTime),
+        skillRepository,
+    )
 
     @After
     fun tearDown() {
@@ -1292,5 +1308,54 @@ class OrchestratorViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertNotNull(viewModel.uiState.value.errorMessage)
+    }
+
+    @Test
+    fun `dependentsOf returns only the pipelines that reference the target`() = runTest {
+        val target = PipelineGraph(id = "x", name = "Target")
+        val dependent = PipelineGraph(
+            id = "a",
+            name = "Caller",
+            nodes = listOf(
+                NodeModel(id = "a-n0", type = NodeType.PIPELINE, x = 0f, y = 0f, targetPipelineId = "x"),
+            ),
+        )
+        val unrelated = PipelineGraph(id = "b", name = "Unrelated")
+        every { loadPipelineUseCase.observeAllPipelines() } returns
+            flowOf(listOf(dependent, unrelated, target))
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(listOf("a"), vm.dependentsOf("x").map { it.id })
+    }
+
+    @Test
+    fun `classifyPipelineTargets maps the validator classification`() = runTest {
+        coEvery { compositionValidator.classifyTargets(any(), any()) } returns listOf(
+            PipelineTargetAvailability(
+                pipelineId = "ok",
+                name = "OK",
+                selectable = true,
+                reason = null,
+            ),
+            PipelineTargetAvailability(
+                pipelineId = "loop",
+                name = "Loop",
+                selectable = false,
+                reason = PipelineTargetAvailability.Reason.Cycle("Caller"),
+            ),
+        )
+
+        val result = viewModel.classifyPipelineTargets()
+
+        assertEquals(listOf("ok", "loop"), result.map { it.pipelineId })
+        assertEquals(PipelineTargetAvailability.Reason.Cycle("Caller"), result[1].reason)
+    }
+
+    @Test
+    fun `classifyPipelineTargets degrades to empty list when the validator throws`() = runTest {
+        coEvery { compositionValidator.classifyTargets(any(), any()) } throws IllegalStateException("boom")
+
+        assertEquals(emptyList<PipelineTargetAvailability>(), viewModel.classifyPipelineTargets())
     }
 }

@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "id": "subtask_act",
+  "name": "Subtask — Act",
+  "description": "Sub-pipeline for a task subtask that performs an action through a tool (auto-selected from the available tools, behind the usual confirmation gate). Used by the Showcase agent's Subtask Router.",
+  "category": "other",
+  "tags": [
+    "showcase",
+    "subtask",
+    "tools",
+    "composition"
+  ],
+  "updatedAt": 1748304000000,
+  "nodes": [
+    {
+      "id": "node-1",
+      "type": "INPUT",
+      "position": {
+        "x": 80,
+        "y": 200
+      },
+      "label": "Input",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "INPUT",
+        "title": "Input",
+        "inputName": "user.message"
+      }
+    },
+    {
+      "id": "node-2",
+      "type": "TOOL",
+      "position": {
+        "x": 420,
+        "y": 200
+      },
+      "label": "Tool Action",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "TOOL",
+        "title": "Tool Action",
+        "toolId": "",
+        "argumentMapping": []
+      }
+    },
+    {
+      "id": "node-3",
+      "type": "OUTPUT",
+      "position": {
+        "x": 760,
+        "y": 200
+      },
+      "label": "Output",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "OUTPUT",
+        "title": "Output",
+        "format": "PLAIN_TEXT",
+        "systemPrompt": ""
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "conn-1-2",
+      "fromNodeId": "node-1",
+      "toNodeId": "node-2",
+      "label": null
+    },
+    {
+      "id": "conn-2-3",
+      "fromNodeId": "node-2",
+      "toNodeId": "node-3",
+      "label": null
+    }
+  ]
+}

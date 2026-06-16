@@ -8,6 +8,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
 import app.knotwork.android.R
+import app.knotwork.android.domain.models.NodeModel
+import app.knotwork.android.domain.models.NodeType
+import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineValidationError
 import app.knotwork.android.presentation.ui.pipeline.editor.bars.ValidationBar
 import org.junit.Assert.assertEquals
@@ -131,5 +134,40 @@ class PipelineEditorValidationBarTest {
         composeTestRule.waitForIdle()
 
         assertEquals(unconnectedInputId, focused)
+    }
+
+    @Test
+    fun goButton_focusesPipelineNode_forMissingTargetCompositionError() {
+        // A PIPELINE-composition error (no target chosen) deep-links to the
+        // offending PIPELINE node via `PipelineValidationError.focusableNodeId`.
+        val pipelineNode = NodeModel(
+            id = "node-pipeline",
+            type = NodeType.PIPELINE,
+            x = 0f,
+            y = 0f,
+            label = "Run sub",
+        )
+        val graph = PipelineGraph(id = "g", name = "g", nodes = listOf(pipelineNode))
+        val errors = listOf(PipelineValidationError.MissingTargetPipeline("node-pipeline"))
+        var focused: String? = null
+        composeTestRule.setContent {
+            MaterialTheme {
+                ValidationBar(
+                    graph = graph,
+                    errors = errors,
+                    errorLabels = listOf("No target pipeline selected"),
+                    nodeLookup = { id -> graph.nodes.find { it.id == id }?.label },
+                    onFocusNode = { focused = it },
+                    onAutoFix = {},
+                )
+            }
+        }
+
+        composeTestRule
+            .onAllNodesWithText(ctx.getString(R.string.pipeline_editor_validation_go))[0]
+            .performClick()
+        composeTestRule.waitForIdle()
+
+        assertEquals("node-pipeline", focused)
     }
 }

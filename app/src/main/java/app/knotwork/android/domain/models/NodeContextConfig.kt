@@ -76,10 +76,16 @@ data class NodeContextConfig(
          * - [NodeType.INTENT_ROUTER] / [NodeType.DECOMPOSITION]: classifiers
          *   that benefit from the user's intent and (for the router) the
          *   recent chat to disambiguate references.
+         * - [NodeType.SKILL]: an inference step driven by a reusable skill.
+         *   This per-type default is only the fallback for a SKILL node with
+         *   no skill resolved yet; once a skill is picked the editor seeds the
+         *   node's context from the skill's own `contextConfig`, and an explicit
+         *   toggle in the node config overrides that inherited default.
          */
         fun defaultForType(type: NodeType): NodeContextConfig = when (type) {
             NodeType.INPUT,
             NodeType.IF_CONDITION,
+            NodeType.PIPELINE,
             -> NodeContextConfig(
                 chatHistory = false,
                 originalTask = false,
@@ -92,6 +98,7 @@ data class NodeContextConfig(
             NodeType.CLARIFICATION,
             NodeType.QUEUE_PROCESSOR,
             NodeType.DECOMPOSITION,
+            NodeType.SKILL,
             -> NodeContextConfig(
                 chatHistory = false,
                 originalTask = true,
@@ -136,10 +143,11 @@ data class NodeContextConfig(
 /**
  * Node types whose executor input is assembled by `NodeContextBuilder` from the
  * pipeline context blocks selected via [NodeContextConfig]. Control-flow types
- * ([NodeType.INPUT], [NodeType.IF_CONDITION], [NodeType.QUEUE_PROCESSOR]) and
- * the terminal [NodeType.OUTPUT] in echo mode (no `systemPrompt`) bypass
- * context composition and forward the raw upstream input verbatim — for those
- * nodes [NodeContextConfig] is ignored at runtime.
+ * ([NodeType.INPUT], [NodeType.IF_CONDITION], [NodeType.QUEUE_PROCESSOR]),
+ * the composition node [NodeType.PIPELINE] (which forwards its raw input to the
+ * sub-pipeline's INPUT node), and the terminal [NodeType.OUTPUT] in echo mode
+ * (no `systemPrompt`) bypass context composition and forward the raw upstream
+ * input verbatim — for those nodes [NodeContextConfig] is ignored at runtime.
  *
  * This single source of truth is consumed by both `GraphExecutionEngine`
  * (deciding whether to compose a node's input) and `PipelineGraph.validate()`
@@ -155,6 +163,7 @@ private val CONTEXT_AWARE_NODE_TYPES: Set<NodeType> = setOf(
     NodeType.EVALUATION,
     NodeType.CLARIFICATION,
     NodeType.TOOL,
+    NodeType.SKILL,
 )
 
 /**

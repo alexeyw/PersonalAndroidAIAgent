@@ -1,7 +1,7 @@
 package app.knotwork.design.components.pipelineeditor
 
 /**
- * Catalog-side enumeration of the twelve pipeline-editor node types.
+ * Catalog-side enumeration of the thirteen pipeline-editor node types.
  *
  * Independent of `app.knotwork.android.domain.models.NodeType` so the design
  * catalog has zero dependency on the production `:app` module. The two
@@ -49,4 +49,10 @@ enum class NodeType {
 
     /** Condenses many node outputs into one. */
     SUMMARY,
+
+    /** Runs another saved pipeline as a nested sub-call (composition). */
+    PIPELINE,
+
+    /** Runs a reusable skill (fixed instruction + tool allowlist) as an inference step. */
+    SKILL,
 }

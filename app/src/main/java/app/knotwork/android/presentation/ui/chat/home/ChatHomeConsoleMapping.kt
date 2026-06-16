@@ -57,6 +57,7 @@ fun ConsoleEvent.toConsoleLine(): ConsoleLine = ConsoleLine(
     source = type.toConsoleSource(),
     level = type.toConsoleLevel(),
     text = message,
+    depth = depth,
 )
 
 /**
@@ -106,6 +107,7 @@ fun traceStepToConsoleSpan(trace: AgentOrchestratorState.TraceStep, startedAtMs:
         durationMs = trace.durationMs,
         startedAt = TIMESTAMP_FORMATTER.format(Instant.ofEpochMilli(startedAtMs)),
         status = SpanStatus.Ok,
+        depth = trace.depth,
     )
 
 /**
@@ -125,8 +127,18 @@ fun traceStepToConsoleSpan(trace: AgentOrchestratorState.TraceStep, startedAtMs:
 fun nodeIoToVarRows(io: AgentOrchestratorState.NodeIO): List<ConsoleVarRow> {
     val node = formatNodeLabel(io.nodeType, io.nodeId)
     return listOf(
-        ConsoleVarRow(node = node, key = CONSOLE_VAR_KEY_INPUT, valueJson = JSONObject.quote(io.input)),
-        ConsoleVarRow(node = node, key = CONSOLE_VAR_KEY_OUTPUT, valueJson = JSONObject.quote(io.output)),
+        ConsoleVarRow(
+            node = node,
+            key = CONSOLE_VAR_KEY_INPUT,
+            valueJson = JSONObject.quote(io.input),
+            depth = io.depth,
+        ),
+        ConsoleVarRow(
+            node = node,
+            key = CONSOLE_VAR_KEY_OUTPUT,
+            valueJson = JSONObject.quote(io.output),
+            depth = io.depth,
+        ),
     )
 }
 
@@ -165,6 +177,7 @@ fun consoleEntryToConsoleEvent(entry: RunTraceRecord.ConsoleEntry): ConsoleEvent
     type = entry.type,
     message = entry.message,
     seq = entry.seq,
+    depth = entry.depth,
 )
 
 /**
@@ -181,6 +194,7 @@ fun nodeIoRecordToNodeIo(record: RunTraceRecord.NodeIo): AgentOrchestratorState.
     nodeType = record.nodeType,
     input = record.inputText,
     output = record.outputText,
+    depth = record.depth,
 )
 
 /**
@@ -198,6 +212,7 @@ fun nodeIoRecordToConsoleSpan(record: RunTraceRecord.NodeIo): ConsoleTraceSpan =
     durationMs = record.durationMs,
     startedAt = TIMESTAMP_FORMATTER.format(Instant.ofEpochMilli(record.timestamp)),
     status = SpanStatus.Ok,
+    depth = record.depth,
 )
 
 /**

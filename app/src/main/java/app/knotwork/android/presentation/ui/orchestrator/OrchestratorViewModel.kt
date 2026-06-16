@@ -11,11 +11,13 @@ import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineImportOutcome
+import app.knotwork.android.domain.models.PipelineTargetAvailability
 import app.knotwork.android.domain.models.PipelineValidationError
 import app.knotwork.android.domain.models.PipelineValidationException
 import app.knotwork.android.domain.models.PresetCategory
 import app.knotwork.android.domain.models.PromptPreset
 import app.knotwork.android.domain.models.PromptTemplate
+import app.knotwork.android.domain.models.Skill
 import app.knotwork.android.domain.pipelineio.PipelineJsonSerializer
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
 import app.knotwork.android.domain.prompt.PromptVariableProvider
@@ -23,7 +25,10 @@ import app.knotwork.android.domain.repositories.ApiKeyRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.PromptPresetRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.repositories.SkillRepository
 import app.knotwork.android.domain.repositories.ToolRepository
+import app.knotwork.android.domain.services.PipelineCompositionValidator
+import app.knotwork.android.domain.services.findDependentPipelines
 import app.knotwork.android.domain.usecases.CreatePipelineUseCase
 import app.knotwork.android.domain.usecases.DeletePipelineUseCase
 import app.knotwork.android.domain.usecases.DuplicatePipelineUseCase
@@ -47,9 +52,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
 
@@ -88,7 +95,9 @@ class OrchestratorViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val promptTemplateEngine: PromptTemplateEngine,
     private val promptPresetRepository: PromptPresetRepository,
+    private val compositionValidator: PipelineCompositionValidator,
     private val promptVariableProviders: Set<@JvmSuppressWildcards PromptVariableProvider>,
+    private val skillRepository: SkillRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -770,6 +779,30 @@ class OrchestratorViewModel @Inject constructor(
                 .find { it.id == err.nodeId }?.label ?: err.nodeId
             UiText.of(R.string.errors_orchestrator_validation_node_no_sources, name)
         }
+        is PipelineValidationError.MissingTargetPipeline -> {
+            val name = _uiState.value.currentPipeline.nodes
+                .find { it.id == err.nodeId }?.label ?: err.nodeId
+            UiText.of(R.string.errors_orchestrator_validation_missing_target_pipeline, name)
+        }
+        is PipelineValidationError.TargetPipelineNotFound -> {
+            val name = _uiState.value.currentPipeline.nodes
+                .find { it.id == err.nodeId }?.label ?: err.nodeId
+            UiText.of(R.string.errors_orchestrator_validation_target_pipeline_not_found, name)
+        }
+        is PipelineValidationError.PipelineCycle ->
+            UiText.of(R.string.errors_orchestrator_validation_pipeline_cycle, err.pipelineChain.joinToString(" → "))
+        is PipelineValidationError.PipelineNestingTooDeep ->
+            UiText.of(R.string.errors_orchestrator_validation_pipeline_nesting_too_deep, err.limit)
+        is PipelineValidationError.MissingSkill -> {
+            val name = _uiState.value.currentPipeline.nodes
+                .find { it.id == err.nodeId }?.label ?: err.nodeId
+            UiText.of(R.string.errors_orchestrator_validation_missing_skill, name)
+        }
+        is PipelineValidationError.SkillNotFound -> {
+            val name = _uiState.value.currentPipeline.nodes
+                .find { it.id == err.nodeId }?.label ?: err.nodeId
+            UiText.of(R.string.errors_orchestrator_validation_skill_not_found, name)
+        }
     }
 
     /**
@@ -885,6 +918,60 @@ class OrchestratorViewModel @Inject constructor(
      *
      * @param pipelineId Unique identifier of the pipeline to delete.
      */
+    /**
+     * The saved pipelines that run [pipelineId] through a `NodeType.PIPELINE`
+     * node — i.e. the dependents that would be left with a dangling target if
+     * [pipelineId] were deleted. Read straight off the current library snapshot;
+     * the library delete dialog uses it to warn the user (and to confirm there is
+     * no silent cascade — dependents become a normal, deep-linkable validation
+     * error, not an automatic delete).
+     *
+     * @param pipelineId the pipeline the user is about to delete.
+     * @return the dependent pipelines (empty when nothing references it).
+     */
+    fun dependentsOf(pipelineId: String): List<PipelineGraph> =
+        findDependentPipelines(pipelineId, _uiState.value.savedPipelines)
+
+    /**
+     * Classifies every saved pipeline as a candidate target for a PIPELINE node
+     * in the pipeline currently open in the editor. Delegates to
+     * [PipelineCompositionValidator.classifyTargets] so the picker disables the
+     * same cycle / self / depth options a save would reject. Failures degrade to
+     * an empty list (the picker then shows its empty-state) rather than crashing
+     * the sheet.
+     *
+     * @return one availability row per saved pipeline, sorted by name.
+     */
+    suspend fun classifyPipelineTargets(): List<PipelineTargetAvailability> {
+        val graph = _uiState.value.currentPipeline
+        return try {
+            compositionValidator.classifyTargets(editingPipelineId = graph.id, editingGraph = graph)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to classify pipeline targets for %s", graph.id)
+            emptyList()
+        }
+    }
+
+    /**
+     * Loads the full skill library (bundled + user) for the SKILL-node picker.
+     * The screen maps the returned domain [Skill]s to the catalog `SkillOption`
+     * (resolving the localized allowlist summary), so the catalog stays free of
+     * skill-storage knowledge. Failures degrade to an empty list (the picker
+     * then shows its empty-state) rather than crashing the sheet.
+     *
+     * @return every skill, newest first; empty on failure.
+     */
+    suspend fun loadSkills(): List<Skill> = try {
+        skillRepository.getAllSkills().first()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Timber.w(e, "Failed to load skills for the SKILL node picker")
+        emptyList()
+    }
+
     fun deletePipeline(pipelineId: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }

@@ -56,6 +56,8 @@ class ParkedRunResumerTest {
         )
         coEvery { settingsRepository.backgroundApprovalWindowHours } returns flowOf(24)
         coEvery { resumePipelineRunUseCase("run-1") } returns ResumeOutcome.Resumed
+        // The parked run is top-level, so its root is itself; failPark fails the root.
+        coEvery { pipelineRunRepository.getRootRunId("run-1") } returns "run-1"
     }
 
     /** A parked approval still inside its window unless [requestedAt] says otherwise. */

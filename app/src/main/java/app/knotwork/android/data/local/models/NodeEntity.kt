@@ -17,6 +17,10 @@ import app.knotwork.android.domain.models.NodeContextConfig
  * @property y The Y coordinate of the node on the canvas.
  * @property label The display label of the node.
  * @property toolName The optional tool name associated with this node.
+ * @property targetPipelineId The id of the pipeline this node runs as a sub-pipeline when its
+ * type is `PIPELINE`; `null` for every other node type.
+ * @property skillId The id of the skill this node runs when its type is `SKILL`; `null` for
+ * every other node type.
  * @property modelPath An optional path to a specific model file (.tflite) for this node.
  * @property conditionComplexity Threshold for task complexity.
  * @property conditionKeywords Comma-separated keywords for condition.
@@ -56,6 +60,8 @@ data class NodeEntity(
     val y: Float,
     val label: String,
     val toolName: String? = null,
+    val targetPipelineId: String? = null,
+    val skillId: String? = null,
     val modelPath: String? = null,
     val conditionComplexity: Int? = null,
     val conditionKeywords: String? = null,

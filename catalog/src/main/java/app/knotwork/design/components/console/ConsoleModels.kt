@@ -91,8 +91,18 @@ data class ConsoleFilter(val sources: Set<ConsoleSource>) {
  * message.
  * @property level severity; drives the accent strip colour.
  * @property text plain-text log body.
+ * @property depth pipeline-nesting level of the run that produced the line
+ * (`0` top-level, `1` a direct sub-pipeline, …). The Logs tab indents the row
+ * by this level so nested sub-pipeline output reads as a hierarchy; the text is
+ * additionally prefixed with `[<sub-pipeline name>]` by the producer.
  */
-data class ConsoleLine(val timestamp: String, val source: ConsoleSource, val level: ConsoleLevel, val text: String)
+data class ConsoleLine(
+    val timestamp: String,
+    val source: ConsoleSource,
+    val level: ConsoleLevel,
+    val text: String,
+    val depth: Int = 0,
+)
 
 /**
  * One key/value pair surfaced inside the Vars tab, grouped by [node].
@@ -101,8 +111,11 @@ data class ConsoleLine(val timestamp: String, val source: ConsoleSource, val lev
  * @property key variable name.
  * @property valueJson already-serialised value (the catalog never parses
  * JSON; the screen passes a rendered fragment).
+ * @property depth pipeline-nesting level of the run that produced the row
+ * (`0` top-level, `1` a direct sub-pipeline, …). The Vars tab indents the node
+ * group by this level so a sub-pipeline's nodes nest under the spawning node.
  */
-data class ConsoleVarRow(val node: String, val key: String, val valueJson: String)
+data class ConsoleVarRow(val node: String, val key: String, val valueJson: String, val depth: Int = 0)
 
 /** Outcome of a [ConsoleTraceSpan]. Drives the trailing chip in the trace row. */
 enum class SpanStatus {
@@ -120,5 +133,14 @@ enum class SpanStatus {
  * @property durationMs span duration in milliseconds.
  * @property startedAt pre-formatted start timestamp (`HH:mm:ss.SSS`).
  * @property status terminal status — `Ok` / `Error`.
+ * @property depth pipeline-nesting level of the run that produced the span
+ * (`0` top-level, `1` a direct sub-pipeline, …). The Traces tab indents the
+ * span by this level so a sub-pipeline's spans nest under the `PIPELINE` node.
  */
-data class ConsoleTraceSpan(val name: String, val durationMs: Long, val startedAt: String, val status: SpanStatus)
+data class ConsoleTraceSpan(
+    val name: String,
+    val durationMs: Long,
+    val startedAt: String,
+    val status: SpanStatus,
+    val depth: Int = 0,
+)

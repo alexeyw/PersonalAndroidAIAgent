@@ -40,6 +40,7 @@ This file maps the contents of the main application package.
       - `PipelinePresetDao.kt` - User-saved pipeline-preset DAO. Backs the `pipeline_presets` table; bundled presets live in `assets/presets/pipelines/` and never reach this DAO.
       - `PipelineRunDao.kt` - Persistent pipeline-run records DAO (`pipeline_runs` table). Every mutating query carries a terminal-status `NOT IN` guard so a finished run can never be flipped back to an active status.
       - `PromptPresetDao.kt` - User-saved prompt-preset DAO. Backs the `prompt_presets` table; bundled presets live in `assets/presets/prompts/` and never reach this DAO.
+      - `SkillDao.kt` - Skill catalogue DAO (`skills` table, v36). Holds both bundled (`isBundled=1`, seeded) and user skills; `deleteUserById` carries an `isBundled=0` guard so bundled rows can't be deleted.
       - `PromptTemplateDao.kt` - Prompt templates DAO.
       - `TraceStepDao.kt` - Run-trace DAO, deliberately batch-only: single-transaction batch insert (the write path of the buffered trace recorder) and the per-run `seq`-ordered query; session-scoped cleanup rides the `chat_sessions` FK cascade.
     - `models/` - Local DB entity models.
@@ -54,6 +55,7 @@ This file maps the contents of the main application package.
       - `PipelinePresetEntity.kt` - User-saved pipeline preset row. Stores `id`, `name`, `description`, `categoryKey`, `graphJson` (full preset payload serialised by `PipelinePresetJsonSerializer`), `tagsCsv`, `createdAt`.
       - `PipelineRunEntity.kt` - Persistent pipeline-run row (`pipeline_runs`). No FK onto `chat_sessions` (a run may be created before its session row exists); cleanup on session deletion happens inside the `ChatDao.deleteSessionCompletely` transaction.
       - `PromptPresetEntity.kt` - User-saved prompt preset row. Stores `id`, `name`, `description`, `nodeTypeKey`, `systemPrompt`, `tagsCsv`, `createdAt`.
+      - `SkillEntity.kt` - Skill row (`skills` table, v36). Stores `id`, `name`, `description`, `instruction`, nullable `toolAllowlistCsv` (null = all tools, `""` = no tools, `"a,b"` = subset), `contextConfig` (via converter), `isBundled`, `createdAt`, `updatedAt`.
       - `PipelineWithNodesAndConnections.kt` - Pipeline relational model.
       - `PromptTemplateEntity.kt` - Prompt template entity.
       - `TraceStepEntity.kt` - Run-trace row: `NODE_IO` (per-node input/output) and `CONSOLE_EVENT` (persisted console line) record kinds discriminated by `recordKind`, attributed to a run via `runId` (CASCADE FK onto `pipeline_runs`) with a per-run monotonic `seq`.
@@ -86,6 +88,9 @@ This file maps the contents of the main application package.
     - `LocalPipelinePresetRepositoryImpl.kt` - Local impl of `PipelinePresetRepository`. Composes the bundled `assets/presets/pipelines/*.json` catalogue (lazy IO-dispatched read, cached for process lifetime, malformed files skipped) with user-saved Room rows; rejects bundled presets on the user-save path.
     - `LocalPipelineRepositoryImpl.kt` - Local pipeline repository implementation.
     - `LocalPromptPresetRepositoryImpl.kt` - Local impl of `PromptPresetRepository`. Composes the bundled `assets/presets/prompts/*.json` catalogue (lazy IO-dispatched read, cached for process lifetime, malformed files skipped) with user-saved Room rows; rejects bundled presets on the user-save path; drops user rows whose stored `nodeTypeKey` no longer maps to a known `NodeType`.
+    - `SkillRepositoryImpl.kt` - Room-backed impl of `SkillRepository`. Maps `SkillEntity` ↔ `Skill` (allowlist via nullable `TagsCsv`, preserving null/empty/subset), enforces the read-only-bundled contract on save, implements `duplicateSkill` (UUID copy named `… (copy)`), and `seedBundledSkills` (idempotent upsert-by-id from `BundledSkillSource`).
+    - `BundledSkillSource.kt` - Interface reading the bundled skills under `assets/presets/skills` (split from its impl so the repository seed path is unit-testable with a fake).
+    - `AssetBundledSkillSource.kt` - Asset-backed `BundledSkillSource`: lists the JSON files under `assets/presets/skills`, parses each via `SkillJsonSerializer` on the IO dispatcher, skipping malformed files.
     - `McpServerRepositoryImpl.kt` - Per-server gateway over the raw `McpClient` transport; owns lazy connections, the 5-minute tool-list cache, and per-URL `McpConnectionStatus` flows consumed by `ToolsViewModel`.
     - `MemoryRepositoryImpl.kt` - Memory repository implementation.
     - `MetricsRepositoryImpl.kt` - Metrics repository implementation.
@@ -173,16 +178,22 @@ This file maps the contents of the main application package.
       - `OutputNodeExecutor.kt` - Terminal executor; optionally formats upstream text via the local model before persisting the final agent response.
       - `SummaryNodeExecutor.kt` - Executor for `SUMMARY` nodes; synthesises upstream subtask results into a coherent summary.
       - `SystemNodeExecutor.kt` - Shared system-prompt-driven executor for `INTENT_ROUTER`, `DECOMPOSITION`, and `EVALUATION` nodes.
-      - `ToolNodeExecutor.kt` - Executor for `TOOL` nodes; dispatches tool calls with the Human-in-the-Loop approval gate.
+      - `ToolNodeExecutor.kt` - Executor for `TOOL` nodes; resolves which tool to run (explicit or LLM auto-select) then hands the call to the shared `ToolInvocationGate`.
+      - `ToolInvocationGate.kt` - Shared `@Singleton` Human-in-the-Loop tool-dispatch gate (risk lookup → destructive-block → approval/park → execute → observation) used by both `ToolNodeExecutor` and `SkillNodeExecutor`; owns the per-session approval-deferred map and the `resumeWithApproval`/`pendingApprovalFor` reattach surface.
+      - `ToolCallParser.kt` - Shared lenient parser that recovers a `{tool, arguments}` tool call from free-form LLM output (fenced/embedded/bare JSON); used by `ToolNodeExecutor` and `SkillNodeExecutor`.
+      - `SkillNodeExecutor.kt` - Executor for `NodeType.SKILL`; loads the skill, renders its instruction via `PromptTemplateEngine` with `$TOOLS` scoped to the skill's allowlist, runs inference by delegating to `LiteRtNodeExecutor`/`CloudLlmNodeExecutor` (engine chosen by `cloudProvider`), and enforces the allowlist at executor level before dispatching any tool call through `ToolInvocationGate`.
       - `IfConditionNodeExecutor.kt` - Executor for `IF_CONDITION` branching nodes; evaluates the boolean condition and routes downstream.
       - `QueueProcessorNodeExecutor.kt` - Pass-through executor for the `QUEUE_PROCESSOR` routing marker consumed by `GraphExecutionEngine`.
       - `ClarificationNodeExecutor.kt` - Executor for `NodeType.CLARIFICATION` that asks the local LLM to generate a question/options JSON, suspends on `ClarificationRepository.requestAnswer`, and forwards the user's reply downstream.
+      - `PipelineNodeExecutor.kt` - Executor for `NodeType.PIPELINE`; runs the target pipeline (loaded via `PipelineRepository`) by recursively re-entering `GraphExecutionEngine` (injected as a `Provider` to break the engine→factory→executor cycle), feeding the node input as the sub-pipeline's user prompt and mapping the sub-run's terminal `Completed`/`Error` to this node's result. Enforces the runtime nesting ceiling (`SettingsRepository.pipelineMaxNestingDepth`) as a safety net behind the static composition validator. Sub-run runs with a `null` run id (nested-run persistence is a follow-up).
   - `memoryio/` - JSON serialisation gateway for long-term memory export/import.
     - `MemorySourceJson.kt` - Single source of truth for the `MemorySource` ↔ JSON wire shape; shared by the Room `source` column converter (`data/local/Converters`) and `MemoryJsonSerializer` so the column encoding and the export file stay byte-identical.
     - `MemoryJsonSerializer.kt` - Two-way mapper between the memory table and the portable `schemaVersion: 1` export document (`embeddingProviderId` + `exportedAt` + per-chunk `id`/`text`/`embedding`/`source`/`timestamp`/`isPinned`/`tags`). Never-throwing `parse` returns `Success / SchemaMismatch / Failure`.
   - `pipelineio/` - JSON serialisation gateway for pipeline import/export.
     - `PipelineJsonSerializer.kt` - Two-way mapper between `PipelineGraph` and the `schemaVersion: 1` JSON document shared with the browser-side editor (`pipeline-editor.html`). Carries the flat runtime `config` fields plus an optional opaque `nodeConfig` object (the rich `NodeConfigCodec` payload) round-tripped verbatim into `NodeModel.configJson` without interpreting it.
     - `PipelinePresetJsonSerializer.kt` - Two-way mapper between `PipelinePreset` and the pipeline-preset JSON format used by `assets/presets/pipelines/*.json` and the browser editor's `*.preset.json` export. Strict superset of the pipeline JSON; delegates the graph half to `PipelineJsonSerializer`.
+  - `skillio/` - JSON serialisation gateway for skill import/export.
+    - `SkillJsonSerializer.kt` - Two-way `Skill` ↔ schema-versioned JSON (org.json). Omits `toolAllowlist` when null so "all tools" round-trips back to null; never throws (maps errors to `SkillImportOutcome.Failure`).
   - `promptio/` - JSON serialisation gateway for prompt-preset import/export.
     - `PromptPresetJsonSerializer.kt` - Two-way mapper between `PromptPreset` and its `schemaVersion: 1` JSON document. Rejects unknown / non-LLM `NodeType` values at parse time; never throws (returns `Success / SchemaMismatch / Failure`).
   - `prompt/` - Prompt templating layer.
@@ -231,15 +242,20 @@ This file maps the contents of the main application package.
     - `ClarificationOutcome.kt` - Typed result of the live clarification wait (`Answered` / `TimedOut`) — moves the timeout policy to the clarification executor.
     - `PipelineRun.kt` - Persistent pipeline-run domain model plus `PipelineRunStatus` (QUEUED → RUNNING → WAITING_* → terminal, with `isTerminal`) and `RunOrigin` (CHAT / SCHEDULER). Carries the originating `userPrompt` for checkpoint resume.
     - `ResumeContext.kt` - Checkpoint payload switching `GraphExecutionEngine` into resume mode: seq-ordered `NodeIo` prefix to replay (cursor model — sound for QUEUE_PROCESSOR loops), optional memory snapshot, and the next free trace seq. Documents the TOOL-node replay asymmetry.
-    - `RunTraceRecord.kt` - Sealed domain model of one persistent run-trace record: `NodeIo` (per-node input/output snapshot incl. recorded `conditionResult` / `routingKey` / `resolvedToolName` for checkpoint replay), `ConsoleEntry` (persisted console event) and `MemorySnapshot` (chunks resolved by the run's single lazy memory retrieval), all carrying `runId` / `sessionId` / per-run `seq` / `timestamp`.
+    - `RunTraceRecord.kt` - Sealed domain model of one persistent run-trace record: `NodeIo` (per-node input/output snapshot incl. recorded `conditionResult` / `routingKey` / `resolvedToolName` for checkpoint replay), `ConsoleEntry` (persisted console event) and `MemorySnapshot` (chunks resolved by the run's single lazy memory retrieval), all carrying `runId` / `sessionId` / per-run `seq` / `timestamp` and a nesting `depth` for nested-console rendering.
+    - `RunStepBudget.kt` - Mutable step-count holder shared across one execution tree, so a sub-pipeline decrements the parent's `MAX_STEPS` ceiling instead of getting a private allowance; exhaustion at any depth fails the whole stack.
+    - `ExecutionScope.kt` - Run-tree-scoped execution context (`depth`, shared `stepBudget`, per-`PIPELINE`-node `pipelineVisitIndex`) threaded from `GraphExecutionEngine` into every `NodeExecutor.execute`; only `PipelineNodeExecutor` consumes it.
     - `PipelineImportOutcome.kt` - Sealed result of parsing a pipeline JSON document (Success / SchemaMismatch / Failure) consumed by `ImportPipelineUseCase`.
     - `PipelinePreset.kt` - Domain model of a reusable pipeline template. Carries `id`, `name`, `description`, `category` (`PresetCategory` enum with wire keys), `graph: PipelineGraph` (template), `tags`, `isBundled`.
     - `PipelinePresetImportOutcome.kt` - Sealed result of parsing a preset JSON document (Success / SchemaMismatch / Failure), mirroring `PipelineImportOutcome`.
     - `PromptPreset.kt` - Domain model of a reusable system-prompt template. Carries `id`, `name`, `description`, `nodeType: NodeType` (must be LLM-driven), `systemPrompt`, `tags`, `isBundled`.
+    - `Skill.kt` - Domain model of a reusable skill (`instruction` + `toolAllowlist: List<String>?` + `contextConfig` + `isBundled` + timestamps). `toolAllowlist` null = all tools, empty = no tools, non-empty = subset; exposes `toolRestriction` (`SkillToolRestriction` ALL/NONE/SUBSET).
+    - `SkillImportOutcome.kt` - Sealed parse outcome for skill JSON (`Success` / `SchemaMismatch` / `Failure`), mirroring `PromptPresetImportOutcome`.
     - `PromptPresetImportOutcome.kt` - Sealed result of parsing a prompt-preset JSON document (Success / SchemaMismatch / Failure).
     - `PromptTemplate.kt` - Domain model of a prompt template (`id`, `name`, `text`, `category`) backing the legacy Prompt-template repository.
     - `ProviderSummary.kt` - Per-provider summary (`CloudProvider` + key-configured flag) of the external LLM providers surfaced in Settings.
     - `PipelineValidationError.kt` - Pipeline validation error model.
+    - `PipelineTargetAvailability.kt` - Per-candidate verdict for the PIPELINE-node target picker: whether a saved pipeline may be chosen as a sub-pipeline target and, if not, why (`Reason.Self` / `Cycle(culpritName)` / `Depth(limit)`). Produced by `PipelineCompositionValidator.classifyTargets`; the editor maps it to the catalog picker option.
     - `PipelineValidationException.kt` - Pipeline validation exception model.
     - `PowerState.kt` - Power state model.
     - `Result.kt` - Result wrapper model.
@@ -274,6 +290,7 @@ This file maps the contents of the main application package.
     - `NetworkStateRepository.kt` - Network state repository interface.
     - `PipelinePresetRepository.kt` - Domain gateway over the two-tier pipeline-preset catalogue: bundled (read-only, from APK assets) + user-saved (mutable, Room-backed). Data-layer impl: `LocalPipelinePresetRepositoryImpl`.
     - `PromptPresetRepository.kt` - Domain gateway over the two-tier prompt-preset catalogue: bundled (read-only, from APK assets) + user-saved (mutable, Room-backed). Exposes a per-`NodeType` filtered flow used by the Prompt Library. Data-layer impl: `LocalPromptPresetRepositoryImpl`.
+    - `SkillRepository.kt` - Domain gateway over the skill catalogue (bundled + user, single `skills` table). Exposes bundled/user/all flows, CRUD with read-only-bundled enforcement, `duplicateSkill`, and the idempotent `seedBundledSkills`. Data-layer impl: `SkillRepositoryImpl`.
     - `PromptRepository.kt` - Prompt-template repository interface (CRUD over `PromptTemplate`). Data-layer impl: `PromptRepositoryImpl`.
     - `PipelineRepository.kt` - Pipeline repository interface.
     - `PendingInteractionRepository.kt` - Parked HITL interaction store interface — the persistent half of the two-phase waiting protocol (durable request snapshot, first-writer-wins decision/answer recording, one-shot consumption). Data-layer impl: `PendingInteractionRepositoryImpl`.
@@ -283,6 +300,7 @@ This file maps the contents of the main application package.
     - `SettingsRepository.kt` - Settings repository interface.
     - `ToolRepository.kt` - Tool repository interface.
   - `services/` - Domain-level services.
+    - `PipelineCompositionValidator.kt` - Static cross-pipeline validator for `NodeType.PIPELINE` composition: walks the call graph (resolving each `targetPipelineId` transitively through `PipelineRepository`) and reports cycles (incl. self-reference), dangling target references, and chains nested deeper than `SettingsRepository.pipelineMaxNestingDepth`. The authoritative defence used by `SavePipelineUseCase`; the structural single-graph checks (incl. a PIPELINE node with no target) stay in `PipelineGraph.validate`. Also powers the editor target picker via `classifyTargets` (reuses the reachability walk to mark each candidate Selectable / Self / Cycle / Depth) and the delete-warning via the pure `findDependentPipelines` helper.
     - `AgentWorkspace.kt` - Domain interface for the agent's jailed file sandbox (`resolve` / `readText` / `writeText` / `editText` / `delete` / `list`, plus the Files-screen surface `usage` / `readTextPreview` / `importBytes` / `exportTo`); the single trust boundary for agent file I/O (path containment + size quotas + text-only agent surface; byte-faithful stream import/export for the user-facing screen). Operations return typed `WorkspaceResult`/`WorkspaceError` instead of throwing. Data-layer impl: `AgentWorkspaceImpl`.
     - `WorkspaceGlob.kt` - Pure, dependency-free glob→`Regex` matcher for workspace-relative paths (`*` within a segment, `**` across directories, `?` single char); backs the `find_files` tool.
     - `WorkspaceTextEdit.kt` - Pure, dependency-free anchored find-replace primitive backing `edit_file`: requires exactly one literal, non-overlapping occurrence of the anchor (`Replaced` / `AnchorNotFound` / `AnchorNotUnique(count)`); the I/O lives in `AgentWorkspace.editText`.
@@ -317,7 +335,9 @@ This file maps the contents of the main application package.
     - `DeletePromptTemplateUseCase.kt` - Deletes a prompt template by id via `PromptRepository`.
     - `DuplicatePipelineUseCase.kt` - Deep-copies an existing pipeline with fresh ids for the graph and every node/connection; suffixes the name with `(copy)`.
     - `ImportPipelineUseCase.kt` - Parses a pipeline JSON document via `PipelineJsonSerializer` and persists clean imports through `SavePipelineUseCase`; defers schema-mismatch persistence to a separate `persistConfirmed` step.
-    - `InitializeAppUseCase.kt` - First-launch initialiser: persists the default system prompts and materialises the bundled `showcase_full_agent` preset (via `LoadPipelineFromPresetUseCase`) as the seed/default pipeline, falling back to `DefaultPipelineFactory` if the preset asset is unavailable. Idempotent on `isFirstLaunch`.
+    - `InitializeAppUseCase.kt` - First-launch initialiser: persists the default system prompts and materialises the bundled `showcase_full_agent` preset (via `LoadPipelineFromPresetUseCase`) as the seed/default pipeline, falling back to `DefaultPipelineFactory` if the preset asset is unavailable. Idempotent on `isFirstLaunch`. On **every** launch it also runs `SeedBundledSkillsUseCase` (so upgrading users receive the bundled skills) and sweeps orphaned runs.
+    - `FindPipelinesUsingSkillUseCase.kt` - Scans saved pipelines for SKILL-node references to a skill (for the delete-with-usage warning). Dormant — returns empty until the SKILL node ships; the single reference check is the only edit then.
+    - `SeedBundledSkillsUseCase.kt` - Idempotently seeds the bundled skills into the `skills` table (delegates the asset I/O to `SkillRepository.seedBundledSkills`). Invoked from `InitializeAppUseCase` on every launch.
     - `LoadModelUseCase.kt` - Use case to load a model.
     - `LoadPipelineFromPresetUseCase.kt` - Materialises a `PipelinePreset` into a concrete `PipelineGraph` with fresh ids (pipeline + nodes + connections), drops orphan connections, validates, persists via `PipelineRepository.savePipeline`, returns the new pipeline id.
     - `LoadPipelineUseCase.kt` - Use case to load a pipeline.
@@ -456,6 +476,10 @@ This file maps the contents of the main application package.
       - `PromptLibraryScreen.kt` - Slim mapper. Folds `PromptLibraryUiState` (bundled + user presets) into the catalog `PromptLibraryViewState`, hosts the editor `ModalBottomSheet` with `PromptEditorSheetBody`. Categories come from `PromptPresetConstants.LLM_DRIVEN_NODE_TYPES`.
       - `PromptLibraryUiState.kt` - Prompt library UI state. Carries `bundledPresets`, `userPresets`, `selectedCategory: String?`, `editorDraft: PromptEditorDraft?` (draft id is now `String`, with optional `description` + `tags` preserved on edit).
       - `PromptLibraryViewModel.kt` - Prompt library ViewModel. Injects `PromptPresetRepository` + `SavePromptAsPresetUseCase`. Exposes `selectCategory`, `openEditor(id?)`, `closeEditor`, per-field editor setters, `saveEditor` (upsert via `existingId`), `duplicatePrompt`, `deletePrompt` (bundled-aware no-op).
+    - `skills/` - Skill Library screen components (Bundled / Mine 2-tab list, full-screen editor, delete dialog), wired onto the catalog `SkillLibraryContent` / `SkillEditorContent` / `SkillDeleteDialogContent` surfaces.
+      - `SkillLibraryScreen.kt` - Slim mapper. Folds `SkillLibraryUiState` into the catalog `SkillLibraryViewState`; renders the full-screen `SkillEditorContent` in place of the list when a draft is open, and hosts the delete `Dialog`. Owns the localised string bundles and the tri-state ↔ allowlist projection.
+      - `SkillLibraryUiState.kt` - Skill library UI state: `bundledSkills`, `userSkills`, `tab`, `openMenuSkillId`, `editor: SkillEditorDraft?`, `deleteTarget: SkillDeleteTarget?`, `availableVariables`, `availableTools`.
+      - `SkillLibraryViewModel.kt` - Skill library ViewModel. Injects `SkillRepository` + `ToolRepository` + `FindPipelinesUsingSkillUseCase` + the prompt-variable providers. Exposes tab selection, the editor lifecycle + per-field setters (incl. tri-state tool mode, per-tool toggle, context-flag toggle), `saveEditor` (tri-state → `toolAllowlist`), `duplicateSkill`, and the delete flow (`requestDelete` → resolve dependents → `confirmDelete`).
     - `splash/` - Cold-start splash / loading screen (wired to the Knotwork `SplashContent` catalog surface).
       - `SplashScreen.kt` - Slim mapper. Folds `SplashUiState` into `SplashViewState` (Initializing / Loading / Error) and renders `SplashContent`.
       - `SplashUiState.kt` - Render state of `SplashScreen` (message, progressFraction, isDone, errorMessage).

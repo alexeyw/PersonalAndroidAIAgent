@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Skill Library — list surface -->
+    <string name="skills_screen_title">Skill library</string>
+    <string name="skills_back_cd">Back</string>
+    <string name="skills_search_cd">Search</string>
+    <string name="skills_more_cd">More actions</string>
+    <string name="skills_fab">New skill</string>
+    <string name="skills_tab_bundled">Bundled</string>
+    <string name="skills_tab_mine">Mine</string>
+    <string name="skills_bundled_badge">BUNDLED</string>
+    <string name="skills_tools_all">All tools</string>
+    <string name="skills_tools_none">No tools</string>
+    <plurals name="skills_tools_count">
+        <item quantity="one">%1$d tool</item>
+        <item quantity="other">%1$d tools</item>
+    </plurals>
+    <string name="skills_menu_view">View</string>
+    <string name="skills_menu_edit">Edit</string>
+    <string name="skills_menu_duplicate">Duplicate</string>
+    <string name="skills_menu_delete">Delete</string>
+    <string name="skills_empty_mine_title">No skills of your own yet</string>
+    <string name="skills_empty_mine_body">Duplicate a bundled skill to tweak it, or tap New skill to describe a capability once and reuse it across pipelines.</string>
+    <string name="skills_error_title">Couldn\'t load skills</string>
+    <string name="skills_error_body">The on-device skill store didn\'t respond. Your skills are safe — this is just a read.</string>
+    <string name="skills_subtitle_format" tools:ignore="PluralsCandidate">%1$d bundled · %2$d mine</string>
+
+    <!-- Skill Library — full-screen editor -->
+    <string name="skills_editor_title_new">New skill</string>
+    <string name="skills_editor_title_edit">Edit skill</string>
+    <string name="skills_editor_title_view">View skill</string>
+    <string name="skills_editor_subtitle_draft">draft</string>
+    <string name="skills_editor_subtitle_mine">mine</string>
+    <string name="skills_editor_subtitle_duplicated">editable copy · from bundled</string>
+    <string name="skills_editor_subtitle_readonly">bundled · read-only</string>
+    <string name="skills_editor_close_cd">Close</string>
+    <string name="skills_editor_required">required</string>
+    <string name="skills_editor_skill_kicker">SKILL</string>
+    <string name="skills_editor_skill_kicker_body">Instruction · tool restriction · context — reused as one bundle.</string>
+    <string name="skills_editor_name_label">NAME</string>
+    <string name="skills_editor_name_placeholder">e.g. Standup digest</string>
+    <string name="skills_editor_name_error">Name is required</string>
+    <string name="skills_editor_description_label">DESCRIPTION</string>
+    <string name="skills_editor_description_hint">short</string>
+    <string name="skills_editor_description_placeholder">One line — what this skill does</string>
+    <string name="skills_editor_instruction_label">INSTRUCTION</string>
+    <string name="skills_editor_instruction_placeholder">Describe the capability. Use $VARIABLES for runtime values — they\'re substituted when the skill runs.</string>
+    <string name="skills_editor_instruction_error">Instruction can\'t be empty</string>
+    <string name="skills_editor_insert_label">INSERT</string>
+    <string name="skills_editor_tools_label">TOOLS</string>
+    <string name="skills_editor_tool_mode_all">All tools</string>
+    <string name="skills_editor_tool_mode_restrict">Restrict</string>
+    <string name="skills_editor_tool_mode_none">No tools</string>
+    <string name="skills_editor_tools_selected_format" tools:ignore="PluralsCandidate">%1$d of %2$d selected</string>
+    <string name="skills_editor_tools_select_header_format">SELECT TOOLS · %1$d/%2$d</string>
+    <string name="skills_editor_tools_clear">Clear</string>
+    <string name="skills_editor_tools_all_title">Every tool — unrestricted</string>
+    <string name="skills_editor_tools_all_body">The skill can call any enabled tool, including tools you add later. Pick this for general-purpose skills.</string>
+    <string name="skills_editor_tools_none_title">Instruction only — no tools</string>
+    <string name="skills_editor_tools_none_body">The skill can\'t call any tool, even ones the agent has. An explicit empty allowlist, not the same as \"unrestricted\".</string>
+    <string name="skills_editor_context_label">CONTEXT THE SKILL SEES</string>
+    <string name="skills_editor_context_on_format">%1$d of %2$d on</string>
+    <string name="skills_editor_delete">Delete skill</string>
+
+    <!-- Context flag rows -->
+    <string name="skills_context_chat_label">Chat history</string>
+    <string name="skills_context_chat_desc">Prior turns in this conversation</string>
+    <string name="skills_context_task_label">Original task</string>
+    <string name="skills_context_task_desc">The user\'s initial request</string>
+    <string name="skills_context_input_label">Node input</string>
+    <string name="skills_context_input_desc">Output handed in from upstream</string>
+    <string name="skills_context_memory_label">Long-term memory</string>
+    <string name="skills_context_memory_desc">Relevant vector-memory chunks</string>
+    <string name="skills_context_tools_label">Tool results</string>
+    <string name="skills_context_tools_desc">Outputs from earlier tool calls</string>
+
+    <!-- Skill Library — delete dialog -->
+    <string name="skills_delete_title_format">Delete \"%1$s\"?</string>
+    <string name="skills_delete_body_no_deps">This permanently removes the skill. No pipeline uses it. This can\'t be undone.</string>
+    <string name="skills_delete_body_one">1 pipeline runs this skill through a SKILL node. Deleting it leaves that node with a dangling reference — the pipeline will show a validation error until you repoint or remove it.</string>
+    <string name="skills_delete_body_many_format" tools:ignore="PluralsCandidate">%1$d pipelines run this skill through a SKILL node. Deleting it leaves each with a dangling reference — they\'ll show a validation error until you repoint or remove the node.</string>
+    <string name="skills_delete_will_break_format">WILL BREAK · %1$d</string>
+    <string name="skills_delete_keep">Keep</string>
+    <string name="skills_delete_anyway">Delete anyway</string>
+    <string name="skills_delete_delete">Delete</string>
+
+    <!-- More-tab entry -->
+    <string name="more_skills_title">Skill library</string>
+    <string name="more_skills_subtitle">Reusable instruction + tools + context</string>
+</resources>

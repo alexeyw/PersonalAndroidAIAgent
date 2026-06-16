@@ -15,9 +15,12 @@ import app.knotwork.android.domain.engine.executors.InputNodeExecutor
 import app.knotwork.android.domain.engine.executors.LiteRtNodeExecutor
 import app.knotwork.android.domain.engine.executors.NodeExecutorFactory
 import app.knotwork.android.domain.engine.executors.OutputNodeExecutor
+import app.knotwork.android.domain.engine.executors.PipelineNodeExecutor
 import app.knotwork.android.domain.engine.executors.QueueProcessorNodeExecutor
+import app.knotwork.android.domain.engine.executors.SkillNodeExecutor
 import app.knotwork.android.domain.engine.executors.SummaryNodeExecutor
 import app.knotwork.android.domain.engine.executors.SystemNodeExecutor
+import app.knotwork.android.domain.engine.executors.ToolInvocationGate
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTool
@@ -28,7 +31,9 @@ import app.knotwork.android.domain.models.ConnectionModel
 import app.knotwork.android.domain.models.ConsoleEventType
 import app.knotwork.android.domain.models.MemoryChunk
 import app.knotwork.android.domain.models.NodeContextConfig
+import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
+import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRunStatus
@@ -49,6 +54,7 @@ import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.MetricsRepository
 import app.knotwork.android.domain.repositories.NetworkActivityTracker
 import app.knotwork.android.domain.repositories.PendingInteractionRepository
+import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
@@ -80,6 +86,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import javax.inject.Provider
 
 class GraphExecutionEngineTest {
 
@@ -105,10 +112,15 @@ class GraphExecutionEngineTest {
     private lateinit var memoryRepository: MemoryRepository
     private lateinit var pipelineRunRepository: PipelineRunRepository
     private lateinit var runTraceRepository: RunTraceRepository
+    private lateinit var pipelineRepository: PipelineRepository
 
     private lateinit var engine: GraphExecutionEngine
     private lateinit var promptTemplateEngine: PromptTemplateEngine
     private var promptVariableProviders: Set<PromptVariableProvider> = emptySet()
+
+    // Stubbable in tests that route a SKILL node through the engine; the real
+    // SkillNodeExecutor is covered by SkillNodeExecutorTest.
+    private lateinit var skillNodeExecutor: SkillNodeExecutor
 
     private val sessionId = "test-session"
 
@@ -137,6 +149,7 @@ class GraphExecutionEngineTest {
         memoryRepository = mockk(relaxed = true)
         pipelineRunRepository = mockk(relaxed = true)
         runTraceRepository = mockk(relaxed = true)
+        pipelineRepository = mockk()
         clarificationRepository = mockk()
         // The resolver is exercised whenever a CLOUD node fires; default to a sensible
         // Koog model so each individual test does not have to wire it up.
@@ -161,10 +174,13 @@ class GraphExecutionEngineTest {
             llmEngine,
             loadModelUseCase,
             toolRepository,
-            settingsRepository,
-            approvalNotifier,
-            chatRepository,
-            pendingInteractionRepository,
+            ToolInvocationGate(
+                toolRepository,
+                settingsRepository,
+                approvalNotifier,
+                chatRepository,
+                pendingInteractionRepository,
+            ),
         )
 
         val liteRtNodeExecutor = LiteRtNodeExecutor(
@@ -206,11 +222,25 @@ class GraphExecutionEngineTest {
             clarificationNotifier,
         )
 
+        // The recursive engine reference is captured lazily via Provider: it is
+        // only dereferenced when a PIPELINE node actually executes, by which
+        // point `engine` below is assigned.
+        val pipelineNodeExecutor = PipelineNodeExecutor(
+            pipelineRepository,
+            settingsRepository,
+            pipelineRunRepository,
+            runTraceRepository,
+            Provider { engine },
+        )
+
+        skillNodeExecutor = mockk(relaxed = true)
+
         val nodeExecutorFactory = NodeExecutorFactory(
             inputNodeExecutor, outputNodeExecutor, ifConditionNodeExecutor,
             toolNodeExecutor, liteRtNodeExecutor, cloudLlmNodeExecutor,
             systemNodeExecutor, queueProcessorNodeExecutor, summaryNodeExecutor,
-            clarificationNodeExecutor,
+            clarificationNodeExecutor, pipelineNodeExecutor,
+            skillNodeExecutor,
         )
 
         promptTemplateEngine = PromptTemplateEngine()
@@ -242,9 +272,128 @@ class GraphExecutionEngineTest {
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { settingsRepository.pipelineMaxNestingDepth } returns flowOf(3)
         coEvery { toolRepository.getAvailableTools() } returns emptyList()
 
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+    }
+
+    @Test
+    fun `PIPELINE node runs the target sub-pipeline and forwards its output`() = runTest {
+        // Sub-pipeline: INPUT -> OUTPUT (echo). Echoes its prompt back verbatim.
+        val subGraph = PipelineGraph(
+            id = "sub-pipe",
+            name = "Sub",
+            nodes = listOf(
+                NodeModel("sub_in", NodeType.INPUT, 0f, 0f),
+                NodeModel("sub_out", NodeType.OUTPUT, 10f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(ConnectionModel("sc", "sub_in", "sub_out")),
+        )
+        coEvery { pipelineRepository.getPipelineById("sub-pipe") } returns subGraph
+
+        // Main pipeline: INPUT -> PIPELINE(target = sub) -> OUTPUT (echo).
+        val mainGraph = PipelineGraph(
+            id = "main-pipe",
+            name = "Main",
+            nodes = listOf(
+                NodeModel("main_in", NodeType.INPUT, 0f, 0f),
+                NodeModel("pipe_node", NodeType.PIPELINE, 10f, 0f, targetPipelineId = "sub-pipe"),
+                NodeModel("main_out", NodeType.OUTPUT, 20f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("mc1", "main_in", "pipe_node"),
+                ConnectionModel("mc2", "pipe_node", "main_out"),
+            ),
+        )
+
+        val states = engine(sessionId, "echo me", mainGraph).toList()
+
+        val completed = states.last() as AgentOrchestratorState.Completed
+        assertEquals("echo me", completed.finalResponse)
+        // The sub-pipeline must have been loaded exactly once for the single PIPELINE node.
+        coVerify(exactly = 1) { pipelineRepository.getPipelineById("sub-pipe") }
+    }
+
+    @Test
+    fun `PIPELINE sub-run shares the parent step budget so depth exhaustion fails the whole stack`() = runTest {
+        // Budget of 3, shared across the tree: main INPUT + main PIPELINE consume
+        // 2, leaving 1 for the sub-pipeline — not enough for its INPUT + LLM, so
+        // the sub-run exhausts the shared budget and the failure bubbles up.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(3)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("partial")
+        val subGraph = PipelineGraph(
+            id = "sub-pipe",
+            name = "Sub",
+            nodes = listOf(
+                NodeModel("sub_in", NodeType.INPUT, 0f, 0f),
+                NodeModel("sub_llm", NodeType.LITE_RT, 5f, 0f),
+                NodeModel("sub_out", NodeType.OUTPUT, 10f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("sc1", "sub_in", "sub_llm"),
+                ConnectionModel("sc2", "sub_llm", "sub_out"),
+            ),
+        )
+        coEvery { pipelineRepository.getPipelineById("sub-pipe") } returns subGraph
+        val mainGraph = PipelineGraph(
+            id = "main-pipe",
+            name = "Main",
+            nodes = listOf(
+                NodeModel("main_in", NodeType.INPUT, 0f, 0f),
+                NodeModel("pipe_node", NodeType.PIPELINE, 10f, 0f, targetPipelineId = "sub-pipe"),
+                NodeModel("main_out", NodeType.OUTPUT, 20f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("mc1", "main_in", "pipe_node"),
+                ConnectionModel("mc2", "pipe_node", "main_out"),
+            ),
+        )
+
+        val states = engine(sessionId, "go", mainGraph).toList()
+
+        val last = states.last()
+        assertTrue("Expected a run-level error, got: $last", last is AgentOrchestratorState.Error)
+        assertTrue((last as AgentOrchestratorState.Error).message.contains("shared across the pipeline tree"))
+    }
+
+    @Test
+    fun `persisted PIPELINE node creates a child run linked to the parent and settles it`() = runTest {
+        coEvery { pipelineRunRepository.getRun(any()) } returns null
+        val subGraph = PipelineGraph(
+            id = "sub-pipe",
+            name = "Sub",
+            nodes = listOf(
+                NodeModel("sub_in", NodeType.INPUT, 0f, 0f),
+                NodeModel("sub_out", NodeType.OUTPUT, 10f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(ConnectionModel("sc", "sub_in", "sub_out")),
+        )
+        coEvery { pipelineRepository.getPipelineById("sub-pipe") } returns subGraph
+        val mainGraph = PipelineGraph(
+            id = "main-pipe",
+            name = "Main",
+            nodes = listOf(
+                NodeModel("main_in", NodeType.INPUT, 0f, 0f),
+                NodeModel("pipe_node", NodeType.PIPELINE, 10f, 0f, targetPipelineId = "sub-pipe"),
+                NodeModel("main_out", NodeType.OUTPUT, 20f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("mc1", "main_in", "pipe_node"),
+                ConnectionModel("mc2", "pipe_node", "main_out"),
+            ),
+        )
+
+        engine(sessionId, "echo me", mainGraph, runId = "root").toList()
+
+        // The sub-run is persisted as a child of the parent run, keyed by the
+        // deterministic id, and settled COMPLETED by the executor.
+        coVerify {
+            pipelineRunRepository.createRun(
+                match { it.id == "root::pipe_node::0" && it.parentRunId == "root" && it.pipelineId == "sub-pipe" },
+            )
+            pipelineRunRepository.finishRun("root::pipe_node::0", PipelineRunStatus.COMPLETED, null)
+        }
     }
 
     @Test
@@ -333,6 +482,34 @@ class GraphExecutionEngineTest {
 
         val completedState = states.last() as AgentOrchestratorState.Completed
         assertEquals("LLM Response", completedState.finalResponse)
+    }
+
+    @Test
+    fun `SKILL node output is forwarded to OUTPUT`() = runTest {
+        val graph = PipelineGraph(
+            id = "g-skill",
+            name = "Skill Graph",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("skill_1", NodeType.SKILL, 0f, 0f, skillId = "skill-1"),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "skill_1"),
+                ConnectionModel("c2", "skill_1", "output_1"),
+            ),
+        )
+        every {
+            skillNodeExecutor.execute(any(), any(), any(), any(), any(), any())
+        } returns flowOf(
+            NodeOutput.State(AgentOrchestratorState.Thinking("…")),
+            NodeOutput.Result(NodeExecutionResult(outputText = "Translated text")),
+        )
+
+        val states = engine(sessionId, "Перевод", graph).toList()
+
+        val completed = states.last() as AgentOrchestratorState.Completed
+        assertEquals("Translated text", completed.finalResponse)
     }
 
     /**
@@ -516,14 +693,21 @@ class GraphExecutionEngineTest {
     fun `given maxSteps exceeded when pipeline loops then emits error`() = runTest {
         every { settingsRepository.pipelineMaxSteps } returns flowOf(2)
 
+        // A chain longer than the step budget: the budget exhausts while a node
+        // is still pending, so the run fails with the shared-budget error rather
+        // than running out of nodes.
         val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
         val llmNode = NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f)
+        val outputNode = NodeModel("output_1", NodeType.OUTPUT, 0f, 0f)
 
         val graph = PipelineGraph(
             id = "g1",
             name = "Long Graph",
-            nodes = listOf(inputNode, llmNode),
-            connections = listOf(ConnectionModel("c1", "input_1", "llm_1")),
+            nodes = listOf(inputNode, llmNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_1"),
+                ConnectionModel("c2", "llm_1", "output_1"),
+            ),
         )
         every { llmEngine.generateResponseStream(any()) } returns flowOf("response")
 
@@ -955,10 +1139,13 @@ class GraphExecutionEngineTest {
                 llmEngine,
                 loadModelUseCase,
                 toolRepository,
-                settingsRepository,
-                approvalNotifier,
-                chatRepository,
-                pendingInteractionRepository,
+                ToolInvocationGate(
+                    toolRepository,
+                    settingsRepository,
+                    approvalNotifier,
+                    chatRepository,
+                    pendingInteractionRepository,
+                ),
             ),
             LiteRtNodeExecutor(
                 llmEngine,
@@ -988,6 +1175,14 @@ class GraphExecutionEngineTest {
                 pendingInteractionRepository,
                 clarificationNotifier,
             ),
+            PipelineNodeExecutor(
+                pipelineRepository,
+                settingsRepository,
+                pipelineRunRepository,
+                runTraceRepository,
+                Provider { engine },
+            ),
+            mockk<SkillNodeExecutor>(relaxed = true),
         )
         val engineWithProvider = GraphExecutionEngine(
             realFactory,
@@ -995,10 +1190,13 @@ class GraphExecutionEngineTest {
                 llmEngine,
                 loadModelUseCase,
                 toolRepository,
-                settingsRepository,
-                approvalNotifier,
-                chatRepository,
-                pendingInteractionRepository,
+                ToolInvocationGate(
+                    toolRepository,
+                    settingsRepository,
+                    approvalNotifier,
+                    chatRepository,
+                    pendingInteractionRepository,
+                ),
             ),
             chatRepository,
             settingsRepository,
@@ -1139,10 +1337,13 @@ class GraphExecutionEngineTest {
                     llmEngine,
                     loadModelUseCase,
                     toolRepository,
-                    settingsRepository,
-                    approvalNotifier,
-                    chatRepository,
-                    pendingInteractionRepository,
+                    ToolInvocationGate(
+                        toolRepository,
+                        settingsRepository,
+                        approvalNotifier,
+                        chatRepository,
+                        pendingInteractionRepository,
+                    ),
                 ),
                 LiteRtNodeExecutor(
                     llmEngine,
@@ -1172,6 +1373,14 @@ class GraphExecutionEngineTest {
                     pendingInteractionRepository,
                     clarificationNotifier,
                 ),
+                PipelineNodeExecutor(
+                    pipelineRepository,
+                    settingsRepository,
+                    pipelineRunRepository,
+                    runTraceRepository,
+                    Provider { engine },
+                ),
+                mockk<SkillNodeExecutor>(relaxed = true),
             )
             val engineWithRealRepo = GraphExecutionEngine(
                 realFactory,
@@ -1179,10 +1388,13 @@ class GraphExecutionEngineTest {
                     llmEngine,
                     loadModelUseCase,
                     toolRepository,
-                    settingsRepository,
-                    approvalNotifier,
-                    chatRepository,
-                    pendingInteractionRepository,
+                    ToolInvocationGate(
+                        toolRepository,
+                        settingsRepository,
+                        approvalNotifier,
+                        chatRepository,
+                        pendingInteractionRepository,
+                    ),
                 ),
                 chatRepository,
                 settingsRepository,

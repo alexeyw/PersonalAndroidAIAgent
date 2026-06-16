@@ -105,6 +105,7 @@ class ChatHomeConsoleStreamingTest {
         runTraceRepository = mockk()
         coEvery { pipelineRunRepository.getActiveRunForSession(any()) } returns null
         coEvery { pipelineRunRepository.getLatestRunForSession(any()) } returns null
+        coEvery { pipelineRunRepository.getDescendantRuns(any()) } returns emptyList()
         every { pipelineRunRepository.observeActiveRunSessionIds() } returns MutableStateFlow(emptySet())
         every { pipelineRunRepository.observeRunsForSession(any()) } returns flowOf(emptyList())
         coEvery { runTraceRepository.getTraceForRun(any()) } returns emptyList()
@@ -195,6 +196,38 @@ class ChatHomeConsoleStreamingTest {
             assertEquals("▶ INPUT", lines[0].text)
             assertEquals(ConsoleSource.TOOL, lines[1].source)
             assertEquals("calendar.create_event", lines[1].text)
+        }
+
+    @Test
+    fun `given a nested sub-pipeline ConsoleLog when streamed then logs interleave by time and carry depth`() =
+        runTest(testDispatcher) {
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            viewModel.onComposerValueChange("hello")
+            viewModel.sendMessage()
+            advanceUntilIdle()
+
+            // Root run (depth 0) brackets the sub-pipeline; the nested run
+            // (depth 1) is forwarded under a distinct child run id.
+            val rootStart = ConsoleEvent(10L, ConsoleEventType.NodeExecution, "▶ PIPELINE", seq = 0, depth = 0)
+            val rootEnd = ConsoleEvent(30L, ConsoleEventType.NodeExecution, "✓ PIPELINE", seq = 1, depth = 0)
+            val nested = ConsoleEvent(20L, ConsoleEventType.NodeExecution, "[Sub] ▶ LITE_RT", seq = 0, depth = 1)
+
+            orchestratorStateFlow.emit(AgentOrchestratorState.ConsoleLog(listOf(rootStart), runId = "root"))
+            orchestratorStateFlow.emit(AgentOrchestratorState.ConsoleLog(listOf(nested), runId = "root::p::0"))
+            orchestratorStateFlow.emit(AgentOrchestratorState.ConsoleLog(listOf(rootStart, rootEnd), runId = "root"))
+            advanceUntilIdle()
+
+            val lines = viewModel.state.value.console.logs
+            assertEquals(3, lines.size)
+            // Ordered by wall-clock time: the nested line falls between the
+            // root's PIPELINE start and end.
+            assertEquals("▶ PIPELINE", lines[0].text)
+            assertEquals(0, lines[0].depth)
+            assertEquals("[Sub] ▶ LITE_RT", lines[1].text)
+            assertEquals(1, lines[1].depth)
+            assertEquals("✓ PIPELINE", lines[2].text)
+            assertEquals(0, lines[2].depth)
         }
 
     @Test

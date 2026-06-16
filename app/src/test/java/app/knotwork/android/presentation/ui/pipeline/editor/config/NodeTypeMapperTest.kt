@@ -19,6 +19,12 @@ class NodeTypeMapperTest {
     }
 
     @Test
+    fun `given PIPELINE domain node type when toCatalog then maps to catalog PIPELINE`() {
+        assertEquals(CatalogNodeType.PIPELINE, NodeTypeMapper.toCatalog(DomainNodeType.PIPELINE))
+        assertEquals(DomainNodeType.PIPELINE, NodeTypeMapper.toDomain(CatalogNodeType.PIPELINE))
+    }
+
+    @Test
     fun `given every catalog node type when toDomain round-trip then identity`() {
         CatalogNodeType.entries.forEach { type ->
             val domain = NodeTypeMapper.toDomain(type)

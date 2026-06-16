@@ -288,6 +288,20 @@
             letter-spacing: 0.04em;
         }
 
+        /* Unresolved-reference badge on PIPELINE / SKILL nodes (see
+           refreshReferenceBadges). Amber chip that sits at the trailing edge
+           of the node body, mirroring the validation warning colour. */
+        .drawflow .drawflow-node .node-body .ref-badge {
+            margin-left: auto;
+            font-size: 10px;
+            font-weight: 600;
+            white-space: nowrap;
+            padding: 1px 6px;
+            border-radius: 8px;
+            color: #1a1205;
+            background: #FFB300;
+        }
+
         .drawflow .drawflow-node .input,
         .drawflow .drawflow-node .output {
             background: #11131a;
@@ -1182,6 +1196,8 @@
         { id: "EVALUATION", label: "Evaluation", color: "#009688", icon: "✅", inputs: 1, outputs: 3 },
         { id: "SUMMARY", label: "Summary", color: "#8BC34A", icon: "📝", inputs: 1, outputs: 1 },
         { id: "CLARIFICATION", label: "Clarification", color: "#9C27B0", icon: "💬", inputs: 1, outputs: 1 },
+        { id: "PIPELINE", label: "Pipeline", color: "#424DB2", icon: "📦", inputs: 1, outputs: 1 },
+        { id: "SKILL", label: "Skill", color: "#FFB300", icon: "⭐", inputs: 1, outputs: 1 },
     ];
     /* /AUTO-GEN:NODE_TYPES */
     const NODE_TYPE_BY_ID = Object.fromEntries(NODE_TYPES.map(t => [t.id, t]));
@@ -1551,7 +1567,7 @@
             "schemaVersion": 1,
             "id": "showcase_full_agent",
             "name": "Showcase — full agent",
-            "description": "The full breadth of the on-device agent in one pipeline: intent routing (chat / factual / task), an IF-condition complexity gate, task and query decomposition feeding queue-processor loops, Wikipedia tool lookups, a human-in-the-loop clarification, and research / task synthesis.",
+            "description": "The full breadth of the on-device agent in one pipeline: intent routing (chat / factual / task), an IF-condition complexity gate, task and query decomposition feeding queue-processor loops, Wikipedia tool lookups, and research / task synthesis. Each subtask runs as a composed sub-pipeline (Clarify / Lookup / Act / Process) through PIPELINE nodes, including a human-in-the-loop clarification.",
             "category": "other",
             "tags": [
                 "showcase",
@@ -2149,18 +2165,19 @@
                 },
                 {
                     "id": "node-17",
-                    "type": "CLARIFICATION",
+                    "type": "PIPELINE",
                     "position": {
                         "x": 462,
                         "y": -175
                     },
                     "label": "Clarify",
                     "config": {
-                        "systemPrompt": "You are a Clarification Generator inside a task-execution loop. The current subtask needs information or a decision that only the user can provide before the agent can continue. Using the subtask and the overall goal, produce ONE short, specific question that unblocks it.\n\nWrite the question in the user's language ($LANG).\n\nOutput STRICTLY a single JSON object and nothing else — no prose, no markdown code fence:\n{\"question\": \"<the question to ask>\", \"options\": [\"<option>\", \"<option>\"]}\n\nRules:\n- Ask exactly one focused question — the single most important thing blocking this subtask. Do not bundle several asks.\n- If there is a small, clear set of likely answers, list them in \"options\" (2 to 5). Put the safest or most neutral choice FIRST — it is used as the default if the user does not reply in time.\n- If the answer is open-ended (a name, a date, free text), return \"options\": [] so the user can type a reply.\n- Keep the question self-contained: the user sees it without the internal subtask text, so do not refer to \"the subtask\" or \"the step\".\n- Do not answer the question yourself, and do not invent the user's preference.\n\nOutput only the JSON object.",
+                        "systemPrompt": null,
                         "cloudProvider": null,
                         "modelPath": null,
                         "toolName": null,
-                        "clarificationTimeoutMs": 60000,
+                        "targetPipelineId": "subtask_clarify",
+                        "clarificationTimeoutMs": null,
                         "conditionPrompt": null,
                         "conditionKeywords": null,
                         "conditionComplexity": null
@@ -2174,26 +2191,25 @@
                     },
                     "nodeConfig": {
                         "v": 1,
-                        "type": "CLARIFICATION",
+                        "type": "PIPELINE",
                         "title": "Clarify",
-                        "questionTemplate": "You are a Clarification Generator inside a task-execution loop. The current subtask needs information or a decision that only the user can provide before the agent can continue. Using the subtask and the overall goal, produce ONE short, specific question that unblocks it.\n\nWrite the question in the user's language ($LANG).\n\nOutput STRICTLY a single JSON object and nothing else — no prose, no markdown code fence:\n{\"question\": \"<the question to ask>\", \"options\": [\"<option>\", \"<option>\"]}\n\nRules:\n- Ask exactly one focused question — the single most important thing blocking this subtask. Do not bundle several asks.\n- If there is a small, clear set of likely answers, list them in \"options\" (2 to 5). Put the safest or most neutral choice FIRST — it is used as the default if the user does not reply in time.\n- If the answer is open-ended (a name, a date, free text), return \"options\": [] so the user can type a reply.\n- Keep the question self-contained: the user sees it without the internal subtask text, so do not refer to \"the subtask\" or \"the step\".\n- Do not answer the question yourself, and do not invent the user's preference.\n\nOutput only the JSON object.",
-                        "quickReplies": [],
-                        "timeoutMs": 60000
+                        "targetPipelineId": "subtask_clarify"
                     }
                 },
                 {
                     "id": "node-18",
-                    "type": "LITE_RT",
+                    "type": "PIPELINE",
                     "position": {
                         "x": 564,
                         "y": -522
                     },
-                    "label": "Subtask Query Builder",
+                    "label": "Lookup",
                     "config": {
-                        "systemPrompt": "The input is a single subtask from a task plan, possibly wrapped in workflow instructions. It has been routed here because it needs a factual lookup. Turn it into a Wikipedia search term for the lookup that runs in the very next step. Your output becomes the search term.\n\nWrite the search term in the user's language ($LANG) so the lookup targets the matching Wikipedia edition.\n\nRules:\n- Output ONLY the search term — a short noun phrase naming the main topic or entity, the way a Wikipedia article would be titled. No question marks, no full sentences, no quotation marks, no explanation, no leading labels.\n- Ignore any surrounding workflow instructions (e.g. \"execute a single subtask\"). Extract only the real topic the subtask is about.\n- Strip imperative verbs and filler — keep just the subject. \"Look up the population of France\" → \"France\".\n- If several topics are mixed in, pick the single most central one.\n\nOutput the search term only.",
+                        "systemPrompt": null,
                         "cloudProvider": null,
                         "modelPath": null,
                         "toolName": null,
+                        "targetPipelineId": "subtask_lookup",
                         "clarificationTimeoutMs": null,
                         "conditionPrompt": null,
                         "conditionKeywords": null,
@@ -2208,62 +2224,25 @@
                     },
                     "nodeConfig": {
                         "v": 1,
-                        "type": "LITE_RT",
-                        "title": "Subtask Query Builder",
-                        "modelId": "",
-                        "systemPrompt": "The input is a single subtask from a task plan, possibly wrapped in workflow instructions. It has been routed here because it needs a factual lookup. Turn it into a Wikipedia search term for the lookup that runs in the very next step. Your output becomes the search term.\n\nWrite the search term in the user's language ($LANG) so the lookup targets the matching Wikipedia edition.\n\nRules:\n- Output ONLY the search term — a short noun phrase naming the main topic or entity, the way a Wikipedia article would be titled. No question marks, no full sentences, no quotation marks, no explanation, no leading labels.\n- Ignore any surrounding workflow instructions (e.g. \"execute a single subtask\"). Extract only the real topic the subtask is about.\n- Strip imperative verbs and filler — keep just the subject. \"Look up the population of France\" → \"France\".\n- If several topics are mixed in, pick the single most central one.\n\nOutput the search term only.",
-                        "temperature": 0.7,
-                        "topP": 0.9,
-                        "maxNewTokens": 512,
-                        "stopTokens": []
-                    }
-                },
-                {
-                    "id": "node-19",
-                    "type": "TOOL",
-                    "position": {
-                        "x": 871,
-                        "y": -403
-                    },
-                    "label": "Wikipedia Lookup (subtask)",
-                    "config": {
-                        "systemPrompt": null,
-                        "cloudProvider": null,
-                        "modelPath": null,
-                        "toolName": "search_tool",
-                        "clarificationTimeoutMs": null,
-                        "conditionPrompt": null,
-                        "conditionKeywords": null,
-                        "conditionComplexity": null
-                    },
-                    "contextConfig": {
-                        "chatHistory": false,
-                        "originalTask": false,
-                        "nodeInput": true,
-                        "longTermMemory": false,
-                        "toolResults": false
-                    },
-                    "nodeConfig": {
-                        "v": 1,
-                        "type": "TOOL",
-                        "title": "Wikipedia Lookup (subtask)",
-                        "toolId": "search_tool",
-                        "argumentMapping": []
+                        "type": "PIPELINE",
+                        "title": "Lookup",
+                        "targetPipelineId": "subtask_lookup"
                     }
                 },
                 {
                     "id": "node-20",
-                    "type": "TOOL",
+                    "type": "PIPELINE",
                     "position": {
                         "x": 498,
                         "y": -620
                     },
-                    "label": "Tool Action",
+                    "label": "Act",
                     "config": {
                         "systemPrompt": null,
                         "cloudProvider": null,
                         "modelPath": null,
                         "toolName": null,
+                        "targetPipelineId": "subtask_act",
                         "clarificationTimeoutMs": null,
                         "conditionPrompt": null,
                         "conditionKeywords": null,
@@ -2271,32 +2250,32 @@
                     },
                     "contextConfig": {
                         "chatHistory": false,
-                        "originalTask": false,
+                        "originalTask": true,
                         "nodeInput": true,
                         "longTermMemory": false,
                         "toolResults": false
                     },
                     "nodeConfig": {
                         "v": 1,
-                        "type": "TOOL",
-                        "title": "Tool Action",
-                        "toolId": "",
-                        "argumentMapping": []
+                        "type": "PIPELINE",
+                        "title": "Act",
+                        "targetPipelineId": "subtask_act"
                     }
                 },
                 {
                     "id": "node-21",
-                    "type": "LITE_RT",
+                    "type": "PIPELINE",
                     "position": {
                         "x": 559,
                         "y": -409
                     },
                     "label": "Process",
                     "config": {
-                        "systemPrompt": "You are completing ONE subtask from a larger plan. It is a reasoning, writing, transformation, calculation or composition step — everything it needs is already available to you; you are not searching for facts, using tools, or asking the user.\n\nToday is $DATE. Work in the user's language ($LANG).\n\nHow to work:\n- Do exactly what the current subtask asks — no more, no less. Ignore any surrounding workflow instructions and do not try to solve the overall task or future steps.\n- If results of earlier subtasks appear in your input, use them as the inputs to this step rather than redoing that work.\n- Produce the concrete result the subtask calls for (the rewritten text, the answer, the computed value, the drafted content) — not a description of how you would do it.\n- If the subtask genuinely cannot be completed from the information available, say so briefly and state what is missing, instead of inventing facts.\n- Output only the result of this subtask, as plain text, with no preamble, no restating of the subtask, and no commentary.\n\nOutput the subtask result only.",
+                        "systemPrompt": null,
                         "cloudProvider": null,
                         "modelPath": null,
                         "toolName": null,
+                        "targetPipelineId": "subtask_process",
                         "clarificationTimeoutMs": null,
                         "conditionPrompt": null,
                         "conditionKeywords": null,
@@ -2311,14 +2290,9 @@
                     },
                     "nodeConfig": {
                         "v": 1,
-                        "type": "LITE_RT",
+                        "type": "PIPELINE",
                         "title": "Process",
-                        "modelId": "",
-                        "systemPrompt": "You are completing ONE subtask from a larger plan. It is a reasoning, writing, transformation, calculation or composition step — everything it needs is already available to you; you are not searching for facts, using tools, or asking the user.\n\nToday is $DATE. Work in the user's language ($LANG).\n\nHow to work:\n- Do exactly what the current subtask asks — no more, no less. Ignore any surrounding workflow instructions and do not try to solve the overall task or future steps.\n- If results of earlier subtasks appear in your input, use them as the inputs to this step rather than redoing that work.\n- Produce the concrete result the subtask calls for (the rewritten text, the answer, the computed value, the drafted content) — not a description of how you would do it.\n- If the subtask genuinely cannot be completed from the information available, say so briefly and state what is missing, instead of inventing facts.\n- Output only the result of this subtask, as plain text, with no preamble, no restating of the subtask, and no commentary.\n\nOutput the subtask result only.",
-                        "temperature": 0.7,
-                        "topP": 0.9,
-                        "maxNewTokens": 2048,
-                        "stopTokens": []
+                        "targetPipelineId": "subtask_process"
                     }
                 },
                 {
@@ -2505,14 +2479,8 @@
                     "label": null
                 },
                 {
-                    "id": "conn-18-output_1-19-input_1",
+                    "id": "conn-18-output_1-14-input_1",
                     "fromNodeId": "node-18",
-                    "toNodeId": "node-19",
-                    "label": null
-                },
-                {
-                    "id": "conn-19-output_1-14-input_1",
-                    "fromNodeId": "node-19",
                     "toNodeId": "node-14",
                     "label": null
                 },
@@ -3649,6 +3617,565 @@
                     "label": null
                 }
             ]
+        },
+        {
+            "schemaVersion": 1,
+            "id": "subtask_clarify",
+            "name": "Subtask — Clarify",
+            "description": "Sub-pipeline for a task subtask that needs the user's input: it asks one focused human-in-the-loop question and forwards the answer. Used by the Showcase agent's Subtask Router.",
+            "category": "other",
+            "tags": [
+                "showcase",
+                "subtask",
+                "hitl",
+                "composition"
+            ],
+            "updatedAt": 1748304000000,
+            "nodes": [
+                {
+                    "id": "node-1",
+                    "type": "INPUT",
+                    "position": {
+                        "x": 80,
+                        "y": 200
+                    },
+                    "label": "Input",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    },
+                    "nodeConfig": {
+                        "v": 1,
+                        "type": "INPUT",
+                        "title": "Input",
+                        "inputName": "user.message"
+                    }
+                },
+                {
+                    "id": "node-2",
+                    "type": "CLARIFICATION",
+                    "position": {
+                        "x": 420,
+                        "y": 200
+                    },
+                    "label": "Clarify",
+                    "config": {
+                        "systemPrompt": "You are a Clarification Generator inside a task-execution loop. The current subtask needs information or a decision that only the user can provide before the agent can continue. Using the subtask and the overall goal, produce ONE short, specific question that unblocks it.\n\nWrite the question in the user's language ($LANG).\n\nOutput STRICTLY a single JSON object and nothing else — no prose, no markdown code fence:\n{\"question\": \"<the question to ask>\", \"options\": [\"<option>\", \"<option>\"]}\n\nRules:\n- Ask exactly one focused question — the single most important thing blocking this subtask. Do not bundle several asks.\n- If there is a small, clear set of likely answers, list them in \"options\" (2 to 5). Put the safest or most neutral choice FIRST — it is used as the default if the user does not reply in time.\n- If the answer is open-ended (a name, a date, free text), return \"options\": [] so the user can type a reply.\n- Keep the question self-contained: the user sees it without the internal subtask text, so do not refer to \"the subtask\" or \"the step\".\n- Do not answer the question yourself, and do not invent the user's preference.\n\nOutput only the JSON object.",
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": 60000,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    },
+                    "nodeConfig": {
+                        "v": 1,
+                        "type": "CLARIFICATION",
+                        "title": "Clarify",
+                        "questionTemplate": "You are a Clarification Generator inside a task-execution loop. The current subtask needs information or a decision that only the user can provide before the agent can continue. Using the subtask and the overall goal, produce ONE short, specific question that unblocks it.\n\nWrite the question in the user's language ($LANG).\n\nOutput STRICTLY a single JSON object and nothing else — no prose, no markdown code fence:\n{\"question\": \"<the question to ask>\", \"options\": [\"<option>\", \"<option>\"]}\n\nRules:\n- Ask exactly one focused question — the single most important thing blocking this subtask. Do not bundle several asks.\n- If there is a small, clear set of likely answers, list them in \"options\" (2 to 5). Put the safest or most neutral choice FIRST — it is used as the default if the user does not reply in time.\n- If the answer is open-ended (a name, a date, free text), return \"options\": [] so the user can type a reply.\n- Keep the question self-contained: the user sees it without the internal subtask text, so do not refer to \"the subtask\" or \"the step\".\n- Do not answer the question yourself, and do not invent the user's preference.\n\nOutput only the JSON object.",
+                        "quickReplies": [],
+                        "timeoutMs": 60000
+                    }
+                },
+                {
+                    "id": "node-3",
+                    "type": "OUTPUT",
+                    "position": {
+                        "x": 760,
+                        "y": 200
+                    },
+                    "label": "Output",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    },
+                    "nodeConfig": {
+                        "v": 1,
+                        "type": "OUTPUT",
+                        "title": "Output",
+                        "format": "PLAIN_TEXT",
+                        "systemPrompt": ""
+                    }
+                }
+            ],
+            "connections": [
+                {
+                    "id": "conn-1-2",
+                    "fromNodeId": "node-1",
+                    "toNodeId": "node-2",
+                    "label": null
+                },
+                {
+                    "id": "conn-2-3",
+                    "fromNodeId": "node-2",
+                    "toNodeId": "node-3",
+                    "label": null
+                }
+            ]
+        },
+        {
+            "schemaVersion": 1,
+            "id": "subtask_lookup",
+            "name": "Subtask — Lookup",
+            "description": "Sub-pipeline for a task subtask that needs a factual lookup: it turns the subtask into a Wikipedia search term and runs the search. Used by the Showcase agent's Subtask Router.",
+            "category": "other",
+            "tags": [
+                "showcase",
+                "subtask",
+                "tools",
+                "composition"
+            ],
+            "updatedAt": 1748304000000,
+            "nodes": [
+                {
+                    "id": "node-1",
+                    "type": "INPUT",
+                    "position": {
+                        "x": 80,
+                        "y": 200
+                    },
+                    "label": "Input",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    },
+                    "nodeConfig": {
+                        "v": 1,
+                        "type": "INPUT",
+                        "title": "Input",
+                        "inputName": "user.message"
+                    }
+                },
+                {
+                    "id": "node-2",
+                    "type": "LITE_RT",
+                    "position": {
+                        "x": 420,
+                        "y": 200
+                    },
+                    "label": "Subtask Query Builder",
+                    "config": {
+                        "systemPrompt": "The input is a single subtask from a task plan, possibly wrapped in workflow instructions. It has been routed here because it needs a factual lookup. Turn it into a Wikipedia search term for the lookup that runs in the very next step. Your output becomes the search term.\n\nWrite the search term in the user's language ($LANG) so the lookup targets the matching Wikipedia edition.\n\nRules:\n- Output ONLY the search term — a short noun phrase naming the main topic or entity, the way a Wikipedia article would be titled. No question marks, no full sentences, no quotation marks, no explanation, no leading labels.\n- Ignore any surrounding workflow instructions (e.g. \"execute a single subtask\"). Extract only the real topic the subtask is about.\n- Strip imperative verbs and filler — keep just the subject. \"Look up the population of France\" → \"France\".\n- If several topics are mixed in, pick the single most central one.\n\nOutput the search term only.",
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    },
+                    "nodeConfig": {
+                        "v": 1,
+                        "type": "LITE_RT",
+                        "title": "Subtask Query Builder",
+                        "modelId": "",
+                        "systemPrompt": "The input is a single subtask from a task plan, possibly wrapped in workflow instructions. It has been routed here because it needs a factual lookup. Turn it into a Wikipedia search term for the lookup that runs in the very next step. Your output becomes the search term.\n\nWrite the search term in the user's language ($LANG) so the lookup targets the matching Wikipedia edition.\n\nRules:\n- Output ONLY the search term — a short noun phrase naming the main topic or entity, the way a Wikipedia article would be titled. No question marks, no full sentences, no quotation marks, no explanation, no leading labels.\n- Ignore any surrounding workflow instructions (e.g. \"execute a single subtask\"). Extract only the real topic the subtask is about.\n- Strip imperative verbs and filler — keep just the subject. \"Look up the population of France\" → \"France\".\n- If several topics are mixed in, pick the single most central one.\n\nOutput the search term only.",
+                        "temperature": 0.7,
+                        "topP": 0.9,
+                        "maxNewTokens": 512,
+                        "stopTokens": []
+                    }
+                },
+                {
+                    "id": "node-3",
+                    "type": "TOOL",
+                    "position": {
+                        "x": 760,
+                        "y": 200
+                    },
+                    "label": "Wikipedia Lookup (subtask)",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": "search_tool",
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    },
+                    "nodeConfig": {
+                        "v": 1,
+                        "type": "TOOL",
+                        "title": "Wikipedia Lookup (subtask)",
+                        "toolId": "search_tool",
+                        "argumentMapping": []
+                    }
+                },
+                {
+                    "id": "node-4",
+                    "type": "OUTPUT",
+                    "position": {
+                        "x": 1100,
+                        "y": 200
+                    },
+                    "label": "Output",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    },
+                    "nodeConfig": {
+                        "v": 1,
+                        "type": "OUTPUT",
+                        "title": "Output",
+                        "format": "PLAIN_TEXT",
+                        "systemPrompt": ""
+                    }
+                }
+            ],
+            "connections": [
+                {
+                    "id": "conn-1-2",
+                    "fromNodeId": "node-1",
+                    "toNodeId": "node-2",
+                    "label": null
+                },
+                {
+                    "id": "conn-2-3",
+                    "fromNodeId": "node-2",
+                    "toNodeId": "node-3",
+                    "label": null
+                },
+                {
+                    "id": "conn-3-4",
+                    "fromNodeId": "node-3",
+                    "toNodeId": "node-4",
+                    "label": null
+                }
+            ]
+        },
+        {
+            "schemaVersion": 1,
+            "id": "subtask_act",
+            "name": "Subtask — Act",
+            "description": "Sub-pipeline for a task subtask that performs an action through a tool (auto-selected from the available tools, behind the usual confirmation gate). Used by the Showcase agent's Subtask Router.",
+            "category": "other",
+            "tags": [
+                "showcase",
+                "subtask",
+                "tools",
+                "composition"
+            ],
+            "updatedAt": 1748304000000,
+            "nodes": [
+                {
+                    "id": "node-1",
+                    "type": "INPUT",
+                    "position": {
+                        "x": 80,
+                        "y": 200
+                    },
+                    "label": "Input",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    },
+                    "nodeConfig": {
+                        "v": 1,
+                        "type": "INPUT",
+                        "title": "Input",
+                        "inputName": "user.message"
+                    }
+                },
+                {
+                    "id": "node-2",
+                    "type": "TOOL",
+                    "position": {
+                        "x": 420,
+                        "y": 200
+                    },
+                    "label": "Tool Action",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    },
+                    "nodeConfig": {
+                        "v": 1,
+                        "type": "TOOL",
+                        "title": "Tool Action",
+                        "toolId": "",
+                        "argumentMapping": []
+                    }
+                },
+                {
+                    "id": "node-3",
+                    "type": "OUTPUT",
+                    "position": {
+                        "x": 760,
+                        "y": 200
+                    },
+                    "label": "Output",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    },
+                    "nodeConfig": {
+                        "v": 1,
+                        "type": "OUTPUT",
+                        "title": "Output",
+                        "format": "PLAIN_TEXT",
+                        "systemPrompt": ""
+                    }
+                }
+            ],
+            "connections": [
+                {
+                    "id": "conn-1-2",
+                    "fromNodeId": "node-1",
+                    "toNodeId": "node-2",
+                    "label": null
+                },
+                {
+                    "id": "conn-2-3",
+                    "fromNodeId": "node-2",
+                    "toNodeId": "node-3",
+                    "label": null
+                }
+            ]
+        },
+        {
+            "schemaVersion": 1,
+            "id": "subtask_process",
+            "name": "Subtask — Process",
+            "description": "Sub-pipeline for a task subtask the model can complete on its own — reasoning, writing, transforming or calculating from what is already available. Used by the Showcase agent's Subtask Router.",
+            "category": "other",
+            "tags": [
+                "showcase",
+                "subtask",
+                "composition"
+            ],
+            "updatedAt": 1748304000000,
+            "nodes": [
+                {
+                    "id": "node-1",
+                    "type": "INPUT",
+                    "position": {
+                        "x": 80,
+                        "y": 200
+                    },
+                    "label": "Input",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    },
+                    "nodeConfig": {
+                        "v": 1,
+                        "type": "INPUT",
+                        "title": "Input",
+                        "inputName": "user.message"
+                    }
+                },
+                {
+                    "id": "node-2",
+                    "type": "LITE_RT",
+                    "position": {
+                        "x": 420,
+                        "y": 200
+                    },
+                    "label": "Process",
+                    "config": {
+                        "systemPrompt": "You are completing ONE subtask from a larger plan. It is a reasoning, writing, transformation, calculation or composition step — everything it needs is already available to you; you are not searching for facts, using tools, or asking the user.\n\nToday is $DATE. Work in the user's language ($LANG).\n\nHow to work:\n- Do exactly what the current subtask asks — no more, no less. Ignore any surrounding workflow instructions and do not try to solve the overall task or future steps.\n- If results of earlier subtasks appear in your input, use them as the inputs to this step rather than redoing that work.\n- Produce the concrete result the subtask calls for (the rewritten text, the answer, the computed value, the drafted content) — not a description of how you would do it.\n- If the subtask genuinely cannot be completed from the information available, say so briefly and state what is missing, instead of inventing facts.\n- Output only the result of this subtask, as plain text, with no preamble, no restating of the subtask, and no commentary.\n\nOutput the subtask result only.",
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    },
+                    "nodeConfig": {
+                        "v": 1,
+                        "type": "LITE_RT",
+                        "title": "Process",
+                        "modelId": "",
+                        "systemPrompt": "You are completing ONE subtask from a larger plan. It is a reasoning, writing, transformation, calculation or composition step — everything it needs is already available to you; you are not searching for facts, using tools, or asking the user.\n\nToday is $DATE. Work in the user's language ($LANG).\n\nHow to work:\n- Do exactly what the current subtask asks — no more, no less. Ignore any surrounding workflow instructions and do not try to solve the overall task or future steps.\n- If results of earlier subtasks appear in your input, use them as the inputs to this step rather than redoing that work.\n- Produce the concrete result the subtask calls for (the rewritten text, the answer, the computed value, the drafted content) — not a description of how you would do it.\n- If the subtask genuinely cannot be completed from the information available, say so briefly and state what is missing, instead of inventing facts.\n- Output only the result of this subtask, as plain text, with no preamble, no restating of the subtask, and no commentary.\n\nOutput the subtask result only.",
+                        "temperature": 0.7,
+                        "topP": 0.9,
+                        "maxNewTokens": 2048,
+                        "stopTokens": []
+                    }
+                },
+                {
+                    "id": "node-3",
+                    "type": "OUTPUT",
+                    "position": {
+                        "x": 760,
+                        "y": 200
+                    },
+                    "label": "Output",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": false,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    },
+                    "nodeConfig": {
+                        "v": 1,
+                        "type": "OUTPUT",
+                        "title": "Output",
+                        "format": "PLAIN_TEXT",
+                        "systemPrompt": ""
+                    }
+                }
+            ],
+            "connections": [
+                {
+                    "id": "conn-1-2",
+                    "fromNodeId": "node-1",
+                    "toNodeId": "node-2",
+                    "label": null
+                },
+                {
+                    "id": "conn-2-3",
+                    "fromNodeId": "node-2",
+                    "toNodeId": "node-3",
+                    "label": null
+                }
+            ]
         }
     ];
 
@@ -3847,6 +4374,11 @@
             case 'EVALUATION':  return { ...base, criteriaPrompt: D.EVALUATION || '', maxRetries: 2 };
             case 'SUMMARY':     return { ...base, format: 'BULLETS', customPrompt: D.SUMMARY || null,
                 targetLengthChars: 600 };
+            // Composition nodes. Mirror the catalog PipelineConfig / SkillConfig
+            // (NodeConfig.kt): only the durable reference id (+ SKILL engine) is
+            // persisted; display names are resolved live by the host app.
+            case 'PIPELINE':    return { ...base, targetPipelineId: '' };
+            case 'SKILL':       return { ...base, skillId: '', engine: 'LITE_RT' };
             default:            return base;
         }
     }
@@ -3863,6 +4395,7 @@
     function richToFlat(typeId, cfg) {
         const flat = {
             systemPrompt: '', cloudProvider: '', modelPath: '', toolName: '',
+            targetPipelineId: '', skillId: '',
             conditionPrompt: '', conditionKeywords: '', conditionComplexity: null,
             clarificationTimeoutMs: null,
         };
@@ -3878,6 +4411,12 @@
                 flat.clarificationTimeoutMs = (cfg.timeoutMs ?? null); break;
             case 'IF_CONDITION':  flat.conditionPrompt = cfg.expression || ''; break;
             case 'TOOL':          flat.toolName = cfg.toolId || ''; break;
+            // SKILL engine maps onto the flat cloudProvider exactly as
+            // NodeConfigCodec.apply does: CLOUD → the "auto" sentinel, LITE_RT →
+            // blank (decoded back via engineFromProvider on the next open).
+            case 'PIPELINE':      flat.targetPipelineId = cfg.targetPipelineId || ''; break;
+            case 'SKILL':         flat.skillId = cfg.skillId || '';
+                flat.cloudProvider = cfg.engine === 'CLOUD' ? 'auto' : ''; break;
             default: break;
         }
         return flat;
@@ -3967,6 +4506,15 @@
                 if (cfg.customPrompt != null) env.customPrompt = cfg.customPrompt;
                 env.targetLengthChars = Number(cfg.targetLengthChars ?? 600);
                 break;
+            case 'PIPELINE':
+                // Mirror NodeConfigCodec.encodePipeline: only the target id.
+                env.targetPipelineId = cfg.targetPipelineId ?? '';
+                break;
+            case 'SKILL':
+                // Mirror NodeConfigCodec.encodeSkill: skill id + engine name.
+                env.skillId = cfg.skillId ?? '';
+                env.engine = cfg.engine || 'LITE_RT';
+                break;
             default: break;
         }
         return env;
@@ -4050,6 +4598,14 @@
                 cfg.customPrompt = env.customPrompt != null ? String(env.customPrompt) : null;
                 cfg.targetLengthChars = num(env.targetLengthChars, 600);
                 break;
+            case 'PIPELINE':
+                if (env.targetPipelineId != null) cfg.targetPipelineId = String(env.targetPipelineId);
+                break;
+            case 'SKILL':
+                if (env.skillId != null) cfg.skillId = String(env.skillId);
+                // Engine falls back to LITE_RT for rows written before the field.
+                cfg.engine = (env.engine === 'CLOUD' || env.engine === 'LITE_RT') ? env.engine : 'LITE_RT';
+                break;
             default: break;
         }
         return cfg;
@@ -4078,6 +4634,10 @@
             case 'DECOMPOSITION': cfg.planningPrompt = sp; break;
             case 'EVALUATION': cfg.criteriaPrompt = sp; break;
             case 'SUMMARY': cfg.customPrompt = sp.trim() ? sp : null; break;
+            case 'PIPELINE': cfg.targetPipelineId = flat.targetPipelineId || ''; break;
+            // engineFromProvider: any non-blank cloudProvider ⇒ CLOUD, else LITE_RT.
+            case 'SKILL': cfg.skillId = flat.skillId || '';
+                cfg.engine = (flat.cloudProvider && String(flat.cloudProvider).trim()) ? 'CLOUD' : 'LITE_RT'; break;
             default: break;
         }
         return cfg;
@@ -4325,10 +4885,120 @@
                 fields.push(prompt('customPrompt', 'Custom prompt (required when format = CUSTOM)', typeId, true));
                 fields.push(cfgNumber('targetLengthChars', 'Target length (chars, 200–4000)', cfg.targetLengthChars, { min: 200, max: 4000, step: 50, kind: 'int' }));
                 break;
+            case 'PIPELINE':
+                fields.push(cfgPipelinePicker(cfg));
+                break;
+            case 'SKILL':
+                fields.push(cfgText('skillId', 'Skill id', cfg.skillId ?? '', 'e.g. report-writer'));
+                fields.push(cfgSelect('engine', 'Inference engine', [
+                    { id: 'LITE_RT', label: 'On-device (LiteRT)' },
+                    { id: 'CLOUD', label: 'Cloud' },
+                ], cfg.engine || 'LITE_RT'));
+                fields.push(cfgHint(
+                    'The browser has no skill library, so the id is entered by hand. The host app ' +
+                    'resolves the skill name, instruction preview and tool allowlist, and flags an ' +
+                    'unknown id on import.',
+                ));
+                break;
         }
 
         fields.push(renderContextConfigSection(contextConfig));
         return fields;
+    }
+
+    /**
+     * Standalone read-only guidance line, appended to a form like a field but
+     * carrying no input. Used where a node type needs a caveat the user must
+     * see (e.g. SKILL ids cannot be resolved in the browser).
+     */
+    function cfgHint(text) {
+        const hint = document.createElement('div');
+        hint.className = 'hint';
+        hint.textContent = text;
+        return hint;
+    }
+
+    /**
+     * Known target-pipeline options for the PIPELINE picker: the bundled
+     * catalogue plus the per-browser "Mine" presets, de-duplicated by id and
+     * excluding the document's own id (a pipeline may not target itself).
+     * Returns `[{ id, name }]`.
+     */
+    function knownPipelineOptions() {
+        const seen = new Set();
+        const out = [];
+        const add = p => {
+            if (!p || typeof p.id !== 'string' || !p.id) return;
+            if (p.id === currentPipelineId) return; // self-reference is never a valid target
+            if (seen.has(p.id)) return;
+            seen.add(p.id);
+            out.push({ id: p.id, name: p.name || p.id });
+        };
+        BUILTIN_PIPELINE_PRESETS.forEach(add);
+        loadUserPipelinePresets().forEach(add);
+        return out;
+    }
+
+    /**
+     * Target-pipeline combobox bound live to [cfg].targetPipelineId (no
+     * `data-field`, so it mutates [cfg] directly like the list editors and is
+     * skipped by the harvest pass). Offers the known pipelines plus a manual
+     * "enter id" escape hatch; an id that is neither known nor blank opens in
+     * manual mode so an unresolved reference imported from JSON stays editable
+     * rather than being silently dropped.
+     */
+    function cfgPipelinePicker(cfg) {
+        const wrap = fieldWrap('Target pipeline');
+        const MANUAL = '__manual__';
+        const known = knownPipelineOptions();
+        const current = (cfg.targetPipelineId || '').trim();
+        const isKnown = current !== '' && known.some(o => o.id === current);
+        const useManual = current !== '' && !isKnown;
+
+        const sel = document.createElement('select');
+        const placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = known.length ? '— select a pipeline —' : '— no known pipelines —';
+        sel.appendChild(placeholder);
+        known.forEach(o => {
+            const opt = document.createElement('option');
+            opt.value = o.id;
+            opt.textContent = `${o.name} (${o.id})`;
+            sel.appendChild(opt);
+        });
+        const manualOpt = document.createElement('option');
+        manualOpt.value = MANUAL;
+        manualOpt.textContent = '✎ Enter id manually…';
+        sel.appendChild(manualOpt);
+        sel.value = useManual ? MANUAL : current;
+
+        const manual = document.createElement('input');
+        manual.type = 'text';
+        manual.placeholder = 'pipeline id';
+        manual.style.marginTop = '6px';
+        manual.value = useManual ? current : '';
+        manual.hidden = !useManual;
+
+        sel.addEventListener('change', () => {
+            if (sel.value === MANUAL) {
+                manual.hidden = false;
+                cfg.targetPipelineId = manual.value.trim();
+                manual.focus();
+            } else {
+                manual.hidden = true;
+                cfg.targetPipelineId = sel.value;
+            }
+        });
+        manual.addEventListener('input', () => { cfg.targetPipelineId = manual.value.trim(); });
+
+        wrap.appendChild(sel);
+        wrap.appendChild(manual);
+        wrap.appendChild(cfgHint(
+            'References another saved pipeline by id. Unknown ids import as “unresolved” (the node ' +
+            'shows a badge); the host app validates the full reference graph — transitive cycles and ' +
+            'the depth limit are checked there, not in the browser.',
+        ));
+        return wrap;
     }
 
     /* ---- cfg-bound field builders (scalar inputs carry data-field + data-kind) ---- */
@@ -4984,6 +5654,15 @@
                 if (!inRange(cfg.targetLengthChars, 200, 4000)) return 'Target length must be between 200 and 4000.';
                 if (cfg.format === 'CUSTOM' && (!cfg.customPrompt || !cfg.customPrompt.trim())) return 'A custom prompt is required for the CUSTOM format.';
                 break;
+            case 'PIPELINE': {
+                const target = (cfg.targetPipelineId || '').trim();
+                if (!target) return 'A target pipeline id is required.';
+                if (target === currentPipelineId) return 'A pipeline cannot reference itself.';
+                break;
+            }
+            case 'SKILL':
+                if (!cfg.skillId || !String(cfg.skillId).trim()) return 'A skill id is required.';
+                break;
         }
         return null;
     }
@@ -5596,6 +6275,44 @@
             }
         });
 
+        // Composition references. The browser holds a SINGLE document, so it can
+        // only detect a *direct* self-reference; full transitive cycle and
+        // depth-limit checking across the saved-pipeline graph stays in the app
+        // (PipelineGraph.validate + PipelineCompositionValidator, with
+        // FindPipelinesUsingSkillUseCase for skills). SKILL ids cannot be
+        // resolved here at all (no in-browser skill library), so a non-blank
+        // skill id is never auto-flagged — only a blank one (handled below).
+        const knownPipelineIds = new Set(knownPipelineOptions().map(o => o.id));
+        nodes.forEach(n => {
+            if (n.type === 'PIPELINE') {
+                const target = (n.data?.targetPipelineId || n.data?.cfg?.targetPipelineId || '').trim();
+                if (!target) {
+                    errors.push({
+                        kind: 'MissingTargetPipeline', level: 'error', nodeId: n.id,
+                        message: 'PIPELINE node has no target pipeline.',
+                    });
+                } else if (target === currentPipelineId) {
+                    errors.push({
+                        kind: 'SelfReference', level: 'error', nodeId: n.id,
+                        message: 'PIPELINE node references its own pipeline.',
+                    });
+                } else if (!knownPipelineIds.has(target)) {
+                    warnings.push({
+                        kind: 'UnresolvedReference', level: 'warning', nodeId: n.id,
+                        message: `Target pipeline "${target}" is not among the known pipelines.`,
+                    });
+                }
+            } else if (n.type === 'SKILL') {
+                const skill = (n.data?.skillId || n.data?.cfg?.skillId || '').trim();
+                if (!skill) {
+                    errors.push({
+                        kind: 'MissingSkill', level: 'error', nodeId: n.id,
+                        message: 'SKILL node has no skill selected.',
+                    });
+                }
+            }
+        });
+
         return { errors, warnings };
     }
 
@@ -5678,8 +6395,63 @@
         exportBtn.disabled = errors.length > 0;
     }
 
+    /**
+     * Classifies a node's composition reference for badge display.
+     * @returns {'unset'|'self'|'unresolved'|null} `null` when there is nothing
+     * to flag (resolved reference, or a non-composition node).
+     */
+    function referenceIssueFor(node) {
+        if (node.type === 'PIPELINE') {
+            const target = (node.data?.targetPipelineId || node.data?.cfg?.targetPipelineId || '').trim();
+            if (!target) return 'unset';
+            if (target === currentPipelineId) return 'self';
+            if (!knownPipelineOptions().some(o => o.id === target)) return 'unresolved';
+            return null;
+        }
+        if (node.type === 'SKILL') {
+            const skill = (node.data?.skillId || node.data?.cfg?.skillId || '').trim();
+            // A non-blank skill id cannot be resolved in the browser, so it is
+            // not flagged as "unresolved" — only a blank one is surfaced.
+            return skill ? null : 'unset';
+        }
+        return null;
+    }
+
+    /**
+     * Patches a visible "⚠ …" badge into the DOM of every PIPELINE / SKILL node
+     * whose reference is unset / self / unresolved, and removes it once the
+     * reference resolves. drawflow does not re-render node HTML on data change,
+     * so — like the label patch — we mutate the rendered node by hand. Called
+     * from runValidation, so it stays in step with every graph mutation and
+     * with import.
+     */
+    function refreshReferenceBadges() {
+        snapshotGraph().forEach(n => {
+            const body = document.querySelector(`#node-${n.id} .node-body`);
+            if (!body) return;
+            const issue = referenceIssueFor(n);
+            let badge = body.querySelector('.ref-badge');
+            if (!issue) { if (badge) badge.remove(); return; }
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'ref-badge';
+                body.appendChild(badge);
+            }
+            const label = n.type === 'SKILL' ? 'skill' : 'pipeline';
+            badge.textContent = issue === 'self' ? '⚠ self-ref'
+                : issue === 'unset' ? `⚠ no ${label}`
+                : '⚠ unresolved';
+            badge.title = issue === 'self'
+                ? 'This pipeline references itself.'
+                : issue === 'unset'
+                    ? `No ${label} selected — open the node to choose one.`
+                    : 'The referenced id is not among the known pipelines (resolved by the host app).';
+        });
+    }
+
     function runValidation() {
         renderValidation(validateGraph());
+        refreshReferenceBadges();
         // Welcome overlay visibility tracks the same lifecycle as
         // validation: every mutation refreshes it so the placeholder
         // shows when the graph is empty and hides as soon as the user
@@ -5924,6 +6696,12 @@
                     cloudProvider: flat.cloudProvider || null,
                     modelPath: flat.modelPath || null,
                     toolName: flat.toolName || null,
+                    // PIPELINE / SKILL reference ids — the runtime executors read
+                    // these flat fields, so they must travel in `config` (the rich
+                    // nodeConfig envelope carries them too). Matches Android
+                    // PipelineJsonSerializer.serializeNode.
+                    targetPipelineId: flat.targetPipelineId || null,
+                    skillId: flat.skillId || null,
                     clarificationTimeoutMs: flat.clarificationTimeoutMs ?? null,
                     conditionPrompt: flat.conditionPrompt || null,
                     conditionKeywords: flat.conditionKeywords || null,
@@ -6081,6 +6859,8 @@
                     cloudProvider: jn.config?.cloudProvider || (jn.type === 'CLOUD' ? 'auto' : ''),
                     modelPath: jn.config?.modelPath || '',
                     toolName: jn.config?.toolName || '',
+                    targetPipelineId: jn.config?.targetPipelineId || '',
+                    skillId: jn.config?.skillId || '',
                     clarificationTimeoutMs: jn.config?.clarificationTimeoutMs ?? null,
                     conditionPrompt: jn.config?.conditionPrompt || '',
                     conditionKeywords: jn.config?.conditionKeywords || '',

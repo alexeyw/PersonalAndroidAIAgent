@@ -34,6 +34,8 @@ internal object NodeTypeMapper {
         DomainNodeType.QUEUE_PROCESSOR -> CatalogNodeType.QUEUE_PROCESSOR
         DomainNodeType.EVALUATION -> CatalogNodeType.EVALUATION
         DomainNodeType.SUMMARY -> CatalogNodeType.SUMMARY
+        DomainNodeType.PIPELINE -> CatalogNodeType.PIPELINE
+        DomainNodeType.SKILL -> CatalogNodeType.SKILL
     }
 
     /**
@@ -54,6 +56,8 @@ internal object NodeTypeMapper {
         CatalogNodeType.QUEUE_PROCESSOR -> DomainNodeType.QUEUE_PROCESSOR
         CatalogNodeType.EVALUATION -> DomainNodeType.EVALUATION
         CatalogNodeType.SUMMARY -> DomainNodeType.SUMMARY
+        CatalogNodeType.PIPELINE -> DomainNodeType.PIPELINE
+        CatalogNodeType.SKILL -> DomainNodeType.SKILL
     }
 }
 

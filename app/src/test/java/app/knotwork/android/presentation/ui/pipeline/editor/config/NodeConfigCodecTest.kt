@@ -7,10 +7,15 @@ import app.knotwork.design.components.pipelineeditor.CloudConfig
 import app.knotwork.design.components.pipelineeditor.CloudProvider
 import app.knotwork.design.components.pipelineeditor.IfConditionConfig
 import app.knotwork.design.components.pipelineeditor.LiteRtConfig
+import app.knotwork.design.components.pipelineeditor.PipelineConfig
+import app.knotwork.design.components.pipelineeditor.SkillConfig
+import app.knotwork.design.components.pipelineeditor.SkillEngine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import app.knotwork.android.domain.models.CloudProvider as DomainCloudProvider
 import app.knotwork.design.components.pipelineeditor.NodeType as CatalogNodeType
 
 class NodeConfigCodecTest {
@@ -176,5 +181,79 @@ class NodeConfigCodecTest {
         assertNotNull(patched.configJson)
         assertTrue(patched.configJson!!.contains("\"title\":\"New\""))
         assertEquals("sp", patched.systemPrompt)
+    }
+
+    @Test
+    fun `given Pipeline config when encode-then-decode then target id preserved`() {
+        val source = node(NodeType.PIPELINE, "Run sub")
+        val config = PipelineConfig(title = "Run sub", targetPipelineId = "target-123")
+        val applied = source.copy(configJson = NodeConfigCodec.encode(config))
+        val decoded = NodeConfigCodec.decode(applied) as PipelineConfig
+        assertEquals("Run sub", decoded.title)
+        assertEquals("target-123", decoded.targetPipelineId)
+    }
+
+    @Test
+    fun `given Pipeline config when apply then targetPipelineId is written onto the NodeModel`() {
+        val src = node(NodeType.PIPELINE, "Run sub")
+        val patched = NodeConfigCodec.apply(src, PipelineConfig(title = "Run sub", targetPipelineId = "target-123"))
+        assertEquals("target-123", patched.targetPipelineId)
+    }
+
+    @Test
+    fun `given Pipeline config with blank target when apply then targetPipelineId is null`() {
+        val src = node(NodeType.PIPELINE, "Run sub").copy(targetPipelineId = "stale")
+        val patched = NodeConfigCodec.apply(src, PipelineConfig(title = "Run sub", targetPipelineId = ""))
+        assertNull(patched.targetPipelineId)
+    }
+
+    @Test
+    fun `given pre-existing PIPELINE node when decode then derives target from the domain field`() {
+        val src = node(NodeType.PIPELINE, "Run sub").copy(targetPipelineId = "legacy-target")
+        val decoded = NodeConfigCodec.decode(src) as PipelineConfig
+        assertEquals("legacy-target", decoded.targetPipelineId)
+    }
+
+    @Test
+    fun `given Skill config when encode-then-decode then skill id and engine preserved`() {
+        val config = SkillConfig(title = "Translate", skillId = "skill-7", engine = SkillEngine.CLOUD)
+        val applied = node(NodeType.SKILL, "Translate").copy(configJson = NodeConfigCodec.encode(config))
+        val decoded = NodeConfigCodec.decode(applied) as SkillConfig
+        assertEquals("Translate", decoded.title)
+        assertEquals("skill-7", decoded.skillId)
+        assertEquals(SkillEngine.CLOUD, decoded.engine)
+    }
+
+    @Test
+    fun `given Skill config with LITE_RT engine when apply then skillId set and cloudProvider null`() {
+        val src = node(NodeType.SKILL, "Translate")
+        val patched = NodeConfigCodec.apply(src, SkillConfig(title = "Translate", skillId = "skill-7"))
+        assertEquals("skill-7", patched.skillId)
+        assertNull(patched.cloudProvider)
+    }
+
+    @Test
+    fun `given Skill config with CLOUD engine when apply then cloudProvider is the auto sentinel`() {
+        val src = node(NodeType.SKILL, "Translate")
+        val patched = NodeConfigCodec.apply(
+            src,
+            SkillConfig(title = "Translate", skillId = "skill-7", engine = SkillEngine.CLOUD),
+        )
+        assertEquals(DomainCloudProvider.AUTO_KEY, patched.cloudProvider)
+    }
+
+    @Test
+    fun `given Skill config with blank skill when apply then skillId is null`() {
+        val src = node(NodeType.SKILL, "Translate").copy(skillId = "stale")
+        val patched = NodeConfigCodec.apply(src, SkillConfig(title = "Translate", skillId = ""))
+        assertNull(patched.skillId)
+    }
+
+    @Test
+    fun `given pre-existing SKILL node when decode then derives skill and engine from domain fields`() {
+        val src = node(NodeType.SKILL, "Translate").copy(skillId = "legacy-skill", cloudProvider = "auto")
+        val decoded = NodeConfigCodec.decode(src) as SkillConfig
+        assertEquals("legacy-skill", decoded.skillId)
+        assertEquals(SkillEngine.CLOUD, decoded.engine)
     }
 }

@@ -33,6 +33,8 @@ class BrowserEditorConstantsGeneratorTest {
             EVALUATION,
             SUMMARY,
             CLARIFICATION,
+            PIPELINE,
+            SKILL,
             INPUT,
             OUTPUT,
         }
@@ -134,7 +136,7 @@ class BrowserEditorConstantsGeneratorTest {
         assertEquals(
             listOf(
                 "LITE_RT", "CLOUD", "TOOL", "IF_CONDITION", "INTENT_ROUTER", "DECOMPOSITION",
-                "QUEUE_PROCESSOR", "EVALUATION", "SUMMARY", "CLARIFICATION", "INPUT", "OUTPUT",
+                "QUEUE_PROCESSOR", "EVALUATION", "SUMMARY", "CLARIFICATION", "PIPELINE", "SKILL", "INPUT", "OUTPUT",
             ),
             names,
         )

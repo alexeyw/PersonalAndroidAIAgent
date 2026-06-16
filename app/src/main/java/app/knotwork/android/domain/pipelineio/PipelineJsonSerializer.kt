@@ -34,6 +34,8 @@ import org.json.JSONObject
  *         "cloudProvider": "auto",
  *         "modelPath": "",
  *         "toolName": "",
+ *         "targetPipelineId": null,
+ *         "skillId": null,
  *         "clarificationTimeoutMs": 60000,
  *         "conditionPrompt": "",
  *         "conditionKeywords": "",
@@ -121,6 +123,14 @@ object PipelineJsonSerializer {
             .put("cloudProvider", node.cloudProvider ?: JSONObject.NULL)
             .put("modelPath", node.modelPath ?: JSONObject.NULL)
             .put("toolName", node.toolName ?: JSONObject.NULL)
+            // PIPELINE / SKILL reference ids live in the flat block (mirroring
+            // `toolName`) because the runtime executors read them directly off
+            // [NodeModel] — `PipelineNodeExecutor` reads `targetPipelineId`,
+            // `SkillNodeExecutor` reads `skillId`. They are ALSO embedded in the
+            // rich `nodeConfig` envelope below; keeping both in agreement matches
+            // how `systemPrompt`/`toolName` are already duplicated.
+            .put("targetPipelineId", node.targetPipelineId ?: JSONObject.NULL)
+            .put("skillId", node.skillId ?: JSONObject.NULL)
             .put("clarificationTimeoutMs", node.clarificationTimeoutMs ?: JSONObject.NULL)
             .put("conditionPrompt", node.conditionPrompt ?: JSONObject.NULL)
             .put("conditionKeywords", node.conditionKeywords ?: JSONObject.NULL)
@@ -278,6 +288,8 @@ object PipelineJsonSerializer {
             y = y,
             label = label,
             toolName = config.optStringOrNull("toolName"),
+            targetPipelineId = config.optStringOrNull("targetPipelineId"),
+            skillId = config.optStringOrNull("skillId"),
             modelPath = config.optStringOrNull("modelPath"),
             conditionComplexity = config.optIntOrNull("conditionComplexity"),
             conditionKeywords = config.optStringOrNull("conditionKeywords"),

@@ -90,6 +90,13 @@ class ParkedRunResumer @Inject constructor(
      * Settles an unrecoverable park: fails the run with [reason], deletes the
      * pending record, and removes its notification.
      *
+     * The failure is stamped on the **root** of the run tree (the park may sit
+     * on a sub-pipeline run): failing the root settles the whole stack and lets
+     * retention cascade-delete the lingering WAITING_* descendants through the
+     * self-referential `parentRunId` foreign key. For a top-level park the root
+     * is the run itself, so the behaviour is unchanged. The pending record is
+     * deleted by its own run id (the descendant that actually parked).
+     *
      * Also used by the maintenance expiry pass, which shares the exact same
      * settlement semantics.
      *
@@ -97,7 +104,8 @@ class ParkedRunResumer @Inject constructor(
      * @param reason Human-readable failure reason for the run record.
      */
     suspend fun failPark(pending: PendingInteraction, reason: String) {
-        pipelineRunRepository.finishRun(pending.runId, PipelineRunStatus.FAILED, reason)
+        val rootId = pipelineRunRepository.getRootRunId(pending.runId) ?: pending.runId
+        pipelineRunRepository.finishRun(rootId, PipelineRunStatus.FAILED, reason)
         pendingInteractionRepository.delete(pending.runId)
         cancelNotification(pending)
     }

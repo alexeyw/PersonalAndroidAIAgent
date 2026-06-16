@@ -355,4 +355,44 @@ class NodeConfigValidationTest {
 
         assertEquals(ValidationFailure.INVALID_JSON, errors[FieldId.SCHEMA_JSON])
     }
+
+    @Test
+    fun `given PipelineConfig with no target when validate then TARGET_PIPELINE_MISSING`() {
+        val errors = NodeConfigValidation.validate(
+            config = PipelineConfig(title = "run sub", targetPipelineId = ""),
+            peerTitles = noPeers,
+        )
+
+        assertEquals(ValidationFailure.TARGET_PIPELINE_MISSING, errors[FieldId.TARGET_PIPELINE_ID])
+    }
+
+    @Test
+    fun `given PipelineConfig with a target when validate then no target error`() {
+        val errors = NodeConfigValidation.validate(
+            config = PipelineConfig(title = "run sub", targetPipelineId = "target-1"),
+            peerTitles = noPeers,
+        )
+
+        assertEquals(null, errors[FieldId.TARGET_PIPELINE_ID])
+    }
+
+    @Test
+    fun `given SkillConfig with no skill when validate then TARGET_SKILL_MISSING`() {
+        val errors = NodeConfigValidation.validate(
+            config = SkillConfig(title = "translate", skillId = ""),
+            peerTitles = noPeers,
+        )
+
+        assertEquals(ValidationFailure.TARGET_SKILL_MISSING, errors[FieldId.SKILL_ID])
+    }
+
+    @Test
+    fun `given SkillConfig with a skill when validate then no skill error`() {
+        val errors = NodeConfigValidation.validate(
+            config = SkillConfig(title = "translate", skillId = "skill-1"),
+            peerTitles = noPeers,
+        )
+
+        assertEquals(null, errors[FieldId.SKILL_ID])
+    }
 }

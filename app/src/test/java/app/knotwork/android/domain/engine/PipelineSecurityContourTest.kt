@@ -14,9 +14,12 @@ import app.knotwork.android.domain.engine.executors.InputNodeExecutor
 import app.knotwork.android.domain.engine.executors.LiteRtNodeExecutor
 import app.knotwork.android.domain.engine.executors.NodeExecutorFactory
 import app.knotwork.android.domain.engine.executors.OutputNodeExecutor
+import app.knotwork.android.domain.engine.executors.PipelineNodeExecutor
 import app.knotwork.android.domain.engine.executors.QueueProcessorNodeExecutor
+import app.knotwork.android.domain.engine.executors.SkillNodeExecutor
 import app.knotwork.android.domain.engine.executors.SummaryNodeExecutor
 import app.knotwork.android.domain.engine.executors.SystemNodeExecutor
+import app.knotwork.android.domain.engine.executors.ToolInvocationGate
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTool
@@ -63,6 +66,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import javax.inject.Provider
 
 /**
  * Cross-cutting security-contour test: drives the security guards of the
@@ -153,10 +157,13 @@ class PipelineSecurityContourTest {
             llmEngine,
             loadModelUseCase,
             toolRepository,
-            settingsRepository,
-            approvalNotifier,
-            chatRepository,
-            pendingInteractionRepository,
+            ToolInvocationGate(
+                toolRepository,
+                settingsRepository,
+                approvalNotifier,
+                chatRepository,
+                pendingInteractionRepository,
+            ),
         )
         val nodeExecutorFactory = NodeExecutorFactory(
             InputNodeExecutor(),
@@ -191,6 +198,16 @@ class PipelineSecurityContourTest {
                 pendingInteractionRepository,
                 clarificationNotifier,
             ),
+            PipelineNodeExecutor(
+                mockk(relaxed = true),
+                mockk(relaxed = true),
+                mockk(relaxed = true),
+                mockk(relaxed = true),
+                Provider {
+                    mockk(relaxed = true)
+                },
+            ),
+            mockk<SkillNodeExecutor>(relaxed = true),
         )
 
         engine = GraphExecutionEngine(

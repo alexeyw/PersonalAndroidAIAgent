@@ -14,6 +14,16 @@
     <string name="orchestrator_library_rename_pipeline_title">Rename pipeline</string>
     <string name="orchestrator_library_delete_pipeline_title">Delete pipeline</string>
     <string name="orchestrator_library_delete_confirm">Delete pipeline «%1$s»? This cannot be undone.</string>
+    <!-- Shown instead of the plain confirm when other pipelines run this one
+         through a PIPELINE node. %1$d is the dependent count. The dialog also
+         lists the dependent names under the WILL BREAK header. -->
+    <plurals name="orchestrator_library_delete_dependents_warning">
+        <item quantity="one">%1$d pipeline runs this one through a PIPELINE node. Deleting it leaves that node with a dangling target — the pipeline will show a validation error until you repoint or remove it.</item>
+        <item quantity="other">%1$d pipelines run this one through a PIPELINE node. Deleting it leaves each with a dangling target — they\'ll show a validation error until you repoint or remove the node.</item>
+    </plurals>
+    <string name="orchestrator_library_delete_dependents_header" tools:ignore="PluralsCandidate">WILL BREAK · %1$d</string>
+    <string name="orchestrator_library_delete_anyway">Delete anyway</string>
+    <string name="orchestrator_library_delete_keep">Keep</string>
     <string name="orchestrator_library_name_field_label">Name</string>
 
     <!-- Snackbars / feedback -->
@@ -63,6 +73,9 @@
     <string name="orchestrator_context_tool_results_label">Tool results</string>
     <string name="orchestrator_context_tool_results_hint">Data returned by tools in the current step</string>
     <string name="orchestrator_context_hint">Fewer inputs make the node faster and cheaper. Enable only what\'s needed.</string>
+    <!-- SKILL node — per-row tag showing whether the context flag still matches the skill default. -->
+    <string name="orchestrator_context_inherited_tag">inherited</string>
+    <string name="orchestrator_context_overridden_tag">overridden</string>
 
     <!-- Pipeline presets UI -->
     <!-- Library speed-dial -->

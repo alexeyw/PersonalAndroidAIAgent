@@ -38,6 +38,11 @@ package app.knotwork.android.domain.models
  *   INPUT-node passthrough) — recovering it from chat history would be
  *   ambiguous. `null` only for records written before this field existed;
  *   such runs cannot be resumed.
+ * @property parentRunId Id of the parent run when this run is a sub-pipeline
+ *   spawned by a `PIPELINE` node; `null` for a top-level run. The parent/child
+ *   links form the run tree the nested console, the shared step budget and the
+ *   resume-across-boundary mechanism rely on. The root of a tree is reached by
+ *   walking [parentRunId] up until it is `null`.
  */
 data class PipelineRun(
     val id: String,
@@ -51,6 +56,7 @@ data class PipelineRun(
     val errorMessage: String?,
     val graphContentHash: String?,
     val userPrompt: String? = null,
+    val parentRunId: String? = null,
 )
 
 /**

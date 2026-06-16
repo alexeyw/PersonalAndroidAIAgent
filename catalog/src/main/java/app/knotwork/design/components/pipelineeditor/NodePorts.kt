@@ -120,6 +120,8 @@ data class NodePorts(val inbound: Int = 1, val outbound: List<OutboundPort> = li
                 NodeType.TOOL,
                 NodeType.DECOMPOSITION,
                 NodeType.SUMMARY,
+                NodeType.PIPELINE,
+                NodeType.SKILL,
                 -> NodePorts() // default: 1 in, 1 unlabelled out.
             }
     }

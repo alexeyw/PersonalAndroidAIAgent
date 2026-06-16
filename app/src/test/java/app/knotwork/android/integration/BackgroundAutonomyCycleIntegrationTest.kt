@@ -19,9 +19,12 @@ import app.knotwork.android.domain.engine.executors.InputNodeExecutor
 import app.knotwork.android.domain.engine.executors.LiteRtNodeExecutor
 import app.knotwork.android.domain.engine.executors.NodeExecutorFactory
 import app.knotwork.android.domain.engine.executors.OutputNodeExecutor
+import app.knotwork.android.domain.engine.executors.PipelineNodeExecutor
 import app.knotwork.android.domain.engine.executors.QueueProcessorNodeExecutor
+import app.knotwork.android.domain.engine.executors.SkillNodeExecutor
 import app.knotwork.android.domain.engine.executors.SummaryNodeExecutor
 import app.knotwork.android.domain.engine.executors.SystemNodeExecutor
+import app.knotwork.android.domain.engine.executors.ToolInvocationGate
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.ChatMessage
@@ -79,6 +82,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import javax.inject.Provider
 
 /**
  * End-to-end JVM integration test of the background-autonomy cycle:
@@ -308,14 +312,18 @@ class BackgroundAutonomyCycleIntegrationTest {
         coEvery { retrieveRelevantMemoryUseCase(any()) } returns emptyList()
         coEvery { retrieveRelevantMemoryUseCase.retrieveScored(any()) } returns emptyList()
 
-        val toolNodeExecutor = ToolNodeExecutor(
-            llmEngine,
-            loadModelUseCase,
+        val toolInvocationGate = ToolInvocationGate(
             toolRepository,
             settingsRepository,
             approvalNotifier,
             chatRepository,
             pendingRepository,
+        )
+        val toolNodeExecutor = ToolNodeExecutor(
+            llmEngine,
+            loadModelUseCase,
+            toolRepository,
+            toolInvocationGate,
         )
         val nodeExecutorFactory = NodeExecutorFactory(
             InputNodeExecutor(),
@@ -350,6 +358,16 @@ class BackgroundAutonomyCycleIntegrationTest {
                 pendingRepository,
                 clarificationNotifier,
             ),
+            PipelineNodeExecutor(
+                mockk(relaxed = true),
+                mockk(relaxed = true),
+                mockk(relaxed = true),
+                mockk(relaxed = true),
+                Provider {
+                    mockk(relaxed = true)
+                },
+            ),
+            mockk<SkillNodeExecutor>(relaxed = true),
         )
         val engine = GraphExecutionEngine(
             nodeExecutorFactory,
