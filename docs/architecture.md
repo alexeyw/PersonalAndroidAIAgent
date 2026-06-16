@@ -323,6 +323,15 @@ runs them is `GraphExecutionEngine`, decomposed into per-type
 | `TOOL`             | Invokes an AppFunctions or MCP tool. Gated by `ToolRisk` (see §4.2).                          |
 | `IF_CONDITION`     | Boolean branch on a condition evaluated against the running context.                          |
 | `QUEUE_PROCESSOR`  | Drains the priority task queue produced by `DECOMPOSITION`, one item per iteration.           |
+| `PIPELINE`         | Runs another pipeline as a sub-step (composition). Names its callee by `targetPipelineId`; nested run tree, shared step budget, and resume across the boundary (see §6.1). |
+| `SKILL`            | Runs a reusable skill (instruction + tool allowlist + context) as an inference step. References a skill by `skillId`; `$TOOLS` is scoped to the allowlist, enforced at the executor (see §4.2). |
+
+Two of these — `PIPELINE` and `SKILL` — **reference another entity by
+id** (a target pipeline / a skill) rather than carrying their behaviour
+inline. The single-graph `PipelineGraph.validate()` flags only an unset
+reference; the cross-entity checks (dangling target, reference cycle,
+nesting depth) live in `PipelineCompositionValidator`, run by
+`SavePipelineUseCase` before a graph can be persisted.
 
 ### 3.2. `NodeContextBuilder` and the fixed block order
 
@@ -374,8 +383,9 @@ returns an empty string.
 
 Recommended defaults per node type (`NodeContextConfig.defaultForType`):
 
-- `INPUT`, `IF_CONDITION` → `nodeInput` only (control flow).
-- `LITE_RT`, `CLARIFICATION`, `QUEUE_PROCESSOR`, `DECOMPOSITION`
+- `INPUT`, `IF_CONDITION`, `PIPELINE` → `nodeInput` only (control flow /
+  the sub-pipeline gets the node input as its prompt).
+- `LITE_RT`, `CLARIFICATION`, `QUEUE_PROCESSOR`, `DECOMPOSITION`, `SKILL`
   → `nodeInput + originalTask` (minimum context for a small model).
 - `CLOUD`, `INTENT_ROUTER` → `nodeInput + originalTask + chatHistory`
   (large context window, history is cheap).
@@ -383,6 +393,10 @@ Recommended defaults per node type (`NodeContextConfig.defaultForType`):
 - `SUMMARY`, `EVALUATION`
   → `nodeInput + originalTask + toolResults` (aggregation).
 - `OUTPUT` → all five flags (final answer should see everything).
+
+For `SKILL` this per-type default is only the fallback for a node with no
+skill resolved yet; once a skill is picked, the node seeds its context from
+the skill's own `contextConfig` (overridable per toggle).
 
 ### 3.4. Validation rules
 
