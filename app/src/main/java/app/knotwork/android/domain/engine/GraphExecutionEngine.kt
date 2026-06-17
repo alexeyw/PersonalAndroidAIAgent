@@ -6,6 +6,7 @@ import app.knotwork.android.domain.engine.executors.NodeExecutorFactory
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
 import app.knotwork.android.domain.engine.structured.JsonPayloadExtractor
 import app.knotwork.android.domain.models.AgentOrchestratorState
+import app.knotwork.android.domain.models.ChatHistorySummary
 import app.knotwork.android.domain.models.ConsoleEvent
 import app.knotwork.android.domain.models.ConsoleEventType
 import app.knotwork.android.domain.models.ExecutionScope
@@ -313,59 +314,80 @@ class GraphExecutionEngine @Inject constructor(
             return hits.also { memoizedMemories = it }
         }
 
-        // Chat-history view is computed lazily and at most once per run, the same
-        // way memory is: only the first executed node that opts into the
-        // `--- Chat History ---` block triggers the DB read + planning, and the
-        // result is reused by every later history-rendering node so the console
-        // note fires exactly once. When compression is off or the history is
-        // within budget the planner returns the full history unchanged, so the
-        // legacy behaviour is preserved bit-for-bit. Not snapshotted for resume —
-        // chat history was never resume-stable (it is read fresh per run).
-        var memoizedChatHistoryView: ChatHistoryView? = null
-        suspend fun resolveChatHistoryViewOnce(): ChatHistoryView {
-            memoizedChatHistoryView?.let { return it }
-            val messages = chatRepository.getMessagesForSession(sessionId).first()
-            val compressionEnabled = settingsRepository.chatHistoryCompressionEnabled.first()
-            val summary = if (compressionEnabled) {
-                try {
-                    chatRepository.getHistorySummary(sessionId)
-                } catch (e: kotlinx.coroutines.CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Timber.tag("PipelineDebug").w(e, "Failed to load chat-history summary; continuing without it")
+        // Chat-history compression splits into a run-stable part and a per-node
+        // part:
+        //  - The cached summary and the compression settings are resolved at most
+        //    once per run. They are safe to memoize because the background
+        //    compressor is gated off while a pipeline is active (see
+        //    ChatHistoryCompressionCoordinator), so the `chat_history_summaries`
+        //    row and the settings cannot change mid-run.
+        //  - The live message list is re-read on EVERY call and is NOT memoized.
+        //    Message-writing nodes mutate it mid-run — in particular a TOOL node's
+        //    observation is persisted as an `isFinal = false` SYSTEM chat message
+        //    (ToolInvocationGate) — and a later history-enabled node must see it,
+        //    so freezing the list here would hide in-run messages until the next
+        //    user turn.
+        // Not snapshotted for resume — chat history was never resume-stable.
+        var chatCompressionResolved = false
+        var chatCompressionEnabled = false
+        var chatHistorySummary: ChatHistorySummary? = null
+        var chatHistoryThresholdTokens = 0
+        var chatHistoryLiveWindow = 0
+        // The console note fires once per run, the first time compression actually
+        // changes what a node sees.
+        var historyCompressionLogged = false
+        suspend fun resolveChatHistoryView(): ChatHistoryView {
+            if (!chatCompressionResolved) {
+                chatCompressionEnabled = settingsRepository.chatHistoryCompressionEnabled.first()
+                chatHistorySummary = if (chatCompressionEnabled) {
+                    try {
+                        chatRepository.getHistorySummary(sessionId)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Timber.tag("PipelineDebug").w(e, "Failed to load chat-history summary; continuing without it")
+                        null
+                    }
+                } else {
                     null
                 }
-            } else {
-                null
+                chatHistoryThresholdTokens = settingsRepository.chatHistoryCompressionThresholdTokens.first()
+                chatHistoryLiveWindow = settingsRepository.chatHistoryLiveWindowSize.first()
+                chatCompressionResolved = true
             }
+            // Re-read fresh: the list grows as message-writing nodes append rows.
+            val messages = chatRepository.getMessagesForSession(sessionId).first()
             val view = chatHistoryWindowPlanner.plan(
                 messages = messages,
-                summary = summary,
-                compressionEnabled = compressionEnabled,
-                thresholdTokens = settingsRepository.chatHistoryCompressionThresholdTokens.first(),
-                liveWindowSize = settingsRepository.chatHistoryLiveWindowSize.first(),
+                summary = chatHistorySummary,
+                compressionEnabled = chatCompressionEnabled,
+                thresholdTokens = chatHistoryThresholdTokens,
+                liveWindowSize = chatHistoryLiveWindow,
             )
             // Surface the compression only when it actually changed what the node
-            // sees — a within-budget run stays silent.
-            if (view.truncatedWithoutSummary) {
-                pushConsole(
-                    ConsoleEventType.HistoryCompression,
-                    "Chat history over budget; summary not ready, kept the last " +
-                        "${view.liveWindow.size} messages",
-                )
-            } else if (view.earlierSummary != null) {
-                val gap = if (view.droppedUncoveredCount > 0) {
-                    " (${view.droppedUncoveredCount} recent messages not yet summarized)"
+            // sees — a within-budget run stays silent — and only once per run.
+            if (!historyCompressionLogged && (view.truncatedWithoutSummary || view.earlierSummary != null)) {
+                historyCompressionLogged = true
+                if (view.truncatedWithoutSummary) {
+                    pushConsole(
+                        ConsoleEventType.HistoryCompression,
+                        "Chat history over budget; summary not ready, kept the last " +
+                            "${view.liveWindow.size} messages",
+                    )
                 } else {
-                    ""
+                    val gap = if (view.droppedUncoveredCount > 0) {
+                        " (${view.droppedUncoveredCount} recent messages not yet summarized)"
+                    } else {
+                        ""
+                    }
+                    pushConsole(
+                        ConsoleEventType.HistoryCompression,
+                        "Chat history compressed: summarized older turns, kept the last " +
+                            "${view.liveWindow.size} messages$gap",
+                    )
                 }
-                pushConsole(
-                    ConsoleEventType.HistoryCompression,
-                    "Chat history compressed: summarized older turns, kept the last " +
-                        "${view.liveWindow.size} messages$gap",
-                )
             }
-            return view.also { memoizedChatHistoryView = it }
+            return view
         }
         // Tool invocations are accumulated as TOOL nodes complete and surfaced
         // via the `--- Tool Results ---` block on later nodes that opt in.
@@ -503,9 +525,12 @@ class GraphExecutionEngine @Inject constructor(
                         emptyList()
                     }
                     // Only nodes that render chat history pay for loading +
-                    // planning it; others get the empty view (no DB read).
+                    // planning it; others get the empty view (no DB read). The
+                    // view is recomputed per node (fresh message read) so in-run
+                    // message writes — e.g. TOOL observations — are visible to
+                    // later history-enabled nodes.
                     val chatHistoryView = if (currentNode.contextConfig.chatHistory) {
-                        resolveChatHistoryViewOnce()
+                        resolveChatHistoryView()
                     } else {
                         ChatHistoryView.EMPTY
                     }

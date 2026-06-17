@@ -1540,6 +1540,59 @@ class GraphExecutionEngineTest {
     }
 
     @Test
+    fun `given two history nodes when a message is written between them then the later node sees it`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        // Compression is off (setup default), so the planner returns the full
+        // history. The engine must re-read the message list per node — a message
+        // written mid-run (e.g. a TOOL observation persisted as isFinal=false)
+        // must reach a later history-enabled node, not be frozen at the value the
+        // first history node saw.
+        val historyConfig = NodeContextConfig(
+            chatHistory = true,
+            originalTask = false,
+            nodeInput = true,
+            longTermMemory = false,
+            toolResults = false,
+        )
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val llm1 = NodeModel("llm1", NodeType.LITE_RT, 0f, 0f, contextConfig = historyConfig)
+        val llm2 = NodeModel("llm2", NodeType.LITE_RT, 0f, 0f, contextConfig = historyConfig)
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+        val graph = PipelineGraph(
+            id = "g-fresh-history",
+            name = "Fresh history",
+            nodes = listOf(inputNode, llm1, llm2, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "llm1"),
+                ConnectionModel("c2", "llm1", "llm2"),
+                ConnectionModel("c3", "llm2", "output"),
+            ),
+        )
+
+        // First history node sees no prior messages; the observation is appended
+        // before the second node reads the history again.
+        val observation = ChatMessage(
+            id = 9,
+            sessionId = sessionId,
+            role = Role.SYSTEM,
+            content = "tool observation XYZ",
+            timestamp = 5L,
+            isFinal = false,
+        )
+        every { chatRepository.getMessagesForSession(sessionId) } returns flowOf(emptyList()) andThen
+            flowOf(listOf(observation))
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("ok")
+
+        engine(sessionId, "hi", graph).toList()
+
+        // The later node's assembled context must include the freshly written
+        // observation — proving the live history is re-read per node, not frozen.
+        verify {
+            llmEngine.generateResponseStream(match { it.contains("tool observation XYZ") })
+        }
+    }
+
+    @Test
     fun `given LITE_RT with only originalTask flag when executed then disabled blocks are absent from prompt`() =
         runTest {
             every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
