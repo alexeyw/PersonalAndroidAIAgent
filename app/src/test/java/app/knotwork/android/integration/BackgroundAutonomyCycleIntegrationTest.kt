@@ -9,6 +9,7 @@ import app.knotwork.android.data.local.models.ChatSessionEntity
 import app.knotwork.android.data.repositories.PendingInteractionRepositoryImpl
 import app.knotwork.android.data.repositories.PipelineRunRepositoryImpl
 import app.knotwork.android.data.repositories.RunTraceRepositoryImpl
+import app.knotwork.android.domain.engine.ChatHistoryWindowPlanner
 import app.knotwork.android.domain.engine.GraphExecutionEngine
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.engine.NodeContextBuilder
@@ -170,6 +171,9 @@ class BackgroundAutonomyCycleIntegrationTest {
 
         settingsRepository = mockk()
         every { settingsRepository.verboseMemoryLoggingEnabled } returns flowOf(false)
+        every { settingsRepository.chatHistoryCompressionEnabled } returns flowOf(false)
+        every { settingsRepository.chatHistoryCompressionThresholdTokens } returns flowOf(3_500)
+        every { settingsRepository.chatHistoryLiveWindowSize } returns flowOf(10)
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
         every { settingsRepository.toolUsageInstruction } returns flowOf("")
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
@@ -396,6 +400,7 @@ class BackgroundAutonomyCycleIntegrationTest {
             PromptTemplateEngine(),
             emptySet(),
             NodeContextBuilder(),
+            ChatHistoryWindowPlanner(),
             retrieveRelevantMemoryUseCase,
             mockk(relaxed = true),
             mockk(relaxed = true) {

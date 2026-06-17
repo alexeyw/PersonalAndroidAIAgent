@@ -236,6 +236,7 @@ class PipelineSecurityContourTest {
             PromptTemplateEngine(),
             emptySet<PromptVariableProvider>(),
             NodeContextBuilder(),
+            ChatHistoryWindowPlanner(),
             retrieveRelevantMemoryUseCase,
             crashReportingRepository,
             localModelRepository,

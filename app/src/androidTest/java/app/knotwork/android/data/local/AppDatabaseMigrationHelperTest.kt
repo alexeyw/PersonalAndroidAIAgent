@@ -340,6 +340,58 @@ class AppDatabaseMigrationHelperTest {
     }
 
     @Test
+    fun migrate37to38_createsChatHistorySummariesTableWithExpectedColumns() {
+        helper.createDatabase(TEST_DB, 37).use { db ->
+            db.execSQL(
+                "INSERT INTO chat_sessions(id, name, updatedAt, isStarred) " +
+                    "VALUES('$SESSION_ID', 'Chat', $CHUNK_TS, 0)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 38, true, AppDatabase.MIGRATION_37_38).use { db ->
+            // Pre-existing session row survives untouched.
+            assertEquals("Chat", querySingleString(db, "SELECT name FROM chat_sessions WHERE id = '$SESSION_ID'"))
+            // The new table accepts a full summary row and reads it back.
+            db.execSQL(
+                "INSERT INTO chat_history_summaries(sessionId, summary, coveredMessageCount, updatedAt) " +
+                    "VALUES('$SESSION_ID', 'older context', 12, $CHUNK_TS)",
+            )
+            db.query(
+                "SELECT summary, coveredMessageCount, updatedAt FROM chat_history_summaries " +
+                    "WHERE sessionId = '$SESSION_ID'",
+            ).use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals("older context", c.getString(0))
+                assertEquals(12, c.getInt(1))
+                assertEquals(CHUNK_TS, c.getLong(2))
+            }
+        }
+    }
+
+    @Test
+    fun migrate37to38_cascadeDeletesSummaryWithItsSession() {
+        helper.createDatabase(TEST_DB, 37).use { db ->
+            db.execSQL(
+                "INSERT INTO chat_sessions(id, name, updatedAt, isStarred) " +
+                    "VALUES('$SESSION_ID', 'Chat', $CHUNK_TS, 0)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 38, true, AppDatabase.MIGRATION_37_38).use { db ->
+            db.execSQL("PRAGMA foreign_keys = ON")
+            db.execSQL(
+                "INSERT INTO chat_history_summaries(sessionId, summary, coveredMessageCount, updatedAt) " +
+                    "VALUES('$SESSION_ID', 'older context', 5, $CHUNK_TS)",
+            )
+            db.execSQL("DELETE FROM chat_sessions WHERE id = '$SESSION_ID'")
+            db.query("SELECT COUNT(*) FROM chat_history_summaries").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals("summary must cascade-delete with its session", 0, c.getInt(0))
+            }
+        }
+    }
+
+    @Test
     fun migrateFullChain23to33_preservesDataAndValidatesFinalSchema() {
         helper.createDatabase(TEST_DB, 23).use { db ->
             seedMemoryChunkV23(db)

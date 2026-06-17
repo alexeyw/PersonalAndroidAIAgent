@@ -88,6 +88,10 @@ class SettingsManager @Inject constructor(
         val MEMORY_LAST_COMPACTED_AT =
             androidx.datastore.preferences.core.longPreferencesKey("memory_last_compacted_at")
         val MEMORY_SEARCH_TOP_K = intPreferencesKey("memory_search_top_k")
+        val CHAT_HISTORY_COMPRESSION_ENABLED = booleanPreferencesKey("chat_history_compression_enabled")
+        val CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS =
+            intPreferencesKey("chat_history_compression_threshold_tokens")
+        val CHAT_HISTORY_LIVE_WINDOW_SIZE = intPreferencesKey("chat_history_live_window_size")
         val MEMORY_SEARCH_THRESHOLD =
             androidx.datastore.preferences.core.floatPreferencesKey("memory_search_threshold")
         val MEMORY_RECENCY_HALF_LIFE_DAYS = intPreferencesKey("memory_recency_half_life_days")
@@ -738,6 +742,66 @@ class SettingsManager @Inject constructor(
     override suspend fun setMemorySearchTopK(topK: Int) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.MEMORY_SEARCH_TOP_K] = topK
+        }
+    }
+
+    override val chatHistoryCompressionEnabled: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.CHAT_HISTORY_COMPRESSION_ENABLED]
+                ?: SettingsDefaults.CHAT_HISTORY_COMPRESSION_ENABLED_DEFAULT
+        }
+
+    override suspend fun setChatHistoryCompressionEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.CHAT_HISTORY_COMPRESSION_ENABLED] = enabled
+        }
+    }
+
+    override val chatHistoryCompressionThresholdTokens: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS]
+                ?: SettingsDefaults.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_DEFAULT
+        }
+
+    override suspend fun setChatHistoryCompressionThresholdTokens(tokens: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS] = tokens
+        }
+    }
+
+    override val chatHistoryLiveWindowSize: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.CHAT_HISTORY_LIVE_WINDOW_SIZE]
+                ?: SettingsDefaults.CHAT_HISTORY_LIVE_WINDOW_DEFAULT
+        }
+
+    override suspend fun setChatHistoryLiveWindowSize(size: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.CHAT_HISTORY_LIVE_WINDOW_SIZE] = size
         }
     }
 

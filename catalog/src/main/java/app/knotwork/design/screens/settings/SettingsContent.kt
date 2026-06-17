@@ -915,6 +915,13 @@ private fun MemoryCard(state: MemoryCardState, callbacks: SettingsCallbacks) {
             )
         }
         IconToggleRow(
+            icon = AppIcons.History,
+            title = state.chatHistoryCompressionLabel,
+            subtitle = state.chatHistoryCompressionSubtitle,
+            checked = state.chatHistoryCompressionEnabled,
+            onCheckedChange = callbacks.onChatHistoryCompressionToggle,
+        )
+        IconToggleRow(
             icon = AppIcons.Refresh,
             title = state.compactionLabel,
             subtitle = state.compactionSubtitle,

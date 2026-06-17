@@ -28,10 +28,16 @@ import javax.inject.Singleton
  *  1. **Original Task** — the immutable user message that started the run.
  *     Sets the goal up-front so the LLM does not lose sight of it after
  *     several intermediate transformations.
- *  2. **Chat History** — prior session messages (numbered).
- *  3. **Long-Term Memory** — semantically retrieved memory chunks (numbered).
- *  4. **Tool Results** — outputs from tool invocations earlier in this run.
- *  5. **Previous Node Output** — the immediate predecessor's payload, the
+ *  2. **Earlier conversation (summarized)** — a prose summary standing in for
+ *     the part of the history older than the live window, present only when
+ *     history compression is active. Occupies the chat-history slot, rendered
+ *     immediately before the verbatim Chat History block so the overall block
+ *     order is unchanged.
+ *  3. **Chat History** — prior session messages (numbered). When compression is
+ *     active this is only the live window; otherwise the full history.
+ *  4. **Long-Term Memory** — semantically retrieved memory chunks (numbered).
+ *  5. **Tool Results** — outputs from tool invocations earlier in this run.
+ *  6. **Previous Node Output** — the immediate predecessor's payload, the
  *     thing the current node is expected to act on.
  *
  * Empty data blocks (e.g. `chatHistory = true` but the session has no
@@ -60,8 +66,17 @@ class NodeContextBuilder @Inject constructor() {
             blocks += renderBlock(HEADER_ORIGINAL_TASK, ctx.originalUserMessage.trim())
         }
 
-        if (config.chatHistory && ctx.chatHistory.isNotEmpty()) {
-            blocks += renderBlock(HEADER_CHAT_HISTORY, formatChatHistory(ctx.chatHistory))
+        if (config.chatHistory) {
+            // The summarised-tail block sits in the chat-history slot, ahead of
+            // the verbatim live window, so the fixed §6.2 block order is kept.
+            // It is gated on the same `chatHistory` flag — a node that opted out
+            // of history must not receive a summary of it either.
+            ctx.earlierSummary?.takeIf { it.isNotBlank() }?.let { summary ->
+                blocks += renderBlock(HEADER_EARLIER_SUMMARY, summary.trim())
+            }
+            if (ctx.chatHistory.isNotEmpty()) {
+                blocks += renderBlock(HEADER_CHAT_HISTORY, formatChatHistory(ctx.chatHistory))
+            }
         }
 
         if (config.longTermMemory && ctx.memoryEntries.isNotEmpty()) {
@@ -94,6 +109,7 @@ class NodeContextBuilder @Inject constructor() {
 
     private companion object {
         private const val HEADER_ORIGINAL_TASK = "--- Original Task ---"
+        private const val HEADER_EARLIER_SUMMARY = "--- Earlier conversation (summarized) ---"
         private const val HEADER_CHAT_HISTORY = "--- Chat History ---"
         private const val HEADER_LONG_TERM_MEMORY = "--- Long-Term Memory ---"
         private const val HEADER_TOOL_RESULTS = "--- Tool Results ---"

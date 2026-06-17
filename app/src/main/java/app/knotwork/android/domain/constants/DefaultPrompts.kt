@@ -435,6 +435,58 @@ object DefaultPrompts {
         """.trimIndent()
     }
 
+    /**
+     * Prompt for the background chat-history compressor
+     * ([app.knotwork.android.domain.usecases.CompressChatHistoryUseCase]). When a
+     * session's verbatim history outgrows the configured token budget, the
+     * compressor summarises the tail older than the live window so the
+     * `--- Earlier conversation (summarized) ---` context block can stand in for
+     * those messages.
+     *
+     * Like [MemoryExtraction] / [MemoryCompaction], this sub-object is a
+     * code-level inference prompt, not a node `systemPrompt` — it is **not**
+     * mirrored into the browser editor (`pipeline-editor.html`) because no
+     * `NodeType` hosts it.
+     */
+    object HistoryCompression {
+        /**
+         * System prompt that instructs the local model to fold an older slice of
+         * a conversation (optionally on top of an existing running summary) into
+         * one dense prose summary.
+         *
+         * Authored conservatively: the model is told to preserve concrete facts,
+         * decisions, names, numbers, and any unresolved questions, and to never
+         * invent detail — the summary stands in for messages the model will no
+         * longer see verbatim, so dropped specifics are lost context. The prior
+         * summary (when present) and the new messages are appended after this
+         * prompt by the use case. The `$DATE` placeholder is resolved at runtime
+         * by [app.knotwork.android.domain.prompt.PromptTemplateEngine] to keep any
+         * relative-date references grounded.
+         *
+         * Expected response: the consolidated summary as plain text and nothing
+         * else (no JSON, no preamble, no bullet markup).
+         */
+        val SYSTEM_FALLBACK = """
+            You are a conversation-history compressor for a personal AI assistant.
+            Today's date is ${'$'}DATE.
+
+            Below is the earlier part of a conversation between the user and the
+            assistant — optionally preceded by a running summary of even older
+            messages. Produce ONE updated summary that captures everything later
+            turns might need to stay coherent.
+
+            Preserve every concrete detail: the user's goals and requests, facts
+            they stated, decisions made, names, dates, numbers, file or tool
+            references, and any question left unanswered or task left unfinished.
+            Fold the prior summary (if present) and the new messages into a single
+            cohesive summary — do NOT just append. Do NOT invent, guess, or add
+            anything not present below. Write in plain, neutral prose.
+
+            Respond with the updated summary as plain text and NOTHING else: no
+            JSON, no quotes, no bullet points, no preamble, no explanation.
+        """.trimIndent()
+    }
+
     /** Prompts for the [NodeType.QUEUE_PROCESSOR] iteration loop. */
     object QueueProcessor {
         /**

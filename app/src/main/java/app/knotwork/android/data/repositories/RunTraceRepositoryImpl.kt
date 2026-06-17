@@ -284,6 +284,7 @@ private fun ConsoleEventType.toStorageName(): String = when (this) {
     ConsoleEventType.Error -> "ERROR"
     ConsoleEventType.StructuredOutputRepair -> "STRUCTURED_OUTPUT_REPAIR"
     ConsoleEventType.CloudRetry -> "CLOUD_RETRY"
+    ConsoleEventType.HistoryCompression -> "HISTORY_COMPRESSION"
 }
 
 /**
@@ -300,6 +301,7 @@ private fun consoleEventTypeFromStorage(name: String?): ConsoleEventType? = when
     "ERROR" -> ConsoleEventType.Error
     "STRUCTURED_OUTPUT_REPAIR" -> ConsoleEventType.StructuredOutputRepair
     "CLOUD_RETRY" -> ConsoleEventType.CloudRetry
+    "HISTORY_COMPRESSION" -> ConsoleEventType.HistoryCompression
     else -> {
         Timber.w("Unknown stored console event type '%s'; skipping row", name)
         null
