@@ -15,6 +15,8 @@ import app.knotwork.android.data.testing.AppFunctionsE2ETestEntryPoint
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.engine.executors.ToolInvocationGate
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
+import app.knotwork.android.domain.engine.structured.CloudStructuredInferenceClientFactory
+import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.NodeContextConfig
 import app.knotwork.android.domain.models.NodeModel
@@ -764,6 +766,11 @@ class AppFunctionsEndToEndTest {
                 chatRepository = entryPoint.chatRepository(),
                 pendingInteractionRepository = entryPoint.pendingInteractionRepository(),
             ),
+            structuredOutputGate = StructuredOutputGate(),
+            settingsRepository = entryPoint.settingsRepository(),
+            // This E2E covers a fixed on-device TOOL node; no cloud structured
+            // client is needed, so the factory always yields null.
+            cloudStructuredFactory = CloudStructuredInferenceClientFactory { _, _ -> null },
         )
     }
 
