@@ -11,6 +11,7 @@ import app.knotwork.android.domain.constants.TimeAndIdConstants
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.engine.NodeContextBuilder
 import app.knotwork.android.domain.engine.PipelineExecutionContext
+import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.MemorySource
 import app.knotwork.android.domain.models.NodeContextConfig
@@ -18,6 +19,7 @@ import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
 import app.knotwork.android.domain.repositories.MemoryRepository
+import app.knotwork.android.domain.repositories.MetricsRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.EmbeddingProvider
 import app.knotwork.android.domain.services.EmbeddingProviderResolver
@@ -70,6 +72,7 @@ class MemoryLifecycleIntegrationTest {
     private lateinit var loadModelUseCase: LoadModelUseCase
     private lateinit var promptTemplateEngine: PromptTemplateEngine
     private lateinit var settingsRepository: SettingsRepository
+    private lateinit var metricsRepository: MetricsRepository
     private lateinit var embeddingProviderResolver: EmbeddingProviderResolver
 
     private lateinit var extractionUseCase: MemoryExtractionUseCase
@@ -123,6 +126,7 @@ class MemoryLifecycleIntegrationTest {
         loadModelUseCase = mockk()
         promptTemplateEngine = mockk()
         settingsRepository = mockk()
+        metricsRepository = mockk(relaxed = true)
 
         // The local model is "loaded" for both extraction and compaction.
         coEvery { loadModelUseCase.invoke(any()) } returns Result.Success(Unit)
@@ -130,8 +134,10 @@ class MemoryLifecycleIntegrationTest {
         coEvery { promptTemplateEngine.render(any(), any()) } answers { firstArg() }
 
         // Single LLM fake that serves both passes: extraction returns the fact
-        // JSON, compaction returns a single consolidated fact.
-        every { llmInferenceEngine.generateResponseStream(any()) } answers {
+        // JSON, compaction returns a single consolidated fact. Two-arg matcher
+        // covers both the one-arg compaction call (temperature defaulted) and the
+        // gate's temperature-overridden extraction call.
+        every { llmInferenceEngine.generateResponseStream(any(), any()) } answers {
             val prompt = firstArg<String>()
             if (prompt.contains("CONSOLIDATED FACT")) {
                 flowOf("Consolidated stale facts")
@@ -145,6 +151,7 @@ class MemoryLifecycleIntegrationTest {
         every { settingsRepository.memoryRecencyHalfLifeDays } returns flowOf(HALF_LIFE_DAYS)
         every { settingsRepository.memoryCompactionAgeDays } returns flowOf(COMPACTION_AGE_DAYS)
         every { settingsRepository.verboseMemoryLoggingEnabled } returns flowOf(false)
+        every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(2)
         every { settingsRepository.activeEmbeddingProviderId } returns flowOf(EmbeddingProvider.ID_USE)
         coEvery { settingsRepository.setMemoryLastCompactedAt(any()) } just Runs
 
@@ -162,6 +169,9 @@ class MemoryLifecycleIntegrationTest {
             embeddingProviderResolver = embeddingProviderResolver,
             memoryRepository = repository,
             memorySearchStatsTracker = searchStatsTracker,
+            structuredOutputGate = StructuredOutputGate(),
+            settingsRepository = settingsRepository,
+            metricsRepository = metricsRepository,
         )
         retrieveUseCase = RetrieveRelevantMemoryUseCase(
             embeddingProviderResolver = embeddingProviderResolver,

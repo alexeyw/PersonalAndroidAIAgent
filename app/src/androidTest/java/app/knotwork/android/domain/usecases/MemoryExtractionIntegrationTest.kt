@@ -8,12 +8,15 @@ import app.knotwork.android.data.local.AppDatabase
 import app.knotwork.android.data.local.Converters
 import app.knotwork.android.data.repositories.MemoryRepositoryImpl
 import app.knotwork.android.domain.engine.LlmInferenceEngine
+import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.MemorySource
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
 import app.knotwork.android.domain.repositories.MemoryRepository
+import app.knotwork.android.domain.repositories.MetricsRepository
+import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.EmbeddingProvider
 import app.knotwork.android.domain.services.EmbeddingProviderResolver
 import app.knotwork.android.domain.services.MemorySearchStatsTracker
@@ -48,6 +51,8 @@ class MemoryExtractionIntegrationTest {
     private lateinit var promptTemplateEngine: PromptTemplateEngine
     private lateinit var embeddingProviderResolver: EmbeddingProviderResolver
     private lateinit var embeddingProvider: EmbeddingProvider
+    private lateinit var settingsRepository: SettingsRepository
+    private lateinit var metricsRepository: MetricsRepository
     private lateinit var useCase: MemoryExtractionUseCase
 
     private val sessionId = "session-int"
@@ -69,11 +74,14 @@ class MemoryExtractionIntegrationTest {
         promptTemplateEngine = mockk()
         embeddingProviderResolver = mockk()
         embeddingProvider = mockk()
+        settingsRepository = mockk()
+        metricsRepository = mockk(relaxed = true)
 
         coEvery { loadModelUseCase.invoke(any()) } returns Result.Success(Unit)
         coEvery { promptTemplateEngine.render(any(), any()) } answers { firstArg() }
         coEvery { embeddingProviderResolver.resolve() } returns embeddingProvider
-        every { llmInferenceEngine.generateResponseStream(any()) } returns
+        every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(2)
+        every { llmInferenceEngine.generateResponseStream(any(), any()) } returns
             flowOf("""[{"type": "preference", "text": "Prefers dark mode"}]""")
 
         useCase = MemoryExtractionUseCase(
@@ -84,6 +92,9 @@ class MemoryExtractionIntegrationTest {
             embeddingProviderResolver = embeddingProviderResolver,
             memoryRepository = repository,
             memorySearchStatsTracker = MemorySearchStatsTracker(),
+            structuredOutputGate = StructuredOutputGate(),
+            settingsRepository = settingsRepository,
+            metricsRepository = metricsRepository,
         )
     }
 
