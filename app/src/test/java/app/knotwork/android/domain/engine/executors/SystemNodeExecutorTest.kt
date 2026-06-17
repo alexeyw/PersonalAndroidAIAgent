@@ -1,6 +1,7 @@
 package app.knotwork.android.domain.engine.executors
 
 import app.knotwork.android.domain.engine.LlmInferenceEngine
+import app.knotwork.android.domain.engine.structured.CloudStructuredInferenceClientFactory
 import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AppError
@@ -42,7 +43,19 @@ class SystemNodeExecutorTest {
         every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(2)
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
         executor =
-            SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository, StructuredOutputGate(), settingsRepository)
+            SystemNodeExecutor(
+                llmEngine,
+                loadModelUseCase,
+                chatRepository,
+                StructuredOutputGate(),
+                settingsRepository,
+                CloudStructuredInferenceClientFactory {
+                        _,
+                        _,
+                    ->
+                    null
+                },
+            )
     }
 
     @Test

@@ -19,6 +19,7 @@ import app.knotwork.android.domain.engine.executors.SummaryNodeExecutor
 import app.knotwork.android.domain.engine.executors.SystemNodeExecutor
 import app.knotwork.android.domain.engine.executors.ToolInvocationGate
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
+import app.knotwork.android.domain.engine.structured.CloudStructuredInferenceClientFactory
 import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ClarificationOutcome
@@ -303,6 +304,7 @@ class NestedResumeIntegrationTest {
             ),
             StructuredOutputGate(),
             settingsRepository,
+            CloudStructuredInferenceClientFactory { _, _ -> null },
         )
         val factory = NodeExecutorFactory(
             InputNodeExecutor(),
@@ -327,7 +329,19 @@ class NestedResumeIntegrationTest {
                 mockk<KoogCloudLlmModelResolver>(relaxed = true),
                 mockk<NetworkActivityTracker>(relaxed = true),
             ),
-            SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository, StructuredOutputGate(), settingsRepository),
+            SystemNodeExecutor(
+                llmEngine,
+                loadModelUseCase,
+                chatRepository,
+                StructuredOutputGate(),
+                settingsRepository,
+                CloudStructuredInferenceClientFactory {
+                        _,
+                        _,
+                    ->
+                    null
+                },
+            ),
             QueueProcessorNodeExecutor(),
             SummaryNodeExecutor(llmEngine, loadModelUseCase),
             ClarificationNodeExecutor(

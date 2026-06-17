@@ -5,11 +5,13 @@ import app.knotwork.android.domain.models.NodeType
 import app.knotwork.design.components.pipelineeditor.ClarificationConfig
 import app.knotwork.design.components.pipelineeditor.CloudConfig
 import app.knotwork.design.components.pipelineeditor.CloudProvider
+import app.knotwork.design.components.pipelineeditor.DecompositionConfig
 import app.knotwork.design.components.pipelineeditor.IfConditionConfig
 import app.knotwork.design.components.pipelineeditor.LiteRtConfig
 import app.knotwork.design.components.pipelineeditor.PipelineConfig
 import app.knotwork.design.components.pipelineeditor.SkillConfig
 import app.knotwork.design.components.pipelineeditor.SkillEngine
+import app.knotwork.design.components.pipelineeditor.ToolConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -255,5 +257,41 @@ class NodeConfigCodecTest {
         val decoded = NodeConfigCodec.decode(src) as SkillConfig
         assertEquals("legacy-skill", decoded.skillId)
         assertEquals(SkillEngine.CLOUD, decoded.engine)
+    }
+
+    @Test
+    fun `given Tool engineProvider when apply then flat cloudProvider set and decodes back`() {
+        val src = node(NodeType.TOOL, "Tool")
+        val config = ToolConfig(title = "Tool", toolId = "fs.write", engineProvider = CloudProvider.GOOGLE)
+
+        val applied = NodeConfigCodec.apply(src, config)
+
+        assertEquals("google", applied.cloudProvider)
+        assertEquals(CloudProvider.GOOGLE, (NodeConfigCodec.decode(applied) as ToolConfig).engineProvider)
+    }
+
+    @Test
+    fun `given structured node defaulting to on-device when apply then cloudProvider cleared`() {
+        // A node that previously ran on a cloud provider; selecting on-device
+        // (engineProvider = null) must clear the stale flat provider so the
+        // engine runs the gate locally again.
+        val src = node(NodeType.DECOMPOSITION, "Plan").copy(cloudProvider = "openai")
+
+        val applied = NodeConfigCodec.apply(src, DecompositionConfig(title = "Plan", engineProvider = null))
+
+        assertNull(applied.cloudProvider)
+        assertNull((NodeConfigCodec.decode(applied) as DecompositionConfig).engineProvider)
+    }
+
+    @Test
+    fun `given Decomposition engineProvider when encode-then-decode then preserved via rich payload`() {
+        val src = node(NodeType.DECOMPOSITION, "Plan")
+        val config =
+            DecompositionConfig(title = "Plan", planningPrompt = "split it", engineProvider = CloudProvider.COMPATIBLE)
+
+        val applied = src.copy(configJson = NodeConfigCodec.encode(config))
+        val decoded = NodeConfigCodec.decode(applied) as DecompositionConfig
+
+        assertEquals(CloudProvider.COMPATIBLE, decoded.engineProvider)
     }
 }

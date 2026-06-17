@@ -2,10 +2,13 @@ package app.knotwork.android.domain.usecases
 
 import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.engine.LlmInferenceEngine
+import app.knotwork.android.domain.engine.structured.CloudStructuredInferenceClientFactory
 import app.knotwork.android.domain.engine.structured.EngineStructuredInferenceClient
 import app.knotwork.android.domain.engine.structured.GateResult
 import app.knotwork.android.domain.engine.structured.RepairListener
+import app.knotwork.android.domain.engine.structured.StructuredInferenceClient
 import app.knotwork.android.domain.engine.structured.StructuredOutputGate
+import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.repositories.SettingsRepository
@@ -28,14 +31,22 @@ import javax.inject.Inject
  * [Outcome.gateFailed] so the executor can surface a console Error and the
  * repair attempts are counted; there are no more silent forks.
  *
+ * The verdict is a constrained `{"True","False"}` token rather than a JSON
+ * payload, so when the node selects a cloud provider its native-JSON capability
+ * does not shorten the repair budget — the configured budget is always used.
+ *
  * @property llmInferenceEngine The engine used to evaluate free-form prompt conditions via LLM.
  * @property structuredOutputGate Validate-and-repair gate wrapping the LLM verdict.
  * @property settingsRepository Source of the configured repair ceiling.
+ * @property cloudStructuredFactory Builds a cloud-backed gate client when the
+ *   node carries a [NodeModel.cloudProvider]; falls back to the local engine
+ *   when the cloud provider is unavailable.
  */
 class EvaluateIfConditionUseCase @Inject constructor(
     private val llmInferenceEngine: LlmInferenceEngine,
     private val structuredOutputGate: StructuredOutputGate,
     private val settingsRepository: SettingsRepository,
+    private val cloudStructuredFactory: CloudStructuredInferenceClientFactory,
 ) {
 
     /**
@@ -132,10 +143,11 @@ class EvaluateIfConditionUseCase @Inject constructor(
             ),
         )
         val maxRepairs = settingsRepository.structuredOutputMaxRepairs.first()
+        val inference = resolveInference(node)
 
         val result = try {
             structuredOutputGate.runToken(
-                inference = EngineStructuredInferenceClient(llmInferenceEngine),
+                inference = inference,
                 prompt = prompt,
                 allowed = setOf(TOKEN_TRUE, TOKEN_FALSE),
                 nodeName = node.label,
@@ -154,6 +166,22 @@ class EvaluateIfConditionUseCase @Inject constructor(
             is GateResult.Success -> Outcome(value = result.value == TOKEN_TRUE)
             is GateResult.Failed -> Outcome(value = false, gateFailed = true)
         }
+    }
+
+    /**
+     * Picks the gate's inference client for [node]: a cloud-backed client when
+     * the node selects a configured cloud provider, otherwise the local LiteRT
+     * engine. An unavailable cloud provider (missing credentials / local-only
+     * mode / unknown id) degrades silently to the local engine — the executor
+     * surfaces any resulting gate failure through [Outcome.gateFailed].
+     *
+     * The use case streams no tokens, so the cloud client's token hook is a
+     * no-op.
+     */
+    private suspend fun resolveInference(node: NodeModel): StructuredInferenceClient {
+        val provider = node.cloudProvider?.takeIf { it.isNotBlank() }?.let { CloudProvider.fromId(it) }
+        val cloud = provider?.let { cloudStructuredFactory.create(it) { } }
+        return cloud?.inference ?: EngineStructuredInferenceClient(llmInferenceEngine)
     }
 
     private companion object {

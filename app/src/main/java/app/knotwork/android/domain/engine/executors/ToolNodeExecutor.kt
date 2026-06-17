@@ -3,11 +3,14 @@ package app.knotwork.android.domain.engine.executors
 import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.engine.executors.ToolCallParser.ToolCall
+import app.knotwork.android.domain.engine.structured.CloudStructuredInferenceClientFactory
 import app.knotwork.android.domain.engine.structured.CollectingRepairListener
 import app.knotwork.android.domain.engine.structured.EngineStructuredInferenceClient
 import app.knotwork.android.domain.engine.structured.GateResult
+import app.knotwork.android.domain.engine.structured.StructuredInferenceClient
 import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentOrchestratorState
+import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.ConsoleEventType
 import app.knotwork.android.domain.models.ExecutionScope
 import app.knotwork.android.domain.models.NodeExecutionResult
@@ -55,6 +58,7 @@ class ToolNodeExecutor @Inject constructor(
     private val toolInvocationGate: ToolInvocationGate,
     private val structuredOutputGate: StructuredOutputGate,
     private val settingsRepository: SettingsRepository,
+    private val cloudStructuredFactory: CloudStructuredInferenceClientFactory,
 ) : NodeExecutor {
 
     /**
@@ -103,18 +107,18 @@ class ToolNodeExecutor @Inject constructor(
 
         emit(NodeOutput.State(AgentOrchestratorState.Thinking("Analyzing task for tool execution...")))
 
-        val loadResult = loadModelUseCase(node.modelPath)
-        if (loadResult is Result.Error) {
-            val errorMsg = "Error loading local model for tool node"
-            emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
-            emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg)))
-            return@flow
-        }
-
-        val maxRepairs = settingsRepository.structuredOutputMaxRepairs.first()
+        val configuredMaxRepairs = settingsRepository.structuredOutputMaxRepairs.first()
+        // Engine selection mirrors the SKILL node: a node carrying a cloud
+        // provider resolves its tool call against that provider; otherwise the
+        // local LiteRT engine backs it. Tool selection / arguments are JSON
+        // objects, so a provider with native JSON support drops the repair
+        // budget to zero (trust-but-verify).
+        val resolution = resolveInference(node) ?: return@flow
+        val inference = resolution.first
+        val maxRepairs = if (resolution.second) 0 else configuredMaxRepairs
 
         val resolved: Pair<String, String> = try {
-            resolveToolCall(isAutoSelect, toolNameConfig, node, inputText, maxRepairs)
+            resolveToolCall(isAutoSelect, toolNameConfig, node, inputText, maxRepairs, inference)
         } catch (e: ResolutionFailed) {
             // A handled resolution failure (no tools, unknown tool, gate exhausted on
             // auto-select): the diagnostics were already emitted; end the node here.
@@ -150,6 +154,43 @@ class ToolNodeExecutor @Inject constructor(
     private class ResolutionFailed : Exception()
 
     /**
+     * Resolves the structured-inference client for [node]: a cloud-backed client
+     * when the node selects a configured cloud provider, otherwise the local
+     * LiteRT engine. An unavailable cloud provider (missing credentials /
+     * local-only mode / unknown id) emits a console note and degrades to the
+     * local engine.
+     *
+     * @return The `(client, supportsNativeJson)` pair, or `null` when even the
+     *   local fallback could not load its model (a terminal error was emitted).
+     */
+    private suspend fun FlowCollector<NodeOutput>.resolveInference(
+        node: NodeModel,
+    ): Pair<StructuredInferenceClient, Boolean>? {
+        val providerId = node.cloudProvider?.takeIf { it.isNotBlank() }
+        if (providerId != null) {
+            val provider = CloudProvider.fromId(providerId)
+            val cloud = provider?.let { cloudStructuredFactory.create(it) { } }
+            if (cloud != null) {
+                return cloud.inference to cloud.supportsNativeJson
+            }
+            emit(
+                NodeOutput.Console(
+                    ConsoleEventType.Error,
+                    "Cloud provider '$providerId' unavailable for '${node.label}'; falling back to the local model",
+                ),
+            )
+        }
+        val loadResult = loadModelUseCase(node.modelPath)
+        if (loadResult is Result.Error) {
+            val errorMsg = "Error loading local model for tool node"
+            emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
+            emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg)))
+            return null
+        }
+        return EngineStructuredInferenceClient(llmEngine) to false
+    }
+
+    /**
      * Resolves the `(toolName, argumentsJson)` to dispatch, running the model output
      * through the structured-output gate.
      *
@@ -166,6 +207,7 @@ class ToolNodeExecutor @Inject constructor(
         node: NodeModel,
         inputText: String,
         maxRepairs: Int,
+        inference: StructuredInferenceClient,
     ): Pair<String, String> {
         if (isAutoSelect) {
             val availableTools = toolRepository.getAvailableTools()
@@ -191,7 +233,7 @@ class ToolNodeExecutor @Inject constructor(
             // Gate the `{tool, arguments}` envelope. On failure the auto-select path
             // has no fallback tool to run, so it takes the existing error path — only
             // after the gate has spent its repair attempts.
-            return when (val result = runArgGate(ToolCall.serializer(), prompt, node, maxRepairs)) {
+            return when (val result = runArgGate(ToolCall.serializer(), prompt, node, maxRepairs, inference)) {
                 is GateResult.Success -> result.value.tool to result.value.arguments.asArgumentString()
                 is GateResult.Failed -> {
                     val errorMsg = "Failed to parse tool selection JSON from LLM output"
@@ -231,7 +273,7 @@ class ToolNodeExecutor @Inject constructor(
         // so we still dispatch — with the last raw output as arguments — and let the
         // tool execution surface its own error observation (the existing path,
         // reached after repairs rather than on the first malformed reply).
-        return when (val result = runArgGate(JsonObject.serializer(), prompt, node, maxRepairs)) {
+        return when (val result = runArgGate(JsonObject.serializer(), prompt, node, maxRepairs, inference)) {
             is GateResult.Success -> selectedTool.name to extractFixedToolArgs(result.value, selectedTool.name)
             is GateResult.Failed -> {
                 emit(
@@ -256,6 +298,7 @@ class ToolNodeExecutor @Inject constructor(
      * @param prompt The fully-rendered tool prompt.
      * @param node The TOOL node (its label keys the repair metric / console line).
      * @param maxRepairs The configured repair ceiling.
+     * @param inference The resolved gate client (cloud or local).
      * @return The gate outcome.
      */
     private suspend fun <T> FlowCollector<NodeOutput>.runArgGate(
@@ -263,10 +306,11 @@ class ToolNodeExecutor @Inject constructor(
         prompt: String,
         node: NodeModel,
         maxRepairs: Int,
+        inference: StructuredInferenceClient,
     ): GateResult<T> {
         val collected = CollectingRepairListener()
         val result = structuredOutputGate.runJson(
-            inference = EngineStructuredInferenceClient(llmEngine),
+            inference = inference,
             prompt = prompt,
             serializer = serializer,
             nodeName = node.label,

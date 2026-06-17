@@ -26,6 +26,7 @@ import app.knotwork.android.domain.engine.executors.SummaryNodeExecutor
 import app.knotwork.android.domain.engine.executors.SystemNodeExecutor
 import app.knotwork.android.domain.engine.executors.ToolInvocationGate
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
+import app.knotwork.android.domain.engine.structured.CloudStructuredInferenceClientFactory
 import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.ChatMessage
@@ -328,6 +329,7 @@ class BackgroundAutonomyCycleIntegrationTest {
             toolInvocationGate,
             StructuredOutputGate(),
             settingsRepository,
+            CloudStructuredInferenceClientFactory { _, _ -> null },
         )
         val nodeExecutorFactory = NodeExecutorFactory(
             InputNodeExecutor(),
@@ -352,7 +354,19 @@ class BackgroundAutonomyCycleIntegrationTest {
                 mockk<KoogCloudLlmModelResolver>(),
                 mockk(relaxed = true),
             ),
-            SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository, StructuredOutputGate(), settingsRepository),
+            SystemNodeExecutor(
+                llmEngine,
+                loadModelUseCase,
+                chatRepository,
+                StructuredOutputGate(),
+                settingsRepository,
+                CloudStructuredInferenceClientFactory {
+                        _,
+                        _,
+                    ->
+                    null
+                },
+            ),
             QueueProcessorNodeExecutor(),
             SummaryNodeExecutor(llmEngine, loadModelUseCase),
             ClarificationNodeExecutor(

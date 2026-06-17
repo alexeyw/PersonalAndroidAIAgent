@@ -576,6 +576,8 @@
     <string name="knotwork_node_field_max_new_tokens">Max new tokens</string>
     <string name="knotwork_node_field_max_tokens">Max tokens</string>
     <string name="knotwork_node_field_provider">Provider</string>
+    <string name="knotwork_node_field_engine">Engine</string>
+    <string name="knotwork_node_field_engine_on_device">On-device</string>
     <string name="knotwork_node_field_timeout_ms">Timeout (ms)</string>
     <string name="knotwork_node_field_format">Format</string>
     <string name="knotwork_node_field_input_name">Input variable name</string>

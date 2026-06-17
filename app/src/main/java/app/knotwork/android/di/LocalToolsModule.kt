@@ -2,6 +2,7 @@ package app.knotwork.android.di
 
 import app.knotwork.android.data.engine.KoogClientFactory
 import app.knotwork.android.data.engine.KoogCloudLlmModelResolver
+import app.knotwork.android.data.engine.KoogStructuredInferenceClientFactory
 import app.knotwork.android.data.tools.local.SearchTool
 import app.knotwork.android.data.tools.local.executors.DelegateTaskExecutor
 import app.knotwork.android.data.tools.local.executors.DeleteFileExecutor
@@ -15,6 +16,7 @@ import app.knotwork.android.data.tools.local.executors.SearchToolExecutor
 import app.knotwork.android.data.tools.local.executors.WriteFileExecutor
 import app.knotwork.android.domain.engine.CloudLlmClientFactory
 import app.knotwork.android.domain.engine.CloudLlmModelResolver
+import app.knotwork.android.domain.engine.structured.CloudStructuredInferenceClientFactory
 import app.knotwork.android.domain.repositories.LocalToolExecutor
 import dagger.Binds
 import dagger.Module
@@ -104,4 +106,16 @@ abstract class LocalToolsModule {
     @Binds
     @Singleton
     abstract fun bindCloudLlmModelResolver(impl: KoogCloudLlmModelResolver): CloudLlmModelResolver
+
+    /**
+     * Domain-level binding for the cloud structured-inference client factory.
+     * The data-layer impl [KoogStructuredInferenceClientFactory] backs the
+     * structured-output gate's cloud path for structured node types whose
+     * `cloudProvider` is set.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindCloudStructuredInferenceClientFactory(
+        impl: KoogStructuredInferenceClientFactory,
+    ): CloudStructuredInferenceClientFactory
 }

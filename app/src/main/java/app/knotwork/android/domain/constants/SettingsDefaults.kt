@@ -335,4 +335,33 @@ object SettingsDefaults {
 
     /** Upper bound for the structured-output repair budget. */
     const val STRUCTURED_OUTPUT_MAX_REPAIRS_MAX: Int = 4
+
+    /**
+     * Default maximum number of attempts (the initial call plus retries) a
+     * transient cloud failure is given before the error propagates. Maps onto
+     * Koog's `RetryConfig.maxAttempts`. `3` mirrors Koog's own `PRODUCTION`
+     * preset: it absorbs a single 429 / 5xx / timeout blip without letting a
+     * persistently failing provider stall a run.
+     */
+    const val CLOUD_RETRY_MAX_ATTEMPTS_DEFAULT: Int = 3
+
+    /** Lower bound for the cloud-retry attempt budget. `1` disables retries (initial call only). */
+    const val CLOUD_RETRY_MAX_ATTEMPTS_MIN: Int = 1
+
+    /** Upper bound for the cloud-retry attempt budget. */
+    const val CLOUD_RETRY_MAX_ATTEMPTS_MAX: Int = 5
+
+    /**
+     * Default base delay, in milliseconds, before the first cloud retry. Maps
+     * onto Koog's `RetryConfig.initialDelay`; subsequent retries grow it by the
+     * fixed exponential backoff multiplier with jitter. `1000` ms matches Koog's
+     * `PRODUCTION` preset.
+     */
+    const val CLOUD_RETRY_BASE_DELAY_MS_DEFAULT: Long = 1000L
+
+    /** Lower bound for the cloud-retry base delay. */
+    const val CLOUD_RETRY_BASE_DELAY_MS_MIN: Long = 100L
+
+    /** Upper bound for the cloud-retry base delay. */
+    const val CLOUD_RETRY_BASE_DELAY_MS_MAX: Long = 10_000L
 }

@@ -74,6 +74,10 @@ class SettingsManagerTest {
     private val pipelineMaxStepsKey = androidx.datastore.preferences.core.intPreferencesKey("pipeline_max_steps")
     private val pipelineMaxNestingDepthKey =
         androidx.datastore.preferences.core.intPreferencesKey("pipeline_max_nesting_depth")
+    private val cloudRetryMaxAttemptsKey =
+        androidx.datastore.preferences.core.intPreferencesKey("cloud_retry_max_attempts")
+    private val cloudRetryBaseDelayMsKey =
+        androidx.datastore.preferences.core.longPreferencesKey("cloud_retry_base_delay_ms")
     private val structuredOutputMaxRepairsKey =
         androidx.datastore.preferences.core.intPreferencesKey("structured_output_max_repairs")
     private val resumeMaxAgeHoursKey = androidx.datastore.preferences.core.intPreferencesKey("resume_max_age_hours")
@@ -538,6 +542,56 @@ class SettingsManagerTest {
 
             manager.setStructuredOutputMaxRepairs(3)
             assertEquals(3, manager.structuredOutputMaxRepairs.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `cloudRetryMaxAttempts returns default of 3 then stored value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[cloudRetryMaxAttemptsKey] } returns null andThen 5
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, context, cipher)
+        assertEquals(3, settingsManager.cloudRetryMaxAttempts.first())
+        assertEquals(5, settingsManager.cloudRetryMaxAttempts.first())
+    }
+
+    @Test
+    fun `setCloudRetryMaxAttempts coerces into the sanctioned 1-5 range`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setCloudRetryMaxAttempts(0)
+            assertEquals(1, manager.cloudRetryMaxAttempts.first())
+
+            manager.setCloudRetryMaxAttempts(99)
+            assertEquals(5, manager.cloudRetryMaxAttempts.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `cloudRetryBaseDelayMs returns default of 1000 then stored value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[cloudRetryBaseDelayMsKey] } returns null andThen 2500L
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, context, cipher)
+        assertEquals(1000L, settingsManager.cloudRetryBaseDelayMs.first())
+        assertEquals(2500L, settingsManager.cloudRetryBaseDelayMs.first())
+    }
+
+    @Test
+    fun `setCloudRetryBaseDelayMs coerces into the sanctioned 100-10000 range`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setCloudRetryBaseDelayMs(10)
+            assertEquals(100L, manager.cloudRetryBaseDelayMs.first())
+
+            manager.setCloudRetryBaseDelayMs(999_999)
+            assertEquals(10_000L, manager.cloudRetryBaseDelayMs.first())
         } finally {
             scope.cancel()
         }

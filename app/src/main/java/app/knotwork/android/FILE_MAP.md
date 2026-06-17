@@ -7,7 +7,11 @@ This file maps the contents of the main application package.
   - `logging/` - Application-level Timber sinks.
     - `CrashlyticsTimberTree.kt` - Timber tree forwarding `Log.WARN` / `Log.ERROR` records to Firebase Crashlytics via `CrashReportingRepository`. Planted only after the user opts in (release builds).
   - `engine/` - Core LLM and inference engines.
-    - `KoogClientFactory.kt` - Factory for Koog clients; data-layer impl of `domain/engine/CloudLlmClientFactory`.
+    - `KoogClientFactory.kt` - Factory for Koog clients; data-layer impl of `domain/engine/CloudLlmClientFactory`. Every constructed client is retry-wrapped via `CloudRetryWrapper`; `createClient` threads a `CloudRetryListener` for console observability, the per-provider helpers wrap with no observation.
+    - `KoogStructuredInferenceClientFactory.kt` - Data-layer impl of `domain/engine/structured/CloudStructuredInferenceClientFactory`; builds a retry-wrapped Koog client, detects native JSON via `LLModel.capabilities`, and exposes a `StructuredInferenceClient` that collapses the streamed response for the gate.
+    - `retry/` - Cloud retry wrapping (data layer).
+      - `CloudRetryWrapper.kt` - `@Singleton` that decorates a raw Koog `LLMClient` with Koog's `RetryingLLMClient` using the settings-driven policy (attempts + base delay); returns the raw client unchanged when retries are disabled (`maxAttempts == 1`).
+      - `RetryObservingLLMClient.kt` - Pass-through `LLMClient` placed *as* the retry policy's delegate; counts re-invocations and reports the 2nd+ as a retry through `CloudRetryListener` (Koog exposes no per-attempt hook). Single-operation-per-instance.
     - `KoogCloudLlmModelResolver.kt` - Data-layer impl of `domain/engine/CloudLlmModelResolver`; owns per-provider default model ids and Ollama context-window lookup.
     - `KoogModelMapper.kt` - Maps string identifiers to Koog LLModel constants.
     - `LiteRTLlmEngine.kt` - LiteRT LLM engine implementation.
@@ -194,6 +198,10 @@ This file maps the contents of the main application package.
       - `RepairListener.kt` - `fun interface` observability seam fired before each repair attempt; consumers emit the `StructuredOutputRepair` console event and bump `AgentMetrics.repairAttemptsPerNode`.
       - `CollectingRepairListener.kt` - `RepairListener` that buffers each repair attempt (the gate reports them via a non-suspend callback) so an executor can drain them afterwards and `emit` one `NodeOutput.Console` per attempt; carries the per-attempt console message.
       - `JsonPayloadExtractor.kt` - Shape-agnostic JSON extraction (fenced ```json / bare / embedded-in-prose, object or array) consolidating the former object-only `ToolCallParser.extractJsonBlock` and array-only `extractJsonArray` helpers.
+      - `CloudStructuredInferenceClientFactory.kt` - `fun interface` building a cloud-backed `StructuredInferenceClient` for the gate (data-layer impl: `KoogStructuredInferenceClientFactory`); returns `CloudStructuredClient(inference, supportsNativeJson)` so a consumer can drop the repair budget to 0 when the provider natively constrains JSON. Structured nodes pick this path via `NodeModel.cloudProvider`.
+    - `retry/` - Cloud-call transient-failure retry observability (the retry itself is Koog's `RetryingLLMClient`).
+      - `CloudRetryListener.kt` - `fun interface` fired before each retry of a transient cloud failure; consumers emit a `CloudRetry` console line. Initial call is not a retry.
+      - `CollectingCloudRetryListener.kt` - `CloudRetryListener` that buffers retries so the cloud node executor can drain them into one `NodeOutput.Console` per retry after the call; carries the per-retry console message.
   - `memoryio/` - JSON serialisation gateway for long-term memory export/import.
     - `MemorySourceJson.kt` - Single source of truth for the `MemorySource` ↔ JSON wire shape; shared by the Room `source` column converter (`data/local/Converters`) and `MemoryJsonSerializer` so the column encoding and the export file stay byte-identical.
     - `MemoryJsonSerializer.kt` - Two-way mapper between the memory table and the portable `schemaVersion: 1` export document (`embeddingProviderId` + `exportedAt` + per-chunk `id`/`text`/`embedding`/`source`/`timestamp`/`isPinned`/`tags`). Never-throwing `parse` returns `Success / SchemaMismatch / Failure`.

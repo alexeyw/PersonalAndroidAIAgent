@@ -155,4 +155,8 @@
     <!-- Provider picker / detail -->
     <string name="settings_provider_picker_title">Add provider</string>
     <string name="settings_provider_detail_title">%1$s provider</string>
+    <string name="settings_cloud_retry_title">Retry policy</string>
+    <string name="settings_cloud_retry_subtitle">Applies to all cloud providers and cloud embeddings. Transient failures (rate limits, 5xx, timeouts) are retried with exponential backoff; authentication errors are not.</string>
+    <string name="settings_cloud_retry_attempts_label">Max attempts: %1$d (1 disables retries)</string>
+    <string name="settings_cloud_retry_delay_label">Base delay: %1$d ms</string>
 </resources>

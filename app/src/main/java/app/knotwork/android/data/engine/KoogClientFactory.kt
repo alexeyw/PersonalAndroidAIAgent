@@ -7,7 +7,9 @@ import ai.koog.prompt.executor.clients.deepseek.DeepSeekLLMClient
 import ai.koog.prompt.executor.clients.google.GoogleLLMClient
 import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
 import ai.koog.prompt.executor.ollama.client.OllamaClient
+import app.knotwork.android.data.engine.retry.CloudRetryWrapper
 import app.knotwork.android.domain.engine.CloudLlmClientFactory
+import app.knotwork.android.domain.engine.retry.CloudRetryListener
 import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.repositories.ApiKeyRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
@@ -29,6 +31,7 @@ import javax.inject.Singleton
 class KoogClientFactory @Inject constructor(
     private val apiKeyRepository: ApiKeyRepository,
     private val settingsRepository: SettingsRepository,
+    private val retryWrapper: CloudRetryWrapper,
 ) : CloudLlmClientFactory {
 
     /**
@@ -63,67 +66,95 @@ class KoogClientFactory @Inject constructor(
      * @return The LLMClient on success or `null` if credentials are missing
      *   or local-only mode is on.
      */
-    override suspend fun createClient(provider: CloudProvider): Any? = when (provider) {
-        CloudProvider.OPENAI -> createOpenAIExecutor()
-        CloudProvider.ANTHROPIC -> createAnthropicExecutor()
-        CloudProvider.GOOGLE -> createGoogleExecutor()
-        CloudProvider.DEEPSEEK -> createDeepSeekExecutor()
-        CloudProvider.OLLAMA -> createOllamaExecutor()
+    override suspend fun createClient(provider: CloudProvider, retryListener: CloudRetryListener): Any? =
+        rawClient(provider)?.let { raw ->
+            retryWrapper.wrap(client = raw, provider = provider.id, listener = retryListener)
+        }
+
+    /**
+     * Builds the raw, un-decorated Koog client for [provider], applying the
+     * local-only gate and the per-provider credential checks. Retry wrapping is
+     * applied separately by [createClient] / the public helpers.
+     *
+     * @return The raw client, or `null` when credentials are missing or
+     *   local-only mode is on.
+     */
+    private suspend fun rawClient(provider: CloudProvider): LLMClient? = when (provider) {
+        CloudProvider.OPENAI -> rawOpenAI()
+        CloudProvider.ANTHROPIC -> rawAnthropic()
+        CloudProvider.GOOGLE -> rawGoogle()
+        CloudProvider.DEEPSEEK -> rawDeepSeek()
+        CloudProvider.OLLAMA -> rawOllama()
     }
 
     /**
-     * Creates an OpenAI LLMClient.
+     * Creates a retry-wrapped OpenAI LLMClient.
      * @return The client, or null if the API key is not configured or
      *   local-only mode is on.
      */
-    suspend fun createOpenAIExecutor(): LLMClient? {
+    suspend fun createOpenAIExecutor(): LLMClient? = rawOpenAI()?.let { wrapNoObserve(it, CloudProvider.OPENAI) }
+
+    /**
+     * Creates a retry-wrapped Anthropic LLMClient.
+     * @return The client, or null if the API key is not configured or
+     *   local-only mode is on.
+     */
+    suspend fun createAnthropicExecutor(): LLMClient? =
+        rawAnthropic()?.let { wrapNoObserve(it, CloudProvider.ANTHROPIC) }
+
+    /**
+     * Creates a retry-wrapped Google (Gemini) LLMClient.
+     * @return The client, or null if the API key is not configured or
+     *   local-only mode is on.
+     */
+    suspend fun createGoogleExecutor(): LLMClient? = rawGoogle()?.let { wrapNoObserve(it, CloudProvider.GOOGLE) }
+
+    /**
+     * Creates a retry-wrapped DeepSeek LLMClient.
+     * @return The client, or null if the API key is not configured or
+     *   local-only mode is on.
+     */
+    suspend fun createDeepSeekExecutor(): LLMClient? = rawDeepSeek()?.let { wrapNoObserve(it, CloudProvider.DEEPSEEK) }
+
+    /**
+     * Creates a retry-wrapped Ollama LLMClient connected to the configured local server.
+     * @return The client, or null if the custom URL is not configured.
+     */
+    suspend fun createOllamaExecutor(): LLMClient? = rawOllama()?.let { wrapNoObserve(it, CloudProvider.OLLAMA) }
+
+    /** Wraps a raw client with the retry policy but no retry observation (off-graph callers). */
+    private suspend fun wrapNoObserve(client: LLMClient, provider: CloudProvider): LLMClient =
+        retryWrapper.wrap(client = client, provider = provider.id)
+
+    private suspend fun rawOpenAI(): LLMClient? {
         if (isLocalOnlyMode()) return null
         val key = apiKeyRepository.getOpenAIKey().firstOrNull()
         if (key.isNullOrBlank()) return null
         return OpenAILLMClient(apiKey = key, httpClientFactory = httpClientFactory)
     }
 
-    /**
-     * Creates an Anthropic LLMClient.
-     * @return The client, or null if the API key is not configured or
-     *   local-only mode is on.
-     */
-    suspend fun createAnthropicExecutor(): LLMClient? {
+    private suspend fun rawAnthropic(): LLMClient? {
         if (isLocalOnlyMode()) return null
         val key = apiKeyRepository.getAnthropicKey().firstOrNull()
         if (key.isNullOrBlank()) return null
         return AnthropicLLMClient(apiKey = key, httpClientFactory = httpClientFactory)
     }
 
-    /**
-     * Creates a Google (Gemini) LLMClient.
-     * @return The client, or null if the API key is not configured or
-     *   local-only mode is on.
-     */
-    suspend fun createGoogleExecutor(): LLMClient? {
+    private suspend fun rawGoogle(): LLMClient? {
         if (isLocalOnlyMode()) return null
         val key = apiKeyRepository.getGoogleKey().firstOrNull()
         if (key.isNullOrBlank()) return null
         return GoogleLLMClient(apiKey = key, httpClientFactory = httpClientFactory)
     }
 
-    /**
-     * Creates a DeepSeek LLMClient.
-     * @return The client, or null if the API key is not configured or
-     *   local-only mode is on.
-     */
-    suspend fun createDeepSeekExecutor(): LLMClient? {
+    private suspend fun rawDeepSeek(): LLMClient? {
         if (isLocalOnlyMode()) return null
         val key = apiKeyRepository.getDeepSeekKey().firstOrNull()
         if (key.isNullOrBlank()) return null
         return DeepSeekLLMClient(apiKey = key, httpClientFactory = httpClientFactory)
     }
 
-    /**
-     * Creates an Ollama LLMClient connected to the configured local server.
-     * @return The client, or null if the custom URL is not configured.
-     */
-    suspend fun createOllamaExecutor(): LLMClient? {
+    private suspend fun rawOllama(): LLMClient? {
         val url = apiKeyRepository.getOllamaBaseUrl().firstOrNull()
         if (url.isNullOrBlank()) return null
         return OllamaClient(httpClientFactory = httpClientFactory, baseUrl = url)

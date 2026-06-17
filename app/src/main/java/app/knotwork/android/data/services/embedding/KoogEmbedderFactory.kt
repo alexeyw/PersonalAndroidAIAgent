@@ -4,6 +4,8 @@ import ai.koog.http.client.ktor.KtorKoogHttpClient
 import ai.koog.prompt.executor.clients.LLMEmbeddingProviderAPI
 import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
 import ai.koog.prompt.executor.ollama.client.OllamaClient
+import app.knotwork.android.data.engine.retry.CloudRetryWrapper
+import app.knotwork.android.domain.models.CloudProvider
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,22 +27,27 @@ import javax.inject.Singleton
 interface KoogEmbedderFactory {
 
     /**
-     * Builds an OpenAI embedding client authenticated with [apiKey].
+     * Builds an OpenAI embedding client authenticated with [apiKey], decorated
+     * with the configured transient-failure retry policy.
+     *
+     * `suspend` because the retry policy is read from settings at build time.
      *
      * @param apiKey A non-blank OpenAI API key (callers must check for blank
      *   first and take the fallback path).
      * @return A Koog [LLMEmbeddingProviderAPI] backed by the OpenAI client.
      */
-    fun openAiClient(apiKey: String): LLMEmbeddingProviderAPI
+    suspend fun openAiClient(apiKey: String): LLMEmbeddingProviderAPI
 
     /**
      * Builds an Ollama embedding client targeting the local-network server at
-     * [baseUrl].
+     * [baseUrl], decorated with the configured transient-failure retry policy.
+     *
+     * `suspend` because the retry policy is read from settings at build time.
      *
      * @param baseUrl A non-blank Ollama base URL (e.g. `http://192.168.1.2:11434`).
      * @return A Koog [LLMEmbeddingProviderAPI] backed by the Ollama client.
      */
-    fun ollamaClient(baseUrl: String): LLMEmbeddingProviderAPI
+    suspend fun ollamaClient(baseUrl: String): LLMEmbeddingProviderAPI
 }
 
 /**
@@ -53,15 +60,20 @@ interface KoogEmbedderFactory {
  * bypasses the lookup.
  */
 @Singleton
-class DefaultKoogEmbedderFactory @Inject constructor() : KoogEmbedderFactory {
+class DefaultKoogEmbedderFactory @Inject constructor(private val retryWrapper: CloudRetryWrapper) :
+    KoogEmbedderFactory {
 
     private val httpClientFactory = KtorKoogHttpClient.Factory()
 
-    override fun openAiClient(apiKey: String): LLMEmbeddingProviderAPI =
-        OpenAILLMClient(apiKey = apiKey, httpClientFactory = httpClientFactory)
+    override suspend fun openAiClient(apiKey: String): LLMEmbeddingProviderAPI = retryWrapper.wrap(
+        client = OpenAILLMClient(apiKey = apiKey, httpClientFactory = httpClientFactory),
+        provider = CloudProvider.OPENAI.id,
+    )
 
-    override fun ollamaClient(baseUrl: String): LLMEmbeddingProviderAPI =
-        OllamaClient(httpClientFactory = httpClientFactory, baseUrl = baseUrl)
+    override suspend fun ollamaClient(baseUrl: String): LLMEmbeddingProviderAPI = retryWrapper.wrap(
+        client = OllamaClient(httpClientFactory = httpClientFactory, baseUrl = baseUrl),
+        provider = CloudProvider.OLLAMA.id,
+    )
 }
 
 /**
