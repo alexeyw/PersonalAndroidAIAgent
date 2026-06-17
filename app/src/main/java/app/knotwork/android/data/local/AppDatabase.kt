@@ -6,6 +6,7 @@ import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import app.knotwork.android.data.local.dao.ChatDao
+import app.knotwork.android.data.local.dao.ChatHistorySummaryDao
 import app.knotwork.android.data.local.dao.LocalModelDao
 import app.knotwork.android.data.local.dao.MemoryDao
 import app.knotwork.android.data.local.dao.PendingInteractionDao
@@ -16,6 +17,7 @@ import app.knotwork.android.data.local.dao.PromptPresetDao
 import app.knotwork.android.data.local.dao.PromptTemplateDao
 import app.knotwork.android.data.local.dao.SkillDao
 import app.knotwork.android.data.local.dao.TraceStepDao
+import app.knotwork.android.data.local.models.ChatHistorySummaryEntity
 import app.knotwork.android.data.local.models.ChatMessageEntity
 import app.knotwork.android.data.local.models.ChatSessionEntity
 import app.knotwork.android.data.local.models.ConnectionEntity
@@ -59,8 +61,9 @@ import app.knotwork.android.data.local.models.TraceStepEntity
         PipelineRunEntity::class,
         PendingInteractionEntity::class,
         SkillEntity::class,
+        ChatHistorySummaryEntity::class,
     ],
-    version = 37,
+    version = 38,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -146,6 +149,14 @@ abstract class AppDatabase : RoomDatabase() {
      * @return The [SkillDao] instance.
      */
     abstract fun skillDao(): SkillDao
+
+    /**
+     * Provides access to the [ChatHistorySummaryDao] backing the per-session
+     * compressed-history summaries.
+     *
+     * @return The [ChatHistorySummaryDao] instance.
+     */
+    abstract fun chatHistorySummaryDao(): ChatHistorySummaryDao
 
     companion object {
         /**
@@ -848,6 +859,32 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_36_37 = object : Migration(36, 37) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `pipeline_nodes` ADD COLUMN `skillId` TEXT")
+            }
+        }
+
+        /**
+         * Adds the `chat_history_summaries` table backing long-session chat
+         * compression. One row per session (PK = `sessionId`), with a
+         * `ON DELETE CASCADE` foreign key onto `chat_sessions(id)` so a summary
+         * is cleaned up with its conversation. Additive — existing sessions
+         * start with no summary (the engine renders the full history until the
+         * background compressor produces one).
+         */
+        val MIGRATION_37_38 = object : Migration(37, 38) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `chat_history_summaries` (
+                        `sessionId` TEXT NOT NULL,
+                        `summary` TEXT NOT NULL,
+                        `coveredMessageCount` INTEGER NOT NULL,
+                        `updatedAt` INTEGER NOT NULL,
+                        PRIMARY KEY(`sessionId`),
+                        FOREIGN KEY(`sessionId`) REFERENCES `chat_sessions`(`id`)
+                            ON UPDATE NO ACTION ON DELETE CASCADE
+                    )
+                    """.trimIndent(),
+                )
             }
         }
     }

@@ -60,6 +60,7 @@ class GraphExecutionEngine @Inject constructor(
     private val promptTemplateEngine: PromptTemplateEngine,
     private val promptVariableProviders: Set<@JvmSuppressWildcards PromptVariableProvider>,
     private val nodeContextBuilder: NodeContextBuilder,
+    private val chatHistoryWindowPlanner: ChatHistoryWindowPlanner,
     private val retrieveRelevantMemoryUseCase: RetrieveRelevantMemoryUseCase,
     private val crashReportingRepository: CrashReportingRepository,
     private val localModelRepository: LocalModelRepository,
@@ -311,6 +312,61 @@ class GraphExecutionEngine @Inject constructor(
             }
             return hits.also { memoizedMemories = it }
         }
+
+        // Chat-history view is computed lazily and at most once per run, the same
+        // way memory is: only the first executed node that opts into the
+        // `--- Chat History ---` block triggers the DB read + planning, and the
+        // result is reused by every later history-rendering node so the console
+        // note fires exactly once. When compression is off or the history is
+        // within budget the planner returns the full history unchanged, so the
+        // legacy behaviour is preserved bit-for-bit. Not snapshotted for resume —
+        // chat history was never resume-stable (it is read fresh per run).
+        var memoizedChatHistoryView: ChatHistoryView? = null
+        suspend fun resolveChatHistoryViewOnce(): ChatHistoryView {
+            memoizedChatHistoryView?.let { return it }
+            val messages = chatRepository.getMessagesForSession(sessionId).first()
+            val compressionEnabled = settingsRepository.chatHistoryCompressionEnabled.first()
+            val summary = if (compressionEnabled) {
+                try {
+                    chatRepository.getHistorySummary(sessionId)
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Timber.tag("PipelineDebug").w(e, "Failed to load chat-history summary; continuing without it")
+                    null
+                }
+            } else {
+                null
+            }
+            val view = chatHistoryWindowPlanner.plan(
+                messages = messages,
+                summary = summary,
+                compressionEnabled = compressionEnabled,
+                thresholdTokens = settingsRepository.chatHistoryCompressionThresholdTokens.first(),
+                liveWindowSize = settingsRepository.chatHistoryLiveWindowSize.first(),
+            )
+            // Surface the compression only when it actually changed what the node
+            // sees — a within-budget run stays silent.
+            if (view.truncatedWithoutSummary) {
+                pushConsole(
+                    ConsoleEventType.HistoryCompression,
+                    "Chat history over budget; summary not ready, kept the last " +
+                        "${view.liveWindow.size} messages",
+                )
+            } else if (view.earlierSummary != null) {
+                val gap = if (view.droppedUncoveredCount > 0) {
+                    " (${view.droppedUncoveredCount} recent messages not yet summarized)"
+                } else {
+                    ""
+                }
+                pushConsole(
+                    ConsoleEventType.HistoryCompression,
+                    "Chat history compressed: summarized older turns, kept the last " +
+                        "${view.liveWindow.size} messages$gap",
+                )
+            }
+            return view.also { memoizedChatHistoryView = it }
+        }
         // Tool invocations are accumulated as TOOL nodes complete and surfaced
         // via the `--- Tool Results ---` block on later nodes that opt in.
         val toolInvocationResults = mutableListOf<ToolInvocationResult>()
@@ -446,12 +502,20 @@ class GraphExecutionEngine @Inject constructor(
                     } else {
                         emptyList()
                     }
+                    // Only nodes that render chat history pay for loading +
+                    // planning it; others get the empty view (no DB read).
+                    val chatHistoryView = if (currentNode.contextConfig.chatHistory) {
+                        resolveChatHistoryViewOnce()
+                    } else {
+                        ChatHistoryView.EMPTY
+                    }
                     val executionContext = PipelineExecutionContext(
                         originalUserMessage = userPrompt,
-                        chatHistory = chatRepository.getMessagesForSession(sessionId).first(),
+                        chatHistory = chatHistoryView.liveWindow,
                         previousNodeOutput = currentInputText,
                         toolResults = toolInvocationResults.toList(),
                         memoryEntries = memoryEntries,
+                        earlierSummary = chatHistoryView.earlierSummary,
                     )
                     // No fallback to currentInputText: an empty result is the
                     // intended outcome of a sparse config (e.g. only toolResults=true

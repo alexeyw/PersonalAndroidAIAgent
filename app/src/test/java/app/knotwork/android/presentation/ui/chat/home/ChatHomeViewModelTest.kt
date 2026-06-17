@@ -211,6 +211,7 @@ class ChatHomeViewModelTest {
         localModelRepository,
         loadModelUseCase,
         mockk(relaxed = true),
+        mockk(relaxed = true),
         saveMessageToMemoryUseCase,
         pipelineRunRepository,
         runTraceRepository,

@@ -262,6 +262,7 @@ class GraphExecutionEngineTest {
             promptTemplateEngine,
             promptVariableProviders,
             NodeContextBuilder(),
+            ChatHistoryWindowPlanner(),
             retrieveRelevantMemoryUseCase,
             crashReportingRepository,
             localModelRepository,
@@ -275,6 +276,10 @@ class GraphExecutionEngineTest {
         coEvery { retrieveRelevantMemoryUseCase.retrieveScored(any()) } returns emptyList()
         every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(2)
         every { settingsRepository.verboseMemoryLoggingEnabled } returns flowOf(false)
+        every { settingsRepository.chatHistoryCompressionEnabled } returns flowOf(false)
+        every { settingsRepository.chatHistoryCompressionThresholdTokens } returns flowOf(3_500)
+        every { settingsRepository.chatHistoryLiveWindowSize } returns flowOf(10)
+        coEvery { chatRepository.getHistorySummary(any()) } returns null
         every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
         every { settingsRepository.toolUsageInstruction } returns flowOf("")
@@ -686,6 +691,7 @@ class GraphExecutionEngineTest {
             PromptTemplateEngine(),
             emptySet(),
             NodeContextBuilder(),
+            ChatHistoryWindowPlanner(),
             mockk(relaxed = true),
             mockk(relaxed = true),
             mockk(relaxed = true),
@@ -1232,6 +1238,7 @@ class GraphExecutionEngineTest {
             PromptTemplateEngine(),
             setOf(dateProvider),
             NodeContextBuilder(),
+            ChatHistoryWindowPlanner(),
             retrieveRelevantMemoryUseCase,
             crashReportingRepository,
             localModelRepository,
@@ -1443,6 +1450,7 @@ class GraphExecutionEngineTest {
                 PromptTemplateEngine(),
                 emptySet(),
                 NodeContextBuilder(),
+                ChatHistoryWindowPlanner(),
                 retrieveRelevantMemoryUseCase,
                 crashReportingRepository,
                 localModelRepository,

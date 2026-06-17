@@ -441,6 +441,100 @@ class NodeContextBuilderTest {
         assertEquals("$previousNodeOutputHeader\nupstream payload", rendered)
     }
 
+    // ── Group F: summarized-history block (chat-history compression) ──────
+
+    private val earlierSummaryHeader = "--- Earlier conversation (summarized) ---"
+
+    @Test
+    fun `given chat history on with a summary then summary renders before the live window`() {
+        val rendered = builder.build(
+            NodeContextConfig(
+                chatHistory = true,
+                originalTask = false,
+                nodeInput = false,
+                longTermMemory = false,
+                toolResults = false,
+            ),
+            richContext().copy(earlierSummary = "The user introduced themselves earlier."),
+        )
+
+        assertTrue(rendered.contains(earlierSummaryHeader))
+        assertTrue(rendered.contains("The user introduced themselves earlier."))
+        assertTrue(rendered.contains(chatHistoryHeader))
+        // Summary block precedes the verbatim chat-history block.
+        assertTrue(rendered.indexOf(earlierSummaryHeader) < rendered.indexOf(chatHistoryHeader))
+    }
+
+    @Test
+    fun `given summary present but chat history flag off then no summary block`() {
+        val rendered = builder.build(
+            NodeContextConfig(
+                chatHistory = false,
+                originalTask = true,
+                nodeInput = false,
+                longTermMemory = false,
+                toolResults = false,
+            ),
+            richContext().copy(earlierSummary = "should never appear"),
+        )
+
+        assertFalse(rendered.contains(earlierSummaryHeader))
+        assertFalse(rendered.contains("should never appear"))
+    }
+
+    @Test
+    fun `given blank summary then summary block is dropped`() {
+        val rendered = builder.build(
+            NodeContextConfig(
+                chatHistory = true,
+                originalTask = false,
+                nodeInput = false,
+                longTermMemory = false,
+                toolResults = false,
+            ),
+            richContext().copy(earlierSummary = "   "),
+        )
+
+        assertFalse(rendered.contains(earlierSummaryHeader))
+        // The live chat-history block still renders.
+        assertTrue(rendered.contains(chatHistoryHeader))
+    }
+
+    @Test
+    fun `given summary with empty live window then only the summary block renders`() {
+        val rendered = builder.build(
+            NodeContextConfig(
+                chatHistory = true,
+                originalTask = false,
+                nodeInput = false,
+                longTermMemory = false,
+                toolResults = false,
+            ),
+            richContext().copy(chatHistory = emptyList(), earlierSummary = "Older context."),
+        )
+
+        assertEquals("$earlierSummaryHeader\nOlder context.", rendered)
+    }
+
+    @Test
+    fun `given summary then overall block order keeps original task first and memory after`() {
+        val rendered = builder.build(
+            NodeContextConfig(
+                chatHistory = true,
+                originalTask = true,
+                nodeInput = false,
+                longTermMemory = true,
+                toolResults = false,
+            ),
+            richContext().copy(earlierSummary = "summary body"),
+        )
+
+        // Original Task → Earlier summary → Chat History → Long-Term Memory.
+        assertTrue(rendered.indexOf(originalTaskHeader) < rendered.indexOf(earlierSummaryHeader))
+        assertTrue(rendered.indexOf(earlierSummaryHeader) < rendered.indexOf(chatHistoryHeader))
+        assertTrue(rendered.indexOf(chatHistoryHeader) < rendered.indexOf(longTermMemoryHeader))
+    }
+
     private fun assertHeaderPresence(rendered: String, mask: Int, header: String, expected: Boolean) {
         val actual = rendered.contains(header)
         if (expected != actual) {

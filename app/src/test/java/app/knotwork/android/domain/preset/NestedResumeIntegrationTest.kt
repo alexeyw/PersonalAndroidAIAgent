@@ -2,6 +2,7 @@ package app.knotwork.android.domain.preset
 
 import app.knotwork.android.data.engine.KoogClientFactory
 import app.knotwork.android.data.engine.KoogCloudLlmModelResolver
+import app.knotwork.android.domain.engine.ChatHistoryWindowPlanner
 import app.knotwork.android.domain.engine.GraphExecutionEngine
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.engine.NodeContextBuilder
@@ -370,6 +371,7 @@ class NestedResumeIntegrationTest {
             PromptTemplateEngine(),
             emptySet<PromptVariableProvider>(),
             NodeContextBuilder(),
+            ChatHistoryWindowPlanner(),
             retrieveRelevantMemoryUseCase,
             mockk<CrashReportingRepository>(relaxed = true),
             mockk<LocalModelRepository>(relaxed = true),

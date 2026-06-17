@@ -15,6 +15,22 @@ details.
 
 ### Added
 
+- **Chat-history compression for long sessions.** Long conversations no longer
+  blow the on-device context window or crowd out memory and tool results. Once a
+  session's verbatim history exceeds a configurable token budget, the messages
+  older than a live window of recent turns are summarised by the local model in
+  the background and rendered as an `--- Earlier conversation (summarized) ---`
+  block ahead of the verbatim `--- Chat History ---` window. Summarisation is
+  incremental (each pass folds the prior summary plus only the newly-aged-out
+  messages, never re-summarising everything) and runs debounced and off the
+  active-run path, sharing the same agent-busy gating as memory auto-extraction.
+  If a summary is not ready when a run needs it, the history is gracefully
+  truncated to the live window and the fact is reported on the agent console
+  (`HistoryCompression` console events). Configurable under Settings → Memory:
+  an on-by-default toggle, the token threshold (default 3500, coordinated with
+  the context-length setting), and the live-window size (default 10 messages);
+  verbose diagnostics ride the existing memory-logging flag.
+
 - **Transient-failure retry for cloud calls.** Every cloud LLM call (chat
   completions and cloud embeddings) is now wrapped with an exponential-backoff
   retry policy: transient failures (HTTP 429 / 5xx / connection & read timeouts)

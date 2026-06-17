@@ -1,5 +1,6 @@
 package app.knotwork.android.domain.repositories
 
+import app.knotwork.android.domain.models.ChatHistorySummary
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
 import kotlinx.coroutines.flow.Flow
@@ -150,4 +151,23 @@ interface ChatRepository {
      * @return The [ChatSession] if found, null otherwise.
      */
     suspend fun getSessionById(id: String): ChatSession?
+
+    /**
+     * Returns the cached compressed-history summary for a session, or `null`
+     * when none has been computed yet. Read by the engine when a node renders
+     * chat history and compression is active.
+     *
+     * @param sessionId The id of the session.
+     * @return The [ChatHistorySummary], or `null` if absent.
+     */
+    suspend fun getHistorySummary(sessionId: String): ChatHistorySummary?
+
+    /**
+     * Inserts or replaces the compressed-history summary for a session (1:1 with
+     * the session row). Written by the background
+     * [app.knotwork.android.domain.usecases.CompressChatHistoryUseCase].
+     *
+     * @param summary The summary to persist.
+     */
+    suspend fun saveHistorySummary(summary: ChatHistorySummary)
 }

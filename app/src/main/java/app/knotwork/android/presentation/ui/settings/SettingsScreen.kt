@@ -403,6 +403,9 @@ private fun buildViewState(uiState: SettingsUiState, context: android.content.Co
         compactionEnabled = uiState.memoryCompactionEnabled,
         compactionLabel = stringResource(R.string.settings_memory_compaction_title),
         compactionSubtitle = stringResource(R.string.settings_memory_compaction_subtitle),
+        chatHistoryCompressionEnabled = uiState.chatHistoryCompressionEnabled,
+        chatHistoryCompressionLabel = stringResource(R.string.settings_memory_history_compression_title),
+        chatHistoryCompressionSubtitle = stringResource(R.string.settings_memory_history_compression_subtitle),
         embeddingTitle = stringResource(R.string.settings_memory_embedding_title),
         embeddingOptions = uiState.embeddingProviderOptions.map { EmbeddingOptionRow(it.id, it.displayName) },
         selectedEmbeddingId = uiState.activeEmbeddingProviderId,
@@ -554,6 +557,22 @@ private fun memoryParamSliders(uiState: SettingsUiState, locale: Locale): List<M
         min = SettingsDefaults.MAX_MEMORY_CHUNKS_MIN,
         max = SettingsDefaults.MAX_MEMORY_CHUNKS_MAX,
     ),
+    intMemoryParam(
+        id = MEMORY_PARAM_COMPRESSION_THRESHOLD,
+        title = stringResource(R.string.settings_memory_param_compression_threshold_title),
+        valueLabel = String.format(locale, "%,d", uiState.chatHistoryCompressionThresholdTokens),
+        value = uiState.chatHistoryCompressionThresholdTokens,
+        min = SettingsDefaults.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_MIN,
+        max = SettingsDefaults.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_MAX,
+    ),
+    intMemoryParam(
+        id = MEMORY_PARAM_LIVE_WINDOW,
+        title = stringResource(R.string.settings_memory_param_live_window_title),
+        valueLabel = uiState.chatHistoryLiveWindowSize.toString(),
+        value = uiState.chatHistoryLiveWindowSize,
+        min = SettingsDefaults.CHAT_HISTORY_LIVE_WINDOW_MIN,
+        max = SettingsDefaults.CHAT_HISTORY_LIVE_WINDOW_MAX,
+    ),
 )
 
 /**
@@ -613,6 +632,16 @@ private fun memoryValidationMessage(error: MemoryValidationError, context: andro
             R.string.settings_memory_validation_max_chunks,
             SettingsDefaults.MAX_MEMORY_CHUNKS_MIN,
             SettingsDefaults.MAX_MEMORY_CHUNKS_MAX,
+        )
+        MemoryValidationError.CompressionThreshold -> context.getString(
+            R.string.settings_memory_validation_compression_threshold,
+            SettingsDefaults.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_MIN,
+            SettingsDefaults.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_MAX,
+        )
+        MemoryValidationError.LiveWindow -> context.getString(
+            R.string.settings_memory_validation_live_window,
+            SettingsDefaults.CHAT_HISTORY_LIVE_WINDOW_MIN,
+            SettingsDefaults.CHAT_HISTORY_LIVE_WINDOW_MAX,
         )
         MemoryValidationError.UnknownEmbeddingProvider -> context.getString(
             R.string.settings_memory_validation_unknown_provider,
@@ -674,9 +703,13 @@ private fun buildCallbacks(
             MEMORY_PARAM_HALF_LIFE -> viewModel.setMemoryRecencyHalfLifeDays(value.roundToInt())
             MEMORY_PARAM_COMPACTION_AGE -> viewModel.setMemoryCompactionAgeDays(value.roundToInt())
             MEMORY_PARAM_MAX_CHUNKS -> viewModel.setMaxMemoryChunks(value.roundToInt())
+            MEMORY_PARAM_COMPRESSION_THRESHOLD ->
+                viewModel.setChatHistoryCompressionThresholdTokens(value.roundToInt())
+            MEMORY_PARAM_LIVE_WINDOW -> viewModel.setChatHistoryLiveWindowSize(value.roundToInt())
         }
     },
     onMemoryCompactionToggle = viewModel::setMemoryCompactionEnabled,
+    onChatHistoryCompressionToggle = viewModel::setChatHistoryCompressionEnabled,
     onEmbeddingProviderSelected = viewModel::setActiveEmbeddingProviderId,
     onExportMemoryClick = onExportClick,
     onImportMemoryClick = onImportClick,
@@ -737,3 +770,5 @@ private const val MEMORY_PARAM_THRESHOLD = "memory_threshold"
 private const val MEMORY_PARAM_HALF_LIFE = "memory_half_life"
 private const val MEMORY_PARAM_COMPACTION_AGE = "memory_compaction_age"
 private const val MEMORY_PARAM_MAX_CHUNKS = "memory_max_chunks"
+private const val MEMORY_PARAM_COMPRESSION_THRESHOLD = "memory_compression_threshold"
+private const val MEMORY_PARAM_LIVE_WINDOW = "memory_live_window"

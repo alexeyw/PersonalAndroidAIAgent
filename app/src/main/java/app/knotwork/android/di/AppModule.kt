@@ -12,6 +12,7 @@ import app.knotwork.android.data.local.Converters
 import app.knotwork.android.data.local.DeferredPassphraseOpenHelperFactory
 import app.knotwork.android.data.local.EncryptedDbPassphraseProvider
 import app.knotwork.android.data.local.dao.ChatDao
+import app.knotwork.android.data.local.dao.ChatHistorySummaryDao
 import app.knotwork.android.data.local.dao.LocalModelDao
 import app.knotwork.android.data.local.dao.MemoryDao
 import app.knotwork.android.data.local.dao.PendingInteractionDao
@@ -163,6 +164,7 @@ object AppModule {
                 AppDatabase.MIGRATION_34_35,
                 AppDatabase.MIGRATION_35_36,
                 AppDatabase.MIGRATION_36_37,
+                AppDatabase.MIGRATION_37_38,
             )
             // No destructive fallback on upgrade: every version bump must supply an explicit
             // migration above so user data survives. Destructive recreation is kept only for the
@@ -240,6 +242,13 @@ object AppModule {
      */
     @Provides
     fun provideSkillDao(database: AppDatabase): SkillDao = database.skillDao()
+
+    /**
+     * Provides the [ChatHistorySummaryDao] backing per-session compressed-history
+     * summaries.
+     */
+    @Provides
+    fun provideChatHistorySummaryDao(database: AppDatabase): ChatHistorySummaryDao = database.chatHistorySummaryDao()
 
     /**
      * Provides the singleton instance of Converters for Room mapping.

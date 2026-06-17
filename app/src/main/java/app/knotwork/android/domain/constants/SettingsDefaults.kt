@@ -165,6 +165,41 @@ object SettingsDefaults {
     const val MEMORY_SEARCH_TOP_K_MAX: Int = 20
 
     /**
+     * Default for the chat-history compression toggle. `true` so long sessions
+     * stay within the on-device context window out of the box — compression only
+     * ever activates once the verbatim history crosses
+     * [CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_DEFAULT], and graceful
+     * truncation bounds the budget even before a summary is ready.
+     */
+    const val CHAT_HISTORY_COMPRESSION_ENABLED_DEFAULT: Boolean = true
+
+    /**
+     * Default approximate-token budget above which chat history is compressed.
+     * Set below [MAX_CONTEXT_LENGTH_DEFAULT] (4096) so the summarised history
+     * leaves room for the long-term-memory, tool-result, and output blocks
+     * within the on-device context window.
+     */
+    const val CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_DEFAULT: Int = 3_500
+
+    /** Lower bound enforced when the user edits the compression token threshold. */
+    const val CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_MIN: Int = 500
+
+    /** Upper bound enforced when the user edits the compression token threshold. */
+    const val CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_MAX: Int = 32_000
+
+    /**
+     * Default number of most-recent messages kept verbatim when compression is
+     * active. The older tail is folded into the summary.
+     */
+    const val CHAT_HISTORY_LIVE_WINDOW_DEFAULT: Int = 10
+
+    /** Lower bound enforced when the user edits the live-window size. */
+    const val CHAT_HISTORY_LIVE_WINDOW_MIN: Int = 2
+
+    /** Upper bound enforced when the user edits the live-window size. */
+    const val CHAT_HISTORY_LIVE_WINDOW_MAX: Int = 50
+
+    /**
      * Default minimum cosine-similarity score a memory chunk must reach to be
      * surfaced during retrieval. Chunks below this are filtered out before
      * reaching the prompt.

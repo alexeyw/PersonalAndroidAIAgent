@@ -162,6 +162,7 @@ class ChatHomeConsoleStreamingTest {
         loadModelUseCase,
         mockk(relaxed = true),
         mockk(relaxed = true),
+        mockk(relaxed = true),
         pipelineRunRepository,
         runTraceRepository,
         mockk(relaxed = true),

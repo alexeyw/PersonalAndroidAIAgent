@@ -75,4 +75,14 @@ sealed interface ConsoleEventType {
      * [app.knotwork.android.domain.engine.retry.CloudRetryListener].
      */
     data object CloudRetry : ConsoleEventType
+
+    /**
+     * The chat history was compressed for this run — either a summary stood in
+     * for the older tail, or (when no summary was ready yet) the older tail was
+     * truncated to the live window. Emitted once per run by
+     * [app.knotwork.android.domain.engine.GraphExecutionEngine] when a node that
+     * renders chat history is over the compression budget, so the user can see
+     * why earlier turns are no longer verbatim.
+     */
+    data object HistoryCompression : ConsoleEventType
 }

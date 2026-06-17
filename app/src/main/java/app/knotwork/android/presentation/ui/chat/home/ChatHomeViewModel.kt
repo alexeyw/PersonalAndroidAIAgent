@@ -24,6 +24,7 @@ import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.services.ChatHistoryCompressionCoordinator
 import app.knotwork.android.domain.services.MemoryAutoExtractionCoordinator
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
@@ -130,6 +131,7 @@ class ChatHomeViewModel @Inject constructor(
     private val localModelRepository: LocalModelRepository,
     private val loadModelUseCase: LoadModelUseCase,
     private val memoryAutoExtractionCoordinator: MemoryAutoExtractionCoordinator,
+    private val chatHistoryCompressionCoordinator: ChatHistoryCompressionCoordinator,
     private val saveMessageToMemoryUseCase: SaveMessageToMemoryUseCase,
     private val pipelineRunRepository: PipelineRunRepository,
     private val runTraceRepository: RunTraceRepository,
@@ -861,6 +863,10 @@ class ChatHomeViewModel @Inject constructor(
                 // conversation into long-term memory. The coordinator debounces
                 // and owns its own scope, so this survives ViewModel teardown.
                 memoryAutoExtractionCoordinator.onPipelineCompleted(_state.value.thread.currentSessionId)
+                // Fire-and-forget likewise: keep a long session's history within
+                // the context window by summarising its older tail in the
+                // background (same debounce + agent-busy gating as extraction).
+                chatHistoryCompressionCoordinator.onPipelineCompleted(_state.value.thread.currentSessionId)
             }
             is AgentOrchestratorState.Error -> {
                 _state.update {

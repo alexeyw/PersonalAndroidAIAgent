@@ -37,6 +37,7 @@ This file maps the contents of the main application package.
     - `SettingsManager.kt` - App settings manager (DataStore facade). The HuggingFace token is kept out of DataStore in a `KeystoreBackedPrefsStore` (re-enterable-secret policy); a legacy plain-DataStore token migrates to the encrypted store on first read.
     - `dao/` - Data Access Objects (DAOs).
       - `ChatDao.kt` - Chat messages DAO.
+      - `ChatHistorySummaryDao.kt` - Per-session compressed-history summary DAO (`chat_history_summaries` table, v38); get-by-session + REPLACE upsert.
       - `LocalModelDao.kt` - Local models DAO.
       - `MemoryDao.kt` - Memory chunks DAO.
       - `PendingInteractionDao.kt` - Parked HITL interaction DAO (`pending_interactions` table). Response-recording updates carry `IS NULL` guards so the first writer wins.
@@ -48,6 +49,7 @@ This file maps the contents of the main application package.
       - `PromptTemplateDao.kt` - Prompt templates DAO.
       - `TraceStepDao.kt` - Run-trace DAO, deliberately batch-only: single-transaction batch insert (the write path of the buffered trace recorder) and the per-run `seq`-ordered query; session-scoped cleanup rides the `chat_sessions` FK cascade.
     - `models/` - Local DB entity models.
+      - `ChatHistorySummaryEntity.kt` - Compressed-history summary row (`chat_history_summaries`, v38): per-session prose summary + `coveredMessageCount` cursor; FK onto `chat_sessions(id)` ON DELETE CASCADE.
       - `ChatMessageEntity.kt` - Chat message entity.
       - `ChatSessionEntity.kt` - Chat session entity.
       - `ConnectionEntity.kt` - Pipeline connection entity.
@@ -166,6 +168,7 @@ This file maps the contents of the main application package.
     - `CloudLlmClientFactory.kt` - Domain interface for constructing cloud LLM clients (data-layer impl: `KoogClientFactory`).
     - `CloudLlmModelResolver.kt` - Domain interface for resolving cloud-LLM model objects (data-layer impl: `KoogCloudLlmModelResolver`).
     - `DefaultPipelineFactory.kt` - Factory for default pipelines.
+    - `ChatHistoryWindowPlanner.kt` - Pure, clock-free planner that decides, per node execution, how a session's chat history splits into a summarised prefix (`ChatHistoryView.earlierSummary`) and a verbatim live window; bounds the over-budget history to the last N messages and flags graceful truncation when no summary is ready. Hosts the shared `CHARS_PER_TOKEN` token estimate.
     - `GraphExecutionEngine.kt` - Engine responsible for executing PipelineGraphs.
     - `LlmInferenceEngine.kt` - LLM engine interface.
     - `MemoryAccessLogFormatter.kt` - Pure formatter for the `MemoryAccess` console event. Renders the terse one-line summary (`query` + hit count + scores) and, when verbose memory logging is on, the per-hit snippet/score expansion. Used by `GraphExecutionEngine`.
@@ -223,6 +226,7 @@ This file maps the contents of the main application package.
     - `AgentTask.kt` - Agent task model.
     - `AgentTool.kt` - Agent tool model.
     - `AppError.kt` - App error model.
+    - `ChatHistorySummary.kt` - Domain model of a session's cached compressed-history summary (`sessionId`, `summary`, incremental `coveredMessageCount` cursor, `updatedAt`).
     - `ChatMessage.kt` - Chat message model.
     - `ChatSession.kt` - Chat session model.
     - `ClarificationRequest.kt` - Domain model describing a clarification question issued by the agent (id, question, options, timeoutMs).
@@ -330,6 +334,7 @@ This file maps the contents of the main application package.
     - `LongRunningTaskNotifier.kt` - Domain seam for posting a notification when a backgrounded pipeline run exceeds the configured duration. Data-layer impl: `LongRunningTaskNotifierImpl`.
     - `ScheduledTaskNotifier.kt` - Domain seam for announcing scheduled-run outcomes ("Task completed" / "Task failed") with a deep-link into the bound session. Presentation-layer impl: `ScheduledTaskNotifierImpl`; gated on the Settings → Notifications → "Scheduled task results" toggle.
     - `MemoryReembedScheduler.kt` - Domain seam for scheduling the background re-embed pass over chunks flagged `needsReembedding`. Keeps `MemoryImportUseCase` free of WorkManager; data-layer impl: `WorkManagerMemoryReembedScheduler`.
+    - `ChatHistoryCompressionCoordinator.kt` - App-scoped, debounced (30s/session) trigger that runs `CompressChatHistoryUseCase` after a pipeline completes; mirrors `MemoryAutoExtractionCoordinator` (short-circuits when `SettingsRepository.chatHistoryCompressionEnabled` is off, defers while `TaskQueueManager.globalState` shows an active pipeline). Notified by `ChatHomeViewModel` on the terminal `Completed` state.
     - `MemoryAutoExtractionCoordinator.kt` - App-scoped, debounced (30s/session) trigger that runs `MemoryExtractionUseCase` after a pipeline completes; short-circuits when `SettingsRepository.autoExtractEnabled` is off, and defers (re-waits a debounce window) while `TaskQueueManager.globalState` shows an active pipeline so it never races a foreground generation on the single-conversation engine. Notified by `ChatHomeViewModel` on the terminal `Completed` state.
     - `MemoryReranker.kt` - Pure, clock-free re-ranker for long-term-memory search hits. Re-scores `(MemoryChunk, similarity)` pairs with recency decay (half-life-based), a flat pinned boost (+0.2, hard-sorted to the top and threshold-exempt), 80-char-prefix deduplication (newest survivor), and a final-score threshold filter. Used by `RetrieveRelevantMemoryUseCase`; the caller supplies `nowMillis`.
     - `MemorySearchStatsTracker.kt` - App-scoped (`@Singleton`) in-memory rolling window of recent similarity-search scores (top-5 per call, last 32 observations) behind the Settings AVG SCORE stat cell. Recorded by `RetrieveRelevantMemoryUseCase` and the extraction dedup check; reset by `ClearAllMemoryUseCase`; observed by `SettingsViewModel`.
@@ -358,6 +363,7 @@ This file maps the contents of the main application package.
     - `LoadPipelineFromPresetUseCase.kt` - Materialises a `PipelinePreset` into a concrete `PipelineGraph` with fresh ids (pipeline + nodes + connections), drops orphan connections, validates, persists via `PipelineRepository.savePipeline`, returns the new pipeline id.
     - `LoadPipelineUseCase.kt` - Use case to load a pipeline.
     - `RenamePipelineUseCase.kt` - Validates and applies a new display name to an existing pipeline; canonical name-validation gate (trim + length).
+    - `CompressChatHistoryUseCase.kt` - Background pass that bounds a long session's history: when over the token budget, summarises the tail older than the live window into one `ChatHistorySummary` via a single local-model call (`DefaultPrompts.HistoryCompression`), incrementally folding the prior summary plus only the newly-aged-out messages. Best-effort (blank reply / inference error / unavailable model / persistence failure all skip, never throw). Driven by `ChatHistoryCompressionCoordinator`.
     - `MemoryCompactionUseCase.kt` - Runs one background memory-compaction pass: loads non-pinned chunks older than `memoryCompactionAgeDays`, clusters them via `KMeansClusterer`, and for each cluster of ≥ 3 runs a local-model consolidation prompt, embeds the summary with the active provider, saves it tagged `MemorySource.Compaction`, and deletes the originals. Best-effort: a blank reply or embedding failure skips only that cluster.
     - `RetrieveRelevantMemoryUseCase.kt` - Use case to retrieve memories.
     - `MemoryExtractionUseCase.kt` - Distils durable facts (`{type, text}` JSON) from a finished conversation via one local-model pass, batch-embeds them with the active `EmbeddingProvider` (single `embed(List)` call), dedups (cosine ≥ 0.92) against stored + same-pass facts, and saves survivors tagged `MemorySource.ChatSession`. The manual "Save to memory" path uses the lighter `SaveMessageToMemoryUseCase` instead (no LLM distillation pass).

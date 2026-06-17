@@ -1,6 +1,7 @@
 package app.knotwork.android.data.repositories
 
 import app.knotwork.android.data.local.dao.ChatDao
+import app.knotwork.android.data.local.dao.ChatHistorySummaryDao
 import app.knotwork.android.data.local.models.ChatMessageEntity
 import app.knotwork.android.data.local.models.ChatSessionEntity
 import app.knotwork.android.domain.models.ChatMessage
@@ -22,12 +23,14 @@ import org.junit.Test
 class ChatRepositoryImplTest {
 
     private lateinit var chatDao: ChatDao
+    private lateinit var chatHistorySummaryDao: ChatHistorySummaryDao
     private lateinit var repository: ChatRepositoryImpl
 
     @Before
     fun setup() {
         chatDao = mockk(relaxed = true)
-        repository = ChatRepositoryImpl(chatDao)
+        chatHistorySummaryDao = mockk(relaxed = true)
+        repository = ChatRepositoryImpl(chatDao, chatHistorySummaryDao)
     }
 
     /**

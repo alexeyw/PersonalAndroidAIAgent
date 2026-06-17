@@ -6,6 +6,7 @@ import app.knotwork.android.data.engine.KoogCloudLlmModelResolver
 import app.knotwork.android.data.local.AgentWorkspaceImpl
 import app.knotwork.android.data.tools.local.SearchTool
 import app.knotwork.android.data.tools.local.executors.WriteFileExecutor
+import app.knotwork.android.domain.engine.ChatHistoryWindowPlanner
 import app.knotwork.android.domain.engine.GraphExecutionEngine
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.engine.NodeContextBuilder
@@ -238,6 +239,7 @@ class ShowcaseResearchToFilePresetIntegrationTest {
             PromptTemplateEngine(),
             emptySet<PromptVariableProvider>(),
             NodeContextBuilder(),
+            ChatHistoryWindowPlanner(),
             retrieveRelevantMemoryUseCase,
             crashReportingRepository,
             localModelRepository,

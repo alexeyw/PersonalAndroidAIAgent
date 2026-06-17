@@ -278,6 +278,18 @@ class SettingsViewModel @Inject constructor(
             _uiState.update { it.copy(maxMemoryChunks = value) }
         }.launchIn(viewModelScope)
 
+        settingsRepository.chatHistoryCompressionEnabled.onEach { value ->
+            _uiState.update { it.copy(chatHistoryCompressionEnabled = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.chatHistoryCompressionThresholdTokens.onEach { value ->
+            _uiState.update { it.copy(chatHistoryCompressionThresholdTokens = value) }
+        }.launchIn(viewModelScope)
+
+        settingsRepository.chatHistoryLiveWindowSize.onEach { value ->
+            _uiState.update { it.copy(chatHistoryLiveWindowSize = value) }
+        }.launchIn(viewModelScope)
+
         settingsRepository.activeEmbeddingProviderId.onEach { value ->
             _uiState.update { it.copy(activeEmbeddingProviderId = value) }
         }.launchIn(viewModelScope)
@@ -662,6 +674,53 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
+     * Toggles long-session chat-history compression.
+     *
+     * @param enabled `true` to compress long sessions, `false` to always feed
+     *   the full verbatim history.
+     */
+    fun setChatHistoryCompressionEnabled(enabled: Boolean) {
+        clearMemoryValidationError()
+        viewModelScope.launch { settingsRepository.setChatHistoryCompressionEnabled(enabled) }
+    }
+
+    /**
+     * Persists the chat-history compression token threshold. Out-of-range values
+     * are rejected with [MemoryValidationError.CompressionThreshold].
+     *
+     * @param tokens Desired threshold; must lie in
+     *   `[CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_MIN, CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_MAX]`.
+     */
+    fun setChatHistoryCompressionThresholdTokens(tokens: Int) {
+        if (tokens < SettingsDefaults.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_MIN ||
+            tokens > SettingsDefaults.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_MAX
+        ) {
+            rejectMemoryEdit(MemoryValidationError.CompressionThreshold)
+            return
+        }
+        clearMemoryValidationError()
+        viewModelScope.launch { settingsRepository.setChatHistoryCompressionThresholdTokens(tokens) }
+    }
+
+    /**
+     * Persists the chat-history live-window size. Out-of-range values are
+     * rejected with [MemoryValidationError.LiveWindow].
+     *
+     * @param size Desired window; must lie in
+     *   `[CHAT_HISTORY_LIVE_WINDOW_MIN, CHAT_HISTORY_LIVE_WINDOW_MAX]`.
+     */
+    fun setChatHistoryLiveWindowSize(size: Int) {
+        if (size < SettingsDefaults.CHAT_HISTORY_LIVE_WINDOW_MIN ||
+            size > SettingsDefaults.CHAT_HISTORY_LIVE_WINDOW_MAX
+        ) {
+            rejectMemoryEdit(MemoryValidationError.LiveWindow)
+            return
+        }
+        clearMemoryValidationError()
+        viewModelScope.launch { settingsRepository.setChatHistoryLiveWindowSize(size) }
+    }
+
+    /**
      * Persists the active embedding provider. The id is validated against the
      * set of registered providers; an unknown id is rejected with
      * [MemoryValidationError.UnknownEmbeddingProvider] and nothing is written.
@@ -892,6 +951,11 @@ class SettingsViewModel @Inject constructor(
         settingsRepository.setMemoryCompactionEnabled(SettingsDefaults.MEMORY_COMPACTION_ENABLED_DEFAULT)
         settingsRepository.setMemoryCompactionAgeDays(SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT)
         settingsRepository.setMaxMemoryChunks(SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT)
+        settingsRepository.setChatHistoryCompressionEnabled(SettingsDefaults.CHAT_HISTORY_COMPRESSION_ENABLED_DEFAULT)
+        settingsRepository.setChatHistoryCompressionThresholdTokens(
+            SettingsDefaults.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_DEFAULT,
+        )
+        settingsRepository.setChatHistoryLiveWindowSize(SettingsDefaults.CHAT_HISTORY_LIVE_WINDOW_DEFAULT)
         settingsRepository.setActiveEmbeddingProviderId(SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT)
     }
 
