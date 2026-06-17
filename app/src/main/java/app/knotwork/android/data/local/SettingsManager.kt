@@ -120,6 +120,9 @@ class SettingsManager @Inject constructor(
         val PIPELINE_MAX_STEPS = intPreferencesKey("pipeline_max_steps")
         val PIPELINE_MAX_NESTING_DEPTH = intPreferencesKey("pipeline_max_nesting_depth")
         val STRUCTURED_OUTPUT_MAX_REPAIRS = intPreferencesKey("structured_output_max_repairs")
+        val CLOUD_RETRY_MAX_ATTEMPTS = intPreferencesKey("cloud_retry_max_attempts")
+        val CLOUD_RETRY_BASE_DELAY_MS =
+            androidx.datastore.preferences.core.longPreferencesKey("cloud_retry_base_delay_ms")
         val RESUME_MAX_AGE_HOURS = intPreferencesKey("resume_max_age_hours")
         val BACKGROUND_APPROVAL_WINDOW_HOURS = intPreferencesKey("background_approval_window_hours")
         val TRACE_RETENTION_RUNS_PER_SESSION = intPreferencesKey("trace_retention_runs_per_session")
@@ -1179,6 +1182,52 @@ class SettingsManager @Inject constructor(
         }
     }
 
+    override val cloudRetryMaxAttempts: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.CLOUD_RETRY_MAX_ATTEMPTS]
+                ?: SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_DEFAULT
+        }
+
+    override suspend fun setCloudRetryMaxAttempts(attempts: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.CLOUD_RETRY_MAX_ATTEMPTS] = attempts.coerceIn(
+                SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_MIN,
+                SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_MAX,
+            )
+        }
+    }
+
+    override val cloudRetryBaseDelayMs: Flow<Long> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.CLOUD_RETRY_BASE_DELAY_MS]
+                ?: SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_DEFAULT
+        }
+
+    override suspend fun setCloudRetryBaseDelayMs(delayMs: Long) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.CLOUD_RETRY_BASE_DELAY_MS] = delayMs.coerceIn(
+                SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_MIN,
+                SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_MAX,
+            )
+        }
+    }
+
     override val resumeMaxAgeHours: Flow<Int> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -1496,6 +1545,10 @@ class SettingsManager @Inject constructor(
                 SettingsDefaults.PIPELINE_MAX_NESTING_DEPTH_DEFAULT
             preferences[PreferencesKeys.STRUCTURED_OUTPUT_MAX_REPAIRS] =
                 SettingsDefaults.STRUCTURED_OUTPUT_MAX_REPAIRS_DEFAULT
+            preferences[PreferencesKeys.CLOUD_RETRY_MAX_ATTEMPTS] =
+                SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_DEFAULT
+            preferences[PreferencesKeys.CLOUD_RETRY_BASE_DELAY_MS] =
+                SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_DEFAULT
         }
     }
 

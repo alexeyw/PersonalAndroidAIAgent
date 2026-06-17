@@ -1,5 +1,6 @@
 package app.knotwork.android.domain.engine
 
+import app.knotwork.android.domain.engine.retry.CloudRetryListener
 import app.knotwork.android.domain.models.CloudProvider
 
 /**
@@ -18,11 +19,18 @@ import app.knotwork.android.domain.models.CloudProvider
  */
 interface CloudLlmClientFactory {
     /**
-     * Creates a streaming LLM client for the given [provider].
+     * Creates a streaming LLM client for the given [provider], decorated with
+     * the configured transient-failure retry policy.
      *
      * @param provider The typed [CloudProvider] to construct a client for.
+     * @param retryListener Sink notified before each retry, so the caller can
+     *   surface retry attempts in the console. Defaults to
+     *   [CloudRetryListener.NONE] for callers that do not observe retries.
      * @return The constructed client, or `null` when the user has not configured the
      *         credentials/base URL required by [provider].
      */
-    suspend fun createClient(provider: CloudProvider): Any?
+    suspend fun createClient(
+        provider: CloudProvider,
+        retryListener: CloudRetryListener = CloudRetryListener.NONE,
+    ): Any?
 }

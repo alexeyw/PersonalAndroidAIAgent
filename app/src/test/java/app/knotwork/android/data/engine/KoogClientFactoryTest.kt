@@ -1,5 +1,6 @@
 package app.knotwork.android.data.engine
 
+import app.knotwork.android.data.engine.retry.CloudRetryWrapper
 import app.knotwork.android.domain.repositories.ApiKeyRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import io.mockk.coEvery
@@ -27,8 +28,11 @@ class KoogClientFactoryTest {
         apiKeyRepository = mockk()
         settingsRepository = mockk(relaxed = true) {
             every { blockNetworkFromLocalModel } returns MutableStateFlow(false)
+            // Disable retry wrapping so each helper returns the raw client these
+            // identity/null assertions expect (an attempt budget of 1 = no retries).
+            every { cloudRetryMaxAttempts } returns flowOf(1)
         }
-        factory = KoogClientFactory(apiKeyRepository, settingsRepository)
+        factory = KoogClientFactory(apiKeyRepository, settingsRepository, CloudRetryWrapper(settingsRepository))
     }
 
     @Test

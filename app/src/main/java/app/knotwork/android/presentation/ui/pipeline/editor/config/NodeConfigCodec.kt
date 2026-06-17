@@ -31,6 +31,7 @@ import org.json.JSONException
 import org.json.JSONObject
 import timber.log.Timber
 import app.knotwork.android.domain.models.NodeType as DomainNodeType
+import app.knotwork.design.components.pipelineeditor.CloudProvider as CatalogCloudProvider
 import app.knotwork.design.components.pipelineeditor.NodeType as CatalogNodeType
 
 /**
@@ -143,8 +144,14 @@ internal object NodeConfigCodec {
                 // sheet does not rewrite an auto-routing node to OpenAI.
                 cloudProvider = CloudProviderMapper.toWireId(config.provider),
             )
-            is ToolConfig -> withJson.copy(toolName = config.toolId.takeIf { it.isNotBlank() })
-            is IfConditionConfig -> withJson.copy(conditionPrompt = config.expression)
+            is ToolConfig -> withJson.copy(
+                toolName = config.toolId.takeIf { it.isNotBlank() },
+                cloudProvider = engineWire(config.engineProvider),
+            )
+            is IfConditionConfig -> withJson.copy(
+                conditionPrompt = config.expression,
+                cloudProvider = engineWire(config.engineProvider),
+            )
             is ClarificationConfig -> withJson.copy(
                 clarificationTimeoutMs = config.timeoutMs?.toLong(),
                 systemPrompt = config.questionTemplate,
@@ -168,15 +175,43 @@ internal object NodeConfigCodec {
                 skillId = config.skillId.takeIf { it.isNotBlank() },
                 cloudProvider = if (config.engine == SkillEngine.CLOUD) CloudProvider.AUTO_KEY else null,
             )
-            is IntentRouterConfig,
-            is DecompositionConfig,
+            is IntentRouterConfig -> withJson.copy(cloudProvider = engineWire(config.engineProvider))
+            is DecompositionConfig -> withJson.copy(cloudProvider = engineWire(config.engineProvider))
+            is EvaluationConfig -> withJson.copy(cloudProvider = engineWire(config.engineProvider))
             is QueueProcessorConfig,
-            is EvaluationConfig,
             is SummaryConfig,
             is InputConfig,
             -> withJson
         }
     }
+
+    /**
+     * Maps a structured node's catalog engine selection to the flat
+     * `cloudProvider` wire-id: `null` (on-device) stays `null`; a concrete cloud
+     * provider yields its wire-id. `Auto` never reaches here — the structured
+     * engine picker offers only on-device + concrete providers.
+     */
+    private fun engineWire(provider: CatalogCloudProvider?): String? =
+        provider?.let { CloudProviderMapper.toWireId(it) }
+
+    /**
+     * Inverse of [engineWire]: maps a node's flat `cloudProvider` back to the
+     * structured engine selection. A blank/`null` provider — or the `"auto"`
+     * sentinel, which structured nodes do not support — resolves to on-device
+     * (`null`); any concrete provider resolves to its catalog tile.
+     */
+    private fun engineProviderFromWire(cloudProvider: String?): CatalogCloudProvider? = cloudProvider
+        ?.takeIf { it.isNotBlank() && !it.equals(CloudProvider.AUTO_KEY, ignoreCase = true) }
+        ?.let { CloudProviderMapper.fromWireId(it) }
+
+    /**
+     * Decodes the structured engine selection from a node's rich payload,
+     * preferring the persisted `engineProvider` name and falling back to the
+     * flat `cloudProvider` wire-id for rows written before the field existed.
+     */
+    private fun decodeEngineProvider(p: JSONObject, fb: NodeModel): CatalogCloudProvider? =
+        enumOrNull<CatalogCloudProvider>(p.optStringOrNull("engineProvider"))
+            ?: engineProviderFromWire(fb.cloudProvider)
 
     /**
      * Builds a fresh default [NodeConfig] for [type] — used by the editor when the user picks
@@ -299,10 +334,12 @@ internal object NodeConfigCodec {
             CatalogNodeType.INTENT_ROUTER -> IntentRouterConfig(
                 title = title,
                 classifierPrompt = systemPromptOrDefault,
+                engineProvider = engineProviderFromWire(node.cloudProvider),
             )
             CatalogNodeType.IF_CONDITION -> IfConditionConfig(
                 title = title,
                 expression = node.conditionPrompt.orEmpty(),
+                engineProvider = engineProviderFromWire(node.cloudProvider),
             )
             CatalogNodeType.CLARIFICATION -> ClarificationConfig(
                 title = title,
@@ -312,15 +349,18 @@ internal object NodeConfigCodec {
             CatalogNodeType.TOOL -> ToolConfig(
                 title = title,
                 toolId = node.toolName.orEmpty(),
+                engineProvider = engineProviderFromWire(node.cloudProvider),
             )
             CatalogNodeType.DECOMPOSITION -> DecompositionConfig(
                 title = title,
                 planningPrompt = systemPromptOrDefault,
+                engineProvider = engineProviderFromWire(node.cloudProvider),
             )
             CatalogNodeType.QUEUE_PROCESSOR -> QueueProcessorConfig(title = title)
             CatalogNodeType.EVALUATION -> EvaluationConfig(
                 title = title,
                 criteriaPrompt = systemPromptOrDefault,
+                engineProvider = engineProviderFromWire(node.cloudProvider),
             )
             CatalogNodeType.SUMMARY -> SummaryConfig(
                 title = title,
@@ -383,12 +423,14 @@ internal object NodeConfigCodec {
         json.put("classes", classes)
         json.put("classifierPrompt", c.classifierPrompt)
         c.fallbackClass?.let { json.put("fallbackClass", it) }
+        c.engineProvider?.let { json.put("engineProvider", it.name) }
     }
 
     private fun encodeIfCondition(json: JSONObject, c: IfConditionConfig) {
         json.put("expression", c.expression)
         json.put("labelTrue", c.labelTrue)
         json.put("labelFalse", c.labelFalse)
+        c.engineProvider?.let { json.put("engineProvider", it.name) }
     }
 
     private fun encodeClarification(json: JSONObject, c: ClarificationConfig) {
@@ -405,12 +447,14 @@ internal object NodeConfigCodec {
         }
         json.put("argumentMapping", args)
         c.confirmOverride?.let { json.put("confirmOverride", it.name) }
+        c.engineProvider?.let { json.put("engineProvider", it.name) }
     }
 
     private fun encodeDecomposition(json: JSONObject, c: DecompositionConfig) {
         json.put("planningPrompt", c.planningPrompt)
         json.put("maxSubtasks", c.maxSubtasks)
         c.outputSchemaJson?.let { json.put("outputSchemaJson", it) }
+        c.engineProvider?.let { json.put("engineProvider", it.name) }
     }
 
     private fun encodeQueueProcessor(json: JSONObject, c: QueueProcessorConfig) {
@@ -423,6 +467,7 @@ internal object NodeConfigCodec {
     private fun encodeEvaluation(json: JSONObject, c: EvaluationConfig) {
         json.put("criteriaPrompt", c.criteriaPrompt)
         json.put("maxRetries", c.maxRetries)
+        c.engineProvider?.let { json.put("engineProvider", it.name) }
     }
 
     private fun encodeSummary(json: JSONObject, c: SummaryConfig) {
@@ -513,6 +558,7 @@ internal object NodeConfigCodec {
         }.orEmpty(),
         classifierPrompt = p.optString("classifierPrompt").ifBlank { fb.systemPrompt.orEmpty() },
         fallbackClass = p.optStringOrNull("fallbackClass"),
+        engineProvider = decodeEngineProvider(p, fb),
     )
 
     private fun decodeIfCondition(
@@ -526,6 +572,7 @@ internal object NodeConfigCodec {
         expression = p.optString("expression").ifBlank { fb.conditionPrompt.orEmpty() },
         labelTrue = p.optString("labelTrue").ifBlank { "True" },
         labelFalse = p.optString("labelFalse").ifBlank { "False" },
+        engineProvider = decodeEngineProvider(p, fb),
     )
 
     private fun decodeClarification(
@@ -552,6 +599,7 @@ internal object NodeConfigCodec {
             }
         }.orEmpty(),
         confirmOverride = enumOrNull<ConfirmPolicy>(p.optStringOrNull("confirmOverride")),
+        engineProvider = decodeEngineProvider(p, fb),
     )
 
     private fun decodeDecomposition(
@@ -565,6 +613,7 @@ internal object NodeConfigCodec {
         planningPrompt = p.optString("planningPrompt").ifBlank { fb.systemPrompt.orEmpty() },
         maxSubtasks = p.optInt("maxSubtasks", DEFAULT_MAX_SUBTASKS),
         outputSchemaJson = p.optStringOrNull("outputSchemaJson"),
+        engineProvider = decodeEngineProvider(p, fb),
     )
 
     private fun decodeQueueProcessor(
@@ -587,6 +636,7 @@ internal object NodeConfigCodec {
             description = description,
             criteriaPrompt = p.optString("criteriaPrompt").ifBlank { fb.systemPrompt.orEmpty() },
             maxRetries = p.optInt("maxRetries", DEFAULT_MAX_RETRIES),
+            engineProvider = decodeEngineProvider(p, fb),
         )
 
     private fun decodeSummary(p: JSONObject, title: String, description: String?, fb: NodeModel): SummaryConfig =

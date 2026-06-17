@@ -62,7 +62,7 @@ class CloudEmbeddingProviderTest {
     @Test
     fun `embed with a key calls OpenAI and maps doubles to floats`() = runTest {
         every { apiKeyRepository.getOpenAIKey() } returns flowOf("sk-test")
-        every { embedderFactory.openAiClient("sk-test") } returns client
+        coEvery { embedderFactory.openAiClient("sk-test") } returns client
         coEvery { client.embed(any<List<String>>(), any()) } returns
             listOf(listOf(0.1, 0.2, 0.3))
 
@@ -75,7 +75,7 @@ class CloudEmbeddingProviderTest {
     @Test
     fun `embed batch preserves per-input order`() = runTest {
         every { apiKeyRepository.getOpenAIKey() } returns flowOf("sk-test")
-        every { embedderFactory.openAiClient(any()) } returns client
+        coEvery { embedderFactory.openAiClient(any()) } returns client
         coEvery { client.embed(any<List<String>>(), any()) } returns
             listOf(listOf(1.0), listOf(2.0))
 
@@ -99,7 +99,7 @@ class CloudEmbeddingProviderTest {
     @Test
     fun `embed wraps a client failure in EmbeddingException`() = runTest {
         every { apiKeyRepository.getOpenAIKey() } returns flowOf("sk-test")
-        every { embedderFactory.openAiClient(any()) } returns client
+        coEvery { embedderFactory.openAiClient(any()) } returns client
         coEvery { client.embed(any<List<String>>(), any()) } throws RuntimeException("boom")
 
         val thrown = runCatching { provider.embed("hello") }.exceptionOrNull()
@@ -111,7 +111,7 @@ class CloudEmbeddingProviderTest {
     @Test
     fun `embed rethrows CancellationException without wrapping`() = runTest {
         every { apiKeyRepository.getOpenAIKey() } returns flowOf("sk-test")
-        every { embedderFactory.openAiClient(any()) } returns client
+        coEvery { embedderFactory.openAiClient(any()) } returns client
         coEvery { client.embed(any<List<String>>(), any()) } throws CancellationException("cancelled")
 
         val thrown = runCatching { provider.embed("hello") }.exceptionOrNull()

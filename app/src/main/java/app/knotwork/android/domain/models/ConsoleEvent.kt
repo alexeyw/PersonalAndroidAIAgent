@@ -66,4 +66,13 @@ sealed interface ConsoleEventType {
      * [app.knotwork.android.domain.engine.structured.RepairListener].
      */
     data object StructuredOutputRepair : ConsoleEventType
+
+    /**
+     * A transient cloud-call failure (HTTP 429 / 5xx / timeout) was retried by
+     * the Koog retry policy (e.g. `"Cloud retry 1/2 for openai"`). Rendered as a
+     * muted warning-style line so the user can see the provider blipped before
+     * recovering. Emitted by the cloud node executor via
+     * [app.knotwork.android.domain.engine.retry.CloudRetryListener].
+     */
+    data object CloudRetry : ConsoleEventType
 }

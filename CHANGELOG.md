@@ -15,6 +15,26 @@ details.
 
 ### Added
 
+- **Transient-failure retry for cloud calls.** Every cloud LLM call (chat
+  completions and cloud embeddings) is now wrapped with an exponential-backoff
+  retry policy: transient failures (HTTP 429 / 5xx / connection & read timeouts)
+  are retried, while authentication errors are not and coroutine cancellation is
+  always honoured. The attempt budget (1–5, default 3; `1` disables retries) and
+  the base delay (100–10000 ms, default 1000) are configurable under
+  Settings → Providers and apply to all cloud providers. Each retry of a CLOUD
+  node is surfaced on the agent console as a muted warning line
+  (`Cloud retry 1/2 for openai`).
+
+- **Cloud-backed structured output for structured nodes.** The structured node
+  types (`INTENT_ROUTER`, `DECOMPOSITION`, `EVALUATION`, `IF_CONDITION`, `TOOL`)
+  can now run their validate-and-repair gate against a cloud provider instead of
+  the on-device model. Each exposes an **Engine** selector (On-device by
+  default, or a concrete cloud provider) in both the in-app and browser pipeline
+  editors, persisted via the node's `cloudProvider`. When the chosen provider
+  natively constrains output to JSON, the gate trusts it and validates once
+  (`maxRepairs = 0`) for JSON-payload nodes; otherwise it falls back to the full
+  repair budget. The gate remains the single source of structural validation.
+
 - **Structured-output validate-and-repair gate.** A new domain component
   validates an LLM-driven node's output against the shape the node expects — a
   JSON object or array (deserialized with `kotlinx.serialization`) or one of a
@@ -127,6 +147,12 @@ details.
     is validated for every graph in the stack.
 
 ### Changed
+
+- **Cloud client and embedding factories are now retry-wrapped.** Cloud clients
+  built by `KoogClientFactory` and the cloud/Ollama embedding clients are
+  decorated with the configurable retry policy before use, using Koog's
+  standalone `RetryingLLMClient` decorator over the existing cloud-LLM-client
+  layer.
 
 - **Structured-output gate wired into every LLM-driven consumer.** The engine's
   structured consumers now route their model output through the validate-and-repair

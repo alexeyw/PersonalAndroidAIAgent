@@ -22,6 +22,7 @@ import app.knotwork.android.domain.engine.executors.SummaryNodeExecutor
 import app.knotwork.android.domain.engine.executors.SystemNodeExecutor
 import app.knotwork.android.domain.engine.executors.ToolInvocationGate
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
+import app.knotwork.android.domain.engine.structured.CloudStructuredInferenceClientFactory
 import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTool
@@ -156,7 +157,7 @@ class GraphExecutionEngineTest {
         // Koog model so each individual test does not have to wire it up.
         coEvery { cloudLlmModelResolver.resolveModel(any()) } returns AnthropicModels.Sonnet_4_5
         // Provider-keyed dispatch — tests that exercise CLOUD configure Anthropic.
-        coEvery { koogClientFactory.createClient(any()) } coAnswers {
+        coEvery { koogClientFactory.createClient(any(), any()) } coAnswers {
             when (firstArg<CloudProvider>()) {
                 CloudProvider.ANTHROPIC -> koogClientFactory.createAnthropicExecutor()
                 CloudProvider.OPENAI -> koogClientFactory.createOpenAIExecutor()
@@ -184,6 +185,7 @@ class GraphExecutionEngineTest {
             ),
             StructuredOutputGate(),
             settingsRepository,
+            CloudStructuredInferenceClientFactory { _, _ -> null },
         )
 
         val liteRtNodeExecutor = LiteRtNodeExecutor(
@@ -212,6 +214,7 @@ class GraphExecutionEngineTest {
             chatRepository,
             StructuredOutputGate(),
             settingsRepository,
+            CloudStructuredInferenceClientFactory { _, _ -> null },
         )
 
         val summaryNodeExecutor = SummaryNodeExecutor(
@@ -1155,6 +1158,7 @@ class GraphExecutionEngineTest {
                 ),
                 StructuredOutputGate(),
                 settingsRepository,
+                CloudStructuredInferenceClientFactory { _, _ -> null },
             ),
             LiteRtNodeExecutor(
                 llmEngine,
@@ -1174,7 +1178,19 @@ class GraphExecutionEngineTest {
                 cloudLlmModelResolver,
                 networkActivityTracker,
             ),
-            SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository, StructuredOutputGate(), settingsRepository),
+            SystemNodeExecutor(
+                llmEngine,
+                loadModelUseCase,
+                chatRepository,
+                StructuredOutputGate(),
+                settingsRepository,
+                CloudStructuredInferenceClientFactory {
+                        _,
+                        _,
+                    ->
+                    null
+                },
+            ),
             QueueProcessorNodeExecutor(),
             SummaryNodeExecutor(llmEngine, loadModelUseCase),
             ClarificationNodeExecutor(
@@ -1208,6 +1224,7 @@ class GraphExecutionEngineTest {
                 ),
                 StructuredOutputGate(),
                 settingsRepository,
+                CloudStructuredInferenceClientFactory { _, _ -> null },
             ),
             chatRepository,
             settingsRepository,
@@ -1357,6 +1374,7 @@ class GraphExecutionEngineTest {
                     ),
                     StructuredOutputGate(),
                     settingsRepository,
+                    CloudStructuredInferenceClientFactory { _, _ -> null },
                 ),
                 LiteRtNodeExecutor(
                     llmEngine,
@@ -1382,6 +1400,7 @@ class GraphExecutionEngineTest {
                     chatRepository,
                     StructuredOutputGate(),
                     settingsRepository,
+                    CloudStructuredInferenceClientFactory { _, _ -> null },
                 ),
                 QueueProcessorNodeExecutor(),
                 SummaryNodeExecutor(llmEngine, loadModelUseCase),
@@ -1416,6 +1435,7 @@ class GraphExecutionEngineTest {
                     ),
                     StructuredOutputGate(),
                     settingsRepository,
+                    CloudStructuredInferenceClientFactory { _, _ -> null },
                 ),
                 chatRepository,
                 settingsRepository,

@@ -81,7 +81,7 @@ class CloudLlmNodeExecutorTest {
         val capturedPrompt = slot<Prompt>()
         coEvery { client.executeStreaming(capture(capturedPrompt), any<LLModel>()) } returns
             flowOf(StreamFrame.TextDelta("ok"))
-        coEvery { clientFactory.createClient(CloudProvider.ANTHROPIC) } returns client
+        coEvery { clientFactory.createClient(CloudProvider.ANTHROPIC, any()) } returns client
         coEvery { modelResolver.resolveModel(CloudProvider.ANTHROPIC) } returns AnthropicModels.Sonnet_4_5
 
         val assembledContext = "--- Original Task ---\nQ\n\n--- Previous Node Output ---\nU"
@@ -104,7 +104,7 @@ class CloudLlmNodeExecutorTest {
             StreamFrame.TextDelta("bbb"),
             StreamFrame.TextDelta("cc"),
         )
-        coEvery { clientFactory.createClient(CloudProvider.ANTHROPIC) } returns client
+        coEvery { clientFactory.createClient(CloudProvider.ANTHROPIC, any()) } returns client
         coEvery { modelResolver.resolveModel(CloudProvider.ANTHROPIC) } returns AnthropicModels.Sonnet_4_5
 
         val outputs = executor.execute(node, "input", "s1", "Q").toList()
@@ -115,7 +115,7 @@ class CloudLlmNodeExecutorTest {
     @Test
     fun `execute returns error result when client factory returns null`() = runTest {
         val node = NodeModel("1", NodeType.CLOUD, 0f, 0f, cloudProvider = "anthropic")
-        coEvery { clientFactory.createClient(CloudProvider.ANTHROPIC) } returns null
+        coEvery { clientFactory.createClient(CloudProvider.ANTHROPIC, any()) } returns null
 
         val outputs = executor.execute(node, "input", "s1", "Q").toList()
 
@@ -135,7 +135,7 @@ class CloudLlmNodeExecutorTest {
         val node = NodeModel("1", NodeType.CLOUD, 0f, 0f, cloudProvider = "anthropic")
         val client: LLMClient = mockk(relaxed = true)
         coEvery { client.executeStreaming(any(), any<LLModel>()) } returns flowOf(StreamFrame.TextDelta("hi"))
-        coEvery { clientFactory.createClient(CloudProvider.ANTHROPIC) } returns client
+        coEvery { clientFactory.createClient(CloudProvider.ANTHROPIC, any()) } returns client
         coEvery { modelResolver.resolveModel(CloudProvider.ANTHROPIC) } returns AnthropicModels.Sonnet_4_5
 
         val outputs = executor.execute(node, "input", "s1", "Q").toList()

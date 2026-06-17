@@ -517,6 +517,36 @@ interface SettingsRepository {
     suspend fun setStructuredOutputMaxRepairs(count: Int)
 
     /**
+     * A [Flow] representing the maximum number of attempts (the initial call
+     * plus retries) a transient cloud-call failure is given before the error
+     * propagates. Consumed by the cloud client/embedding factories to build
+     * Koog's retry policy; `1` means "no retries". Valid range: 1–5.
+     */
+    val cloudRetryMaxAttempts: Flow<Int>
+
+    /**
+     * Updates the cloud-retry attempt budget.
+     *
+     * @param attempts The new attempt ceiling. Will be coerced to the range 1–5.
+     */
+    suspend fun setCloudRetryMaxAttempts(attempts: Int)
+
+    /**
+     * A [Flow] representing the base delay, in milliseconds, before the first
+     * cloud retry. Subsequent retries grow it by the fixed exponential-backoff
+     * multiplier with jitter. Valid range: 100–10000.
+     */
+    val cloudRetryBaseDelayMs: Flow<Long>
+
+    /**
+     * Updates the cloud-retry base delay.
+     *
+     * @param delayMs The new base delay in milliseconds. Will be coerced to the
+     *   range 100–10000.
+     */
+    suspend fun setCloudRetryBaseDelayMs(delayMs: Long)
+
+    /**
      * A [Flow] representing the window, in hours, during which an interrupted
      * pipeline run can still be resumed from its checkpoint. Interrupted runs
      * older than this only offer the regular discard path — their recorded

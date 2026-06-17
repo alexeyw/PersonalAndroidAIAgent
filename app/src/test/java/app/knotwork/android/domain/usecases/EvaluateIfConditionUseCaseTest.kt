@@ -1,7 +1,10 @@
 package app.knotwork.android.domain.usecases
 
 import app.knotwork.android.domain.engine.LlmInferenceEngine
+import app.knotwork.android.domain.engine.structured.CloudStructuredClient
+import app.knotwork.android.domain.engine.structured.CloudStructuredInferenceClientFactory
 import app.knotwork.android.domain.engine.structured.CollectingRepairListener
+import app.knotwork.android.domain.engine.structured.StructuredInferenceClient
 import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
@@ -36,6 +39,7 @@ class EvaluateIfConditionUseCaseTest {
             llmInferenceEngine,
             StructuredOutputGate(),
             settingsRepository,
+            CloudStructuredInferenceClientFactory { _, _ -> null },
         )
     }
 
@@ -88,6 +92,31 @@ class EvaluateIfConditionUseCaseTest {
         every { llmInferenceEngine.generateResponseStream(any(), any()) } returns flowOf("T", "r", "u", "e")
 
         val outcome = evaluateIfConditionUseCase(ifNode(prompt = "Is this a question?"), "How are you?")
+
+        assertTrue(outcome.value)
+        assertFalse(outcome.gateFailed)
+    }
+
+    @Test
+    fun `given a cloud provider node when invoke then routes the gate to the cloud client`() = runTest {
+        // A cloud-backed structured client that classifies the condition as True,
+        // proving the use case routes to the cloud seam (not the local engine)
+        // when the node carries a cloudProvider.
+        val cloudFactory = CloudStructuredInferenceClientFactory { _, _ ->
+            CloudStructuredClient(
+                inference = StructuredInferenceClient { _, _ -> "True" },
+                supportsNativeJson = true,
+            )
+        }
+        val useCase = EvaluateIfConditionUseCase(
+            llmInferenceEngine,
+            StructuredOutputGate(),
+            settingsRepository,
+            cloudFactory,
+        )
+        val node = ifNode(prompt = "Is this a question?").copy(cloudProvider = "openai")
+
+        val outcome = useCase(node, "How are you?")
 
         assertTrue(outcome.value)
         assertFalse(outcome.gateFailed)

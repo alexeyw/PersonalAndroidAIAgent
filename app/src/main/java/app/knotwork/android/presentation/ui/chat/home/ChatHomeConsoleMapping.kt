@@ -71,6 +71,7 @@ internal fun ConsoleEventType.toConsoleSource(): ConsoleSource = when (this) {
     ConsoleEventType.SystemMessage -> ConsoleSource.RUNTIME
     ConsoleEventType.Error -> ConsoleSource.RUNTIME
     ConsoleEventType.StructuredOutputRepair -> ConsoleSource.RUNTIME
+    ConsoleEventType.CloudRetry -> ConsoleSource.RUNTIME
 }
 
 /**
@@ -83,6 +84,7 @@ internal fun ConsoleEventType.toConsoleSource(): ConsoleSource = when (this) {
 internal fun ConsoleEventType.toConsoleLevel(): ConsoleLevel = when (this) {
     ConsoleEventType.Error -> ConsoleLevel.Error
     ConsoleEventType.StructuredOutputRepair -> ConsoleLevel.Warn
+    ConsoleEventType.CloudRetry -> ConsoleLevel.Warn
     ConsoleEventType.NodeExecution -> ConsoleLevel.Trace
     ConsoleEventType.MemoryAccess,
     ConsoleEventType.ToolCall,

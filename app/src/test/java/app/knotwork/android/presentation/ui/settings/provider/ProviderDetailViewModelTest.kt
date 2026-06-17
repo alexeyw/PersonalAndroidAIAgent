@@ -2,6 +2,7 @@ package app.knotwork.android.presentation.ui.settings.provider
 
 import app.knotwork.android.domain.models.ProviderId
 import app.knotwork.android.domain.repositories.ApiKeyRepository
+import app.knotwork.android.domain.repositories.SettingsRepository
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
@@ -39,6 +40,7 @@ class ProviderDetailViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
 
     private lateinit var apiKeyRepository: ApiKeyRepository
+    private lateinit var settingsRepository: SettingsRepository
     private lateinit var viewModel: ProviderDetailViewModel
 
     @Before
@@ -47,7 +49,10 @@ class ProviderDetailViewModelTest {
         // Relaxed so the suspend setters are stubbed as no-ops; bind() reads are
         // overridden per test below.
         apiKeyRepository = mockk(relaxed = true)
-        viewModel = ProviderDetailViewModel(apiKeyRepository)
+        // Relaxed so the global cloud-retry flows the ViewModel binds on
+        // construction resolve to empty flows (no emissions) by default.
+        settingsRepository = mockk(relaxed = true)
+        viewModel = ProviderDetailViewModel(apiKeyRepository, settingsRepository)
     }
 
     @After

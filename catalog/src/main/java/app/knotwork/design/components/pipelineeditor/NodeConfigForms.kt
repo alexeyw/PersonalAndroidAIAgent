@@ -460,6 +460,35 @@ private fun <T> SegmentedChipRow(label: String, values: List<Pair<T, String>>, s
     }
 }
 
+/**
+ * Optional engine selector shared by the structured node types
+ * (INTENT_ROUTER / DECOMPOSITION / EVALUATION / IF_CONDITION / TOOL).
+ *
+ * Unlike the CLOUD node — which is always cloud — these nodes default to
+ * on-device inference, so the first chip is `On-device` (a `null` provider) and
+ * the remaining chips pick a concrete cloud provider that backs the node's
+ * structured-output gate. `Auto` is intentionally omitted: structured nodes
+ * select a concrete provider, never runtime auto-detection.
+ *
+ * @param selected the currently selected provider, or `null` for on-device.
+ * @param onSelect invoked with the new selection (`null` ⇒ on-device).
+ */
+@Composable
+private fun EngineProviderRow(selected: CloudProvider?, onSelect: (CloudProvider?) -> Unit) {
+    SegmentedChipRow<CloudProvider?>(
+        label = stringResource(R.string.knotwork_node_field_engine),
+        values = listOf(
+            null to stringResource(R.string.knotwork_node_field_engine_on_device),
+            CloudProvider.OPEN_AI to "OpenAI",
+            CloudProvider.ANTHROPIC to "Anthropic",
+            CloudProvider.GOOGLE to "Google",
+            CloudProvider.COMPATIBLE to "Compatible",
+        ),
+        selected = selected,
+        onSelect = onSelect,
+    )
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Per-type forms
 // ─────────────────────────────────────────────────────────────────────────
@@ -751,6 +780,7 @@ private fun IntentRouterFormBody(
         )
         InlineError(failure = errors[FieldId.FALLBACK_CLASS])
     }
+    EngineProviderRow(config.engineProvider) { next -> onChange(config.copy(engineProvider = next)) }
 }
 
 @Composable
@@ -790,6 +820,7 @@ private fun IfConditionFormBody(
         singleLine = true,
         onChange = { next -> onChange(config.copy(labelFalse = next)) },
     )
+    EngineProviderRow(config.engineProvider) { next -> onChange(config.copy(engineProvider = next)) }
 }
 
 @Composable
@@ -1201,6 +1232,7 @@ private fun ToolFormBody(
         selected = config.confirmOverride,
         onSelect = { next -> onChange(config.copy(confirmOverride = next)) },
     )
+    EngineProviderRow(config.engineProvider) { next -> onChange(config.copy(engineProvider = next)) }
 }
 
 @Composable
@@ -1239,6 +1271,7 @@ private fun DecompositionFormBody(
         singleLine = false,
         onChange = { next -> onChange(config.copy(outputSchemaJson = next.takeIf { it.isNotBlank() })) },
     )
+    EngineProviderRow(config.engineProvider) { next -> onChange(config.copy(engineProvider = next)) }
 }
 
 @Composable
@@ -1311,6 +1344,7 @@ private fun EvaluationFormBody(
         error = errors[FieldId.MAX_RETRIES],
         onChange = { next -> onChange(config.copy(maxRetries = next)) },
     )
+    EngineProviderRow(config.engineProvider) { next -> onChange(config.copy(engineProvider = next)) }
 }
 
 @Composable

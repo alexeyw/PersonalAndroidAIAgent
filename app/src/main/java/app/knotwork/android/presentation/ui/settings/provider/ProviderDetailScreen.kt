@@ -13,6 +13,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -32,6 +33,7 @@ import app.knotwork.android.data.engine.KoogModelMapper
 import app.knotwork.android.domain.constants.SettingsDefaults
 import app.knotwork.android.domain.models.ProviderId
 import app.knotwork.android.domain.repositories.ApiKeyRepository
+import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.screens.settings.KnotworkProviderRow
 import app.knotwork.design.screens.settings.OllamaProviderInputs
@@ -178,8 +180,75 @@ fun ProviderDetailScreen(
                         )
                     }
                 }
+                CloudRetrySection(
+                    maxAttempts = uiState.cloudRetryMaxAttempts,
+                    baseDelayMs = uiState.cloudRetryBaseDelayMs,
+                    onMaxAttemptsChange = viewModel::updateCloudRetryMaxAttempts,
+                    onBaseDelayChange = viewModel::updateCloudRetryBaseDelayMs,
+                )
             }
         }
+    }
+}
+
+/**
+ * Global cloud-retry policy controls, shown on every provider detail screen
+ * because the policy applies to all cloud providers (and cloud embeddings)
+ * uniformly. Two sliders map onto the persisted
+ * [SettingsRepository.cloudRetryMaxAttempts] (initial call + retries) and
+ * [SettingsRepository.cloudRetryBaseDelayMs] (base backoff delay); the store
+ * coerces both to their valid ranges. An attempt budget of `1` disables retries.
+ *
+ * @param maxAttempts current attempt budget.
+ * @param baseDelayMs current base delay in milliseconds.
+ * @param onMaxAttemptsChange invoked as the attempts slider settles.
+ * @param onBaseDelayChange invoked as the delay slider settles.
+ */
+@Composable
+private fun CloudRetrySection(
+    maxAttempts: Int,
+    baseDelayMs: Long,
+    onMaxAttemptsChange: (Int) -> Unit,
+    onBaseDelayChange: (Long) -> Unit,
+) {
+    val minAttempts = SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_MIN
+    val maxAttemptsBound = SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_MAX
+    val attemptsRange = minAttempts.toFloat()..maxAttemptsBound.toFloat()
+    val minDelay = SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_MIN.toFloat()
+    val maxDelay = SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_MAX.toFloat()
+    val delayRange = minDelay..maxDelay
+    Column(modifier = Modifier.fillMaxWidth().padding(top = KnotworkTheme.spacing.sp4)) {
+        Text(
+            text = stringResource(R.string.settings_cloud_retry_title),
+            style = KnotworkTextStyles.TitleMd,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = stringResource(R.string.settings_cloud_retry_subtitle),
+            style = KnotworkTextStyles.BodySm,
+            color = KnotworkTheme.extended.onSurfaceMuted,
+        )
+        Text(
+            text = stringResource(R.string.settings_cloud_retry_attempts_label, maxAttempts),
+            style = KnotworkTextStyles.BodyBase,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Slider(
+            value = maxAttempts.toFloat(),
+            onValueChange = { onMaxAttemptsChange(it.toInt()) },
+            valueRange = attemptsRange,
+            steps = maxAttemptsBound - minAttempts - 1,
+        )
+        Text(
+            text = stringResource(R.string.settings_cloud_retry_delay_label, baseDelayMs),
+            style = KnotworkTextStyles.BodyBase,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Slider(
+            value = baseDelayMs.toFloat(),
+            onValueChange = { onBaseDelayChange(it.toLong()) },
+            valueRange = delayRange,
+        )
     }
 }
 
@@ -232,6 +301,8 @@ data class ProviderDetailUiState(
     val ollamaModel: String = "",
     val ollamaContextWindow: String = "4096",
     val ollamaBaseUrlInvalid: Boolean = false,
+    val cloudRetryMaxAttempts: Int = SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_DEFAULT,
+    val cloudRetryBaseDelayMs: Long = SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_DEFAULT,
 )
 
 /**
@@ -241,10 +312,24 @@ data class ProviderDetailUiState(
  * link target without forcing the entire Settings tree to load.
  */
 @HiltViewModel
-class ProviderDetailViewModel @Inject constructor(private val apiKeyRepository: ApiKeyRepository) : ViewModel() {
+class ProviderDetailViewModel @Inject constructor(
+    private val apiKeyRepository: ApiKeyRepository,
+    private val settingsRepository: SettingsRepository,
+) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ProviderDetailUiState())
     val uiState: StateFlow<ProviderDetailUiState> = _uiState.asStateFlow()
+
+    init {
+        // The cloud-retry policy is global (applies to every provider), so it is
+        // bound once on construction rather than per-provider in [bind].
+        settingsRepository.cloudRetryMaxAttempts
+            .onEach { v -> _uiState.update { it.copy(cloudRetryMaxAttempts = v) } }
+            .launchIn(viewModelScope)
+        settingsRepository.cloudRetryBaseDelayMs
+            .onEach { v -> _uiState.update { it.copy(cloudRetryBaseDelayMs = v) } }
+            .launchIn(viewModelScope)
+    }
 
     /**
      * Binds the screen to the relevant API-key flows. Idempotent —
@@ -343,5 +428,15 @@ class ProviderDetailViewModel @Inject constructor(private val apiKeyRepository: 
             val size = value.toIntOrNull() ?: SettingsDefaults.OLLAMA_CONTEXT_WINDOW_DEFAULT
             apiKeyRepository.setOllamaContextWindowSize(size)
         }
+    }
+
+    /** Persists the global cloud-retry attempt budget (coerced to 1–5 by the store). */
+    fun updateCloudRetryMaxAttempts(value: Int) {
+        viewModelScope.launch { settingsRepository.setCloudRetryMaxAttempts(value) }
+    }
+
+    /** Persists the global cloud-retry base delay in milliseconds (coerced to 100–10000). */
+    fun updateCloudRetryBaseDelayMs(value: Long) {
+        viewModelScope.launch { settingsRepository.setCloudRetryBaseDelayMs(value) }
     }
 }

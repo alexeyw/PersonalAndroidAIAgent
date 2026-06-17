@@ -1,6 +1,7 @@
 package app.knotwork.android.domain.engine.executors
 
 import app.knotwork.android.domain.engine.LlmInferenceEngine
+import app.knotwork.android.domain.engine.structured.CloudStructuredInferenceClientFactory
 import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTool
@@ -83,6 +84,7 @@ class ToolNodeExecutorTest {
             ),
             structuredOutputGate = StructuredOutputGate(),
             settingsRepository = settingsRepository,
+            cloudStructuredFactory = CloudStructuredInferenceClientFactory { _, _ -> null },
         )
 
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
