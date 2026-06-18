@@ -204,6 +204,10 @@ details.
   events read in the console. No behaviour change — documentation catching up
   to the shipped reliability contour.
 
+- **Bump `dev.detekt` `2.0.0-alpha.4` → `2.0.0-alpha.5`** to clear the
+  `NewerVersionAvailable` lint gate. Build tooling only (not shipped in the
+  APK); no rule-set changes affecting the codebase.
+
 ## [0.5.0] - 2026-06-14
 
 ### Added
