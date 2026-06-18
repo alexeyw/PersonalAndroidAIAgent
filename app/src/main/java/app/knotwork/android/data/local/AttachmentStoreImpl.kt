@@ -12,8 +12,6 @@ import app.knotwork.android.domain.services.AttachmentStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.ByteArrayInputStream
@@ -46,9 +44,10 @@ import kotlin.math.roundToInt
  * own token-budget resize at inference time, so this only protects on-disk size
  * and decode memory.
  *
- * **Concurrency.** File writes/deletes serialise on [mutex]; the directory is
- * the store's exclusive territory. Blocking work runs on [dispatcher]
- * ([Dispatchers.IO] in production, overridable in tests).
+ * **Concurrency.** No lock is needed: every ingest writes a freshly minted
+ * UUID file (no two callers can target the same path), [delete] is path-scoped
+ * and idempotent, and the store keeps no shared in-memory state. Blocking work
+ * runs on [dispatcher] ([Dispatchers.IO] in production, overridable in tests).
  *
  * @property context Application context, used solely to locate [Context.filesDir].
  */
@@ -58,8 +57,6 @@ class AttachmentStoreImpl @Inject constructor(@ApplicationContext private val co
     /** Dispatcher for blocking I/O and bitmap work; swapped in unit tests. */
     internal var dispatcher: CoroutineDispatcher = Dispatchers.IO
 
-    private val mutex = Mutex()
-
     override suspend fun ingest(bytes: ByteArray): Result<MessageAttachment> = withContext(dispatcher) {
         try {
             val image = decodeDownscaled(bytes)
@@ -68,10 +65,8 @@ class AttachmentStoreImpl @Inject constructor(@ApplicationContext private val co
                 )
             try {
                 val fileName = "${UUID.randomUUID()}.jpg"
-                mutex.withLock {
-                    FileOutputStream(File(rootDir(), fileName)).use { out ->
-                        image.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
-                    }
+                FileOutputStream(File(rootDir(), fileName)).use { out ->
+                    image.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
                 }
                 Result.success(
                     MessageAttachment(
@@ -111,13 +106,11 @@ class AttachmentStoreImpl @Inject constructor(@ApplicationContext private val co
 
     override suspend fun delete(path: String): Result<Unit> = withContext(dispatcher) {
         try {
-            mutex.withLock {
-                val target = resolveSafe(path)
-                when {
-                    target == null || !target.exists() -> Result.success(Unit)
-                    target.delete() -> Result.success(Unit)
-                    else -> Result.failure(IOException("Failed to delete attachment $path"))
-                }
+            val target = resolveSafe(path)
+            when {
+                target == null || !target.exists() -> Result.success(Unit)
+                target.delete() -> Result.success(Unit)
+                else -> Result.failure(IOException("Failed to delete attachment $path"))
             }
         } catch (e: CancellationException) {
             throw e
@@ -127,9 +120,17 @@ class AttachmentStoreImpl @Inject constructor(@ApplicationContext private val co
         }
     }
 
-    override suspend fun listStoredPaths(): Result<List<String>> = withContext(dispatcher) {
+    override suspend fun listStoredPaths(minAgeMillis: Long): Result<List<String>> = withContext(dispatcher) {
         try {
-            val names = rootDir().listFiles()?.filter { it.isFile }?.map { it.name }.orEmpty()
+            // Files younger than the grace window are skipped: an attachment is
+            // written to disk the moment it is picked, but only referenced by a
+            // message row on send — without the window the orphan sweep could
+            // delete an in-flight attachment still sitting in the composer.
+            val cutoff = System.currentTimeMillis() - minAgeMillis
+            val names = rootDir().listFiles()
+                ?.filter { it.isFile && it.lastModified() <= cutoff }
+                ?.map { it.name }
+                .orEmpty()
             Result.success(names)
         } catch (e: SecurityException) {
             Timber.e(e, "Failed to list attachment directory")

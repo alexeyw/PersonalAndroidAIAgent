@@ -29,7 +29,7 @@ class CleanupOrphanAttachmentsUseCaseTest {
 
     @Test
     fun `given unreferenced files when invoked then only orphans are deleted`() = runTest {
-        coEvery { attachmentStore.listStoredPaths() } returns Result.success(listOf("a.jpg", "b.jpg", "c.jpg"))
+        coEvery { attachmentStore.listStoredPaths(any()) } returns Result.success(listOf("a.jpg", "b.jpg", "c.jpg"))
         coEvery { chatRepository.getReferencedAttachmentPaths() } returns listOf("b.jpg")
         coEvery { attachmentStore.delete(any()) } returns Result.success(Unit)
 
@@ -43,7 +43,7 @@ class CleanupOrphanAttachmentsUseCaseTest {
 
     @Test
     fun `given all files referenced when invoked then nothing is deleted`() = runTest {
-        coEvery { attachmentStore.listStoredPaths() } returns Result.success(listOf("a.jpg", "b.jpg"))
+        coEvery { attachmentStore.listStoredPaths(any()) } returns Result.success(listOf("a.jpg", "b.jpg"))
         coEvery { chatRepository.getReferencedAttachmentPaths() } returns listOf("a.jpg", "b.jpg")
 
         val deleted = useCase()
@@ -54,7 +54,7 @@ class CleanupOrphanAttachmentsUseCaseTest {
 
     @Test
     fun `given empty store when invoked then references are never queried`() = runTest {
-        coEvery { attachmentStore.listStoredPaths() } returns Result.success(emptyList())
+        coEvery { attachmentStore.listStoredPaths(any()) } returns Result.success(emptyList())
 
         val deleted = useCase()
 
@@ -64,7 +64,7 @@ class CleanupOrphanAttachmentsUseCaseTest {
 
     @Test
     fun `given store listing fails when invoked then zero is returned`() = runTest {
-        coEvery { attachmentStore.listStoredPaths() } returns Result.failure(RuntimeException("io"))
+        coEvery { attachmentStore.listStoredPaths(any()) } returns Result.failure(RuntimeException("io"))
 
         val deleted = useCase()
 
@@ -74,7 +74,7 @@ class CleanupOrphanAttachmentsUseCaseTest {
 
     @Test
     fun `given a delete fails when invoked then it is not counted`() = runTest {
-        coEvery { attachmentStore.listStoredPaths() } returns Result.success(listOf("a.jpg", "b.jpg"))
+        coEvery { attachmentStore.listStoredPaths(any()) } returns Result.success(listOf("a.jpg", "b.jpg"))
         coEvery { chatRepository.getReferencedAttachmentPaths() } returns emptyList()
         coEvery { attachmentStore.delete("a.jpg") } returns Result.success(Unit)
         coEvery { attachmentStore.delete("b.jpg") } returns Result.failure(RuntimeException("locked"))

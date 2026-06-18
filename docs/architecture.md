@@ -919,7 +919,9 @@ does **not** travel the pipeline graph — only text does; an image-only message
 substitutes an internal default instruction (`DefaultPrompts`) as the prompt.
 Files are deleted with their owning message/session (`ChatRepositoryImpl`), and
 a daily `AttachmentOrphanCleanupWorker` (mirroring `RunRetentionWorker`) sweeps
-files no message references — the same charging + idle maintenance window.
+files no message references — the same charging + idle maintenance window. The
+sweep skips files younger than a 24 h grace window, so an attachment that is
+already on disk but not yet sent (still in the composer) is never reclaimed.
 
 ### 5.3. JSON parsing
 

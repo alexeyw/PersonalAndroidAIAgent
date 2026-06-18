@@ -51,14 +51,21 @@ interface AttachmentStore {
     suspend fun delete(path: String): Result<Unit>
 
     /**
-     * Enumerates the store-relative paths of every file currently in the
-     * attachment directory. Used by the orphan-cleanup sweep to diff against
-     * the set of paths still referenced by messages.
+     * Enumerates the store-relative paths of stored attachment files at least
+     * [minAgeMillis] old. Used by the orphan-cleanup sweep to diff against the
+     * set of paths still referenced by messages.
      *
-     * @return [Result.success] with the stored file names, or [Result.failure]
-     *   when the directory cannot be read.
+     * The age filter is a safety window: an attachment is written to disk the
+     * moment it is picked but only referenced by a message row on send, so a
+     * just-created file still in the composer must be excluded from the sweep
+     * to avoid deleting an in-flight attachment.
+     *
+     * @param minAgeMillis minimum age (ms since last modification) a file must
+     *   have to be listed; `0` lists every file.
+     * @return [Result.success] with the qualifying stored file names, or
+     *   [Result.failure] when the directory cannot be read.
      */
-    suspend fun listStoredPaths(): Result<List<String>>
+    suspend fun listStoredPaths(minAgeMillis: Long = 0L): Result<List<String>>
 
     /**
      * Resolves a store-relative attachment path to an absolute filesystem path

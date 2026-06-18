@@ -119,6 +119,21 @@ class AttachmentStoreImplTest {
     }
 
     @Test
+    fun `given a grace window then a freshly-written file is excluded but an aged one is listed`() = runTest {
+        val fresh = store.ingest(jpegBytes(800, 600)).getOrNull()
+        val aged = store.ingest(jpegBytes(640, 480)).getOrNull()
+        requireNotNull(fresh)
+        requireNotNull(aged)
+        // Backdate one file well beyond the grace window.
+        File(store.absolutePathFor(aged.path)).setLastModified(System.currentTimeMillis() - TWO_HOURS_MS)
+
+        val listed = store.listStoredPaths(minAgeMillis = ONE_HOUR_MS).getOrNull().orEmpty()
+
+        assertFalse("in-flight (fresh) file must be skipped by the grace window", listed.contains(fresh.path))
+        assertTrue("aged file is a real orphan candidate", listed.contains(aged.path))
+    }
+
+    @Test
     fun `given content uri when ingested then bytes are read and stored`() = runTest {
         val uri = "content://test/image".toUri()
         shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream(jpegBytes(1000, 800)))
@@ -141,5 +156,7 @@ class AttachmentStoreImplTest {
         const val CAP = AttachmentStoreImpl.MAX_LONGEST_SIDE_PX
         const val JPEG_TEST_QUALITY = 90
         const val RATIO_TOLERANCE = 0.05f
+        const val ONE_HOUR_MS = 60L * 60L * 1000L
+        const val TWO_HOURS_MS = 2L * ONE_HOUR_MS
     }
 }

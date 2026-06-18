@@ -19,6 +19,12 @@ import javax.inject.Inject
  * The pass is read-only with respect to the database — it never deletes a
  * message — so it can never race the engine or remove a live attachment.
  *
+ * A **grace window** ([ORPHAN_GRACE_MILLIS]) further guards against a benign
+ * race: an attachment is written to disk the moment it is picked but only
+ * referenced by a message row on send, so files younger than the window are
+ * never considered — a just-picked attachment still sitting in the composer is
+ * not mistaken for an orphan.
+ *
  * @property chatRepository Source of the referenced attachment paths.
  * @property attachmentStore Source of the stored files and the deletion sink.
  */
@@ -33,12 +39,21 @@ class CleanupOrphanAttachmentsUseCase @Inject constructor(
      *   when the store cannot be listed (best-effort: the next pass retries).
      */
     suspend operator fun invoke(): Int {
-        val stored = attachmentStore.listStoredPaths().getOrElse { return 0 }
+        val stored = attachmentStore.listStoredPaths(ORPHAN_GRACE_MILLIS).getOrElse { return 0 }
         if (stored.isEmpty()) {
             return 0
         }
         val referenced = chatRepository.getReferencedAttachmentPaths().toSet()
         val orphans = stored.filterNot { it in referenced }
         return orphans.count { attachmentStore.delete(it).isSuccess }
+    }
+
+    private companion object {
+        /**
+         * Minimum age a stored file must reach before the sweep may treat it as
+         * an orphan — 24 hours, comfortably longer than any composer session, so
+         * an in-flight (picked-but-unsent) attachment is never reclaimed.
+         */
+        const val ORPHAN_GRACE_MILLIS: Long = 24L * 60L * 60L * 1000L
     }
 }
