@@ -61,7 +61,7 @@ class OllamaEmbeddingProviderTest {
     @Test
     fun `embed with a base url calls Ollama and maps doubles to floats`() = runTest {
         every { apiKeyRepository.getOllamaBaseUrl() } returns flowOf("http://192.168.1.2:11434")
-        every { embedderFactory.ollamaClient("http://192.168.1.2:11434") } returns client
+        coEvery { embedderFactory.ollamaClient("http://192.168.1.2:11434") } returns client
         coEvery { client.embed(any<List<String>>(), any()) } returns
             listOf(listOf(0.5, 0.25))
 
@@ -84,7 +84,7 @@ class OllamaEmbeddingProviderTest {
     @Test
     fun `embed wraps a client failure in EmbeddingException`() = runTest {
         every { apiKeyRepository.getOllamaBaseUrl() } returns flowOf("http://host:11434")
-        every { embedderFactory.ollamaClient(any()) } returns client
+        coEvery { embedderFactory.ollamaClient(any()) } returns client
         coEvery { client.embed(any<List<String>>(), any()) } throws RuntimeException("down")
 
         val thrown = runCatching { provider.embed("hi") }.exceptionOrNull()
@@ -95,7 +95,7 @@ class OllamaEmbeddingProviderTest {
     @Test
     fun `embed rethrows CancellationException without wrapping`() = runTest {
         every { apiKeyRepository.getOllamaBaseUrl() } returns flowOf("http://host:11434")
-        every { embedderFactory.ollamaClient(any()) } returns client
+        coEvery { embedderFactory.ollamaClient(any()) } returns client
         coEvery { client.embed(any<List<String>>(), any()) } throws CancellationException("cancelled")
 
         val thrown = runCatching { provider.embed("hi") }.exceptionOrNull()

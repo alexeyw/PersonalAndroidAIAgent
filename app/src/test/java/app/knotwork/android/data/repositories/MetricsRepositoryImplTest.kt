@@ -72,4 +72,28 @@ class MetricsRepositoryImplTest {
         assertEquals(5L, repository.metrics.value.totalExecutionTimeMs)
         assertEquals(mapOf(NodeType.IF_CONDITION to 5L), repository.metrics.value.timePerNodeType)
     }
+
+    @Test
+    fun `given recordStructuredOutputRepair when called repeatedly then per-node counters accumulate`() {
+        repository.recordStructuredOutputRepair("Decompose")
+        repository.recordStructuredOutputRepair("Decompose")
+        repository.recordStructuredOutputRepair("Router")
+
+        assertEquals(
+            mapOf("Decompose" to 2, "Router" to 1),
+            repository.metrics.value.repairAttemptsPerNode,
+        )
+    }
+
+    @Test
+    fun `given recordStructuredOutputRepair when called then other counters are untouched`() {
+        repository.recordNodeExecution(NodeType.LITE_RT, durationMs = 100L, tokenCount = 5)
+
+        repository.recordStructuredOutputRepair("Decompose")
+
+        val metrics = repository.metrics.value
+        assertEquals(100L, metrics.totalExecutionTimeMs)
+        assertEquals(5, metrics.totalTokensProcessed)
+        assertEquals(mapOf("Decompose" to 1), metrics.repairAttemptsPerNode)
+    }
 }

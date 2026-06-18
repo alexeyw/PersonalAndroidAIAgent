@@ -57,4 +57,32 @@ sealed interface ConsoleEventType {
 
     /** A failure surfaced from any pipeline subsystem. Rendered in error color. */
     data object Error : ConsoleEventType
+
+    /**
+     * The structured-output gate had to repair a node's malformed model output
+     * (e.g. `"Output repair 1/2 for node Router"`). Rendered as a muted
+     * warning-style line so the user can see the model stumbled before
+     * recovering. Emitted by the gate's consumers via
+     * [app.knotwork.android.domain.engine.structured.RepairListener].
+     */
+    data object StructuredOutputRepair : ConsoleEventType
+
+    /**
+     * A transient cloud-call failure (HTTP 429 / 5xx / timeout) was retried by
+     * the Koog retry policy (e.g. `"Cloud retry 1/2 for openai"`). Rendered as a
+     * muted warning-style line so the user can see the provider blipped before
+     * recovering. Emitted by the cloud node executor via
+     * [app.knotwork.android.domain.engine.retry.CloudRetryListener].
+     */
+    data object CloudRetry : ConsoleEventType
+
+    /**
+     * The chat history was compressed for this run — either a summary stood in
+     * for the older tail, or (when no summary was ready yet) the older tail was
+     * truncated to the live window. Emitted once per run by
+     * [app.knotwork.android.domain.engine.GraphExecutionEngine] when a node that
+     * renders chat history is over the compression budget, so the user can see
+     * why earlier turns are no longer verbatim.
+     */
+    data object HistoryCompression : ConsoleEventType
 }

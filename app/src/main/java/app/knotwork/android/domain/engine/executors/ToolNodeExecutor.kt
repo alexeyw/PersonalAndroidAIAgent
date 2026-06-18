@@ -2,17 +2,33 @@ package app.knotwork.android.domain.engine.executors
 
 import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.engine.LlmInferenceEngine
+import app.knotwork.android.domain.engine.executors.ToolCallParser.ToolCall
+import app.knotwork.android.domain.engine.structured.CloudStructuredInferenceClientFactory
+import app.knotwork.android.domain.engine.structured.CollectingRepairListener
+import app.knotwork.android.domain.engine.structured.EngineStructuredInferenceClient
+import app.knotwork.android.domain.engine.structured.GateResult
+import app.knotwork.android.domain.engine.structured.StructuredInferenceClient
+import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentOrchestratorState
+import app.knotwork.android.domain.models.CloudProvider
+import app.knotwork.android.domain.models.ConsoleEventType
 import app.knotwork.android.domain.models.ExecutionScope
 import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.Result
+import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -40,6 +56,9 @@ class ToolNodeExecutor @Inject constructor(
     private val loadModelUseCase: LoadModelUseCase,
     private val toolRepository: ToolRepository,
     private val toolInvocationGate: ToolInvocationGate,
+    private val structuredOutputGate: StructuredOutputGate,
+    private val settingsRepository: SettingsRepository,
+    private val cloudStructuredFactory: CloudStructuredInferenceClientFactory,
 ) : NodeExecutor {
 
     /**
@@ -88,24 +107,115 @@ class ToolNodeExecutor @Inject constructor(
 
         emit(NodeOutput.State(AgentOrchestratorState.Thinking("Analyzing task for tool execution...")))
 
-        val loadResult = loadModelUseCase(node.modelPath)
-        if (loadResult is Result.Error) {
-            val errorMsg = "Error loading local model for tool node"
+        val configuredMaxRepairs = settingsRepository.structuredOutputMaxRepairs.first()
+        // Engine selection mirrors the SKILL node: a node carrying a cloud
+        // provider resolves its tool call against that provider; otherwise the
+        // local LiteRT engine backs it. Tool selection / arguments are JSON
+        // objects, so a provider with native JSON support drops the repair
+        // budget to zero (trust-but-verify).
+        val resolution = resolveInference(node) ?: return@flow
+        val inference = resolution.first
+        val maxRepairs = if (resolution.second) 0 else configuredMaxRepairs
+
+        val resolved: Pair<String, String> = try {
+            resolveToolCall(isAutoSelect, toolNameConfig, node, inputText, maxRepairs, inference)
+        } catch (e: ResolutionFailed) {
+            // A handled resolution failure (no tools, unknown tool, gate exhausted on
+            // auto-select): the diagnostics were already emitted; end the node here.
+            return@flow
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // An engine-level failure during argument generation (not a validation
+            // miss) — surface it as a graceful node error rather than tearing down the run.
+            Timber.tag("PipelineDebug").e(e, "Error generating tool arguments via LLM")
+            val errorMsg = "Error generating tool arguments: ${e.message}"
             emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
             emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg)))
             return@flow
         }
 
-        val resolvedToolName: String
-        val resolvedToolArgs: String
+        toolInvocationGate.dispatch(
+            collector = this,
+            nodeType = node.type.name,
+            nodeId = node.id,
+            sessionId = sessionId,
+            runId = runId,
+            resolvedToolName = resolved.first,
+            resolvedToolArgs = resolved.second,
+        )
+    }
 
+    /**
+     * Marker thrown by [resolveToolCall] when it has already emitted the terminal
+     * diagnostics for a handled failure and the node should simply end. Kept private so
+     * it never escapes the executor.
+     */
+    private class ResolutionFailed : Exception()
+
+    /**
+     * Resolves the structured-inference client for [node]: a cloud-backed client
+     * when the node selects a configured cloud provider, otherwise the local
+     * LiteRT engine. An unavailable cloud provider (missing credentials /
+     * local-only mode / unknown id) emits a console note and degrades to the
+     * local engine.
+     *
+     * @return The `(client, supportsNativeJson)` pair, or `null` when even the
+     *   local fallback could not load its model (a terminal error was emitted).
+     */
+    private suspend fun FlowCollector<NodeOutput>.resolveInference(
+        node: NodeModel,
+    ): Pair<StructuredInferenceClient, Boolean>? {
+        val providerId = node.cloudProvider?.takeIf { it.isNotBlank() }
+        if (providerId != null) {
+            val provider = CloudProvider.fromId(providerId)
+            val cloud = provider?.let { cloudStructuredFactory.create(it) { } }
+            if (cloud != null) {
+                return cloud.inference to cloud.supportsNativeJson
+            }
+            emit(
+                NodeOutput.Console(
+                    ConsoleEventType.Error,
+                    "Cloud provider '$providerId' unavailable for '${node.label}'; falling back to the local model",
+                ),
+            )
+        }
+        val loadResult = loadModelUseCase(node.modelPath)
+        if (loadResult is Result.Error) {
+            val errorMsg = "Error loading local model for tool node"
+            emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
+            emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg)))
+            return null
+        }
+        return EngineStructuredInferenceClient(llmEngine) to false
+    }
+
+    /**
+     * Resolves the `(toolName, argumentsJson)` to dispatch, running the model output
+     * through the structured-output gate.
+     *
+     * For auto-select the `{tool, arguments}` envelope is validated; an exhausted gate has
+     * no fallback tool, so the terminal parse-error result is emitted here and
+     * [ResolutionFailed] is thrown. For a fixed tool the arguments object is validated; an
+     * exhausted gate falls back to the last raw output so the tool execution surfaces its
+     * own error observation. Engine-level inference exceptions propagate to the caller's
+     * graceful handler.
+     */
+    private suspend fun FlowCollector<NodeOutput>.resolveToolCall(
+        isAutoSelect: Boolean,
+        toolNameConfig: String?,
+        node: NodeModel,
+        inputText: String,
+        maxRepairs: Int,
+        inference: StructuredInferenceClient,
+    ): Pair<String, String> {
         if (isAutoSelect) {
             val availableTools = toolRepository.getAvailableTools()
             if (availableTools.isEmpty()) {
                 val errorMsg = "No tools available for auto selection"
                 emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
                 emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg)))
-                return@flow
+                throw ResolutionFailed()
             }
 
             val toolsDescriptions = availableTools.joinToString("\n\n") {
@@ -120,98 +230,114 @@ class ToolNodeExecutor @Inject constructor(
                 ),
             )
 
-            val responseStream = llmEngine.generateResponseStream(prompt)
-            val accumulatedResponse = StringBuilder()
-            try {
-                responseStream.collect { token ->
-                    accumulatedResponse.append(token)
+            // Gate the `{tool, arguments}` envelope. On failure the auto-select path
+            // has no fallback tool to run, so it takes the existing error path — only
+            // after the gate has spent its repair attempts.
+            return when (val result = runArgGate(ToolCall.serializer(), prompt, node, maxRepairs, inference)) {
+                is GateResult.Success -> result.value.tool to result.value.arguments.asArgumentString()
+                is GateResult.Failed -> {
+                    val errorMsg = "Failed to parse tool selection JSON from LLM output"
+                    emit(
+                        NodeOutput.Console(
+                            ConsoleEventType.Error,
+                            "$errorMsg (after ${result.repairs} repair attempt(s))",
+                        ),
+                    )
+                    emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
+                    emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg)))
+                    throw ResolutionFailed()
                 }
-            } catch (e: CancellationException) {
-                // Preserve structured-concurrency cancellation: a broad `catch (Exception)`
-                // would silently swallow cancellation and leave the parent coroutine running.
-                throw e
-            } catch (e: Exception) {
-                Timber.tag("PipelineDebug").e(e, "Error generating tool selection via LLM")
-                val errorMsg = "Error generating tool selection: ${e.message}"
-                emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
-                emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg)))
-                return@flow
-            }
-
-            val parsedSelection = parseToolSelection(accumulatedResponse.toString())
-            if (parsedSelection == null) {
-                val errorMsg = "Failed to parse tool selection JSON from LLM output"
-                emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
-                emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg)))
-                return@flow
-            }
-
-            resolvedToolName = parsedSelection.first
-            resolvedToolArgs = parsedSelection.second
-        } else {
-            val tools = toolRepository.getAvailableTools()
-            val selectedTool = tools.find { it.name == toolNameConfig }
-            if (selectedTool == null) {
-                val errorMsg = "Tool $toolNameConfig not found in available tools"
-                emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
-                emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg)))
-                return@flow
-            }
-
-            val prompt = DefaultPrompts.renderTemplate(
-                DefaultPrompts.Tool.ARGUMENT_GENERATION_TEMPLATE,
-                mapOf(
-                    "TOOL_NAME" to selectedTool.name,
-                    "TOOL_DESCRIPTION" to selectedTool.description,
-                    "TOOL_PARAMETERS" to selectedTool.parameters,
-                    "INPUT_TEXT" to inputText,
-                ),
-            )
-
-            val responseStream = llmEngine.generateResponseStream(prompt)
-            val accumulatedResponse = StringBuilder()
-            try {
-                responseStream.collect { token ->
-                    accumulatedResponse.append(token)
-                }
-            } catch (e: CancellationException) {
-                // Preserve structured-concurrency cancellation: a broad `catch (Exception)`
-                // would silently swallow cancellation and leave the parent coroutine running.
-                throw e
-            } catch (e: Exception) {
-                Timber.tag("PipelineDebug").e(e, "Error generating tool arguments via LLM")
-                val errorMsg = "Error generating tool arguments: ${e.message}"
-                emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
-                emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg)))
-                return@flow
-            }
-
-            val parsedSelection = parseToolSelection(accumulatedResponse.toString())
-            if (parsedSelection != null && parsedSelection.first == toolNameConfig) {
-                resolvedToolName = parsedSelection.first
-                resolvedToolArgs = parsedSelection.second
-            } else {
-                resolvedToolName = toolNameConfig
-                resolvedToolArgs =
-                    parseToolArguments(accumulatedResponse.toString()) ?: accumulatedResponse.toString().trim()
             }
         }
 
-        toolInvocationGate.dispatch(
-            collector = this,
-            nodeType = node.type.name,
-            nodeId = node.id,
-            sessionId = sessionId,
-            runId = runId,
-            resolvedToolName = resolvedToolName,
-            resolvedToolArgs = resolvedToolArgs,
+        val tools = toolRepository.getAvailableTools()
+        val selectedTool = tools.find { it.name == toolNameConfig }
+        if (selectedTool == null) {
+            val errorMsg = "Tool $toolNameConfig not found in available tools"
+            emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
+            emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg)))
+            throw ResolutionFailed()
+        }
+
+        val prompt = DefaultPrompts.renderTemplate(
+            DefaultPrompts.Tool.ARGUMENT_GENERATION_TEMPLATE,
+            mapOf(
+                "TOOL_NAME" to selectedTool.name,
+                "TOOL_DESCRIPTION" to selectedTool.description,
+                "TOOL_PARAMETERS" to selectedTool.parameters,
+                "INPUT_TEXT" to inputText,
+            ),
         )
+
+        // Gate the arguments as a JSON object. On failure the tool name is fixed,
+        // so we still dispatch — with the last raw output as arguments — and let the
+        // tool execution surface its own error observation (the existing path,
+        // reached after repairs rather than on the first malformed reply).
+        return when (val result = runArgGate(JsonObject.serializer(), prompt, node, maxRepairs, inference)) {
+            is GateResult.Success -> selectedTool.name to extractFixedToolArgs(result.value, selectedTool.name)
+            is GateResult.Failed -> {
+                emit(
+                    NodeOutput.Console(
+                        ConsoleEventType.Error,
+                        "Tool '${selectedTool.name}' arguments did not validate after " +
+                            "${result.repairs} repair attempt(s); executing with the raw output",
+                    ),
+                )
+                selectedTool.name to result.lastRaw.trim()
+            }
+        }
     }
 
-    @androidx.annotation.VisibleForTesting
-    internal fun parseToolSelection(response: String): Pair<String, String>? =
-        ToolCallParser.parseToolSelection(response)
+    /**
+     * Runs one structured-output gate pass for a tool inference, surfacing each repair
+     * attempt as a console line (which the engine also counts in the repair metric).
+     *
+     * @param T The validated payload type ([ToolCall] for auto-select, [JsonObject] for
+     *   a fixed tool's arguments).
+     * @param serializer Deserializer the gate validates the reply against.
+     * @param prompt The fully-rendered tool prompt.
+     * @param node The TOOL node (its label keys the repair metric / console line).
+     * @param maxRepairs The configured repair ceiling.
+     * @param inference The resolved gate client (cloud or local).
+     * @return The gate outcome.
+     */
+    private suspend fun <T> FlowCollector<NodeOutput>.runArgGate(
+        serializer: KSerializer<T>,
+        prompt: String,
+        node: NodeModel,
+        maxRepairs: Int,
+        inference: StructuredInferenceClient,
+    ): GateResult<T> {
+        val collected = CollectingRepairListener()
+        val result = structuredOutputGate.runJson(
+            inference = inference,
+            prompt = prompt,
+            serializer = serializer,
+            nodeName = node.label,
+            maxRepairs = maxRepairs,
+            listener = collected,
+        )
+        collected.attempts.forEach { attempt ->
+            emit(NodeOutput.Console(ConsoleEventType.StructuredOutputRepair, attempt.consoleMessage()))
+        }
+        return result
+    }
 
-    @androidx.annotation.VisibleForTesting
-    internal fun parseToolArguments(response: String): String? = ToolCallParser.parseToolArguments(response)
+    /**
+     * Derives the arguments string for a fixed tool from the validated JSON object.
+     *
+     * The fixed-tool template may return either a bare arguments object or the
+     * `{"tool": NAME, "arguments": <value>}` envelope. When the object carries a matching
+     * `tool` field and an `arguments` field, the latter is used; otherwise the whole
+     * object is treated as the arguments.
+     *
+     * @param obj The validated JSON object.
+     * @param toolName The fixed tool's name to match the optional `tool` field against.
+     * @return The arguments as a JSON string.
+     */
+    private fun extractFixedToolArgs(obj: JsonObject, toolName: String): String {
+        val toolField = (obj["tool"] as? JsonPrimitive)?.contentOrNull
+        val argsField = obj["arguments"]
+        return if (toolField == toolName && argsField != null) argsField.asArgumentString() else obj.toString()
+    }
 }

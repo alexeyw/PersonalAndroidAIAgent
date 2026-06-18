@@ -4347,6 +4347,29 @@
         }
     }
 
+    // Engine selector for the structured node types (INTENT_ROUTER /
+    // DECOMPOSITION / EVALUATION / IF_CONDITION / TOOL). Unlike CLOUD these
+    // default to on-device inference, so the first option is on-device (empty
+    // id) and the rest pick a concrete provider — Auto is intentionally absent.
+    const ENGINE_PROVIDER_OPTIONS = [
+        { id: '',          label: 'On-device' },
+        { id: 'OPEN_AI',   label: 'OpenAI' },
+        { id: 'ANTHROPIC', label: 'Anthropic' },
+        { id: 'GOOGLE',    label: 'Google' },
+        { id: 'COMPATIBLE', label: 'Compatible (DeepSeek / Ollama / OpenAI-compatible)' },
+    ];
+
+    /** Maps a structured node's rich `engineProvider` to the flat wire id; on-device ⇒ blank. */
+    function engineProviderToFlat(provider) {
+        return provider ? richCloudToFlat(provider) : '';
+    }
+
+    /** Maps a flat `cloudProvider` back to the structured engine selection; blank/auto ⇒ on-device. */
+    function flatToEngineProvider(flatId) {
+        if (!flatId || flatId === 'auto') return '';
+        return flatToRichCloud(flatId);
+    }
+
     /** A fresh default `cfg` for [typeId], mirroring `NodeConfigCodec.defaultFor`. */
     function defaultRichConfig(typeId) {
         const t = NODE_TYPE_BY_ID[typeId];
@@ -4362,16 +4385,19 @@
             case 'INTENT_ROUTER': return { ...base,
                 classes: [{ name: 'simple', description: '', examples: [] },
                           { name: 'complex', description: '', examples: [] }],
-                classifierPrompt: D.INTENT_ROUTER || '', fallbackClass: null };
-            case 'IF_CONDITION': return { ...base, expression: '', labelTrue: 'True', labelFalse: 'False' };
+                classifierPrompt: D.INTENT_ROUTER || '', fallbackClass: null, engineProvider: '' };
+            case 'IF_CONDITION': return { ...base, expression: '', labelTrue: 'True', labelFalse: 'False',
+                engineProvider: '' };
             case 'CLARIFICATION': return { ...base, questionTemplate: D.CLARIFICATION || '',
                 quickReplies: [], timeoutMs: null };
-            case 'TOOL':        return { ...base, toolId: '', argumentMapping: [], confirmOverride: null };
+            case 'TOOL':        return { ...base, toolId: '', argumentMapping: [], confirmOverride: null,
+                engineProvider: '' };
             case 'DECOMPOSITION': return { ...base, planningPrompt: D.DECOMPOSITION || '',
-                maxSubtasks: 5, outputSchemaJson: null };
+                maxSubtasks: 5, outputSchemaJson: null, engineProvider: '' };
             case 'QUEUE_PROCESSOR': return { ...base, inputList: '', itemVariable: 'item',
                 parallelism: 1, stopOnError: true };
-            case 'EVALUATION':  return { ...base, criteriaPrompt: D.EVALUATION || '', maxRetries: 2 };
+            case 'EVALUATION':  return { ...base, criteriaPrompt: D.EVALUATION || '', maxRetries: 2,
+                engineProvider: '' };
             case 'SUMMARY':     return { ...base, format: 'BULLETS', customPrompt: D.SUMMARY || null,
                 targetLengthChars: 600 };
             // Composition nodes. Mirror the catalog PipelineConfig / SkillConfig
@@ -4403,14 +4429,19 @@
             case 'LITE_RT': flat.systemPrompt = cfg.systemPrompt || ''; flat.modelPath = cfg.modelId || ''; break;
             case 'CLOUD':   flat.systemPrompt = cfg.systemPrompt || ''; flat.cloudProvider = richCloudToFlat(cfg.provider); break;
             case 'OUTPUT':  flat.systemPrompt = cfg.systemPrompt || ''; break;
-            case 'INTENT_ROUTER': flat.systemPrompt = cfg.classifierPrompt || ''; break;
-            case 'DECOMPOSITION': flat.systemPrompt = cfg.planningPrompt || ''; break;
-            case 'EVALUATION':    flat.systemPrompt = cfg.criteriaPrompt || ''; break;
+            case 'INTENT_ROUTER': flat.systemPrompt = cfg.classifierPrompt || '';
+                flat.cloudProvider = engineProviderToFlat(cfg.engineProvider); break;
+            case 'DECOMPOSITION': flat.systemPrompt = cfg.planningPrompt || '';
+                flat.cloudProvider = engineProviderToFlat(cfg.engineProvider); break;
+            case 'EVALUATION':    flat.systemPrompt = cfg.criteriaPrompt || '';
+                flat.cloudProvider = engineProviderToFlat(cfg.engineProvider); break;
             case 'SUMMARY':       flat.systemPrompt = cfg.customPrompt || ''; break;
             case 'CLARIFICATION': flat.systemPrompt = cfg.questionTemplate || '';
                 flat.clarificationTimeoutMs = (cfg.timeoutMs ?? null); break;
-            case 'IF_CONDITION':  flat.conditionPrompt = cfg.expression || ''; break;
-            case 'TOOL':          flat.toolName = cfg.toolId || ''; break;
+            case 'IF_CONDITION':  flat.conditionPrompt = cfg.expression || '';
+                flat.cloudProvider = engineProviderToFlat(cfg.engineProvider); break;
+            case 'TOOL':          flat.toolName = cfg.toolId || '';
+                flat.cloudProvider = engineProviderToFlat(cfg.engineProvider); break;
             // SKILL engine maps onto the flat cloudProvider exactly as
             // NodeConfigCodec.apply does: CLOUD → the "auto" sentinel, LITE_RT →
             // blank (decoded back via engineFromProvider on the next open).
@@ -4468,11 +4499,13 @@
                 }));
                 env.classifierPrompt = cfg.classifierPrompt ?? '';
                 if (nonBlank(cfg.fallbackClass)) env.fallbackClass = cfg.fallbackClass;
+                if (nonBlank(cfg.engineProvider)) env.engineProvider = cfg.engineProvider;
                 break;
             case 'IF_CONDITION':
                 env.expression = cfg.expression ?? '';
                 env.labelTrue = cfg.labelTrue || 'True';
                 env.labelFalse = cfg.labelFalse || 'False';
+                if (nonBlank(cfg.engineProvider)) env.engineProvider = cfg.engineProvider;
                 break;
             case 'CLARIFICATION':
                 env.questionTemplate = cfg.questionTemplate ?? '';
@@ -4485,11 +4518,13 @@
                     name: a.name ?? '', expression: a.expression ?? '',
                 }));
                 if (nonBlank(cfg.confirmOverride)) env.confirmOverride = cfg.confirmOverride;
+                if (nonBlank(cfg.engineProvider)) env.engineProvider = cfg.engineProvider;
                 break;
             case 'DECOMPOSITION':
                 env.planningPrompt = cfg.planningPrompt ?? '';
                 env.maxSubtasks = Number(cfg.maxSubtasks ?? 5);
                 if (nonBlank(cfg.outputSchemaJson)) env.outputSchemaJson = cfg.outputSchemaJson;
+                if (nonBlank(cfg.engineProvider)) env.engineProvider = cfg.engineProvider;
                 break;
             case 'QUEUE_PROCESSOR':
                 env.inputList = cfg.inputList ?? '';
@@ -4500,6 +4535,7 @@
             case 'EVALUATION':
                 env.criteriaPrompt = cfg.criteriaPrompt ?? '';
                 env.maxRetries = Number(cfg.maxRetries ?? 2);
+                if (nonBlank(cfg.engineProvider)) env.engineProvider = cfg.engineProvider;
                 break;
             case 'SUMMARY':
                 env.format = cfg.format || 'BULLETS';
@@ -4560,11 +4596,13 @@
                 }));
                 if (env.classifierPrompt != null) cfg.classifierPrompt = String(env.classifierPrompt);
                 cfg.fallbackClass = env.fallbackClass != null ? String(env.fallbackClass) : null;
+                cfg.engineProvider = env.engineProvider != null ? String(env.engineProvider) : '';
                 break;
             case 'IF_CONDITION':
                 if (env.expression != null) cfg.expression = String(env.expression);
                 if (env.labelTrue) cfg.labelTrue = String(env.labelTrue);
                 if (env.labelFalse) cfg.labelFalse = String(env.labelFalse);
+                cfg.engineProvider = env.engineProvider != null ? String(env.engineProvider) : '';
                 break;
             case 'CLARIFICATION':
                 if (env.questionTemplate != null) cfg.questionTemplate = String(env.questionTemplate);
@@ -4577,11 +4615,13 @@
                     name: String(a.name ?? ''), expression: String(a.expression ?? ''),
                 }));
                 cfg.confirmOverride = env.confirmOverride != null ? String(env.confirmOverride) : null;
+                cfg.engineProvider = env.engineProvider != null ? String(env.engineProvider) : '';
                 break;
             case 'DECOMPOSITION':
                 if (env.planningPrompt != null) cfg.planningPrompt = String(env.planningPrompt);
                 cfg.maxSubtasks = num(env.maxSubtasks, 5);
                 cfg.outputSchemaJson = env.outputSchemaJson != null ? String(env.outputSchemaJson) : null;
+                cfg.engineProvider = env.engineProvider != null ? String(env.engineProvider) : '';
                 break;
             case 'QUEUE_PROCESSOR':
                 if (env.inputList != null) cfg.inputList = String(env.inputList);
@@ -4592,6 +4632,7 @@
             case 'EVALUATION':
                 if (env.criteriaPrompt != null) cfg.criteriaPrompt = String(env.criteriaPrompt);
                 cfg.maxRetries = num(env.maxRetries, 2);
+                cfg.engineProvider = env.engineProvider != null ? String(env.engineProvider) : '';
                 break;
             case 'SUMMARY':
                 if (env.format) cfg.format = String(env.format);
@@ -4626,13 +4667,18 @@
             case 'OUTPUT': cfg.systemPrompt = flat.systemPrompt || ''; break;
             case 'LITE_RT': cfg.systemPrompt = sp; cfg.modelId = flat.modelPath || ''; break;
             case 'CLOUD': cfg.systemPrompt = sp; cfg.provider = flatToRichCloud(flat.cloudProvider); break;
-            case 'INTENT_ROUTER': cfg.classifierPrompt = sp; break;
-            case 'IF_CONDITION': cfg.expression = flat.conditionPrompt || ''; break;
+            case 'INTENT_ROUTER': cfg.classifierPrompt = sp;
+                cfg.engineProvider = flatToEngineProvider(flat.cloudProvider); break;
+            case 'IF_CONDITION': cfg.expression = flat.conditionPrompt || '';
+                cfg.engineProvider = flatToEngineProvider(flat.cloudProvider); break;
             case 'CLARIFICATION': cfg.questionTemplate = sp;
                 cfg.timeoutMs = (flat.clarificationTimeoutMs ?? null); break;
-            case 'TOOL': cfg.toolId = flat.toolName || ''; break;
-            case 'DECOMPOSITION': cfg.planningPrompt = sp; break;
-            case 'EVALUATION': cfg.criteriaPrompt = sp; break;
+            case 'TOOL': cfg.toolId = flat.toolName || '';
+                cfg.engineProvider = flatToEngineProvider(flat.cloudProvider); break;
+            case 'DECOMPOSITION': cfg.planningPrompt = sp;
+                cfg.engineProvider = flatToEngineProvider(flat.cloudProvider); break;
+            case 'EVALUATION': cfg.criteriaPrompt = sp;
+                cfg.engineProvider = flatToEngineProvider(flat.cloudProvider); break;
             case 'SUMMARY': cfg.customPrompt = sp.trim() ? sp : null; break;
             case 'PIPELINE': cfg.targetPipelineId = flat.targetPipelineId || ''; break;
             // engineFromProvider: any non-blank cloudProvider ⇒ CLOUD, else LITE_RT.
@@ -4846,6 +4892,7 @@
                 fields.push(cfgIntentClasses(cfg.classes, 'Classes (2–6) — one out-port label per class'));
                 fields.push(prompt('classifierPrompt', 'Classifier prompt', typeId, true));
                 fields.push(cfgText('fallbackClass', 'Fallback class (optional)', cfg.fallbackClass ?? '', 'class name routed on no match'));
+                fields.push(cfgSelect('engineProvider', 'Engine', ENGINE_PROVIDER_OPTIONS, cfg.engineProvider ?? ''));
                 break;
             case 'IF_CONDITION':
                 // EvaluateIfConditionUseCase runs the LLM on `conditionPrompt`
@@ -4854,6 +4901,7 @@
                 fields.push(prompt('expression', 'Condition expression', 'IF_CONDITION', false));
                 fields.push(cfgText('labelTrue', 'True branch label', cfg.labelTrue || 'True'));
                 fields.push(cfgText('labelFalse', 'False branch label', cfg.labelFalse || 'False'));
+                fields.push(cfgSelect('engineProvider', 'Engine', ENGINE_PROVIDER_OPTIONS, cfg.engineProvider ?? ''));
                 break;
             case 'CLARIFICATION':
                 fields.push(prompt('questionTemplate', 'Question template', typeId, true));
@@ -4864,11 +4912,13 @@
                 fields.push(cfgSelect('toolId', 'Tool', [{ id: '', label: 'Auto (pick at runtime)' }, ...AVAILABLE_TOOLS], cfg.toolId ?? ''));
                 fields.push(cfgArgMapping(cfg.argumentMapping, 'Argument mapping (name → expression)'));
                 fields.push(cfgSelect('confirmOverride', 'Confirmation override', CONFIRM_POLICIES.map(p => ({ id: p, label: p || '— inherit declared risk —' })), cfg.confirmOverride || ''));
+                fields.push(cfgSelect('engineProvider', 'Engine', ENGINE_PROVIDER_OPTIONS, cfg.engineProvider ?? ''));
                 break;
             case 'DECOMPOSITION':
                 fields.push(prompt('planningPrompt', 'Planning prompt', typeId, true));
                 fields.push(cfgNumber('maxSubtasks', 'Max subtasks (1–20)', cfg.maxSubtasks, { min: 1, max: 20, step: 1, kind: 'int' }));
                 fields.push(cfgTextarea('outputSchemaJson', 'Output JSON schema (optional)', cfg.outputSchemaJson ?? '', 3));
+                fields.push(cfgSelect('engineProvider', 'Engine', ENGINE_PROVIDER_OPTIONS, cfg.engineProvider ?? ''));
                 break;
             case 'QUEUE_PROCESSOR':
                 fields.push(cfgText('inputList', 'Input list expression', cfg.inputList ?? '', 'blank = previous node output'));
@@ -4879,6 +4929,7 @@
             case 'EVALUATION':
                 fields.push(prompt('criteriaPrompt', 'Criteria prompt (model replies PASS / RETRY / FAIL)', typeId, true));
                 fields.push(cfgNumber('maxRetries', 'Max retries (0–5)', cfg.maxRetries, { min: 0, max: 5, step: 1, kind: 'int' }));
+                fields.push(cfgSelect('engineProvider', 'Engine', ENGINE_PROVIDER_OPTIONS, cfg.engineProvider ?? ''));
                 break;
             case 'SUMMARY':
                 fields.push(cfgSelect('format', 'Format', SUMMARY_FORMATS.map(f => ({ id: f, label: f })), cfg.format || 'BULLETS'));

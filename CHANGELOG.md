@@ -15,6 +15,54 @@ details.
 
 ### Added
 
+- **Chat-history compression for long sessions.** Long conversations no longer
+  blow the on-device context window or crowd out memory and tool results. Once a
+  session's verbatim history exceeds a configurable token budget, the messages
+  older than a live window of recent turns are summarised by the local model in
+  the background and rendered as an `--- Earlier conversation (summarized) ---`
+  block ahead of the verbatim `--- Chat History ---` window. Summarisation is
+  incremental (each pass folds the prior summary plus only the newly-aged-out
+  messages, never re-summarising everything) and runs debounced and off the
+  active-run path, sharing the same agent-busy gating as memory auto-extraction.
+  If a summary is not ready when a run needs it, the history is gracefully
+  truncated to the live window and the fact is reported on the agent console
+  (`HistoryCompression` console events). Configurable under Settings → Memory:
+  an on-by-default toggle, the token threshold (default 3500, coordinated with
+  the context-length setting), and the live-window size (default 10 messages);
+  verbose diagnostics ride the existing memory-logging flag.
+
+- **Transient-failure retry for cloud calls.** Every cloud LLM call (chat
+  completions and cloud embeddings) is now wrapped with an exponential-backoff
+  retry policy: transient failures (HTTP 429 / 5xx / connection & read timeouts)
+  are retried, while authentication errors are not and coroutine cancellation is
+  always honoured. The attempt budget (1–5, default 3; `1` disables retries) and
+  the base delay (100–10000 ms, default 1000) are configurable under
+  Settings → Providers and apply to all cloud providers. Each retry of a CLOUD
+  node is surfaced on the agent console as a muted warning line
+  (`Cloud retry 1/2 for openai`).
+
+- **Cloud-backed structured output for structured nodes.** The structured node
+  types (`INTENT_ROUTER`, `DECOMPOSITION`, `EVALUATION`, `IF_CONDITION`, `TOOL`)
+  can now run their validate-and-repair gate against a cloud provider instead of
+  the on-device model. Each exposes an **Engine** selector (On-device by
+  default, or a concrete cloud provider) in both the in-app and browser pipeline
+  editors, persisted via the node's `cloudProvider`. When the chosen provider
+  natively constrains output to JSON, the gate trusts it and validates once
+  (`maxRepairs = 0`) for JSON-payload nodes; otherwise it falls back to the full
+  repair budget. The gate remains the single source of structural validation.
+
+- **Structured-output validate-and-repair gate.** A new domain component
+  validates an LLM-driven node's output against the shape the node expects — a
+  JSON object or array (deserialized with `kotlinx.serialization`) or one of a
+  constrained set of tokens (e.g. `True`/`False`, `Pass`/`Retry`/`Fail`, router
+  keys) — and, when the local model emits malformed output, hands it back its own
+  invalid reply plus the validation error and asks it to correct itself, at a
+  lowered sampling temperature. The number of repair attempts is configurable
+  (default 2, range 0–4). JSON payload extraction (fenced / bare /
+  embedded-in-prose, object or array) is consolidated in one place. Repairs are
+  surfaced on the agent console as a muted warning line and counted per node in
+  the run metrics.
+
 - **Composed Showcase agent (bundled sub-pipelines).** The first-launch
   **Showcase — full agent** pipeline now demonstrates composition: its task
   loop's four subtask branches — *Clarify*, *Lookup*, *Act*, *Process* — are
@@ -113,6 +161,52 @@ details.
     stack: the parent replays to its `PIPELINE` node and continues the child
     run from its checkpoint rather than restarting it; the recorded graph hash
     is validated for every graph in the stack.
+
+### Changed
+
+- **Cloud client and embedding factories are now retry-wrapped.** Cloud clients
+  built by `KoogClientFactory` and the cloud/Ollama embedding clients are
+  decorated with the configurable retry policy before use, using Koog's
+  standalone `RetryingLLMClient` decorator over the existing cloud-LLM-client
+  layer.
+
+- **Structured-output gate wired into every LLM-driven consumer.** The engine's
+  structured consumers now route their model output through the validate-and-repair
+  gate instead of ad-hoc parsing, and each silent fallback becomes observable:
+  - `IF_CONDITION` (a `True`/`False` token) and `INTENT_ROUTER` (a routing key
+    constrained to the node's own outgoing edge labels) keep their default branch
+    when the gate exhausts its repairs, but now emit a console error and count the
+    repair attempts — there are no more silent forks.
+  - `EVALUATION` (a `Pass`/`Retry`/`Fail` verdict) behaves the same: default port
+    on failure, but observable.
+  - `DECOMPOSITION` (a JSON array of sub-tasks) now **fails the run with a clear
+    error** when no valid list can be produced — a corrupted sub-task list is worse
+    than stopping.
+  - `TOOL` argument generation validates the `{tool, arguments}` envelope (auto
+    select) or the arguments object (fixed tool), repairing malformed JSON before
+    falling back to the previous error-observation path.
+  - Background memory extraction validates its `{type, text}` fact array, repairing
+    once before honouring its best-effort (zero-result) contract.
+  - Repairs are an internal node mechanic: they consume the node's repair budget,
+    never pipeline steps. Repair re-inferences run at a lowered, deterministic-leaning
+    sampling temperature. The duplicate per-consumer JSON extractors and regex parsers
+    left over from the previous change have been removed.
+
+- **Reliability features documented end-to-end.**
+  [`docs/architecture.md`](docs/architecture.md) gains a *Structured-output
+  reliability gate* section (with a gate-cycle diagram and the per-node
+  failure-policy table) and a *Chat-history compression* section, and its
+  *Cloud LLM providers* section now covers transient-failure retry and
+  cloud-backed structured output. [`docs/user-guide.md`](docs/user-guide.md)
+  documents the structured-output repair budget and per-node **Engine**
+  selector, the cloud **Retry policy** sliders, the **Compress long chat
+  history** settings, and how repair / cloud-retry / history-compression
+  events read in the console. No behaviour change — documentation catching up
+  to the shipped reliability contour.
+
+- **Bump `dev.detekt` `2.0.0-alpha.4` → `2.0.0-alpha.5`** to clear the
+  `NewerVersionAvailable` lint gate. Build tooling only (not shipped in the
+  APK); no rule-set changes affecting the codebase.
 
 ## [0.5.0] - 2026-06-14
 

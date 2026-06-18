@@ -22,6 +22,8 @@ import app.knotwork.android.domain.engine.executors.SummaryNodeExecutor
 import app.knotwork.android.domain.engine.executors.SystemNodeExecutor
 import app.knotwork.android.domain.engine.executors.ToolInvocationGate
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
+import app.knotwork.android.domain.engine.structured.CloudStructuredInferenceClientFactory
+import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.ChatMessage
@@ -155,7 +157,7 @@ class GraphExecutionEngineTest {
         // Koog model so each individual test does not have to wire it up.
         coEvery { cloudLlmModelResolver.resolveModel(any()) } returns AnthropicModels.Sonnet_4_5
         // Provider-keyed dispatch — tests that exercise CLOUD configure Anthropic.
-        coEvery { koogClientFactory.createClient(any()) } coAnswers {
+        coEvery { koogClientFactory.createClient(any(), any()) } coAnswers {
             when (firstArg<CloudProvider>()) {
                 CloudProvider.ANTHROPIC -> koogClientFactory.createAnthropicExecutor()
                 CloudProvider.OPENAI -> koogClientFactory.createOpenAIExecutor()
@@ -181,6 +183,9 @@ class GraphExecutionEngineTest {
                 chatRepository,
                 pendingInteractionRepository,
             ),
+            StructuredOutputGate(),
+            settingsRepository,
+            CloudStructuredInferenceClientFactory { _, _ -> null },
         )
 
         val liteRtNodeExecutor = LiteRtNodeExecutor(
@@ -207,6 +212,9 @@ class GraphExecutionEngineTest {
             llmEngine,
             loadModelUseCase,
             chatRepository,
+            StructuredOutputGate(),
+            settingsRepository,
+            CloudStructuredInferenceClientFactory { _, _ -> null },
         )
 
         val summaryNodeExecutor = SummaryNodeExecutor(
@@ -254,6 +262,7 @@ class GraphExecutionEngineTest {
             promptTemplateEngine,
             promptVariableProviders,
             NodeContextBuilder(),
+            ChatHistoryWindowPlanner(),
             retrieveRelevantMemoryUseCase,
             crashReportingRepository,
             localModelRepository,
@@ -265,7 +274,12 @@ class GraphExecutionEngineTest {
         coEvery { getContextWindowUseCase(sessionId) } returns ""
         coEvery { retrieveRelevantMemoryUseCase(any()) } returns emptyList()
         coEvery { retrieveRelevantMemoryUseCase.retrieveScored(any()) } returns emptyList()
+        every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(2)
         every { settingsRepository.verboseMemoryLoggingEnabled } returns flowOf(false)
+        every { settingsRepository.chatHistoryCompressionEnabled } returns flowOf(false)
+        every { settingsRepository.chatHistoryCompressionThresholdTokens } returns flowOf(3_500)
+        every { settingsRepository.chatHistoryLiveWindowSize } returns flowOf(10)
+        coEvery { chatRepository.getHistorySummary(any()) } returns null
         every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
         every { settingsRepository.toolUsageInstruction } returns flowOf("")
@@ -572,7 +586,8 @@ class GraphExecutionEngineTest {
         )
 
         // Evaluate to true
-        coEvery { evaluateIfConditionUseCase(ifNode, "Test prompt") } returns true
+        coEvery { evaluateIfConditionUseCase(ifNode, "Test prompt", any()) } returns
+            EvaluateIfConditionUseCase.Outcome(value = true)
         every { llmEngine.generateResponseStream(any()) } returns flowOf("Test prompt")
 
         val statesTrue = engine(sessionId, "Test prompt", graph).toList()
@@ -676,6 +691,7 @@ class GraphExecutionEngineTest {
             PromptTemplateEngine(),
             emptySet(),
             NodeContextBuilder(),
+            ChatHistoryWindowPlanner(),
             mockk(relaxed = true),
             mockk(relaxed = true),
             mockk(relaxed = true),
@@ -1146,6 +1162,9 @@ class GraphExecutionEngineTest {
                     chatRepository,
                     pendingInteractionRepository,
                 ),
+                StructuredOutputGate(),
+                settingsRepository,
+                CloudStructuredInferenceClientFactory { _, _ -> null },
             ),
             LiteRtNodeExecutor(
                 llmEngine,
@@ -1165,7 +1184,19 @@ class GraphExecutionEngineTest {
                 cloudLlmModelResolver,
                 networkActivityTracker,
             ),
-            SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+            SystemNodeExecutor(
+                llmEngine,
+                loadModelUseCase,
+                chatRepository,
+                StructuredOutputGate(),
+                settingsRepository,
+                CloudStructuredInferenceClientFactory {
+                        _,
+                        _,
+                    ->
+                    null
+                },
+            ),
             QueueProcessorNodeExecutor(),
             SummaryNodeExecutor(llmEngine, loadModelUseCase),
             ClarificationNodeExecutor(
@@ -1197,6 +1228,9 @@ class GraphExecutionEngineTest {
                     chatRepository,
                     pendingInteractionRepository,
                 ),
+                StructuredOutputGate(),
+                settingsRepository,
+                CloudStructuredInferenceClientFactory { _, _ -> null },
             ),
             chatRepository,
             settingsRepository,
@@ -1204,6 +1238,7 @@ class GraphExecutionEngineTest {
             PromptTemplateEngine(),
             setOf(dateProvider),
             NodeContextBuilder(),
+            ChatHistoryWindowPlanner(),
             retrieveRelevantMemoryUseCase,
             crashReportingRepository,
             localModelRepository,
@@ -1344,6 +1379,9 @@ class GraphExecutionEngineTest {
                         chatRepository,
                         pendingInteractionRepository,
                     ),
+                    StructuredOutputGate(),
+                    settingsRepository,
+                    CloudStructuredInferenceClientFactory { _, _ -> null },
                 ),
                 LiteRtNodeExecutor(
                     llmEngine,
@@ -1363,7 +1401,14 @@ class GraphExecutionEngineTest {
                     cloudLlmModelResolver,
                     networkActivityTracker,
                 ),
-                SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+                SystemNodeExecutor(
+                    llmEngine,
+                    loadModelUseCase,
+                    chatRepository,
+                    StructuredOutputGate(),
+                    settingsRepository,
+                    CloudStructuredInferenceClientFactory { _, _ -> null },
+                ),
                 QueueProcessorNodeExecutor(),
                 SummaryNodeExecutor(llmEngine, loadModelUseCase),
                 ClarificationNodeExecutor(
@@ -1395,6 +1440,9 @@ class GraphExecutionEngineTest {
                         chatRepository,
                         pendingInteractionRepository,
                     ),
+                    StructuredOutputGate(),
+                    settingsRepository,
+                    CloudStructuredInferenceClientFactory { _, _ -> null },
                 ),
                 chatRepository,
                 settingsRepository,
@@ -1402,6 +1450,7 @@ class GraphExecutionEngineTest {
                 PromptTemplateEngine(),
                 emptySet(),
                 NodeContextBuilder(),
+                ChatHistoryWindowPlanner(),
                 retrieveRelevantMemoryUseCase,
                 crashReportingRepository,
                 localModelRepository,
@@ -1487,6 +1536,59 @@ class GraphExecutionEngineTest {
                         it.contains("--- Previous Node Output ---")
                 },
             )
+        }
+    }
+
+    @Test
+    fun `given two history nodes when a message is written between them then the later node sees it`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        // Compression is off (setup default), so the planner returns the full
+        // history. The engine must re-read the message list per node — a message
+        // written mid-run (e.g. a TOOL observation persisted as isFinal=false)
+        // must reach a later history-enabled node, not be frozen at the value the
+        // first history node saw.
+        val historyConfig = NodeContextConfig(
+            chatHistory = true,
+            originalTask = false,
+            nodeInput = true,
+            longTermMemory = false,
+            toolResults = false,
+        )
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val llm1 = NodeModel("llm1", NodeType.LITE_RT, 0f, 0f, contextConfig = historyConfig)
+        val llm2 = NodeModel("llm2", NodeType.LITE_RT, 0f, 0f, contextConfig = historyConfig)
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+        val graph = PipelineGraph(
+            id = "g-fresh-history",
+            name = "Fresh history",
+            nodes = listOf(inputNode, llm1, llm2, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "llm1"),
+                ConnectionModel("c2", "llm1", "llm2"),
+                ConnectionModel("c3", "llm2", "output"),
+            ),
+        )
+
+        // First history node sees no prior messages; the observation is appended
+        // before the second node reads the history again.
+        val observation = ChatMessage(
+            id = 9,
+            sessionId = sessionId,
+            role = Role.SYSTEM,
+            content = "tool observation XYZ",
+            timestamp = 5L,
+            isFinal = false,
+        )
+        every { chatRepository.getMessagesForSession(sessionId) } returns flowOf(emptyList()) andThen
+            flowOf(listOf(observation))
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("ok")
+
+        engine(sessionId, "hi", graph).toList()
+
+        // The later node's assembled context must include the freshly written
+        // observation — proving the live history is re-read per node, not frozen.
+        verify {
+            llmEngine.generateResponseStream(match { it.contains("tool observation XYZ") })
         }
     }
 

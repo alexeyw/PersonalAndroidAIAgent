@@ -17,9 +17,15 @@ import app.knotwork.android.domain.models.ToolInvocationResult
  * Captured at the engine's entry point and never mutated — even nodes deep in
  * the chain still see the original intent here, regardless of what previous
  * nodes wrote downstream.
- * @property chatHistory Snapshot of the persisted chat messages for the active
- * session at the moment this context was built. Empty list when the session has
- * no prior messages.
+ * @property chatHistory The chat messages rendered verbatim under
+ * `--- Chat History ---`. When history compression is inactive this is the full
+ * persisted history for the active session; when it is active this is only the
+ * live window of recent messages (the older tail is represented by
+ * [earlierSummary]). Empty list when the session has no prior messages.
+ * @property earlierSummary Prose summary of the conversation older than
+ * [chatHistory], rendered as `--- Earlier conversation (summarized) ---` ahead
+ * of the live window. `null` when compression is off, the history is within
+ * budget, or no summary has been computed yet.
  * @property previousNodeOutput The text produced by the immediately preceding
  * node (or the user prompt itself for the first iteration). This is the canonical
  * "what just happened" payload threaded through a chain.
@@ -36,4 +42,5 @@ data class PipelineExecutionContext(
     val previousNodeOutput: String,
     val toolResults: List<ToolInvocationResult>,
     val memoryEntries: List<MemoryChunk>,
+    val earlierSummary: String? = null,
 )

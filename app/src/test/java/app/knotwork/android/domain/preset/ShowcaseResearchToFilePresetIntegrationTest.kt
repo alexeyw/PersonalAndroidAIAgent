@@ -6,6 +6,7 @@ import app.knotwork.android.data.engine.KoogCloudLlmModelResolver
 import app.knotwork.android.data.local.AgentWorkspaceImpl
 import app.knotwork.android.data.tools.local.SearchTool
 import app.knotwork.android.data.tools.local.executors.WriteFileExecutor
+import app.knotwork.android.domain.engine.ChatHistoryWindowPlanner
 import app.knotwork.android.domain.engine.GraphExecutionEngine
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.engine.NodeContextBuilder
@@ -23,6 +24,8 @@ import app.knotwork.android.domain.engine.executors.SummaryNodeExecutor
 import app.knotwork.android.domain.engine.executors.SystemNodeExecutor
 import app.knotwork.android.domain.engine.executors.ToolInvocationGate
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
+import app.knotwork.android.domain.engine.structured.CloudStructuredInferenceClientFactory
+import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.PipelineGraph
@@ -166,6 +169,9 @@ class ShowcaseResearchToFilePresetIntegrationTest {
                 chatRepository,
                 pendingInteractionRepository,
             ),
+            StructuredOutputGate(),
+            settingsRepository,
+            CloudStructuredInferenceClientFactory { _, _ -> null },
         )
         val nodeExecutorFactory = NodeExecutorFactory(
             InputNodeExecutor(),
@@ -190,7 +196,19 @@ class ShowcaseResearchToFilePresetIntegrationTest {
                 cloudLlmModelResolver,
                 networkActivityTracker,
             ),
-            SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+            SystemNodeExecutor(
+                llmEngine,
+                loadModelUseCase,
+                chatRepository,
+                StructuredOutputGate(),
+                settingsRepository,
+                CloudStructuredInferenceClientFactory {
+                        _,
+                        _,
+                    ->
+                    null
+                },
+            ),
             QueueProcessorNodeExecutor(),
             SummaryNodeExecutor(llmEngine, loadModelUseCase),
             ClarificationNodeExecutor(
@@ -221,6 +239,7 @@ class ShowcaseResearchToFilePresetIntegrationTest {
             PromptTemplateEngine(),
             emptySet<PromptVariableProvider>(),
             NodeContextBuilder(),
+            ChatHistoryWindowPlanner(),
             retrieveRelevantMemoryUseCase,
             crashReportingRepository,
             localModelRepository,
@@ -229,8 +248,10 @@ class ShowcaseResearchToFilePresetIntegrationTest {
             mockk(relaxed = true),
         )
 
-        // Scripted LLM: one canned answer per node / arg-generation pass.
-        every { llmEngine.generateResponseStream(any()) } answers {
+        // Scripted LLM: one canned answer per node / arg-generation pass. The second
+        // (temperature) argument is matched so structured-output repair re-inferences are
+        // answered too.
+        every { llmEngine.generateResponseStream(any(), any()) } answers {
             flowOf(scriptFor(firstArg()))
         }
         coEvery { getContextWindowUseCase(any()) } returns ""
@@ -242,6 +263,7 @@ class ShowcaseResearchToFilePresetIntegrationTest {
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.NeverPrompt)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(2)
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
         coEvery { localModelRepository.getActiveModel() } returns null
 

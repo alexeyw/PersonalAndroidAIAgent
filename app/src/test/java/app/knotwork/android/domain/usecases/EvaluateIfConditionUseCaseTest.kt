@@ -1,12 +1,19 @@
 package app.knotwork.android.domain.usecases
 
 import app.knotwork.android.domain.engine.LlmInferenceEngine
+import app.knotwork.android.domain.engine.structured.CloudStructuredClient
+import app.knotwork.android.domain.engine.structured.CloudStructuredInferenceClientFactory
+import app.knotwork.android.domain.engine.structured.CollectingRepairListener
+import app.knotwork.android.domain.engine.structured.StructuredInferenceClient
+import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
+import app.knotwork.android.domain.repositories.SettingsRepository
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -14,158 +21,177 @@ import org.junit.Test
 import java.util.UUID
 
 /**
- * Tests for [EvaluateIfConditionUseCase].
+ * Tests for [EvaluateIfConditionUseCase], including the structured-output gate path
+ * (constrained `{"True","False"}` token with repair).
  */
 class EvaluateIfConditionUseCaseTest {
 
     private lateinit var llmInferenceEngine: LlmInferenceEngine
+    private lateinit var settingsRepository: SettingsRepository
     private lateinit var evaluateIfConditionUseCase: EvaluateIfConditionUseCase
 
     @Before
     fun setup() {
         llmInferenceEngine = mockk()
-        evaluateIfConditionUseCase = EvaluateIfConditionUseCase(llmInferenceEngine)
+        settingsRepository = mockk()
+        every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(DEFAULT_MAX_REPAIRS)
+        evaluateIfConditionUseCase = EvaluateIfConditionUseCase(
+            llmInferenceEngine,
+            StructuredOutputGate(),
+            settingsRepository,
+            CloudStructuredInferenceClientFactory { _, _ -> null },
+        )
     }
 
-    @Test
-    fun `invoke returns true when keywords match`() = runTest {
-        val node = NodeModel(
+    private fun ifNode(keywords: String? = null, complexity: Int? = null, prompt: String? = null): NodeModel =
+        NodeModel(
             id = UUID.randomUUID().toString(),
             type = NodeType.IF_CONDITION,
             x = 0f,
             y = 0f,
-            conditionKeywords = "urgent, important",
+            conditionKeywords = keywords,
+            conditionComplexity = complexity,
+            conditionPrompt = prompt,
         )
-        val inputText = "This is an URGENT message."
 
-        val result = evaluateIfConditionUseCase(node, inputText)
+    @Test
+    fun `given matching keywords when invoke then returns true without gate`() = runTest {
+        val outcome = evaluateIfConditionUseCase(ifNode(keywords = "urgent, important"), "This is an URGENT message.")
 
-        assertTrue(result)
+        assertTrue(outcome.value)
+        assertFalse(outcome.gateFailed)
     }
 
     @Test
-    fun `invoke returns false when keywords do not match`() = runTest {
-        val node = NodeModel(
-            id = UUID.randomUUID().toString(),
-            type = NodeType.IF_CONDITION,
-            x = 0f,
-            y = 0f,
-            conditionKeywords = "urgent, important",
-        )
-        val inputText = "This is a normal message."
+    fun `given non-matching keywords when invoke then returns false`() = runTest {
+        val outcome = evaluateIfConditionUseCase(ifNode(keywords = "urgent, important"), "This is a normal message.")
 
-        val result = evaluateIfConditionUseCase(node, inputText)
-
-        assertFalse(result)
+        assertFalse(outcome.value)
+        assertFalse(outcome.gateFailed)
     }
 
     @Test
-    fun `invoke returns true when text length exceeds complexity threshold`() = runTest {
-        val node = NodeModel(
-            id = UUID.randomUUID().toString(),
-            type = NodeType.IF_CONDITION,
-            x = 0f,
-            y = 0f,
-            conditionComplexity = 10,
+    fun `given text over complexity threshold when invoke then returns true`() = runTest {
+        val outcome = evaluateIfConditionUseCase(
+            ifNode(complexity = 10),
+            "This message is definitely longer than 10 characters.",
         )
-        val inputText = "This message is definitely longer than 10 characters."
 
-        val result = evaluateIfConditionUseCase(node, inputText)
-
-        assertTrue(result)
+        assertTrue(outcome.value)
     }
 
     @Test
-    fun `invoke returns false when text length is below complexity threshold`() = runTest {
-        val node = NodeModel(
-            id = UUID.randomUUID().toString(),
-            type = NodeType.IF_CONDITION,
-            x = 0f,
-            y = 0f,
-            conditionComplexity = 50,
-        )
-        val inputText = "Short message."
+    fun `given text under complexity threshold when invoke then returns false`() = runTest {
+        val outcome = evaluateIfConditionUseCase(ifNode(complexity = 50), "Short message.")
 
-        val result = evaluateIfConditionUseCase(node, inputText)
-
-        assertFalse(result)
+        assertFalse(outcome.value)
     }
 
     @Test
-    fun `invoke returns true when LLM returns true`() = runTest {
-        val node = NodeModel(
-            id = UUID.randomUUID().toString(),
-            type = NodeType.IF_CONDITION,
-            x = 0f,
-            y = 0f,
-            conditionPrompt = "Is this text asking a question?",
-        )
-        val inputText = "How are you?"
+    fun `given LLM emits True when invoke then returns true`() = runTest {
+        every { llmInferenceEngine.generateResponseStream(any(), any()) } returns flowOf("T", "r", "u", "e")
 
-        every { llmInferenceEngine.generateResponseStream(any()) } returns flowOf("t", "r", "u", "e")
+        val outcome = evaluateIfConditionUseCase(ifNode(prompt = "Is this a question?"), "How are you?")
 
-        val result = evaluateIfConditionUseCase(node, inputText)
-
-        assertTrue(result)
+        assertTrue(outcome.value)
+        assertFalse(outcome.gateFailed)
     }
 
     @Test
-    fun `invoke returns false when LLM returns false`() = runTest {
-        val node = NodeModel(
-            id = UUID.randomUUID().toString(),
-            type = NodeType.IF_CONDITION,
-            x = 0f,
-            y = 0f,
-            conditionPrompt = "Is this text asking a question?",
+    fun `given a cloud provider node when invoke then routes the gate to the cloud client`() = runTest {
+        // A cloud-backed structured client that classifies the condition as True,
+        // proving the use case routes to the cloud seam (not the local engine)
+        // when the node carries a cloudProvider.
+        val cloudFactory = CloudStructuredInferenceClientFactory { _, _ ->
+            CloudStructuredClient(
+                inference = StructuredInferenceClient { _, _ -> "True" },
+                supportsNativeJson = true,
+            )
+        }
+        val useCase = EvaluateIfConditionUseCase(
+            llmInferenceEngine,
+            StructuredOutputGate(),
+            settingsRepository,
+            cloudFactory,
         )
-        val inputText = "I am fine."
+        val node = ifNode(prompt = "Is this a question?").copy(cloudProvider = "openai")
 
-        every { llmInferenceEngine.generateResponseStream(any()) } returns flowOf("f", "a", "l", "s", "e")
+        val outcome = useCase(node, "How are you?")
 
-        val result = evaluateIfConditionUseCase(node, inputText)
+        assertTrue(outcome.value)
+        assertFalse(outcome.gateFailed)
+    }
 
-        assertFalse(result)
+    @Test
+    fun `given LLM emits False when invoke then returns false`() = runTest {
+        every { llmInferenceEngine.generateResponseStream(any(), any()) } returns flowOf("False")
+
+        val outcome = evaluateIfConditionUseCase(ifNode(prompt = "Is this a question?"), "I am fine.")
+
+        assertFalse(outcome.value)
+        assertFalse(outcome.gateFailed)
+    }
+
+    @Test
+    fun `given malformed verdict then a valid one when invoke then repairs and returns true`() = runTest {
+        every { llmInferenceEngine.generateResponseStream(any(), any()) } returnsMany listOf(
+            flowOf("hmm, maybe"), // no recognised token → triggers repair
+            flowOf("True"),
+        )
+        val listener = CollectingRepairListener()
+
+        val outcome = evaluateIfConditionUseCase(ifNode(prompt = "Is this a question?"), "How are you?", listener)
+
+        assertTrue(outcome.value)
+        assertFalse(outcome.gateFailed)
+        assertEquals(1, listener.attempts.size)
+    }
+
+    @Test
+    fun `given verdict never recognised when invoke then defaults to false and flags gate failure`() = runTest {
+        every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(1)
+        every { llmInferenceEngine.generateResponseStream(any(), any()) } returns flowOf("inconclusive")
+        val listener = CollectingRepairListener()
+
+        val outcome = evaluateIfConditionUseCase(ifNode(prompt = "Is this a question?"), "How are you?", listener)
+
+        assertFalse(outcome.value)
+        assertTrue(outcome.gateFailed)
+        assertEquals(1, listener.attempts.size)
+    }
+
+    @Test
+    fun `given inference error when invoke then defaults to false and flags gate failure`() = runTest {
+        every { llmInferenceEngine.generateResponseStream(any(), any()) } returns
+            kotlinx.coroutines.flow.flow { throw IllegalStateException("engine down") }
+
+        val outcome = evaluateIfConditionUseCase(ifNode(prompt = "Is this a question?"), "How are you?")
+
+        assertFalse(outcome.value)
+        assertTrue(outcome.gateFailed)
     }
 
     @Test(expected = IllegalArgumentException::class)
-    fun `invoke throws exception for wrong node type`() = runTest {
-        val node = NodeModel(
-            id = UUID.randomUUID().toString(),
-            type = NodeType.TOOL,
-            x = 0f,
-            y = 0f,
-        )
-        val inputText = "Text"
-
-        evaluateIfConditionUseCase(node, inputText)
+    fun `given wrong node type when invoke then throws`() = runTest {
+        val node = NodeModel(id = UUID.randomUUID().toString(), type = NodeType.TOOL, x = 0f, y = 0f)
+        evaluateIfConditionUseCase(node, "Text")
     }
 
     @Test
-    fun `invoke returns false when input text is blank`() = runTest {
-        val node = NodeModel(
-            id = UUID.randomUUID().toString(),
-            type = NodeType.IF_CONDITION,
-            x = 0f,
-            y = 0f,
-            conditionKeywords = "urgent",
-        )
+    fun `given blank input when invoke then returns false`() = runTest {
+        val outcome = evaluateIfConditionUseCase(ifNode(keywords = "urgent"), "   ")
 
-        val result = evaluateIfConditionUseCase(node, "   ")
-
-        assertFalse(result)
+        assertFalse(outcome.value)
     }
 
     @Test
-    fun `invoke returns false when no conditions are set`() = runTest {
-        val node = NodeModel(
-            id = UUID.randomUUID().toString(),
-            type = NodeType.IF_CONDITION,
-            x = 0f,
-            y = 0f,
-        )
+    fun `given no conditions when invoke then returns false`() = runTest {
+        val outcome = evaluateIfConditionUseCase(ifNode(), "Some text")
 
-        val result = evaluateIfConditionUseCase(node, "Some text")
+        assertFalse(outcome.value)
+    }
 
-        assertFalse(result)
+    private companion object {
+        const val DEFAULT_MAX_REPAIRS = 2
     }
 }

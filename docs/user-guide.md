@@ -260,7 +260,27 @@ The pane has three tabs:
   *why* a particular branch fired or a node was skipped.
 - **Node I/O** — per-node input / output text plus the values of every
   `$VARIABLE` resolved during the run, so you can diff what the agent
-  actually saw.
+  actually saw. In a long conversation the input may open with an
+  **`--- Earlier conversation (summarized) ---`** block: that is the
+  model-written stand-in for older turns that no longer fit verbatim (see
+  **Settings → Memory → Compress long chat history**). The recent turns
+  still appear underneath it under `--- Chat History ---`.
+
+A few events are worth recognising while you read the **Console log**:
+
+- **Reliability warnings (RUNTIME chip).** When the agent has to nudge a
+  node into producing well-formed output, you'll see a muted yellow line
+  like `Output repair 1/2 for node Intent Router`. When a cloud call hits a
+  transient failure and is retried, you'll see `Cloud retry 1/2 for openai`.
+  Both are normal self-healing, not errors — they only mean the agent had to
+  try again. A genuine give-up is logged as a red **Error** line instead
+  (for example a router that exhausted its repairs and fell back to its
+  default branch).
+- **History compression (MEMORY chip).** Once per run, if older turns were
+  summarised to fit the context window, a line such as `Chat history
+  compressed: summarized older turns, kept the last 10 messages` appears.
+  If the summary was not ready in time, you'll see `Chat history over
+  budget; summary not ready, kept the last 10 messages` instead.
 
 Three actions are available at the pane footer:
 
@@ -625,6 +645,22 @@ sheet lets you grow / shrink the class list: each row has a small
 **+ Add class** button under the list creates a new empty class row
 (disabled above the 6-class maximum). The new class shows up as an
 additional outbound port on the node card immediately on Save.
+
+The nodes that produce a structured result — **IntentRouter**,
+**IfCondition**, **Evaluation**, **Decomposition** and **Tool** — run their
+output through a validate-and-repair step: if the model's first reply is
+malformed, the agent hands it back the bad output and asks it to fix itself
+(up to a small repair budget, 2 attempts by default) before falling back.
+Each repair attempt shows on the console as `Output repair 1/2 for node …`,
+and a node that exhausts its budget logs an Error and takes its default
+path (or, for Decomposition, fails the run rather than continue on a
+corrupt subtask list).
+
+Each of these nodes also carries an **Engine** selector — choose whether it
+runs **On-device** (the default) or against a configured cloud provider. A
+cloud provider that natively guarantees JSON output lets a JSON-producing
+node skip the repair loop; if the chosen provider is unavailable at run time
+the node falls back to on-device and notes it on the console.
 
 ### Composing pipelines (the Pipeline node)
 
@@ -1178,6 +1214,20 @@ carries a **LAN** pill plus the base URL. Use **+ Add provider**
 to surface an unconfigured provider's editor without scrolling.
 Leaving every cloud row blank keeps the agent fully offline.
 
+The provider editor also carries a **Retry policy** that applies to every
+cloud provider (chat and cloud embeddings alike). Transient failures —
+rate-limits (HTTP 429), server errors (5xx) and connection or read timeouts
+— are retried with exponential backoff; authentication errors are not
+retried, and stopping a run cancels cleanly. Two sliders tune it:
+
+- **Max attempts** (1–5, default 3) — the total number of tries per call.
+  Set it to **1** to disable retries entirely.
+- **Base delay** (100–10 000 ms, default 1 000) — the initial backoff before
+  the first retry; later retries back off further.
+
+Each retry shows up on the agent console as a muted line such as
+`Cloud retry 1/2 for openai`.
+
 ### Memory
 
 Four-cell stat grid — **Chunks / Size / Threads / Avg score** — an
@@ -1206,6 +1256,27 @@ parameters that otherwise only have code defaults:
 Each slider only offers in-range values; if a value is somehow rejected
 (for example by a future automated edit), an inline message appears and
 the change is discarded rather than saved.
+
+**Chat-history compression.** Three controls keep a long conversation from
+overflowing the context window or crowding out memory and tool results:
+
+- **Compress long chat history** (toggle, default on) — when on, once a
+  session's history grows past the threshold below, the older turns are
+  summarised by the local model in the background and shown to the agent as
+  an *"Earlier conversation (summarized)"* block ahead of the recent,
+  verbatim turns. Turn it off to always feed the full verbatim history.
+- **Compression threshold** (500–32 000 tokens, default 3 500) — the
+  approximate history size above which compression kicks in. Keep it
+  comfortably below your **Max context** so the summary plus the recent
+  window still fit.
+- **Live window** (2–50 messages, default 10) — how many of the most recent
+  messages are always kept verbatim, never folded into the summary.
+
+Summarisation runs off the active-run path (the same charging/idle-friendly,
+agent-not-busy gating as memory work), so if a summary is not ready when a
+run needs it, the history is simply trimmed to the live window for that run
+and the agent console notes it. Verbose diagnostics ride the same
+**Verbose memory logging** flag.
 
 A **Background compaction** toggle (default on) controls whether the
 daily charging-and-idle worker consolidates stale clusters, and an

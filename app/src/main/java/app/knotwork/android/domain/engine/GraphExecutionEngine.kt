@@ -4,7 +4,9 @@ import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.constants.PipelineExecutionDefaults
 import app.knotwork.android.domain.engine.executors.NodeExecutorFactory
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
+import app.knotwork.android.domain.engine.structured.JsonPayloadExtractor
 import app.knotwork.android.domain.models.AgentOrchestratorState
+import app.knotwork.android.domain.models.ChatHistorySummary
 import app.knotwork.android.domain.models.ConsoleEvent
 import app.knotwork.android.domain.models.ConsoleEventType
 import app.knotwork.android.domain.models.ExecutionScope
@@ -37,6 +39,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.Json
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -46,6 +51,12 @@ import javax.inject.Singleton
  * It traverses nodes starting from [NodeType.INPUT], evaluates conditions,
  * executes LLM inference, triggers tools, and reaches [NodeType.OUTPUT].
  */
+// LargeClass is suppressed deliberately: this is the central pipeline
+// orchestrator, and the run-walk logic (node traversal, lazy memory and
+// chat-history resolution, HITL suspension, checkpoint/resume, sub-pipeline
+// fan-out) is most readable as one cohesive state machine. Decomposing it into
+// collaborators is tracked as future work rather than forced here.
+@Suppress("LargeClass")
 @Singleton
 class GraphExecutionEngine @Inject constructor(
     private val nodeExecutorFactory: NodeExecutorFactory,
@@ -56,6 +67,7 @@ class GraphExecutionEngine @Inject constructor(
     private val promptTemplateEngine: PromptTemplateEngine,
     private val promptVariableProviders: Set<@JvmSuppressWildcards PromptVariableProvider>,
     private val nodeContextBuilder: NodeContextBuilder,
+    private val chatHistoryWindowPlanner: ChatHistoryWindowPlanner,
     private val retrieveRelevantMemoryUseCase: RetrieveRelevantMemoryUseCase,
     private val crashReportingRepository: CrashReportingRepository,
     private val localModelRepository: LocalModelRepository,
@@ -307,6 +319,82 @@ class GraphExecutionEngine @Inject constructor(
             }
             return hits.also { memoizedMemories = it }
         }
+
+        // Chat-history compression splits into a run-stable part and a per-node
+        // part:
+        //  - The cached summary and the compression settings are resolved at most
+        //    once per run. They are safe to memoize because the background
+        //    compressor is gated off while a pipeline is active (see
+        //    ChatHistoryCompressionCoordinator), so the `chat_history_summaries`
+        //    row and the settings cannot change mid-run.
+        //  - The live message list is re-read on EVERY call and is NOT memoized.
+        //    Message-writing nodes mutate it mid-run — in particular a TOOL node's
+        //    observation is persisted as an `isFinal = false` SYSTEM chat message
+        //    (ToolInvocationGate) — and a later history-enabled node must see it,
+        //    so freezing the list here would hide in-run messages until the next
+        //    user turn.
+        // Not snapshotted for resume — chat history was never resume-stable.
+        var chatCompressionResolved = false
+        var chatCompressionEnabled = false
+        var chatHistorySummary: ChatHistorySummary? = null
+        var chatHistoryThresholdTokens = 0
+        var chatHistoryLiveWindow = 0
+        // The console note fires once per run, the first time compression actually
+        // changes what a node sees.
+        var historyCompressionLogged = false
+        suspend fun resolveChatHistoryView(): ChatHistoryView {
+            if (!chatCompressionResolved) {
+                chatCompressionEnabled = settingsRepository.chatHistoryCompressionEnabled.first()
+                chatHistorySummary = if (chatCompressionEnabled) {
+                    try {
+                        chatRepository.getHistorySummary(sessionId)
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Timber.tag("PipelineDebug").w(e, "Failed to load chat-history summary; continuing without it")
+                        null
+                    }
+                } else {
+                    null
+                }
+                chatHistoryThresholdTokens = settingsRepository.chatHistoryCompressionThresholdTokens.first()
+                chatHistoryLiveWindow = settingsRepository.chatHistoryLiveWindowSize.first()
+                chatCompressionResolved = true
+            }
+            // Re-read fresh: the list grows as message-writing nodes append rows.
+            val messages = chatRepository.getMessagesForSession(sessionId).first()
+            val view = chatHistoryWindowPlanner.plan(
+                messages = messages,
+                summary = chatHistorySummary,
+                compressionEnabled = chatCompressionEnabled,
+                thresholdTokens = chatHistoryThresholdTokens,
+                liveWindowSize = chatHistoryLiveWindow,
+            )
+            // Surface the compression only when it actually changed what the node
+            // sees — a within-budget run stays silent — and only once per run.
+            if (!historyCompressionLogged && (view.truncatedWithoutSummary || view.earlierSummary != null)) {
+                historyCompressionLogged = true
+                if (view.truncatedWithoutSummary) {
+                    pushConsole(
+                        ConsoleEventType.HistoryCompression,
+                        "Chat history over budget; summary not ready, kept the last " +
+                            "${view.liveWindow.size} messages",
+                    )
+                } else {
+                    val gap = if (view.droppedUncoveredCount > 0) {
+                        " (${view.droppedUncoveredCount} recent messages not yet summarized)"
+                    } else {
+                        ""
+                    }
+                    pushConsole(
+                        ConsoleEventType.HistoryCompression,
+                        "Chat history compressed: summarized older turns, kept the last " +
+                            "${view.liveWindow.size} messages$gap",
+                    )
+                }
+            }
+            return view
+        }
         // Tool invocations are accumulated as TOOL nodes complete and surfaced
         // via the `--- Tool Results ---` block on later nodes that opt in.
         val toolInvocationResults = mutableListOf<ToolInvocationResult>()
@@ -442,12 +530,23 @@ class GraphExecutionEngine @Inject constructor(
                     } else {
                         emptyList()
                     }
+                    // Only nodes that render chat history pay for loading +
+                    // planning it; others get the empty view (no DB read). The
+                    // view is recomputed per node (fresh message read) so in-run
+                    // message writes — e.g. TOOL observations — are visible to
+                    // later history-enabled nodes.
+                    val chatHistoryView = if (currentNode.contextConfig.chatHistory) {
+                        resolveChatHistoryView()
+                    } else {
+                        ChatHistoryView.EMPTY
+                    }
                     val executionContext = PipelineExecutionContext(
                         originalUserMessage = userPrompt,
-                        chatHistory = chatRepository.getMessagesForSession(sessionId).first(),
+                        chatHistory = chatHistoryView.liveWindow,
                         previousNodeOutput = currentInputText,
                         toolResults = toolInvocationResults.toList(),
                         memoryEntries = memoryEntries,
+                        earlierSummary = chatHistoryView.earlierSummary,
                     )
                     // No fallback to currentInputText: an empty result is the
                     // intended outcome of a sparse config (e.g. only toolResults=true
@@ -461,6 +560,18 @@ class GraphExecutionEngine @Inject constructor(
 
                 val nodeStartMs = System.currentTimeMillis()
                 var runParked = false
+                // A routing node validates its key against the labels of its own
+                // outgoing edges, which only the graph knows — surface them through
+                // the scope so the executor can constrain (and repair towards) a key
+                // that actually matches a branch. Empty for every other node type.
+                val routingChoices = if (currentNode.type == NodeType.INTENT_ROUTER) {
+                    graph.connections
+                        .filter { it.sourceNodeId == currentNode.id && !it.label.isNullOrBlank() }
+                        .map { it.label!! }
+                        .distinct()
+                } else {
+                    emptyList()
+                }
                 try {
                     executor.execute(
                         nodeForExecution,
@@ -468,7 +579,12 @@ class GraphExecutionEngine @Inject constructor(
                         sessionId,
                         userPrompt,
                         runId,
-                        ExecutionScope(depth = depth, stepBudget = budget, pipelineVisitIndex = pipelineVisitIndex),
+                        ExecutionScope(
+                            depth = depth,
+                            stepBudget = budget,
+                            pipelineVisitIndex = pipelineVisitIndex,
+                            routingChoices = routingChoices,
+                        ),
                     )
                         .collect { output ->
                             when (output) {
@@ -486,6 +602,17 @@ class GraphExecutionEngine @Inject constructor(
                                     emit(output.state)
                                 }
                                 is NodeOutput.Result -> nodeResult = output.result
+                                is NodeOutput.Console -> {
+                                    // The node has no console sink of its own; the
+                                    // engine owns `seq`/`depth` stamping. A repair
+                                    // attempt additionally bumps the per-node repair
+                                    // counter so the statistics surface reflects how
+                                    // often this node's structured output stumbled.
+                                    pushConsole(output.type, output.message)
+                                    if (output.type == ConsoleEventType.StructuredOutputRepair) {
+                                        metricsRepository.recordStructuredOutputRepair(nodeForExecution.label)
+                                    }
+                                }
                             }
                         }
 
@@ -899,23 +1026,34 @@ class GraphExecutionEngine @Inject constructor(
         return node.copy(systemPrompt = rendered)
     }
 
+    /**
+     * Parses a list of items from a node's text output, used to seed a
+     * `QUEUE_PROCESSOR` from an upstream `DECOMPOSITION` (or any list-producing
+     * node).
+     *
+     * JSON isolation is delegated to the shared [JsonPayloadExtractor] and the
+     * array is deserialized with `kotlinx.serialization`, so this no longer
+     * carries its own ```json regex or `org.json` walk — a `DECOMPOSITION` node
+     * already validated and re-encoded its list through the structured-output
+     * gate, so the common case is a clean array. The Markdown-list fallback (and
+     * the single-item fallback) remain for nodes that emit a plain bulleted or
+     * numbered list rather than JSON.
+     *
+     * @param text The upstream node output to parse.
+     * @return The parsed items, or a single-element list of [text] when nothing
+     *   list-shaped is found.
+     */
     private fun parseListFromText(text: String): List<String> {
-        try {
-            val blockRegex = """```json\s*(\[.*?\])\s*```""".toRegex(RegexOption.DOT_MATCHES_ALL)
-            val blockMatch = blockRegex.find(text)
-            val jsonString = blockMatch?.groups?.get(1)?.value ?: text.trim()
-
-            if (jsonString.startsWith("[")) {
-                val jsonArray = org.json.JSONArray(jsonString)
-                val list = mutableListOf<String>()
-                for (i in 0 until jsonArray.length()) {
-                    list.add(jsonArray.getString(i))
-                }
+        val payload = JsonPayloadExtractor.extract(text)
+        if (payload.startsWith("[")) {
+            try {
+                val list = listJson.decodeFromString(ListSerializer(String.serializer()), payload)
                 if (list.isNotEmpty()) return list
+            } catch (e: IllegalArgumentException) {
+                // Not a valid string array — fall through to the Markdown-list parsing.
+                // `decodeFromString` is non-suspend, so this cannot mask a CancellationException.
+                Timber.tag("PipelineDebug").e(e, "Error parsing JSON list")
             }
-        } catch (e: Exception) {
-            // Ignore JSON parse errors and fallback
-            Timber.tag("PipelineDebug").e(e, "Error parsing JSON list")
         }
 
         val lines = text.lines().map { it.trim() }.filter { it.matches(Regex("""^(\d+\.|-|\*)\s+.*""")) }
@@ -927,6 +1065,12 @@ class GraphExecutionEngine @Inject constructor(
     }
 
     private companion object {
+        /** Lenient JSON used to parse a `QUEUE_PROCESSOR` seed list (see [parseListFromText]). */
+        val listJson = Json {
+            ignoreUnknownKeys = true
+            isLenient = true
+        }
+
         /**
          * Node types whose `systemPrompt` is forwarded to an LLM engine and
          * therefore needs `$VARIABLE` placeholders resolved before execution.

@@ -5,6 +5,7 @@ import app.knotwork.android.data.engine.KoogClientFactory
 import app.knotwork.android.data.engine.KoogCloudLlmModelResolver
 import app.knotwork.android.data.local.AgentWorkspaceImpl
 import app.knotwork.android.data.tools.local.executors.WriteFileExecutor
+import app.knotwork.android.domain.engine.ChatHistoryWindowPlanner
 import app.knotwork.android.domain.engine.GraphExecutionEngine
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.engine.NodeContextBuilder
@@ -22,6 +23,8 @@ import app.knotwork.android.domain.engine.executors.SummaryNodeExecutor
 import app.knotwork.android.domain.engine.executors.SystemNodeExecutor
 import app.knotwork.android.domain.engine.executors.ToolInvocationGate
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
+import app.knotwork.android.domain.engine.structured.CloudStructuredInferenceClientFactory
+import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.ConnectionModel
@@ -141,6 +144,7 @@ class SkillReportWriterIntegrationTest {
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
         every { settingsRepository.pipelineMaxNestingDepth } returns flowOf(3)
         every { settingsRepository.verboseMemoryLoggingEnabled } returns flowOf(false)
+        every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(2)
 
         workspace = AgentWorkspaceImpl(context, settingsRepository)
         writeFileExecutor = WriteFileExecutor(workspace)
@@ -247,7 +251,15 @@ class SkillReportWriterIntegrationTest {
             chatRepository,
             mockk<PendingInteractionRepository>(relaxed = true),
         )
-        val toolNodeExecutor = ToolNodeExecutor(llmEngine, loadModelUseCase, toolRepository, toolInvocationGate)
+        val toolNodeExecutor = ToolNodeExecutor(
+            llmEngine,
+            loadModelUseCase,
+            toolRepository,
+            toolInvocationGate,
+            StructuredOutputGate(),
+            settingsRepository,
+            CloudStructuredInferenceClientFactory { _, _ -> null },
+        )
         val liteRtNodeExecutor =
             LiteRtNodeExecutor(
                 llmEngine,
@@ -284,7 +296,19 @@ class SkillReportWriterIntegrationTest {
             toolNodeExecutor,
             liteRtNodeExecutor,
             cloudLlmNodeExecutor,
-            SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+            SystemNodeExecutor(
+                llmEngine,
+                loadModelUseCase,
+                chatRepository,
+                StructuredOutputGate(),
+                settingsRepository,
+                CloudStructuredInferenceClientFactory {
+                        _,
+                        _,
+                    ->
+                    null
+                },
+            ),
             QueueProcessorNodeExecutor(),
             SummaryNodeExecutor(llmEngine, loadModelUseCase),
             ClarificationNodeExecutor(
@@ -313,6 +337,7 @@ class SkillReportWriterIntegrationTest {
             PromptTemplateEngine(),
             emptySet<PromptVariableProvider>(),
             NodeContextBuilder(),
+            ChatHistoryWindowPlanner(),
             retrieveRelevantMemoryUseCase,
             mockk<CrashReportingRepository>(relaxed = true),
             mockk<LocalModelRepository>(relaxed = true),

@@ -160,6 +160,8 @@ data class IntentClass(val name: String, val description: String = "", val examp
  * @property classifierPrompt mono multi-line prompt consumed by the local LLM.
  * @property fallbackClass class name to route to when no match is found;
  * `null` = no fallback (the engine raises an error).
+ * @property engineProvider optional cloud provider backing this node's
+ * structured inference; `null` runs on-device (the default).
  */
 data class IntentRouterConfig(
     override val title: String,
@@ -167,6 +169,7 @@ data class IntentRouterConfig(
     val classes: List<IntentClass> = emptyList(),
     val classifierPrompt: String = "",
     val fallbackClass: String? = null,
+    val engineProvider: CloudProvider? = null,
 ) : NodeConfig {
     override val type: NodeType get() = NodeType.INTENT_ROUTER
 }
@@ -180,6 +183,8 @@ data class IntentRouterConfig(
  * node outputs.
  * @property labelTrue port label for the True branch (also the [EdgeLabel]).
  * @property labelFalse port label for the False branch.
+ * @property engineProvider optional cloud provider backing this node's
+ * structured inference; `null` runs on-device (the default).
  */
 data class IfConditionConfig(
     override val title: String,
@@ -187,6 +192,7 @@ data class IfConditionConfig(
     val expression: String = "",
     val labelTrue: String = "True",
     val labelFalse: String = "False",
+    val engineProvider: CloudProvider? = null,
 ) : NodeConfig {
     override val type: NodeType get() = NodeType.IF_CONDITION
 }
@@ -237,6 +243,8 @@ data class ToolArgument(val name: String, val expression: String)
  * declared here surface as validation errors.
  * @property confirmOverride optional override of the tool's declared risk
  * policy; `null` inherits the tool's declared risk.
+ * @property engineProvider optional cloud provider backing this node's
+ * structured tool-selection / argument inference; `null` runs on-device.
  */
 data class ToolConfig(
     override val title: String,
@@ -244,6 +252,7 @@ data class ToolConfig(
     val toolId: String = "",
     val argumentMapping: List<ToolArgument> = emptyList(),
     val confirmOverride: ConfirmPolicy? = null,
+    val engineProvider: CloudProvider? = null,
 ) : NodeConfig {
     override val type: NodeType get() = NodeType.TOOL
 }
@@ -257,6 +266,8 @@ data class ToolConfig(
  * @property planningPrompt mono multi-line planning prompt; supports `$INPUT`.
  * @property maxSubtasks generation cap, range `1..20`.
  * @property outputSchemaJson optional structured-output JSON schema.
+ * @property engineProvider optional cloud provider backing this node's
+ * structured inference; `null` runs on-device (the default).
  */
 data class DecompositionConfig(
     override val title: String,
@@ -264,6 +275,7 @@ data class DecompositionConfig(
     val planningPrompt: String = "",
     val maxSubtasks: Int = 5,
     val outputSchemaJson: String? = null,
+    val engineProvider: CloudProvider? = null,
 ) : NodeConfig {
     override val type: NodeType get() = NodeType.DECOMPOSITION
 }
@@ -298,12 +310,15 @@ data class QueueProcessorConfig(
  * `$INPUT` and `$ATTEMPT`.
  * @property maxRetries retry budget, range `0..5`. Surfaces the `Retry`
  * out-port only when greater than zero.
+ * @property engineProvider optional cloud provider backing this node's
+ * structured inference; `null` runs on-device (the default).
  */
 data class EvaluationConfig(
     override val title: String,
     override val description: String? = null,
     val criteriaPrompt: String = "",
     val maxRetries: Int = 2,
+    val engineProvider: CloudProvider? = null,
 ) : NodeConfig {
     override val type: NodeType get() = NodeType.EVALUATION
 }

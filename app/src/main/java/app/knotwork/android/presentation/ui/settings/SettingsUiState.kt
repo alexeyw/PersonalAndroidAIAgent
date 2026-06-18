@@ -55,6 +55,12 @@ import app.knotwork.android.domain.models.ToolApprovalPolicy
  * @property memoryCompactionAgeDays Age (days) after which a non-pinned chunk
  *   becomes a compaction candidate.
  * @property maxMemoryChunks Hard ceiling on the number of stored chunks.
+ * @property chatHistoryCompressionEnabled Whether long chat sessions are
+ *   compressed (older tail summarised) once over the token budget.
+ * @property chatHistoryCompressionThresholdTokens Approximate-token budget above
+ *   which chat history is compressed.
+ * @property chatHistoryLiveWindowSize Number of most-recent messages kept
+ *   verbatim when compression is active.
  * @property activeEmbeddingProviderId Wire id of the selected embedding
  *   provider.
  * @property lastReembedProviderId Wire id of the provider the stored memory
@@ -116,6 +122,10 @@ data class SettingsUiState(
     val memoryCompactionEnabled: Boolean = SettingsDefaults.MEMORY_COMPACTION_ENABLED_DEFAULT,
     val memoryCompactionAgeDays: Int = SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT,
     val maxMemoryChunks: Int = SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT,
+    val chatHistoryCompressionEnabled: Boolean = SettingsDefaults.CHAT_HISTORY_COMPRESSION_ENABLED_DEFAULT,
+    val chatHistoryCompressionThresholdTokens: Int =
+        SettingsDefaults.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_DEFAULT,
+    val chatHistoryLiveWindowSize: Int = SettingsDefaults.CHAT_HISTORY_LIVE_WINDOW_DEFAULT,
     val activeEmbeddingProviderId: String = SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT,
     val lastReembedProviderId: String? = null,
     val embeddingProviderOptions: List<EmbeddingProviderOption> = emptyList(),
@@ -172,6 +182,8 @@ enum class MemoryValidationError {
     RecencyHalfLife,
     CompactionAge,
     MaxChunks,
+    CompressionThreshold,
+    LiveWindow,
     UnknownEmbeddingProvider,
 }
 

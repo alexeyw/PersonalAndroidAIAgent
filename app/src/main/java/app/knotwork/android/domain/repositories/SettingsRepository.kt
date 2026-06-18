@@ -304,6 +304,55 @@ interface SettingsRepository {
     suspend fun setMemorySearchTopK(topK: Int)
 
     /**
+     * `true` when long chat sessions should be compressed: once the verbatim
+     * history exceeds [chatHistoryCompressionThresholdTokens], the tail older
+     * than the live window is summarised into the `--- Earlier conversation
+     * (summarized) ---` context block. Defaults to
+     * [app.knotwork.android.domain.constants.SettingsDefaults.CHAT_HISTORY_COMPRESSION_ENABLED_DEFAULT].
+     */
+    val chatHistoryCompressionEnabled: Flow<Boolean>
+
+    /**
+     * Persists the chat-history compression toggle.
+     *
+     * @param enabled `true` to enable history compression, `false` to always
+     *   feed the full verbatim history.
+     */
+    suspend fun setChatHistoryCompressionEnabled(enabled: Boolean)
+
+    /**
+     * Approximate-token budget above which a session's verbatim chat history is
+     * compressed. Coordinated with [maxContextLength] so the summarised history
+     * plus memory and tool blocks fit the on-device context window. Defaults to
+     * [app.knotwork.android.domain.constants.SettingsDefaults.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_DEFAULT].
+     */
+    val chatHistoryCompressionThresholdTokens: Flow<Int>
+
+    /**
+     * Persists the chat-history compression token threshold.
+     *
+     * @param tokens The new threshold; callers should keep it within a sane
+     *   range (validation of user-entered values lives in the Settings ViewModel).
+     */
+    suspend fun setChatHistoryCompressionThresholdTokens(tokens: Int)
+
+    /**
+     * Number of most-recent messages kept verbatim under `--- Chat History ---`
+     * when compression is active; everything older is represented by the
+     * summary. Defaults to
+     * [app.knotwork.android.domain.constants.SettingsDefaults.CHAT_HISTORY_LIVE_WINDOW_DEFAULT].
+     */
+    val chatHistoryLiveWindowSize: Flow<Int>
+
+    /**
+     * Persists the chat-history live-window size.
+     *
+     * @param size The new window size; callers should keep it within a sane
+     *   range (validation of user-entered values lives in the Settings ViewModel).
+     */
+    suspend fun setChatHistoryLiveWindowSize(size: Int)
+
+    /**
      * A [Flow] emitting the minimum cosine-similarity score (0.0–1.0) a memory
      * chunk must reach to be considered relevant during retrieval. Chunks below
      * this threshold are dropped before they reach a node's context. Defaults
@@ -500,6 +549,51 @@ interface SettingsRepository {
      * @param depth The new limit. Will be coerced to the range 1–5.
      */
     suspend fun setPipelineMaxNestingDepth(depth: Int)
+
+    /**
+     * A [Flow] representing the number of corrective re-inferences the
+     * structured-output gate may spend on a single node's malformed output
+     * before giving up. Consumed by the gate's engine-side integration; the gate
+     * treats `0` as "validate once, never repair". Valid range: 0–4.
+     */
+    val structuredOutputMaxRepairs: Flow<Int>
+
+    /**
+     * Updates the structured-output repair budget.
+     *
+     * @param count The new repair ceiling. Will be coerced to the range 0–4.
+     */
+    suspend fun setStructuredOutputMaxRepairs(count: Int)
+
+    /**
+     * A [Flow] representing the maximum number of attempts (the initial call
+     * plus retries) a transient cloud-call failure is given before the error
+     * propagates. Consumed by the cloud client/embedding factories to build
+     * Koog's retry policy; `1` means "no retries". Valid range: 1–5.
+     */
+    val cloudRetryMaxAttempts: Flow<Int>
+
+    /**
+     * Updates the cloud-retry attempt budget.
+     *
+     * @param attempts The new attempt ceiling. Will be coerced to the range 1–5.
+     */
+    suspend fun setCloudRetryMaxAttempts(attempts: Int)
+
+    /**
+     * A [Flow] representing the base delay, in milliseconds, before the first
+     * cloud retry. Subsequent retries grow it by the fixed exponential-backoff
+     * multiplier with jitter. Valid range: 100–10000.
+     */
+    val cloudRetryBaseDelayMs: Flow<Long>
+
+    /**
+     * Updates the cloud-retry base delay.
+     *
+     * @param delayMs The new base delay in milliseconds. Will be coerced to the
+     *   range 100–10000.
+     */
+    suspend fun setCloudRetryBaseDelayMs(delayMs: Long)
 
     /**
      * A [Flow] representing the window, in hours, during which an interrupted

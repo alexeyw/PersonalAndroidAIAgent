@@ -7,7 +7,11 @@ This file maps the contents of the main application package.
   - `logging/` - Application-level Timber sinks.
     - `CrashlyticsTimberTree.kt` - Timber tree forwarding `Log.WARN` / `Log.ERROR` records to Firebase Crashlytics via `CrashReportingRepository`. Planted only after the user opts in (release builds).
   - `engine/` - Core LLM and inference engines.
-    - `KoogClientFactory.kt` - Factory for Koog clients; data-layer impl of `domain/engine/CloudLlmClientFactory`.
+    - `KoogClientFactory.kt` - Factory for Koog clients; data-layer impl of `domain/engine/CloudLlmClientFactory`. Every constructed client is retry-wrapped via `CloudRetryWrapper`; `createClient` threads a `CloudRetryListener` for console observability, the per-provider helpers wrap with no observation.
+    - `KoogStructuredInferenceClientFactory.kt` - Data-layer impl of `domain/engine/structured/CloudStructuredInferenceClientFactory`; builds a retry-wrapped Koog client, detects native JSON via `LLModel.capabilities`, and exposes a `StructuredInferenceClient` that collapses the streamed response for the gate.
+    - `retry/` - Cloud retry wrapping (data layer).
+      - `CloudRetryWrapper.kt` - `@Singleton` that decorates a raw Koog `LLMClient` with Koog's `RetryingLLMClient` using the settings-driven policy (attempts + base delay); returns the raw client unchanged when retries are disabled (`maxAttempts == 1`).
+      - `RetryObservingLLMClient.kt` - Pass-through `LLMClient` placed *as* the retry policy's delegate; counts re-invocations and reports the 2nd+ as a retry through `CloudRetryListener` (Koog exposes no per-attempt hook). Single-operation-per-instance.
     - `KoogCloudLlmModelResolver.kt` - Data-layer impl of `domain/engine/CloudLlmModelResolver`; owns per-provider default model ids and Ollama context-window lookup.
     - `KoogModelMapper.kt` - Maps string identifiers to Koog LLModel constants.
     - `LiteRTLlmEngine.kt` - LiteRT LLM engine implementation.
@@ -33,6 +37,7 @@ This file maps the contents of the main application package.
     - `SettingsManager.kt` - App settings manager (DataStore facade). The HuggingFace token is kept out of DataStore in a `KeystoreBackedPrefsStore` (re-enterable-secret policy); a legacy plain-DataStore token migrates to the encrypted store on first read.
     - `dao/` - Data Access Objects (DAOs).
       - `ChatDao.kt` - Chat messages DAO.
+      - `ChatHistorySummaryDao.kt` - Per-session compressed-history summary DAO (`chat_history_summaries` table, v38); get-by-session + REPLACE upsert.
       - `LocalModelDao.kt` - Local models DAO.
       - `MemoryDao.kt` - Memory chunks DAO.
       - `PendingInteractionDao.kt` - Parked HITL interaction DAO (`pending_interactions` table). Response-recording updates carry `IS NULL` guards so the first writer wins.
@@ -44,6 +49,7 @@ This file maps the contents of the main application package.
       - `PromptTemplateDao.kt` - Prompt templates DAO.
       - `TraceStepDao.kt` - Run-trace DAO, deliberately batch-only: single-transaction batch insert (the write path of the buffered trace recorder) and the per-run `seq`-ordered query; session-scoped cleanup rides the `chat_sessions` FK cascade.
     - `models/` - Local DB entity models.
+      - `ChatHistorySummaryEntity.kt` - Compressed-history summary row (`chat_history_summaries`, v38): per-session prose summary + `coveredMessageCount` cursor; FK onto `chat_sessions(id)` ON DELETE CASCADE.
       - `ChatMessageEntity.kt` - Chat message entity.
       - `ChatSessionEntity.kt` - Chat session entity.
       - `ConnectionEntity.kt` - Pipeline connection entity.
@@ -162,6 +168,7 @@ This file maps the contents of the main application package.
     - `CloudLlmClientFactory.kt` - Domain interface for constructing cloud LLM clients (data-layer impl: `KoogClientFactory`).
     - `CloudLlmModelResolver.kt` - Domain interface for resolving cloud-LLM model objects (data-layer impl: `KoogCloudLlmModelResolver`).
     - `DefaultPipelineFactory.kt` - Factory for default pipelines.
+    - `ChatHistoryWindowPlanner.kt` - Pure, clock-free planner that decides, per node execution, how a session's chat history splits into a summarised prefix (`ChatHistoryView.earlierSummary`) and a verbatim live window; bounds the over-budget history to the last N messages and flags graceful truncation when no summary is ready. Hosts the shared `CHARS_PER_TOKEN` token estimate.
     - `GraphExecutionEngine.kt` - Engine responsible for executing PipelineGraphs.
     - `LlmInferenceEngine.kt` - LLM engine interface.
     - `MemoryAccessLogFormatter.kt` - Pure formatter for the `MemoryAccess` console event. Renders the terse one-line summary (`query` + hit count + scores) and, when verbose memory logging is on, the per-hit snippet/score expansion. Used by `GraphExecutionEngine`.
@@ -177,15 +184,27 @@ This file maps the contents of the main application package.
       - `CloudLlmNodeExecutor.kt` - Executor for `CLOUD` nodes; dispatches to a cloud LLM provider with streaming support.
       - `OutputNodeExecutor.kt` - Terminal executor; optionally formats upstream text via the local model before persisting the final agent response.
       - `SummaryNodeExecutor.kt` - Executor for `SUMMARY` nodes; synthesises upstream subtask results into a coherent summary.
-      - `SystemNodeExecutor.kt` - Shared system-prompt-driven executor for `INTENT_ROUTER`, `DECOMPOSITION`, and `EVALUATION` nodes.
-      - `ToolNodeExecutor.kt` - Executor for `TOOL` nodes; resolves which tool to run (explicit or LLM auto-select) then hands the call to the shared `ToolInvocationGate`.
+      - `SystemNodeExecutor.kt` - Shared system-prompt-driven executor for `INTENT_ROUTER`, `DECOMPOSITION`, and `EVALUATION` nodes; runs each through the `StructuredOutputGate` (constrained token for routing/eval, JSON array for decomposition) and applies the per-node failure policy (default branch + console error for routing/eval, run failure for decomposition).
+      - `ToolNodeExecutor.kt` - Executor for `TOOL` nodes; resolves which tool to run (explicit or LLM auto-select) through the `StructuredOutputGate` (validates the `{tool, arguments}` envelope for auto-select, the arguments object for a fixed tool, repairing malformed JSON), then hands the call to the shared `ToolInvocationGate`.
       - `ToolInvocationGate.kt` - Shared `@Singleton` Human-in-the-Loop tool-dispatch gate (risk lookup → destructive-block → approval/park → execute → observation) used by both `ToolNodeExecutor` and `SkillNodeExecutor`; owns the per-session approval-deferred map and the `resumeWithApproval`/`pendingApprovalFor` reattach surface.
-      - `ToolCallParser.kt` - Shared lenient parser that recovers a `{tool, arguments}` tool call from free-form LLM output (fenced/embedded/bare JSON); used by `ToolNodeExecutor` and `SkillNodeExecutor`.
+      - `ToolCallParser.kt` - Non-repair parser that recovers a `{tool, arguments}` tool call from free-form LLM output via the shared `JsonPayloadExtractor` + `kotlinx.serialization` (`ToolCall` DTO); used by `SkillNodeExecutor` (whose inference output is already produced, so re-inference is impossible). Also hosts `JsonElement.asArgumentString()` (unwraps a string primitive, compact-JSON otherwise) shared with `ToolNodeExecutor`.
       - `SkillNodeExecutor.kt` - Executor for `NodeType.SKILL`; loads the skill, renders its instruction via `PromptTemplateEngine` with `$TOOLS` scoped to the skill's allowlist, runs inference by delegating to `LiteRtNodeExecutor`/`CloudLlmNodeExecutor` (engine chosen by `cloudProvider`), and enforces the allowlist at executor level before dispatching any tool call through `ToolInvocationGate`.
-      - `IfConditionNodeExecutor.kt` - Executor for `IF_CONDITION` branching nodes; evaluates the boolean condition and routes downstream.
+      - `IfConditionNodeExecutor.kt` - Executor for `IF_CONDITION` branching nodes; evaluates the boolean condition (LLM path gated as a `True`/`False` token) and routes downstream, keeping the `False` default branch on gate failure but emitting a console error + repair events.
       - `QueueProcessorNodeExecutor.kt` - Pass-through executor for the `QUEUE_PROCESSOR` routing marker consumed by `GraphExecutionEngine`.
       - `ClarificationNodeExecutor.kt` - Executor for `NodeType.CLARIFICATION` that asks the local LLM to generate a question/options JSON, suspends on `ClarificationRepository.requestAnswer`, and forwards the user's reply downstream.
       - `PipelineNodeExecutor.kt` - Executor for `NodeType.PIPELINE`; runs the target pipeline (loaded via `PipelineRepository`) by recursively re-entering `GraphExecutionEngine` (injected as a `Provider` to break the engine→factory→executor cycle), feeding the node input as the sub-pipeline's user prompt and mapping the sub-run's terminal `Completed`/`Error` to this node's result. Enforces the runtime nesting ceiling (`SettingsRepository.pipelineMaxNestingDepth`) as a safety net behind the static composition validator. Sub-run runs with a `null` run id (nested-run persistence is a follow-up).
+    - `structured/` - Structured-output validate-and-repair layer for LLM-driven nodes.
+      - `StructuredOutputGate.kt` - `@Singleton` gate over a `StructuredInferenceClient`: validates a node's model output against a `kotlinx.serialization` deserializer (`runJson`, object or array) or a constrained token set (`runToken`, e.g. True/False, Pass/Retry/Fail, INTENT_ROUTER keys), and on failure re-infers up to `maxRepairs` times with a `DefaultPrompts.StructuredOutput` feedback prompt at the lowered `REPAIR_TEMPERATURE`. Returns `GateResult.Success`/`Failed`; never decides the per-node failure policy.
+      - `StructuredInferenceClient.kt` - `fun interface` inference seam (`suspend infer(prompt, temperature)`) the gate sits on; decouples it from `LlmInferenceEngine` streaming and lets the caller bind any engine plus the repair-temperature override.
+      - `EngineStructuredInferenceClient.kt` - `StructuredInferenceClient` backed by the local `LlmInferenceEngine`: collapses the token stream into one string, forwards the gate's `temperature` override to `generateResponseStream`, and exposes an optional `onToken` hook so a streaming consumer can keep emitting `Thinking` while the gate runs.
+      - `GateResult.kt` - Sealed gate outcome: `Success(value, repairs)` / `Failed(lastRaw, lastError, repairs)`.
+      - `RepairListener.kt` - `fun interface` observability seam fired before each repair attempt; consumers emit the `StructuredOutputRepair` console event and bump `AgentMetrics.repairAttemptsPerNode`.
+      - `CollectingRepairListener.kt` - `RepairListener` that buffers each repair attempt (the gate reports them via a non-suspend callback) so an executor can drain them afterwards and `emit` one `NodeOutput.Console` per attempt; carries the per-attempt console message.
+      - `JsonPayloadExtractor.kt` - Shape-agnostic JSON extraction (fenced ```json / bare / embedded-in-prose, object or array) consolidating the former object-only `ToolCallParser.extractJsonBlock` and array-only `extractJsonArray` helpers.
+      - `CloudStructuredInferenceClientFactory.kt` - `fun interface` building a cloud-backed `StructuredInferenceClient` for the gate (data-layer impl: `KoogStructuredInferenceClientFactory`); returns `CloudStructuredClient(inference, supportsNativeJson)` so a consumer can drop the repair budget to 0 when the provider natively constrains JSON. Structured nodes pick this path via `NodeModel.cloudProvider`.
+    - `retry/` - Cloud-call transient-failure retry observability (the retry itself is Koog's `RetryingLLMClient`).
+      - `CloudRetryListener.kt` - `fun interface` fired before each retry of a transient cloud failure; consumers emit a `CloudRetry` console line. Initial call is not a retry.
+      - `CollectingCloudRetryListener.kt` - `CloudRetryListener` that buffers retries so the cloud node executor can drain them into one `NodeOutput.Console` per retry after the call; carries the per-retry console message.
   - `memoryio/` - JSON serialisation gateway for long-term memory export/import.
     - `MemorySourceJson.kt` - Single source of truth for the `MemorySource` ↔ JSON wire shape; shared by the Room `source` column converter (`data/local/Converters`) and `MemoryJsonSerializer` so the column encoding and the export file stay byte-identical.
     - `MemoryJsonSerializer.kt` - Two-way mapper between the memory table and the portable `schemaVersion: 1` export document (`embeddingProviderId` + `exportedAt` + per-chunk `id`/`text`/`embedding`/`source`/`timestamp`/`isPinned`/`tags`). Never-throwing `parse` returns `Success / SchemaMismatch / Failure`.
@@ -207,6 +226,7 @@ This file maps the contents of the main application package.
     - `AgentTask.kt` - Agent task model.
     - `AgentTool.kt` - Agent tool model.
     - `AppError.kt` - App error model.
+    - `ChatHistorySummary.kt` - Domain model of a session's cached compressed-history summary (`sessionId`, `summary`, incremental `coveredMessageCount` cursor, `updatedAt`).
     - `ChatMessage.kt` - Chat message model.
     - `ChatSession.kt` - Chat session model.
     - `ClarificationRequest.kt` - Domain model describing a clarification question issued by the agent (id, question, options, timeoutMs).
@@ -235,7 +255,7 @@ This file maps the contents of the main application package.
     - `NodeContextConfig.kt` - Per-node selection of pipeline context blocks (chat history, original task, previous node output, long-term memory, tool results) injected on every execution.
     - `NodeExecutionResult.kt` - Result of a node execution.
     - `NodeModel.kt` - Node model.
-    - `NodeOutput.kt` - Sealed class wrapping `NodeExecutor.execute()` flow elements (`State` for orchestrator updates / `Result` for the terminal node result), replacing the legacy untyped `Flow<Any>` channel.
+    - `NodeOutput.kt` - Sealed class wrapping `NodeExecutor.execute()` flow elements (`State` for orchestrator updates / `Result` for the terminal node result / `Console` for a console line the engine stamps and renders, e.g. structured-output repair / failure), replacing the legacy untyped `Flow<Any>` channel.
     - `NodeType.kt` - Node type enum.
     - `PipelineGraph.kt` - Pipeline graph model. Also hosts `contentHash()` — a stable SHA-256 over execution-relevant graph content (canvas coordinates / pipeline name / `updatedAt` excluded), captured into run records as the checkpoint-invalidation contract.
     - `PendingInteraction.kt` - Domain model of one parked HITL interaction (`PendingInteractionKind`, `PendingDecision`): the durable request snapshot and the one-shot recorded response, TOCTOU-bound to the exact tool call it was given for.
@@ -244,7 +264,7 @@ This file maps the contents of the main application package.
     - `ResumeContext.kt` - Checkpoint payload switching `GraphExecutionEngine` into resume mode: seq-ordered `NodeIo` prefix to replay (cursor model — sound for QUEUE_PROCESSOR loops), optional memory snapshot, and the next free trace seq. Documents the TOOL-node replay asymmetry.
     - `RunTraceRecord.kt` - Sealed domain model of one persistent run-trace record: `NodeIo` (per-node input/output snapshot incl. recorded `conditionResult` / `routingKey` / `resolvedToolName` for checkpoint replay), `ConsoleEntry` (persisted console event) and `MemorySnapshot` (chunks resolved by the run's single lazy memory retrieval), all carrying `runId` / `sessionId` / per-run `seq` / `timestamp` and a nesting `depth` for nested-console rendering.
     - `RunStepBudget.kt` - Mutable step-count holder shared across one execution tree, so a sub-pipeline decrements the parent's `MAX_STEPS` ceiling instead of getting a private allowance; exhaustion at any depth fails the whole stack.
-    - `ExecutionScope.kt` - Run-tree-scoped execution context (`depth`, shared `stepBudget`, per-`PIPELINE`-node `pipelineVisitIndex`) threaded from `GraphExecutionEngine` into every `NodeExecutor.execute`; only `PipelineNodeExecutor` consumes it.
+    - `ExecutionScope.kt` - Run-tree-scoped execution context (`depth`, shared `stepBudget`, per-`PIPELINE`-node `pipelineVisitIndex`, and `routingChoices` — an `INTENT_ROUTER` node's outgoing edge labels, supplied so its executor can constrain the gate to a key that matches a branch) threaded from `GraphExecutionEngine` into every `NodeExecutor.execute`.
     - `PipelineImportOutcome.kt` - Sealed result of parsing a pipeline JSON document (Success / SchemaMismatch / Failure) consumed by `ImportPipelineUseCase`.
     - `PipelinePreset.kt` - Domain model of a reusable pipeline template. Carries `id`, `name`, `description`, `category` (`PresetCategory` enum with wire keys), `graph: PipelineGraph` (template), `tags`, `isBundled`.
     - `PipelinePresetImportOutcome.kt` - Sealed result of parsing a preset JSON document (Success / SchemaMismatch / Failure), mirroring `PipelineImportOutcome`.
@@ -314,6 +334,7 @@ This file maps the contents of the main application package.
     - `LongRunningTaskNotifier.kt` - Domain seam for posting a notification when a backgrounded pipeline run exceeds the configured duration. Data-layer impl: `LongRunningTaskNotifierImpl`.
     - `ScheduledTaskNotifier.kt` - Domain seam for announcing scheduled-run outcomes ("Task completed" / "Task failed") with a deep-link into the bound session. Presentation-layer impl: `ScheduledTaskNotifierImpl`; gated on the Settings → Notifications → "Scheduled task results" toggle.
     - `MemoryReembedScheduler.kt` - Domain seam for scheduling the background re-embed pass over chunks flagged `needsReembedding`. Keeps `MemoryImportUseCase` free of WorkManager; data-layer impl: `WorkManagerMemoryReembedScheduler`.
+    - `ChatHistoryCompressionCoordinator.kt` - App-scoped, debounced (30s/session) trigger that runs `CompressChatHistoryUseCase` after a pipeline completes; mirrors `MemoryAutoExtractionCoordinator` (short-circuits when `SettingsRepository.chatHistoryCompressionEnabled` is off, defers while `TaskQueueManager.globalState` shows an active pipeline). Notified by `ChatHomeViewModel` on the terminal `Completed` state.
     - `MemoryAutoExtractionCoordinator.kt` - App-scoped, debounced (30s/session) trigger that runs `MemoryExtractionUseCase` after a pipeline completes; short-circuits when `SettingsRepository.autoExtractEnabled` is off, and defers (re-waits a debounce window) while `TaskQueueManager.globalState` shows an active pipeline so it never races a foreground generation on the single-conversation engine. Notified by `ChatHomeViewModel` on the terminal `Completed` state.
     - `MemoryReranker.kt` - Pure, clock-free re-ranker for long-term-memory search hits. Re-scores `(MemoryChunk, similarity)` pairs with recency decay (half-life-based), a flat pinned boost (+0.2, hard-sorted to the top and threshold-exempt), 80-char-prefix deduplication (newest survivor), and a final-score threshold filter. Used by `RetrieveRelevantMemoryUseCase`; the caller supplies `nowMillis`.
     - `MemorySearchStatsTracker.kt` - App-scoped (`@Singleton`) in-memory rolling window of recent similarity-search scores (top-5 per call, last 32 observations) behind the Settings AVG SCORE stat cell. Recorded by `RetrieveRelevantMemoryUseCase` and the extraction dedup check; reset by `ClearAllMemoryUseCase`; observed by `SettingsViewModel`.
@@ -342,6 +363,7 @@ This file maps the contents of the main application package.
     - `LoadPipelineFromPresetUseCase.kt` - Materialises a `PipelinePreset` into a concrete `PipelineGraph` with fresh ids (pipeline + nodes + connections), drops orphan connections, validates, persists via `PipelineRepository.savePipeline`, returns the new pipeline id.
     - `LoadPipelineUseCase.kt` - Use case to load a pipeline.
     - `RenamePipelineUseCase.kt` - Validates and applies a new display name to an existing pipeline; canonical name-validation gate (trim + length).
+    - `CompressChatHistoryUseCase.kt` - Background pass that bounds a long session's history: when over the token budget, summarises the tail older than the live window into one `ChatHistorySummary` via a single local-model call (`DefaultPrompts.HistoryCompression`), incrementally folding the prior summary plus only the newly-aged-out messages. Best-effort (blank reply / inference error / unavailable model / persistence failure all skip, never throw). Driven by `ChatHistoryCompressionCoordinator`.
     - `MemoryCompactionUseCase.kt` - Runs one background memory-compaction pass: loads non-pinned chunks older than `memoryCompactionAgeDays`, clusters them via `KMeansClusterer`, and for each cluster of ≥ 3 runs a local-model consolidation prompt, embeds the summary with the active provider, saves it tagged `MemorySource.Compaction`, and deletes the originals. Best-effort: a blank reply or embedding failure skips only that cluster.
     - `RetrieveRelevantMemoryUseCase.kt` - Use case to retrieve memories.
     - `MemoryExtractionUseCase.kt` - Distils durable facts (`{type, text}` JSON) from a finished conversation via one local-model pass, batch-embeds them with the active `EmbeddingProvider` (single `embed(List)` call), dedups (cosine ≥ 0.92) against stored + same-pass facts, and saves survivors tagged `MemorySource.ChatSession`. The manual "Save to memory" path uses the lighter `SaveMessageToMemoryUseCase` instead (no LLM distillation pass).

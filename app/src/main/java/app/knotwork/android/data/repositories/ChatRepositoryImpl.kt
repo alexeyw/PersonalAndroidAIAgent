@@ -1,9 +1,12 @@
 package app.knotwork.android.data.repositories
 
 import app.knotwork.android.data.local.dao.ChatDao
+import app.knotwork.android.data.local.dao.ChatHistorySummaryDao
+import app.knotwork.android.data.local.models.ChatHistorySummaryEntity
 import app.knotwork.android.data.local.models.ChatSessionEntity
 import app.knotwork.android.data.mappers.toDomain
 import app.knotwork.android.data.mappers.toEntity
+import app.knotwork.android.domain.models.ChatHistorySummary
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.Role
@@ -25,9 +28,14 @@ import javax.inject.Singleton
  * the same session skip the [ChatDao.getSessionById] round-trip and update only the timestamp.
  *
  * @property chatDao The Data Access Object for chat messages.
+ * @property chatHistorySummaryDao DAO for the per-session compressed-history
+ *   summaries used by the long-session chat-compression feature.
  */
 @Singleton
-class ChatRepositoryImpl @Inject constructor(private val chatDao: ChatDao) : ChatRepository {
+class ChatRepositoryImpl @Inject constructor(
+    private val chatDao: ChatDao,
+    private val chatHistorySummaryDao: ChatHistorySummaryDao,
+) : ChatRepository {
 
     @Volatile
     private var cachedSessionId: String? = null
@@ -144,6 +152,27 @@ class ChatRepositoryImpl @Inject constructor(private val chatDao: ChatDao) : Cha
     }
 
     override suspend fun getSessionById(id: String): ChatSession? = chatDao.getSessionById(id)?.toDomain()
+
+    override suspend fun getHistorySummary(sessionId: String): ChatHistorySummary? =
+        chatHistorySummaryDao.getForSession(sessionId)?.let { entity ->
+            ChatHistorySummary(
+                sessionId = entity.sessionId,
+                summary = entity.summary,
+                coveredMessageCount = entity.coveredMessageCount,
+                updatedAt = entity.updatedAt,
+            )
+        }
+
+    override suspend fun saveHistorySummary(summary: ChatHistorySummary) {
+        chatHistorySummaryDao.upsert(
+            ChatHistorySummaryEntity(
+                sessionId = summary.sessionId,
+                summary = summary.summary,
+                coveredMessageCount = summary.coveredMessageCount,
+                updatedAt = summary.updatedAt,
+            ),
+        )
+    }
 
     private companion object {
         /**

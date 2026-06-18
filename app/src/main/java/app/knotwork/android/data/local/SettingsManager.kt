@@ -88,6 +88,10 @@ class SettingsManager @Inject constructor(
         val MEMORY_LAST_COMPACTED_AT =
             androidx.datastore.preferences.core.longPreferencesKey("memory_last_compacted_at")
         val MEMORY_SEARCH_TOP_K = intPreferencesKey("memory_search_top_k")
+        val CHAT_HISTORY_COMPRESSION_ENABLED = booleanPreferencesKey("chat_history_compression_enabled")
+        val CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS =
+            intPreferencesKey("chat_history_compression_threshold_tokens")
+        val CHAT_HISTORY_LIVE_WINDOW_SIZE = intPreferencesKey("chat_history_live_window_size")
         val MEMORY_SEARCH_THRESHOLD =
             androidx.datastore.preferences.core.floatPreferencesKey("memory_search_threshold")
         val MEMORY_RECENCY_HALF_LIFE_DAYS = intPreferencesKey("memory_recency_half_life_days")
@@ -119,6 +123,10 @@ class SettingsManager @Inject constructor(
             androidx.datastore.preferences.core.longPreferencesKey("http_tool_max_response_bytes")
         val PIPELINE_MAX_STEPS = intPreferencesKey("pipeline_max_steps")
         val PIPELINE_MAX_NESTING_DEPTH = intPreferencesKey("pipeline_max_nesting_depth")
+        val STRUCTURED_OUTPUT_MAX_REPAIRS = intPreferencesKey("structured_output_max_repairs")
+        val CLOUD_RETRY_MAX_ATTEMPTS = intPreferencesKey("cloud_retry_max_attempts")
+        val CLOUD_RETRY_BASE_DELAY_MS =
+            androidx.datastore.preferences.core.longPreferencesKey("cloud_retry_base_delay_ms")
         val RESUME_MAX_AGE_HOURS = intPreferencesKey("resume_max_age_hours")
         val BACKGROUND_APPROVAL_WINDOW_HOURS = intPreferencesKey("background_approval_window_hours")
         val TRACE_RETENTION_RUNS_PER_SESSION = intPreferencesKey("trace_retention_runs_per_session")
@@ -737,6 +745,66 @@ class SettingsManager @Inject constructor(
         }
     }
 
+    override val chatHistoryCompressionEnabled: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.CHAT_HISTORY_COMPRESSION_ENABLED]
+                ?: SettingsDefaults.CHAT_HISTORY_COMPRESSION_ENABLED_DEFAULT
+        }
+
+    override suspend fun setChatHistoryCompressionEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.CHAT_HISTORY_COMPRESSION_ENABLED] = enabled
+        }
+    }
+
+    override val chatHistoryCompressionThresholdTokens: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS]
+                ?: SettingsDefaults.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_DEFAULT
+        }
+
+    override suspend fun setChatHistoryCompressionThresholdTokens(tokens: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS] = tokens
+        }
+    }
+
+    override val chatHistoryLiveWindowSize: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.CHAT_HISTORY_LIVE_WINDOW_SIZE]
+                ?: SettingsDefaults.CHAT_HISTORY_LIVE_WINDOW_DEFAULT
+        }
+
+    override suspend fun setChatHistoryLiveWindowSize(size: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.CHAT_HISTORY_LIVE_WINDOW_SIZE] = size
+        }
+    }
+
     override val memorySearchThreshold: Flow<Float> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -1155,6 +1223,75 @@ class SettingsManager @Inject constructor(
         }
     }
 
+    override val structuredOutputMaxRepairs: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.STRUCTURED_OUTPUT_MAX_REPAIRS]
+                ?: SettingsDefaults.STRUCTURED_OUTPUT_MAX_REPAIRS_DEFAULT
+        }
+
+    override suspend fun setStructuredOutputMaxRepairs(count: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.STRUCTURED_OUTPUT_MAX_REPAIRS] = count.coerceIn(
+                SettingsDefaults.STRUCTURED_OUTPUT_MAX_REPAIRS_MIN,
+                SettingsDefaults.STRUCTURED_OUTPUT_MAX_REPAIRS_MAX,
+            )
+        }
+    }
+
+    override val cloudRetryMaxAttempts: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.CLOUD_RETRY_MAX_ATTEMPTS]
+                ?: SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_DEFAULT
+        }
+
+    override suspend fun setCloudRetryMaxAttempts(attempts: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.CLOUD_RETRY_MAX_ATTEMPTS] = attempts.coerceIn(
+                SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_MIN,
+                SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_MAX,
+            )
+        }
+    }
+
+    override val cloudRetryBaseDelayMs: Flow<Long> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.CLOUD_RETRY_BASE_DELAY_MS]
+                ?: SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_DEFAULT
+        }
+
+    override suspend fun setCloudRetryBaseDelayMs(delayMs: Long) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.CLOUD_RETRY_BASE_DELAY_MS] = delayMs.coerceIn(
+                SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_MIN,
+                SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_MAX,
+            )
+        }
+    }
+
     override val resumeMaxAgeHours: Flow<Int> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -1470,6 +1607,12 @@ class SettingsManager @Inject constructor(
             preferences[PreferencesKeys.PIPELINE_MAX_STEPS] = SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT
             preferences[PreferencesKeys.PIPELINE_MAX_NESTING_DEPTH] =
                 SettingsDefaults.PIPELINE_MAX_NESTING_DEPTH_DEFAULT
+            preferences[PreferencesKeys.STRUCTURED_OUTPUT_MAX_REPAIRS] =
+                SettingsDefaults.STRUCTURED_OUTPUT_MAX_REPAIRS_DEFAULT
+            preferences[PreferencesKeys.CLOUD_RETRY_MAX_ATTEMPTS] =
+                SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_DEFAULT
+            preferences[PreferencesKeys.CLOUD_RETRY_BASE_DELAY_MS] =
+                SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_DEFAULT
         }
     }
 

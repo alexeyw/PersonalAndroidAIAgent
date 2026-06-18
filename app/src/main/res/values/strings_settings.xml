@@ -65,7 +65,13 @@
     <string name="settings_memory_param_half_life_title">Recency half-life</string>
     <string name="settings_memory_param_compaction_age_title">Compaction age</string>
     <string name="settings_memory_param_max_chunks_title">Max stored chunks</string>
+    <string name="settings_memory_param_compression_threshold_title">History compression threshold</string>
+    <string name="settings_memory_param_live_window_title">Live message window</string>
     <string name="settings_memory_param_days_value">%1$d d</string>
+
+    <!-- Chat-history compression toggle. -->
+    <string name="settings_memory_history_compression_title">Compress long chat history</string>
+    <string name="settings_memory_history_compression_subtitle">Summarizes older messages in long sessions so they keep fitting the on-device context window.</string>
 
     <!-- Background-compaction toggle. -->
     <string name="settings_memory_compaction_title">Background compaction</string>
@@ -83,6 +89,8 @@
     <string name="settings_memory_validation_half_life" tools:ignore="PluralsCandidate">Half-life must be between %1$d and %2$d days.</string>
     <string name="settings_memory_validation_compaction_age" tools:ignore="PluralsCandidate">Compaction age must be between %1$d and %2$d days.</string>
     <string name="settings_memory_validation_max_chunks" tools:ignore="PluralsCandidate">Max chunks must be between %1$d and %2$d.</string>
+    <string name="settings_memory_validation_compression_threshold" tools:ignore="PluralsCandidate">Compression threshold must be between %1$d and %2$d tokens.</string>
+    <string name="settings_memory_validation_live_window" tools:ignore="PluralsCandidate">Live window must be between %1$d and %2$d messages.</string>
     <string name="settings_memory_validation_unknown_provider">Unknown embedding provider.</string>
     <!-- Memory action button labels — kept short so the three buttons fit
          side-by-side in the row without ellipsis at the default font scale. -->
@@ -155,4 +163,8 @@
     <!-- Provider picker / detail -->
     <string name="settings_provider_picker_title">Add provider</string>
     <string name="settings_provider_detail_title">%1$s provider</string>
+    <string name="settings_cloud_retry_title">Retry policy</string>
+    <string name="settings_cloud_retry_subtitle">Applies to all cloud providers and cloud embeddings. Transient failures (rate limits, 5xx, timeouts) are retried with exponential backoff; authentication errors are not.</string>
+    <string name="settings_cloud_retry_attempts_label">Max attempts: %1$d (1 disables retries)</string>
+    <string name="settings_cloud_retry_delay_label">Base delay: %1$d ms</string>
 </resources>

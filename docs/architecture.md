@@ -423,6 +423,109 @@ verbatim and logged as a warning. See
 [`docs/extending.md`](extending.md) for the recipe to add new
 variables.
 
+### 3.5. Structured-output reliability gate
+
+A small on-device model does not always emit the exact shape a structured
+node needs — a router key, a `True`/`False` verdict, a JSON array of
+subtasks, a tool-call envelope. Rather than parse loosely and silently fork
+on a malformed reply, every LLM-driven consumer routes its output through a
+single domain component, `StructuredOutputGate`
+(`domain/engine/structured/`). The gate is pure Kotlin — it knows nothing
+about LiteRT, Koog, the console, or metrics; it talks to the model through
+a `StructuredInferenceClient` seam (carrying an optional sampling
+`temperature`, which `generateResponseStream` does not expose) and reports
+repairs through a `RepairListener`.
+
+The gate validates against one of two shapes:
+
+- **`runJson<T>`** — deserialize a JSON object or array with
+  `kotlinx.serialization`. `JsonPayloadExtractor` first pulls the payload
+  out of fenced, bare, or prose-embedded output (object **or** array), so a
+  model that wraps its JSON in chatter still validates.
+- **`runToken`** — constrain the reply to one of an allowed token set (e.g.
+  `True`/`False`; `Pass`/`Retry`/`Fail`; the node's own outgoing router
+  keys).
+
+On a malformed reply the gate runs a **repair loop**: it hands the model
+back its own invalid output plus the validation error and asks it to
+correct itself, at a lowered, deterministic-leaning sampling temperature
+(`REPAIR_TEMPERATURE`). The number of attempts is the
+**Settings → max repairs** budget (`structuredOutputMaxRepairs`, default 2,
+range 0–4). The loop ends in `GateResult.Success(value, repairs)` or
+`GateResult.Failed(lastRaw, lastError, repairs)`.
+
+```mermaid
+flowchart TD
+    Node[Structured node] --> Infer[Inference<br/>StructuredInferenceClient]
+    Infer --> Extract[Extract payload<br/>JsonPayloadExtractor]
+    Extract --> Validate{Valid shape?}
+    Validate -->|yes| Success[GateResult.Success]
+    Validate -->|no| Budget{repairs left?}
+    Budget -->|yes| Repair[Repair re-inference<br/>invalid output + error<br/>at REPAIR_TEMPERATURE]
+    Repair -->|RepairListener: console + metric| Infer
+    Budget -->|no| Failed[GateResult.Failed]
+```
+
+The gate never decides what a failure *means* — that **Failed policy** is
+the consumer's, and each failure is now observable instead of silent:
+
+| Consumer (node)         | Expected shape              | On `Failed`                                                        |
+|-------------------------|-----------------------------|-------------------------------------------------------------------|
+| `IF_CONDITION`          | `True` / `False` token      | Keep the default branch; emit a console error, count the repairs. |
+| `INTENT_ROUTER`         | a routing key (edge labels) | Keep the default branch; console error + repair count.            |
+| `EVALUATION`            | `Pass` / `Retry` / `Fail`   | Default port; console error + repair count.                       |
+| `DECOMPOSITION`         | JSON array of subtasks      | **Fail the run** — a corrupted subtask list is worse than stopping.|
+| `TOOL`                  | `{tool, arguments}` / args  | Fall back to the previous error-observation path.                 |
+| Memory auto-extraction  | `{type, text}` array        | Honour the best-effort (zero-result) contract.                    |
+
+Repairs are an internal node mechanic: they consume the node's repair
+budget, **never** pipeline steps. Each attempt surfaces on the console as a
+muted `RUNTIME` warning (`Output repair 1/2 for node <name>`) and bumps the
+per-node counter in `AgentMetrics.repairAttemptsPerNode`.
+
+A structured node may run its gate against a **cloud** provider instead of
+the on-device model — see §4.4.
+
+### 3.6. Chat-history compression
+
+A long conversation eventually overflows the on-device context window and
+crowds out memory and tool results. When a session's verbatim history
+exceeds a token budget, the messages older than a live window of recent
+turns are replaced by a model-written summary.
+
+The split is decided by a pure planner, `ChatHistoryWindowPlanner`
+(`domain/engine`), which returns a `ChatHistoryView(earlierSummary,
+liveWindow, droppedUncoveredCount, truncatedWithoutSummary)`:
+
+- **Below budget, or disabled** → the full history passes through unchanged.
+- **Over budget, summary available** → the summary stands in for the older
+  turns, and the remainder is bounded to the last *N* messages (the
+  **live window**, by message count — not tokens).
+- **Over budget, no summary yet** → the history is gracefully truncated to
+  the live window and the fact is flagged (`truncatedWithoutSummary`).
+
+The summary is produced off the active-run path by
+`CompressChatHistoryUseCase`, driven by `ChatHistoryCompressionCoordinator`
+— a debounced, agent-busy-gated background service modelled on the memory
+auto-extraction coordinator, so summarisation never competes with a live
+run for the single inference engine. It is **incremental**: each pass folds
+the prior summary plus only the newly-aged-out tail (tracked by a
+`coveredMessageCount` cursor), never re-summarising everything. Summaries
+live in a dedicated `chat_history_summaries` table (one row per session,
+`ON DELETE CASCADE` from `chat_sessions`).
+
+At run time the engine resolves the view only for nodes whose context
+includes chat history. The cached summary and the compression settings are
+read once per run (safe — the background compressor is gated off while a
+pipeline is active), but the live message list is re-read **fresh for every
+node**, because history grows mid-run (tool observations are persisted as
+non-final messages). `NodeContextBuilder` renders the summary as an
+`--- Earlier conversation (summarized) ---` block in the chat-history slot,
+immediately before the verbatim `--- Chat History ---` block (the fixed
+block order of §3.2 is preserved). The first time compression changes what
+a run sees, a single `HistoryCompression` console event is emitted under the
+`MEMORY` source.
+
 ---
 
 ## 4. Integrations
@@ -555,9 +658,14 @@ External tool servers are integrated through MCP clients in
 `data/mcp/` (`KoogMcpClient`, `McpClient`). `ToolRepositoryImpl` holds
 active connections in a `ConcurrentHashMap<String, McpClient>` keyed by
 server id. Connections are **lazy**: they open on first use and close
-when the agent session ends. Every MCP call is wrapped in
-`runCatching` and converted to a `ToolResult.Error` on failure — raw
-exceptions never reach the presentation layer.
+when the agent session ends. Every MCP call is wrapped in a
+`try`/`catch` that re-throws `CancellationException` from a dedicated
+first catch clause before mapping any other failure to a
+`ToolResult.Error` — so cooperative cancellation propagates cleanly and
+raw exceptions never reach the presentation layer. `runCatching` is
+never used around these suspending calls (it would swallow
+cancellation; see [`docs/api-conventions.md`](api-conventions.md) §
+Model Context Protocol).
 
 ### 4.4. Cloud LLM providers
 
@@ -568,6 +676,36 @@ provider id as a parameter — there is no provider-specific node type,
 and adding a new provider does not require touching the pipeline
 engine. API keys live in the Keystore-backed encrypted store (see §5.2)
 and are never serialized into DataStore or git.
+
+**Transient-failure retry.** Every cloud `LLMClient` built by
+`KoogClientFactory` — chat completions and the cloud / Ollama embedding
+clients alike — is wrapped with an exponential-backoff retry policy before
+use (`data/engine/retry/CloudRetryWrapper`, using Koog's standalone
+`RetryingLLMClient` decorator). Transient failures (HTTP 429 / 5xx / 529
+and connection-or-read timeouts) are retried; authentication errors are
+not, and coroutine cancellation is always honoured (re-thrown, never
+swallowed). The attempt budget (`cloudRetryMaxAttempts`, 1–5, default 3;
+`1` returns the raw client unwrapped, disabling retries) and the base delay
+(`cloudRetryBaseDelayMs`, 100–10000 ms, default 1000) are configurable under
+Settings → Providers. Koog exposes no per-attempt hook, so a thin
+`RetryObservingLLMClient` sits as the retrying client's delegate and counts
+invocations; a retried `CLOUD` node surfaces each retry on the console as a
+muted `RUNTIME` warning (`Cloud retry 1/2 for openai`).
+
+**Cloud-backed structured output.** A structured node (§3.5) can run its
+validate-and-repair gate against a cloud provider instead of the on-device
+model. The node carries the choice in its `cloudProvider` field, exposed as
+an **Engine** selector (On-device by default) in both the in-app and browser
+pipeline editors. The data-layer `KoogStructuredInferenceClientFactory`
+backs the `CloudStructuredInferenceClientFactory` seam: when the chosen
+provider natively constrains output to JSON
+(`LLMCapability.Schema.JSON`), the gate trusts it and validates once
+(`maxRepairs = 0`) **for JSON-payload nodes only** (`DECOMPOSITION` array,
+`TOOL` arguments); token-output nodes keep their configured repair budget,
+since a JSON-mode provider could still wrap a bare token. If a cloud
+provider is selected but unavailable, the node notes it on the console and
+falls back to the on-device model. The gate remains the single source of
+structural validation regardless of which engine produced the output.
 
 ### 4.5. File and HTTP tools (the workspace contour)
 

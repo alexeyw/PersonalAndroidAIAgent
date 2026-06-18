@@ -8,8 +8,10 @@ import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.constants.PipelineExecutionDefaults
 import app.knotwork.android.domain.engine.CloudLlmClientFactory
 import app.knotwork.android.domain.engine.CloudLlmModelResolver
+import app.knotwork.android.domain.engine.retry.CollectingCloudRetryListener
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.CloudProvider
+import app.knotwork.android.domain.models.ConsoleEventType
 import app.knotwork.android.domain.models.ExecutionScope
 import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
@@ -22,6 +24,7 @@ import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -90,10 +93,16 @@ class CloudLlmNodeExecutor @Inject constructor(
             CloudProvider.fromId(configuredProvider)
         }
 
+        // Buffers transient-failure retries performed by the Koog retry policy so
+        // each one can be surfaced as a console line after the stream drains
+        // (symmetric to the structured-output repair lines). Retries happen before
+        // the first token, so draining afterwards still reports them in order.
+        val retryCollector = CollectingCloudRetryListener()
+
         val responseStream = if (selectedProvider == null) {
             flowOf("Error: No cloud provider configured or selected")
         } else {
-            val client = cloudLlmClientFactory.createClient(selectedProvider) as? LLMClient
+            val client = cloudLlmClientFactory.createClient(selectedProvider, retryCollector) as? LLMClient
             if (client == null) {
                 flowOf("Error: ${selectedProvider.id} not configured")
             } else {
@@ -135,10 +144,13 @@ class CloudLlmNodeExecutor @Inject constructor(
             Timber.tag(
                 "PipelineDebug",
             ).e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error in CloudLlmNodeExecutor generation")
+            emitRetries(retryCollector)
             emit(NodeOutput.State(AgentOrchestratorState.Error(e.message ?: "Unknown error during LLM generation")))
             emit(NodeOutput.Result(NodeExecutionResult(error = e.message)))
             return@flow
         }
+
+        emitRetries(retryCollector)
 
         val endTime = System.currentTimeMillis()
         metricsRepository.updateMetrics(endTime - startTime, approximateTokenCount)
@@ -148,6 +160,18 @@ class CloudLlmNodeExecutor @Inject constructor(
         kotlinx.coroutines.delay(PipelineExecutionDefaults.NODE_RESULT_EMIT_DELAY_MS)
 
         emit(NodeOutput.Result(NodeExecutionResult(outputText = fullResponseText, tokenCount = approximateTokenCount)))
+    }
+
+    /**
+     * Emits one [NodeOutput.Console] per buffered transient-failure retry, so the
+     * user can see the cloud provider blipped before recovering.
+     *
+     * @param collector The listener that buffered the retries during the call.
+     */
+    private suspend fun FlowCollector<NodeOutput>.emitRetries(collector: CollectingCloudRetryListener) {
+        collector.attempts.forEach { attempt ->
+            emit(NodeOutput.Console(ConsoleEventType.CloudRetry, attempt.consoleMessage()))
+        }
     }
 
     /**

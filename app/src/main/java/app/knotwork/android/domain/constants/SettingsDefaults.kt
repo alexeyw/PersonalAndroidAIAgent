@@ -165,6 +165,41 @@ object SettingsDefaults {
     const val MEMORY_SEARCH_TOP_K_MAX: Int = 20
 
     /**
+     * Default for the chat-history compression toggle. `true` so long sessions
+     * stay within the on-device context window out of the box — compression only
+     * ever activates once the verbatim history crosses
+     * [CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_DEFAULT], and graceful
+     * truncation bounds the budget even before a summary is ready.
+     */
+    const val CHAT_HISTORY_COMPRESSION_ENABLED_DEFAULT: Boolean = true
+
+    /**
+     * Default approximate-token budget above which chat history is compressed.
+     * Set below [MAX_CONTEXT_LENGTH_DEFAULT] (4096) so the summarised history
+     * leaves room for the long-term-memory, tool-result, and output blocks
+     * within the on-device context window.
+     */
+    const val CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_DEFAULT: Int = 3_500
+
+    /** Lower bound enforced when the user edits the compression token threshold. */
+    const val CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_MIN: Int = 500
+
+    /** Upper bound enforced when the user edits the compression token threshold. */
+    const val CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_MAX: Int = 32_000
+
+    /**
+     * Default number of most-recent messages kept verbatim when compression is
+     * active. The older tail is folded into the summary.
+     */
+    const val CHAT_HISTORY_LIVE_WINDOW_DEFAULT: Int = 10
+
+    /** Lower bound enforced when the user edits the live-window size. */
+    const val CHAT_HISTORY_LIVE_WINDOW_MIN: Int = 2
+
+    /** Upper bound enforced when the user edits the live-window size. */
+    const val CHAT_HISTORY_LIVE_WINDOW_MAX: Int = 50
+
+    /**
      * Default minimum cosine-similarity score a memory chunk must reach to be
      * surfaced during retrieval. Chunks below this are filtered out before
      * reaching the prompt.
@@ -319,4 +354,49 @@ object SettingsDefaults {
      * the cap stops a redirect loop from spinning forever.
      */
     const val HTTP_TOOL_MAX_REDIRECTS: Int = 5
+
+    /**
+     * Default number of corrective re-inferences the structured-output gate
+     * ([app.knotwork.android.domain.engine.structured.StructuredOutputGate])
+     * may spend on a single node before giving up and returning a
+     * [app.knotwork.android.domain.engine.structured.GateResult.Failed]. `2`
+     * recovers the common single-malformed-reply case without letting a
+     * persistently confused model stall a run.
+     */
+    const val STRUCTURED_OUTPUT_MAX_REPAIRS_DEFAULT: Int = 2
+
+    /** Lower bound (no repairs — fail fast) for the structured-output repair budget. */
+    const val STRUCTURED_OUTPUT_MAX_REPAIRS_MIN: Int = 0
+
+    /** Upper bound for the structured-output repair budget. */
+    const val STRUCTURED_OUTPUT_MAX_REPAIRS_MAX: Int = 4
+
+    /**
+     * Default maximum number of attempts (the initial call plus retries) a
+     * transient cloud failure is given before the error propagates. Maps onto
+     * Koog's `RetryConfig.maxAttempts`. `3` mirrors Koog's own `PRODUCTION`
+     * preset: it absorbs a single 429 / 5xx / timeout blip without letting a
+     * persistently failing provider stall a run.
+     */
+    const val CLOUD_RETRY_MAX_ATTEMPTS_DEFAULT: Int = 3
+
+    /** Lower bound for the cloud-retry attempt budget. `1` disables retries (initial call only). */
+    const val CLOUD_RETRY_MAX_ATTEMPTS_MIN: Int = 1
+
+    /** Upper bound for the cloud-retry attempt budget. */
+    const val CLOUD_RETRY_MAX_ATTEMPTS_MAX: Int = 5
+
+    /**
+     * Default base delay, in milliseconds, before the first cloud retry. Maps
+     * onto Koog's `RetryConfig.initialDelay`; subsequent retries grow it by the
+     * fixed exponential backoff multiplier with jitter. `1000` ms matches Koog's
+     * `PRODUCTION` preset.
+     */
+    const val CLOUD_RETRY_BASE_DELAY_MS_DEFAULT: Long = 1000L
+
+    /** Lower bound for the cloud-retry base delay. */
+    const val CLOUD_RETRY_BASE_DELAY_MS_MIN: Long = 100L
+
+    /** Upper bound for the cloud-retry base delay. */
+    const val CLOUD_RETRY_BASE_DELAY_MS_MAX: Long = 10_000L
 }

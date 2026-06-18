@@ -9,6 +9,7 @@ import app.knotwork.android.data.local.models.ChatSessionEntity
 import app.knotwork.android.data.repositories.PendingInteractionRepositoryImpl
 import app.knotwork.android.data.repositories.PipelineRunRepositoryImpl
 import app.knotwork.android.data.repositories.RunTraceRepositoryImpl
+import app.knotwork.android.domain.engine.ChatHistoryWindowPlanner
 import app.knotwork.android.domain.engine.GraphExecutionEngine
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.engine.NodeContextBuilder
@@ -26,6 +27,8 @@ import app.knotwork.android.domain.engine.executors.SummaryNodeExecutor
 import app.knotwork.android.domain.engine.executors.SystemNodeExecutor
 import app.knotwork.android.domain.engine.executors.ToolInvocationGate
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
+import app.knotwork.android.domain.engine.structured.CloudStructuredInferenceClientFactory
+import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ConnectionModel
@@ -168,6 +171,9 @@ class BackgroundAutonomyCycleIntegrationTest {
 
         settingsRepository = mockk()
         every { settingsRepository.verboseMemoryLoggingEnabled } returns flowOf(false)
+        every { settingsRepository.chatHistoryCompressionEnabled } returns flowOf(false)
+        every { settingsRepository.chatHistoryCompressionThresholdTokens } returns flowOf(3_500)
+        every { settingsRepository.chatHistoryLiveWindowSize } returns flowOf(10)
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
         every { settingsRepository.toolUsageInstruction } returns flowOf("")
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
@@ -177,6 +183,7 @@ class BackgroundAutonomyCycleIntegrationTest {
         every { settingsRepository.resumeMaxAgeHours } returns flowOf(48)
         every { settingsRepository.backgroundApprovalWindowHours } returns flowOf(24)
         every { settingsRepository.defaultPipelineId } returns flowOf(GRAPH_ID)
+        every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(2)
 
         toolRepository = mockk(relaxed = true)
         coEvery { toolRepository.getAvailableTools() } returns
@@ -324,6 +331,9 @@ class BackgroundAutonomyCycleIntegrationTest {
             loadModelUseCase,
             toolRepository,
             toolInvocationGate,
+            StructuredOutputGate(),
+            settingsRepository,
+            CloudStructuredInferenceClientFactory { _, _ -> null },
         )
         val nodeExecutorFactory = NodeExecutorFactory(
             InputNodeExecutor(),
@@ -348,7 +358,19 @@ class BackgroundAutonomyCycleIntegrationTest {
                 mockk<KoogCloudLlmModelResolver>(),
                 mockk(relaxed = true),
             ),
-            SystemNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+            SystemNodeExecutor(
+                llmEngine,
+                loadModelUseCase,
+                chatRepository,
+                StructuredOutputGate(),
+                settingsRepository,
+                CloudStructuredInferenceClientFactory {
+                        _,
+                        _,
+                    ->
+                    null
+                },
+            ),
             QueueProcessorNodeExecutor(),
             SummaryNodeExecutor(llmEngine, loadModelUseCase),
             ClarificationNodeExecutor(
@@ -378,6 +400,7 @@ class BackgroundAutonomyCycleIntegrationTest {
             PromptTemplateEngine(),
             emptySet(),
             NodeContextBuilder(),
+            ChatHistoryWindowPlanner(),
             retrieveRelevantMemoryUseCase,
             mockk(relaxed = true),
             mockk(relaxed = true) {

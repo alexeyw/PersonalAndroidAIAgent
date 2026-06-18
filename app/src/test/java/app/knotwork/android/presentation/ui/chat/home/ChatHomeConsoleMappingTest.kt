@@ -77,6 +77,18 @@ class ChatHomeConsoleMappingTest {
     }
 
     @Test
+    fun `given StructuredOutputRepair event when mapping then source RUNTIME and level Warn`() {
+        val line = ConsoleEvent(
+            timestamp = 0L,
+            type = ConsoleEventType.StructuredOutputRepair,
+            message = "Output repair 1/2 for node Router",
+        ).toConsoleLine()
+
+        assertEquals(ConsoleSource.RUNTIME, line.source)
+        assertEquals(ConsoleLevel.Warn, line.level)
+    }
+
+    @Test
     fun `given trace step when mapping then status Ok and duration preserved`() {
         val trace = AgentOrchestratorState.TraceStep(
             nodeName = "LITE_RT",
