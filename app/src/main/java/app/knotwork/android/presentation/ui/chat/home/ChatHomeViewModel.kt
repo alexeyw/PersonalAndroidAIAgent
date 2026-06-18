@@ -74,7 +74,6 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import timber.log.Timber
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -164,6 +163,7 @@ class ChatHomeViewModel @Inject constructor(
     private val _memorySaveEvents: MutableSharedFlow<MemorySaveEvent> = MutableSharedFlow(extraBufferCapacity = 1)
     private val _resumeFeedbackEvents: MutableSharedFlow<ResumeFeedbackEvent> =
         MutableSharedFlow(extraBufferCapacity = 1)
+    private val _attachmentErrorEvents: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 1)
 
     /**
      * One-shot signal raised when the binding of the active chat points
@@ -210,6 +210,14 @@ class ChatHomeViewModel @Inject constructor(
      * the surface flips to `Generating` and the live state flow takes over.
      */
     val resumeFeedbackEvents: SharedFlow<ResumeFeedbackEvent> = _resumeFeedbackEvents.asSharedFlow()
+
+    /**
+     * One-shot signal raised when ingesting a picked/captured image fails. The
+     * screen surfaces a transient `KnotworkSnackbar`; deliberately not modelled
+     * as a [ChatHomeUiState.Error] so a failed attachment never clobbers the
+     * surface's main visual state (e.g. an in-flight `Generating` run).
+     */
+    val attachmentErrorEvents: SharedFlow<Unit> = _attachmentErrorEvents.asSharedFlow()
 
     private var messagesJob: Job? = null
     private var generationJob: Job? = null
@@ -368,7 +376,10 @@ class ChatHomeViewModel @Inject constructor(
             )
         }
 
-        autoRenameIfDefault(sessionId, prompt)
+        // Rename from the user's own text, not the effective prompt: an
+        // image-only message (empty draft) must not title the chat with the
+        // internal default instruction.
+        autoRenameIfDefault(sessionId, draftText)
 
         generationJob?.cancel()
         generationJob = viewModelScope.launch {
@@ -401,6 +412,9 @@ class ChatHomeViewModel @Inject constructor(
      * @param uri content URI string of the picked/captured image.
      */
     fun onImagePicked(uri: String) {
+        // Discard any prior pending attachment's file (it was never sent) before
+        // replacing the draft, so a re-pick doesn't leave an orphan behind.
+        val replacedPath = (_state.value.composer.attachment as? ComposerAttachmentDraft.Ready)?.attachment?.path
         _state.update {
             it.copy(
                 sourceChooserVisible = false,
@@ -408,52 +422,59 @@ class ChatHomeViewModel @Inject constructor(
             )
         }
         viewModelScope.launch {
-            val result = attachmentStore.ingestUri(uri)
-            val ready = result.getOrNull()?.let { stored ->
-                val absolutePath = attachmentStore.absolutePathFor(stored.path)
-                ComposerAttachmentDraft.Ready(
-                    attachment = stored,
-                    absolutePath = absolutePath,
-                    detail = attachmentDetailLabel(stored.width, stored.height, absolutePath),
-                )
+            if (replacedPath != null) {
+                attachmentStore.delete(replacedPath)
             }
-            if (ready != null) {
+            val stored = attachmentStore.ingestUri(uri).getOrNull()
+            if (stored != null) {
+                val ready = ComposerAttachmentDraft.Ready(
+                    attachment = stored,
+                    absolutePath = attachmentStore.absolutePathFor(stored.path),
+                    detail = attachmentDetailLabel(stored.width, stored.height, attachmentStore.sizeBytes(stored.path)),
+                )
                 _state.update { it.copy(composer = it.composer.copy(attachment = ready)) }
             } else {
-                _state.update {
-                    it.copy(
-                        composer = it.composer.copy(attachment = null),
-                        visual = ChatHomeUiState.Error(ATTACHMENT_FAILED_MESSAGE),
-                    )
-                }
+                // Transient failure — surface a snackbar rather than flipping the
+                // whole surface to Error (which would clobber an in-flight run).
+                _state.update { it.copy(composer = it.composer.copy(attachment = null)) }
+                _attachmentErrorEvents.tryEmit(Unit)
             }
         }
     }
 
-    /** Removes the pending composer attachment without sending it. */
+    /** Removes the pending composer attachment without sending it, deleting its file. */
     fun removeAttachment() {
+        val path = (_state.value.composer.attachment as? ComposerAttachmentDraft.Ready)?.attachment?.path
         _state.update { it.copy(composer = it.composer.copy(attachment = null)) }
+        if (path != null) {
+            viewModelScope.launch { attachmentStore.delete(path) }
+        }
     }
 
     /**
-     * Opens the full-screen viewer for [attachment]. Resolves the absolute
-     * path and checks the file still exists so the viewer can render the calm
-     * "no longer available" state for an attachment cleared by retention.
+     * Opens the full-screen viewer for [attachment]. The existence check and
+     * size read run off the main thread (via [AttachmentStore]) so tapping a
+     * bubble never blocks the UI; the viewer renders the calm "no longer
+     * available" state when retention has cleared the file.
      *
      * @param attachment the attachment of the tapped message bubble.
      */
     fun openImageViewer(attachment: MessageAttachment) {
         val absolutePath = attachmentStore.absolutePathFor(attachment.path)
-        val exists = File(absolutePath).exists()
-        _state.update {
-            it.copy(
-                imageViewer = ImageViewerTarget(
-                    model = if (exists) absolutePath else null,
-                    fileName = attachment.path,
-                    dimensionsLabel = attachmentDetailLabel(attachment.width, attachment.height, absolutePath),
-                    isMissing = !exists,
-                ),
-            )
+        viewModelScope.launch {
+            val exists = attachmentStore.exists(attachment.path)
+            val detail =
+                attachmentDetailLabel(attachment.width, attachment.height, attachmentStore.sizeBytes(attachment.path))
+            _state.update {
+                it.copy(
+                    imageViewer = ImageViewerTarget(
+                        model = if (exists) absolutePath else null,
+                        fileName = attachment.path,
+                        dimensionsLabel = detail,
+                        isMissing = !exists,
+                    ),
+                )
+            }
         }
     }
 
@@ -463,22 +484,13 @@ class ChatHomeViewModel @Inject constructor(
     }
 
     /**
-     * Resolves the Coil model for a message attachment: the absolute file path
-     * when it still exists, or `null` so the thumbnail renders its missing-file
-     * fallback for an attachment cleared by the retention sweep.
-     */
-    private fun resolveAttachmentModel(attachment: MessageAttachment): Any? {
-        val absolutePath = attachmentStore.absolutePathFor(attachment.path)
-        return if (File(absolutePath).exists()) absolutePath else null
-    }
-
-    /**
      * Builds the mono dimensions/size label shown on the composer preview and
-     * the viewer top bar, e.g. `712×1536 · 84 KB`. Falls back to dimensions
-     * only when the file size cannot be read.
+     * the viewer top bar, e.g. `712×1536 · 84 KB`. Pure: [sizeBytes] is read by
+     * the caller off the main thread. Falls back to dimensions only when the
+     * size is unknown.
      */
-    private fun attachmentDetailLabel(width: Int, height: Int, absolutePath: String): String {
-        val sizeKb = (File(absolutePath).length() / BYTES_PER_KB).toInt()
+    private fun attachmentDetailLabel(width: Int, height: Int, sizeBytes: Long): String {
+        val sizeKb = (sizeBytes / BYTES_PER_KB).toInt()
         val dimensions = "$width×$height"
         return if (sizeKb > 0) "$dimensions · $sizeKb KB" else dimensions
     }
@@ -918,7 +930,10 @@ class ChatHomeViewModel @Inject constructor(
                             chatMessageToRow(
                                 message = message,
                                 activeModelName = current.model.name,
-                                attachmentModel = attachment?.let { resolveAttachmentModel(it) },
+                                // Pure path arithmetic (no disk I/O on the main
+                                // thread); the thumbnail's own error slot renders
+                                // the missing state if the file is gone.
+                                attachmentModel = attachment?.let { attachmentStore.absolutePathFor(it.path) },
                                 onImageTap = attachment?.let { { openImageViewer(it) } },
                             )
                         },
@@ -1738,6 +1753,7 @@ class ChatHomeViewModel @Inject constructor(
      * framing.
      */
     private fun autoRenameIfDefault(sessionId: String, prompt: String) {
+        if (prompt.isBlank()) return
         val session = sessions.firstOrNull { it.id == sessionId } ?: return
         if (session.name != DEFAULT_NEW_CHAT_NAME) return
         val truncated = if (prompt.length > AUTO_RENAME_CHAR_LIMIT) {
@@ -2113,10 +2129,6 @@ class ChatHomeViewModel @Inject constructor(
 
         /** Rough chars-per-token divisor used for the v0.1 token counter (`text.length / 4`). */
         const val TOKEN_CHARS_PER_TOKEN: Int = 4
-
-        /** User-facing message surfaced when ingesting a picked/captured image fails. */
-        const val ATTACHMENT_FAILED_MESSAGE: String =
-            "Could not attach that image. Please try a different one."
 
         /** Divisor used to render an attachment's file size in kilobytes. */
         const val BYTES_PER_KB: Long = 1024L

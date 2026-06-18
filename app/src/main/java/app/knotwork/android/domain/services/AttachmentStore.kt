@@ -76,4 +76,24 @@ interface AttachmentStore {
      * @return The absolute path of the file inside the attachment directory.
      */
     fun absolutePathFor(path: String): String
+
+    /**
+     * Whether the stored file for [path] currently exists. Runs the filesystem
+     * stat off the caller's thread so the presentation layer never blocks the
+     * main thread checking attachment availability.
+     *
+     * @param path The store-relative path (file name) from a [MessageAttachment].
+     * @return `true` when the file is present, `false` otherwise (incl. an
+     *   invalid path).
+     */
+    suspend fun exists(path: String): Boolean
+
+    /**
+     * Size in bytes of the stored file for [path], or `0` when it is absent.
+     * Runs the filesystem stat off the caller's thread.
+     *
+     * @param path The store-relative path (file name) from a [MessageAttachment].
+     * @return The file size in bytes, or `0` if missing.
+     */
+    suspend fun sizeBytes(path: String): Long
 }

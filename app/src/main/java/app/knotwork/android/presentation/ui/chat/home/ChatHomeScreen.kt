@@ -180,6 +180,7 @@ fun ChatHomeScreen(
     val messageCopiedMessage = stringResource(R.string.chat_snackbar_copied)
     val rateComingSoonMessage = stringResource(R.string.chat_message_rate_coming_soon)
     val savedToMemoryMessage = stringResource(R.string.chat_snackbar_saved_to_memory)
+    val attachmentFailedMessage = stringResource(R.string.chat_snackbar_attachment_failed)
     val saveToMemoryFailedMessage = stringResource(R.string.chat_snackbar_save_to_memory_failed)
     val resumeGraphChangedMessage = stringResource(R.string.chat_snackbar_resume_graph_changed)
     val resumeExpiredMessage = stringResource(R.string.chat_snackbar_resume_expired)
@@ -231,6 +232,11 @@ fun ChatHomeScreen(
                 MemorySaveEvent.Failed -> saveToMemoryFailedMessage
             }
             snackbarHostState.showSnackbar(message = message)
+        }
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.attachmentErrorEvents.collect {
+            snackbarHostState.showSnackbar(message = attachmentFailedMessage)
         }
     }
 

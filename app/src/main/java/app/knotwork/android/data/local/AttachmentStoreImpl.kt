@@ -140,6 +140,16 @@ class AttachmentStoreImpl @Inject constructor(@ApplicationContext private val co
 
     override fun absolutePathFor(path: String): String = File(rootDir(), path).absolutePath
 
+    override suspend fun exists(path: String): Boolean = withContext(dispatcher) {
+        val target = resolveSafe(path)
+        target != null && target.exists()
+    }
+
+    override suspend fun sizeBytes(path: String): Long = withContext(dispatcher) {
+        val target = resolveSafe(path)
+        if (target != null && target.isFile) target.length() else 0L
+    }
+
     /**
      * Returns the attachment directory, creating it lazily on first access.
      */

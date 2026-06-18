@@ -433,17 +433,25 @@ class ChatHomeViewModelTest {
     }
 
     @Test
-    fun `onImagePicked failure clears draft and surfaces an error`() = runTest(testDispatcher) {
-        viewModel = createViewModel()
-        advanceUntilIdle()
-        coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.failure(RuntimeException("bad"))
+    fun `onImagePicked failure clears draft and emits a transient error event without clobbering visual`() =
+        runTest(testDispatcher) {
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            val visualBefore = viewModel.state.value.visual
+            coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.failure(RuntimeException("bad"))
+            val events = mutableListOf<Unit>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.attachmentErrorEvents.collect { events.add(it) }
+            }
 
-        viewModel.onImagePicked("content://bad")
-        advanceUntilIdle()
+            viewModel.onImagePicked("content://bad")
+            advanceUntilIdle()
 
-        assertNull(viewModel.state.value.composer.attachment)
-        assertTrue(viewModel.state.value.visual is ChatHomeUiState.Error)
-    }
+            assertNull(viewModel.state.value.composer.attachment)
+            assertEquals(1, events.size)
+            // The surface's main visual axis is untouched (no Error clobber).
+            assertEquals(visualBefore, viewModel.state.value.visual)
+        }
 
     @Test
     fun `removeAttachment clears the pending draft`() = runTest(testDispatcher) {
@@ -495,6 +503,29 @@ class ChatHomeViewModelTest {
             }
             assertNull(viewModel.state.value.composer.attachment)
         }
+
+    @Test
+    fun `image-only send does not rename the chat to the internal default instruction`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        val stored = MessageAttachment(path = "p.jpg", mimeType = "image/jpeg", width = 712, height = 1536)
+        coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.success(stored)
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/p.jpg"
+        coEvery { agentOrchestratorUseCase(sessionId, any(), any(), any(), any()) } returns
+            flow { emit(AgentOrchestratorState.Completed("done")) }
+
+        viewModel.onImagePicked("content://pick")
+        advanceUntilIdle()
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        // The chat keeps its default name — the instruction text must not become the title.
+        assertEquals(
+            ChatHomeViewModel.DEFAULT_NEW_CHAT_NAME,
+            sessionsFlow.value.first { it.id == sessionId }.name,
+        )
+    }
 
     @Test
     fun `sendMessage clears pending approval and flips to Generating in one atomic emission`() =

@@ -134,6 +134,24 @@ class AttachmentStoreImplTest {
     }
 
     @Test
+    fun `given a stored attachment then exists is true and sizeBytes is positive`() = runTest {
+        val stored = store.ingest(jpegBytes(800, 600)).getOrNull()
+        requireNotNull(stored)
+
+        assertTrue(store.exists(stored.path))
+        assertTrue("size should be > 0 for a written JPEG", store.sizeBytes(stored.path) > 0L)
+    }
+
+    @Test
+    fun `given a missing or invalid path then exists is false and sizeBytes is zero`() = runTest {
+        assertFalse(store.exists("missing.jpg"))
+        assertEquals(0L, store.sizeBytes("missing.jpg"))
+        // Path-traversal name is rejected → treated as absent.
+        assertFalse(store.exists("../secret.txt"))
+        assertEquals(0L, store.sizeBytes("../secret.txt"))
+    }
+
+    @Test
     fun `given content uri when ingested then bytes are read and stored`() = runTest {
         val uri = "content://test/image".toUri()
         shadowOf(context.contentResolver).registerInputStream(uri, ByteArrayInputStream(jpegBytes(1000, 800)))

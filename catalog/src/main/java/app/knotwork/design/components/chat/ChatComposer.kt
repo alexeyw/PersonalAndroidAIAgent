@@ -42,6 +42,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
@@ -198,6 +199,9 @@ fun ChatComposer(
                 state = state,
                 value = value,
                 hasAttachment = attachment != null,
+                // Sending is blocked while the image is still downscaling, so the
+                // Send affordance renders disabled rather than firing a silent no-op.
+                sendEnabled = attachment !is ComposerAttachment.Processing,
                 onSend = onSend,
                 onStop = onStop,
                 onMic = onMic,
@@ -399,6 +403,7 @@ private fun ActionButton(
     state: ComposerState,
     value: String,
     hasAttachment: Boolean,
+    sendEnabled: Boolean,
     onSend: () -> Unit,
     onStop: () -> Unit,
     onMic: (() -> Unit)?,
@@ -414,6 +419,9 @@ private fun ActionButton(
         },
         label = "composer_action_morph",
     ) { current ->
+        // Send is the only target gated by [sendEnabled] (blocked while an
+        // attachment is still processing); the others are always actionable.
+        val disabled = current == ActionTarget.Send && !sendEnabled
         val icon: ImageVector
         val descriptionRes: Int
         val onClick: () -> Unit
@@ -430,9 +438,9 @@ private fun ActionButton(
             ActionTarget.Send -> {
                 icon = AppIcons.Send
                 descriptionRes = R.string.knotwork_composer_send
-                onClick = onSend
-                container = MaterialTheme.colorScheme.primary
-                content = MaterialTheme.colorScheme.onPrimary
+                onClick = if (disabled) ({ }) else onSend
+                container = if (disabled) KnotworkTheme.extended.surface3 else MaterialTheme.colorScheme.primary
+                content = if (disabled) KnotworkTheme.extended.onSurfaceDim else MaterialTheme.colorScheme.onPrimary
             }
             ActionTarget.Stop -> {
                 icon = AppIcons.Pause
@@ -455,6 +463,7 @@ private fun ActionButton(
             onClick = onClick,
             container = container,
             content = content,
+            enabled = !disabled,
         )
     }
 }
@@ -495,6 +504,7 @@ private fun ComposerActionButton(
     onClick: () -> Unit,
     container: Color,
     content: Color,
+    enabled: Boolean = true,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     Box(
@@ -508,11 +518,13 @@ private fun ComposerActionButton(
                 interactionSource = interactionSource,
                 indication = null,
                 role = Role.Button,
+                enabled = enabled,
                 onClick = onClick,
             )
             .semantics {
                 this.contentDescription = contentDescription
                 this.role = Role.Button
+                if (!enabled) disabled()
             },
     ) {
         Icon(
