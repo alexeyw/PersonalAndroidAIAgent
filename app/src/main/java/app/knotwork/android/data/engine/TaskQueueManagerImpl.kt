@@ -159,12 +159,18 @@ class TaskQueueManagerImpl @Inject constructor(
         // on one consistent row.
         pipelineRunRepository.createRun(task.toQueuedRun())
 
-        // 1. Save user message
+        // 1. Save user message, carrying any image attachment from the task so
+        // it is persisted on the message and rendered in the chat bubble. By
+        // contract only the prompt text flows along the pipeline graph.
         val userMessage = ChatMessage(
             sessionId = task.sessionId,
             role = Role.USER,
-            content = task.prompt,
+            // For an image-only message `displayContent` is the empty caption so
+            // the bubble shows just the thumbnail; `prompt` (the internal default
+            // instruction) still travels the graph.
+            content = task.displayContent ?: task.prompt,
             timestamp = System.currentTimeMillis(),
+            attachment = task.attachment,
         )
         chatRepository.saveMessage(userMessage)
 

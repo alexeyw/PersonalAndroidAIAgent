@@ -104,6 +104,47 @@
     <!-- ContentDescription for the trailing mic button (Idle state with empty input and an onMic callback). -->
     <string name="knotwork_composer_mic">Voice input</string>
 
+    <!-- ============ Image attachments ============ -->
+
+    <!-- ContentDescription for the composer attachment (add image) button. -->
+    <string name="knotwork_attachment_add">Add image</string>
+    <!-- ContentDescription for the remove-attachment button on the composer preview. -->
+    <string name="knotwork_attachment_remove">Remove image</string>
+    <!-- Title shown on the composer preview strip once an image is attached. -->
+    <string name="knotwork_attachment_attached">Image attached</string>
+    <!-- Title shown on the composer preview strip while the image is being downscaled. -->
+    <string name="knotwork_attachment_processing">Processing…</string>
+    <!-- Mono caption shown while the image is being downscaled. -->
+    <string name="knotwork_attachment_processing_detail">downscale · 1536px cap · JPEG</string>
+    <!-- ContentDescription for an attached-image thumbnail. -->
+    <string name="knotwork_attachment_thumbnail">Attached image</string>
+    <!-- Title shown in place of a thumbnail whose file is no longer on the device. -->
+    <string name="knotwork_attachment_unavailable">Image unavailable</string>
+    <!-- Mono subtitle explaining why an attachment thumbnail is missing. -->
+    <string name="knotwork_attachment_removed">removed by retention sweep</string>
+
+    <!-- ============ SourceChooserSheet ============ -->
+
+    <!-- Title of the image-source chooser bottom sheet. -->
+    <string name="knotwork_source_title">Add image</string>
+    <!-- Photo-library (gallery / screenshots) source row. -->
+    <string name="knotwork_source_photo_library">Photo library</string>
+    <!-- Camera (take a photo) source row. -->
+    <string name="knotwork_source_camera">Camera</string>
+
+    <!-- ============ ImageViewer ============ -->
+
+    <!-- ContentDescription for the viewer close button. -->
+    <string name="knotwork_image_viewer_close">Close</string>
+    <!-- ContentDescription for the viewer share button. -->
+    <string name="knotwork_image_viewer_share">Share image</string>
+    <!-- ContentDescription for the full-screen image. -->
+    <string name="knotwork_image_viewer_image">Attached image, full screen</string>
+    <!-- Title shown in the viewer when the underlying file is gone. -->
+    <string name="knotwork_image_viewer_missing_title">Image no longer available</string>
+    <!-- Body shown in the viewer when the underlying file is gone. -->
+    <string name="knotwork_image_viewer_missing_body">The file was cleared from this device to save space. The message text is still in the chat.</string>
+
     <!-- ============ ConsolePane ============ -->
 
     <!-- ContentDescription for the Search header action. -->

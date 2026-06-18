@@ -7,6 +7,7 @@ import app.knotwork.android.data.local.models.ChatSessionEntity
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.Role
+import app.knotwork.android.domain.services.AttachmentStore
 import io.mockk.CapturingSlot
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -24,13 +25,15 @@ class ChatRepositoryImplTest {
 
     private lateinit var chatDao: ChatDao
     private lateinit var chatHistorySummaryDao: ChatHistorySummaryDao
+    private lateinit var attachmentStore: AttachmentStore
     private lateinit var repository: ChatRepositoryImpl
 
     @Before
     fun setup() {
         chatDao = mockk(relaxed = true)
         chatHistorySummaryDao = mockk(relaxed = true)
-        repository = ChatRepositoryImpl(chatDao, chatHistorySummaryDao)
+        attachmentStore = mockk(relaxed = true)
+        repository = ChatRepositoryImpl(chatDao, chatHistorySummaryDao, attachmentStore)
     }
 
     /**
@@ -43,6 +46,46 @@ class ChatRepositoryImplTest {
         repository.deleteSession("session-abc")
 
         coVerify { chatDao.deleteSessionCompletely("session-abc") }
+    }
+
+    @Test
+    fun `given session with attachments when deleted then each attachment file is removed`() = runTest {
+        coEvery { chatDao.getAttachmentPathsForSession("sess-att") } returns listOf("a.jpg", "b.jpg")
+
+        repository.deleteSession("sess-att")
+
+        coVerify(exactly = 1) { chatDao.deleteSessionCompletely("sess-att") }
+        coVerify(exactly = 1) { attachmentStore.delete("a.jpg") }
+        coVerify(exactly = 1) { attachmentStore.delete("b.jpg") }
+    }
+
+    @Test
+    fun `given message with attachment when deleted then attachment file is removed after row`() = runTest {
+        coEvery { chatDao.getAttachmentPathById(99L) } returns "pic.jpg"
+
+        repository.deleteMessage(99L)
+
+        coVerify(exactly = 1) { chatDao.deleteMessageById(99L) }
+        coVerify(exactly = 1) { attachmentStore.delete("pic.jpg") }
+    }
+
+    @Test
+    fun `given message without attachment when deleted then no file deletion happens`() = runTest {
+        coEvery { chatDao.getAttachmentPathById(100L) } returns null
+
+        repository.deleteMessage(100L)
+
+        coVerify(exactly = 1) { chatDao.deleteMessageById(100L) }
+        coVerify(exactly = 0) { attachmentStore.delete(any()) }
+    }
+
+    @Test
+    fun `given referenced attachment paths requested then dao getAllAttachmentPaths is returned`() = runTest {
+        coEvery { chatDao.getAllAttachmentPaths() } returns listOf("x.jpg", "y.jpg")
+
+        val paths = repository.getReferencedAttachmentPaths()
+
+        assertEquals(listOf("x.jpg", "y.jpg"), paths)
     }
 
     @Test

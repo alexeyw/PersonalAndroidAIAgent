@@ -211,6 +211,32 @@ stores the message verbatim in long-term memory as a manual entry and
 confirms with a *Saved to memory* snackbar. Saved entries show up under
 **More → Memory** with the **Manual** source.
 
+### Attaching an image
+
+Tap the **image** button in the composer to attach a picture to your next
+message. A small sheet offers two sources:
+
+- **Photo library** — the system photo picker (your gallery and
+  screenshots). No storage permission is requested; the picker runs in its
+  own process and hands back only the image you choose.
+- **Camera** — take a photo now.
+
+The chosen image is **downscaled on the device** (its aspect ratio is kept —
+never cropped to a square) and re-encoded to JPEG before it is stored; the
+original file is never copied into the app. A removable preview appears above
+the input row while you finish typing — tap the **✕** to drop it. You can send
+an image on its own, without any caption.
+
+Once sent, the message bubble shows a thumbnail; tap it to view the image
+full-screen, and use back, the close button, or a tap outside the image to
+dismiss. If an image was later cleared to save space (see *Run history and
+retention*), the thumbnail and viewer say so plainly — the message text stays
+in the chat.
+
+> Sending an image to the model for it to *understand* (vision) depends on the
+> active model and arrives in a later release; for now the image is stored and
+> shown in the conversation.
+
 ---
 
 ## Console

@@ -63,7 +63,7 @@ import app.knotwork.android.data.local.models.TraceStepEntity
         SkillEntity::class,
         ChatHistorySummaryEntity::class,
     ],
-    version = 38,
+    version = 39,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -885,6 +885,22 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                     """.trimIndent(),
                 )
+            }
+        }
+
+        /**
+         * Adds the image-attachment columns to `chat_messages`: the store-relative
+         * path, MIME type, and pixel dimensions of an image attached to a user
+         * message. All nullable and additive — pre-existing rows keep `NULL`
+         * (no attachment). The image bytes live in the on-device attachment store
+         * (`filesDir/attachments/`), not the database.
+         */
+        val MIGRATION_38_39 = object : Migration(38, 39) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `chat_messages` ADD COLUMN `attachmentPath` TEXT")
+                db.execSQL("ALTER TABLE `chat_messages` ADD COLUMN `attachmentMimeType` TEXT")
+                db.execSQL("ALTER TABLE `chat_messages` ADD COLUMN `attachmentWidth` INTEGER")
+                db.execSQL("ALTER TABLE `chat_messages` ADD COLUMN `attachmentHeight` INTEGER")
             }
         }
     }

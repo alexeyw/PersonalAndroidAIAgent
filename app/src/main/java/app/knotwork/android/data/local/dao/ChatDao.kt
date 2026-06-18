@@ -95,6 +95,42 @@ interface ChatDao {
     suspend fun deleteMessageById(messageId: Long)
 
     /**
+     * Returns the attachment path of a single message, or `null` when the
+     * message has no attachment or does not exist. Used by the repository to
+     * locate the on-disk image file before deleting the message row, so the
+     * file can be cleaned up alongside it.
+     *
+     * @param messageId The ID of the message.
+     * @return The store-relative attachment path, or `null`.
+     */
+    @Query("SELECT attachmentPath FROM chat_messages WHERE id = :messageId")
+    suspend fun getAttachmentPathById(messageId: Long): String?
+
+    /**
+     * Returns the attachment paths of every message in a session that has one.
+     * Used by the repository to delete the on-disk image files when a whole
+     * session is removed.
+     *
+     * @param sessionId The ID of the session.
+     * @return The store-relative attachment paths owned by the session.
+     */
+    @Query(
+        "SELECT attachmentPath FROM chat_messages " +
+            "WHERE sessionId = :sessionId AND attachmentPath IS NOT NULL",
+    )
+    suspend fun getAttachmentPathsForSession(sessionId: String): List<String>
+
+    /**
+     * Returns every attachment path still referenced by a chat message. The
+     * attachment orphan-cleanup sweep diffs the files present in the attachment
+     * store against this set and deletes the unreferenced remainder.
+     *
+     * @return The store-relative paths of all currently referenced attachments.
+     */
+    @Query("SELECT attachmentPath FROM chat_messages WHERE attachmentPath IS NOT NULL")
+    suspend fun getAllAttachmentPaths(): List<String>
+
+    /**
      * Retrieves recent messages of a specific role, used for monitoring logs.
      *
      * @param role The role of the messages to retrieve.

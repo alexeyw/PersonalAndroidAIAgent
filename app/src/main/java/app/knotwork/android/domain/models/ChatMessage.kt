@@ -15,6 +15,8 @@ package app.knotwork.android.domain.models
  *   Defaults to `true` to preserve behavior for legacy save sites.
  * @property isStarred Whether the user has saved (starred) this message. Starred messages
  *   are surfaced via the chat-screen "starred only" filter.
+ * @property attachment The image attached to this message, or `null` when the
+ *   message has no attachment. Only user messages carry attachments in this phase.
  */
 data class ChatMessage(
     val id: Long? = null,
@@ -24,4 +26,5 @@ data class ChatMessage(
     val timestamp: Long,
     val isFinal: Boolean = true,
     val isStarred: Boolean = false,
+    val attachment: MessageAttachment? = null,
 )

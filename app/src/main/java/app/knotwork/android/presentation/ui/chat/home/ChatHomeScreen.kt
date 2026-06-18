@@ -1,7 +1,10 @@
 package app.knotwork.android.presentation.ui.chat.home
 
+import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -49,11 +52,14 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.knotwork.android.R
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chat.ChatContextAction
+import app.knotwork.design.components.chat.ImageViewer
+import app.knotwork.design.components.chat.SourceChooserSheet
 import app.knotwork.design.components.controls.KnotworkField
 import app.knotwork.design.components.controls.KnotworkTextField
 import app.knotwork.design.components.knotworkMarkdownColor
@@ -67,6 +73,7 @@ import com.mikepenz.markdown.m3.Markdown
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * Redesigned Knotwork chat home — the user-facing surface that wires up:
@@ -245,6 +252,24 @@ fun ChatHomeScreen(
         }
     }
 
+    // Photo Picker (gallery / screenshots) — permission-free across all
+    // supported API levels; on success the VM ingests the picked content URI.
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri != null) viewModel.onImagePicked(uri.toString())
+    }
+    // Camera capture into a FileProvider URI, ingested on success. The capture
+    // URI is created when the camera is chosen and remembered until the result.
+    var pendingCaptureUri by remember { mutableStateOf<Uri?>(null) }
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture(),
+    ) { success ->
+        val uri = pendingCaptureUri
+        if (success && uri != null) viewModel.onImagePicked(uri.toString())
+        pendingCaptureUri = null
+    }
+
     // Resolve every user-facing stub string up here so the mapping below
     // stays free of hardcoded strings — agent-status pills, drawer
     // sessions, and the empty-state suggestion cards all flow from
@@ -257,6 +282,8 @@ fun ChatHomeScreen(
         onComposerValueChange = viewModel::onComposerValueChange,
         onSend = viewModel::sendMessage,
         onStop = viewModel::stopGeneration,
+        onAttach = viewModel::onAttachClicked,
+        onRemoveAttachment = viewModel::removeAttachment,
         onOpenDrawer = viewModel::openDrawer,
         onCloseDrawer = viewModel::closeDrawer,
         onSelectThread = viewModel::selectThread,
@@ -522,7 +549,44 @@ fun ChatHomeScreen(
                 )
             }
         }
+        if (screenState.sourceChooserVisible) {
+            SourceChooserSheet(
+                onDismiss = viewModel::dismissSourceChooser,
+                onPickPhotoLibrary = {
+                    viewModel.dismissSourceChooser()
+                    photoPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                    )
+                },
+                onPickCamera = {
+                    viewModel.dismissSourceChooser()
+                    val uri = createImageCaptureUri(context)
+                    pendingCaptureUri = uri
+                    cameraLauncher.launch(uri)
+                },
+            )
+        }
+        screenState.imageViewer?.let { viewer ->
+            ImageViewer(
+                model = viewer.model,
+                fileName = viewer.fileName,
+                dimensionsLabel = viewer.dimensionsLabel,
+                isMissing = viewer.isMissing,
+                onDismiss = viewModel::dismissImageViewer,
+            )
+        }
     }
+}
+
+/**
+ * Creates a `FileProvider` content URI backing a camera capture, under
+ * `cacheDir/images/`. The captured file is transient: the attachment store
+ * keeps only the downscaled JPEG, and the OS evicts the cache file in time.
+ */
+private fun createImageCaptureUri(context: Context): Uri {
+    val dir = File(context.cacheDir, "images").apply { mkdirs() }
+    val file = File(dir, "capture_${System.currentTimeMillis()}.jpg")
+    return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
 }
 
 /**

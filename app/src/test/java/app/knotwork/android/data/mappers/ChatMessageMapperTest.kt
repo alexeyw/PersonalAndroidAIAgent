@@ -2,8 +2,10 @@ package app.knotwork.android.data.mappers
 
 import app.knotwork.android.data.local.models.ChatMessageEntity
 import app.knotwork.android.domain.models.ChatMessage
+import app.knotwork.android.domain.models.MessageAttachment
 import app.knotwork.android.domain.models.Role
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class ChatMessageMapperTest {
@@ -130,5 +132,77 @@ class ChatMessageMapperTest {
 
         assertEquals(false, entity.isFinal)
         assertEquals(true, entity.isStarred)
+    }
+
+    @Test
+    fun `toEntity spreads attachment fields`() {
+        val domain = ChatMessage(
+            id = 20L,
+            sessionId = "att",
+            role = Role.USER,
+            content = "look",
+            timestamp = 1700000010L,
+            attachment = MessageAttachment(path = "img.jpg", mimeType = "image/jpeg", width = 712, height = 1536),
+        )
+
+        val entity = domain.toEntity()
+
+        assertEquals("img.jpg", entity.attachmentPath)
+        assertEquals("image/jpeg", entity.attachmentMimeType)
+        assertEquals(712, entity.attachmentWidth)
+        assertEquals(1536, entity.attachmentHeight)
+    }
+
+    @Test
+    fun `toDomain reconstructs attachment from entity columns`() {
+        val entity = ChatMessageEntity(
+            id = 21L,
+            sessionId = "att",
+            role = "USER",
+            content = "look",
+            timestamp = 1700000011L,
+            attachmentPath = "img.jpg",
+            attachmentMimeType = "image/jpeg",
+            attachmentWidth = 712,
+            attachmentHeight = 1536,
+        )
+
+        val attachment = entity.toDomain().attachment
+
+        assertEquals("img.jpg", attachment?.path)
+        assertEquals("image/jpeg", attachment?.mimeType)
+        assertEquals(712, attachment?.width)
+        assertEquals(1536, attachment?.height)
+    }
+
+    @Test
+    fun `toDomain yields null attachment when path absent`() {
+        val entity = ChatMessageEntity(
+            id = 22L,
+            sessionId = "no-att",
+            role = "USER",
+            content = "text only",
+            timestamp = 1700000012L,
+        )
+
+        assertNull(entity.toDomain().attachment)
+    }
+
+    @Test
+    fun `toDomain defaults attachment metadata when only path present`() {
+        val entity = ChatMessageEntity(
+            id = 23L,
+            sessionId = "att",
+            role = "USER",
+            content = "",
+            timestamp = 1700000013L,
+            attachmentPath = "img.jpg",
+        )
+
+        val attachment = entity.toDomain().attachment
+
+        assertEquals("image/jpeg", attachment?.mimeType)
+        assertEquals(0, attachment?.width)
+        assertEquals(0, attachment?.height)
     }
 }

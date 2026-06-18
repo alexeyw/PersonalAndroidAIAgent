@@ -19,6 +19,15 @@ import androidx.room.PrimaryKey
  *   continue to render unchanged.
  * @property isStarred Whether the user has marked this message as a favourite.
  *   Defaults to `false`; surfaced via the chat-screen "starred only" filter.
+ * @property attachmentPath Store-relative path (file name) of the image attached
+ *   to this message, or `null` when there is no attachment. Added in
+ *   `MIGRATION_38_39`; backfilled to `NULL` for pre-existing rows.
+ * @property attachmentMimeType MIME type of the attached image (always
+ *   `image/jpeg` in this phase), or `null` when there is no attachment.
+ * @property attachmentWidth Pixel width of the stored (downscaled) attachment,
+ *   or `null` when there is no attachment.
+ * @property attachmentHeight Pixel height of the stored (downscaled) attachment,
+ *   or `null` when there is no attachment.
  */
 @Entity(tableName = "chat_messages")
 data class ChatMessageEntity(
@@ -32,4 +41,8 @@ data class ChatMessageEntity(
     val isFinal: Boolean = true,
     @ColumnInfo(defaultValue = "0")
     val isStarred: Boolean = false,
+    val attachmentPath: String? = null,
+    val attachmentMimeType: String? = null,
+    val attachmentWidth: Int? = null,
+    val attachmentHeight: Int? = null,
 )

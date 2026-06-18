@@ -18,6 +18,7 @@ import app.knotwork.design.icons.imagevector.knotworkBookmarkAddIcon
 import app.knotwork.design.icons.imagevector.knotworkBookmarkIcon
 import app.knotwork.design.icons.imagevector.knotworkBrainIcon
 import app.knotwork.design.icons.imagevector.knotworkBranchIcon
+import app.knotwork.design.icons.imagevector.knotworkCameraIcon
 import app.knotwork.design.icons.imagevector.knotworkChatActiveIcon
 import app.knotwork.design.icons.imagevector.knotworkChatIcon
 import app.knotwork.design.icons.imagevector.knotworkCheckIcon
@@ -51,6 +52,8 @@ import app.knotwork.design.icons.imagevector.knotworkGridOffIcon
 import app.knotwork.design.icons.imagevector.knotworkHistoryIcon
 import app.knotwork.design.icons.imagevector.knotworkHourglassIcon
 import app.knotwork.design.icons.imagevector.knotworkHubIcon
+import app.knotwork.design.icons.imagevector.knotworkImageIcon
+import app.knotwork.design.icons.imagevector.knotworkImageOffIcon
 import app.knotwork.design.icons.imagevector.knotworkImportFileIcon
 import app.knotwork.design.icons.imagevector.knotworkInfoIcon
 import app.knotwork.design.icons.imagevector.knotworkKeyIcon
@@ -371,6 +374,15 @@ object AppIcons {
 
     /** `I.mic` — voice input. */
     val Mic: ImageVector get() = knotworkMicIcon
+
+    /** `I.image` — image attachment affordance / Photo-library row / thumbnail. */
+    val Image: ImageVector get() = knotworkImageIcon
+
+    /** `I.camera` — camera capture source. */
+    val Camera: ImageVector get() = knotworkCameraIcon
+
+    /** `I.imageOff` — broken / missing image fallback. */
+    val ImageOff: ImageVector get() = knotworkImageOffIcon
 
     /** `I.archive` — archive. */
     val Archive: ImageVector get() = knotworkArchiveIcon

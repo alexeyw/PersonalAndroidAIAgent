@@ -5,6 +5,7 @@ import app.knotwork.design.components.chat.ChatContextAction
 import app.knotwork.design.components.chat.ChatMessageStatus
 import app.knotwork.design.components.chat.ChatMetadata
 import app.knotwork.design.components.chat.ChatRole
+import app.knotwork.design.components.chat.ComposerAttachment
 import app.knotwork.design.components.chat.ComposerState
 import app.knotwork.design.components.console.ConsoleFilter
 import app.knotwork.design.components.console.ConsoleLine
@@ -218,6 +219,11 @@ data class ChatHomeViewState(
      * (`"[NODE]  idle · ready"`). `null` hides the pill.
      */
     val agentStatusLine: String? = null,
+    /**
+     * Image attached to the composer, rendered as a removable strip above the
+     * input row. `null` when no image is attached.
+     */
+    val composerAttachment: ComposerAttachment? = null,
 ) {
     init {
         require((visualState == ChatHomeVisualState.Error) == (errorMessage != null)) {
@@ -236,6 +242,13 @@ class ChatHomeCallbacks(
     val onComposerValueChange: (String) -> Unit = {},
     val onSend: () -> Unit = {},
     val onStop: () -> Unit = {},
+    /**
+     * Fired when the user taps the composer "add image" button. `null` hides
+     * the attachment affordance entirely.
+     */
+    val onAttach: (() -> Unit)? = null,
+    /** Fired when the user removes the pending composer attachment. */
+    val onRemoveAttachment: () -> Unit = {},
     val onOpenDrawer: () -> Unit = {},
     val onCloseDrawer: () -> Unit = {},
     val onSelectThread: (String) -> Unit = {},

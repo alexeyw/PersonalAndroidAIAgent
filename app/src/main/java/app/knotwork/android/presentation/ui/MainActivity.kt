@@ -19,6 +19,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.rememberNavController
 import app.knotwork.android.data.services.AgentForegroundService
+import app.knotwork.android.data.services.AttachmentOrphanCleanupScheduler
 import app.knotwork.android.data.services.MemoryCompactionScheduler
 import app.knotwork.android.data.services.PendingInteractionMaintenanceScheduler
 import app.knotwork.android.data.services.RunRetentionScheduler
@@ -52,6 +53,8 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var pendingInteractionMaintenanceScheduler: PendingInteractionMaintenanceScheduler
 
     @Inject lateinit var runRetentionScheduler: RunRetentionScheduler
+
+    @Inject lateinit var attachmentOrphanCleanupScheduler: AttachmentOrphanCleanupScheduler
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -100,6 +103,9 @@ class MainActivity : ComponentActivity() {
             // Retention pass over persisted pipeline runs and their traces —
             // same daily charging + idle window as memory compaction.
             runRetentionScheduler.schedulePeriodic()
+            // Backstop sweep for orphaned image-attachment files (eager
+            // delete-with-message handles the common case) — same window.
+            attachmentOrphanCleanupScheduler.schedulePeriodic()
             // Self-heal: re-arm the import re-embed pass if a prior one-off was
             // lost or exhausted its retries. The check lives in the scheduler so
             // recovery isn't tied to this one entry point (the foreground service

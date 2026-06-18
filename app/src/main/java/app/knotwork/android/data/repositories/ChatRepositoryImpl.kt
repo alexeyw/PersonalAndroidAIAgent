@@ -11,6 +11,7 @@ import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.repositories.ChatRepository
+import app.knotwork.android.domain.services.AttachmentStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import org.json.JSONArray
@@ -30,11 +31,16 @@ import javax.inject.Singleton
  * @property chatDao The Data Access Object for chat messages.
  * @property chatHistorySummaryDao DAO for the per-session compressed-history
  *   summaries used by the long-session chat-compression feature.
+ * @property attachmentStore Store for image attachment files, used to delete
+ *   the on-disk image when its owning message or session is removed. File
+ *   deletion is best-effort: a failure is tolerated because the orphan-cleanup
+ *   sweep reclaims any leftover file later.
  */
 @Singleton
 class ChatRepositoryImpl @Inject constructor(
     private val chatDao: ChatDao,
     private val chatHistorySummaryDao: ChatHistorySummaryDao,
+    private val attachmentStore: AttachmentStore,
 ) : ChatRepository {
 
     @Volatile
@@ -81,16 +87,23 @@ class ChatRepositoryImpl @Inject constructor(
     }
 
     override suspend fun deleteSession(sessionId: String) {
-        // Single transaction: messages + pipeline-run records + session row
-        // (trace steps cascade via FK) — a crash mid-delete can never leave a
-        // half-deleted session behind.
+        // Collect attachment paths before the rows are gone, then delete the
+        // session atomically (messages + pipeline-run records + session row;
+        // trace steps cascade via FK — a crash mid-delete can never leave a
+        // half-deleted session behind), then clean up the image files.
+        val attachmentPaths = chatDao.getAttachmentPathsForSession(sessionId)
         chatDao.deleteSessionCompletely(sessionId)
+        attachmentPaths.forEach { attachmentStore.delete(it) }
     }
 
     override suspend fun getAllSessions(): List<String> = chatDao.getAllSessions()
 
     override suspend fun deleteMessage(messageId: Long) {
+        // Read the attachment path before deleting the row so the on-disk image
+        // can be removed alongside it.
+        val attachmentPath = chatDao.getAttachmentPathById(messageId)
         chatDao.deleteMessageById(messageId)
+        attachmentPath?.let { attachmentStore.delete(it) }
     }
 
     override fun getRecentSystemMessages(limit: Int): Flow<List<ChatMessage>> =
@@ -173,6 +186,8 @@ class ChatRepositoryImpl @Inject constructor(
             ),
         )
     }
+
+    override suspend fun getReferencedAttachmentPaths(): List<String> = chatDao.getAllAttachmentPaths()
 
     private companion object {
         /**
