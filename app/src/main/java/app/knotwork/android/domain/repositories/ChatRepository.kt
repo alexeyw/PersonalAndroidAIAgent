@@ -170,4 +170,15 @@ interface ChatRepository {
      * @param summary The summary to persist.
      */
     suspend fun saveHistorySummary(summary: ChatHistorySummary)
+
+    /**
+     * Returns the store-relative paths of every image attachment still
+     * referenced by a chat message. The orphan-cleanup sweep diffs this against
+     * the files present in the attachment store to find files no message points
+     * at anymore.
+     *
+     * @return The referenced attachment paths (no duplicates guaranteed by the
+     *   caller's set semantics).
+     */
+    suspend fun getReferencedAttachmentPaths(): List<String>
 }

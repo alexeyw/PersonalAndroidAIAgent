@@ -6,6 +6,7 @@ import app.knotwork.design.components.chat.ChatMessageStatus
 import app.knotwork.design.components.chat.ChatMetadata
 import app.knotwork.design.components.chat.ChatRole
 import app.knotwork.design.components.chat.ClarificationCardModel
+import app.knotwork.design.components.chat.ComposerAttachment
 import app.knotwork.design.components.chat.ComposerState
 import app.knotwork.design.components.chat.HitlConfirmationModel
 import app.knotwork.design.components.chat.InterruptedRunCardModel
@@ -48,7 +49,8 @@ fun ChatHomeScreenState.toViewState(fixtures: ChatHomeFixtures = ChatHomeFixture
     val modelName = model.name
     val composerValue = composer.value
     val resolvedPipelineName = pipelineName ?: PIPELINE_NAME_PLACEHOLDER
-    return when (val visual = visual) {
+    val composerAttachment = composer.attachment?.toCatalogComposerAttachment()
+    val baseViewState = when (val visual = visual) {
         is ChatHomeUiState.Loading -> ChatHomeViewState(
             visualState = ChatHomeVisualState.Loading,
             threadTitle = threadTitle,
@@ -191,6 +193,17 @@ fun ChatHomeScreenState.toViewState(fixtures: ChatHomeFixtures = ChatHomeFixture
             console = console,
         )
     }
+    return baseViewState.copy(composerAttachment = composerAttachment)
+}
+
+/**
+ * Projects the app-side pending attachment draft onto the catalog
+ * [app.knotwork.design.components.chat.ComposerAttachment] consumed by the
+ * composer.
+ */
+private fun ComposerAttachmentDraft.toCatalogComposerAttachment(): ComposerAttachment = when (this) {
+    is ComposerAttachmentDraft.Processing -> ComposerAttachment.Processing
+    is ComposerAttachmentDraft.Ready -> ComposerAttachment.Ready(model = absolutePath, detail = detail)
 }
 
 /** Pre-canned baseline conversation used by every non-Empty state. */

@@ -8,4 +8,9 @@
     <cache-path
         name="shared"
         path="shared/" />
+    <!-- Transient camera-capture files staged here for the TakePicture
+         FileProvider URI; the attachment store keeps only the downscaled JPEG. -->
+    <cache-path
+        name="images"
+        path="images/" />
 </paths>

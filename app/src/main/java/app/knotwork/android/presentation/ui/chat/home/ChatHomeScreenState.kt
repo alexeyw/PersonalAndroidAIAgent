@@ -2,6 +2,7 @@ package app.knotwork.android.presentation.ui.chat.home
 
 import app.knotwork.android.domain.models.ClarificationRequest
 import app.knotwork.android.domain.models.LocalModel
+import app.knotwork.android.domain.models.MessageAttachment
 import app.knotwork.design.screens.chat.ChatHomeConsoleState
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
 import app.knotwork.design.screens.chat.ChatHomeThreadRow
@@ -45,6 +46,10 @@ import app.knotwork.design.screens.chat.ChatHomeThreadRow
  *   that execution would never pick.
  * @property availablePipelines pipeline summaries surfaced by the
  *   new-thread pipeline picker.
+ * @property sourceChooserVisible whether the image-source chooser sheet
+ *   (Photo library / Camera) is currently shown.
+ * @property imageViewer target of the full-screen image viewer, or `null`
+ *   when the viewer is closed.
  */
 data class ChatHomeScreenState(
     val visual: ChatHomeUiState = ChatHomeUiState.Loading,
@@ -58,6 +63,50 @@ data class ChatHomeScreenState(
     val messages: List<ChatHomeMessageRow> = emptyList(),
     val pipelineName: String? = null,
     val availablePipelines: List<PipelineSummary> = emptyList(),
+    val sourceChooserVisible: Boolean = false,
+    val imageViewer: ImageViewerTarget? = null,
+)
+
+/**
+ * Pending composer attachment while the user composes a message.
+ *
+ * The picked/captured image is ingested asynchronously (downscale + JPEG
+ * re-encode), so the draft passes through [Processing] before becoming
+ * [Ready]; only [Ready] can be sent.
+ */
+sealed interface ComposerAttachmentDraft {
+
+    /** The image is being downscaled and re-encoded; send is blocked. */
+    data object Processing : ComposerAttachmentDraft
+
+    /**
+     * The image is stored and ready to send.
+     *
+     * @property attachment the stored [MessageAttachment] (carried onto the
+     *   user message when sent).
+     * @property absolutePath absolute path to the stored JPEG for the preview
+     *   thumbnail (Coil model).
+     * @property detail mono dimensions/size label shown beside the preview.
+     */
+    data class Ready(val attachment: MessageAttachment, val absolutePath: String, val detail: String) :
+        ComposerAttachmentDraft
+}
+
+/**
+ * Target of the full-screen image viewer.
+ *
+ * @property model image loader model (absolute file path), or `null` when the
+ *   file is gone.
+ * @property fileName file name shown in the viewer top bar.
+ * @property dimensionsLabel mono dimensions/size label shown in the top bar.
+ * @property isMissing whether the underlying file has been cleared (renders the
+ *   "no longer available" message instead of the image).
+ */
+data class ImageViewerTarget(
+    val model: Any?,
+    val fileName: String,
+    val dimensionsLabel: String,
+    val isMissing: Boolean,
 )
 
 /**
@@ -73,8 +122,14 @@ data class ChatHomeScreenState(
  *   HITL confirmation row; must equal the magic word
  *   ([ChatHomeViewModel.DESTRUCTIVE_TYPED_CONFIRM_WORD], case-insensitive)
  *   before a destructive tool can be approved.
+ * @property attachment pending image attachment shown above the input row, or
+ *   `null` when none is attached.
  */
-data class ChatHomeComposerState(val value: String = "", val typedConfirm: String = "")
+data class ChatHomeComposerState(
+    val value: String = "",
+    val typedConfirm: String = "",
+    val attachment: ComposerAttachmentDraft? = null,
+)
 
 /**
  * Snapshots of whatever the orchestrator is currently paused on.

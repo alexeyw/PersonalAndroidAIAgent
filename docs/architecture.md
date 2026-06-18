@@ -903,6 +903,25 @@ explicitly in [`SECURITY.md`](../SECURITY.md) (*Agent file workspace*).
 | **Keystore-backed stores** (`KeystoreBackedPrefsStore`) | SQLCipher passphrase, cloud-provider API keys, HuggingFace access token                                        | **AES-256-GCM per value**, key non-exportable in the Android Keystore      |
 | **DataStore** (Preferences)   | Non-sensitive settings: sampling params, timeouts, default pipeline id, opt-in flags, `allowed_http_domains`, `app_function_risk_overrides` | **FBE + app sandbox only** (plaintext within the sandbox; no app cipher)   |
 | **Agent workspace** (`files/agent_workspace/`) | Agent-produced and user-imported files (reports, exports, inputs)                                              | **FBE + app sandbox only** — *not* SQLCipher-encrypted (see `SECURITY.md`) |
+| **Attachment store** (`files/attachments/`) | Downscaled JPEG image attachments of chat messages                                                            | **FBE + app sandbox only** — *not* SQLCipher-encrypted (same posture as the workspace) |
+
+**Image attachments.** A user message can carry one image. The picked /
+captured content URI is read, decoded, EXIF-rotated, downscaled **preserving
+aspect ratio** (longest side ≤ 1536 px — a client-side storage bound; the model
+does its own token-budget resize at inference time) and re-encoded to JPEG into
+`files/attachments/` by `AttachmentStore` (domain interface; impl
+`data/local/AttachmentStoreImpl`). Only the derived file is kept; the original
+is never copied. The store-relative path plus MIME and pixel dimensions are
+persisted on `chat_messages` (nullable columns added in `MIGRATION_38_39`,
+schema v39) and carried on the domain `ChatMessage` / `AgentTask` as
+`MessageAttachment`. By contract the attachment rides the **user message** but
+does **not** travel the pipeline graph — only text does; an image-only message
+substitutes an internal default instruction (`DefaultPrompts`) as the prompt.
+Files are deleted with their owning message/session (`ChatRepositoryImpl`), and
+a daily `AttachmentOrphanCleanupWorker` (mirroring `RunRetentionWorker`) sweeps
+files no message references — the same charging + idle maintenance window. The
+sweep skips files younger than a 24 h grace window, so an attachment that is
+already on disk but not yet sent (still in the composer) is never reclaimed.
 
 ### 5.3. JSON parsing
 

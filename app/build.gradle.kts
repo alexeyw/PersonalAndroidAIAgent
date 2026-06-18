@@ -753,6 +753,10 @@ dependencies {
     // Markdown
     implementation(libs.markdown.m3)
 
+    // Image loading (Coil 3) + EXIF orientation for attachment ingest
+    implementation(libs.coil.compose)
+    implementation(libs.androidx.exifinterface)
+
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.hilt.work)

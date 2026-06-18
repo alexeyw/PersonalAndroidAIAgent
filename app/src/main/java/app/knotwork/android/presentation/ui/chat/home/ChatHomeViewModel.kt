@@ -3,12 +3,14 @@ package app.knotwork.android.presentation.ui.chat.home
 import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.ClarificationRequest
 import app.knotwork.android.domain.models.ConsoleEvent
+import app.knotwork.android.domain.models.MessageAttachment
 import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
@@ -24,6 +26,7 @@ import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.services.AttachmentStore
 import app.knotwork.android.domain.services.ChatHistoryCompressionCoordinator
 import app.knotwork.android.domain.services.MemoryAutoExtractionCoordinator
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
@@ -139,6 +142,7 @@ class ChatHomeViewModel @Inject constructor(
     private val pendingInteractionRepository: PendingInteractionRepository,
     private val submitApprovalDecisionUseCase: SubmitApprovalDecisionUseCase,
     private val submitClarificationAnswerUseCase: SubmitClarificationAnswerUseCase,
+    private val attachmentStore: AttachmentStore,
 ) : ViewModel() {
 
     private val _state: MutableStateFlow<ChatHomeScreenState> = MutableStateFlow(ChatHomeScreenState())
@@ -159,6 +163,7 @@ class ChatHomeViewModel @Inject constructor(
     private val _memorySaveEvents: MutableSharedFlow<MemorySaveEvent> = MutableSharedFlow(extraBufferCapacity = 1)
     private val _resumeFeedbackEvents: MutableSharedFlow<ResumeFeedbackEvent> =
         MutableSharedFlow(extraBufferCapacity = 1)
+    private val _attachmentErrorEvents: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 1)
 
     /**
      * One-shot signal raised when the binding of the active chat points
@@ -205,6 +210,14 @@ class ChatHomeViewModel @Inject constructor(
      * the surface flips to `Generating` and the live state flow takes over.
      */
     val resumeFeedbackEvents: SharedFlow<ResumeFeedbackEvent> = _resumeFeedbackEvents.asSharedFlow()
+
+    /**
+     * One-shot signal raised when ingesting a picked/captured image fails. The
+     * screen surfaces a transient `KnotworkSnackbar`; deliberately not modelled
+     * as a [ChatHomeUiState.Error] so a failed attachment never clobbers the
+     * surface's main visual state (e.g. an in-flight `Generating` run).
+     */
+    val attachmentErrorEvents: SharedFlow<Unit> = _attachmentErrorEvents.asSharedFlow()
 
     private var messagesJob: Job? = null
     private var generationJob: Job? = null
@@ -317,8 +330,12 @@ class ChatHomeViewModel @Inject constructor(
      * the `isFinal = true` row when the pipeline reaches OUTPUT.
      */
     fun sendMessage() {
-        val draft = _state.value.composer.value.trim()
-        if (draft.isEmpty()) return
+        val draftText = _state.value.composer.value.trim()
+        val readyAttachment = (_state.value.composer.attachment as? ComposerAttachmentDraft.Ready)?.attachment
+        // Block while the attachment is still being downscaled, and refuse a
+        // wholly empty send (no text and no image).
+        if (_state.value.composer.attachment is ComposerAttachmentDraft.Processing) return
+        if (draftText.isEmpty() && readyAttachment == null) return
         if (_state.value.visual is ChatHomeUiState.Generating) return
         if (!llmInferenceEngine.isInitialized) {
             // Surface the error with copy that matches what Retry actually
@@ -329,7 +346,13 @@ class ChatHomeViewModel @Inject constructor(
             _state.update { it.copy(visual = ChatHomeUiState.Error(MODEL_NOT_LOADED_MESSAGE)) }
             return
         }
-        _state.update { it.copy(composer = it.composer.copy(value = "")) }
+        // Image-only message: an empty caption is replaced by the internal
+        // default instruction so the all-text pipeline graph has a prompt to
+        // travel; the saved message keeps the empty caption so the bubble shows
+        // just the thumbnail.
+        val prompt = draftText.ifEmpty { DefaultPrompts.IMAGE_ONLY_DEFAULT_INSTRUCTION }
+        val displayContent = if (draftText.isEmpty()) "" else null
+        _state.update { it.copy(composer = it.composer.copy(value = "", attachment = null)) }
 
         val sessionId = _state.value.thread.currentSessionId
         if (sessionId.isBlank()) return
@@ -353,11 +376,14 @@ class ChatHomeViewModel @Inject constructor(
             )
         }
 
-        autoRenameIfDefault(sessionId, draft)
+        // Rename from the user's own text, not the effective prompt: an
+        // image-only message (empty draft) must not title the chat with the
+        // internal default instruction.
+        autoRenameIfDefault(sessionId, draftText)
 
         generationJob?.cancel()
         generationJob = viewModelScope.launch {
-            agentOrchestratorUseCase(sessionId, draft, pipelineId)
+            agentOrchestratorUseCase(sessionId, prompt, pipelineId, readyAttachment, displayContent)
                 .catch { error ->
                     _state.update {
                         it.copy(visual = ChatHomeUiState.Error(error.message ?: UNKNOWN_ERROR_FALLBACK))
@@ -365,6 +391,108 @@ class ChatHomeViewModel @Inject constructor(
                 }
                 .collect { orchestratorState -> handleOrchestratorState(orchestratorState) }
         }
+    }
+
+    /** Opens the image-source chooser sheet (Photo library / Camera). */
+    fun onAttachClicked() {
+        _state.update { it.copy(sourceChooserVisible = true) }
+    }
+
+    /** Dismisses the image-source chooser sheet without a choice. */
+    fun dismissSourceChooser() {
+        _state.update { it.copy(sourceChooserVisible = false) }
+    }
+
+    /**
+     * Ingests a picked/captured image: marks the composer attachment
+     * [ComposerAttachmentDraft.Processing], downscales + re-encodes it through
+     * [AttachmentStore], then settles to [ComposerAttachmentDraft.Ready] (or
+     * clears the draft and surfaces an error on failure).
+     *
+     * @param uri content URI string of the picked/captured image.
+     */
+    fun onImagePicked(uri: String) {
+        // Discard any prior pending attachment's file (it was never sent) before
+        // replacing the draft, so a re-pick doesn't leave an orphan behind.
+        val replacedPath = (_state.value.composer.attachment as? ComposerAttachmentDraft.Ready)?.attachment?.path
+        _state.update {
+            it.copy(
+                sourceChooserVisible = false,
+                composer = it.composer.copy(attachment = ComposerAttachmentDraft.Processing),
+            )
+        }
+        viewModelScope.launch {
+            if (replacedPath != null) {
+                attachmentStore.delete(replacedPath)
+            }
+            val stored = attachmentStore.ingestUri(uri).getOrNull()
+            if (stored != null) {
+                val ready = ComposerAttachmentDraft.Ready(
+                    attachment = stored,
+                    absolutePath = attachmentStore.absolutePathFor(stored.path),
+                    detail = attachmentDetailLabel(stored.width, stored.height, attachmentStore.sizeBytes(stored.path)),
+                )
+                _state.update { it.copy(composer = it.composer.copy(attachment = ready)) }
+            } else {
+                // Transient failure — surface a snackbar rather than flipping the
+                // whole surface to Error (which would clobber an in-flight run).
+                _state.update { it.copy(composer = it.composer.copy(attachment = null)) }
+                _attachmentErrorEvents.tryEmit(Unit)
+            }
+        }
+    }
+
+    /** Removes the pending composer attachment without sending it, deleting its file. */
+    fun removeAttachment() {
+        val path = (_state.value.composer.attachment as? ComposerAttachmentDraft.Ready)?.attachment?.path
+        _state.update { it.copy(composer = it.composer.copy(attachment = null)) }
+        if (path != null) {
+            viewModelScope.launch { attachmentStore.delete(path) }
+        }
+    }
+
+    /**
+     * Opens the full-screen viewer for [attachment]. The existence check and
+     * size read run off the main thread (via [AttachmentStore]) so tapping a
+     * bubble never blocks the UI; the viewer renders the calm "no longer
+     * available" state when retention has cleared the file.
+     *
+     * @param attachment the attachment of the tapped message bubble.
+     */
+    fun openImageViewer(attachment: MessageAttachment) {
+        val absolutePath = attachmentStore.absolutePathFor(attachment.path)
+        viewModelScope.launch {
+            val exists = attachmentStore.exists(attachment.path)
+            val detail =
+                attachmentDetailLabel(attachment.width, attachment.height, attachmentStore.sizeBytes(attachment.path))
+            _state.update {
+                it.copy(
+                    imageViewer = ImageViewerTarget(
+                        model = if (exists) absolutePath else null,
+                        fileName = attachment.path,
+                        dimensionsLabel = detail,
+                        isMissing = !exists,
+                    ),
+                )
+            }
+        }
+    }
+
+    /** Closes the full-screen image viewer. */
+    fun dismissImageViewer() {
+        _state.update { it.copy(imageViewer = null) }
+    }
+
+    /**
+     * Builds the mono dimensions/size label shown on the composer preview and
+     * the viewer top bar, e.g. `712×1536 · 84 KB`. Pure: [sizeBytes] is read by
+     * the caller off the main thread. Falls back to dimensions only when the
+     * size is unknown.
+     */
+    private fun attachmentDetailLabel(width: Int, height: Int, sizeBytes: Long): String {
+        val sizeKb = (sizeBytes / BYTES_PER_KB).toInt()
+        val dimensions = "$width×$height"
+        return if (sizeKb > 0) "$dimensions · $sizeKb KB" else dimensions
     }
 
     /**
@@ -796,7 +924,20 @@ class ChatHomeViewModel @Inject constructor(
         messagesJob = viewModelScope.launch {
             chatRepository.getDisplayMessagesForSession(sessionId).collect { incoming ->
                 _state.update { current ->
-                    current.copy(messages = incoming.map { chatMessageToRow(it, current.model.name) })
+                    current.copy(
+                        messages = incoming.map { message ->
+                            val attachment = message.attachment
+                            chatMessageToRow(
+                                message = message,
+                                activeModelName = current.model.name,
+                                // Pure path arithmetic (no disk I/O on the main
+                                // thread); the thumbnail's own error slot renders
+                                // the missing state if the file is gone.
+                                attachmentModel = attachment?.let { attachmentStore.absolutePathFor(it.path) },
+                                onImageTap = attachment?.let { { openImageViewer(it) } },
+                            )
+                        },
+                    )
                 }
                 rebalanceRestingState()
                 tokenCounterJob?.cancel()
@@ -1612,6 +1753,7 @@ class ChatHomeViewModel @Inject constructor(
      * framing.
      */
     private fun autoRenameIfDefault(sessionId: String, prompt: String) {
+        if (prompt.isBlank()) return
         val session = sessions.firstOrNull { it.id == sessionId } ?: return
         if (session.name != DEFAULT_NEW_CHAT_NAME) return
         val truncated = if (prompt.length > AUTO_RENAME_CHAR_LIMIT) {
@@ -1988,6 +2130,9 @@ class ChatHomeViewModel @Inject constructor(
         /** Rough chars-per-token divisor used for the v0.1 token counter (`text.length / 4`). */
         const val TOKEN_CHARS_PER_TOKEN: Int = 4
 
+        /** Divisor used to render an attachment's file size in kilobytes. */
+        const val BYTES_PER_KB: Long = 1024L
+
         /**
          * Magic word the user must type to confirm a destructive tool call.
          * Mirrors the catalog `HitlConfirmationState.DESTRUCTIVE_CONFIRM_WORD`
@@ -2050,7 +2195,12 @@ class ChatHomeViewModel @Inject constructor(
          * model. Kept on the companion so the mapping can be unit-tested
          * without spinning up the VM.
          */
-        fun chatMessageToRow(message: ChatMessage, activeModelName: String): ChatHomeMessageRow {
+        fun chatMessageToRow(
+            message: ChatMessage,
+            activeModelName: String,
+            attachmentModel: Any? = null,
+            onImageTap: (() -> Unit)? = null,
+        ): ChatHomeMessageRow {
             val role = when (message.role) {
                 Role.USER -> ChatRole.User
                 Role.AGENT -> ChatRole.Assistant
@@ -2070,13 +2220,25 @@ class ChatHomeViewModel @Inject constructor(
                 ChatRole.Tool -> "t"
             }
             val rowId = message.id?.let { "$idPrefix-$it" } ?: "$idPrefix-${UUID.randomUUID()}"
-            // Agent + tool bubbles can carry markdown (headings / lists / code
-            // fences from the LLM); surface as `ChatContent.Markdown` so the
-            // host-supplied renderer formats them. User input never carries
-            // intentional markdown — stick with plain text to avoid e.g. a
-            // stray `#` turning into a heading.
-            val content = when (role) {
-                ChatRole.Assistant, ChatRole.Tool -> ChatContent.Markdown(message.content)
+            // A user message carrying an image renders as an image bubble:
+            // thumbnail (aspect-fit) + the caption below (null for image-only,
+            // so the bubble shrinks to the thumbnail). Otherwise: agent + tool
+            // bubbles can carry markdown (headings / lists / code fences from
+            // the LLM); user text stays plain to avoid a stray `#` becoming a
+            // heading.
+            val attachment = message.attachment
+            val content = when {
+                role == ChatRole.User && attachment != null -> ChatContent.Image(
+                    model = attachmentModel,
+                    caption = message.content.ifEmpty { null },
+                    aspectRatio = if (attachment.height > 0) {
+                        attachment.width.toFloat() / attachment.height
+                    } else {
+                        1f
+                    },
+                    onTap = onImageTap,
+                )
+                role == ChatRole.Assistant || role == ChatRole.Tool -> ChatContent.Markdown(message.content)
                 else -> ChatContent.Text(message.content)
             }
             return ChatHomeMessageRow(

@@ -96,4 +96,24 @@ sealed interface ChatContent {
      */
     data class ToolCall(val toolName: String, val argsJson: String, val result: String?, val status: ToolCallStatus) :
         ChatContent
+
+    /**
+     * Image attachment on a user message — a thumbnail rendered inside the user
+     * bubble, tappable to open a full-screen viewer. The image is shown
+     * aspect-**fit** (never square-cropped). For an image-only message [caption]
+     * is `null` and the bubble shrinks to the thumbnail.
+     *
+     * @property model image loader model (typically the absolute file path of
+     *   the stored attachment). `null` renders the broken/missing fallback.
+     * @property caption optional user caption rendered below the thumbnail.
+     * @property aspectRatio width / height of the stored image, used to size the
+     *   thumbnail within the bounding box; defaults to `1f` (square) when unknown.
+     * @property onTap optional handler opening the full-screen viewer.
+     */
+    data class Image(
+        val model: Any?,
+        val caption: String? = null,
+        val aspectRatio: Float = 1f,
+        val onTap: (() -> Unit)? = null,
+    ) : ChatContent
 }

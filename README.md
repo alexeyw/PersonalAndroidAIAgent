@@ -88,6 +88,12 @@ configured it.
   background chat-history compression that summarises older turns so a long
   session never overflows the context window. All three are configurable and
   surface their activity on the agent console.
+- **Image attachments** — attach one image per message from the system Photo
+  Picker (gallery / screenshots, no storage permission) or the camera. Images
+  are downscaled on-device (aspect-preserved) and re-encoded to JPEG in private
+  storage; the original is never kept. A removable composer preview, a bubble
+  thumbnail, and a tap-to-fullscreen viewer; attachment files are cleaned up
+  with their message and by a daily orphan sweep.
 - Redesigned **Settings** screen with identity card, structured
   HITL restrictions, sampling/repetition controls, memory dashboard
   (Chunks · Size · Threads · Avg score + Export / Import / Re-embed / Clear),
@@ -256,6 +262,7 @@ After installing:
 | Async            | Coroutines / Flow                                       |
 | Serialization    | kotlinx.serialization (structured-output validation)    |
 | Network          | OkHttp + Ktor (via Koog)                                |
+| Image loading    | Coil 3 (attachment thumbnails / viewer)                 |
 | Local storage    | Room + DataStore                                        |
 | Testing          | JUnit + MockK                                           |
 

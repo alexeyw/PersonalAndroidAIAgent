@@ -346,6 +346,9 @@ private fun ChatHomeBottomBar(state: ChatHomeViewState, callbacks: ChatHomeCallb
             onSend = callbacks.onSend,
             onStop = callbacks.onStop,
             state = state.composerState,
+            attachment = state.composerAttachment,
+            onAttach = callbacks.onAttach,
+            onRemoveAttachment = callbacks.onRemoveAttachment,
         )
     }
 }

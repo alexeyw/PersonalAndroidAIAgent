@@ -15,6 +15,19 @@ details.
 
 ### Added
 
+- **Image attachments in chat.** A message can now carry one image, attached
+  from the system **Photo Picker** (gallery / screenshots, no storage
+  permission) or the **camera**. The picked image is downscaled on-device
+  (aspect ratio preserved, longest side ≤ 1536 px) and re-encoded to JPEG into
+  private app storage — the original is never kept. A removable preview shows in
+  the composer before sending; the sent message renders a thumbnail in its
+  bubble that opens a full-screen viewer on tap. An image may be sent without a
+  caption (an internal default instruction then accompanies it). Attachment
+  files are deleted with their message or session, with a daily background sweep
+  reclaiming any orphaned files. On-device multimodal inference over the image
+  is a later change; for now the attachment travels with the user message while
+  the pipeline graph continues to operate on text.
+
 - **Chat-history compression for long sessions.** Long conversations no longer
   blow the on-device context window or crowd out memory and tool results. Once a
   session's verbatim history exceeds a configurable token budget, the messages

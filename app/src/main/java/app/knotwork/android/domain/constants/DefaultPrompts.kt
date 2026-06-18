@@ -70,6 +70,16 @@ object DefaultPrompts {
     const val SYSTEM_PROMPT_PREFIX = "You are a helpful AI assistant running on an Android device."
 
     /**
+     * Prompt text used as the effective user message when an image is sent with
+     * no caption. Image-only messages are allowed, but the pipeline graph only
+     * carries text, so this internal default becomes the prompt that travels the
+     * graph (the chat bubble still shows just the thumbnail). Wiring the image
+     * itself into the first inference node is a later, multimodal-inference
+     * concern; this constant only ensures the run has a sensible instruction.
+     */
+    const val IMAGE_ONLY_DEFAULT_INSTRUCTION = "Describe what you see in this image."
+
+    /**
      * Tool-usage instruction surfaced to user-authored prompts when the agent
      * wants to advertise the available tools. The literal `[TOOL_LIST]`
      * placeholder is substituted by the caller (currently consumed by

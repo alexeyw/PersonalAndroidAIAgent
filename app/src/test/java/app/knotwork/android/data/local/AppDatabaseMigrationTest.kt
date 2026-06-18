@@ -273,4 +273,34 @@ class AppDatabaseMigrationTest {
             depth.contains("NOT NULL") && depth.contains("DEFAULT 0"),
         )
     }
+
+    @Test
+    fun `MIGRATION_38_39 targets versions 38 to 39`() {
+        val migration = AppDatabase.MIGRATION_38_39
+
+        assertEquals(38, migration.startVersion)
+        assertEquals(39, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_38_39 adds four nullable attachment columns to chat_messages`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val statements = mutableListOf<String>()
+
+        AppDatabase.MIGRATION_38_39.migrate(db)
+
+        verify(exactly = 4) { db.execSQL(capture(statements)) }
+        val joined = statements.joinToString(" | ").uppercase()
+        listOf("ATTACHMENTPATH", "ATTACHMENTMIMETYPE", "ATTACHMENTWIDTH", "ATTACHMENTHEIGHT").forEach { column ->
+            assertTrue(
+                "Expected ALTER chat_messages ADD $column, got: $joined",
+                joined.contains("ALTER TABLE `CHAT_MESSAGES` ADD COLUMN `$column`"),
+            )
+        }
+        // Additive nullable columns — never NOT NULL, so existing rows keep NULL (no attachment).
+        assertTrue(
+            "Attachment columns must be nullable (no NOT NULL): $joined",
+            !joined.contains("NOT NULL"),
+        )
+    }
 }

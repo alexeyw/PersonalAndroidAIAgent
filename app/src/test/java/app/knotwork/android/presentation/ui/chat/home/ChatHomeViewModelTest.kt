@@ -1,5 +1,6 @@
 package app.knotwork.android.presentation.ui.chat.home
 
+import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.constants.SettingsDefaults
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AgentOrchestratorState
@@ -7,6 +8,7 @@ import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.ClarificationRequest
 import app.knotwork.android.domain.models.LocalModel
+import app.knotwork.android.domain.models.MessageAttachment
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
@@ -24,6 +26,7 @@ import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.services.AttachmentStore
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
@@ -61,6 +64,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -107,6 +111,7 @@ class ChatHomeViewModelTest {
     private lateinit var pendingInteractionRepository: PendingInteractionRepository
     private lateinit var submitApprovalDecisionUseCase: SubmitApprovalDecisionUseCase
     private lateinit var submitClarificationAnswerUseCase: SubmitClarificationAnswerUseCase
+    private lateinit var attachmentStore: AttachmentStore
 
     private lateinit var sessionsFlow: MutableStateFlow<List<ChatSession>>
     private lateinit var localModelsFlow: MutableStateFlow<List<LocalModel>>
@@ -139,6 +144,7 @@ class ChatHomeViewModelTest {
         pendingInteractionRepository = mockk(relaxed = true)
         coEvery { pendingInteractionRepository.getForSession(any()) } returns null
         submitApprovalDecisionUseCase = mockk(relaxed = true)
+        attachmentStore = mockk(relaxed = true)
         coEvery { submitApprovalDecisionUseCase(any(), any(), any()) } returns PendingSubmissionOutcome.LiveResumed
         submitClarificationAnswerUseCase = mockk(relaxed = true)
         coEvery {
@@ -219,6 +225,7 @@ class ChatHomeViewModelTest {
         pendingInteractionRepository,
         submitApprovalDecisionUseCase,
         submitClarificationAnswerUseCase,
+        attachmentStore,
     ).also { vm ->
         // Keep the replay projection on the test scheduler so
         // advanceUntilIdle() deterministically covers it.
@@ -392,6 +399,132 @@ class ChatHomeViewModelTest {
         assertEquals("", viewModel.state.value.composer.value)
         assertEquals(ChatHomeUiState.Empty, viewModel.state.value.visual) // no messages persisted in this stub
         coVerify { agentOrchestratorUseCase(sessionId, "hi", null) }
+    }
+
+    @Test
+    fun `onAttachClicked shows chooser and dismissSourceChooser hides it`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAttachClicked()
+        assertTrue(viewModel.state.value.sourceChooserVisible)
+
+        viewModel.dismissSourceChooser()
+        assertFalse(viewModel.state.value.sourceChooserVisible)
+    }
+
+    @Test
+    fun `onImagePicked ingests and settles composer attachment to Ready`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val stored = MessageAttachment(path = "p.jpg", mimeType = "image/jpeg", width = 712, height = 1536)
+        coEvery { attachmentStore.ingestUri("content://pick") } returns kotlin.Result.success(stored)
+        every { attachmentStore.absolutePathFor("p.jpg") } returns "/tmp/p.jpg"
+
+        viewModel.onImagePicked("content://pick")
+        advanceUntilIdle()
+
+        val draft = viewModel.state.value.composer.attachment
+        assertTrue(draft is ComposerAttachmentDraft.Ready)
+        val ready = draft as ComposerAttachmentDraft.Ready
+        assertEquals(stored, ready.attachment)
+        assertTrue("detail should carry dimensions", ready.detail.contains("712×1536"))
+        assertFalse(viewModel.state.value.sourceChooserVisible)
+    }
+
+    @Test
+    fun `onImagePicked failure clears draft and emits a transient error event without clobbering visual`() =
+        runTest(testDispatcher) {
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            val visualBefore = viewModel.state.value.visual
+            coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.failure(RuntimeException("bad"))
+            val events = mutableListOf<Unit>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.attachmentErrorEvents.collect { events.add(it) }
+            }
+
+            viewModel.onImagePicked("content://bad")
+            advanceUntilIdle()
+
+            assertNull(viewModel.state.value.composer.attachment)
+            assertEquals(1, events.size)
+            // The surface's main visual axis is untouched (no Error clobber).
+            assertEquals(visualBefore, viewModel.state.value.visual)
+        }
+
+    @Test
+    fun `removeAttachment clears the pending draft`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val stored = MessageAttachment(path = "p.jpg", mimeType = "image/jpeg", width = 100, height = 100)
+        coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.success(stored)
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/p.jpg"
+        viewModel.onImagePicked("content://pick")
+        advanceUntilIdle()
+
+        viewModel.removeAttachment()
+
+        assertNull(viewModel.state.value.composer.attachment)
+    }
+
+    @Test
+    fun `sendMessage with image and no caption sends the default instruction with empty display`() =
+        runTest(testDispatcher) {
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            val sessionId = viewModel.state.value.thread.currentSessionId
+            val stored = MessageAttachment(path = "p.jpg", mimeType = "image/jpeg", width = 712, height = 1536)
+            coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.success(stored)
+            every { attachmentStore.absolutePathFor(any()) } returns "/tmp/p.jpg"
+            coEvery {
+                agentOrchestratorUseCase(
+                    sessionId,
+                    DefaultPrompts.IMAGE_ONLY_DEFAULT_INSTRUCTION,
+                    null,
+                    stored,
+                    "",
+                )
+            } returns flow { emit(AgentOrchestratorState.Completed("done")) }
+
+            viewModel.onImagePicked("content://pick")
+            advanceUntilIdle()
+            viewModel.sendMessage()
+            advanceUntilIdle()
+
+            coVerify {
+                agentOrchestratorUseCase(
+                    sessionId,
+                    DefaultPrompts.IMAGE_ONLY_DEFAULT_INSTRUCTION,
+                    null,
+                    stored,
+                    "",
+                )
+            }
+            assertNull(viewModel.state.value.composer.attachment)
+        }
+
+    @Test
+    fun `image-only send does not rename the chat to the internal default instruction`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        val stored = MessageAttachment(path = "p.jpg", mimeType = "image/jpeg", width = 712, height = 1536)
+        coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.success(stored)
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/p.jpg"
+        coEvery { agentOrchestratorUseCase(sessionId, any(), any(), any(), any()) } returns
+            flow { emit(AgentOrchestratorState.Completed("done")) }
+
+        viewModel.onImagePicked("content://pick")
+        advanceUntilIdle()
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        // The chat keeps its default name — the instruction text must not become the title.
+        assertEquals(
+            ChatHomeViewModel.DEFAULT_NEW_CHAT_NAME,
+            sessionsFlow.value.first { it.id == sessionId }.name,
+        )
     }
 
     @Test

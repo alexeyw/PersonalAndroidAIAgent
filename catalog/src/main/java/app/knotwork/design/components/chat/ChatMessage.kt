@@ -13,9 +13,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -40,6 +42,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -54,6 +57,12 @@ import app.knotwork.design.tokens.KnotworkTextStyles
 
 /** Fraction of the screen width a user / assistant bubble may consume horizontally. */
 private const val USER_BUBBLE_MAX_WIDTH_FRACTION = 0.80f
+
+/** Maximum width of an image-bubble thumbnail's bounding box. */
+private val IMAGE_BUBBLE_MAX_WIDTH = 220.dp
+
+/** Maximum height of an image-bubble thumbnail's bounding box. */
+private val IMAGE_BUBBLE_MAX_HEIGHT = 260.dp
 
 /** Insets reserved opposite the assistant bubble so it never reaches the screen edge. */
 private val AssistantBubbleTrailingInset = 64.dp
@@ -361,6 +370,40 @@ private fun BubbleBody(
             onResume = onRunResume,
             onDiscard = onRunDiscard,
         )
+        is ChatContent.Image -> ImageBubble(
+            role = role,
+            content = content,
+            onContextAction = onContextAction,
+        )
+    }
+}
+
+/**
+ * Image bubble — an attached image rendered inside the user bubble, aspect-fit
+ * inside a bounding box (never square-cropped), with an optional caption below.
+ * Tapping the thumbnail opens the full-screen viewer via [ChatContent.Image.onTap].
+ */
+@Composable
+private fun ImageBubble(role: ChatRole, content: ChatContent.Image, onContextAction: ((ChatContextAction) -> Unit)?) {
+    val textColor = chatBubbleTextColor(role)
+    ChatBubbleChrome(role = role, onContextAction = onContextAction) {
+        Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2)) {
+            val ratio = content.aspectRatio.takeIf { it > 0f } ?: 1f
+            ImageThumbnail(
+                model = content.model,
+                contentDescription = stringResource(R.string.knotwork_attachment_thumbnail),
+                contentScale = ContentScale.Fit,
+                shape = KnotworkTheme.shapes.md,
+                onClick = content.onTap,
+                modifier = Modifier
+                    .widthIn(max = IMAGE_BUBBLE_MAX_WIDTH)
+                    .heightIn(max = IMAGE_BUBBLE_MAX_HEIGHT)
+                    .aspectRatio(ratio),
+            )
+            if (!content.caption.isNullOrEmpty()) {
+                Text(text = content.caption, style = KnotworkTextStyles.BodyBase, color = textColor)
+            }
+        }
     }
 }
 

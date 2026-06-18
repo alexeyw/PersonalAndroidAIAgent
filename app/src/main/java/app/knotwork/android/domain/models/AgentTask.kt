@@ -29,6 +29,16 @@ import java.util.UUID
  *   the user message and re-creating the run record, resolves the pipeline
  *   strictly by the run's recorded pipeline id, and drives the engine in
  *   checkpoint-replay mode from the persisted trace.
+ * @property attachment The image attached to the originating user message, or
+ *   `null` when none. Carried so the queue worker can persist it onto the saved
+ *   user [ChatMessage]; by the phase contract only [prompt] text travels the
+ *   pipeline graph, so the attachment rides the message but does not flow
+ *   between nodes here.
+ * @property displayContent Text persisted on the saved user [ChatMessage] when
+ *   it must differ from [prompt]. Used for an image-only message: the bubble
+ *   shows just the thumbnail (empty display content) while [prompt] carries the
+ *   internal default instruction that travels the graph. `null` means the saved
+ *   message uses [prompt] verbatim (the common case).
  */
 data class AgentTask(
     val id: String = UUID.randomUUID().toString(),
@@ -39,4 +49,6 @@ data class AgentTask(
     val pipelineId: String? = null,
     val origin: RunOrigin = RunOrigin.CHAT,
     val isResume: Boolean = false,
+    val attachment: MessageAttachment? = null,
+    val displayContent: String? = null,
 )
