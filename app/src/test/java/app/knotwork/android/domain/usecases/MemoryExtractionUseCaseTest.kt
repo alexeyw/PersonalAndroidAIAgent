@@ -95,7 +95,7 @@ class MemoryExtractionUseCaseTest {
     }
 
     private fun stubReply(reply: String) {
-        every { llmInferenceEngine.generateResponseStream(any(), any()) } returns flowOf(reply)
+        every { llmInferenceEngine.generateResponseStream(any(), any(), any()) } returns flowOf(reply)
     }
 
     @Test
@@ -281,7 +281,7 @@ class MemoryExtractionUseCaseTest {
     @Test
     fun `given malformed then valid reply when invoke then repairs and records the repair metric`() = runTest {
         every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(1)
-        every { llmInferenceEngine.generateResponseStream(any(), any()) } returnsMany listOf(
+        every { llmInferenceEngine.generateResponseStream(any(), any(), any()) } returnsMany listOf(
             flowOf("here you go:"), // no JSON array → triggers a repair
             flowOf("""[{"type": "preference", "text": "Prefers dark mode"}]"""),
         )

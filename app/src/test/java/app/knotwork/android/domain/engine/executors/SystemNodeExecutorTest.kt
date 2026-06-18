@@ -61,7 +61,7 @@ class SystemNodeExecutorTest {
     @Test
     fun `given INTENT_ROUTER with no labelled edges then runs plain inference and routes by raw reply`() = runTest {
         val node = NodeModel("1", NodeType.INTENT_ROUTER, 0f, 0f)
-        every { llmEngine.generateResponseStream(any(), any()) } returns flowOf("Result")
+        every { llmEngine.generateResponseStream(any(), any(), any()) } returns flowOf("Result")
 
         val outputs = executor.execute(node, "input", "session-1", "prompt").toList()
 
@@ -74,7 +74,7 @@ class SystemNodeExecutorTest {
     @Test
     fun `given INTENT_ROUTER with labelled edges then routing key is the matched label`() = runTest {
         val node = NodeModel("1", NodeType.INTENT_ROUTER, 0f, 0f)
-        every { llmEngine.generateResponseStream(any(), any()) } returns flowOf("I think this is Weather data")
+        every { llmEngine.generateResponseStream(any(), any(), any()) } returns flowOf("I think this is Weather data")
 
         val outputs = executor.execute(
             node,
@@ -91,7 +91,7 @@ class SystemNodeExecutorTest {
     fun `given INTENT_ROUTER reply matches no route after repairs then default branch and error event`() = runTest {
         every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(1)
         val node = NodeModel("1", NodeType.INTENT_ROUTER, 0f, 0f)
-        every { llmEngine.generateResponseStream(any(), any()) } returns flowOf("no idea")
+        every { llmEngine.generateResponseStream(any(), any(), any()) } returns flowOf("no idea")
 
         val outputs = executor.execute(
             node,
@@ -109,7 +109,7 @@ class SystemNodeExecutorTest {
     @Test
     fun `given EVALUATION verdict then routing key is the canonical token`() = runTest {
         val node = NodeModel("1", NodeType.EVALUATION, 0f, 0f)
-        every { llmEngine.generateResponseStream(any(), any()) } returns flowOf("PASS — looks good")
+        every { llmEngine.generateResponseStream(any(), any(), any()) } returns flowOf("PASS — looks good")
 
         val outputs = executor.execute(node, "input", "session-1", "prompt").toList()
 
@@ -119,7 +119,7 @@ class SystemNodeExecutorTest {
     @Test
     fun `given EVALUATION malformed then valid verdict then repairs and routes`() = runTest {
         val node = NodeModel("1", NodeType.EVALUATION, 0f, 0f)
-        every { llmEngine.generateResponseStream(any(), any()) } returnsMany listOf(
+        every { llmEngine.generateResponseStream(any(), any(), any()) } returnsMany listOf(
             flowOf("undecided"),
             flowOf("Retry"),
         )
@@ -133,7 +133,7 @@ class SystemNodeExecutorTest {
     @Test
     fun `given DECOMPOSITION valid array then re-encodes the validated list`() = runTest {
         val node = NodeModel("1", NodeType.DECOMPOSITION, 0f, 0f)
-        every { llmEngine.generateResponseStream(any(), any()) } returns
+        every { llmEngine.generateResponseStream(any(), any(), any()) } returns
             flowOf("""Here are the steps: ["buy milk", "walk dog"]""")
 
         val outputs = executor.execute(node, "input", "session-1", "prompt").toList()
@@ -147,7 +147,7 @@ class SystemNodeExecutorTest {
     fun `given DECOMPOSITION never valid after repairs then fails the run with a clear error`() = runTest {
         every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(1)
         val node = NodeModel("1", NodeType.DECOMPOSITION, 0f, 0f)
-        every { llmEngine.generateResponseStream(any(), any()) } returns flowOf("not a json array at all")
+        every { llmEngine.generateResponseStream(any(), any(), any()) } returns flowOf("not a json array at all")
 
         val outputs = executor.execute(node, "input", "session-1", "prompt").toList()
 

@@ -21,12 +21,15 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -34,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
@@ -56,6 +60,13 @@ private val LeadingGlyphSize = 20.dp
 
 /** Diameter of the green "active" status dot. */
 private val ActiveDotSize = 8.dp
+
+/**
+ * Down-scale factor for the image-support [Switch]: Material3's default
+ * (52×32 dp) dwarfs the row title at the 14sp scale, so shrink it to ~78% to
+ * match the rest of the toggle rows in the app.
+ */
+private const val VISION_SWITCH_SCALE = 0.78f
 
 /** Height of the determinate download progress bar shown on a downloading preset. */
 private val ProgressBarHeight = 3.dp
@@ -210,7 +221,7 @@ private fun ModelsBody(
     ) {
         state.active?.let { active ->
             item(key = "active") {
-                ActiveModelCard(active = active, strings = strings)
+                ActiveModelCard(active = active, strings = strings, callbacks = callbacks)
             }
         }
         item(key = "hf-section") {
@@ -332,50 +343,103 @@ private fun SectionHeader(label: String, modifier: Modifier = Modifier, trailing
 }
 
 @Composable
-private fun ActiveModelCard(active: ActiveModelRow, strings: ModelsStrings) {
-    // Non-interactive status card: there is no active-model detail surface in
-    // v0.x, so the card neither clicks nor shows a trailing chevron (a chevron
-    // would falsely imply navigation).
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+private fun ActiveModelCard(active: ActiveModelRow, strings: ModelsStrings, callbacks: ModelsCallbacks) {
+    // Status card with a single interactive affordance: the image-support
+    // toggle below the identity row. The identity row itself stays
+    // non-interactive (no active-model detail surface in v0.x).
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(KnotworkTheme.shapes.md)
-            .background(color = KnotworkTheme.extended.surface3)
-            .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp3),
+            .background(color = KnotworkTheme.extended.surface3),
     ) {
-        LeadingChipTile(background = MaterialTheme.colorScheme.surface)
-        Column(
-            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
-            modifier = Modifier.weight(1f),
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp3),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            LeadingChipTile(background = MaterialTheme.colorScheme.surface)
+            Column(
+                verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+                modifier = Modifier.weight(1f),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = strings.activeBadge,
+                        style = KnotworkTextStyles.LabelSm,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Box(
+                        modifier = Modifier
+                            .padding(start = KnotworkTheme.spacing.sp1)
+                            .size(ActiveDotSize)
+                            .background(
+                                color = KnotworkTheme.extended.signalSuccess,
+                                shape = KnotworkTheme.shapes.full,
+                            ),
+                    )
+                }
                 Text(
-                    text = strings.activeBadge,
-                    style = KnotworkTextStyles.LabelSm,
+                    text = active.displayName,
+                    style = KnotworkTextStyles.MonoBase,
                     color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                Box(
-                    modifier = Modifier
-                        .padding(start = KnotworkTheme.spacing.sp1)
-                        .size(ActiveDotSize)
-                        .background(color = KnotworkTheme.extended.signalSuccess, shape = KnotworkTheme.shapes.full),
+                Text(
+                    text = active.meta,
+                    style = KnotworkTextStyles.MonoSm,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
                 )
             }
+        }
+        HorizontalDivider(color = KnotworkTheme.extended.divider)
+        VisionToggleRow(
+            checked = active.visionSupported,
+            strings = strings,
+            onToggle = { callbacks.onToggleVision(!active.visionSupported) },
+        )
+    }
+}
+
+/**
+ * Image-support toggle row of the active-model card. The whole row is the tap
+ * target (the documented 48 dp floor); the [Switch] itself is non-interactive
+ * and only reflects [checked]. Mirrors the skill-editor context-flag rows.
+ */
+@Composable
+private fun VisionToggleRow(checked: Boolean, strings: ModelsStrings, onToggle: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle)
+            .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp3),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = active.displayName,
-                style = KnotworkTextStyles.MonoBase,
+                text = strings.visionLabel,
+                style = KnotworkTextStyles.BodyBase,
                 color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = active.meta,
-                style = KnotworkTextStyles.MonoSm,
+                text = strings.visionDescription,
+                style = KnotworkTextStyles.BodySm,
                 color = KnotworkTheme.extended.onSurfaceMuted,
             )
         }
+        Switch(
+            checked = checked,
+            onCheckedChange = null,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                checkedTrackColor = MaterialTheme.colorScheme.primary,
+                checkedBorderColor = MaterialTheme.colorScheme.primary,
+            ),
+            modifier = Modifier.scale(VISION_SWITCH_SCALE),
+        )
     }
 }
 
@@ -714,4 +778,6 @@ data class ModelsStrings(
     val emptyCta: String = "Add model",
     val errorTitle: String = "Couldn't load models",
     val errorRetry: String = "Retry",
+    val visionLabel: String = "Image support",
+    val visionDescription: String = "Let this model read attached photos",
 )

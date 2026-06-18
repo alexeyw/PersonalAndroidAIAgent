@@ -37,10 +37,19 @@ package app.knotwork.android.domain.models
  *   that actually matches an outgoing edge. Empty for every other node — and for
  *   a routing node with no labelled edges, in which case the executor skips the
  *   gate and the engine falls back to the first outgoing edge.
+ * @property imagePath Absolute filesystem path of the run's image attachment,
+ *   set by the engine **only** on the first vision-eligible `LITE_RT` node (a
+ *   `LITE_RT` node whose context includes the original task) and `null` on every
+ *   other node. This is how the per-phase contract "the attachment belongs to
+ *   `userPrompt`; only text travels the graph" is realised: a single node sees
+ *   the image, the rest of the graph (and every `CLOUD` node) never does.
+ *   [LiteRtNodeExecutor][app.knotwork.android.domain.engine.executors.LiteRtNodeExecutor]
+ *   forwards it to the inference engine; all other executors ignore it.
  */
 data class ExecutionScope(
     val depth: Int = 0,
     val stepBudget: RunStepBudget? = null,
     val pipelineVisitIndex: Int = 0,
     val routingChoices: List<String> = emptyList(),
+    val imagePath: String? = null,
 )

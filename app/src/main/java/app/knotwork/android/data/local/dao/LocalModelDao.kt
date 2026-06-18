@@ -89,6 +89,17 @@ interface LocalModelDao {
     suspend fun activateModelById(id: Long)
 
     /**
+     * Sets the [LocalModelEntity.supportsVision] flag for a specific model.
+     * Backs the manual "this model can read images" toggle on the model screen;
+     * a targeted column update avoids a read-modify-write of the whole row.
+     *
+     * @param id The ID of the model to update.
+     * @param enabled `true` to mark the model vision-capable, `false` otherwise.
+     */
+    @Query("UPDATE local_models SET supportsVision = :enabled WHERE id = :id")
+    suspend fun setVisionSupport(id: Long, enabled: Boolean)
+
+    /**
      * Returns the number of rows whose [LocalModelEntity.name] matches
      * [fileName] exactly. Used by [LocalModelRepository.isInstalled] to
      * avoid loading the full table just to test presence.

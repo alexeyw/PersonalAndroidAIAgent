@@ -14,6 +14,7 @@ fun LocalModelEntity.toDomain(): LocalModel = LocalModel(
     path = this.path,
     size = this.size,
     isActive = this.isActive,
+    supportsVision = this.supportsVision,
 )
 
 /**
@@ -27,4 +28,5 @@ fun LocalModel.toEntity(): LocalModelEntity = LocalModelEntity(
     path = this.path,
     size = this.size,
     isActive = this.isActive,
+    supportsVision = this.supportsVision,
 )

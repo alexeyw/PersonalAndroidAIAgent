@@ -251,7 +251,7 @@ class ShowcaseResearchToFilePresetIntegrationTest {
         // Scripted LLM: one canned answer per node / arg-generation pass. The second
         // (temperature) argument is matched so structured-output repair re-inferences are
         // answered too.
-        every { llmEngine.generateResponseStream(any(), any()) } answers {
+        every { llmEngine.generateResponseStream(any(), any(), any()) } answers {
             flowOf(scriptFor(firstArg()))
         }
         coEvery { getContextWindowUseCase(any()) } returns ""

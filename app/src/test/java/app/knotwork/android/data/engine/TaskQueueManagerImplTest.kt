@@ -4,7 +4,9 @@ import app.knotwork.android.domain.engine.GraphExecutionEngine
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTask
 import app.knotwork.android.domain.models.ConsoleEventType
+import app.knotwork.android.domain.models.EngineImageInput
 import app.knotwork.android.domain.models.MemoryChunk
+import app.knotwork.android.domain.models.MessageAttachment
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PendingInteractionKind
@@ -20,6 +22,7 @@ import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.services.AttachmentStore
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -42,6 +45,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -58,6 +62,7 @@ class TaskQueueManagerImplTest {
     private lateinit var graphExecutionEngine: GraphExecutionEngine
     private lateinit var pipelineRunRepository: PipelineRunRepository
     private lateinit var runTraceRepository: RunTraceRepository
+    private lateinit var attachmentStore: AttachmentStore
 
     private lateinit var taskQueueManager: TaskQueueManagerImpl
 
@@ -71,6 +76,7 @@ class TaskQueueManagerImplTest {
         graphExecutionEngine = mockk()
         pipelineRunRepository = mockk(relaxed = true)
         runTraceRepository = mockk(relaxed = true)
+        attachmentStore = mockk(relaxed = true)
 
         // Baseline library: a single pipeline marked as the user default, so
         // tests that exercise unrelated behaviour (eviction, cancellation)
@@ -86,6 +92,7 @@ class TaskQueueManagerImplTest {
             graphExecutionEngine = graphExecutionEngine,
             pipelineRunRepository = pipelineRunRepository,
             runTraceRepository = runTraceRepository,
+            attachmentStore = attachmentStore,
         ).apply {
             dispatcher = testDispatcher
         }
@@ -152,6 +159,41 @@ class TaskQueueManagerImplTest {
             "Expected Completed or Idle after processing, got $state",
             state is AgentOrchestratorState.Idle || state is AgentOrchestratorState.Completed,
         )
+    }
+
+    @Test
+    fun `enqueueTask with an image attachment passes a resolved image input to the engine`() = testScope.runTest {
+        val attachment = MessageAttachment(path = "p.jpg", mimeType = "image/jpeg", width = 640, height = 480)
+        every { attachmentStore.absolutePathFor("p.jpg") } returns "/abs/p.jpg"
+        coEvery { attachmentStore.sizeBytes("p.jpg") } returns 2048L
+
+        val imageSlot = slot<EngineImageInput>()
+        every {
+            graphExecutionEngine.invoke(any(), any(), any(), any(), any(), any(), any(), capture(imageSlot))
+        } returns flowOf(AgentOrchestratorState.Completed("ok"))
+
+        taskQueueManager.enqueueTask(AgentTask(sessionId = "s1", prompt = "hi", attachment = attachment))
+        advanceUntilIdle()
+
+        val captured = imageSlot.captured
+        assertNotNull("Engine must receive a resolved image input", captured)
+        assertEquals("/abs/p.jpg", captured.absolutePath)
+        assertEquals(640, captured.width)
+        assertEquals(480, captured.height)
+        assertEquals(2048L, captured.sizeBytes)
+    }
+
+    @Test
+    fun `enqueueTask without an attachment passes a null image input to the engine`() = testScope.runTest {
+        every {
+            graphExecutionEngine.invoke(any(), any(), any(), any(), any(), any(), any(), isNull())
+        } returns flowOf(AgentOrchestratorState.Completed("ok"))
+
+        taskQueueManager.enqueueTask(AgentTask(sessionId = "s1", prompt = "hi"))
+        advanceUntilIdle()
+
+        // A text-only run resolves no image input; the engine is invoked with null.
+        verify { graphExecutionEngine.invoke(any(), any(), any(), any(), any(), any(), any(), isNull()) }
     }
 
     /**

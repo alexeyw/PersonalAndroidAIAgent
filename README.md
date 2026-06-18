@@ -94,6 +94,13 @@ configured it.
   storage; the original is never kept. A removable composer preview, a bubble
   thumbnail, and a tap-to-fullscreen viewer; attachment files are cleaned up
   with their message and by a daily orphan sweep.
+- **On-device image understanding** — a vision-capable local model (e.g.
+  Gemma 4) reads the attached image entirely on-device. The image is handed to
+  the first on-device pipeline step alongside the prompt and **never sent to
+  cloud models**. Mark a model vision-capable with the **Image support** toggle
+  on the Models screen; a pre-flight check blocks (with a clear message) sending
+  an image to a text-only model or to a cloud-first pipeline before the run
+  starts.
 - Redesigned **Settings** screen with identity card, structured
   HITL restrictions, sampling/repetition controls, memory dashboard
   (Chunks · Size · Threads · Avg score + Export / Import / Re-embed / Clear),

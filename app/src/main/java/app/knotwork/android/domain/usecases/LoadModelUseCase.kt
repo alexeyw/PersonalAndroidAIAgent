@@ -28,46 +28,68 @@ class LoadModelUseCase @Inject constructor(
      * Retrieves the specified model or the currently active model from the repository, checks if the file exists on disk,
      * and initializes the LLM engine with the model path.
      *
-     * If the requested model is already loaded in the engine, it returns [Result.Success] immediately.
+     * If the requested model is already loaded in the engine — and already in the
+     * vision mode the caller needs — it returns [Result.Success] immediately. An
+     * image-carrying run ([requireVision] = `true`) against an engine currently
+     * loaded text-only forces a vision-enabling re-initialization, since the
+     * runtime fixes its vision backend at construction time.
      *
      * @param modelPath Optional absolute path to the model file. If null, the globally active model is used.
+     * @param requireVision When `true`, the engine must be (re-)initialized with
+     *   its vision backend so the run can attach an image. Defaults to `false`
+     *   for every text-only run. The pre-flight send guard guarantees the active
+     *   model is vision-capable before a `true` load is requested.
      * @return [Result.Success] if the model was successfully loaded, or [Result.Error] otherwise.
      */
-    suspend operator fun invoke(modelPath: String? = null): Result<Unit, AppError> = withContext(Dispatchers.IO) {
-        try {
-            // Blank `modelPath` is the "Active model" sentinel persisted by
-            // the LITE_RT node form — fall back to `getActiveModel()` just
-            // like the null case. Centralising the coercion here keeps every
-            // executor's call site uniform.
-            val requestedPath = modelPath?.takeIf { it.isNotBlank() }
-            val pathToLoad = requestedPath ?: localModelRepository.getActiveModel()?.path
-                ?: return@withContext Result.Error(
-                    error = LlmSystemError,
-                    message = "No active model found. Please select a model in settings or provide a path.",
-                )
+    suspend operator fun invoke(modelPath: String? = null, requireVision: Boolean = false): Result<Unit, AppError> =
+        withContext(Dispatchers.IO) {
+            try {
+                // Blank `modelPath` is the "Active model" sentinel persisted by
+                // the LITE_RT node form — fall back to `getActiveModel()` just
+                // like the null case. Centralising the coercion here keeps every
+                // executor's call site uniform.
+                val requestedPath = modelPath?.takeIf { it.isNotBlank() }
+                val pathToLoad = requestedPath ?: localModelRepository.getActiveModel()?.path
+                    ?: return@withContext Result.Error(
+                        error = LlmSystemError,
+                        message = "No active model found. Please select a model in settings or provide a path.",
+                    )
 
-            // Check if the engine is already initialized with this exact model
-            if (llmInferenceEngine.isInitialized && llmInferenceEngine.currentModelPath == pathToLoad) {
-                return@withContext Result.Success(Unit)
-            }
+                // Reuse the loaded engine only when it already covers the requested
+                // vision mode — an image run needs vision on, but a text run is happy
+                // to reuse an already vision-enabled engine (no point downgrading).
+                val visionModeSatisfied = llmInferenceEngine.isVisionEnabled || !requireVision
+                if (
+                    llmInferenceEngine.isInitialized &&
+                    llmInferenceEngine.currentModelPath == pathToLoad &&
+                    visionModeSatisfied
+                ) {
+                    return@withContext Result.Success(Unit)
+                }
 
-            val file = File(pathToLoad)
-            if (!file.exists()) {
+                val file = File(pathToLoad)
+                if (!file.exists()) {
+                    return@withContext Result.Error(
+                        error = LlmSystemError,
+                        message = "Model file not found at: $pathToLoad. Please download it again.",
+                    )
+                }
+
+                // Keep vision on if it was already enabled for THIS model (a prior
+                // image run) so a following text node doesn't needlessly tear the
+                // encoder down; a model switch resets to the requested mode so we
+                // never force a vision backend onto a freshly loaded text-only model.
+                val enableVision = requireVision ||
+                    (llmInferenceEngine.isVisionEnabled && llmInferenceEngine.currentModelPath == pathToLoad)
+                return@withContext llmInferenceEngine.initialize(pathToLoad, enableVision = enableVision)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
                 return@withContext Result.Error(
                     error = LlmSystemError,
-                    message = "Model file not found at: $pathToLoad. Please download it again.",
+                    message = e.localizedMessage ?: "Unknown error while loading model",
+                    throwable = e,
                 )
             }
-
-            return@withContext llmInferenceEngine.initialize(pathToLoad)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            return@withContext Result.Error(
-                error = LlmSystemError,
-                message = e.localizedMessage ?: "Unknown error while loading model",
-                throwable = e,
-            )
         }
-    }
 }

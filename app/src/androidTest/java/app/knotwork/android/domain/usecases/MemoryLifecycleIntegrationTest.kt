@@ -137,7 +137,7 @@ class MemoryLifecycleIntegrationTest {
         // JSON, compaction returns a single consolidated fact. Two-arg matcher
         // covers both the one-arg compaction call (temperature defaulted) and the
         // gate's temperature-overridden extraction call.
-        every { llmInferenceEngine.generateResponseStream(any(), any()) } answers {
+        every { llmInferenceEngine.generateResponseStream(any(), any(), any()) } answers {
             val prompt = firstArg<String>()
             if (prompt.contains("CONSOLIDATED FACT")) {
                 flowOf("Consolidated stale facts")

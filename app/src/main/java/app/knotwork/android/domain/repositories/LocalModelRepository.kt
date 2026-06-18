@@ -52,6 +52,18 @@ interface LocalModelRepository {
     suspend fun setActiveModel(id: Long)
 
     /**
+     * Sets the manual vision-capability flag of the model with the given [id].
+     * Backs the "this model can read images" toggle on the model screen; the
+     * multimodal pre-flight send guard reads the resulting
+     * [LocalModel.supportsVision] to decide whether an image message may run
+     * against the active model.
+     *
+     * @param id The ID of the model to update.
+     * @param enabled `true` to mark the model vision-capable, `false` otherwise.
+     */
+    suspend fun setVisionSupport(id: Long, enabled: Boolean)
+
+    /**
      * Live snapshot of the currently active model enriched with on-device
      * metadata (file size, parsed quantization marker, downloaded
      * timestamp). Emits `null` when no model has been activated yet —

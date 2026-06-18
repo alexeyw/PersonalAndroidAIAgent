@@ -89,7 +89,7 @@ class EvaluateIfConditionUseCaseTest {
 
     @Test
     fun `given LLM emits True when invoke then returns true`() = runTest {
-        every { llmInferenceEngine.generateResponseStream(any(), any()) } returns flowOf("T", "r", "u", "e")
+        every { llmInferenceEngine.generateResponseStream(any(), any(), any()) } returns flowOf("T", "r", "u", "e")
 
         val outcome = evaluateIfConditionUseCase(ifNode(prompt = "Is this a question?"), "How are you?")
 
@@ -124,7 +124,7 @@ class EvaluateIfConditionUseCaseTest {
 
     @Test
     fun `given LLM emits False when invoke then returns false`() = runTest {
-        every { llmInferenceEngine.generateResponseStream(any(), any()) } returns flowOf("False")
+        every { llmInferenceEngine.generateResponseStream(any(), any(), any()) } returns flowOf("False")
 
         val outcome = evaluateIfConditionUseCase(ifNode(prompt = "Is this a question?"), "I am fine.")
 
@@ -134,7 +134,7 @@ class EvaluateIfConditionUseCaseTest {
 
     @Test
     fun `given malformed verdict then a valid one when invoke then repairs and returns true`() = runTest {
-        every { llmInferenceEngine.generateResponseStream(any(), any()) } returnsMany listOf(
+        every { llmInferenceEngine.generateResponseStream(any(), any(), any()) } returnsMany listOf(
             flowOf("hmm, maybe"), // no recognised token → triggers repair
             flowOf("True"),
         )
@@ -150,7 +150,7 @@ class EvaluateIfConditionUseCaseTest {
     @Test
     fun `given verdict never recognised when invoke then defaults to false and flags gate failure`() = runTest {
         every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(1)
-        every { llmInferenceEngine.generateResponseStream(any(), any()) } returns flowOf("inconclusive")
+        every { llmInferenceEngine.generateResponseStream(any(), any(), any()) } returns flowOf("inconclusive")
         val listener = CollectingRepairListener()
 
         val outcome = evaluateIfConditionUseCase(ifNode(prompt = "Is this a question?"), "How are you?", listener)
@@ -162,7 +162,7 @@ class EvaluateIfConditionUseCaseTest {
 
     @Test
     fun `given inference error when invoke then defaults to false and flags gate failure`() = runTest {
-        every { llmInferenceEngine.generateResponseStream(any(), any()) } returns
+        every { llmInferenceEngine.generateResponseStream(any(), any(), any()) } returns
             kotlinx.coroutines.flow.flow { throw IllegalStateException("engine down") }
 
         val outcome = evaluateIfConditionUseCase(ifNode(prompt = "Is this a question?"), "How are you?")

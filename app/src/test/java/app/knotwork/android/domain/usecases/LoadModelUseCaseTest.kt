@@ -80,6 +80,40 @@ class LoadModelUseCaseTest {
         val result = loadModelUseCase()
 
         assertTrue(result is Result.Success)
-        coVerify(exactly = 1) { llmInferenceEngine.initialize(tempFile.absolutePath) }
+        coVerify(exactly = 1) { llmInferenceEngine.initialize(tempFile.absolutePath, enableVision = false) }
+    }
+
+    @Test
+    fun `invoke re-initializes with vision when an image run hits a text-only loaded engine`() = runTest {
+        val tempFile = File.createTempFile("test_model", ".bin")
+        tempFile.deleteOnExit()
+        val path = tempFile.absolutePath
+
+        // Same model already loaded, but text-only — an image run must force a
+        // vision-enabling re-initialization rather than reuse.
+        every { llmInferenceEngine.isInitialized } returns true
+        every { llmInferenceEngine.currentModelPath } returns path
+        every { llmInferenceEngine.isVisionEnabled } returns false
+        coEvery { llmInferenceEngine.initialize(path, enableVision = true) } returns Result.Success(Unit)
+
+        val result = loadModelUseCase(path, requireVision = true)
+
+        assertTrue(result is Result.Success)
+        coVerify(exactly = 1) { llmInferenceEngine.initialize(path, enableVision = true) }
+    }
+
+    @Test
+    fun `invoke reuses an already vision-enabled engine for an image run`() = runTest {
+        val path = "/path/to/model.bin"
+
+        every { llmInferenceEngine.isInitialized } returns true
+        every { llmInferenceEngine.currentModelPath } returns path
+        every { llmInferenceEngine.isVisionEnabled } returns true
+
+        val result = loadModelUseCase(path, requireVision = true)
+
+        // Vision already on for this exact model → no re-initialization.
+        assertTrue(result is Result.Success)
+        coVerify(exactly = 0) { llmInferenceEngine.initialize(any(), any()) }
     }
 }

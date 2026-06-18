@@ -526,6 +526,40 @@ block order of §3.2 is preserved). The first time compression changes what
 a run sees, a single `HistoryCompression` console event is emitted under the
 `MEMORY` source.
 
+### 3.7. Multimodal image delivery
+
+A user message may carry one image attachment (stored as in §5.2). Its journey
+into a run is deliberately narrow so the rest of the engine stays text-only:
+
+1. **Resolve.** When `TaskQueueManagerImpl` starts a fresh run, it turns the
+   message's `MessageAttachment` into an `EngineImageInput` — the absolute path
+   of the stored JPEG (resolved through `AttachmentStore`) plus its pixel size
+   and byte size — and threads it into `GraphExecutionEngine.invoke(...)`. A
+   resumed run never re-delivers (it replays a trace), so `imageInput` is `null`
+   there.
+2. **Announce.** At run start the engine emits one `Image input: W×H, N KB`
+   console line (`SystemMessage`).
+3. **Deliver to exactly one node.** While walking the graph, the engine hands
+   the image to the **first `LITE_RT` node whose context includes the original
+   task** — via `ExecutionScope.imagePath` — and marks it delivered. Every other
+   node, and every `CLOUD` node, sees `null`. This realises the contract *"the
+   attachment belongs to the user prompt; the graph carries text"*.
+4. **Infer.** `LiteRtNodeExecutor` loads the model in vision mode
+   (`LoadModelUseCase(requireVision = true)`, which re-initialises the LiteRT
+   engine with a vision backend only when needed) and calls
+   `generateResponseStream(prompt, imagePath = …)`, which sends a multimodal
+   `Contents(image, text)` to LiteRT-LM.
+
+**Capability and privacy guards.** The LiteRT runtime exposes no vision-capability
+probe, so `LocalModel.supportsVision` is a manual per-model flag (Models screen
+toggle, default `false`). Before enqueueing an image message, `ChatHomeViewModel`
+runs a pre-flight: `ResolveEntryInferenceUseCase` classifies the bound pipeline's
+entry node (`LOCAL` / `CLOUD` / `NONE`); a `CLOUD` entry is blocked (attachments
+never leave the device), and otherwise a non-vision active model is blocked. Both
+produce a clear, non-blocking message and preserve the draft. `CloudLlmNodeExecutor`
+structurally ignores `ExecutionScope.imagePath`, so an image can never reach a
+cloud provider.
+
 ---
 
 ## 4. Integrations

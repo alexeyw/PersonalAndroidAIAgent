@@ -735,7 +735,7 @@ class ToolNodeExecutorTest {
         val toolName = "MyTool"
         val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName)
         coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool(toolName, "Desc", "Schema"))
-        every { llmEngine.generateResponseStream(any(), any()) } returnsMany listOf(
+        every { llmEngine.generateResponseStream(any(), any(), any()) } returnsMany listOf(
             flowOf("sorry, here is the json"), // not a JSON object → triggers repair
             flowOf("""{"tool": "MyTool", "arguments": "good_args"}"""),
         )
@@ -752,7 +752,7 @@ class ToolNodeExecutorTest {
         every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(0)
         val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = "auto")
         coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool("ToolA", "DescA", "SchemaA"))
-        every { llmEngine.generateResponseStream(any(), any()) } returns flowOf("I cannot decide")
+        every { llmEngine.generateResponseStream(any(), any(), any()) } returns flowOf("I cannot decide")
 
         val outputs = executor.execute(node, "Do", "session-1", "").toList()
 

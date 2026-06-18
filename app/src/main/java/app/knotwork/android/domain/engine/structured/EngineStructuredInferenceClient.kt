@@ -43,7 +43,7 @@ class EngineStructuredInferenceClient(
      */
     override suspend fun infer(prompt: String, temperature: Float?): String {
         val builder = StringBuilder()
-        engine.generateResponseStream(prompt, temperature).collect { token ->
+        engine.generateResponseStream(prompt, temperature = temperature).collect { token ->
             builder.append(token)
             onToken(token)
         }

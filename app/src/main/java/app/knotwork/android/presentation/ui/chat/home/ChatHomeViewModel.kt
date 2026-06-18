@@ -30,9 +30,11 @@ import app.knotwork.android.domain.services.AttachmentStore
 import app.knotwork.android.domain.services.ChatHistoryCompressionCoordinator
 import app.knotwork.android.domain.services.MemoryAutoExtractionCoordinator
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
+import app.knotwork.android.domain.usecases.EntryInferenceKind
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.PendingSubmissionOutcome
+import app.knotwork.android.domain.usecases.ResolveEntryInferenceUseCase
 import app.knotwork.android.domain.usecases.ResumeOutcome
 import app.knotwork.android.domain.usecases.ResumePipelineRunUseCase
 import app.knotwork.android.domain.usecases.SaveMessageToMemoryUseCase
@@ -143,6 +145,7 @@ class ChatHomeViewModel @Inject constructor(
     private val submitApprovalDecisionUseCase: SubmitApprovalDecisionUseCase,
     private val submitClarificationAnswerUseCase: SubmitClarificationAnswerUseCase,
     private val attachmentStore: AttachmentStore,
+    private val resolveEntryInferenceUseCase: ResolveEntryInferenceUseCase,
 ) : ViewModel() {
 
     private val _state: MutableStateFlow<ChatHomeScreenState> = MutableStateFlow(ChatHomeScreenState())
@@ -346,6 +349,59 @@ class ChatHomeViewModel @Inject constructor(
             _state.update { it.copy(visual = ChatHomeUiState.Error(MODEL_NOT_LOADED_MESSAGE)) }
             return
         }
+        // Multimodal pre-flight: an image can only travel into a run that starts
+        // on-device against a vision-capable model. The check resolves the
+        // pipeline graph, so it suspends — run it before clearing the composer so
+        // a blocked send keeps the user's draft and attachment intact (mirrors
+        // the "model not loaded" guard above, which also returns before clearing).
+        if (readyAttachment != null) {
+            viewModelScope.launch {
+                val block = attachmentPreflightBlockReason()
+                if (block != null) {
+                    _state.update { it.copy(visual = ChatHomeUiState.Error(block)) }
+                } else {
+                    proceedSend(draftText, readyAttachment)
+                }
+            }
+            return
+        }
+        proceedSend(draftText, readyAttachment = null)
+    }
+
+    /**
+     * Resolves whether an image message must be blocked before it is enqueued,
+     * returning the user-facing block reason or `null` when the send may proceed.
+     *
+     * Two guards, in order:
+     * 1. The run's first node after `INPUT` is a `CLOUD` node — attachments are
+     *    never sent off-device ([CLOUD_ATTACHMENT_BLOCKED_MESSAGE]).
+     * 2. The active local model is not marked vision-capable — it cannot read an
+     *    image ([MODEL_NO_VISION_MESSAGE]).
+     *
+     * @return The block reason, or `null` to allow the send.
+     */
+    private suspend fun attachmentPreflightBlockReason(): String? {
+        val sessionId = _state.value.thread.currentSessionId
+        val pipelineId = sessions.firstOrNull { it.id == sessionId }?.pipelineId
+        if (resolveEntryInferenceUseCase(pipelineId) == EntryInferenceKind.CLOUD) {
+            return CLOUD_ATTACHMENT_BLOCKED_MESSAGE
+        }
+        val activeSupportsVision = _state.value.model.let { model ->
+            model.installed.firstOrNull { it.id == model.activeId }?.supportsVision == true
+        }
+        return if (activeSupportsVision) null else MODEL_NO_VISION_MESSAGE
+    }
+
+    /**
+     * Performs the actual send once any pre-flight guard has passed: builds the
+     * effective prompt, clears the composer, flips the surface to Generating and
+     * launches the orchestrator collection.
+     *
+     * @param draftText The user's trimmed caption text (may be empty for an
+     *   image-only message).
+     * @param readyAttachment The resolved image attachment to send, or `null`.
+     */
+    private fun proceedSend(draftText: String, readyAttachment: MessageAttachment?) {
         // Image-only message: an empty caption is replaced by the internal
         // default instruction so the all-text pipeline graph has a prompt to
         // travel; the saved message keeps the empty caption so the bubble shows
@@ -2126,6 +2182,26 @@ class ChatHomeViewModel @Inject constructor(
          */
         const val NO_ACTIVE_MODEL_MESSAGE: String =
             "No active model. Open Settings → Models to install or activate one."
+
+        /**
+         * Surfaced when the user attaches an image but the active local model is
+         * not marked vision-capable. The run is blocked before it starts so the
+         * native inference layer never receives an image it cannot decode; the
+         * draft and attachment are preserved so the user can switch models and
+         * resend. Calm, non-alarmist copy in line with the attachment UX.
+         */
+        const val MODEL_NO_VISION_MESSAGE: String =
+            "This model can't read images. Turn on image support for it on the Models screen, " +
+                "or switch to a vision-capable model."
+
+        /**
+         * Surfaced when the user attaches an image but the bound pipeline starts
+         * on a CLOUD node. Attachments stay on-device by design, so the run is
+         * blocked before it starts rather than silently dropping the image.
+         */
+        const val CLOUD_ATTACHMENT_BLOCKED_MESSAGE: String =
+            "Images stay on your device and aren't sent to cloud models. Use a pipeline that starts " +
+                "with an on-device step to send a picture."
 
         /** Rough chars-per-token divisor used for the v0.1 token counter (`text.length / 4`). */
         const val TOKEN_CHARS_PER_TOKEN: Int = 4
