@@ -51,6 +51,12 @@ import javax.inject.Singleton
  * It traverses nodes starting from [NodeType.INPUT], evaluates conditions,
  * executes LLM inference, triggers tools, and reaches [NodeType.OUTPUT].
  */
+// LargeClass is suppressed deliberately: this is the central pipeline
+// orchestrator, and the run-walk logic (node traversal, lazy memory and
+// chat-history resolution, HITL suspension, checkpoint/resume, sub-pipeline
+// fan-out) is most readable as one cohesive state machine. Decomposing it into
+// collaborators is tracked as future work rather than forced here.
+@Suppress("LargeClass")
 @Singleton
 class GraphExecutionEngine @Inject constructor(
     private val nodeExecutorFactory: NodeExecutorFactory,

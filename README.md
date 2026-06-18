@@ -81,6 +81,13 @@ configured it.
 - Prompt variables (`$DATE`, `$TIME`, `$TOOLS`, `$MODEL`, `$MEMORY_SUMMARY`,
   `$LANG`, `$LOCATION`, `$USER`, `$DEVICE`) rendered fresh on every
   execution.
+- **Reliability layer** for long, autonomous runs: a validate-and-repair
+  gate that keeps structured nodes (routers, conditions, decomposition,
+  tool calls) producing well-formed output (on-device or against a cloud
+  engine), exponential-backoff retry for transient cloud failures, and
+  background chat-history compression that summarises older turns so a long
+  session never overflows the context window. All three are configurable and
+  surface their activity on the agent console.
 - Redesigned **Settings** screen with identity card, structured
   HITL restrictions, sampling/repetition controls, memory dashboard
   (Chunks · Size · Threads · Avg score + Export / Import / Re-embed / Clear),

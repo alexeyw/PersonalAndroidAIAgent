@@ -28,6 +28,7 @@ data class ChatHistoryView(
     val droppedUncoveredCount: Int,
     val truncatedWithoutSummary: Boolean,
 ) {
+    /** Shared, reusable instances of [ChatHistoryView]. */
     companion object {
         /** The view for a node that does not request chat history at all. */
         val EMPTY = ChatHistoryView(
@@ -130,6 +131,7 @@ class ChatHistoryWindowPlanner @Inject constructor() {
         )
     }
 
+    /** Tuning constants for the window-planning heuristics. */
     companion object {
         /**
          * Smallest live window the planner will honour, guarding against a

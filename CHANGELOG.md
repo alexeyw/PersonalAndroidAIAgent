@@ -192,6 +192,18 @@ details.
     sampling temperature. The duplicate per-consumer JSON extractors and regex parsers
     left over from the previous change have been removed.
 
+- **Reliability features documented end-to-end.**
+  [`docs/architecture.md`](docs/architecture.md) gains a *Structured-output
+  reliability gate* section (with a gate-cycle diagram and the per-node
+  failure-policy table) and a *Chat-history compression* section, and its
+  *Cloud LLM providers* section now covers transient-failure retry and
+  cloud-backed structured output. [`docs/user-guide.md`](docs/user-guide.md)
+  documents the structured-output repair budget and per-node **Engine**
+  selector, the cloud **Retry policy** sliders, the **Compress long chat
+  history** settings, and how repair / cloud-retry / history-compression
+  events read in the console. No behaviour change — documentation catching up
+  to the shipped reliability contour.
+
 ## [0.5.0] - 2026-06-14
 
 ### Added
