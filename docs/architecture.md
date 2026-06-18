@@ -658,9 +658,14 @@ External tool servers are integrated through MCP clients in
 `data/mcp/` (`KoogMcpClient`, `McpClient`). `ToolRepositoryImpl` holds
 active connections in a `ConcurrentHashMap<String, McpClient>` keyed by
 server id. Connections are **lazy**: they open on first use and close
-when the agent session ends. Every MCP call is wrapped in
-`runCatching` and converted to a `ToolResult.Error` on failure — raw
-exceptions never reach the presentation layer.
+when the agent session ends. Every MCP call is wrapped in a
+`try`/`catch` that re-throws `CancellationException` from a dedicated
+first catch clause before mapping any other failure to a
+`ToolResult.Error` — so cooperative cancellation propagates cleanly and
+raw exceptions never reach the presentation layer. `runCatching` is
+never used around these suspending calls (it would swallow
+cancellation; see [`docs/api-conventions.md`](api-conventions.md) §
+Model Context Protocol).
 
 ### 4.4. Cloud LLM providers
 
