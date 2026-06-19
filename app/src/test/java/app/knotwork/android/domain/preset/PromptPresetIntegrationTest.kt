@@ -60,7 +60,7 @@ class PromptPresetIntegrationTest {
         "DATE" to "29 May 2026",
         "TIME" to "14:30",
         "TOOLS" to "search — Search the web",
-        "MODEL" to "Gemma 3n E2B",
+        "MODEL" to "Gemma 4 E2B",
         "MEMORY_SUMMARY" to "1. Prefers metric units",
         "LANG" to "en-US",
         "LOCATION" to "US",
