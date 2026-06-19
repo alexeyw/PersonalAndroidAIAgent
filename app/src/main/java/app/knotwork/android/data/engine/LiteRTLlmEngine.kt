@@ -15,6 +15,7 @@ import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
+import com.google.ai.edge.litertlm.Message
 import com.google.ai.edge.litertlm.SamplerConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -265,70 +266,21 @@ class LiteRTLlmEngine @Inject constructor(
      *   at the requested temperature — used by the structured-output repair loop.
      * @return A [Flow] of strings representing the generated tokens as they are produced.
      */
-    override fun generateResponseStream(prompt: String, imagePath: String?, temperature: Float?): Flow<String> = flow {
-        val currentEngine = engine
-        if (currentEngine == null) {
-            Timber.e("Engine is not initialized")
-            throw IllegalStateException("LLM Engine not initialized")
-        }
-
-        try {
-            Timber.d("Starting inference for prompt: %s (image=%s)", prompt, imagePath != null)
-
-            // Serialise the whole generation: closing/recreating the single
-            // conversation and streaming its tokens must not interleave with
-            // another concurrent generation (foreground pipeline vs background
-            // memory extraction), which would tear down an in-flight session.
-            generationMutex.withLock {
-                // LiteRT-LM allows only one active session. Since the Orchestrator manually
-                // supplies the full history context every time, we must close the old conversation
-                // and create a fresh one to prevent token accumulation and OOM crashes.
-                conversation?.close()
-                // A temperature override replaces the whole sampler (LiteRT-LM
-                // has no "override one field" path), so the override case supplies
-                // conventional top-k / top-p alongside the requested temperature;
-                // the low repair temperature does the determinism work. The
-                // default (`null`) path passes no config, leaving the native
-                // sampler exactly as before.
-                conversation = if (temperature == null) {
-                    currentEngine.createConversation()
-                } else {
-                    currentEngine.createConversation(repairConversationConfig(temperature))
-                }
-
-                // Stream the tokens directly from the LiteRT-LM conversation. With
-                // an image, the message is a multimodal [Contents] (image then
-                // text); without, the plain-string overload keeps the text path
-                // byte-identical to before.
-                conversation?.let { conversation ->
-                    val responses = if (imagePath == null) {
-                        conversation.sendMessageAsync(prompt)
-                    } else {
-                        conversation.sendMessageAsync(
-                            Contents.of(Content.ImageFile(imagePath), Content.Text(prompt)),
-                        )
-                    }
-                    responses.collect { chunk ->
-                        val textParts = chunk.contents.contents.filterIsInstance<Content.Text>()
-                        val text = textParts.joinToString("") { it.text }
-                        if (text.isNotEmpty()) {
-                            emit(text)
-                        }
-                    }
-                }
+    override fun generateResponseStream(prompt: String, imagePath: String?, temperature: Float?): Flow<String> =
+        // With an image, the message is a multimodal [Contents] (image then text);
+        // without, the plain-string overload keeps the text path byte-identical.
+        streamConversation(temperature) { conversation ->
+            if (imagePath == null) {
+                conversation.sendMessageAsync(prompt)
+            } else {
+                conversation.sendMessageAsync(Contents.of(Content.ImageFile(imagePath), Content.Text(prompt)))
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Timber.e(e, "Error during text generation")
-            throw e
         }
-    }.flowOn(Dispatchers.IO)
 
     /**
-     * Transcribes a single audio clip into text. Mirrors [generateResponseStream]'s
-     * lifecycle — it serialises on [generationMutex] and recreates the single
-     * LiteRT-LM [Conversation] — but builds the message from an audio file
+     * Transcribes a single audio clip into text. Runs through the same
+     * single-conversation [streamConversation] discipline as
+     * [generateResponseStream] but builds the message from an audio file
      * (`Content.AudioFile`) followed by the transcription instruction, which
      * requires the engine to have been initialized with `enableAudio = true`
      * (guaranteed by `LoadModelUseCase` loading the model in audio mode first).
@@ -339,41 +291,66 @@ class LiteRTLlmEngine @Inject constructor(
      * @param prompt The rendered transcription instruction.
      * @return A [Flow] of transcript token chunks, emitted on [Dispatchers.IO].
      */
-    override fun transcribe(audioPath: String, prompt: String): Flow<String> = flow {
-        val currentEngine = engine
-        if (currentEngine == null) {
-            Timber.e("Engine is not initialized")
-            throw IllegalStateException("LLM Engine not initialized")
+    override fun transcribe(audioPath: String, prompt: String): Flow<String> =
+        streamConversation(temperature = null) { conversation ->
+            conversation.sendMessageAsync(Contents.of(Content.AudioFile(audioPath), Content.Text(prompt)))
         }
 
-        try {
-            Timber.d("Starting transcription for audio: %s", audioPath)
-            generationMutex.withLock {
-                // Same single-conversation discipline as generation: close any
-                // prior conversation and open a fresh one so no stale history
-                // leaks into the transcript.
-                conversation?.close()
-                conversation = currentEngine.createConversation()
-                conversation?.let { conversation ->
-                    val responses = conversation.sendMessageAsync(
-                        Contents.of(Content.AudioFile(audioPath), Content.Text(prompt)),
-                    )
-                    responses.collect { chunk ->
-                        val textParts = chunk.contents.contents.filterIsInstance<Content.Text>()
-                        val text = textParts.joinToString("") { it.text }
-                        if (text.isNotEmpty()) {
-                            emit(text)
+    /**
+     * Shared single-conversation streaming discipline for [generateResponseStream]
+     * and [transcribe]. Serialises on [generationMutex] so closing/recreating the
+     * single LiteRT-LM [Conversation] and streaming its tokens never interleaves
+     * with another concurrent generation (which would tear down an in-flight
+     * session), opens a fresh conversation (with a repair [SamplerConfig] when
+     * [temperature] is non-`null`), sends the caller-built message, and re-emits
+     * each chunk's [Content.Text] parts as they arrive.
+     *
+     * @param temperature Optional sampling-temperature override (see
+     *   [generateResponseStream]); `null` leaves the model's native sampler.
+     * @param openResponses Builds and sends the message on the freshly opened
+     *   [Conversation], returning the LiteRT-LM response [Message] stream.
+     * @return A [Flow] of generated text chunks, emitted on [Dispatchers.IO].
+     */
+    private fun streamConversation(temperature: Float?, openResponses: (Conversation) -> Flow<Message>): Flow<String> =
+        flow {
+            val currentEngine = engine
+            if (currentEngine == null) {
+                Timber.e("Engine is not initialized")
+                throw IllegalStateException("LLM Engine not initialized")
+            }
+
+            try {
+                generationMutex.withLock {
+                    // LiteRT-LM allows only one active session. The orchestrator supplies
+                    // the full history every time, so we close the old conversation and
+                    // open a fresh one to prevent token accumulation and OOM crashes. A
+                    // temperature override replaces the whole sampler (LiteRT-LM has no
+                    // "override one field" path); the default (`null`) path passes no
+                    // config, leaving the native sampler exactly as before.
+                    conversation?.close()
+                    conversation = if (temperature == null) {
+                        currentEngine.createConversation()
+                    } else {
+                        currentEngine.createConversation(repairConversationConfig(temperature))
+                    }
+                    conversation?.let { conversation ->
+                        openResponses(conversation).collect { chunk ->
+                            val text = chunk.contents.contents
+                                .filterIsInstance<Content.Text>()
+                                .joinToString(separator = "") { it.text }
+                            if (text.isNotEmpty()) {
+                                emit(text)
+                            }
                         }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "Error during conversation streaming")
+                throw e
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Timber.e(e, "Error during audio transcription")
-            throw e
-        }
-    }.flowOn(Dispatchers.IO)
+        }.flowOn(Dispatchers.IO)
 
     /**
      * Unloads the engine from memory, releasing heavy resources.

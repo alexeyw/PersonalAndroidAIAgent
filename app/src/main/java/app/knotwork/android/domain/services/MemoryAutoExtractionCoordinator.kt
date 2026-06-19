@@ -2,7 +2,7 @@ package app.knotwork.android.domain.services
 
 import app.knotwork.android.domain.constants.TimeAndIdConstants
 import app.knotwork.android.domain.engine.TaskQueueManager
-import app.knotwork.android.domain.models.AgentOrchestratorState
+import app.knotwork.android.domain.models.isBusy
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.usecases.MemoryExtractionUseCase
@@ -96,7 +96,7 @@ class MemoryAutoExtractionCoordinator @Inject constructor(
                     // Read the toggle at extraction time so a user flipping it
                     // off during the debounce window still cancels the work.
                     if (!settingsRepository.autoExtractEnabled.first()) return@launch
-                    if (isAgentBusy()) continue
+                    if (taskQueueManager.globalState.value.isBusy) continue
 
                     val messages = chatRepository.getMessagesForSession(sessionId).first()
                     memoryExtractionUseCase(sessionId, messages)
@@ -114,23 +114,6 @@ class MemoryAutoExtractionCoordinator @Inject constructor(
                 pendingJobs.remove(sessionId, coroutineContext[Job])
             }
         }
-    }
-
-    /**
-     * `true` when the agent is mid-run on the shared inference engine — i.e.
-     * [TaskQueueManager.globalState] is any non-terminal state. Mirrors the
-     * idle predicate `AgentIdleManager` uses (idle = `Idle` / `Completed` /
-     * `Error`); everything else (loading, streaming, awaiting approval, …)
-     * means a foreground generation could be holding the engine's single
-     * conversation.
-     */
-    private fun isAgentBusy(): Boolean = when (taskQueueManager.globalState.value) {
-        is AgentOrchestratorState.Idle,
-        is AgentOrchestratorState.Completed,
-        is AgentOrchestratorState.Error,
-        -> false
-
-        else -> true
     }
 
     private companion object {

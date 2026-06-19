@@ -940,8 +940,12 @@ private fun VoiceNoticeBanner(notice: ComposerVoiceNotice, onChangeModel: () -> 
     }
 }
 
-/** Formats a whole-second count as `m:ss` (e.g. 7 → `0:07`, 90 → `1:30`). */
-private fun formatClock(totalSeconds: Int): String {
+/**
+ * Formats a whole-second count as `m:ss` (e.g. 7 → `0:07`, 90 → `1:30`). Shared
+ * by the recording-bar timer and the audio-source chooser's duration label so a
+ * second is formatted identically everywhere.
+ */
+internal fun formatClock(totalSeconds: Int): String {
     val safe = totalSeconds.coerceAtLeast(0)
     val minutes = safe / SECONDS_PER_MINUTE
     val seconds = safe % SECONDS_PER_MINUTE

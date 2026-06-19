@@ -185,3 +185,23 @@ sealed interface AgentOrchestratorState {
         val depth: Int = 0,
     ) : AgentOrchestratorState
 }
+
+/**
+ * Whether the orchestrator is mid-run on the shared inference engine — i.e. in
+ * any **non-terminal** state. Idle, [AgentOrchestratorState.Completed] and
+ * [AgentOrchestratorState.Error] are terminal (engine free); every other state
+ * (loading, streaming, awaiting approval, …) means a foreground generation could
+ * be holding the engine's single conversation.
+ *
+ * Single source of truth for the "don't touch the engine right now" predicate
+ * shared by the background coordinators and the voice-transcription pre-flight.
+ */
+val AgentOrchestratorState.isBusy: Boolean
+    get() = when (this) {
+        is AgentOrchestratorState.Idle,
+        is AgentOrchestratorState.Completed,
+        is AgentOrchestratorState.Error,
+        -> false
+
+        else -> true
+    }

@@ -39,8 +39,8 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * **Stateless** — the caller owns visibility (renders this only while open) and
  * the recorder / picker launches; this composable just surfaces the two choices.
  *
- * @param maxDurationLabel the recording limit clock (e.g. `0:30`) shown in the
- *  "Record voice" subtitle.
+ * @param maxDurationSec the recording limit in seconds; rendered as a `m:ss`
+ *  clock in the "Record voice" subtitle.
  * @param onDismiss invoked when the sheet is dismissed without a choice.
  * @param onPickRecord invoked when the user chooses to record.
  * @param onPickFile invoked when the user chooses to pick an audio file.
@@ -48,7 +48,7 @@ import app.knotwork.design.tokens.KnotworkTextStyles
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AudioSourceChooserSheet(
-    maxDurationLabel: String,
+    maxDurationSec: Int,
     onDismiss: () -> Unit,
     onPickRecord: () -> Unit,
     onPickFile: () -> Unit,
@@ -60,7 +60,7 @@ fun AudioSourceChooserSheet(
         containerColor = MaterialTheme.colorScheme.surface,
     ) {
         AudioSourceChooserSheetContent(
-            maxDurationLabel = maxDurationLabel,
+            maxDurationSec = maxDurationSec,
             onPickRecord = onPickRecord,
             onPickFile = onPickFile,
         )
@@ -71,14 +71,15 @@ fun AudioSourceChooserSheet(
  * The chooser body (rows) without the sheet chrome. Split out so it can be
  * previewed / snapshot-tested directly.
  *
- * @param maxDurationLabel the recording limit clock shown in the record subtitle.
+ * @param maxDurationSec the recording limit in seconds, shown as `m:ss` in the
+ *  record subtitle.
  * @param onPickRecord invoked when the user chooses to record.
  * @param onPickFile invoked when the user chooses to pick an audio file.
  * @param modifier layout modifier applied to the rows column.
  */
 @Composable
 fun AudioSourceChooserSheetContent(
-    maxDurationLabel: String,
+    maxDurationSec: Int,
     onPickRecord: () -> Unit,
     onPickFile: () -> Unit,
     modifier: Modifier = Modifier,
@@ -101,7 +102,7 @@ fun AudioSourceChooserSheetContent(
         AudioSourceRow(
             icon = AppIcons.Mic,
             label = stringResource(R.string.knotwork_audio_source_record),
-            subtitle = stringResource(R.string.knotwork_audio_source_record_sub, maxDurationLabel),
+            subtitle = stringResource(R.string.knotwork_audio_source_record_sub, formatClock(maxDurationSec)),
             onClick = onPickRecord,
         )
         AudioSourceRow(

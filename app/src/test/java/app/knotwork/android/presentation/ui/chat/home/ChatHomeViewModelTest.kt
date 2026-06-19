@@ -2070,6 +2070,36 @@ class ChatHomeViewModelTest {
         assertEquals(VoiceInputState.Idle, viewModel.state.value.composer.voice)
     }
 
+    @Test
+    fun `startRecording transcribes the finished clip`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        every { audioRecorder.state } returns MutableStateFlow(RecordingState.Finished("/cache/clip.wav"))
+        coEvery { transcribeAudioUseCase("/cache/clip.wav") } returns TranscriptionOutcome.Success("hi there")
+        advanceUntilIdle()
+
+        viewModel.startRecording()
+        advanceUntilIdle()
+
+        val composer = viewModel.state.value.composer
+        assertEquals("hi there", composer.value)
+        assertEquals(VoiceInputState.Idle, composer.voice)
+    }
+
+    @Test
+    fun `startRecording resets the composer when capture fails`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        // A failed capture emits the terminal Failed state (not Finished); the VM
+        // must stop collecting and reset rather than hang forever.
+        every { audioRecorder.state } returns MutableStateFlow(RecordingState.Failed)
+        advanceUntilIdle()
+
+        viewModel.startRecording()
+        advanceUntilIdle()
+
+        assertEquals(VoiceInputState.Idle, viewModel.state.value.composer.voice)
+        coVerify(exactly = 0) { transcribeAudioUseCase(any()) }
+    }
+
     // endregion
 
     private companion object {

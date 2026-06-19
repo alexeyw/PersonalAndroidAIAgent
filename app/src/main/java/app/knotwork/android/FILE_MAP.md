@@ -158,6 +158,8 @@ This file maps the contents of the main application package.
         - `HttpRequestExecutor.kt` - `LocalToolExecutor` for the outbound `http_request` tool (GET/POST/PUT/DELETE over the shared `OkHttpClient`). Enforces the security stack before any byte leaves the device: method gate, domain allowlist (`SettingsRepository.allowedHttpDomains` — empty ⇒ refuse), https-only for public hosts (local-IP cleartext exception), stored-credential leak refusal (`ApiKeyRepository` values), manual redirect following with per-hop allowlist re-validation, and a `httpToolMaxResponseBytes`-capped response with a truncation marker. Per-method risk (`GET` SENSITIVE / writes DESTRUCTIVE) is resolved upstream by `ToolRepositoryImpl.getRisk` from the same `HttpRequestPolicy`.
 - `di/` - Dependency Injection configurations (Hilt).
   - `AppModule.kt` - General app-level DI module.
+  - `CoroutinesModule.kt` - Provides the `@ApplicationScope` application-lifetime `CoroutineScope` (`SupervisorJob` + `Dispatchers.Default`) for singletons that own fire-and-forget background work (e.g. the voice recorder).
+  - `ApplicationScope.kt` - `@Qualifier` for the application-lifetime `CoroutineScope` provided by `CoroutinesModule`.
   - `DataModule.kt` - Data layer DI module.
   - `EmbeddingModule.kt` - Hilt multibinding for the `EmbeddingProvider` map (`use` / `openai_3_small` / `ollama`) and the `KoogEmbedderFactory` binding.
   - `LocalToolsModule.kt` - Hilt multibinding for `LocalToolExecutor` map and bindings for `CloudLlmClientFactory` / `CloudLlmModelResolver`.

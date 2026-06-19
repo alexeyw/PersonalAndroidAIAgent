@@ -3,8 +3,8 @@ package app.knotwork.android.domain.usecases
 import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.engine.TaskQueueManager
-import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.Result
+import app.knotwork.android.domain.models.isBusy
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.services.AudioCaptureStore
 import kotlinx.coroutines.CancellationException
@@ -58,7 +58,7 @@ class TranscribeAudioUseCase @Inject constructor(
         // Refuse while a pipeline is generating: the engine allows one active
         // conversation, so transcribing now would tear down the in-flight run.
         // Keep the clip so an immediate retry (once idle) reuses it.
-        if (isAgentBusy()) {
+        if (taskQueueManager.globalState.value.isBusy) {
             return TranscriptionOutcome.EngineBusy
         }
 
@@ -95,21 +95,6 @@ class TranscribeAudioUseCase @Inject constructor(
             // Ephemeral clip: drop it once consumed, regardless of outcome.
             audioCaptureStore.delete(audioPath)
         }
-    }
-
-    /**
-     * `true` when the agent is mid-run on the shared inference engine — i.e.
-     * [TaskQueueManager.globalState] is any non-terminal state. Mirrors the idle
-     * predicate the background coordinators use (idle = `Idle` / `Completed` /
-     * `Error`).
-     */
-    private fun isAgentBusy(): Boolean = when (taskQueueManager.globalState.value) {
-        is AgentOrchestratorState.Idle,
-        is AgentOrchestratorState.Completed,
-        is AgentOrchestratorState.Error,
-        -> false
-
-        else -> true
     }
 }
 

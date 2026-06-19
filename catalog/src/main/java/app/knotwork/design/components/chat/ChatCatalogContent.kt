@@ -228,7 +228,7 @@ fun ChatCatalogContent() {
 
             SectionLabel(text = "AudioSourceChooserSheet")
             AudioSourceChooserSheetContent(
-                maxDurationLabel = "0:30",
+                maxDurationSec = 30,
                 onPickRecord = {},
                 onPickFile = {},
             )

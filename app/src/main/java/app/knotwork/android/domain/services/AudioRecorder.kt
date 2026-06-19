@@ -63,4 +63,20 @@ sealed interface RecordingState {
      * @property path absolute path of the finalized WAV clip.
      */
     data class Finished(val path: String) : RecordingState
+
+    /**
+     * Capture failed and produced no usable clip (the mic could not be opened or
+     * an I/O error interrupted recording). Terminal, like [Finished], so an
+     * observer can distinguish a failed capture from an idle recorder and surface
+     * an error instead of waiting forever for a [Finished] that never comes.
+     */
+    data object Failed : RecordingState
 }
+
+/**
+ * Whether this is a terminal recording state — capture is no longer in progress
+ * because it [Finished] or [Failed]. An observer collecting [AudioRecorder.state]
+ * should stop on any terminal state, not only [RecordingState.Finished].
+ */
+val RecordingState.isTerminal: Boolean
+    get() = this is RecordingState.Finished || this is RecordingState.Failed

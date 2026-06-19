@@ -186,6 +186,7 @@ fun ChatHomeScreen(
     val rateComingSoonMessage = stringResource(R.string.chat_message_rate_coming_soon)
     val savedToMemoryMessage = stringResource(R.string.chat_snackbar_saved_to_memory)
     val attachmentFailedMessage = stringResource(R.string.chat_snackbar_attachment_failed)
+    val voiceFailedMessage = stringResource(R.string.chat_snackbar_voice_failed)
     val saveToMemoryFailedMessage = stringResource(R.string.chat_snackbar_save_to_memory_failed)
     val resumeGraphChangedMessage = stringResource(R.string.chat_snackbar_resume_graph_changed)
     val resumeExpiredMessage = stringResource(R.string.chat_snackbar_resume_expired)
@@ -242,6 +243,11 @@ fun ChatHomeScreen(
     LaunchedEffect(viewModel) {
         viewModel.attachmentErrorEvents.collect {
             snackbarHostState.showSnackbar(message = attachmentFailedMessage)
+        }
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.voiceErrorEvents.collect {
+            snackbarHostState.showSnackbar(message = voiceFailedMessage)
         }
     }
 
@@ -618,7 +624,7 @@ fun ChatHomeScreen(
         }
         if (screenState.composer.audioChooserVisible) {
             AudioSourceChooserSheet(
-                maxDurationLabel = formatClock(screenState.composer.audioMaxDurationSec),
+                maxDurationSec = screenState.composer.audioMaxDurationSec,
                 onDismiss = viewModel::dismissAudioChooser,
                 onPickRecord = {
                     viewModel.dismissAudioChooser()
@@ -892,13 +898,3 @@ private const val MIME_JSON: String = "application/json"
 
 /** MIME filter for the voice-input audio file picker (OpenDocument). */
 private const val AUDIO_MIME_FILTER: String = "audio/*"
-
-/** Seconds in a minute, used to format the audio-chooser duration label. */
-private const val SECONDS_PER_MINUTE: Int = 60
-
-/** Formats whole seconds as `m:ss` for the audio-chooser "Up to 0:30" label. */
-private fun formatClock(totalSeconds: Int): String {
-    val safe = totalSeconds.coerceAtLeast(0)
-    val seconds = (safe % SECONDS_PER_MINUTE).toString().padStart(2, '0')
-    return "${safe / SECONDS_PER_MINUTE}:$seconds"
-}

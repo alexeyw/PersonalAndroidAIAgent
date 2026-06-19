@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import app.knotwork.android.di.ApplicationScope
 import app.knotwork.android.domain.services.AudioCaptureStore
 import app.knotwork.android.domain.services.AudioRecorder
 import app.knotwork.android.domain.services.RecordingState
@@ -11,7 +12,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,13 +36,13 @@ import kotlin.coroutines.coroutineContext
  * @property audioCaptureStore allocates the clip path and cleans up on cancel.
  */
 @Singleton
-class AudioRecorderImpl @Inject constructor(private val audioCaptureStore: AudioCaptureStore) : AudioRecorder {
+class AudioRecorderImpl @Inject constructor(
+    private val audioCaptureStore: AudioCaptureStore,
+    @ApplicationScope private val scope: CoroutineScope,
+) : AudioRecorder {
 
     private val _state = MutableStateFlow<RecordingState>(RecordingState.Idle)
     override val state: StateFlow<RecordingState> = _state.asStateFlow()
-
-    /** Scope the capture loop runs in; overridable in tests. */
-    internal var scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val stopRequested = AtomicBoolean(false)
     private val cancelled = AtomicBoolean(false)
@@ -56,7 +56,9 @@ class AudioRecorderImpl @Inject constructor(private val audioCaptureStore: Audio
         stopRequested.set(false)
         cancelled.set(false)
         _state.value = RecordingState.Recording(elapsedSec = 0, maxSec = maxDurationSec)
-        captureJob = scope.launch { captureLoop(path, maxDurationSec) }
+        // Blocking AudioRecord reads + file writes run on the IO dispatcher
+        // (the injected scope's base context is Dispatchers.Default).
+        captureJob = scope.launch(Dispatchers.IO) { captureLoop(path, maxDurationSec) }
     }
 
     override suspend fun stop(): String? {
@@ -68,10 +70,21 @@ class AudioRecorderImpl @Inject constructor(private val audioCaptureStore: Audio
     override fun cancel() {
         cancelled.set(true)
         stopRequested.set(true)
-        captureJob?.cancel()
-        currentPath?.let { path -> scope.launch { audioCaptureStore.delete(path) } }
+        val job = captureJob
+        val path = currentPath
+        captureJob = null
         currentPath = null
         _state.value = RecordingState.Idle
+        // Delete only after the capture loop has finished writing and closed the
+        // file, so the deletion never races the final header patch. The loop
+        // exits promptly on `stopRequested` and skips `Finished` because
+        // `cancelled` is set.
+        if (path != null) {
+            scope.launch {
+                job?.join()
+                audioCaptureStore.delete(path)
+            }
+        }
     }
 
     @SuppressLint("MissingPermission") // Mic is opened only after the composer permission gate.
@@ -105,6 +118,7 @@ class AudioRecorderImpl @Inject constructor(private val audioCaptureStore: Audio
         try {
             captureToWav(record, path, maxDurationSec, bufferSize)
             if (!cancelled.get()) {
+                currentPath = null
                 _state.value = RecordingState.Finished(path)
             }
         } catch (e: CancellationException) {
@@ -151,7 +165,7 @@ class AudioRecorderImpl @Inject constructor(private val audioCaptureStore: Audio
     private suspend fun failCapture(path: String) {
         audioCaptureStore.delete(path)
         currentPath = null
-        _state.value = RecordingState.Idle
+        _state.value = RecordingState.Failed
     }
 
     private companion object {

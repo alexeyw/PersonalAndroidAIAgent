@@ -32,6 +32,7 @@ import app.knotwork.android.domain.services.AudioRecorder
 import app.knotwork.android.domain.services.ChatHistoryCompressionCoordinator
 import app.knotwork.android.domain.services.MemoryAutoExtractionCoordinator
 import app.knotwork.android.domain.services.RecordingState
+import app.knotwork.android.domain.services.isTerminal
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
 import app.knotwork.android.domain.usecases.EntryInferenceKind
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
@@ -177,6 +178,7 @@ class ChatHomeViewModel @Inject constructor(
     private val _resumeFeedbackEvents: MutableSharedFlow<ResumeFeedbackEvent> =
         MutableSharedFlow(extraBufferCapacity = 1)
     private val _attachmentErrorEvents: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 1)
+    private val _voiceErrorEvents: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 1)
 
     /**
      * One-shot signal raised when the binding of the active chat points
@@ -231,6 +233,14 @@ class ChatHomeViewModel @Inject constructor(
      * surface's main visual state (e.g. an in-flight `Generating` run).
      */
     val attachmentErrorEvents: SharedFlow<Unit> = _attachmentErrorEvents.asSharedFlow()
+
+    /**
+     * One-shot signal raised when voice input fails (recording failed to capture,
+     * a picked audio file could not be imported, or transcription errored). The
+     * screen shows a voice-specific snackbar — distinct from the image-attachment
+     * failure message.
+     */
+    val voiceErrorEvents: SharedFlow<Unit> = _voiceErrorEvents.asSharedFlow()
 
     private var messagesJob: Job? = null
     private var generationJob: Job? = null
@@ -330,7 +340,9 @@ class ChatHomeViewModel @Inject constructor(
 
     /** Updates the composer input value. Hoisted to the VM so screen recompositions never own the text. */
     fun onComposerValueChange(value: String) {
-        _state.update { it.copy(composer = it.composer.copy(value = value)) }
+        // Typing dismisses any blocked voice notice so it never wedges Send
+        // (which is disabled while a notice is shown).
+        _state.update { it.copy(composer = it.composer.copy(value = value, voiceNotice = null)) }
     }
 
     /** Updates the typed-confirm input shown next to the Destructive HITL confirmation row. */
@@ -593,25 +605,31 @@ class ChatHomeViewModel @Inject constructor(
     /**
      * Starts a microphone capture (invoked by the screen after the `RECORD_AUDIO`
      * permission is granted). Observes the recorder, mirroring its elapsed time
-     * into the composer's recording bar, and transcribes the clip once capture
-     * finishes (auto-stop at the limit or a manual stop).
+     * into the composer's recording bar, and dispatches on the **terminal** state:
+     * a finished clip is transcribed, a failed capture resets the composer and
+     * pings the error snackbar. The limit is the value already loaded by
+     * [onMicClicked] (no second DataStore read, and the bar starts at the real
+     * limit rather than a `0:00` placeholder).
      */
     fun startRecording() {
         voiceJob?.cancel()
+        val maxSec = _state.value.composer.audioMaxDurationSec
         _state.update {
             it.copy(
                 composer = it.composer.copy(
                     audioChooserVisible = false,
                     voiceNotice = null,
-                    voice = VoiceInputState.Recording(elapsedSec = 0, maxSec = 0),
+                    voice = VoiceInputState.Recording(elapsedSec = 0, maxSec = maxSec),
                 ),
             )
         }
         voiceJob = viewModelScope.launch {
-            val maxSec = settingsRepository.audioMaxDurationSec.first()
             audioRecorder.start(maxSec)
+            // Mirror elapsed time until capture reaches a terminal state
+            // (Finished or Failed) — collecting only on `!is Finished` would
+            // hang forever on the Failed/Idle path.
             audioRecorder.state
-                .takeWhile { it !is RecordingState.Finished }
+                .takeWhile { !it.isTerminal }
                 .collect { recordingState ->
                     if (recordingState is RecordingState.Recording) {
                         _state.update {
@@ -626,7 +644,15 @@ class ChatHomeViewModel @Inject constructor(
                         }
                     }
                 }
-            (audioRecorder.state.value as? RecordingState.Finished)?.let { transcribeClip(it.path) }
+            when (val terminal = audioRecorder.state.value) {
+                is RecordingState.Finished -> transcribeClip(terminal.path)
+                RecordingState.Failed -> {
+                    _state.update { it.copy(composer = it.composer.copy(voice = VoiceInputState.Idle)) }
+                    _voiceErrorEvents.tryEmit(Unit)
+                }
+                // Idle here means a concurrent cancel raced in; just reset.
+                else -> _state.update { it.copy(composer = it.composer.copy(voice = VoiceInputState.Idle)) }
+            }
         }
     }
 
@@ -663,7 +689,7 @@ class ChatHomeViewModel @Inject constructor(
             val path = audioCaptureStore.importFromUri(uri).getOrNull()
             if (path == null) {
                 _state.update { it.copy(composer = it.composer.copy(voice = VoiceInputState.Idle)) }
-                _attachmentErrorEvents.tryEmit(Unit)
+                _voiceErrorEvents.tryEmit(Unit)
                 return@launch
             }
             transcribeClip(path)
@@ -703,7 +729,7 @@ class ChatHomeViewModel @Inject constructor(
 
             is TranscriptionOutcome.Failed -> {
                 _state.update { it.copy(composer = it.composer.copy(voice = VoiceInputState.Idle)) }
-                _attachmentErrorEvents.tryEmit(Unit)
+                _voiceErrorEvents.tryEmit(Unit)
             }
         }
     }
@@ -712,12 +738,6 @@ class ChatHomeViewModel @Inject constructor(
         _state.update {
             it.copy(composer = it.composer.copy(voice = VoiceInputState.Idle, voiceNotice = notice))
         }
-    }
-
-    /** Dismisses the active voice notice (e.g. when the user starts typing). */
-    fun dismissVoiceNotice() {
-        if (_state.value.composer.voiceNotice == null) return
-        _state.update { it.copy(composer = it.composer.copy(voiceNotice = null)) }
     }
 
     /**

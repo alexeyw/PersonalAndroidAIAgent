@@ -38,7 +38,7 @@ class LoadModelUseCaseTest {
         val result = loadModelUseCase()
 
         assertTrue(result is Result.Error)
-        coVerify(exactly = 0) { llmInferenceEngine.initialize(any()) }
+        coVerify(exactly = 0) { llmInferenceEngine.initialize(any(), any(), any()) }
     }
 
     @Test
@@ -53,7 +53,7 @@ class LoadModelUseCaseTest {
         val result = loadModelUseCase()
 
         assertTrue(result is Result.Success)
-        coVerify(exactly = 0) { llmInferenceEngine.initialize(any()) }
+        coVerify(exactly = 0) { llmInferenceEngine.initialize(any(), any(), any()) }
     }
 
     @Test
@@ -64,7 +64,7 @@ class LoadModelUseCaseTest {
         val result = loadModelUseCase()
 
         assertTrue(result is Result.Error)
-        coVerify(exactly = 0) { llmInferenceEngine.initialize(any()) }
+        coVerify(exactly = 0) { llmInferenceEngine.initialize(any(), any(), any()) }
     }
 
     @Test
@@ -80,7 +80,9 @@ class LoadModelUseCaseTest {
         val result = loadModelUseCase()
 
         assertTrue(result is Result.Success)
-        coVerify(exactly = 1) { llmInferenceEngine.initialize(tempFile.absolutePath, enableVision = false) }
+        coVerify(exactly = 1) {
+            llmInferenceEngine.initialize(tempFile.absolutePath, enableVision = false, enableAudio = false)
+        }
     }
 
     @Test
@@ -94,12 +96,14 @@ class LoadModelUseCaseTest {
         every { llmInferenceEngine.isInitialized } returns true
         every { llmInferenceEngine.currentModelPath } returns path
         every { llmInferenceEngine.isVisionEnabled } returns false
-        coEvery { llmInferenceEngine.initialize(path, enableVision = true) } returns Result.Success(Unit)
+        coEvery {
+            llmInferenceEngine.initialize(path, enableVision = true, enableAudio = false)
+        } returns Result.Success(Unit)
 
         val result = loadModelUseCase(path, requireVision = true)
 
         assertTrue(result is Result.Success)
-        coVerify(exactly = 1) { llmInferenceEngine.initialize(path, enableVision = true) }
+        coVerify(exactly = 1) { llmInferenceEngine.initialize(path, enableVision = true, enableAudio = false) }
     }
 
     @Test
@@ -114,7 +118,7 @@ class LoadModelUseCaseTest {
 
         // Vision already on for this exact model → no re-initialization.
         assertTrue(result is Result.Success)
-        coVerify(exactly = 0) { llmInferenceEngine.initialize(any(), any()) }
+        coVerify(exactly = 0) { llmInferenceEngine.initialize(any(), any(), any()) }
     }
 
     @Test
