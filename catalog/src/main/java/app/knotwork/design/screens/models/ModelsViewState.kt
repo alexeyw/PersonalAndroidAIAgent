@@ -27,8 +27,16 @@ enum class ModelsVisualState {
  *
  * @property displayName monospace model filename or human-readable label.
  * @property meta "1.4 GB · NPU · QNN backend"-style mono description.
+ * @property visionSupported whether the user has marked this model as able to
+ *   read image attachments. Drives the "Image support" toggle on the active
+ *   card; defaults to `false` (text-only).
  */
-data class ActiveModelRow(val id: Long, val displayName: String, val meta: String)
+data class ActiveModelRow(
+    val id: Long,
+    val displayName: String,
+    val meta: String,
+    val visionSupported: Boolean = false,
+)
 
 /** Per-preset row content. */
 data class PresetRow(val id: String, val name: String, val source: String, val status: PresetStatus)
@@ -117,6 +125,7 @@ class ModelsCallbacks(
     val onCustomDownloadCancel: () -> Unit = {},
     val onActiveOpen: () -> Unit = {},
     val onOverflowMenu: () -> Unit = {},
+    val onToggleVision: (Boolean) -> Unit = {},
     val onRetry: () -> Unit = {},
 )
 

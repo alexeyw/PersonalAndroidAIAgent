@@ -28,9 +28,11 @@ import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.AttachmentStore
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
+import app.knotwork.android.domain.usecases.EntryInferenceKind
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.PendingSubmissionOutcome
+import app.knotwork.android.domain.usecases.ResolveEntryInferenceUseCase
 import app.knotwork.android.domain.usecases.ResumeOutcome
 import app.knotwork.android.domain.usecases.ResumePipelineRunUseCase
 import app.knotwork.android.domain.usecases.SaveMessageToMemoryUseCase
@@ -112,6 +114,7 @@ class ChatHomeViewModelTest {
     private lateinit var submitApprovalDecisionUseCase: SubmitApprovalDecisionUseCase
     private lateinit var submitClarificationAnswerUseCase: SubmitClarificationAnswerUseCase
     private lateinit var attachmentStore: AttachmentStore
+    private lateinit var resolveEntryInferenceUseCase: ResolveEntryInferenceUseCase
 
     private lateinit var sessionsFlow: MutableStateFlow<List<ChatSession>>
     private lateinit var localModelsFlow: MutableStateFlow<List<LocalModel>>
@@ -145,6 +148,11 @@ class ChatHomeViewModelTest {
         coEvery { pendingInteractionRepository.getForSession(any()) } returns null
         submitApprovalDecisionUseCase = mockk(relaxed = true)
         attachmentStore = mockk(relaxed = true)
+        resolveEntryInferenceUseCase = mockk()
+        // Default: the bound pipeline starts on-device, so the attachment
+        // pre-flight only depends on the active model's vision flag. Tests that
+        // exercise the CLOUD-entry block override this.
+        coEvery { resolveEntryInferenceUseCase(any()) } returns EntryInferenceKind.LOCAL
         coEvery { submitApprovalDecisionUseCase(any(), any(), any()) } returns PendingSubmissionOutcome.LiveResumed
         submitClarificationAnswerUseCase = mockk(relaxed = true)
         coEvery {
@@ -226,6 +234,7 @@ class ChatHomeViewModelTest {
         submitApprovalDecisionUseCase,
         submitClarificationAnswerUseCase,
         attachmentStore,
+        resolveEntryInferenceUseCase,
     ).also { vm ->
         // Keep the replay projection on the test scheduler so
         // advanceUntilIdle() deterministically covers it.
@@ -471,6 +480,11 @@ class ChatHomeViewModelTest {
     @Test
     fun `sendMessage with image and no caption sends the default instruction with empty display`() =
         runTest(testDispatcher) {
+            // The active model must be vision-capable or the multimodal pre-flight
+            // blocks the send.
+            localModelsFlow.value = listOf(
+                LocalModel(id = 1L, name = "Vision", path = "/v", size = 0L, isActive = true, supportsVision = true),
+            )
             viewModel = createViewModel()
             advanceUntilIdle()
             val sessionId = viewModel.state.value.thread.currentSessionId
@@ -506,6 +520,9 @@ class ChatHomeViewModelTest {
 
     @Test
     fun `image-only send does not rename the chat to the internal default instruction`() = runTest(testDispatcher) {
+        localModelsFlow.value = listOf(
+            LocalModel(id = 1L, name = "Vision", path = "/v", size = 0L, isActive = true, supportsVision = true),
+        )
         viewModel = createViewModel()
         advanceUntilIdle()
         val sessionId = viewModel.state.value.thread.currentSessionId
@@ -526,6 +543,108 @@ class ChatHomeViewModelTest {
             sessionsFlow.value.first { it.id == sessionId }.name,
         )
     }
+
+    @Test
+    fun `sendMessage with image blocks and surfaces vision error when active model is text-only`() =
+        runTest(testDispatcher) {
+            // Active model is NOT vision-capable.
+            localModelsFlow.value = listOf(
+                LocalModel(id = 1L, name = "Text", path = "/t", size = 0L, isActive = true, supportsVision = false),
+            )
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            val stored = MessageAttachment(path = "p.jpg", mimeType = "image/jpeg", width = 100, height = 100)
+            coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.success(stored)
+            every { attachmentStore.absolutePathFor(any()) } returns "/tmp/p.jpg"
+
+            viewModel.onImagePicked("content://pick")
+            advanceUntilIdle()
+            viewModel.sendMessage()
+            advanceUntilIdle()
+
+            val visual = viewModel.state.value.visual
+            assertTrue(visual is ChatHomeUiState.Error)
+            assertEquals(ChatHomeViewModel.MODEL_NO_VISION_MESSAGE, (visual as ChatHomeUiState.Error).message)
+            // The run never starts and the draft attachment is preserved.
+            coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any(), any(), any()) }
+            assertNotNull(viewModel.state.value.composer.attachment)
+        }
+
+    @Test
+    fun `sendMessage with image blocks when the pipeline has no on-device vision sink`() = runTest(testDispatcher) {
+        localModelsFlow.value = listOf(
+            LocalModel(id = 1L, name = "Vision", path = "/v", size = 0L, isActive = true, supportsVision = true),
+        )
+        coEvery { resolveEntryInferenceUseCase(any()) } returns EntryInferenceKind.NONE
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val stored = MessageAttachment(path = "p.jpg", mimeType = "image/jpeg", width = 100, height = 100)
+        coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.success(stored)
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/p.jpg"
+
+        viewModel.onImagePicked("content://pick")
+        advanceUntilIdle()
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        val visual = viewModel.state.value.visual
+        assertTrue(visual is ChatHomeUiState.Error)
+        assertEquals(ChatHomeViewModel.PIPELINE_NO_VISION_MESSAGE, (visual as ChatHomeUiState.Error).message)
+        coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `two rapid image sends enqueue only one run (no double-send race)`() = runTest(testDispatcher) {
+        localModelsFlow.value = listOf(
+            LocalModel(id = 1L, name = "Vision", path = "/v", size = 0L, isActive = true, supportsVision = true),
+        )
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        val stored = MessageAttachment(path = "p.jpg", mimeType = "image/jpeg", width = 100, height = 100)
+        coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.success(stored)
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/p.jpg"
+        coEvery { agentOrchestratorUseCase(sessionId, any(), any(), any(), any()) } returns
+            flow { emit(AgentOrchestratorState.Completed("done")) }
+
+        viewModel.onImagePicked("content://pick")
+        advanceUntilIdle()
+        // Both taps land before the async pre-flight resolves; the in-flight guard
+        // must reject the second so only one run is enqueued.
+        viewModel.sendMessage()
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { agentOrchestratorUseCase(sessionId, any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `sendMessage with image blocks and surfaces cloud error when pipeline starts on a cloud node`() =
+        runTest(testDispatcher) {
+            // Active model is vision-capable, so only the CLOUD-entry guard can block.
+            localModelsFlow.value = listOf(
+                LocalModel(id = 1L, name = "Vision", path = "/v", size = 0L, isActive = true, supportsVision = true),
+            )
+            coEvery { resolveEntryInferenceUseCase(any()) } returns EntryInferenceKind.CLOUD
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            val stored = MessageAttachment(path = "p.jpg", mimeType = "image/jpeg", width = 100, height = 100)
+            coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.success(stored)
+            every { attachmentStore.absolutePathFor(any()) } returns "/tmp/p.jpg"
+
+            viewModel.onImagePicked("content://pick")
+            advanceUntilIdle()
+            viewModel.sendMessage()
+            advanceUntilIdle()
+
+            val visual = viewModel.state.value.visual
+            assertTrue(visual is ChatHomeUiState.Error)
+            assertEquals(
+                ChatHomeViewModel.CLOUD_ATTACHMENT_BLOCKED_MESSAGE,
+                (visual as ChatHomeUiState.Error).message,
+            )
+            coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any(), any(), any()) }
+        }
 
     @Test
     fun `sendMessage clears pending approval and flips to Generating in one atomic emission`() =

@@ -61,14 +61,19 @@ class LiteRtNodeExecutor @Inject constructor(
 
         val startTime = System.currentTimeMillis()
 
-        val loadResult = loadModelUseCase(node.modelPath)
+        // The engine only ever sees an image on the node the engine chose to
+        // deliver it to (the first vision-eligible LITE_RT node); every other
+        // node has `scope.imagePath == null`. An image-carrying node needs the
+        // engine loaded in vision mode, so request it on the load.
+        val imagePath = scope.imagePath
+        val loadResult = loadModelUseCase(node.modelPath, requireVision = imagePath != null)
         if (loadResult is Result.Error) {
             emit(NodeOutput.State(AgentOrchestratorState.Error("Error loading local model")))
             emit(NodeOutput.Result(NodeExecutionResult(error = "Error loading local model")))
             return@flow
         }
 
-        val responseStream = llmEngine.generateResponseStream(fullPrompt)
+        val responseStream = llmEngine.generateResponseStream(fullPrompt, imagePath = imagePath)
 
         val accumulatedResponse = StringBuilder()
         var emittedThinking = false

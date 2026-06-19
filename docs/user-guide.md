@@ -233,9 +233,36 @@ dismiss. If an image was later cleared to save space (see *Run history and
 retention*), the thumbnail and viewer say so plainly — the message text stays
 in the chat.
 
-> Sending an image to the model for it to *understand* (vision) depends on the
-> active model and arrives in a later release; for now the image is stored and
-> shown in the conversation.
+### Image understanding (vision)
+
+For the agent to actually *read* the picture, the active local model must be
+**vision-capable** (for example a Gemma 4 model). Because the on-device runtime
+does not advertise this, you tell the app which models can see: open
+**Models**, and on the active model's card flip the **Image support** toggle on.
+The setting is per model and off by default.
+
+When you send an image, the picture is handed to the **first on-device step of
+the pipeline** together with your message; from there the rest of the pipeline
+works on text as usual. The agent console shows an `Image input: W×H, N KB`
+line at the start of the run so you can see the image was taken in.
+
+Safety checks run **before** a run starts, so you get a clear message instead of
+a failure mid-answer (your draft and the attached image are always kept):
+
+- **Cloud-first pipeline.** Images **never leave your device** — they are not
+  sent to cloud models. If the pipeline bound to the chat begins with a cloud
+  step, sending an image is blocked with a note to use an on-device pipeline.
+- **Text-only model.** If the active model is not marked vision-capable, the app
+  explains that it can't read images and points you to the Models toggle (or to
+  switch models).
+- **No on-device image step.** If the bound pipeline has no on-device model step
+  that could read the picture, the send is blocked rather than quietly ignoring
+  the image.
+
+For a pipeline that branches, the image goes to the first on-device model step
+on the path the run actually takes. If a branch is taken that has no such step,
+the agent says so on the console (`Image not used …`) instead of pretending the
+model saw the picture.
 
 ---
 

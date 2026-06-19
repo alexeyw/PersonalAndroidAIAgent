@@ -65,6 +65,12 @@ import javax.inject.Provider
  * depth fails the child, which becomes this node's error and terminates the
  * whole stack.
  *
+ * **Shared image delivery.** [ExecutionScope.imageDelivery] is likewise threaded
+ * into the child run, so a run's single image attachment reaches the first vision
+ * sink in execution order *anywhere in the tree* — including a `LITE_RT` node
+ * nested inside this sub-pipeline — and is consumed exactly once across the whole
+ * stack.
+ *
  * **Human-in-the-loop.** When the child parks in its persistent waiting phase
  * (its TOOL/CLARIFICATION node timed out into a durable pending-interaction
  * keyed by the child run id), the child engine ends with
@@ -173,6 +179,7 @@ class PipelineNodeExecutor @Inject constructor(
                 resume = null,
                 depth = scope.depth + 1,
                 stepBudget = scope.stepBudget,
+                imageDelivery = scope.imageDelivery,
             ).collect { state ->
                 when (state) {
                     is AgentOrchestratorState.Completed -> finalResponse = state.finalResponse
@@ -213,6 +220,7 @@ class PipelineNodeExecutor @Inject constructor(
                 resume = childResume,
                 depth = scope.depth + 1,
                 stepBudget = scope.stepBudget,
+                imageDelivery = scope.imageDelivery,
             ).collect { state ->
                 when (state) {
                     is AgentOrchestratorState.Completed -> finalResponse = state.finalResponse

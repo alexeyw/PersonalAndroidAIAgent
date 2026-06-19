@@ -31,6 +31,7 @@ import app.knotwork.android.domain.models.ClarificationOutcome
 import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.ConnectionModel
 import app.knotwork.android.domain.models.ConsoleEventType
+import app.knotwork.android.domain.models.EngineImageInput
 import app.knotwork.android.domain.models.MemoryChunk
 import app.knotwork.android.domain.models.NodeContextConfig
 import app.knotwork.android.domain.models.NodeExecutionResult
@@ -2053,6 +2054,125 @@ class GraphExecutionEngineTest {
         assertTrue("Missing OUTPUT start", nodeMessages.any { it.startsWith("▶") && it.contains("OUTPUT") })
         assertTrue("OUTPUT must not push ✓", nodeMessages.none { it.startsWith("✓") && it.contains("OUTPUT") })
     }
+
+    @Test
+    fun `given an image input when run executes then only the first LITE_RT node receives it`() = runTest {
+        val graph = PipelineGraph(
+            id = "g1",
+            name = "Multimodal",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("llm_a", NodeType.LITE_RT, 0f, 0f, systemPrompt = "NODE_A"),
+                NodeModel("llm_b", NodeType.LITE_RT, 0f, 0f, systemPrompt = "NODE_B"),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_a"),
+                ConnectionModel("c2", "llm_a", "llm_b"),
+                ConnectionModel("c3", "llm_b", "output_1"),
+            ),
+        )
+        coEvery { loadModelUseCase(any(), any()) } returns Result.Success(Unit)
+        every { llmEngine.generateResponseStream(any(), any(), any()) } returns flowOf("out")
+
+        val image = EngineImageInput(absolutePath = "/abs/photo.jpg", width = 800, height = 600, sizeBytes = 4096)
+        val states = engine(sessionId, "Describe", graph, imageInput = image).toList()
+
+        assertTrue(states.last() is AgentOrchestratorState.Completed)
+
+        // Exactly one generation carried the image, and it was the FIRST LITE_RT node.
+        verify(exactly = 1) { llmEngine.generateResponseStream(any(), "/abs/photo.jpg", any()) }
+        verify { llmEngine.generateResponseStream(match { it.contains("NODE_A") }, "/abs/photo.jpg", any()) }
+        // The downstream LITE_RT node sees only text — the contract is "image belongs to userPrompt".
+        verify { llmEngine.generateResponseStream(match { it.contains("NODE_B") }, null, any()) }
+        // The receiving node loaded the engine in vision mode.
+        coVerify { loadModelUseCase(any(), requireVision = true) }
+
+        // The run announces the image once at start.
+        val consoleLines = states.filterIsInstance<AgentOrchestratorState.ConsoleLog>()
+            .last().events.map { it.message }
+        assertTrue(
+            "Missing image-input console line: $consoleLines",
+            consoleLines.any { it.contains("Image input: 800×600, 4 KB") },
+        )
+    }
+
+    @Test
+    fun `given an image input when the only LITE_RT lives in a sub-pipeline then the nested node receives it`() =
+        runTest {
+            val subGraph = PipelineGraph(
+                id = "sub-pipe",
+                name = "Sub",
+                nodes = listOf(
+                    NodeModel("sub_in", NodeType.INPUT, 0f, 0f),
+                    NodeModel("sub_lite", NodeType.LITE_RT, 10f, 0f, systemPrompt = "SUB_NODE"),
+                    NodeModel("sub_out", NodeType.OUTPUT, 20f, 0f, systemPrompt = null),
+                ),
+                connections = listOf(
+                    ConnectionModel("s1", "sub_in", "sub_lite"),
+                    ConnectionModel("s2", "sub_lite", "sub_out"),
+                ),
+            )
+            coEvery { pipelineRepository.getPipelineById("sub-pipe") } returns subGraph
+            val mainGraph = PipelineGraph(
+                id = "main-pipe",
+                name = "Main",
+                nodes = listOf(
+                    NodeModel("main_in", NodeType.INPUT, 0f, 0f),
+                    NodeModel("pipe_node", NodeType.PIPELINE, 10f, 0f, targetPipelineId = "sub-pipe"),
+                    NodeModel("main_out", NodeType.OUTPUT, 20f, 0f, systemPrompt = null),
+                ),
+                connections = listOf(
+                    ConnectionModel("m1", "main_in", "pipe_node"),
+                    ConnectionModel("m2", "pipe_node", "main_out"),
+                ),
+            )
+            coEvery { loadModelUseCase(any(), any()) } returns Result.Success(Unit)
+            every { llmEngine.generateResponseStream(any(), any(), any()) } returns flowOf("answer")
+
+            val image = EngineImageInput(absolutePath = "/abs/y.jpg", width = 640, height = 480, sizeBytes = 4096)
+            val states = engine(sessionId, "Describe", mainGraph, imageInput = image).toList()
+
+            assertTrue(states.last() is AgentOrchestratorState.Completed)
+            // The image was forwarded into the sub-pipeline and consumed by its LITE_RT node.
+            verify(exactly = 1) { llmEngine.generateResponseStream(any(), "/abs/y.jpg", any()) }
+            verify { llmEngine.generateResponseStream(match { it.contains("SUB_NODE") }, "/abs/y.jpg", any()) }
+            val consoleLines = states.filterIsInstance<AgentOrchestratorState.ConsoleLog>()
+                .last().events.map { it.message }
+            assertTrue(
+                "Unexpected 'Image not used' note: $consoleLines",
+                consoleLines.none { it.contains("Image not used") },
+            )
+        }
+
+    @Test
+    fun `given an image input but no vision-sink node when run completes then emits an Image not used note`() =
+        runTest {
+            // INPUT -> OUTPUT (echo): no LITE_RT-with-originalTask node, so the
+            // image can never be delivered. The engine must say so on the console.
+            val graph = PipelineGraph(
+                id = "g1",
+                name = "No sink",
+                nodes = listOf(
+                    NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                    NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+                ),
+                connections = listOf(ConnectionModel("c1", "input_1", "output_1")),
+            )
+            val image = EngineImageInput(absolutePath = "/abs/x.jpg", width = 10, height = 10, sizeBytes = 2048)
+
+            val states = engine(sessionId, "hi", graph, imageInput = image).toList()
+
+            assertTrue(states.last() is AgentOrchestratorState.Completed)
+            val consoleLines = states.filterIsInstance<AgentOrchestratorState.ConsoleLog>()
+                .last().events.map { it.message }
+            assertTrue(
+                "Missing 'Image not used' note: $consoleLines",
+                consoleLines.any {
+                    it.contains("Image not used")
+                },
+            )
+        }
 
     @Test
     fun `given retrieved hits when run completes then MemoryAccess event carries query and scores`() = runTest {

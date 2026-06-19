@@ -15,6 +15,20 @@ details.
 
 ### Added
 
+- **On-device image understanding (vision inference).** A vision-capable local
+  model (e.g. Gemma 4) now actually reads an attached image. The image is
+  delivered to the **first on-device step of the pipeline** alongside the user's
+  prompt; the rest of the graph continues to operate on text, so the contract
+  stays "the attachment belongs to the user message, the graph carries text".
+  Images are **never sent to cloud models** (a privacy guarantee of this
+  release). Because the LiteRT runtime exposes no capability probe, each model
+  carries a manual **"Image support"** toggle on the Models screen (default off);
+  the agent reads it in a **pre-flight check before a run starts** — sending an
+  image to a text-only model, or to a pipeline that begins with a cloud step,
+  surfaces a clear, non-blocking explanation instead of failing mid-inference.
+  The agent console announces the multimodal input at the start of the run
+  (`Image input: W×H, N KB`).
+
 - **Image attachments in chat.** A message can now carry one image, attached
   from the system **Photo Picker** (gallery / screenshots, no storage
   permission) or the **camera**. The picked image is downscaled on-device

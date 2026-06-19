@@ -94,6 +94,9 @@ fun ModelsScreen(modifier: Modifier = Modifier, viewModel: ModelsViewModel = hil
                     ?.let { viewModel.deleteModel(it.id) }
             },
             onCustomDownloadCancel = { viewModel.cancelDownload() },
+            onToggleVision = { enabled ->
+                uiState.activeModel?.let { viewModel.setVisionSupport(it.id, enabled) }
+            },
             // `onActiveOpen` / `onOverflowMenu` are intentionally left at their
             // default no-ops: the catalog no longer renders those affordances
             // (the active-model card is a passive status row and the TopAppBar
@@ -142,6 +145,7 @@ internal fun ModelsUiState.toViewState(subtitleFormat: String): ModelsViewState 
             id = model.id,
             displayName = model.name,
             meta = model.toMetaLine(backendLabel = backendLabel),
+            visionSupported = model.supportsVision,
         )
     }
     val downloadingName = activeDownloadFileName

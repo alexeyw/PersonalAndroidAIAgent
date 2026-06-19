@@ -204,6 +204,22 @@ class ModelsViewModel @Inject constructor(
     }
 
     /**
+     * Sets the manual vision-capability flag of the model with the given id.
+     * Backs the "Image support" toggle on the active-model card; the persisted
+     * value is read by the chat send-time pre-flight to decide whether an image
+     * message may run against the active model. The model list is observed, so
+     * the toggle reflects the new value on the next emission.
+     *
+     * @param modelId The unique identifier of the model to update.
+     * @param enabled `true` to mark the model vision-capable, `false` otherwise.
+     */
+    fun setVisionSupport(modelId: Long, enabled: Boolean) {
+        viewModelScope.launch {
+            localModelRepository.setVisionSupport(modelId, enabled)
+        }
+    }
+
+    /**
      * Cancels the currently in-flight download (if any). The download manager
      * has no native cancellation API, so the collection job is interrupted
      * instead — partial files are not cleaned up, but the UI returns to the

@@ -417,6 +417,7 @@ class BackgroundAutonomyCycleIntegrationTest {
             graphExecutionEngine = engine,
             pipelineRunRepository = runRepository,
             runTraceRepository = traceRepository,
+            attachmentStore = mockk(relaxed = true),
         ).apply { dispatcher = testDispatcher }
 
         val resumeRun = ResumePipelineRunUseCase(

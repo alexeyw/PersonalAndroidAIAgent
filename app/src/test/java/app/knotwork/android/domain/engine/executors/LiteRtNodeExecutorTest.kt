@@ -1,6 +1,7 @@
 package app.knotwork.android.domain.engine.executors
 
 import app.knotwork.android.domain.engine.LlmInferenceEngine
+import app.knotwork.android.domain.models.ExecutionScope
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.NodeType
@@ -11,9 +12,11 @@ import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -126,6 +129,42 @@ class LiteRtNodeExecutorTest {
 
         val result = outputs.filterIsInstance<NodeOutput.Result>().single().result
         assertEquals(5, result.tokenCount)
+    }
+
+    @Test
+    fun `given scope carries an image path when execute then engine and loader run in vision mode`() = runTest {
+        val node = NodeModel("1", NodeType.LITE_RT, 0f, 0f, modelPath = "model-path")
+        every { settingsRepository.systemPromptPrefix } returns flowOf("")
+        coEvery { loadModelUseCase(any(), any()) } returns Result.Success(Unit)
+        every { llmEngine.generateResponseStream(any(), any(), any()) } returns flowOf("ok")
+
+        executor.execute(
+            node = node,
+            inputText = "input",
+            sessionId = "session-1",
+            originalPrompt = "prompt",
+            scope = ExecutionScope(imagePath = "/abs/photo.jpg"),
+        ).toList()
+
+        // The image path the engine chose for this node must reach both the model
+        // loader (so it initialises in vision mode) and the generation call.
+        coVerify { loadModelUseCase("model-path", requireVision = true) }
+        verify { llmEngine.generateResponseStream(any(), "/abs/photo.jpg", any()) }
+    }
+
+    @Test
+    fun `given no image path when execute then engine and loader run in text mode`() = runTest {
+        val node = NodeModel("1", NodeType.LITE_RT, 0f, 0f, modelPath = "model-path")
+        every { settingsRepository.systemPromptPrefix } returns flowOf("")
+        coEvery { loadModelUseCase(any(), any()) } returns Result.Success(Unit)
+        every { llmEngine.generateResponseStream(any(), any(), any()) } returns flowOf("ok")
+
+        // Default scope → no image: a text node must never request vision nor pass
+        // an image to the engine.
+        executor.execute(node, "input", "session-1", "prompt").toList()
+
+        coVerify { loadModelUseCase("model-path", requireVision = false) }
+        verify { llmEngine.generateResponseStream(any(), null, any()) }
     }
 
     @Test

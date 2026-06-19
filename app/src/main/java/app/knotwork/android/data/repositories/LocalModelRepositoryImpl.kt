@@ -72,6 +72,10 @@ class LocalModelRepositoryImpl @Inject constructor(private val localModelDao: Lo
         localModelDao.activateModelById(id)
     }
 
+    override suspend fun setVisionSupport(id: Long, enabled: Boolean): Unit = withContext(Dispatchers.IO) {
+        localModelDao.setVisionSupport(id, enabled)
+    }
+
     override suspend fun isInstalled(fileName: String): Boolean = withContext(Dispatchers.IO) {
         localModelDao.countByName(fileName) > 0
     }

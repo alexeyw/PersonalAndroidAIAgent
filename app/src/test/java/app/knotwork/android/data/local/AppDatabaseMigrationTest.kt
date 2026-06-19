@@ -303,4 +303,29 @@ class AppDatabaseMigrationTest {
             !joined.contains("NOT NULL"),
         )
     }
+
+    @Test
+    fun `MIGRATION_39_40 targets versions 39 to 40`() {
+        val migration = AppDatabase.MIGRATION_39_40
+
+        assertEquals(39, migration.startVersion)
+        assertEquals(40, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_39_40 adds supportsVision column to local_models with default 0`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val statements = mutableListOf<String>()
+
+        AppDatabase.MIGRATION_39_40.migrate(db)
+
+        verify(exactly = 1) { db.execSQL(capture(statements)) }
+        val sql = statements.single().uppercase()
+        assertTrue(
+            "Expected ALTER local_models ADD supportsVision, got: $sql",
+            sql.contains("ALTER TABLE `LOCAL_MODELS` ADD COLUMN `SUPPORTSVISION`"),
+        )
+        // Backfilled to text-only (0) for every existing row.
+        assertTrue("supportsVision must be NOT NULL DEFAULT 0: $sql", sql.contains("NOT NULL DEFAULT 0"))
+    }
 }

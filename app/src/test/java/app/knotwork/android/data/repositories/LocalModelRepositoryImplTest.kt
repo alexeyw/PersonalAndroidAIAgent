@@ -76,6 +76,13 @@ class LocalModelRepositoryImplTest {
     }
 
     @Test
+    fun `setVisionSupport delegates to the dao with the given id and flag`() = runTest {
+        repository.setVisionSupport(id = 5L, enabled = true)
+
+        coVerify(exactly = 1) { localModelDao.setVisionSupport(5L, true) }
+    }
+
+    @Test
     fun `deleteModelById deletes the on-disk file then the record`() = runTest {
         val file = File.createTempFile("model", ".task").apply { writeBytes(byteArrayOf(1, 2, 3)) }
         val entity = LocalModelEntity(7, "Model", file.absolutePath, 3L, false)

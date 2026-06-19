@@ -526,6 +526,51 @@ block order of §3.2 is preserved). The first time compression changes what
 a run sees, a single `HistoryCompression` console event is emitted under the
 `MEMORY` source.
 
+### 3.7. Multimodal image delivery
+
+A user message may carry one image attachment (stored as in §5.2). Its journey
+into a run is deliberately narrow so the rest of the engine stays text-only:
+
+1. **Resolve.** When `TaskQueueManagerImpl` starts a fresh run, it turns the
+   message's `MessageAttachment` into an `EngineImageInput` — the absolute path
+   of the stored JPEG (resolved through `AttachmentStore`) plus its pixel size
+   and byte size — and threads it into `GraphExecutionEngine.invoke(...)`. A
+   resumed run never re-delivers (it replays a trace), so `imageInput` is `null`
+   there.
+2. **Announce.** At run start the engine emits one `Image input: W×H, N KB`
+   console line (`SystemMessage`).
+3. **Deliver to exactly one node, anywhere in the tree.** Delivery state is a
+   tree-shared `RunImageDelivery` holder (mirroring the shared `RunStepBudget`):
+   a `PIPELINE` node threads it into its sub-pipeline's engine invocation via
+   `ExecutionScope.imageDelivery`. The engine hands the image to the **first
+   `LITE_RT` node whose context includes the original task** in execution order
+   *across the whole run tree* — including a node nested inside a sub-pipeline —
+   via `ExecutionScope.imagePath`, then marks the holder consumed. Every other
+   node, and every `CLOUD` node, sees `null`. This realises the contract *"the
+   attachment belongs to the user prompt; the graph carries text"* even for the
+   composed (sub-pipeline) showcase pipelines.
+4. **Infer.** `LiteRtNodeExecutor` loads the model in vision mode
+   (`LoadModelUseCase(requireVision = true)`, which re-initialises the LiteRT
+   engine with a vision backend only when needed) and calls
+   `generateResponseStream(prompt, imagePath = …)`, which sends a multimodal
+   `Contents(image, text)` to LiteRT-LM.
+
+**Capability and privacy guards.** The LiteRT runtime exposes no vision-capability
+probe, so `LocalModel.supportsVision` is a manual per-model flag (Models screen
+toggle, default `false`). Before enqueueing an image message, `ChatHomeViewModel`
+runs a pre-flight on `ResolveEntryInferenceUseCase`, which classifies the bound
+pipeline the same way the engine delivers: `CLOUD` when the run starts on a cloud
+node, `LOCAL` when a **vision sink** (a `LITE_RT` node carrying the original task)
+is reachable from `INPUT` — **recursing into `PIPELINE` nodes' sub-graphs**, since
+the engine forwards the image there — else `NONE`. The three guards, in order, are: `CLOUD`
+→ blocked (attachments never leave the device); active model not vision-capable →
+blocked; `NONE` (no reachable vision sink) → blocked. Each preserves the draft and
+shows a clear message. Branch-dependent routing can still take a path that skips
+the sink even when one exists; the engine emits an *"Image not used"* console note
+in that case rather than letting the earlier `Image input` line imply otherwise.
+`CloudLlmNodeExecutor` structurally ignores `ExecutionScope.imagePath`, so an
+image can never reach a cloud provider.
+
 ---
 
 ## 4. Integrations
