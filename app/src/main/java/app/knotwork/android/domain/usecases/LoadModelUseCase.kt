@@ -76,9 +76,12 @@ class LoadModelUseCase @Inject constructor(
                 }
 
                 // Keep vision on if it was already enabled for THIS model (a prior
-                // image run) so a following text node doesn't needlessly tear the
-                // encoder down; a model switch resets to the requested mode so we
-                // never force a vision backend onto a freshly loaded text-only model.
+                // image run). Re-initialization is a full model reload (unload +
+                // reconstruct the engine), so downgrading just to drop the vision
+                // encoder would cost far more than the memory it reclaims — the
+                // encoder is released instead when the engine is unloaded on
+                // background / memory-trim. A model switch resets to the requested
+                // mode, so vision is never forced onto a freshly loaded text-only model.
                 val enableVision = requireVision ||
                     (llmInferenceEngine.isVisionEnabled && llmInferenceEngine.currentModelPath == pathToLoad)
                 return@withContext llmInferenceEngine.initialize(pathToLoad, enableVision = enableVision)

@@ -571,6 +571,54 @@ class ChatHomeViewModelTest {
         }
 
     @Test
+    fun `sendMessage with image blocks when the pipeline has no on-device vision sink`() = runTest(testDispatcher) {
+        localModelsFlow.value = listOf(
+            LocalModel(id = 1L, name = "Vision", path = "/v", size = 0L, isActive = true, supportsVision = true),
+        )
+        coEvery { resolveEntryInferenceUseCase(any()) } returns EntryInferenceKind.NONE
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val stored = MessageAttachment(path = "p.jpg", mimeType = "image/jpeg", width = 100, height = 100)
+        coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.success(stored)
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/p.jpg"
+
+        viewModel.onImagePicked("content://pick")
+        advanceUntilIdle()
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        val visual = viewModel.state.value.visual
+        assertTrue(visual is ChatHomeUiState.Error)
+        assertEquals(ChatHomeViewModel.PIPELINE_NO_VISION_MESSAGE, (visual as ChatHomeUiState.Error).message)
+        coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `two rapid image sends enqueue only one run (no double-send race)`() = runTest(testDispatcher) {
+        localModelsFlow.value = listOf(
+            LocalModel(id = 1L, name = "Vision", path = "/v", size = 0L, isActive = true, supportsVision = true),
+        )
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        val stored = MessageAttachment(path = "p.jpg", mimeType = "image/jpeg", width = 100, height = 100)
+        coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.success(stored)
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/p.jpg"
+        coEvery { agentOrchestratorUseCase(sessionId, any(), any(), any(), any()) } returns
+            flow { emit(AgentOrchestratorState.Completed("done")) }
+
+        viewModel.onImagePicked("content://pick")
+        advanceUntilIdle()
+        // Both taps land before the async pre-flight resolves; the in-flight guard
+        // must reject the second so only one run is enqueued.
+        viewModel.sendMessage()
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { agentOrchestratorUseCase(sessionId, any(), any(), any(), any()) }
+    }
+
+    @Test
     fun `sendMessage with image blocks and surfaces cloud error when pipeline starts on a cloud node`() =
         runTest(testDispatcher) {
             // Active model is vision-capable, so only the CLOUD-entry guard can block.

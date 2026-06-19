@@ -28,8 +28,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -37,7 +35,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
@@ -47,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
+import app.knotwork.design.components.controls.LabeledSwitchRow
 import app.knotwork.design.components.misc.EmptyState
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
@@ -60,13 +58,6 @@ private val LeadingGlyphSize = 20.dp
 
 /** Diameter of the green "active" status dot. */
 private val ActiveDotSize = 8.dp
-
-/**
- * Down-scale factor for the image-support [Switch]: Material3's default
- * (52×32 dp) dwarfs the row title at the 14sp scale, so shrink it to ~78% to
- * match the rest of the toggle rows in the app.
- */
-private const val VISION_SWITCH_SCALE = 0.78f
 
 /** Height of the determinate download progress bar shown on a downloading preset. */
 private val ProgressBarHeight = 3.dp
@@ -396,49 +387,11 @@ private fun ActiveModelCard(active: ActiveModelRow, strings: ModelsStrings, call
             }
         }
         HorizontalDivider(color = KnotworkTheme.extended.divider)
-        VisionToggleRow(
+        LabeledSwitchRow(
+            label = strings.visionLabel,
+            description = strings.visionDescription,
             checked = active.visionSupported,
-            strings = strings,
             onToggle = { callbacks.onToggleVision(!active.visionSupported) },
-        )
-    }
-}
-
-/**
- * Image-support toggle row of the active-model card. The whole row is the tap
- * target (the documented 48 dp floor); the [Switch] itself is non-interactive
- * and only reflects [checked]. Mirrors the skill-editor context-flag rows.
- */
-@Composable
-private fun VisionToggleRow(checked: Boolean, strings: ModelsStrings, onToggle: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onToggle)
-            .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp3),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = strings.visionLabel,
-                style = KnotworkTextStyles.BodyBase,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = strings.visionDescription,
-                style = KnotworkTextStyles.BodySm,
-                color = KnotworkTheme.extended.onSurfaceMuted,
-            )
-        }
-        Switch(
-            checked = checked,
-            onCheckedChange = null,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                checkedBorderColor = MaterialTheme.colorScheme.primary,
-            ),
-            modifier = Modifier.scale(VISION_SWITCH_SCALE),
         )
     }
 }

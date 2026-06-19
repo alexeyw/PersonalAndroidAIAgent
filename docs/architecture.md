@@ -553,12 +553,17 @@ into a run is deliberately narrow so the rest of the engine stays text-only:
 **Capability and privacy guards.** The LiteRT runtime exposes no vision-capability
 probe, so `LocalModel.supportsVision` is a manual per-model flag (Models screen
 toggle, default `false`). Before enqueueing an image message, `ChatHomeViewModel`
-runs a pre-flight: `ResolveEntryInferenceUseCase` classifies the bound pipeline's
-entry node (`LOCAL` / `CLOUD` / `NONE`); a `CLOUD` entry is blocked (attachments
-never leave the device), and otherwise a non-vision active model is blocked. Both
-produce a clear, non-blocking message and preserve the draft. `CloudLlmNodeExecutor`
-structurally ignores `ExecutionScope.imagePath`, so an image can never reach a
-cloud provider.
+runs a pre-flight on `ResolveEntryInferenceUseCase`, which classifies the bound
+pipeline the same way the engine delivers: `CLOUD` when the run starts on a cloud
+node, `LOCAL` when a **vision sink** (a `LITE_RT` node carrying the original task)
+is reachable from `INPUT`, else `NONE`. The three guards, in order, are: `CLOUD`
+→ blocked (attachments never leave the device); active model not vision-capable →
+blocked; `NONE` (no reachable vision sink) → blocked. Each preserves the draft and
+shows a clear message. Branch-dependent routing can still take a path that skips
+the sink even when one exists; the engine emits an *"Image not used"* console note
+in that case rather than letting the earlier `Image input` line imply otherwise.
+`CloudLlmNodeExecutor` structurally ignores `ExecutionScope.imagePath`, so an
+image can never reach a cloud provider.
 
 ---
 

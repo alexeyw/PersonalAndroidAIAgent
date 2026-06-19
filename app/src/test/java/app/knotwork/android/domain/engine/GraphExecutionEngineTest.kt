@@ -2098,6 +2098,35 @@ class GraphExecutionEngineTest {
     }
 
     @Test
+    fun `given an image input but no vision-sink node when run completes then emits an Image not used note`() =
+        runTest {
+            // INPUT -> OUTPUT (echo): no LITE_RT-with-originalTask node, so the
+            // image can never be delivered. The engine must say so on the console.
+            val graph = PipelineGraph(
+                id = "g1",
+                name = "No sink",
+                nodes = listOf(
+                    NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                    NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+                ),
+                connections = listOf(ConnectionModel("c1", "input_1", "output_1")),
+            )
+            val image = EngineImageInput(absolutePath = "/abs/x.jpg", width = 10, height = 10, sizeBytes = 2048)
+
+            val states = engine(sessionId, "hi", graph, imageInput = image).toList()
+
+            assertTrue(states.last() is AgentOrchestratorState.Completed)
+            val consoleLines = states.filterIsInstance<AgentOrchestratorState.ConsoleLog>()
+                .last().events.map { it.message }
+            assertTrue(
+                "Missing 'Image not used' note: $consoleLines",
+                consoleLines.any {
+                    it.contains("Image not used")
+                },
+            )
+        }
+
+    @Test
     fun `given retrieved hits when run completes then MemoryAccess event carries query and scores`() = runTest {
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
         coEvery { retrieveRelevantMemoryUseCase.retrieveScored(any()) } returns listOf(

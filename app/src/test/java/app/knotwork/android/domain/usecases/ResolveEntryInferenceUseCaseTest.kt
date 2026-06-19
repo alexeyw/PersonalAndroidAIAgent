@@ -1,6 +1,7 @@
 package app.knotwork.android.domain.usecases
 
 import app.knotwork.android.domain.models.ConnectionModel
+import app.knotwork.android.domain.models.NodeContextConfig
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
@@ -62,10 +63,55 @@ class ResolveEntryInferenceUseCaseTest {
     }
 
     @Test
-    fun `given bound pipeline starts on a local system node when invoke then returns LOCAL`() = runTest {
+    fun `given local entry but no reachable LITE_RT vision sink when invoke then returns NONE`() = runTest {
+        // INPUT -> INTENT_ROUTER (on-device, but not a vision sink) and nothing downstream.
         coEvery { pipelineRepository.getPipelineById("bound") } returns graphWithEntry("bound", NodeType.INTENT_ROUTER)
 
+        assertEquals(EntryInferenceKind.NONE, useCase("bound"))
+    }
+
+    @Test
+    fun `given a router entry with a downstream LITE_RT sink when invoke then returns LOCAL`() = runTest {
+        // INPUT -> INTENT_ROUTER -> LITE_RT(originalTask). The router is not a sink,
+        // but the reachable LITE_RT node is, so the image is deliverable.
+        val input = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val router = NodeModel("router", NodeType.INTENT_ROUTER, 0f, 0f)
+        val lite = NodeModel("lite", NodeType.LITE_RT, 0f, 0f)
+        val graph = PipelineGraph(
+            id = "bound",
+            name = "bound",
+            nodes = listOf(input, router, lite),
+            connections = listOf(
+                ConnectionModel("c1", "input", "router"),
+                ConnectionModel("c2", "router", "lite"),
+            ),
+        )
+        coEvery { pipelineRepository.getPipelineById("bound") } returns graph
+
         assertEquals(EntryInferenceKind.LOCAL, useCase("bound"))
+    }
+
+    @Test
+    fun `given a LITE_RT entry without originalTask context when invoke then returns NONE`() = runTest {
+        // A LITE_RT node that does NOT carry the original task is not where the
+        // engine delivers the image, so it does not count as a vision sink.
+        val input = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val lite = NodeModel(
+            "lite",
+            NodeType.LITE_RT,
+            0f,
+            0f,
+            contextConfig = NodeContextConfig(originalTask = false),
+        )
+        val graph = PipelineGraph(
+            id = "bound",
+            name = "bound",
+            nodes = listOf(input, lite),
+            connections = listOf(ConnectionModel("c1", "input", "lite")),
+        )
+        coEvery { pipelineRepository.getPipelineById("bound") } returns graph
+
+        assertEquals(EntryInferenceKind.NONE, useCase("bound"))
     }
 
     @Test

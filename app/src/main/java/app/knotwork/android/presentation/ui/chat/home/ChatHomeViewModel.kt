@@ -224,6 +224,15 @@ class ChatHomeViewModel @Inject constructor(
 
     private var messagesJob: Job? = null
     private var generationJob: Job? = null
+
+    /**
+     * Re-entrancy guard for the image send path: the attachment pre-flight is
+     * asynchronous (it resolves the pipeline graph), so a second `sendMessage`
+     * could slip through the synchronous `Generating` guard before the first
+     * pre-flight flips the surface. Set synchronously the moment a pre-flight
+     * launches, cleared when it settles to a block or a started run.
+     */
+    private var attachmentSendInFlight: Boolean = false
     private var tokenCounterJob: Job? = null
     private var sessions: List<ChatSession> = emptyList()
     private var availablePipelinesObserved: Boolean = false
@@ -354,13 +363,28 @@ class ChatHomeViewModel @Inject constructor(
         // pipeline graph, so it suspends — run it before clearing the composer so
         // a blocked send keeps the user's draft and attachment intact (mirrors
         // the "model not loaded" guard above, which also returns before clearing).
+        //
+        // The suspend gap means the synchronous `Generating` guard above cannot
+        // cover the window between two rapid sends; `attachmentSendInFlight` is
+        // set synchronously here (before the coroutine suspends) so a second tap
+        // is rejected until this pre-flight resolves to either a block or a run.
         if (readyAttachment != null) {
-            viewModelScope.launch {
-                val block = attachmentPreflightBlockReason()
-                if (block != null) {
-                    _state.update { it.copy(visual = ChatHomeUiState.Error(block)) }
-                } else {
-                    proceedSend(draftText, readyAttachment)
+            // Guard without its own `return` keeps the function's return count
+            // within the detekt ceiling; a second tap simply finds the flag set
+            // and falls through to the trailing `return` doing nothing.
+            if (!attachmentSendInFlight) {
+                attachmentSendInFlight = true
+                viewModelScope.launch {
+                    try {
+                        val block = attachmentPreflightBlockReason()
+                        if (block != null) {
+                            _state.update { it.copy(visual = ChatHomeUiState.Error(block)) }
+                        } else {
+                            proceedSend(draftText, readyAttachment)
+                        }
+                    } finally {
+                        attachmentSendInFlight = false
+                    }
                 }
             }
             return
@@ -372,24 +396,28 @@ class ChatHomeViewModel @Inject constructor(
      * Resolves whether an image message must be blocked before it is enqueued,
      * returning the user-facing block reason or `null` when the send may proceed.
      *
-     * Two guards, in order:
-     * 1. The run's first node after `INPUT` is a `CLOUD` node — attachments are
-     *    never sent off-device ([CLOUD_ATTACHMENT_BLOCKED_MESSAGE]).
+     * Three guards, in precedence order:
+     * 1. The run starts on a `CLOUD` node — attachments are never sent off-device
+     *    ([CLOUD_ATTACHMENT_BLOCKED_MESSAGE]).
      * 2. The active local model is not marked vision-capable — it cannot read an
-     *    image ([MODEL_NO_VISION_MESSAGE]).
+     *    image ([MODEL_NO_VISION_MESSAGE]); the most common, most actionable fix.
+     * 3. The pipeline has no on-device step that could receive the image (no
+     *    reachable vision sink), so the picture would be silently ignored
+     *    ([PIPELINE_NO_VISION_MESSAGE]).
      *
      * @return The block reason, or `null` to allow the send.
      */
     private suspend fun attachmentPreflightBlockReason(): String? {
         val sessionId = _state.value.thread.currentSessionId
         val pipelineId = sessions.firstOrNull { it.id == sessionId }?.pipelineId
-        if (resolveEntryInferenceUseCase(pipelineId) == EntryInferenceKind.CLOUD) {
-            return CLOUD_ATTACHMENT_BLOCKED_MESSAGE
-        }
+        val entryKind = resolveEntryInferenceUseCase(pipelineId)
+        if (entryKind == EntryInferenceKind.CLOUD) return CLOUD_ATTACHMENT_BLOCKED_MESSAGE
         val activeSupportsVision = _state.value.model.let { model ->
             model.installed.firstOrNull { it.id == model.activeId }?.supportsVision == true
         }
-        return if (activeSupportsVision) null else MODEL_NO_VISION_MESSAGE
+        if (!activeSupportsVision) return MODEL_NO_VISION_MESSAGE
+        if (entryKind == EntryInferenceKind.NONE) return PIPELINE_NO_VISION_MESSAGE
+        return null
     }
 
     /**
@@ -2202,6 +2230,16 @@ class ChatHomeViewModel @Inject constructor(
         const val CLOUD_ATTACHMENT_BLOCKED_MESSAGE: String =
             "Images stay on your device and aren't sent to cloud models. Use a pipeline that starts " +
                 "with an on-device step to send a picture."
+
+        /**
+         * Surfaced when the user attaches an image but the bound pipeline has no
+         * on-device step that could read it (no reachable `LITE_RT` node that
+         * carries the original task). Blocking is honest: the engine would
+         * otherwise drop the image silently while the run looks normal.
+         */
+        const val PIPELINE_NO_VISION_MESSAGE: String =
+            "This pipeline has no on-device step that can read an image. Pick a pipeline with an " +
+                "on-device model step to send a picture."
 
         /** Rough chars-per-token divisor used for the v0.1 token counter (`text.length / 4`). */
         const val TOKEN_CHARS_PER_TOKEN: Int = 4

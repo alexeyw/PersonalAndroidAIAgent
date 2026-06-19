@@ -184,26 +184,14 @@ class LiteRTLlmEngine @Inject constructor(
             settingsRepository.setLastInitBackendAttempt(null)
         }
 
-        val backend = when (resolved) {
-            LocalBackend.GPU -> Backend.GPU()
-            LocalBackend.NPU -> Backend.NPU()
-            LocalBackend.CPU -> Backend.CPU()
-        }
+        val backend = newBackend(resolved)
 
         // The vision encoder runs on a fresh backend instance of the same
         // compute family as text (LiteRT-LM fixes the vision backend at engine
         // construction). A text-only init leaves it `null` so no vision encoder
         // is loaded. `maxNumImages` mirrors the one-attachment-per-message
         // contract of this phase.
-        val visionBackend = if (enableVision) {
-            when (resolved) {
-                LocalBackend.GPU -> Backend.GPU()
-                LocalBackend.NPU -> Backend.NPU()
-                LocalBackend.CPU -> Backend.CPU()
-            }
-        } else {
-            null
-        }
+        val visionBackend = if (enableVision) newBackend(resolved) else null
 
         // Initialize Engine Configuration
         val config = EngineConfig(
@@ -378,6 +366,20 @@ class LiteRTLlmEngine @Inject constructor(
      * @param temperature The repair sampling temperature to apply.
      * @return A conversation config carrying the repair [SamplerConfig].
      */
+    /**
+     * Builds a fresh LiteRT-LM [Backend] instance for the given [LocalBackend].
+     * Used for both the compute backend and (when vision is enabled) the vision
+     * backend, so the GPU/NPU/CPU mapping lives in exactly one place.
+     *
+     * @param backend The resolved on-device execution backend.
+     * @return A new [Backend] of the matching family.
+     */
+    private fun newBackend(backend: LocalBackend): Backend = when (backend) {
+        LocalBackend.GPU -> Backend.GPU()
+        LocalBackend.NPU -> Backend.NPU()
+        LocalBackend.CPU -> Backend.CPU()
+    }
+
     private fun repairConversationConfig(temperature: Float): ConversationConfig = ConversationConfig(
         samplerConfig = SamplerConfig(
             topK = REPAIR_SAMPLER_TOP_K,

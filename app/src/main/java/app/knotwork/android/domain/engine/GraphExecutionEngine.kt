@@ -145,8 +145,10 @@ class GraphExecutionEngine @Inject constructor(
      *   the original task (via [ExecutionScope.imagePath]); every other node — and
      *   every `CLOUD` node — sees only text, realising the "attachment belongs to
      *   `userPrompt`, the graph carries text" contract. The send-time pre-flight
-     *   guard guarantees such a vision-capable entry node exists before a run with
-     *   an image is enqueued. `null` on resume — a replayed run never re-delivers.
+     *   guard verifies such a vision sink is *reachable* before enqueuing an image
+     *   run; branch-dependent routing can still take a path that skips it, in which
+     *   case the run emits an "Image not used" console note. `null` on resume — a
+     *   replayed run never re-delivers.
      * @return A cold flow of orchestrator states describing the run.
      */
     // Reason: this is the agent's core orchestrator. It is a long single
@@ -216,6 +218,19 @@ class GraphExecutionEngine @Inject constructor(
             emit(AgentOrchestratorState.ConsoleLog(consoleEvents.toList(), runId))
         }
 
+        // Honesty note for a run that carried an image but routed down a path with
+        // no vision sink: the send-time pre-flight guarantees such a node *exists*,
+        // but branch-dependent routing can still skip it. Emitting this keeps the
+        // earlier "Image input" line from implying the model saw the picture.
+        suspend fun noteUndeliveredImage(input: EngineImageInput?, delivered: Boolean) {
+            if (input != null && !delivered) {
+                pushConsole(
+                    ConsoleEventType.SystemMessage,
+                    "Image not used: this run took a path with no on-device step that reads images.",
+                )
+            }
+        }
+
         if (!graph.isValidDAG()) {
             // Push the console event BEFORE the terminal Error so the Error
             // remains the last value of the orchestrator state flow.
@@ -249,9 +264,12 @@ class GraphExecutionEngine @Inject constructor(
         // delivered to a single LITE_RT node below; this line is purely
         // informational ("Image input: W×H, N KB").
         if (imageInput != null) {
+            // Round to the nearest KB with a 1 KB floor: a valid sub-1 KB image
+            // must never read "0 KB" (which looks like a broken attachment).
+            val sizeKb = maxOf(1L, (imageInput.sizeBytes + BYTES_PER_KB / 2) / BYTES_PER_KB)
             pushConsole(
                 ConsoleEventType.SystemMessage,
-                "Image input: ${imageInput.width}×${imageInput.height}, ${imageInput.sizeBytes / BYTES_PER_KB} KB",
+                "Image input: ${imageInput.width}×${imageInput.height}, $sizeKb KB",
             )
         }
         // Tracks whether the run's image has already been handed to a node, so it
@@ -609,6 +627,15 @@ class GraphExecutionEngine @Inject constructor(
                 if (imagePathForNode != null) {
                     imageDelivered = true
                 }
+                // Note an undelivered image *before* the terminal OUTPUT node runs:
+                // OUTPUT's executor emits the terminal `Completed`, after which the
+                // engine must not push any further console line (it would shift the
+                // last orchestrator state away from `Completed`). By the OUTPUT
+                // iteration every upstream node — including any vision sink — has
+                // already run, so `imageDelivered` is final here.
+                if (currentNode.type == NodeType.OUTPUT) {
+                    noteUndeliveredImage(imageInput, imageDelivered)
+                }
                 try {
                     executor.execute(
                         nodeForExecution,
@@ -896,6 +923,10 @@ class GraphExecutionEngine @Inject constructor(
 
             currentNode = nextNode
         }
+
+        // Covers loop exits that don't go through an OUTPUT node (a dangling graph
+        // whose walk ends with no terminal node); the OUTPUT path notes it inline.
+        noteUndeliveredImage(imageInput, imageDelivered)
 
         if (budget.remaining <= 0 && currentNode != null) {
             // Shared run-tree budget exhausted. When this run is a sub-pipeline

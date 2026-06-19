@@ -1,5 +1,6 @@
 package app.knotwork.android.domain.usecases
 
+import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.repositories.PipelineRepository
@@ -8,30 +9,38 @@ import kotlinx.coroutines.flow.firstOrNull
 import javax.inject.Inject
 
 /**
- * Where a pipeline run's inference begins — the node the `INPUT` node hands the
- * user's message to first. Backs the multimodal send-time pre-flight guard,
- * which must decide whether an image attachment can travel into the run before
- * it is enqueued.
+ * How a pipeline run would treat an image attachment, decided before the run is
+ * enqueued. Backs the multimodal send-time pre-flight guard.
+ *
+ * The classification mirrors what
+ * [app.knotwork.android.domain.engine.GraphExecutionEngine] actually does at
+ * runtime: it delivers the image to the first `LITE_RT` node whose context
+ * includes the original task. So the pre-flight does not merely look at the
+ * `INPUT` node's immediate successor — it also verifies such a delivery target
+ * exists at all, otherwise an image send would pass the guard and then be
+ * silently dropped mid-run.
  */
 enum class EntryInferenceKind {
     /**
-     * The first node after `INPUT` runs on-device (a `LITE_RT` node or any
-     * other local node). An image attachment may flow into the run, **provided**
-     * the active model is vision-capable (checked separately by the caller).
+     * The run starts on-device **and** the graph contains a reachable vision
+     * sink (a `LITE_RT` node with `originalTask` context). An image attachment
+     * can flow into the run, provided the active model is vision-capable (the
+     * caller checks that separately).
      */
     LOCAL,
 
     /**
-     * The first node after `INPUT` is a `CLOUD` node. Attachments are never sent
-     * off-device, so an image message must be blocked before the run starts.
+     * The run starts unconditionally on a `CLOUD` node. Attachments never leave
+     * the device, so an image message must be blocked before the run starts.
      */
     CLOUD,
 
     /**
-     * No inference entry could be resolved — there is no usable pipeline, no
-     * `INPUT` node, or `INPUT` has no successor. The pre-flight treats this as
-     * "nothing to block": a genuinely broken/empty pipeline fails through the
-     * normal run-start error path rather than the attachment guard.
+     * No vision delivery target could be resolved — there is no usable pipeline,
+     * no `INPUT` node, `INPUT` has no successor, or no reachable `LITE_RT`
+     * node carries the original task. An image sent here would never reach any
+     * node, so the caller blocks the send with an explanation rather than
+     * letting the picture be silently ignored.
      */
     NONE,
 }
@@ -42,12 +51,18 @@ enum class EntryInferenceKind {
  *
  * Pipeline resolution mirrors the orchestrator's enqueue-time chain
  * (`TaskQueueManagerImpl`): the session's bound pipeline id first, then the
- * application-wide [SettingsRepository.defaultPipelineId]. The entry node is the
- * single target of the `INPUT` node's outgoing connection; only its type is
- * classified — branch-dependent inference deeper in the graph is intentionally
- * out of scope, because the active branch is unknowable before the run executes.
- * The conservative cases the task cares about (a `CLOUD`-first pipeline, and any
- * local-first pipeline gated by the model's vision flag) are both covered.
+ * application-wide [SettingsRepository.defaultPipelineId]. Classification:
+ *
+ * - the `INPUT` node's immediate successor is a `CLOUD` node ⇒ [EntryInferenceKind.CLOUD]
+ *   (the run unconditionally begins off-device);
+ * - otherwise, if a vision sink — a `LITE_RT` node with `contextConfig.originalTask`
+ *   — is reachable from `INPUT`, ⇒ [EntryInferenceKind.LOCAL] (an image can be delivered);
+ * - otherwise ⇒ [EntryInferenceKind.NONE] (nothing on-device can read the image).
+ *
+ * Branch-dependent routing is still not fully knowable before the run executes:
+ * a `LOCAL` result confirms the pipeline *can* show the image to the model, not
+ * that every branch will. The engine surfaces the residual case (a run that
+ * never delivered its image) on the console.
  */
 class ResolveEntryInferenceUseCase @Inject constructor(
     private val pipelineRepository: PipelineRepository,
@@ -60,21 +75,49 @@ class ResolveEntryInferenceUseCase @Inject constructor(
      * @param sessionPipelineId The chat session's bound pipeline id, or `null`
      *   to fall back to the application-wide default.
      * @return [EntryInferenceKind.CLOUD] when the run would start on a `CLOUD`
-     *   node, [EntryInferenceKind.LOCAL] when it would start on-device, or
-     *   [EntryInferenceKind.NONE] when no inference entry could be resolved.
+     *   node, [EntryInferenceKind.LOCAL] when an on-device vision sink is
+     *   reachable, or [EntryInferenceKind.NONE] when no delivery target resolves.
      */
     suspend operator fun invoke(sessionPipelineId: String?): EntryInferenceKind {
         val graph = resolveGraph(sessionPipelineId) ?: return EntryInferenceKind.NONE
         val inputNode = graph.nodes.firstOrNull { it.type == NodeType.INPUT } ?: return EntryInferenceKind.NONE
-        val entryNodeId = graph.connections
-            .firstOrNull { it.sourceNodeId == inputNode.id }
-            ?.targetNodeId
-            ?: return EntryInferenceKind.NONE
-        val entryNode = graph.nodes.firstOrNull { it.id == entryNodeId } ?: return EntryInferenceKind.NONE
-        return when (entryNode.type) {
-            NodeType.CLOUD -> EntryInferenceKind.CLOUD
-            else -> EntryInferenceKind.LOCAL
+        val entryNode = entrySuccessor(graph, inputNode) ?: return EntryInferenceKind.NONE
+        return when {
+            entryNode.type == NodeType.CLOUD -> EntryInferenceKind.CLOUD
+            hasReachableVisionSink(graph, inputNode) -> EntryInferenceKind.LOCAL
+            else -> EntryInferenceKind.NONE
         }
+    }
+
+    /**
+     * Returns the single node the `INPUT` node connects to (the run's entry
+     * node), or `null` when `INPUT` has no outgoing edge or it points nowhere.
+     */
+    private fun entrySuccessor(graph: PipelineGraph, inputNode: NodeModel): NodeModel? {
+        val entryNodeId = graph.connections.firstOrNull { it.sourceNodeId == inputNode.id }?.targetNodeId ?: return null
+        return graph.nodes.firstOrNull { it.id == entryNodeId }
+    }
+
+    /**
+     * Returns `true` when at least one **vision sink** — a `LITE_RT` node whose
+     * `contextConfig.originalTask` is enabled, i.e. exactly the node the engine
+     * would hand the image to — is reachable from [inputNode] over the graph's
+     * connections. A breadth-first walk over the validated DAG; cheap and bounded
+     * by the node count.
+     */
+    private fun hasReachableVisionSink(graph: PipelineGraph, inputNode: NodeModel): Boolean {
+        val nodesById = graph.nodes.associateBy { it.id }
+        val successors = graph.connections.groupBy({ it.sourceNodeId }, { it.targetNodeId })
+        val visited = mutableSetOf(inputNode.id)
+        val frontier = ArrayDeque(successors[inputNode.id].orEmpty())
+        while (frontier.isNotEmpty()) {
+            val nodeId = frontier.removeFirst()
+            if (!visited.add(nodeId)) continue
+            val node = nodesById[nodeId] ?: continue
+            if (node.type == NodeType.LITE_RT && node.contextConfig.originalTask) return true
+            frontier.addAll(successors[nodeId].orEmpty())
+        }
+        return false
     }
 
     /**

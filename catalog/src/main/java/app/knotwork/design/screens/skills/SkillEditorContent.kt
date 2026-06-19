@@ -28,8 +28,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -37,7 +35,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.AnnotatedString
@@ -49,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.RiskPill
 import app.knotwork.design.components.controls.KnotworkSegmentedControl
+import app.knotwork.design.components.controls.LabeledSwitchRow
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
@@ -61,9 +59,6 @@ private val EditorTileGlyph = 22.dp
 
 /** Minimum height of the multi-line instruction field. */
 private val InstructionMinHeight = 132.dp
-
-/** Render scale for the context-flag switches, matching the Settings rows. */
-private const val CONTEXT_SWITCH_SCALE = 0.78f
 
 /**
  * Stateless full-screen Skill editor — create or edit a skill's name,
@@ -419,48 +414,14 @@ private fun ContextFlags(state: SkillEditorUi, strings: SkillEditorStrings, call
     ) {
         state.contextFlags.forEachIndexed { index, flag ->
             if (index > 0) HorizontalDivider(color = KnotworkTheme.extended.divider)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.surface)
-                    .then(
-                        if (state.readOnly) {
-                            Modifier
-                        } else {
-                            // Tap target on the whole row (the documented 48 dp
-                            // floor); the Switch itself is non-interactive.
-                            Modifier.clickable { callbacks.onContextToggle(flag.key) }
-                        },
-                    )
-                    .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp3),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = flag.label,
-                        style = KnotworkTextStyles.BodyBase,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = flag.description,
-                        style = KnotworkTextStyles.BodySm,
-                        color = KnotworkTheme.extended.onSurfaceMuted,
-                    )
-                }
-                Switch(
-                    checked = flag.enabled,
-                    onCheckedChange = null,
-                    enabled = !state.readOnly,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                        checkedTrackColor = MaterialTheme.colorScheme.primary,
-                        checkedBorderColor = MaterialTheme.colorScheme.primary,
-                    ),
-                    // Material3's default Switch (52×32 dp) dwarfs the row title at
-                    // our 14sp scale — shrink to ~78% to match the Settings rows.
-                    modifier = Modifier.scale(CONTEXT_SWITCH_SCALE),
-                )
-            }
+            LabeledSwitchRow(
+                label = flag.label,
+                description = flag.description,
+                checked = flag.enabled,
+                onToggle = { callbacks.onContextToggle(flag.key) },
+                modifier = Modifier.background(MaterialTheme.colorScheme.surface),
+                enabled = !state.readOnly,
+            )
         }
     }
 }
