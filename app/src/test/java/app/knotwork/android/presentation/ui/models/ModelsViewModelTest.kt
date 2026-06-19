@@ -89,6 +89,14 @@ class ModelsViewModelTest {
     }
 
     @Test
+    fun `setAudioSupport delegates to the repository`() = runTest {
+        viewModel.setAudioSupport(modelId = 7L, enabled = true)
+        advanceUntilIdle()
+
+        coVerify { localModelRepository.setAudioSupport(7L, true) }
+    }
+
+    @Test
     fun `onAuthTokenChanged updates state and saves to repository`() = runTest {
         viewModel.onAuthTokenChanged("new-token-456")
         advanceUntilIdle()

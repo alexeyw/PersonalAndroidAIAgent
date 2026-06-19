@@ -19,6 +19,7 @@ class LocalModelMapperTest {
             size = 1024L,
             isActive = true,
             supportsVision = true,
+            supportsAudio = true,
         )
 
         val domain = entity.toDomain()
@@ -29,6 +30,7 @@ class LocalModelMapperTest {
         assertEquals(1024L, domain.size)
         assertEquals(true, domain.isActive)
         assertEquals(true, domain.supportsVision)
+        assertEquals(true, domain.supportsAudio)
     }
 
     @Test
@@ -40,6 +42,7 @@ class LocalModelMapperTest {
             size = 2048L,
             isActive = false,
             supportsVision = true,
+            supportsAudio = true,
         )
 
         val entity = domain.toEntity()
@@ -50,5 +53,6 @@ class LocalModelMapperTest {
         assertEquals(2048L, entity.size)
         assertEquals(false, entity.isActive)
         assertEquals(true, entity.supportsVision)
+        assertEquals(true, entity.supportsAudio)
     }
 }

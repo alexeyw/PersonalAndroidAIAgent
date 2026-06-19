@@ -27,6 +27,9 @@ import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.AttachmentStore
+import app.knotwork.android.domain.services.AudioCaptureStore
+import app.knotwork.android.domain.services.AudioRecorder
+import app.knotwork.android.domain.services.RecordingState
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
 import app.knotwork.android.domain.usecases.EntryInferenceKind
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
@@ -39,8 +42,11 @@ import app.knotwork.android.domain.usecases.SaveMessageToMemoryUseCase
 import app.knotwork.android.domain.usecases.SaveToMemoryOutcome
 import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
 import app.knotwork.android.domain.usecases.SubmitClarificationAnswerUseCase
+import app.knotwork.android.domain.usecases.TranscribeAudioUseCase
+import app.knotwork.android.domain.usecases.TranscriptionOutcome
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ChatRole
+import app.knotwork.design.components.chat.ComposerVoiceNotice
 import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.components.console.ConsoleSnap
 import io.mockk.coEvery
@@ -115,6 +121,9 @@ class ChatHomeViewModelTest {
     private lateinit var submitClarificationAnswerUseCase: SubmitClarificationAnswerUseCase
     private lateinit var attachmentStore: AttachmentStore
     private lateinit var resolveEntryInferenceUseCase: ResolveEntryInferenceUseCase
+    private lateinit var audioRecorder: AudioRecorder
+    private lateinit var audioCaptureStore: AudioCaptureStore
+    private lateinit var transcribeAudioUseCase: TranscribeAudioUseCase
 
     private lateinit var sessionsFlow: MutableStateFlow<List<ChatSession>>
     private lateinit var localModelsFlow: MutableStateFlow<List<LocalModel>>
@@ -149,6 +158,10 @@ class ChatHomeViewModelTest {
         submitApprovalDecisionUseCase = mockk(relaxed = true)
         attachmentStore = mockk(relaxed = true)
         resolveEntryInferenceUseCase = mockk()
+        audioRecorder = mockk(relaxed = true)
+        every { audioRecorder.state } returns MutableStateFlow(RecordingState.Idle)
+        audioCaptureStore = mockk(relaxed = true)
+        transcribeAudioUseCase = mockk(relaxed = true)
         // Default: the bound pipeline starts on-device, so the attachment
         // pre-flight only depends on the active model's vision flag. Tests that
         // exercise the CLOUD-entry block override this.
@@ -199,6 +212,7 @@ class ChatHomeViewModelTest {
         every { settingsRepository.currentChatSessionId } returns savedSessionIdFlow
         every { settingsRepository.defaultPipelineId } returns defaultPipelineIdFlow
         every { settingsRepository.maxContextLength } returns maxContextLengthFlow
+        every { settingsRepository.audioMaxDurationSec } returns flowOf(AUDIO_LIMIT_SEC)
         every { settingsRepository.consolePreferredConsoleTabName } returns consolePreferredConsoleTabNameFlow
         coEvery { settingsRepository.setConsolePreferredConsoleTabName(any()) } answers {
             consolePreferredConsoleTabNameFlow.value = firstArg()
@@ -235,6 +249,9 @@ class ChatHomeViewModelTest {
         submitClarificationAnswerUseCase,
         attachmentStore,
         resolveEntryInferenceUseCase,
+        audioRecorder,
+        audioCaptureStore,
+        transcribeAudioUseCase,
     ).also { vm ->
         // Keep the replay projection on the test scheduler so
         // advanceUntilIdle() deterministically covers it.
@@ -1987,8 +2004,107 @@ class ChatHomeViewModelTest {
 
     // endregion
 
+    // region Voice input
+
+    @Test
+    fun `onMicClicked opens the audio chooser with the configured duration`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onMicClicked()
+        advanceUntilIdle()
+
+        val composer = viewModel.state.value.composer
+        assertTrue(composer.audioChooserVisible)
+        assertEquals(AUDIO_LIMIT_SEC, composer.audioMaxDurationSec)
+    }
+
+    @Test
+    fun `onMicPermissionDenied surfaces the permission notice and closes the chooser`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onMicPermissionDenied()
+
+        val composer = viewModel.state.value.composer
+        assertEquals(ComposerVoiceNotice.PermissionDenied, composer.voiceNotice)
+        assertFalse(composer.audioChooserVisible)
+    }
+
+    @Test
+    fun `onAudioFilePicked transcribes the clip into the composer`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        coEvery { audioCaptureStore.importFromUri("content://clip") } returns kotlin.Result.success("/cache/clip.wav")
+        coEvery { transcribeAudioUseCase("/cache/clip.wav") } returns TranscriptionOutcome.Success("hello world")
+        advanceUntilIdle()
+
+        viewModel.onAudioFilePicked("content://clip")
+        advanceUntilIdle()
+
+        val composer = viewModel.state.value.composer
+        assertEquals("hello world", composer.value)
+        assertEquals(VoiceInputState.Idle, composer.voice)
+    }
+
+    @Test
+    fun `transcription against a non-audio model surfaces the no-audio notice`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        coEvery { audioCaptureStore.importFromUri(any()) } returns kotlin.Result.success("/cache/clip.wav")
+        coEvery { transcribeAudioUseCase(any()) } returns TranscriptionOutcome.ModelNotAudioCapable
+        advanceUntilIdle()
+
+        viewModel.onAudioFilePicked("content://clip")
+        advanceUntilIdle()
+
+        assertEquals(ComposerVoiceNotice.NoAudioModel, viewModel.state.value.composer.voiceNotice)
+    }
+
+    @Test
+    fun `onDiscardRecording cancels the recorder and resets the voice state`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onDiscardRecording()
+
+        verify { audioRecorder.cancel() }
+        assertEquals(VoiceInputState.Idle, viewModel.state.value.composer.voice)
+    }
+
+    @Test
+    fun `startRecording transcribes the finished clip`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        every { audioRecorder.state } returns MutableStateFlow(RecordingState.Finished("/cache/clip.wav"))
+        coEvery { transcribeAudioUseCase("/cache/clip.wav") } returns TranscriptionOutcome.Success("hi there")
+        advanceUntilIdle()
+
+        viewModel.startRecording()
+        advanceUntilIdle()
+
+        val composer = viewModel.state.value.composer
+        assertEquals("hi there", composer.value)
+        assertEquals(VoiceInputState.Idle, composer.voice)
+    }
+
+    @Test
+    fun `startRecording resets the composer when capture fails`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        // A failed capture emits the terminal Failed state (not Finished); the VM
+        // must stop collecting and reset rather than hang forever.
+        every { audioRecorder.state } returns MutableStateFlow(RecordingState.Failed)
+        advanceUntilIdle()
+
+        viewModel.startRecording()
+        advanceUntilIdle()
+
+        assertEquals(VoiceInputState.Idle, viewModel.state.value.composer.voice)
+        coVerify(exactly = 0) { transcribeAudioUseCase(any()) }
+    }
+
+    // endregion
+
     private companion object {
         const val DEFAULT_TOKENS_MAX: Int = 4096
         const val ALT_TOKENS_MAX: Int = 8192
+        const val AUDIO_LIMIT_SEC: Int = 30
     }
 }

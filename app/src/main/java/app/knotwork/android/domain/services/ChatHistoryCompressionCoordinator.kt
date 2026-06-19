@@ -2,7 +2,7 @@ package app.knotwork.android.domain.services
 
 import app.knotwork.android.domain.constants.TimeAndIdConstants
 import app.knotwork.android.domain.engine.TaskQueueManager
-import app.knotwork.android.domain.models.AgentOrchestratorState
+import app.knotwork.android.domain.models.isBusy
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.usecases.CompressChatHistoryUseCase
 import kotlinx.coroutines.CancellationException
@@ -94,7 +94,7 @@ class ChatHistoryCompressionCoordinator @Inject constructor(
                     // Read the toggle at compression time so a user flipping it
                     // off during the debounce window still cancels the work.
                     if (!settingsRepository.chatHistoryCompressionEnabled.first()) return@launch
-                    if (isAgentBusy()) continue
+                    if (taskQueueManager.globalState.value.isBusy) continue
 
                     compressChatHistoryUseCase(sessionId)
                     return@launch
@@ -111,22 +111,6 @@ class ChatHistoryCompressionCoordinator @Inject constructor(
                 pendingJobs.remove(sessionId, coroutineContext[Job])
             }
         }
-    }
-
-    /**
-     * `true` when the agent is mid-run on the shared inference engine — i.e.
-     * [TaskQueueManager.globalState] is any non-terminal state. Mirrors the idle
-     * predicate used by [MemoryAutoExtractionCoordinator] (idle = `Idle` /
-     * `Completed` / `Error`); everything else means a foreground generation could
-     * be holding the engine's single conversation.
-     */
-    private fun isAgentBusy(): Boolean = when (taskQueueManager.globalState.value) {
-        is AgentOrchestratorState.Idle,
-        is AgentOrchestratorState.Completed,
-        is AgentOrchestratorState.Error,
-        -> false
-
-        else -> true
     }
 
     private companion object {

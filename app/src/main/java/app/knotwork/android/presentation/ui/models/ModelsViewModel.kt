@@ -220,6 +220,23 @@ class ModelsViewModel @Inject constructor(
     }
 
     /**
+     * Sets the manual audio-capability flag of the model with the given id.
+     * Backs the "Audio support" toggle on the active-model card; the persisted
+     * value is read by the voice-input transcription pre-flight to decide
+     * whether the active model may transcribe a recorded/picked clip. The model
+     * list is observed, so the toggle reflects the new value on the next
+     * emission.
+     *
+     * @param modelId The unique identifier of the model to update.
+     * @param enabled `true` to mark the model audio-capable, `false` otherwise.
+     */
+    fun setAudioSupport(modelId: Long, enabled: Boolean) {
+        viewModelScope.launch {
+            localModelRepository.setAudioSupport(modelId, enabled)
+        }
+    }
+
+    /**
      * Cancels the currently in-flight download (if any). The download manager
      * has no native cancellation API, so the collection job is interrupted
      * instead — partial files are not cleaned up, but the UI returns to the

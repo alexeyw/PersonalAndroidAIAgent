@@ -264,6 +264,38 @@ on the path the run actually takes. If a branch is taken that has no such step,
 the agent says so on the console (`Image not used …`) instead of pretending the
 model saw the picture.
 
+### Voice input
+
+Tap the **microphone** button in the composer to add voice. A small sheet
+offers two ways in:
+
+- **Record voice** — the app asks for microphone permission the first time,
+  then records. While recording, the input row becomes a bar with a live timer
+  (`0:07 / 0:30`), a discard ✕, and a Stop button. Recording **auto-stops** at
+  the limit (set by *Audio recording length*, default 30 seconds) — the timer
+  turns amber in the last few seconds to warn you.
+- **Choose audio file** — pick an existing clip from your device.
+
+Either way, the clip is **transcribed to text by your active model before
+anything runs** — the audio never travels the pipeline. You'll see
+*Transcribing…* in the composer; when it finishes, the transcript drops into
+the input field as **ordinary editable text**. Read it, fix anything, and send
+it like any other message.
+
+Transcription needs an **audio-capable** model:
+
+- **Text-only model.** A calm note ("This model can't transcribe audio") points
+  you to the **Audio support** toggle on the Models screen (next to *Image
+  support*) — turn it on for a multimodal model such as Gemma 4.
+- **Microphone off.** If you declined the permission, a note offers to open
+  system settings so you can grant it.
+- **A task is running.** Transcription shares the single on-device engine with
+  the agent, so it waits until the current run finishes rather than interrupting
+  it; a note tells you to try again in a moment.
+
+The recorded or picked clip is **temporary** — it is deleted as soon as it has
+been transcribed (only the text remains).
+
 ---
 
 ## Console

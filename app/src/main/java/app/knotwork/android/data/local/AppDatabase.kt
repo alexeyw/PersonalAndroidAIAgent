@@ -63,7 +63,7 @@ import app.knotwork.android.data.local.models.TraceStepEntity
         SkillEntity::class,
         ChatHistorySummaryEntity::class,
     ],
-    version = 40,
+    version = 41,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -915,6 +915,21 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_39_40 = object : Migration(39, 40) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `local_models` ADD COLUMN `supportsVision` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * Adds the `supportsAudio` flag to `local_models`. A user-set marker
+         * declaring a model audio-capable (able to transcribe a recorded/picked
+         * audio clip), read by the voice-input transcription pre-flight.
+         * Additive and backfilled to `0` (audio-incapable) for every existing
+         * row, matching the entity column default — like vision support, the
+         * LiteRT-LM runtime exposes no capability probe, so audio support is
+         * opt-in rather than auto-detected.
+         */
+        val MIGRATION_40_41 = object : Migration(40, 41) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `local_models` ADD COLUMN `supportsAudio` INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

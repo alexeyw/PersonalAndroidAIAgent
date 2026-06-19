@@ -15,6 +15,10 @@ import androidx.room.PrimaryKey
  *   vision-capable (able to read an attached image). Added in schema v40
  *   (`MIGRATION_39_40`) with a `false` default so every pre-existing row stays
  *   text-only until the user opts in on the model screen.
+ * @property supportsAudio Whether the user has marked this model as
+ *   audio-capable (able to transcribe a recorded/picked audio clip). Added in
+ *   schema v41 (`MIGRATION_40_41`) with a `false` default so every pre-existing
+ *   row stays audio-incapable until the user opts in on the model screen.
  */
 @Entity(tableName = "local_models")
 data class LocalModelEntity(
@@ -25,4 +29,5 @@ data class LocalModelEntity(
     val size: Long,
     val isActive: Boolean,
     val supportsVision: Boolean = false,
+    val supportsAudio: Boolean = false,
 )

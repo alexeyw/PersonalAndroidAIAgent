@@ -80,6 +80,19 @@ object DefaultPrompts {
     const val IMAGE_ONLY_DEFAULT_INSTRUCTION = "Describe what you see in this image."
 
     /**
+     * Instruction sent alongside an audio clip when transcribing voice input.
+     * Transcription is a **preprocessing** step run by the active multimodal
+     * model before any pipeline: the audio never travels the execution graph —
+     * only this transcript text does, landing in the composer as an editable
+     * message the user reviews before sending. The instruction asks for a
+     * verbatim transcript and nothing else (no commentary, no translation) so
+     * the model's output can be used directly as the message text.
+     */
+    const val AUDIO_TRANSCRIPTION_INSTRUCTION =
+        "Transcribe the spoken words in this audio exactly as said. " +
+            "Output only the transcript text, with no added commentary, labels, or translation."
+
+    /**
      * Tool-usage instruction surfaced to user-authored prompts when the agent
      * wants to advertise the available tools. The literal `[TOOL_LIST]`
      * placeholder is substituted by the caller (currently consumed by

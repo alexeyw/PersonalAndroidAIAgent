@@ -87,6 +87,37 @@ class LiteRTLlmEngineTest {
     }
 
     @Test
+    fun `transcribe throws IllegalStateException when not initialized`() = runTest {
+        try {
+            engine.transcribe("/cache/audio/clip.wav", "Transcribe this").toList()
+            assert(false) { "Expected IllegalStateException" }
+        } catch (e: IllegalStateException) {
+            assertEquals("LLM Engine not initialized", e.message)
+        }
+    }
+
+    @Test
+    fun `text-only init leaves audio disabled`() = runTest {
+        val tempFile = File.createTempFile("model", ".tflite")
+        tempFile.deleteOnExit()
+
+        engine.initialize(tempFile.absolutePath)
+
+        assertTrue(!engine.isAudioEnabled)
+    }
+
+    @Test
+    fun `init with enableAudio marks the engine audio-enabled`() = runTest {
+        val tempFile = File.createTempFile("model", ".tflite")
+        tempFile.deleteOnExit()
+
+        val result = engine.initialize(tempFile.absolutePath, enableAudio = true)
+
+        assertTrue(result is Result.Success)
+        assertTrue(engine.isAudioEnabled)
+    }
+
+    @Test
     fun `registers component callbacks on init`() {
         verify { context.registerComponentCallbacks(engine) }
     }

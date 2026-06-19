@@ -353,6 +353,22 @@ interface SettingsRepository {
     suspend fun setChatHistoryLiveWindowSize(size: Int)
 
     /**
+     * Maximum voice-recording length, in seconds, before the recorder
+     * auto-stops and the clip is handed to transcription. Defaults to
+     * [app.knotwork.android.domain.constants.SettingsDefaults.AUDIO_MAX_DURATION_SEC_DEFAULT].
+     */
+    val audioMaxDurationSec: Flow<Int>
+
+    /**
+     * Persists the maximum voice-recording length.
+     *
+     * @param seconds The new limit in seconds; callers should keep it within the
+     *   `AUDIO_MAX_DURATION_SEC_MIN..AUDIO_MAX_DURATION_SEC_MAX` range (validation
+     *   of user-entered values lives in the Settings ViewModel).
+     */
+    suspend fun setAudioMaxDurationSec(seconds: Int)
+
+    /**
      * A [Flow] emitting the minimum cosine-similarity score (0.0–1.0) a memory
      * chunk must reach to be considered relevant during retrieval. Chunks below
      * this threshold are dropped before they reach a node's context. Defaults

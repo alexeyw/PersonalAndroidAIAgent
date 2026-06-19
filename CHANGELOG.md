@@ -15,6 +15,20 @@ details.
 
 ### Added
 
+- **Voice input (on-device transcription).** The composer mic now records a
+  short voice clip — or you can pick an existing audio file — and a multimodal
+  local model **transcribes it to text before anything runs**. The transcript
+  lands in the input field as ordinary, editable text you review and send;
+  the audio itself never travels the pipeline (a deliberate simplification that
+  keeps the whole graph text-only). Recording captures canonical 16 kHz mono
+  WAV, shows a live timer, and auto-stops at a configurable limit
+  (`audioMaxDurationSec`, default 30 s, to match the model's audio window).
+  Transcription requires the active model to be marked audio-capable via a new
+  **"Audio support"** toggle on the Models screen (default off); a text-only
+  model, a denied microphone permission, or a busy engine each surface a calm,
+  non-blocking notice instead of failing. The clip is temporary and deleted
+  after a successful transcription.
+
 - **On-device image understanding (vision inference).** A vision-capable local
   model (e.g. Gemma 4) now actually reads an attached image. The image is
   delivered to the **first on-device step of the pipeline** alongside the user's

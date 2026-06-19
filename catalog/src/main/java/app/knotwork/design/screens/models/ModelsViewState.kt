@@ -30,12 +30,16 @@ enum class ModelsVisualState {
  * @property visionSupported whether the user has marked this model as able to
  *   read image attachments. Drives the "Image support" toggle on the active
  *   card; defaults to `false` (text-only).
+ * @property audioSupported whether the user has marked this model as able to
+ *   transcribe audio clips. Drives the "Audio support" toggle on the active
+ *   card; defaults to `false`.
  */
 data class ActiveModelRow(
     val id: Long,
     val displayName: String,
     val meta: String,
     val visionSupported: Boolean = false,
+    val audioSupported: Boolean = false,
 )
 
 /** Per-preset row content. */
@@ -126,6 +130,7 @@ class ModelsCallbacks(
     val onActiveOpen: () -> Unit = {},
     val onOverflowMenu: () -> Unit = {},
     val onToggleVision: (Boolean) -> Unit = {},
+    val onToggleAudio: (Boolean) -> Unit = {},
     val onRetry: () -> Unit = {},
 )
 

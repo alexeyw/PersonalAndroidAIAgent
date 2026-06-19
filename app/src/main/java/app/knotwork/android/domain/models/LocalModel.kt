@@ -16,6 +16,13 @@ package app.knotwork.android.domain.models
  *   support cannot be auto-detected from the `.litertlm` file and is instead a
  *   user-set flag on the model screen. The pre-flight send guard reads it to
  *   block an image message against a text-only active model before a run starts.
+ * @property supportsAudio Whether this model can transcribe an audio clip (a
+ *   multimodal LiteRT-LM model exposing an audio backend, such as Gemma-class
+ *   speech models). Defaults to `false` for the same reason as [supportsVision]:
+ *   the runtime offers no capability probe, so this is a user-set flag on the
+ *   model screen. Voice input transcribes the clip with the active model *before*
+ *   the pipeline runs; this flag gates that preprocessing step so a text-only
+ *   model yields a calm "switch model" message instead of failing in native code.
  */
 data class LocalModel(
     val id: Long = 0,
@@ -24,4 +31,5 @@ data class LocalModel(
     val size: Long,
     val isActive: Boolean,
     val supportsVision: Boolean = false,
+    val supportsAudio: Boolean = false,
 )
