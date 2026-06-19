@@ -45,6 +45,12 @@ package app.knotwork.android.domain.models
  *   the image, the rest of the graph (and every `CLOUD` node) never does.
  *   [LiteRtNodeExecutor][app.knotwork.android.domain.engine.executors.LiteRtNodeExecutor]
  *   forwards it to the inference engine; all other executors ignore it.
+ * @property imageDelivery The run tree's shared single-image delivery state, or
+ *   `null` when the run carries no image. Threaded through unchanged so a
+ *   `PIPELINE` node can forward it to its sub-pipeline's engine invocation —
+ *   letting a vision sink nested inside a sub-pipeline consume the image. Only
+ *   [PipelineNodeExecutor][app.knotwork.android.domain.engine.executors.PipelineNodeExecutor]
+ *   reads it; the engine sets [imagePath] from it for the actual delivery node.
  */
 data class ExecutionScope(
     val depth: Int = 0,
@@ -52,4 +58,5 @@ data class ExecutionScope(
     val pipelineVisitIndex: Int = 0,
     val routingChoices: List<String> = emptyList(),
     val imagePath: String? = null,
+    val imageDelivery: RunImageDelivery? = null,
 )

@@ -539,11 +539,16 @@ into a run is deliberately narrow so the rest of the engine stays text-only:
    there.
 2. **Announce.** At run start the engine emits one `Image input: W×H, N KB`
    console line (`SystemMessage`).
-3. **Deliver to exactly one node.** While walking the graph, the engine hands
-   the image to the **first `LITE_RT` node whose context includes the original
-   task** — via `ExecutionScope.imagePath` — and marks it delivered. Every other
+3. **Deliver to exactly one node, anywhere in the tree.** Delivery state is a
+   tree-shared `RunImageDelivery` holder (mirroring the shared `RunStepBudget`):
+   a `PIPELINE` node threads it into its sub-pipeline's engine invocation via
+   `ExecutionScope.imageDelivery`. The engine hands the image to the **first
+   `LITE_RT` node whose context includes the original task** in execution order
+   *across the whole run tree* — including a node nested inside a sub-pipeline —
+   via `ExecutionScope.imagePath`, then marks the holder consumed. Every other
    node, and every `CLOUD` node, sees `null`. This realises the contract *"the
-   attachment belongs to the user prompt; the graph carries text"*.
+   attachment belongs to the user prompt; the graph carries text"* even for the
+   composed (sub-pipeline) showcase pipelines.
 4. **Infer.** `LiteRtNodeExecutor` loads the model in vision mode
    (`LoadModelUseCase(requireVision = true)`, which re-initialises the LiteRT
    engine with a vision backend only when needed) and calls
@@ -556,7 +561,8 @@ toggle, default `false`). Before enqueueing an image message, `ChatHomeViewModel
 runs a pre-flight on `ResolveEntryInferenceUseCase`, which classifies the bound
 pipeline the same way the engine delivers: `CLOUD` when the run starts on a cloud
 node, `LOCAL` when a **vision sink** (a `LITE_RT` node carrying the original task)
-is reachable from `INPUT`, else `NONE`. The three guards, in order, are: `CLOUD`
+is reachable from `INPUT` — **recursing into `PIPELINE` nodes' sub-graphs**, since
+the engine forwards the image there — else `NONE`. The three guards, in order, are: `CLOUD`
 → blocked (attachments never leave the device); active model not vision-capable →
 blocked; `NONE` (no reachable vision sink) → blocked. Each preserves the draft and
 shows a clear message. Branch-dependent routing can still take a path that skips

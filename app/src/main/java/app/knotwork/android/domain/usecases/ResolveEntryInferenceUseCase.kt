@@ -84,7 +84,7 @@ class ResolveEntryInferenceUseCase @Inject constructor(
         val entryNode = entrySuccessor(graph, inputNode) ?: return EntryInferenceKind.NONE
         return when {
             entryNode.type == NodeType.CLOUD -> EntryInferenceKind.CLOUD
-            hasReachableVisionSink(graph, inputNode) -> EntryInferenceKind.LOCAL
+            hasReachableVisionSink(graph, inputNode, mutableSetOf()) -> EntryInferenceKind.LOCAL
             else -> EntryInferenceKind.NONE
         }
     }
@@ -101,11 +101,17 @@ class ResolveEntryInferenceUseCase @Inject constructor(
     /**
      * Returns `true` when at least one **vision sink** — a `LITE_RT` node whose
      * `contextConfig.originalTask` is enabled, i.e. exactly the node the engine
-     * would hand the image to — is reachable from [inputNode] over the graph's
-     * connections. A breadth-first walk over the validated DAG; cheap and bounded
-     * by the node count.
+     * would hand the image to — is reachable from [inputNode]. The walk follows
+     * the graph's connections and **recurses into `PIPELINE` nodes' target
+     * graphs**, because the engine forwards the image into sub-pipelines, so a
+     * sink nested inside a sub-pipeline still receives it. [visitedPipelines]
+     * guards against revisiting a sub-pipeline (and against composition cycles).
      */
-    private fun hasReachableVisionSink(graph: PipelineGraph, inputNode: NodeModel): Boolean {
+    private suspend fun hasReachableVisionSink(
+        graph: PipelineGraph,
+        inputNode: NodeModel,
+        visitedPipelines: MutableSet<String>,
+    ): Boolean {
         val nodesById = graph.nodes.associateBy { it.id }
         val successors = graph.connections.groupBy({ it.sourceNodeId }, { it.targetNodeId })
         val visited = mutableSetOf(inputNode.id)
@@ -115,9 +121,27 @@ class ResolveEntryInferenceUseCase @Inject constructor(
             if (!visited.add(nodeId)) continue
             val node = nodesById[nodeId] ?: continue
             if (node.type == NodeType.LITE_RT && node.contextConfig.originalTask) return true
+            if (subPipelineHasVisionSink(node, visitedPipelines)) return true
             frontier.addAll(successors[nodeId].orEmpty())
         }
         return false
+    }
+
+    /**
+     * Loads a `PIPELINE` node's target graph and searches it for a vision sink,
+     * skipping a sub-pipeline already visited on this resolution. Returns `false`
+     * for any non-`PIPELINE` node, an unset/already-visited target, or a target
+     * that fails to load.
+     */
+    private suspend fun subPipelineHasVisionSink(node: NodeModel, visitedPipelines: MutableSet<String>): Boolean {
+        // `add` short-circuits behind the type/non-null checks, so a non-PIPELINE
+        // node (or one already visited) never pollutes the visited set.
+        val targetId = node.targetPipelineId
+            ?.takeIf { node.type == NodeType.PIPELINE && visitedPipelines.add(it) }
+            ?: return false
+        val sub = pipelineRepository.getPipelineById(targetId) ?: return false
+        val subInput = sub.nodes.firstOrNull { it.type == NodeType.INPUT } ?: return false
+        return hasReachableVisionSink(sub, subInput, visitedPipelines)
     }
 
     /**

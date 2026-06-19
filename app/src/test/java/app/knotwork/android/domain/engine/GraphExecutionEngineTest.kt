@@ -2098,6 +2098,54 @@ class GraphExecutionEngineTest {
     }
 
     @Test
+    fun `given an image input when the only LITE_RT lives in a sub-pipeline then the nested node receives it`() =
+        runTest {
+            val subGraph = PipelineGraph(
+                id = "sub-pipe",
+                name = "Sub",
+                nodes = listOf(
+                    NodeModel("sub_in", NodeType.INPUT, 0f, 0f),
+                    NodeModel("sub_lite", NodeType.LITE_RT, 10f, 0f, systemPrompt = "SUB_NODE"),
+                    NodeModel("sub_out", NodeType.OUTPUT, 20f, 0f, systemPrompt = null),
+                ),
+                connections = listOf(
+                    ConnectionModel("s1", "sub_in", "sub_lite"),
+                    ConnectionModel("s2", "sub_lite", "sub_out"),
+                ),
+            )
+            coEvery { pipelineRepository.getPipelineById("sub-pipe") } returns subGraph
+            val mainGraph = PipelineGraph(
+                id = "main-pipe",
+                name = "Main",
+                nodes = listOf(
+                    NodeModel("main_in", NodeType.INPUT, 0f, 0f),
+                    NodeModel("pipe_node", NodeType.PIPELINE, 10f, 0f, targetPipelineId = "sub-pipe"),
+                    NodeModel("main_out", NodeType.OUTPUT, 20f, 0f, systemPrompt = null),
+                ),
+                connections = listOf(
+                    ConnectionModel("m1", "main_in", "pipe_node"),
+                    ConnectionModel("m2", "pipe_node", "main_out"),
+                ),
+            )
+            coEvery { loadModelUseCase(any(), any()) } returns Result.Success(Unit)
+            every { llmEngine.generateResponseStream(any(), any(), any()) } returns flowOf("answer")
+
+            val image = EngineImageInput(absolutePath = "/abs/y.jpg", width = 640, height = 480, sizeBytes = 4096)
+            val states = engine(sessionId, "Describe", mainGraph, imageInput = image).toList()
+
+            assertTrue(states.last() is AgentOrchestratorState.Completed)
+            // The image was forwarded into the sub-pipeline and consumed by its LITE_RT node.
+            verify(exactly = 1) { llmEngine.generateResponseStream(any(), "/abs/y.jpg", any()) }
+            verify { llmEngine.generateResponseStream(match { it.contains("SUB_NODE") }, "/abs/y.jpg", any()) }
+            val consoleLines = states.filterIsInstance<AgentOrchestratorState.ConsoleLog>()
+                .last().events.map { it.message }
+            assertTrue(
+                "Unexpected 'Image not used' note: $consoleLines",
+                consoleLines.none { it.contains("Image not used") },
+            )
+        }
+
+    @Test
     fun `given an image input but no vision-sink node when run completes then emits an Image not used note`() =
         runTest {
             // INPUT -> OUTPUT (echo): no LITE_RT-with-originalTask node, so the

@@ -19,6 +19,7 @@ import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.ResumeContext
+import app.knotwork.android.domain.models.RunImageDelivery
 import app.knotwork.android.domain.models.RunStepBudget
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.ToolInvocationResult
@@ -138,17 +139,24 @@ class GraphExecutionEngine @Inject constructor(
      *   same ceiling instead of getting a private allowance. Exhaustion at any
      *   depth fails the run with the max-steps error, which propagates up the
      *   stack as the parent PIPELINE node's error.
-     * @param imageInput The run's single image attachment, already resolved to an
-     *   absolute path + dimensions + byte size, or `null` for a text-only run.
-     *   The engine emits an `Image input: W×H, N KB` console line at run start and
-     *   delivers the image to the **first** `LITE_RT` node whose context includes
-     *   the original task (via [ExecutionScope.imagePath]); every other node — and
+     * @param imageInput The **top-level** run's single image attachment, already
+     *   resolved to an absolute path + dimensions + byte size, or `null` for a
+     *   text-only run (and always `null` for a sub-pipeline invocation, which
+     *   instead receives [imageDelivery]). The engine emits an `Image input: W×H,
+     *   N KB` console line at run start and seeds the tree-shared delivery state
+     *   from it. `null` on resume — a replayed run never re-delivers.
+     * @param imageDelivery The run tree's shared single-image delivery state,
+     *   passed by a `PIPELINE` node into its sub-pipeline invocation so a vision
+     *   sink nested inside the sub-pipeline can consume the image. `null` for a
+     *   top-level run (which seeds it from [imageInput]) and for a text-only run.
+     *   The image reaches the **first** `LITE_RT` node whose context includes the
+     *   original task in execution order *anywhere in the tree* (via
+     *   [ExecutionScope.imagePath]) and exactly that node; every other node — and
      *   every `CLOUD` node — sees only text, realising the "attachment belongs to
      *   `userPrompt`, the graph carries text" contract. The send-time pre-flight
-     *   guard verifies such a vision sink is *reachable* before enqueuing an image
-     *   run; branch-dependent routing can still take a path that skips it, in which
-     *   case the run emits an "Image not used" console note. `null` on resume — a
-     *   replayed run never re-delivers.
+     *   verifies such a sink is *reachable* (recursing into sub-pipelines) before
+     *   enqueuing; branch-dependent routing can still skip it, in which case the
+     *   top-level run emits an "Image not used" console note.
      * @return A cold flow of orchestrator states describing the run.
      */
     // Reason: this is the agent's core orchestrator. It is a long single
@@ -167,6 +175,7 @@ class GraphExecutionEngine @Inject constructor(
         depth: Int = 0,
         stepBudget: RunStepBudget? = null,
         imageInput: EngineImageInput? = null,
+        imageDelivery: RunImageDelivery? = null,
     ): Flow<AgentOrchestratorState> = flow {
         // Buffer of console events accumulated for this run. The engine emits a
         // fresh `ConsoleLog` snapshot on every append so the UI reactively
@@ -218,12 +227,19 @@ class GraphExecutionEngine @Inject constructor(
             emit(AgentOrchestratorState.ConsoleLog(consoleEvents.toList(), runId))
         }
 
+        // The run tree's shared single-image delivery state. A top-level run seeds
+        // it from [imageInput]; a sub-pipeline run reuses the parent's instance
+        // (threaded in via [imageDelivery]) so a vision sink nested inside a
+        // sub-pipeline can consume the image, tracked once across the whole tree.
+        val delivery = imageDelivery ?: imageInput?.let { RunImageDelivery(it) }
+
         // Honesty note for a run that carried an image but routed down a path with
         // no vision sink: the send-time pre-flight guarantees such a node *exists*,
-        // but branch-dependent routing can still skip it. Emitting this keeps the
-        // earlier "Image input" line from implying the model saw the picture.
-        suspend fun noteUndeliveredImage(input: EngineImageInput?, delivered: Boolean) {
-            if (input != null && !delivered) {
+        // but branch-dependent routing can still skip it. Emitted only at the
+        // top-level run (which owns the "Image input" announcement) and only when
+        // the tree-wide delivery was never consumed at any depth.
+        suspend fun noteUndeliveredImage() {
+            if (imageInput != null && delivery?.consumed == false) {
                 pushConsole(
                     ConsoleEventType.SystemMessage,
                     "Image not used: this run took a path with no on-device step that reads images.",
@@ -259,10 +275,10 @@ class GraphExecutionEngine @Inject constructor(
             localModelRepository.getActiveModel()?.name ?: ACTIVE_MODEL_NONE,
         )
 
-        // Announce the image attachment once at run start so the console shows
+        // Announce the image attachment once, at the top-level run start (a
+        // sub-run has [imageDelivery] but no [imageInput]), so the console shows
         // the multimodal input before any node executes. The image itself is
-        // delivered to a single LITE_RT node below; this line is purely
-        // informational ("Image input: W×H, N KB").
+        // delivered to a single LITE_RT node below; this line is informational.
         if (imageInput != null) {
             // Round to the nearest KB with a 1 KB floor: a valid sub-1 KB image
             // must never read "0 KB" (which looks like a broken attachment).
@@ -272,9 +288,6 @@ class GraphExecutionEngine @Inject constructor(
                 "Image input: ${imageInput.width}×${imageInput.height}, $sizeKb KB",
             )
         }
-        // Tracks whether the run's image has already been handed to a node, so it
-        // reaches exactly one (the first vision-eligible LITE_RT node).
-        var imageDelivered = false
 
         val maxSteps = settingsRepository.pipelineMaxSteps.first()
         // Step budget shared across the whole run tree. A top-level run seeds a
@@ -617,24 +630,28 @@ class GraphExecutionEngine @Inject constructor(
                 }
                 // Deliver the run's image to the FIRST vision-eligible node only:
                 // a LITE_RT node whose context includes the original task (so the
-                // image accompanies the user's prompt). Once delivered, every
-                // later node — and every CLOUD node — sees text only.
-                val imagePathForNode = imageInput?.absolutePath?.takeIf {
-                    !imageDelivered &&
-                        currentNode.type == NodeType.LITE_RT &&
-                        currentNode.contextConfig.originalTask
-                }
+                // image accompanies the user's prompt). Consumption is tracked on
+                // the tree-shared [delivery], so once any node at any depth takes
+                // the image, every later node — and every CLOUD node — sees text only.
+                val imagePathForNode = delivery
+                    ?.takeIf {
+                        !it.consumed &&
+                            currentNode.type == NodeType.LITE_RT &&
+                            currentNode.contextConfig.originalTask
+                    }
+                    ?.image
+                    ?.absolutePath
                 if (imagePathForNode != null) {
-                    imageDelivered = true
+                    delivery?.consumed = true
                 }
                 // Note an undelivered image *before* the terminal OUTPUT node runs:
                 // OUTPUT's executor emits the terminal `Completed`, after which the
                 // engine must not push any further console line (it would shift the
                 // last orchestrator state away from `Completed`). By the OUTPUT
                 // iteration every upstream node — including any vision sink — has
-                // already run, so `imageDelivered` is final here.
+                // already run, so the delivery state is final here.
                 if (currentNode.type == NodeType.OUTPUT) {
-                    noteUndeliveredImage(imageInput, imageDelivered)
+                    noteUndeliveredImage()
                 }
                 try {
                     executor.execute(
@@ -649,6 +666,7 @@ class GraphExecutionEngine @Inject constructor(
                             pipelineVisitIndex = pipelineVisitIndex,
                             routingChoices = routingChoices,
                             imagePath = imagePathForNode,
+                            imageDelivery = delivery,
                         ),
                     )
                         .collect { output ->
@@ -926,7 +944,7 @@ class GraphExecutionEngine @Inject constructor(
 
         // Covers loop exits that don't go through an OUTPUT node (a dangling graph
         // whose walk ends with no terminal node); the OUTPUT path notes it inline.
-        noteUndeliveredImage(imageInput, imageDelivered)
+        noteUndeliveredImage()
 
         if (budget.remaining <= 0 && currentNode != null) {
             // Shared run-tree budget exhausted. When this run is a sub-pipeline

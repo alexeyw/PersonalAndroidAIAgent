@@ -115,6 +115,60 @@ class ResolveEntryInferenceUseCaseTest {
     }
 
     @Test
+    fun `given a PIPELINE entry whose sub-pipeline has a LITE_RT sink when invoke then returns LOCAL`() = runTest {
+        // Main: INPUT -> PIPELINE(sub) -> OUTPUT; the only vision sink is nested
+        // inside the sub-pipeline, which the engine forwards the image into.
+        val sub = PipelineGraph(
+            id = "sub",
+            name = "sub",
+            nodes = listOf(
+                NodeModel("s_in", NodeType.INPUT, 0f, 0f),
+                NodeModel("s_lite", NodeType.LITE_RT, 0f, 0f),
+            ),
+            connections = listOf(ConnectionModel("sc", "s_in", "s_lite")),
+        )
+        val main = PipelineGraph(
+            id = "bound",
+            name = "bound",
+            nodes = listOf(
+                NodeModel("input", NodeType.INPUT, 0f, 0f),
+                NodeModel("pipe", NodeType.PIPELINE, 0f, 0f, targetPipelineId = "sub"),
+            ),
+            connections = listOf(ConnectionModel("c", "input", "pipe")),
+        )
+        coEvery { pipelineRepository.getPipelineById("bound") } returns main
+        coEvery { pipelineRepository.getPipelineById("sub") } returns sub
+
+        assertEquals(EntryInferenceKind.LOCAL, useCase("bound"))
+    }
+
+    @Test
+    fun `given a PIPELINE entry whose sub-pipeline has no LITE_RT sink when invoke then returns NONE`() = runTest {
+        val sub = PipelineGraph(
+            id = "sub",
+            name = "sub",
+            nodes = listOf(
+                NodeModel("s_in", NodeType.INPUT, 0f, 0f),
+                NodeModel("s_tool", NodeType.TOOL, 0f, 0f),
+            ),
+            connections = listOf(ConnectionModel("sc", "s_in", "s_tool")),
+        )
+        val main = PipelineGraph(
+            id = "bound",
+            name = "bound",
+            nodes = listOf(
+                NodeModel("input", NodeType.INPUT, 0f, 0f),
+                NodeModel("pipe", NodeType.PIPELINE, 0f, 0f, targetPipelineId = "sub"),
+            ),
+            connections = listOf(ConnectionModel("c", "input", "pipe")),
+        )
+        coEvery { pipelineRepository.getPipelineById("bound") } returns main
+        coEvery { pipelineRepository.getPipelineById("sub") } returns sub
+
+        assertEquals(EntryInferenceKind.NONE, useCase("bound"))
+    }
+
+    @Test
     fun `given INPUT has no successor when invoke then returns NONE`() = runTest {
         coEvery { pipelineRepository.getPipelineById("bound") } returns graphWithEntry("bound", entryType = null)
 

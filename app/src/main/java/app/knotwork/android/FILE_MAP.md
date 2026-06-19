@@ -229,6 +229,7 @@ This file maps the contents of the main application package.
     - `AgentTask.kt` - Agent task model.
     - `MessageAttachment.kt` - Image attached to a user `ChatMessage`: store-relative `path`, `mimeType` (always `image/jpeg` this phase), and downscaled pixel `width`/`height`. Pure-Kotlin value class carried on `ChatMessage` and `AgentTask`.
     - `EngineImageInput.kt` - A run's single image resolved for the engine: absolute JPEG path (for LiteRT-LM `Content.ImageFile`) plus pixel `width`/`height` and on-disk `sizeBytes` (for the `Image input: W×H, N KB` console line). Built by `TaskQueueManagerImpl` from the saved `MessageAttachment` and threaded into `GraphExecutionEngine`.
+    - `RunImageDelivery.kt` - Tree-shared mutable holder (mirroring `RunStepBudget`) carrying the run's `EngineImageInput` + a `consumed` flag. Threaded through every `PIPELINE` node's sub-pipeline invocation (via `ExecutionScope.imageDelivery`) so the image reaches the first vision sink (`LITE_RT` with `originalTask`) anywhere in the run tree — including nested sub-pipelines — and exactly once.
     - `AgentTool.kt` - Agent tool model.
     - `AppError.kt` - App error model.
     - `ChatHistorySummary.kt` - Domain model of a session's cached compressed-history summary (`sessionId`, `summary`, incremental `coveredMessageCount` cursor, `updatedAt`).
