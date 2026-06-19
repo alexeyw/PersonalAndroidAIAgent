@@ -47,6 +47,7 @@ import app.knotwork.design.icons.imagevector.knotworkFlowActiveIcon
 import app.knotwork.design.icons.imagevector.knotworkFlowIcon
 import app.knotwork.design.icons.imagevector.knotworkFolderIcon
 import app.knotwork.design.icons.imagevector.knotworkFolderOpenIcon
+import app.knotwork.design.icons.imagevector.knotworkGaugeIcon
 import app.knotwork.design.icons.imagevector.knotworkGlobeIcon
 import app.knotwork.design.icons.imagevector.knotworkGridIcon
 import app.knotwork.design.icons.imagevector.knotworkGridOffIcon
@@ -266,6 +267,9 @@ object AppIcons {
 
     /** `I.monitor` — monitoring / metrics. */
     val Monitor: ImageVector get() = knotworkMonitorIcon
+
+    /** `I.gauge` — speedometer; model Performance-card header (speed/throughput). */
+    val Gauge: ImageVector get() = knotworkGaugeIcon
 
     /** `I.history` — history. */
     val History: ImageVector get() = knotworkHistoryIcon

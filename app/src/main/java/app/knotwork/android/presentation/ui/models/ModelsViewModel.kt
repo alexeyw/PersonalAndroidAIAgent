@@ -3,18 +3,32 @@ package app.knotwork.android.presentation.ui.models
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.knotwork.android.data.network.AndroidModelDownloadManager
+import app.knotwork.android.domain.engine.TaskQueueManager
 import app.knotwork.android.domain.models.DownloadState
 import app.knotwork.android.domain.models.LocalModel
+import app.knotwork.android.domain.models.isBusy
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.ModelDownloadManager
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.usecases.BenchmarkOutcome
+import app.knotwork.android.domain.usecases.BenchmarkRunPhase
+import app.knotwork.android.domain.usecases.GetModelPerformanceUseCase
+import app.knotwork.android.domain.usecases.RunBenchmarkUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -28,12 +42,21 @@ import javax.inject.Inject
  * @property localModelRepository The repository for accessing locally stored models.
  * @property downloadManager The manager for downloading new models from the network.
  * @property settingsRepository The repository for managing application settings like auth tokens.
+ * @property getModelPerformanceUseCase Supplies the rolling-average performance
+ *   summary for the active model shown on the Performance card.
+ * @property runBenchmarkUseCase Runs the controlled one-shot benchmark.
+ * @property taskQueueManager Source of the live engine-busy signal that gates
+ *   the Performance card's benchmark action.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class ModelsViewModel @Inject constructor(
     private val localModelRepository: LocalModelRepository,
     private val downloadManager: ModelDownloadManager,
     private val settingsRepository: SettingsRepository,
+    private val getModelPerformanceUseCase: GetModelPerformanceUseCase,
+    private val runBenchmarkUseCase: RunBenchmarkUseCase,
+    private val taskQueueManager: TaskQueueManager,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ModelsUiState())
@@ -43,6 +66,22 @@ class ModelsViewModel @Inject constructor(
      */
     val uiState: StateFlow<ModelsUiState> = _uiState.asStateFlow()
 
+    private val _benchmarkShareEvents = MutableSharedFlow<String>(extraBufferCapacity = 1)
+
+    /**
+     * One-shot stream of formatted benchmark-report text to hand to the system
+     * share sheet. Emitted when the user taps Share on the benchmark result.
+     */
+    val benchmarkShareEvents: SharedFlow<String> = _benchmarkShareEvents.asSharedFlow()
+
+    private val _benchmarkErrorEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
+    /**
+     * One-shot stream signalling that a benchmark run failed, so the screen can
+     * show a transient error snackbar.
+     */
+    val benchmarkErrorEvents: SharedFlow<Unit> = _benchmarkErrorEvents.asSharedFlow()
+
     /**
      * Reference to the currently in-flight download collection job. Held so
      * [cancelDownload] can interrupt it; nulled out when the download
@@ -50,10 +89,42 @@ class ModelsViewModel @Inject constructor(
      */
     private var downloadJob: Job? = null
 
+    /**
+     * Reference to the in-flight benchmark job. Held so [onCancelBenchmark] can
+     * interrupt it; nulled out when the run terminates.
+     */
+    private var benchmarkJob: Job? = null
+
     init {
         observeDownloadedModels()
         observeAuthToken()
         observeBackend()
+        observeActiveModelPerformance()
+        observeEngineBusy()
+    }
+
+    /**
+     * Tracks the rolling performance summary of the active model. Re-subscribes
+     * whenever the active model changes (or none is active → emits `null`).
+     */
+    private fun observeActiveModelPerformance() {
+        localModelRepository.getAllModels()
+            .map { models -> models.find { it.isActive }?.path }
+            .distinctUntilChanged()
+            .flatMapLatest { activePath ->
+                if (activePath == null) flowOf(null) else getModelPerformanceUseCase(activePath)
+            }
+            .onEach { summary -> _uiState.update { it.copy(performanceSummary = summary) } }
+            .launchIn(viewModelScope)
+    }
+
+    /** Mirrors the engine-busy predicate so the Performance card can gate the benchmark. */
+    private fun observeEngineBusy() {
+        taskQueueManager.globalState
+            .map { it.isBusy }
+            .distinctUntilChanged()
+            .onEach { busy -> _uiState.update { it.copy(engineBusy = busy) } }
+            .launchIn(viewModelScope)
     }
 
     private fun observeBackend() {
@@ -269,5 +340,59 @@ class ModelsViewModel @Inject constructor(
      */
     fun clearError() {
         _uiState.update { it.copy(downloadError = null) }
+    }
+
+    /**
+     * Starts the controlled benchmark of the active model. No-op when a
+     * benchmark is already running. Drives the card through Warming up →
+     * Measuring → Result; a failure surfaces a one-shot error event and resets
+     * the card. The engine-busy case is gated upstream (the Run action is hidden
+     * while busy), but is handled defensively by resetting to idle.
+     */
+    fun onRunBenchmark() {
+        if (_uiState.value.benchmark is BenchmarkUiState.Running) return
+        benchmarkJob?.cancel()
+        _uiState.update { it.copy(benchmark = BenchmarkUiState.Running(BenchmarkRunPhase.WARMING_UP)) }
+        benchmarkJob = viewModelScope.launch {
+            val outcome = runBenchmarkUseCase { phase ->
+                _uiState.update { it.copy(benchmark = BenchmarkUiState.Running(phase)) }
+            }
+            val next = when (outcome) {
+                is BenchmarkOutcome.Success -> BenchmarkUiState.Result(outcome.report)
+                is BenchmarkOutcome.Failed -> {
+                    _benchmarkErrorEvents.tryEmit(Unit)
+                    BenchmarkUiState.Idle
+                }
+                is BenchmarkOutcome.EngineBusy,
+                is BenchmarkOutcome.NoActiveModel,
+                -> BenchmarkUiState.Idle
+            }
+            _uiState.update { it.copy(benchmark = next) }
+            benchmarkJob = null
+        }
+    }
+
+    /**
+     * Cancels the in-flight benchmark (the user tapped Cancel) and returns the
+     * card to its idle rolling-average view.
+     */
+    fun onCancelBenchmark() {
+        benchmarkJob?.cancel()
+        benchmarkJob = null
+        _uiState.update { it.copy(benchmark = BenchmarkUiState.Idle) }
+    }
+
+    /**
+     * Emits the formatted benchmark report text for the system share sheet.
+     * No-op unless a benchmark result is currently shown.
+     */
+    fun onShareBenchmark() {
+        val report = (_uiState.value.benchmark as? BenchmarkUiState.Result)?.report ?: return
+        _benchmarkShareEvents.tryEmit(PerformanceFormatting.shareText(report))
+    }
+
+    /** Dismisses the inline benchmark result, returning to the rolling-average view. */
+    fun onDismissBenchmark() {
+        _uiState.update { it.copy(benchmark = BenchmarkUiState.Idle) }
     }
 }

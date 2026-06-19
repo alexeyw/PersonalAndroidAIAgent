@@ -1451,6 +1451,38 @@ LLMs.
   one of three states: `Get` (not downloaded), progress bar with
   cancel-X (downloading), or `✓ ON DISK` (ready to activate).
 
+### Model performance & benchmark
+
+Below the Active card, the **Performance** card shows how the active
+model actually performs *on your device* — picking a model is a
+speed/quality/memory trade-off, and the numbers make it concrete instead
+of a guess:
+
+- **Time to first token** — how long after a run starts the model emits
+  its first token (model-load time excluded). Shown in milliseconds, or
+  seconds once it passes one second.
+- **Decode speed** — sustained generation throughput in tokens per second.
+- **Peak memory** — the highest process-wide native-heap usage seen during
+  a run. This is deliberately labelled **approximate**: it covers the whole
+  app process (not just the model), excludes the model file's
+  memory-mapped pages, and can read low on devices that compress memory. It
+  is a useful relative indicator, **not** the model's exact footprint.
+
+These figures are **averaged over the model's most recent runs** and update
+automatically — every on-device generation you trigger (chatting, running a
+pipeline) records a sample. A freshly installed model that hasn't run yet
+shows a calm **"No runs yet"** state.
+
+Tap **Run benchmark** to measure the model on demand. It runs a fixed
+prompt twice — a **warm-up** run (not counted) followed by a **measured**
+run — then shows a one-shot report (TTFT, decode speed, total time, peak
+memory) with a **BENCHMARK** badge. **Share** hands a plain-text summary to
+any app (messages, notes, a bug report); **Done** returns to the rolling
+averages. You can **Cancel** a benchmark while it runs. The benchmark only
+runs in the foreground and **waits its turn** if a pipeline is currently
+using the engine — it never interrupts an active run (you'll see a calm
+"Busy with a task" notice in that case).
+
 ## Prompt library
 
 **More → Prompt library** stores reusable system prompts grouped by

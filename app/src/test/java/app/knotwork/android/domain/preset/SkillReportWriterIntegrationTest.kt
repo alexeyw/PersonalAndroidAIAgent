@@ -54,6 +54,7 @@ import app.knotwork.android.domain.repositories.SkillRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
+import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.skillio.SkillJsonSerializer
 import app.knotwork.android.domain.usecases.EvaluateIfConditionUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
@@ -128,6 +129,7 @@ class SkillReportWriterIntegrationTest {
     @Before
     fun setup() {
         llmEngine = mockk()
+        every { llmEngine.currentModelPath } returns null
         toolRepository = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
         skillRepository = mockk()
@@ -267,6 +269,8 @@ class SkillReportWriterIntegrationTest {
                 chatRepository,
                 settingsRepository,
                 metricsRepository,
+                mockk(relaxed = true),
+                NativeMemorySampler { 0L },
                 loadModelUseCase,
             )
         val cloudLlmNodeExecutor = CloudLlmNodeExecutor(

@@ -94,6 +94,9 @@ sealed interface PresetStatus {
  * section so the user can find and activate them.
  * @property subtitle TopAppBar subtitle (e.g. `"1 active · 2 on disk · 3.3 GB"`).
  * @property errorMessage user-visible error when [visualState] is [ModelsVisualState.Error].
+ * @property performance state of the Performance card rendered below the
+ * Active-model card (per-model TTFT / decode speed / peak memory + benchmark),
+ * or `null` to omit the card entirely.
  */
 data class ModelsViewState(
     val visualState: ModelsVisualState,
@@ -106,6 +109,7 @@ data class ModelsViewState(
     val downloadedRows: List<PresetRow> = emptyList(),
     val subtitle: String = "",
     val errorMessage: String? = null,
+    val performance: PerformanceCardState? = null,
 ) {
     init {
         require((visualState == ModelsVisualState.Error) == (errorMessage != null)) {
@@ -132,6 +136,10 @@ class ModelsCallbacks(
     val onToggleVision: (Boolean) -> Unit = {},
     val onToggleAudio: (Boolean) -> Unit = {},
     val onRetry: () -> Unit = {},
+    val onRunBenchmark: () -> Unit = {},
+    val onCancelBenchmark: () -> Unit = {},
+    val onShareBenchmark: () -> Unit = {},
+    val onDismissBenchmark: () -> Unit = {},
 )
 
 /** Convenience factory returning a no-op callback bundle. */

@@ -47,6 +47,7 @@ import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
+import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.usecases.EvaluateIfConditionUseCase
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
@@ -118,6 +119,7 @@ class PipelineSecurityContourTest {
     @Before
     fun setup() {
         llmEngine = mockk()
+        every { llmEngine.currentModelPath } returns null
         toolRepository = mockk()
         chatRepository = mockk(relaxed = true)
         settingsRepository = mockk()
@@ -181,6 +183,8 @@ class PipelineSecurityContourTest {
                 chatRepository,
                 settingsRepository,
                 metricsRepository,
+                mockk(relaxed = true),
+                NativeMemorySampler { 0L },
                 loadModelUseCase,
             ),
             CloudLlmNodeExecutor(
