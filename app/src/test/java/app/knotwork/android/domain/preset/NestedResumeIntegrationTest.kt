@@ -117,6 +117,7 @@ class NestedResumeIntegrationTest {
     @Before
     fun setup() {
         llmEngine = mockk()
+        every { llmEngine.currentModelPath } returns null
         settingsRepository = mockk(relaxed = true)
         every { llmEngine.generateResponseStream(any()) } returns
             flowOf("""{"question":"What color?","options":["Blue","Red"]}""")

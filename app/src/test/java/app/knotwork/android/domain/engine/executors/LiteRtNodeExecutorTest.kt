@@ -198,6 +198,19 @@ class LiteRtNodeExecutorTest {
     }
 
     @Test
+    fun `execute does not record a sample when the generation produced no tokens`() = runTest {
+        val node = NodeModel("1", NodeType.LITE_RT, 0f, 0f)
+        every { settingsRepository.systemPromptPrefix } returns flowOf("")
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+        // Empty stream → zero tokens → no useful timing → skip recording.
+        every { llmEngine.generateResponseStream(any()) } returns flowOf()
+
+        executor.execute(node, "input", "session-1", "prompt").toList()
+
+        coVerify(exactly = 0) { modelPerformanceRepository.record(any()) }
+    }
+
+    @Test
     fun `execute does not record a sample when the engine reports no loaded path`() = runTest {
         val node = NodeModel("1", NodeType.LITE_RT, 0f, 0f)
         every { settingsRepository.systemPromptPrefix } returns flowOf("")

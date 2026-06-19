@@ -2,6 +2,7 @@ package app.knotwork.android.data.repositories
 
 import app.knotwork.android.data.local.dao.ModelPerformanceDao
 import app.knotwork.android.data.local.models.ModelPerformanceSampleEntity
+import app.knotwork.android.domain.constants.PerformanceConstants
 import app.knotwork.android.domain.models.ModelPerformanceSample
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -20,24 +21,39 @@ class ModelPerformanceRepositoryImplTest {
     private val repository = ModelPerformanceRepositoryImpl(dao)
 
     @Test
-    fun `given a sample when recorded then it is inserted as an entity`() = runTest {
+    fun `given a sample when recorded then it is inserted and trimmed to the retention cap`() = runTest {
         val sample = sample()
         val slot = slot<ModelPerformanceSampleEntity>()
-        coEvery { dao.insert(capture(slot)) } returns 1L
+        coEvery { dao.insertAndTrim(capture(slot), any()) } returns Unit
 
         repository.record(sample)
 
-        coVerify { dao.insert(any()) }
+        coVerify { dao.insertAndTrim(any(), PerformanceConstants.RETENTION_PER_MODEL) }
         assertEquals("/m.litertlm", slot.captured.modelPath)
         assertEquals(true, slot.captured.isBenchmark)
     }
 
     @Test
     fun `given the dao throws when recording then the failure is swallowed`() = runTest {
-        coEvery { dao.insert(any()) } throws IllegalStateException("disk full")
+        coEvery { dao.insertAndTrim(any(), any()) } throws IllegalStateException("disk full")
 
         // Must not propagate — a metrics write may never break the run.
         repository.record(sample())
+    }
+
+    @Test
+    fun `given a model path when deleteForModel then the dao drops its samples`() = runTest {
+        repository.deleteForModel("/m.litertlm")
+
+        coVerify { dao.deleteForModel("/m.litertlm") }
+    }
+
+    @Test
+    fun `given the dao throws when deleting then the failure is swallowed`() = runTest {
+        coEvery { dao.deleteForModel(any()) } throws IllegalStateException("locked")
+
+        // Must not propagate — failing to drop samples may never break model deletion.
+        repository.deleteForModel("/m.litertlm")
     }
 
     @Test

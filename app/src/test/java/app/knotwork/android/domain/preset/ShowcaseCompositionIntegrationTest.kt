@@ -125,6 +125,7 @@ class ShowcaseCompositionIntegrationTest {
     @Before
     fun setup() {
         llmEngine = mockk()
+        every { llmEngine.currentModelPath } returns null
         settingsRepository = mockk(relaxed = true)
 
         // --- in-memory pipeline repository ---

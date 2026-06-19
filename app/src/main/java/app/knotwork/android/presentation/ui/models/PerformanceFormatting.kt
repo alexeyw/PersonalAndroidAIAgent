@@ -1,5 +1,6 @@
 package app.knotwork.android.presentation.ui.models
 
+import app.knotwork.android.domain.constants.TimeAndIdConstants
 import app.knotwork.android.domain.usecases.BenchmarkReport
 import java.util.Locale
 
@@ -14,11 +15,8 @@ import java.util.Locale
  */
 internal object PerformanceFormatting {
 
-    private const val MS_PER_SECOND = 1000.0
+    private val MS_PER_SECOND = TimeAndIdConstants.MS_PER_SECOND.toDouble()
     private const val SECOND_THRESHOLD_MS = 1000L
-    private const val KILOBYTE = 1024.0
-    private const val MEGABYTE = KILOBYTE * KILOBYTE
-    private const val GIGABYTE = MEGABYTE * KILOBYTE
 
     /**
      * Formats time-to-first-token: milliseconds below one second (`"420 ms"`),
@@ -41,11 +39,7 @@ internal object PerformanceFormatting {
      * `"640 MB"`. Returns `null` when no reading is available (`bytes <= 0`), so
      * the card renders its "unavailable" dash.
      */
-    fun memory(bytes: Long): String? = when {
-        bytes <= 0L -> null
-        bytes >= GIGABYTE -> String.format(Locale.US, "%.1f GB", bytes / GIGABYTE)
-        else -> String.format(Locale.US, "%.0f MB", bytes / MEGABYTE)
-    }
+    fun memory(bytes: Long): String? = if (bytes <= 0L) null else gigabyteOrMegabyteLabel(bytes)
 
     /**
      * Builds the rolling-window caption shown on the populated card, e.g.

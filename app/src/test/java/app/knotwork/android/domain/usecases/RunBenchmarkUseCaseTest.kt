@@ -65,6 +65,28 @@ class RunBenchmarkUseCaseTest {
     }
 
     @Test
+    fun `given a run starts during warm-up when invoked then refuses before measuring`() = runTest {
+        // Idle at entry, busy by the time the warm-up finishes: the benchmark
+        // must refuse rather than measure against a contended engine.
+        val state = MutableStateFlow<AgentOrchestratorState>(AgentOrchestratorState.Idle)
+        every { taskQueueManager.globalState } returns state
+        useCase =
+            RunBenchmarkUseCase(taskQueueManager, localModelRepository, loadModelUseCase, engine, repository, sampler)
+        coEvery { localModelRepository.getActiveModel() } returns activeModel()
+        coEvery { loadModelUseCase() } returns Result.Success(Unit)
+        every { engine.currentModelPath } returns "/models/gemma.litertlm"
+        every { engine.generateResponseStream(any(), any(), any()) } answers {
+            state.value = AgentOrchestratorState.Loading // a run grabbed the engine during warm-up
+            flowOf("a", "b")
+        }
+
+        val outcome = useCase()
+
+        assertEquals(BenchmarkOutcome.EngineBusy, outcome)
+        coVerify(exactly = 0) { repository.record(any()) }
+    }
+
+    @Test
     fun `given model load fails when invoked then Failed`() = runTest {
         coEvery { localModelRepository.getActiveModel() } returns activeModel()
         coEvery { loadModelUseCase() } returns Result.Error(error = object : AppError.System {}, message = "boom")

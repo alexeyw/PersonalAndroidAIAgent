@@ -46,7 +46,7 @@ This file maps the contents of the main application package.
       - `ChatHistorySummaryDao.kt` - Per-session compressed-history summary DAO (`chat_history_summaries` table, v38); get-by-session + REPLACE upsert.
       - `LocalModelDao.kt` - Local models DAO.
       - `MemoryDao.kt` - Memory chunks DAO.
-      - `ModelPerformanceDao.kt` - DAO for `model_performance_samples` (v42): `insert` one sample, `observeRecentForModel(modelPath, limit)` (newest-first, capped) backing the Performance card's rolling window.
+      - `ModelPerformanceDao.kt` - DAO for `model_performance_samples` (v42): `insertAndTrim` (insert + per-model retention cap in one `@Transaction`), `observeRecentForModel(modelPath, limit)` (newest-first) backing the rolling window, and `deleteForModel` (orphan cleanup on model removal).
       - `PendingInteractionDao.kt` - Parked HITL interaction DAO (`pending_interactions` table). Response-recording updates carry `IS NULL` guards so the first writer wins.
       - `PipelineDao.kt` - Pipelines DAO.
       - `PipelinePresetDao.kt` - User-saved pipeline-preset DAO. Backs the `pipeline_presets` table; bundled presets live in `assets/presets/pipelines/` and never reach this DAO.
@@ -188,7 +188,8 @@ This file maps the contents of the main application package.
     - `LlmInferenceEngine.kt` - LLM engine interface.
     - `MemoryAccessLogFormatter.kt` - Pure formatter for the `MemoryAccess` console event. Renders the terse one-line summary (`query` + hit count + scores) and, when verbose memory logging is on, the per-hit snippet/score expansion. Used by `GraphExecutionEngine`.
     - `NodeContextBuilder.kt` - Assembles a node's executor input by concatenating only the context blocks enabled by its `NodeContextConfig` (Original Task, Chat History, Long-Term Memory, Tool Results, Previous Node Output).
-    - `PeakHeapSampler.kt` - Per-run helper tracking the peak native-heap reading across an inference window; reads `NativeMemorySampler` at a throttled (~150 ms) cadence from the token-collection loop. Shared by `LiteRtNodeExecutor` and `RunBenchmarkUseCase`.
+    - `PeakHeapSampler.kt` - Per-run helper tracking the peak native-heap reading across an inference window; reads `NativeMemorySampler` at a throttled (~150 ms) cadence. Used by `StreamInferenceMeter`.
+    - `StreamInferenceMeter.kt` - Per-generation instrumentation shared by `LiteRtNodeExecutor` and `RunBenchmarkUseCase`: stamps the TTFT baseline at construction, counts tokens + first-token time + drives `PeakHeapSampler` via `onToken`, and folds into a `ModelPerformanceSample` via `toSample`. Keeps the *measurement* (not just the `fromTimings` arithmetic) identical between real runs and the benchmark.
     - `PipelineExecutionContext.kt` - Immutable per-iteration snapshot of pipeline-scoped data (original user message, chat history, previous node output, tool invocation results, memory entries) consumed by `NodeContextBuilder`.
     - `TaskQueueManager.kt` - Task queue manager interface.
     - `TextEmbeddingEngine.kt` - Text embedding engine interface.
@@ -238,7 +239,7 @@ This file maps the contents of the main application package.
   - `models/` - Domain entity models.
     - `ActiveModelMeta.kt` - Rich metadata for the currently active local model rendered on the Settings local-model card.
     - `AgentMetrics.kt` - Agent metrics model.
-    - `ModelPerformanceSample.kt` - One persisted inference measurement (TTFT / decode tok-s / total / peak native heap / `isBenchmark`), keyed by model path; `fromTimings(...)` derives the figures from raw timings (shared by executor + benchmark). Also hosts `ModelPerformanceSummary` (rolling-average fold over a window, or `null` when empty).
+    - `ModelPerformanceSample.kt` - One persisted inference measurement (TTFT / decode tok-s / total / peak native heap / `isBenchmark`), keyed by model path; `fromTimings(...)` derives the figures from raw timings (shared by executor + benchmark). Also hosts `ModelPerformanceSummary` (rolling-average fold; excludes degenerate 0-ttft / 0-decode samples from the means, keeps the window count, or `null` when empty).
     - `AgentOrchestratorState.kt` - Orchestrator state model.
     - `AgentTask.kt` - Agent task model.
     - `MessageAttachment.kt` - Image attached to a user `ChatMessage`: store-relative `path`, `mimeType` (always `image/jpeg` this phase), and downscaled pixel `width`/`height`. Pure-Kotlin value class carried on `ChatMessage` and `AgentTask`.
@@ -326,7 +327,7 @@ This file maps the contents of the main application package.
     - `MemoryRepository.kt` - Memory repository interface.
     - `MetricsRepository.kt` - Metrics repository interface.
     - `ModelDownloadManager.kt` - Model download manager interface.
-    - `ModelPerformanceRepository.kt` - Persists/queries per-model inference samples keyed by on-disk path: best-effort `record`, and `observeRecentForModel(modelPath, limit)` for the rolling window. Unlike `MetricsRepository` (session-scoped, in-memory), this survives process death. Data-layer impl: `ModelPerformanceRepositoryImpl`.
+    - `ModelPerformanceRepository.kt` - Persists/queries per-model inference samples keyed by on-disk path: best-effort `record` (insert + retention-cap trim), `observeRecentForModel(modelPath, limit)` for the rolling window, and `deleteForModel` (orphan cleanup, called from `LocalModelRepository` on model removal). Unlike `MetricsRepository` (session-scoped, in-memory), this survives process death. Data-layer impl: `ModelPerformanceRepositoryImpl`.
     - `NetworkActivityTracker.kt` - Domain interface tracking the timestamp of the most recent outbound LLM / MCP call. Used by the More tab privacy footer to compute "no network calls in last N m" without observing connectivity.
     - `NetworkStateRepository.kt` - Network state repository interface.
     - `PipelinePresetRepository.kt` - Domain gateway over the two-tier pipeline-preset catalogue: bundled (read-only, from APK assets) + user-saved (mutable, Room-backed). Data-layer impl: `LocalPipelinePresetRepositoryImpl`.
@@ -479,7 +480,8 @@ This file maps the contents of the main application package.
       - `ModelsScreen.kt` - Slim mapper. Folds `ModelsUiState` into the catalog `ModelsViewState` (Active card / HF auth section / Custom URL / Presets list with Idle / Downloading / OnDisk variants). Also builds the Performance card state via `toPerformanceCardState()` (NoModel / Empty / Populated / Running / Result / EngineBusy) and wires the benchmark callbacks; collects `benchmarkShareEvents` to fire an `ACTION_SEND` text share and `benchmarkErrorEvents` to a snackbar.
       - `ModelsUiState.kt` - Models UI state. Adds `activeDownloadFileName: String?` so the catalog can render the in-flight progress on the matching preset row. Adds `performanceSummary` (active-model rolling averages), `benchmark` (`BenchmarkUiState` Idle/Running/Result), and `engineBusy` for the Performance card.
       - `ModelsViewModel.kt` - Models ViewModel. Adds `cancelDownload` (cancels the active download job) and `deleteModel`. Observes the active model's `GetModelPerformanceUseCase` summary (re-subscribes on active-model change) and the engine-busy signal; drives the benchmark (`onRunBenchmark`/`onCancelBenchmark`/`onShareBenchmark`/`onDismissBenchmark`) via `RunBenchmarkUseCase`, emitting one-shot share/error events.
-      - `PerformanceFormatting.kt` - App-side display formatting for the Performance card and the benchmark share text (TTFT ms→s, decode tok/s, peak memory GB/MB or `null`, total seconds, "avg · last N runs" caption, plain-text share payload). Kept out of the catalog so the design layer holds no number/unit logic.
+      - `ByteSizeLabel.kt` - Shared GiB/MiB byte-label ladder (`gigabyteOrMegabyteLabel`, Locale.US, "1.8 GB" / "640 MB", with a rounding-boundary guard so it never prints "1024 MB"). Single source for the Models surface's model-size labels (`ModelsScreen`) and the Performance card's peak memory (`PerformanceFormatting`), so the two can't drift.
+      - `PerformanceFormatting.kt` - App-side display formatting for the Performance card and the benchmark share text (TTFT ms→s, decode tok/s, peak memory via `ByteSizeLabel` or `null`, total seconds, "avg · last N runs" caption, plain-text share payload). Kept out of the catalog so the design layer holds no number/unit logic.
     - `monitoring/` - Monitoring screen components.
       - `MonitoringScreen.kt` - Slim mapper. Folds `MonitoringUiState` into the catalog `MonitoringViewState` and renders `MonitoringContent`.
       - `MonitoringUiState.kt` - Monitoring UI state.

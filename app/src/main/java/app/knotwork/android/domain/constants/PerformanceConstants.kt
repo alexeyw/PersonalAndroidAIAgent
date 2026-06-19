@@ -19,6 +19,16 @@ object PerformanceConstants {
     const val SAMPLE_WINDOW: Int = 8
 
     /**
+     * Maximum number of samples retained **per model**. Every on-device
+     * generation inserts a row, but only the most recent
+     * [SAMPLE_WINDOW] feed the card — so the table is trimmed to this larger
+     * cap after each insert to keep some history without unbounded growth.
+     * Mirrors the bounded-growth pattern used by the other sample/run tables
+     * (e.g. `pipeline_runs`).
+     */
+    const val RETENTION_PER_MODEL: Int = 50
+
+    /**
      * Minimum spacing, in milliseconds, between two peak-native-memory reads
      * during a single inference window. Native-heap reads are cheap (unlike the
      * rate-throttled `Debug.getMemoryInfo()`/PSS path), but sampling on every

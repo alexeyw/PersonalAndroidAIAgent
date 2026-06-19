@@ -3,6 +3,7 @@ package app.knotwork.android.data.repositories
 import app.knotwork.android.data.local.dao.LocalModelDao
 import app.knotwork.android.data.local.models.LocalModelEntity
 import app.knotwork.android.domain.models.LocalModel
+import app.knotwork.android.domain.repositories.ModelPerformanceRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -18,12 +19,14 @@ import java.io.File
 class LocalModelRepositoryImplTest {
 
     private lateinit var localModelDao: LocalModelDao
+    private lateinit var modelPerformanceRepository: ModelPerformanceRepository
     private lateinit var repository: LocalModelRepositoryImpl
 
     @Before
     fun setup() {
         localModelDao = mockk(relaxed = true)
-        repository = LocalModelRepositoryImpl(localModelDao)
+        modelPerformanceRepository = mockk(relaxed = true)
+        repository = LocalModelRepositoryImpl(localModelDao, modelPerformanceRepository)
     }
 
     @Test
@@ -92,6 +95,8 @@ class LocalModelRepositoryImplTest {
 
         assertFalse("model weights file must be removed from disk", file.exists())
         coVerify(exactly = 1) { localModelDao.deleteModelById(7) }
+        // The model's performance history is dropped too (samples carry no FK).
+        coVerify(exactly = 1) { modelPerformanceRepository.deleteForModel(file.absolutePath) }
     }
 
     @Test

@@ -38,6 +38,13 @@ class PerformanceFormattingTest {
     }
 
     @Test
+    fun `memory never renders 1024 MB just below the gigabyte boundary`() {
+        // ~1023.9 MiB: would round to "1024 MB" under a naive %.0f; must read as GB instead.
+        val justUnderOneGb = (1023.9 * 1024 * 1024).toLong()
+        assertEquals("1.0 GB", PerformanceFormatting.memory(justUnderOneGb))
+    }
+
+    @Test
     fun `sample caption pluralises the run noun`() {
         assertEquals("avg · last 1 run", PerformanceFormatting.sampleCaption(1))
         assertEquals("avg · last 8 runs", PerformanceFormatting.sampleCaption(8))

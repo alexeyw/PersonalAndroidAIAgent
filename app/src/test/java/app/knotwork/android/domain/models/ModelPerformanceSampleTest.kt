@@ -83,6 +83,37 @@ class ModelPerformanceSampleTest {
         assertEquals(3_000, summary.peakNativeHeapBytes) // max, not average
     }
 
+    @Test
+    fun `given degenerate samples when summary from then they are excluded from the metric means`() {
+        // A blank run (ttft=0, decode=0) and a single-token run (decode=0)
+        // must not drag the averages down — each metric averages only over the
+        // samples that actually measured it, but sampleCount reflects the window.
+        val samples = listOf(
+            sample(ttftMs = 400, decode = 12f, peak = 2_000),
+            sample(ttftMs = 0, decode = 0f, peak = 1_000), // blank generation
+            sample(ttftMs = 300, decode = 0f, peak = 1_500), // single token: ttft but no decode
+        )
+
+        val summary = ModelPerformanceSummary.from(samples)!!
+
+        assertEquals(3, summary.sampleCount)
+        assertEquals(350, summary.avgTtftMs) // (400+300)/2 — the 0 is excluded
+        assertEquals(12f, summary.avgDecodeTokensPerSec, 0.001f) // only the one real decode
+        assertEquals(2_000, summary.peakNativeHeapBytes) // peak still spans all samples
+    }
+
+    @Test
+    fun `given only degenerate samples when summary from then means are zero but the window is non-empty`() {
+        val summary = ModelPerformanceSummary.from(
+            listOf(sample(ttftMs = 0, decode = 0f, peak = 500)),
+        )!!
+
+        assertEquals(1, summary.sampleCount)
+        assertEquals(0, summary.avgTtftMs)
+        assertEquals(0f, summary.avgDecodeTokensPerSec, 0.0f)
+        assertEquals(500, summary.peakNativeHeapBytes)
+    }
+
     private fun sample(ttftMs: Long, decode: Float, peak: Long): ModelPerformanceSample = ModelPerformanceSample(
         modelPath = "/m.litertlm",
         ttftMs = ttftMs,

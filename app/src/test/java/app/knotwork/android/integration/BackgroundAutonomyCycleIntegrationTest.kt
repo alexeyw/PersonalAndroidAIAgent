@@ -456,6 +456,7 @@ class BackgroundAutonomyCycleIntegrationTest {
      * replay vs. live re-execution).
      */
     private fun scriptedLlmEngine(): LlmInferenceEngine = mockk {
+        every { currentModelPath } returns null
         every { generateResponseStream(any()) } answers {
             val prompt = firstArg<String>()
             flowOf(

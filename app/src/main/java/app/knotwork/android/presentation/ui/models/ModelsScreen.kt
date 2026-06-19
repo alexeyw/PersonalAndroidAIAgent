@@ -27,7 +27,6 @@ import app.knotwork.design.screens.models.ModelsVisualState
 import app.knotwork.design.screens.models.PerformanceCardState
 import app.knotwork.design.screens.models.PresetRow
 import app.knotwork.design.screens.models.PresetStatus
-import java.util.Locale
 
 /**
  * Slim app-side Models mapper. Subscribes to [ModelsViewModel.uiState],
@@ -322,19 +321,9 @@ private fun String.toShortSource(): String {
 
 private const val MAX_SOURCE_LEN = 44
 
-private fun Long.toGigabytesLabel(): String {
-    if (this <= 0L) return "0 GB"
-    val gb = this.toDouble() / GIGABYTE
-    return if (gb >= 1.0) {
-        String.format(Locale.US, "%.1f GB", gb)
-    } else {
-        val mb = this.toDouble() / MEGABYTE
-        String.format(Locale.US, "%.0f MB", mb)
-    }
-}
-
-private const val MEGABYTE = 1024.0 * 1024.0
-private const val GIGABYTE = MEGABYTE * 1024.0
+// Reuses the shared GiB/MiB ladder ([gigabyteOrMegabyteLabel]); model sizes
+// render "0 GB" for an unknown/zero size rather than nothing.
+private fun Long.toGigabytesLabel(): String = if (this <= 0L) "0 GB" else gigabyteOrMegabyteLabel(this)
 
 /** Bundle of localised display strings threaded into [ModelsContent]. */
 private data class LocalisedModelsStrings(val content: ModelsStrings, val subtitleFormat: String)

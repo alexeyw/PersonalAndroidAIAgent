@@ -142,10 +142,22 @@ data class ModelPerformanceSummary(
          */
         fun from(samples: List<ModelPerformanceSample>): ModelPerformanceSummary? {
             if (samples.isEmpty()) return null
+            // Exclude degenerate runs from the metric means: a blank generation
+            // (no tokens) has ttft = 0, and a single-token generation has
+            // decode = 0. Folding those zeros in would systematically drag the
+            // displayed averages below the model's real performance. Each metric
+            // averages only over the samples that actually measured it; the peak
+            // is the worst case across every sample.
+            val ttftSamples = samples.filter { it.ttftMs > 0L }
+            val decodeSamples = samples.filter { it.decodeTokensPerSec > 0f }
             return ModelPerformanceSummary(
                 sampleCount = samples.size,
-                avgTtftMs = samples.sumOf { it.ttftMs } / samples.size,
-                avgDecodeTokensPerSec = samples.map { it.decodeTokensPerSec }.average().toFloat(),
+                avgTtftMs = if (ttftSamples.isEmpty()) 0L else ttftSamples.sumOf { it.ttftMs } / ttftSamples.size,
+                avgDecodeTokensPerSec = if (decodeSamples.isEmpty()) {
+                    0f
+                } else {
+                    decodeSamples.map { it.decodeTokensPerSec }.average().toFloat()
+                },
                 peakNativeHeapBytes = samples.maxOf { it.peakNativeHeapBytes },
             )
         }

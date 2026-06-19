@@ -129,6 +129,7 @@ class SkillReportWriterIntegrationTest {
     @Before
     fun setup() {
         llmEngine = mockk()
+        every { llmEngine.currentModelPath } returns null
         toolRepository = mockk(relaxed = true)
         settingsRepository = mockk(relaxed = true)
         skillRepository = mockk()

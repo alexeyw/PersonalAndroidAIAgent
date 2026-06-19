@@ -2,7 +2,7 @@ package app.knotwork.android.domain.usecases
 
 import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.engine.LlmInferenceEngine
-import app.knotwork.android.domain.engine.PeakHeapSampler
+import app.knotwork.android.domain.engine.StreamInferenceMeter
 import app.knotwork.android.domain.engine.TaskQueueManager
 import app.knotwork.android.domain.models.ModelPerformanceSample
 import app.knotwork.android.domain.models.Result
@@ -78,18 +78,27 @@ class RunBenchmarkUseCase @Inject constructor(
                     onPhase(BenchmarkRunPhase.WARMING_UP)
                     llmInferenceEngine.generateResponseStream(DefaultPrompts.BENCHMARK_PROMPT).collect { }
 
-                    onPhase(BenchmarkRunPhase.MEASURING)
-                    val sample = measureRun(modelPath)
-                    modelPerformanceRepository.record(sample)
-                    BenchmarkOutcome.Success(
-                        BenchmarkReport(
-                            modelName = activeModel.name,
-                            ttftMs = sample.ttftMs,
-                            decodeTokensPerSec = sample.decodeTokensPerSec,
-                            totalMs = sample.totalMs,
-                            peakNativeHeapBytes = sample.peakNativeHeapBytes,
-                        ),
-                    )
+                    // Re-check the engine-busy gate after the (multi-second)
+                    // warm-up: a background/scheduled run may have started in the
+                    // meantime. Measuring now would block on the engine's
+                    // generation mutex and inflate the timings, so refuse rather
+                    // than report a corrupted figure.
+                    if (taskQueueManager.globalState.value.isBusy) {
+                        BenchmarkOutcome.EngineBusy
+                    } else {
+                        onPhase(BenchmarkRunPhase.MEASURING)
+                        val sample = measureRun(modelPath)
+                        modelPerformanceRepository.record(sample)
+                        BenchmarkOutcome.Success(
+                            BenchmarkReport(
+                                modelName = activeModel.name,
+                                ttftMs = sample.ttftMs,
+                                decodeTokensPerSec = sample.decodeTokensPerSec,
+                                totalMs = sample.totalMs,
+                                peakNativeHeapBytes = sample.peakNativeHeapBytes,
+                            ),
+                        )
+                    }
                 }
             }
         } catch (e: CancellationException) {
@@ -108,27 +117,12 @@ class RunBenchmarkUseCase @Inject constructor(
      * @return The computed [ModelPerformanceSample] (`isBenchmark = true`).
      */
     private suspend fun measureRun(modelPath: String): ModelPerformanceSample {
-        val peak = PeakHeapSampler(nativeMemorySampler)
-        val inferenceStartMs = System.currentTimeMillis()
-        var firstTokenAtMs = 0L
-        var tokenCount = 0
+        val meter = StreamInferenceMeter(nativeMemorySampler)
         llmInferenceEngine.generateResponseStream(DefaultPrompts.BENCHMARK_PROMPT).collect {
-            val now = System.currentTimeMillis()
-            if (firstTokenAtMs == 0L) firstTokenAtMs = now
-            tokenCount += 1
-            peak.observe(now)
+            meter.onToken(System.currentTimeMillis())
         }
         val endMs = System.currentTimeMillis()
-        return ModelPerformanceSample.fromTimings(
-            modelPath = modelPath,
-            inferenceStartMs = inferenceStartMs,
-            firstTokenAtMs = firstTokenAtMs,
-            endMs = endMs,
-            tokenCount = tokenCount,
-            peakNativeHeapBytes = peak.peakBytes,
-            isBenchmark = true,
-            createdAt = endMs,
-        )
+        return meter.toSample(modelPath, endMs = endMs, isBenchmark = true, createdAt = endMs)
     }
 }
 

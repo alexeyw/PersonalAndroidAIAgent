@@ -131,6 +131,7 @@ class GraphExecutionEngineTest {
     @Before
     fun setup() {
         llmEngine = mockk()
+        every { llmEngine.currentModelPath } returns null
         toolRepository = mockk(relaxed = true)
         chatRepository = mockk(relaxed = true)
         getContextWindowUseCase = mockk()
