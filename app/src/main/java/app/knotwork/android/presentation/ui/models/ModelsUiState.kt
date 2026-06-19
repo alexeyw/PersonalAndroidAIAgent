@@ -2,6 +2,9 @@ package app.knotwork.android.presentation.ui.models
 
 import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.LocalModel
+import app.knotwork.android.domain.models.ModelPerformanceSummary
+import app.knotwork.android.domain.usecases.BenchmarkReport
+import app.knotwork.android.domain.usecases.BenchmarkRunPhase
 
 /**
  * Represents the UI state for the Models management screen.
@@ -50,7 +53,47 @@ data class ModelsUiState(
      * `cpu` until the first observation lands.
      */
     val localBackendKey: String = "cpu",
+    /**
+     * Rolling-average performance summary for the active model, or `null` when
+     * the active model has no recorded runs yet (the card shows "no runs yet").
+     */
+    val performanceSummary: ModelPerformanceSummary? = null,
+    /**
+     * Live state of the controlled benchmark. [BenchmarkUiState.Idle] when no
+     * benchmark is running or its result has been dismissed.
+     */
+    val benchmark: BenchmarkUiState = BenchmarkUiState.Idle,
+    /**
+     * `true` while a pipeline run holds the single inference engine. The
+     * Performance card then shows a calm "busy with a task" notice instead of
+     * the Run-benchmark action (a benchmark can't seize the engine mid-run).
+     * Observed live from the task queue's global state.
+     */
+    val engineBusy: Boolean = false,
 )
+
+/**
+ * Presentation state of the model benchmark, layered over the rolling-average
+ * Performance card.
+ */
+sealed interface BenchmarkUiState {
+    /** No benchmark running; the card shows the rolling average (or empty state). */
+    data object Idle : BenchmarkUiState
+
+    /**
+     * A benchmark is in progress.
+     *
+     * @property phase Which timed phase is currently running.
+     */
+    data class Running(val phase: BenchmarkRunPhase) : BenchmarkUiState
+
+    /**
+     * The benchmark finished; the inline one-shot report is shown until dismissed.
+     *
+     * @property report The measured figures.
+     */
+    data class Result(val report: BenchmarkReport) : BenchmarkUiState
+}
 
 /**
  * Represents a predefined model download option.

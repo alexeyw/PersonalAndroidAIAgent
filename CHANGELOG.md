@@ -15,6 +15,19 @@ details.
 
 ### Added
 
+- **Model performance insights & benchmark.** The Models screen now shows a
+  **Performance** card for the active model with its rolling-average
+  **time-to-first-token**, **decode speed** (tokens/second) and **peak memory**,
+  averaged over the last few runs — so choosing a model is an informed
+  speed/quality/memory trade-off instead of a guess. Every on-device generation
+  records a sample automatically; a model with no runs yet shows a calm "no runs
+  yet" state. A **Run benchmark** action measures the model on demand with a
+  fixed prompt (a warm-up run followed by a measured run) and produces a one-shot
+  report you can **share as plain text**. The benchmark is foreground-only and
+  waits its turn when a pipeline is using the engine. Peak memory is measured via
+  the process native heap and is labelled **approximate** throughout — it is a
+  process-wide figure, not the model's exact footprint.
+
 - **Voice input (on-device transcription).** The composer mic now records a
   short voice clip — or you can pick an existing audio file — and a multimodal
   local model **transcribes it to text before anything runs**. The transcript

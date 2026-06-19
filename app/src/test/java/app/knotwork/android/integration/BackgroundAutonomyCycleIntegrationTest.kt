@@ -48,6 +48,7 @@ import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
+import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.ParkedRunResumer
@@ -346,6 +347,8 @@ class BackgroundAutonomyCycleIntegrationTest {
                 chatRepository,
                 settingsRepository,
                 mockk(relaxed = true),
+                mockk(relaxed = true),
+                NativeMemorySampler { 0L },
                 loadModelUseCase,
             ),
             CloudLlmNodeExecutor(

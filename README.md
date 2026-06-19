@@ -116,6 +116,12 @@ configured it.
 - **Local model manager** with an inline Active card, HuggingFace
   token + custom URL download fields, and preset rows showing live
   download progress / on-disk status.
+- **Model performance insights & benchmark** — a Performance card on the
+  Models screen showing the active model's rolling-average **time-to-first-token**,
+  **decode speed** (tok/s) and **peak memory** over its recent runs, plus a
+  **Run benchmark** action (fixed prompt, warm-up + measured run) that produces a
+  shareable one-shot report. Samples are recorded automatically from real runs;
+  peak memory is a process-wide native-heap figure, labelled **approximate**.
 - **Prompt library** — `ScrollableTabRow` of categories, per-card
   edit / delete / duplicate actions, inline `$VAR` highlighting in
   the body, and a `ModalBottomSheet` editor with `INSERT` chip row.

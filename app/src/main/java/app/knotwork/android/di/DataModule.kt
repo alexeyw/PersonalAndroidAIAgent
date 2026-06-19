@@ -7,6 +7,7 @@ import app.knotwork.android.data.engine.MediaPipeTextEmbeddingEngine
 import app.knotwork.android.data.engine.TaskQueueManagerImpl
 import app.knotwork.android.data.engine.TextEmbedderFactory
 import app.knotwork.android.data.local.AgentWorkspaceImpl
+import app.knotwork.android.data.local.AndroidNativeMemorySampler
 import app.knotwork.android.data.local.ApiKeyManager
 import app.knotwork.android.data.local.AttachmentStoreImpl
 import app.knotwork.android.data.local.AudioCaptureStoreImpl
@@ -30,6 +31,7 @@ import app.knotwork.android.data.repositories.LocalPromptPresetRepositoryImpl
 import app.knotwork.android.data.repositories.McpServerRepositoryImpl
 import app.knotwork.android.data.repositories.MemoryRepositoryImpl
 import app.knotwork.android.data.repositories.MetricsRepositoryImpl
+import app.knotwork.android.data.repositories.ModelPerformanceRepositoryImpl
 import app.knotwork.android.data.repositories.NetworkActivityTrackerImpl
 import app.knotwork.android.data.repositories.NetworkStateRepositoryImpl
 import app.knotwork.android.data.repositories.PendingInteractionRepositoryImpl
@@ -54,6 +56,7 @@ import app.knotwork.android.domain.repositories.McpServerRepository
 import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.MetricsRepository
 import app.knotwork.android.domain.repositories.ModelDownloadManager
+import app.knotwork.android.domain.repositories.ModelPerformanceRepository
 import app.knotwork.android.domain.repositories.NetworkActivityTracker
 import app.knotwork.android.domain.repositories.NetworkStateRepository
 import app.knotwork.android.domain.repositories.PendingInteractionRepository
@@ -74,6 +77,7 @@ import app.knotwork.android.domain.services.AudioRecorder
 import app.knotwork.android.domain.services.DatabaseResetService
 import app.knotwork.android.domain.services.LongRunningTaskNotifier
 import app.knotwork.android.domain.services.MemoryReembedScheduler
+import app.knotwork.android.domain.services.NativeMemorySampler
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -229,6 +233,24 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindMetricsRepository(repository: MetricsRepositoryImpl): MetricsRepository
+
+    /**
+     * Binds the [ModelPerformanceRepositoryImpl] implementation to the
+     * [ModelPerformanceRepository] interface backing the per-model inference
+     * performance samples (TTFT / decode speed / peak native memory).
+     */
+    @Binds
+    @Singleton
+    abstract fun bindModelPerformanceRepository(repository: ModelPerformanceRepositoryImpl): ModelPerformanceRepository
+
+    /**
+     * Binds the [AndroidNativeMemorySampler] implementation to the
+     * [NativeMemorySampler] interface, reading native-heap usage via
+     * `android.os.Debug` during inference.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindNativeMemorySampler(sampler: AndroidNativeMemorySampler): NativeMemorySampler
 
     /**
      * Binds the [PowerStateRepositoryImpl] implementation to the [PowerStateRepository] interface.

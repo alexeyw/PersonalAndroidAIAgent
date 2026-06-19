@@ -2,16 +2,20 @@ package app.knotwork.android.domain.engine.executors
 
 import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.engine.LlmInferenceEngine
+import app.knotwork.android.domain.engine.PeakHeapSampler
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ExecutionScope
+import app.knotwork.android.domain.models.ModelPerformanceSample
 import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.MetricsRepository
+import app.knotwork.android.domain.repositories.ModelPerformanceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
+import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -38,6 +42,8 @@ class LiteRtNodeExecutor @Inject constructor(
     private val chatRepository: ChatRepository,
     private val settingsRepository: SettingsRepository,
     private val metricsRepository: MetricsRepository,
+    private val modelPerformanceRepository: ModelPerformanceRepository,
+    private val nativeMemorySampler: NativeMemorySampler,
     private val loadModelUseCase: LoadModelUseCase,
 ) : NodeExecutor {
 
@@ -79,8 +85,19 @@ class LiteRtNodeExecutor @Inject constructor(
         var emittedThinking = false
         var approximateTokenCount = 0
 
+        // Performance instrumentation: TTFT is measured from the start of stream
+        // consumption (after the model is loaded), and peak native memory is
+        // sampled at a throttled cadence across the generation window.
+        val peakHeapSampler = PeakHeapSampler(nativeMemorySampler)
+        val inferenceStartMs = System.currentTimeMillis()
+        var firstTokenAtMs = 0L
+
         try {
             responseStream.collect { token ->
+                val now = System.currentTimeMillis()
+                if (firstTokenAtMs == 0L) firstTokenAtMs = now
+                peakHeapSampler.observe(now)
+
                 accumulatedResponse.append(token)
                 // Each emitted token from LiteRT is one model token, not a string of arbitrary
                 // length — counting by `+= 1` matches the real generation count.
@@ -108,6 +125,34 @@ class LiteRtNodeExecutor @Inject constructor(
 
         val endTime = System.currentTimeMillis()
         metricsRepository.updateMetrics(endTime - startTime, approximateTokenCount)
+
+        // Persist a per-model performance sample for the Performance card's
+        // rolling average. Fully best-effort: recording metrics must never affect
+        // the run, so any failure here (including an unexpected engine state) is
+        // logged and swallowed — only cancellation is re-thrown so structured
+        // concurrency keeps working. The sample is keyed by the engine's concrete
+        // loaded path (robust to the blank "Active model" sentinel in
+        // `node.modelPath`); a `null` path skips the sample.
+        try {
+            llmEngine.currentModelPath?.let { resolvedModelPath ->
+                modelPerformanceRepository.record(
+                    ModelPerformanceSample.fromTimings(
+                        modelPath = resolvedModelPath,
+                        inferenceStartMs = inferenceStartMs,
+                        firstTokenAtMs = firstTokenAtMs,
+                        endMs = endTime,
+                        tokenCount = approximateTokenCount,
+                        peakNativeHeapBytes = peakHeapSampler.peakBytes,
+                        isBenchmark = false,
+                        createdAt = endTime,
+                    ),
+                )
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to record model performance sample")
+        }
 
         val fullResponseText = accumulatedResponse.toString().trim()
 

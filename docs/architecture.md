@@ -571,6 +571,43 @@ in that case rather than letting the earlier `Image input` line imply otherwise.
 `CloudLlmNodeExecutor` structurally ignores `ExecutionScope.imagePath`, so an
 image can never reach a cloud provider.
 
+### 3.8. Per-model performance samples
+
+Distinct from `MetricsRepository` — which holds **session-scoped, process-local**
+figures not keyed by model — per-model performance is **persisted** so the Models
+screen can show rolling averages and a benchmark result that survive process
+death.
+
+1. **Measure.** `LiteRtNodeExecutor` times every on-device generation: it captures
+   **time-to-first-token** from the start of stream consumption (after model load)
+   to the first emitted token, **decode speed** over the first-to-last-token
+   window, and **peak native heap** sampled at a throttled (~150 ms) cadence
+   across the window via the domain `NativeMemorySampler` seam (data impl reads
+   `Debug.getNativeHeapAllocatedSize()` — cheap and unthrottled, unlike PSS). The
+   arithmetic lives in `ModelPerformanceSample.fromTimings(...)`, shared with the
+   benchmark.
+2. **Record.** It writes one `ModelPerformanceSample` through
+   `ModelPerformanceRepository` into the `model_performance_samples` table,
+   **keyed by the engine's concrete loaded path** (robust to the blank "Active
+   model" sentinel). Recording is fully best-effort — wrapped so a metrics-write
+   failure never affects the run, and skipped entirely for a run that produced no
+   tokens.
+3. **Aggregate.** `GetModelPerformanceUseCase` folds the most recent
+   `PerformanceConstants.SAMPLE_WINDOW` rows for the active model into a
+   `ModelPerformanceSummary` (mean TTFT, mean decode, worst-case peak) **on the
+   fly** — no precomputed aggregate table — and `ModelsViewModel` exposes it to the
+   Performance card.
+4. **Benchmark.** `RunBenchmarkUseCase` reuses the same measurement path for a
+   controlled run: it refuses while the engine is busy (`TaskQueueManager`'s global
+   state), runs a fixed prompt (`DefaultPrompts.BENCHMARK_PROMPT`) as a warm-up plus
+   a measured pass, persists the measured sample (`isBenchmark = true`), and returns
+   a `BenchmarkReport` for the inline one-shot view. It is foreground-only and
+   shares the engine's generation mutex, so it can never interleave with a real run.
+
+Peak memory is **process-wide and approximate** (it excludes the model's mmap'd
+pages and reads low under ZRAM); this caveat is carried verbatim into the UI and
+the shared text so the figure is never presented as the model's exact footprint.
+
 ---
 
 ## 4. Integrations

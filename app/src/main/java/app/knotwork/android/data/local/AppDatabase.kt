@@ -9,6 +9,7 @@ import app.knotwork.android.data.local.dao.ChatDao
 import app.knotwork.android.data.local.dao.ChatHistorySummaryDao
 import app.knotwork.android.data.local.dao.LocalModelDao
 import app.knotwork.android.data.local.dao.MemoryDao
+import app.knotwork.android.data.local.dao.ModelPerformanceDao
 import app.knotwork.android.data.local.dao.PendingInteractionDao
 import app.knotwork.android.data.local.dao.PipelineDao
 import app.knotwork.android.data.local.dao.PipelinePresetDao
@@ -23,6 +24,7 @@ import app.knotwork.android.data.local.models.ChatSessionEntity
 import app.knotwork.android.data.local.models.ConnectionEntity
 import app.knotwork.android.data.local.models.LocalModelEntity
 import app.knotwork.android.data.local.models.MemoryChunkEntity
+import app.knotwork.android.data.local.models.ModelPerformanceSampleEntity
 import app.knotwork.android.data.local.models.NodeEntity
 import app.knotwork.android.data.local.models.PendingInteractionEntity
 import app.knotwork.android.data.local.models.PipelineEntity
@@ -62,8 +64,9 @@ import app.knotwork.android.data.local.models.TraceStepEntity
         PendingInteractionEntity::class,
         SkillEntity::class,
         ChatHistorySummaryEntity::class,
+        ModelPerformanceSampleEntity::class,
     ],
-    version = 41,
+    version = 42,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -157,6 +160,15 @@ abstract class AppDatabase : RoomDatabase() {
      * @return The [ChatHistorySummaryDao] instance.
      */
     abstract fun chatHistorySummaryDao(): ChatHistorySummaryDao
+
+    /**
+     * Provides access to the [ModelPerformanceDao] backing the per-model
+     * inference performance samples (TTFT / decode speed / peak native memory)
+     * shown on the model screen.
+     *
+     * @return The [ModelPerformanceDao] instance.
+     */
+    abstract fun modelPerformanceDao(): ModelPerformanceDao
 
     companion object {
         /**
@@ -930,6 +942,41 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_40_41 = object : Migration(40, 41) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `local_models` ADD COLUMN `supportsAudio` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * Adds the `model_performance_samples` table backing the model screen's
+         * Performance card (per-model TTFT, decode speed and peak native memory)
+         * and the controlled benchmark. Additive — no existing rows are touched.
+         *
+         * Samples are keyed by `modelPath` (the on-disk path of the model that
+         * ran) rather than a foreign key onto `local_models`, so attribution
+         * never depends on resolving the "Active model" sentinel and a sample
+         * survives the model row being edited. The `(modelPath, id)` index backs
+         * the "most recent N for this model" rolling-window query.
+         */
+        val MIGRATION_41_42 = object : Migration(41, 42) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `model_performance_samples` (
+                        `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                        `modelPath` TEXT NOT NULL,
+                        `ttftMs` INTEGER NOT NULL,
+                        `decodeTokensPerSec` REAL NOT NULL,
+                        `totalMs` INTEGER NOT NULL,
+                        `tokenCount` INTEGER NOT NULL,
+                        `peakNativeHeapBytes` INTEGER NOT NULL,
+                        `isBenchmark` INTEGER NOT NULL,
+                        `createdAt` INTEGER NOT NULL
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_model_performance_samples_modelPath_id` " +
+                        "ON `model_performance_samples` (`modelPath`, `id`)",
+                )
             }
         }
     }

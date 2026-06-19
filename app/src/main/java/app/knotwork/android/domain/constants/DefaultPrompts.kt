@@ -93,6 +93,21 @@ object DefaultPrompts {
             "Output only the transcript text, with no added commentary, labels, or translation."
 
     /**
+     * Fixed prompt used by the model benchmark
+     * ([app.knotwork.android.domain.usecases.RunBenchmarkUseCase]). It is held
+     * constant so successive benchmark runs — and runs across different models —
+     * stay comparable: the only variables are the device and the model, never the
+     * input. It asks for a short, self-contained generation so the measured run
+     * exercises real decoding without dragging on, while still producing enough
+     * tokens to derive a stable decode-speed figure. The benchmark never shows
+     * this text or the model's answer to the user; only the timing numbers
+     * surface.
+     */
+    const val BENCHMARK_PROMPT =
+        "Write a short, friendly paragraph (about four sentences) explaining what " +
+            "an AI assistant running entirely on a phone can do for its user."
+
+    /**
      * Tool-usage instruction surfaced to user-authored prompts when the agent
      * wants to advertise the available tools. The literal `[TOOL_LIST]`
      * placeholder is substituted by the caller (currently consumed by

@@ -215,6 +215,20 @@ private fun ModelsBody(
                 ActiveModelCard(active = active, strings = strings, callbacks = callbacks)
             }
         }
+        state.performance?.let { performance ->
+            item(key = "performance") {
+                PerformanceCard(
+                    state = performance,
+                    strings = strings.performance,
+                    callbacks = PerformanceCallbacks(
+                        onRunBenchmark = callbacks.onRunBenchmark,
+                        onCancelBenchmark = callbacks.onCancelBenchmark,
+                        onShareReport = callbacks.onShareBenchmark,
+                        onDismissReport = callbacks.onDismissBenchmark,
+                    ),
+                )
+            }
+        }
         item(key = "hf-section") {
             SectionHeader(label = strings.hfSection, trailing = strings.hfOptional)
         }
@@ -742,4 +756,5 @@ data class ModelsStrings(
     val visionDescription: String = "Let this model read attached photos",
     val audioLabel: String = "Audio support",
     val audioDescription: String = "Record or pick a clip to transcribe",
+    val performance: PerformanceStrings = PerformanceStrings(),
 )
