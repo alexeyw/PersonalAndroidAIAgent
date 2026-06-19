@@ -328,4 +328,29 @@ class AppDatabaseMigrationTest {
         // Backfilled to text-only (0) for every existing row.
         assertTrue("supportsVision must be NOT NULL DEFAULT 0: $sql", sql.contains("NOT NULL DEFAULT 0"))
     }
+
+    @Test
+    fun `MIGRATION_40_41 targets versions 40 to 41`() {
+        val migration = AppDatabase.MIGRATION_40_41
+
+        assertEquals(40, migration.startVersion)
+        assertEquals(41, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_40_41 adds supportsAudio column to local_models with default 0`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val statements = mutableListOf<String>()
+
+        AppDatabase.MIGRATION_40_41.migrate(db)
+
+        verify(exactly = 1) { db.execSQL(capture(statements)) }
+        val sql = statements.single().uppercase()
+        assertTrue(
+            "Expected ALTER local_models ADD supportsAudio, got: $sql",
+            sql.contains("ALTER TABLE `LOCAL_MODELS` ADD COLUMN `SUPPORTSAUDIO`"),
+        )
+        // Backfilled to audio-incapable (0) for every existing row.
+        assertTrue("supportsAudio must be NOT NULL DEFAULT 0: $sql", sql.contains("NOT NULL DEFAULT 0"))
+    }
 }

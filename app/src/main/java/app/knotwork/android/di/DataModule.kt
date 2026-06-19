@@ -8,6 +8,7 @@ import app.knotwork.android.data.engine.TextEmbedderFactory
 import app.knotwork.android.data.local.AgentWorkspaceImpl
 import app.knotwork.android.data.local.ApiKeyManager
 import app.knotwork.android.data.local.AttachmentStoreImpl
+import app.knotwork.android.data.local.AudioCaptureStoreImpl
 import app.knotwork.android.data.local.DatabaseResetServiceImpl
 import app.knotwork.android.data.local.SettingsManager
 import app.knotwork.android.data.local.crypto.AeadCipher
@@ -67,6 +68,7 @@ import app.knotwork.android.domain.repositories.SkillRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.AgentWorkspace
 import app.knotwork.android.domain.services.AttachmentStore
+import app.knotwork.android.domain.services.AudioCaptureStore
 import app.knotwork.android.domain.services.DatabaseResetService
 import app.knotwork.android.domain.services.LongRunningTaskNotifier
 import app.knotwork.android.domain.services.MemoryReembedScheduler
@@ -364,4 +366,13 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindAttachmentStore(store: AttachmentStoreImpl): AttachmentStore
+
+    /**
+     * Binds [AudioCaptureStoreImpl] to [AudioCaptureStore] — the ephemeral
+     * voice-input clip store under `cacheDir/audio/`. Singleton so recorder and
+     * transcription callers share one view of the cache directory.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindAudioCaptureStore(store: AudioCaptureStoreImpl): AudioCaptureStore
 }

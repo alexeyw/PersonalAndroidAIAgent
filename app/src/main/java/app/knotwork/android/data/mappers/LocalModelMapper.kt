@@ -15,6 +15,7 @@ fun LocalModelEntity.toDomain(): LocalModel = LocalModel(
     size = this.size,
     isActive = this.isActive,
     supportsVision = this.supportsVision,
+    supportsAudio = this.supportsAudio,
 )
 
 /**
@@ -29,4 +30,5 @@ fun LocalModel.toEntity(): LocalModelEntity = LocalModelEntity(
     size = this.size,
     isActive = this.isActive,
     supportsVision = this.supportsVision,
+    supportsAudio = this.supportsAudio,
 )

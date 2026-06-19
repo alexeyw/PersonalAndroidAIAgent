@@ -25,9 +25,20 @@ interface LlmInferenceEngine {
      *   this relative to the currently loaded mode forces a re-initialization —
      *   the underlying runtime fixes the vision backend at engine-construction
      *   time.
+     * @param enableAudio When `true`, the engine is configured with an audio
+     *   backend so the model can transcribe an audio clip (see [transcribe]).
+     *   Defaults to `false` for the same reason as [enableVision]: only the
+     *   voice-input transcription step (gated by the active model's audio-support
+     *   flag) requests `true`, and toggling it relative to the loaded mode forces
+     *   a re-initialization, since the runtime fixes the audio backend at
+     *   engine-construction time.
      * @return A [Result] indicating success or containing an [AppError] if initialization failed.
      */
-    suspend fun initialize(modelPath: String, enableVision: Boolean = false): Result<Unit, AppError>
+    suspend fun initialize(
+        modelPath: String,
+        enableVision: Boolean = false,
+        enableAudio: Boolean = false,
+    ): Result<Unit, AppError>
 
     /**
      * Returns true if the LLM engine is currently initialized with a model.
@@ -47,6 +58,35 @@ interface LlmInferenceEngine {
      * vision-enabling re-initialization of an already-loaded model.
      */
     val isVisionEnabled: Boolean
+
+    /**
+     * Whether the currently loaded engine was initialized with its audio
+     * backend enabled (`enableAudio = true` on the last [initialize]). `false`
+     * when no model is loaded or the model was loaded without audio. Used by
+     * `LoadModelUseCase` to decide whether a transcription request needs an
+     * audio-enabling re-initialization of an already-loaded model.
+     */
+    val isAudioEnabled: Boolean
+
+    /**
+     * Transcribes a single audio clip into text using the loaded multimodal
+     * model. This is a **preprocessing** step that runs *before* any pipeline:
+     * voice input never travels the execution graph — only the resulting text
+     * does, as an ordinary editable message. It therefore has its own entry
+     * point rather than overloading [generateResponseStream] (whose
+     * image/temperature contract belongs to graph inference).
+     *
+     * @param audioPath Absolute filesystem path of the audio clip to transcribe
+     *   (a 16 kHz mono PCM WAV produced by the recorder, or a copy of a picked
+     *   audio file). Requires the engine to have been initialized with
+     *   [initialize]'s `enableAudio = true`, which the caller guarantees by
+     *   loading the model in audio mode before issuing a transcription.
+     * @param prompt The transcription instruction sent alongside the audio (the
+     *   rendered transcription system prompt).
+     * @return A [Flow] of strings streaming the transcript tokens as they are
+     *   produced; the caller joins them into the final transcript text.
+     */
+    fun transcribe(audioPath: String, prompt: String): Flow<String>
 
     /**
      * Generates a response stream from the LLM based on the provided prompt.

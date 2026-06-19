@@ -92,6 +92,7 @@ class SettingsManager @Inject constructor(
         val CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS =
             intPreferencesKey("chat_history_compression_threshold_tokens")
         val CHAT_HISTORY_LIVE_WINDOW_SIZE = intPreferencesKey("chat_history_live_window_size")
+        val AUDIO_MAX_DURATION_SEC = intPreferencesKey("audio_max_duration_sec")
         val MEMORY_SEARCH_THRESHOLD =
             androidx.datastore.preferences.core.floatPreferencesKey("memory_search_threshold")
         val MEMORY_RECENCY_HALF_LIFE_DAYS = intPreferencesKey("memory_recency_half_life_days")
@@ -802,6 +803,26 @@ class SettingsManager @Inject constructor(
     override suspend fun setChatHistoryLiveWindowSize(size: Int) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.CHAT_HISTORY_LIVE_WINDOW_SIZE] = size
+        }
+    }
+
+    override val audioMaxDurationSec: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.AUDIO_MAX_DURATION_SEC]
+                ?: SettingsDefaults.AUDIO_MAX_DURATION_SEC_DEFAULT
+        }
+
+    override suspend fun setAudioMaxDurationSec(seconds: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.AUDIO_MAX_DURATION_SEC] = seconds
         }
     }
 

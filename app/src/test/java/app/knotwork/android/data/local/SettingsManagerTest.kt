@@ -74,6 +74,8 @@ class SettingsManagerTest {
     private val pipelineMaxStepsKey = androidx.datastore.preferences.core.intPreferencesKey("pipeline_max_steps")
     private val pipelineMaxNestingDepthKey =
         androidx.datastore.preferences.core.intPreferencesKey("pipeline_max_nesting_depth")
+    private val audioMaxDurationSecKey =
+        androidx.datastore.preferences.core.intPreferencesKey("audio_max_duration_sec")
     private val cloudRetryMaxAttemptsKey =
         androidx.datastore.preferences.core.intPreferencesKey("cloud_retry_max_attempts")
     private val cloudRetryBaseDelayMsKey =
@@ -159,6 +161,28 @@ class SettingsManagerTest {
         val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.topP.first()
         assertEquals(SettingsDefaults.TOP_P_DEFAULT, result)
+    }
+
+    @Test
+    fun `audioMaxDurationSec returns default value`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[audioMaxDurationSecKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, context, cipher)
+        val result = settingsManager.audioMaxDurationSec.first()
+        assertEquals(SettingsDefaults.AUDIO_MAX_DURATION_SEC_DEFAULT, result)
+    }
+
+    @Test
+    fun `setAudioMaxDurationSec persists and is read back`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            manager.setAudioMaxDurationSec(45)
+            assertEquals(45, manager.audioMaxDurationSec.first())
+        } finally {
+            scope.cancel()
+        }
     }
 
     @Test

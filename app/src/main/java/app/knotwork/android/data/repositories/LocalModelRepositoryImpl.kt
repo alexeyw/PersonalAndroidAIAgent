@@ -76,6 +76,10 @@ class LocalModelRepositoryImpl @Inject constructor(private val localModelDao: Lo
         localModelDao.setVisionSupport(id, enabled)
     }
 
+    override suspend fun setAudioSupport(id: Long, enabled: Boolean): Unit = withContext(Dispatchers.IO) {
+        localModelDao.setAudioSupport(id, enabled)
+    }
+
     override suspend fun isInstalled(fileName: String): Boolean = withContext(Dispatchers.IO) {
         localModelDao.countByName(fileName) > 0
     }

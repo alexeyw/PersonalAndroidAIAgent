@@ -48,6 +48,7 @@ class LiteRTLlmEngine @Inject constructor(
     private var conversation: Conversation? = null
     private var _currentModelPath: String? = null
     private var _isVisionEnabled: Boolean = false
+    private var _isAudioEnabled: Boolean = false
 
     /**
      * Serialises every [generateResponseStream] call. LiteRT-LM allows only
@@ -75,6 +76,11 @@ class LiteRTLlmEngine @Inject constructor(
      */
     override val isVisionEnabled: Boolean get() = _isVisionEnabled
 
+    /**
+     * Whether the loaded engine was constructed with its audio backend enabled.
+     */
+    override val isAudioEnabled: Boolean get() = _isAudioEnabled
+
     init {
         context.registerComponentCallbacks(this)
     }
@@ -94,32 +100,40 @@ class LiteRTLlmEngine @Inject constructor(
      *   vision-capable model can read an attached image; when `false` the vision
      *   backend is left unset, keeping text-only runs lean. The flag is recorded
      *   in [isVisionEnabled] so the loader can detect a needed mode switch.
+     * @param enableAudio When `true`, the engine is built with an audio backend
+     *   (mirroring the compute [Backend]) so a multimodal model can transcribe an
+     *   audio clip; when `false` the audio backend is left unset. The flag is
+     *   recorded in [isAudioEnabled] so the loader can detect a needed mode switch.
      * @return [Result.Success] on successful initialization, or [Result.Error] on failure.
      */
-    override suspend fun initialize(modelPath: String, enableVision: Boolean): Result<Unit, AppError> =
-        withContext(Dispatchers.IO) {
-            try {
-                initializeInternal(modelPath, enableVision)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                // Catch `Throwable` (not just `Exception`) so JVM-side
-                // `Error`s thrown by the LiteRT JNI layer (e.g.
-                // `UnsatisfiedLinkError`, `AssertionError`) also land here
-                // instead of escaping to the default uncaught-exception
-                // handler and killing the process. The crash-recovery
-                // breadcrumb stays set on disk so the next cold-start
-                // auto-falls back to CPU.
-                Timber.e(e, "Failed to initialize LiteRTLlmEngine")
-                _currentModelPath = null
-                _isVisionEnabled = false
-                Result.Error(
-                    error = LlmSystemError,
-                    message = e.localizedMessage ?: "Unknown initialization error",
-                    throwable = e,
-                )
-            }
+    override suspend fun initialize(
+        modelPath: String,
+        enableVision: Boolean,
+        enableAudio: Boolean,
+    ): Result<Unit, AppError> = withContext(Dispatchers.IO) {
+        try {
+            initializeInternal(modelPath, enableVision, enableAudio)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            // Catch `Throwable` (not just `Exception`) so JVM-side
+            // `Error`s thrown by the LiteRT JNI layer (e.g.
+            // `UnsatisfiedLinkError`, `AssertionError`) also land here
+            // instead of escaping to the default uncaught-exception
+            // handler and killing the process. The crash-recovery
+            // breadcrumb stays set on disk so the next cold-start
+            // auto-falls back to CPU.
+            Timber.e(e, "Failed to initialize LiteRTLlmEngine")
+            _currentModelPath = null
+            _isVisionEnabled = false
+            _isAudioEnabled = false
+            Result.Error(
+                error = LlmSystemError,
+                message = e.localizedMessage ?: "Unknown initialization error",
+                throwable = e,
+            )
         }
+    }
 
     /**
      * Performs the actual engine construction. Split out from [initialize] so the
@@ -128,15 +142,21 @@ class LiteRTLlmEngine @Inject constructor(
      *
      * @param modelPath The exact path to the locally downloaded model file.
      * @param enableVision Whether to configure the vision backend (see [initialize]).
+     * @param enableAudio Whether to configure the audio backend (see [initialize]).
      * @return [Result.Success] on successful initialization, or [Result.Error] on failure.
      */
-    private suspend fun initializeInternal(modelPath: String, enableVision: Boolean): Result<Unit, AppError> {
+    private suspend fun initializeInternal(
+        modelPath: String,
+        enableVision: Boolean,
+        enableAudio: Boolean,
+    ): Result<Unit, AppError> {
         val file = File(modelPath)
         if (!file.exists()) {
             val errorMsg = "Model file does not exist at path: $modelPath"
             Timber.e(errorMsg)
             _currentModelPath = null
             _isVisionEnabled = false
+            _isAudioEnabled = false
             return Result.Error(
                 error = LlmSystemError,
                 message = errorMsg,
@@ -193,12 +213,18 @@ class LiteRTLlmEngine @Inject constructor(
         // contract of this phase.
         val visionBackend = if (enableVision) newBackend(resolved) else null
 
+        // The audio encoder, like vision, runs on a fresh backend instance of the
+        // same compute family and is fixed at engine construction (LiteRT-LM
+        // exposes no `maxNumAudio` budget — the audio backend's presence alone
+        // enables transcription). A non-audio init leaves it `null`.
+        val audioBackend = if (enableAudio) newBackend(resolved) else null
+
         // Initialize Engine Configuration
         val config = EngineConfig(
             modelPath = modelPath,
             backend = backend,
             visionBackend = visionBackend,
-            audioBackend = null,
+            audioBackend = audioBackend,
             maxNumTokens = maxTokens,
             maxNumImages = if (enableVision) MAX_NUM_IMAGES else null,
             cacheDir = context.cacheDir.absolutePath,
@@ -210,10 +236,14 @@ class LiteRTLlmEngine @Inject constructor(
         }
         _currentModelPath = modelPath
         _isVisionEnabled = enableVision
+        _isAudioEnabled = enableAudio
         // Init succeeded — clear the crash-recovery breadcrumb so the
         // next launch trusts the persisted backend.
         settingsRepository.setLastInitBackendAttempt(null)
-        Timber.i("LiteRT-LM Engine successfully initialized with $modelPath (vision=$enableVision)")
+        Timber.i(
+            "LiteRT-LM Engine successfully initialized with $modelPath " +
+                "(vision=$enableVision, audio=$enableAudio)",
+        )
 
         return Result.Success(Unit)
     }
@@ -296,6 +326,56 @@ class LiteRTLlmEngine @Inject constructor(
     }.flowOn(Dispatchers.IO)
 
     /**
+     * Transcribes a single audio clip into text. Mirrors [generateResponseStream]'s
+     * lifecycle — it serialises on [generationMutex] and recreates the single
+     * LiteRT-LM [Conversation] — but builds the message from an audio file
+     * (`Content.AudioFile`) followed by the transcription instruction, which
+     * requires the engine to have been initialized with `enableAudio = true`
+     * (guaranteed by `LoadModelUseCase` loading the model in audio mode first).
+     * Transcription is a pre-pipeline step: the resulting text, not the audio,
+     * is what later travels the execution graph.
+     *
+     * @param audioPath Absolute path of the audio clip (16 kHz mono PCM WAV).
+     * @param prompt The rendered transcription instruction.
+     * @return A [Flow] of transcript token chunks, emitted on [Dispatchers.IO].
+     */
+    override fun transcribe(audioPath: String, prompt: String): Flow<String> = flow {
+        val currentEngine = engine
+        if (currentEngine == null) {
+            Timber.e("Engine is not initialized")
+            throw IllegalStateException("LLM Engine not initialized")
+        }
+
+        try {
+            Timber.d("Starting transcription for audio: %s", audioPath)
+            generationMutex.withLock {
+                // Same single-conversation discipline as generation: close any
+                // prior conversation and open a fresh one so no stale history
+                // leaks into the transcript.
+                conversation?.close()
+                conversation = currentEngine.createConversation()
+                conversation?.let { conversation ->
+                    val responses = conversation.sendMessageAsync(
+                        Contents.of(Content.AudioFile(audioPath), Content.Text(prompt)),
+                    )
+                    responses.collect { chunk ->
+                        val textParts = chunk.contents.contents.filterIsInstance<Content.Text>()
+                        val text = textParts.joinToString("") { it.text }
+                        if (text.isNotEmpty()) {
+                            emit(text)
+                        }
+                    }
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.e(e, "Error during audio transcription")
+            throw e
+        }
+    }.flowOn(Dispatchers.IO)
+
+    /**
      * Unloads the engine from memory, releasing heavy resources.
      */
     override fun unload() {
@@ -310,6 +390,7 @@ class LiteRTLlmEngine @Inject constructor(
             engine = null
             _currentModelPath = null
             _isVisionEnabled = false
+            _isAudioEnabled = false
         }
     }
 

@@ -64,6 +64,18 @@ interface LocalModelRepository {
     suspend fun setVisionSupport(id: Long, enabled: Boolean)
 
     /**
+     * Sets the manual audio-capability flag of the model with the given [id].
+     * Backs the "this model can transcribe audio" toggle on the model screen;
+     * the voice-input transcription pre-flight reads the resulting
+     * [LocalModel.supportsAudio] to decide whether the active model may
+     * transcribe a recorded/picked clip.
+     *
+     * @param id The ID of the model to update.
+     * @param enabled `true` to mark the model audio-capable, `false` otherwise.
+     */
+    suspend fun setAudioSupport(id: Long, enabled: Boolean)
+
+    /**
      * Live snapshot of the currently active model enriched with on-device
      * metadata (file size, parsed quantization marker, downloaded
      * timestamp). Emits `null` when no model has been activated yet —
