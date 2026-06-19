@@ -38,6 +38,7 @@ import app.knotwork.design.icons.imagevector.knotworkExtensionIcon
 import app.knotwork.design.icons.imagevector.knotworkExternalIcon
 import app.knotwork.design.icons.imagevector.knotworkEyeIcon
 import app.knotwork.design.icons.imagevector.knotworkEyeOffIcon
+import app.knotwork.design.icons.imagevector.knotworkFileAudioIcon
 import app.knotwork.design.icons.imagevector.knotworkFileBinIcon
 import app.knotwork.design.icons.imagevector.knotworkFileIcon
 import app.knotwork.design.icons.imagevector.knotworkFileTextIcon
@@ -374,6 +375,9 @@ object AppIcons {
 
     /** `I.mic` — voice input. */
     val Mic: ImageVector get() = knotworkMicIcon
+
+    /** `I.fileAudio` — an audio document (file + mini waveform); "Choose audio file" source. */
+    val FileAudio: ImageVector get() = knotworkFileAudioIcon
 
     /** `I.image` — image attachment affordance / Photo-library row / thumbnail. */
     val Image: ImageVector get() = knotworkImageIcon

@@ -193,7 +193,18 @@ fun ChatHomeScreenState.toViewState(fixtures: ChatHomeFixtures = ChatHomeFixture
             console = console,
         )
     }
-    return baseViewState.copy(composerAttachment = composerAttachment)
+    // The voice capture/transcription phase overrides the visual-derived composer
+    // state: recording replaces the input row, transcribing shows the spinner.
+    val voiceComposerState = when (val voice = composer.voice) {
+        is VoiceInputState.Recording -> ComposerState.Recording(elapsedSec = voice.elapsedSec, maxSec = voice.maxSec)
+        VoiceInputState.Transcribing -> ComposerState.Transcribing
+        VoiceInputState.Idle -> null
+    }
+    return baseViewState.copy(
+        composerAttachment = composerAttachment,
+        composerState = voiceComposerState ?: baseViewState.composerState,
+        composerVoiceNotice = composer.voiceNotice,
+    )
 }
 
 /**

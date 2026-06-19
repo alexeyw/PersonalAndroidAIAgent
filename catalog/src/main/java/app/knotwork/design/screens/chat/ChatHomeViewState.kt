@@ -7,6 +7,7 @@ import app.knotwork.design.components.chat.ChatMetadata
 import app.knotwork.design.components.chat.ChatRole
 import app.knotwork.design.components.chat.ComposerAttachment
 import app.knotwork.design.components.chat.ComposerState
+import app.knotwork.design.components.chat.ComposerVoiceNotice
 import app.knotwork.design.components.console.ConsoleFilter
 import app.knotwork.design.components.console.ConsoleLine
 import app.knotwork.design.components.console.ConsoleSnap
@@ -224,6 +225,11 @@ data class ChatHomeViewState(
      * input row. `null` when no image is attached.
      */
     val composerAttachment: ComposerAttachment? = null,
+    /**
+     * Calm blocked/permission notice shown above the composer input row when a
+     * voice action cannot proceed, or `null` when none.
+     */
+    val composerVoiceNotice: ComposerVoiceNotice? = null,
 ) {
     init {
         require((visualState == ChatHomeVisualState.Error) == (errorMessage != null)) {
@@ -249,6 +255,19 @@ class ChatHomeCallbacks(
     val onAttach: (() -> Unit)? = null,
     /** Fired when the user removes the pending composer attachment. */
     val onRemoveAttachment: () -> Unit = {},
+    /**
+     * Fired when the user taps the composer mic (voice input). `null` hides the
+     * mic affordance entirely (it never renders without a handler).
+     */
+    val onMic: (() -> Unit)? = null,
+    /** Fired when the user taps Stop in the recording bar. */
+    val onStopRecording: () -> Unit = {},
+    /** Fired when the user taps the discard ✕ in the recording bar. */
+    val onDiscardRecording: () -> Unit = {},
+    /** Fired from the no-audio-model voice notice's "Change model" action. */
+    val onChangeModel: () -> Unit = {},
+    /** Fired from the permission voice notice's "Open settings" action. */
+    val onOpenAppSettings: () -> Unit = {},
     val onOpenDrawer: () -> Unit = {},
     val onCloseDrawer: () -> Unit = {},
     val onSelectThread: (String) -> Unit = {},

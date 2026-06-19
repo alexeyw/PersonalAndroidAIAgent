@@ -393,6 +393,13 @@ private fun ActiveModelCard(active: ActiveModelRow, strings: ModelsStrings, call
             checked = active.visionSupported,
             onToggle = { callbacks.onToggleVision(!active.visionSupported) },
         )
+        HorizontalDivider(color = KnotworkTheme.extended.divider)
+        LabeledSwitchRow(
+            label = strings.audioLabel,
+            description = strings.audioDescription,
+            checked = active.audioSupported,
+            onToggle = { callbacks.onToggleAudio(!active.audioSupported) },
+        )
     }
 }
 
@@ -733,4 +740,6 @@ data class ModelsStrings(
     val errorRetry: String = "Retry",
     val visionLabel: String = "Image support",
     val visionDescription: String = "Let this model read attached photos",
+    val audioLabel: String = "Audio support",
+    val audioDescription: String = "Record or pick a clip to transcribe",
 )

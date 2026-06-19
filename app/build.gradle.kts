@@ -370,6 +370,11 @@ kover {
                     "app.knotwork.android.data.local.AppDatabase_Impl*",
                     "*_AutoMigration_*",
                     "app.knotwork.android.data.local.dao.*",
+                    // Mic capture is a thin platform-`AudioRecord` wrapper that
+                    // cannot run on the JVM; its testable WAV-header logic lives
+                    // in `data.audio.WavHeader`, which stays in coverage.
+                    "app.knotwork.android.data.audio.AudioRecorderImpl",
+                    "app.knotwork.android.data.audio.AudioRecorderImpl$*",
                     // Compose synthetic singletons + project-convention preview files
                     // (every Compose `@Preview` lives in a `*Preview.kt` file).
                     "*ComposableSingletons*",

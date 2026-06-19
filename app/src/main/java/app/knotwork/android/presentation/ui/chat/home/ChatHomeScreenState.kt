@@ -1,8 +1,10 @@
 package app.knotwork.android.presentation.ui.chat.home
 
+import app.knotwork.android.domain.constants.SettingsDefaults
 import app.knotwork.android.domain.models.ClarificationRequest
 import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.MessageAttachment
+import app.knotwork.design.components.chat.ComposerVoiceNotice
 import app.knotwork.design.screens.chat.ChatHomeConsoleState
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
 import app.knotwork.design.screens.chat.ChatHomeThreadRow
@@ -124,12 +126,41 @@ data class ImageViewerTarget(
  *   before a destructive tool can be approved.
  * @property attachment pending image attachment shown above the input row, or
  *   `null` when none is attached.
+ * @property voice the voice-input capture/transcription phase driving the
+ *   composer's recording bar / transcribing indicator.
+ * @property voiceNotice a calm blocked/permission notice shown above the input
+ *   row when a voice action cannot proceed, or `null` when none.
+ * @property audioChooserVisible whether the voice source chooser sheet is open.
  */
 data class ChatHomeComposerState(
     val value: String = "",
     val typedConfirm: String = "",
     val attachment: ComposerAttachmentDraft? = null,
+    val voice: VoiceInputState = VoiceInputState.Idle,
+    val voiceNotice: ComposerVoiceNotice? = null,
+    val audioChooserVisible: Boolean = false,
+    val audioMaxDurationSec: Int = SettingsDefaults.AUDIO_MAX_DURATION_SEC_DEFAULT,
 )
+
+/**
+ * Voice-input phase of the composer (distinct from the text [value]). Drives the
+ * catalog composer's recording bar and transcribing indicator.
+ */
+sealed interface VoiceInputState {
+    /** Not recording or transcribing. */
+    data object Idle : VoiceInputState
+
+    /**
+     * Capturing a clip.
+     *
+     * @property elapsedSec whole seconds captured so far.
+     * @property maxSec the recording limit.
+     */
+    data class Recording(val elapsedSec: Int, val maxSec: Int) : VoiceInputState
+
+    /** Transcribing the captured/picked clip into text. */
+    data object Transcribing : VoiceInputState
+}
 
 /**
  * Snapshots of whatever the orchestrator is currently paused on.

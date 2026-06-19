@@ -101,6 +101,13 @@ configured it.
   on the Models screen; a pre-flight check blocks (with a clear message) sending
   an image to a text-only model or to a cloud-first pipeline before the run
   starts.
+- **Voice input** — record a short clip (or pick an audio file) and a
+  multimodal local model **transcribes it to editable text before the pipeline
+  runs** — the audio never travels the graph. Canonical 16 kHz mono capture, a
+  live timer, and an auto-stop limit (default 30 s); mark a model audio-capable
+  with the **Audio support** toggle on the Models screen. A text-only model, a
+  denied mic permission, or a busy engine each surface a calm, non-blocking
+  notice. The clip is deleted after a successful transcription.
 - Redesigned **Settings** screen with identity card, structured
   HITL restrictions, sampling/repetition controls, memory dashboard
   (Chunks · Size · Threads · Avg score + Export / Import / Re-embed / Clear),

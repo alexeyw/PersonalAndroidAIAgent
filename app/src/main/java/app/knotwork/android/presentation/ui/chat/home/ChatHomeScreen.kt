@@ -1,8 +1,11 @@
 package app.knotwork.android.presentation.ui.chat.home
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -52,11 +55,13 @@ import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.knotwork.android.R
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
+import app.knotwork.design.components.chat.AudioSourceChooserSheet
 import app.knotwork.design.components.chat.ChatContextAction
 import app.knotwork.design.components.chat.ImageViewer
 import app.knotwork.design.components.chat.SourceChooserSheet
@@ -276,6 +281,33 @@ fun ChatHomeScreen(
         pendingCaptureUri = null
     }
 
+    // Voice input: a RECORD_AUDIO permission gate before capture, and an
+    // OpenDocument picker (audio/*) for an existing clip. Both feed the VM's
+    // record→transcribe / pick→transcribe flow.
+    val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) viewModel.startRecording() else viewModel.onMicPermissionDenied()
+    }
+    val audioPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) viewModel.onAudioFilePicked(uri.toString())
+    }
+    val requestRecordAudio: () -> Unit = {
+        val granted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO,
+        ) == PackageManager.PERMISSION_GRANTED
+        if (granted) {
+            viewModel.startRecording()
+        } else {
+            recordAudioPermissionLauncher.launch(
+                Manifest.permission.RECORD_AUDIO,
+            )
+        }
+    }
+
     // Resolve every user-facing stub string up here so the mapping below
     // stays free of hardcoded strings — agent-status pills, drawer
     // sessions, and the empty-state suggestion cards all flow from
@@ -290,6 +322,18 @@ fun ChatHomeScreen(
         onStop = viewModel::stopGeneration,
         onAttach = viewModel::onAttachClicked,
         onRemoveAttachment = viewModel::removeAttachment,
+        onMic = viewModel::onMicClicked,
+        onStopRecording = viewModel::onStopRecording,
+        onDiscardRecording = viewModel::onDiscardRecording,
+        onChangeModel = onOpenModels,
+        onOpenAppSettings = {
+            context.startActivity(
+                Intent(
+                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.fromParts("package", context.packageName, null),
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        },
         onOpenDrawer = viewModel::openDrawer,
         onCloseDrawer = viewModel::closeDrawer,
         onSelectThread = viewModel::selectThread,
@@ -572,6 +616,20 @@ fun ChatHomeScreen(
                 },
             )
         }
+        if (screenState.composer.audioChooserVisible) {
+            AudioSourceChooserSheet(
+                maxDurationLabel = formatClock(screenState.composer.audioMaxDurationSec),
+                onDismiss = viewModel::dismissAudioChooser,
+                onPickRecord = {
+                    viewModel.dismissAudioChooser()
+                    requestRecordAudio()
+                },
+                onPickFile = {
+                    viewModel.dismissAudioChooser()
+                    audioPickerLauncher.launch(arrayOf(AUDIO_MIME_FILTER))
+                },
+            )
+        }
         screenState.imageViewer?.let { viewer ->
             ImageViewer(
                 model = viewer.model,
@@ -831,3 +889,16 @@ internal fun visibleConsoleLogs(
 
 /** MIME type used by both the export share-sheet and the import file picker. */
 private const val MIME_JSON: String = "application/json"
+
+/** MIME filter for the voice-input audio file picker (OpenDocument). */
+private const val AUDIO_MIME_FILTER: String = "audio/*"
+
+/** Seconds in a minute, used to format the audio-chooser duration label. */
+private const val SECONDS_PER_MINUTE: Int = 60
+
+/** Formats whole seconds as `m:ss` for the audio-chooser "Up to 0:30" label. */
+private fun formatClock(totalSeconds: Int): String {
+    val safe = totalSeconds.coerceAtLeast(0)
+    val seconds = (safe % SECONDS_PER_MINUTE).toString().padStart(2, '0')
+    return "${safe / SECONDS_PER_MINUTE}:$seconds"
+}

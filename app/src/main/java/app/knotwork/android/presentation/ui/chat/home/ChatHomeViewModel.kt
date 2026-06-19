@@ -27,8 +27,11 @@ import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.AttachmentStore
+import app.knotwork.android.domain.services.AudioCaptureStore
+import app.knotwork.android.domain.services.AudioRecorder
 import app.knotwork.android.domain.services.ChatHistoryCompressionCoordinator
 import app.knotwork.android.domain.services.MemoryAutoExtractionCoordinator
+import app.knotwork.android.domain.services.RecordingState
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
 import app.knotwork.android.domain.usecases.EntryInferenceKind
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
@@ -41,10 +44,13 @@ import app.knotwork.android.domain.usecases.SaveMessageToMemoryUseCase
 import app.knotwork.android.domain.usecases.SaveToMemoryOutcome
 import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
 import app.knotwork.android.domain.usecases.SubmitClarificationAnswerUseCase
+import app.knotwork.android.domain.usecases.TranscribeAudioUseCase
+import app.knotwork.android.domain.usecases.TranscriptionOutcome
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ChatMessageStatus
 import app.knotwork.design.components.chat.ChatMetadata
 import app.knotwork.design.components.chat.ChatRole
+import app.knotwork.design.components.chat.ComposerVoiceNotice
 import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.components.console.ConsoleFilter
 import app.knotwork.design.components.console.ConsoleLine
@@ -70,6 +76,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -146,6 +153,9 @@ class ChatHomeViewModel @Inject constructor(
     private val submitClarificationAnswerUseCase: SubmitClarificationAnswerUseCase,
     private val attachmentStore: AttachmentStore,
     private val resolveEntryInferenceUseCase: ResolveEntryInferenceUseCase,
+    private val audioRecorder: AudioRecorder,
+    private val audioCaptureStore: AudioCaptureStore,
+    private val transcribeAudioUseCase: TranscribeAudioUseCase,
 ) : ViewModel() {
 
     private val _state: MutableStateFlow<ChatHomeScreenState> = MutableStateFlow(ChatHomeScreenState())
@@ -533,6 +543,191 @@ class ChatHomeViewModel @Inject constructor(
         if (path != null) {
             viewModelScope.launch { attachmentStore.delete(path) }
         }
+    }
+
+    // ──────────────────────────── Voice input ────────────────────────────
+    //
+    // Voice is a preprocessing step: a clip is recorded (or picked) and the
+    // multimodal model transcribes it to text BEFORE any pipeline runs — the
+    // audio never travels the graph. [voiceJob] owns the active record→transcribe
+    // (or pick→transcribe) flow so a discard / re-start cancels it cleanly.
+
+    private var voiceJob: Job? = null
+
+    /** Opens the voice-input source chooser (Record voice / Choose audio file). */
+    fun onMicClicked() {
+        viewModelScope.launch {
+            val maxSec = settingsRepository.audioMaxDurationSec.first()
+            _state.update {
+                it.copy(
+                    composer = it.composer.copy(
+                        audioChooserVisible = true,
+                        voiceNotice = null,
+                        audioMaxDurationSec = maxSec,
+                    ),
+                )
+            }
+        }
+    }
+
+    /** Dismisses the voice-input source chooser without a choice. */
+    fun dismissAudioChooser() {
+        _state.update { it.copy(composer = it.composer.copy(audioChooserVisible = false)) }
+    }
+
+    /**
+     * Surfaces the microphone-permission notice when the user denied the
+     * `RECORD_AUDIO` request from the screen's permission gate.
+     */
+    fun onMicPermissionDenied() {
+        _state.update {
+            it.copy(
+                composer = it.composer.copy(
+                    audioChooserVisible = false,
+                    voiceNotice = ComposerVoiceNotice.PermissionDenied,
+                ),
+            )
+        }
+    }
+
+    /**
+     * Starts a microphone capture (invoked by the screen after the `RECORD_AUDIO`
+     * permission is granted). Observes the recorder, mirroring its elapsed time
+     * into the composer's recording bar, and transcribes the clip once capture
+     * finishes (auto-stop at the limit or a manual stop).
+     */
+    fun startRecording() {
+        voiceJob?.cancel()
+        _state.update {
+            it.copy(
+                composer = it.composer.copy(
+                    audioChooserVisible = false,
+                    voiceNotice = null,
+                    voice = VoiceInputState.Recording(elapsedSec = 0, maxSec = 0),
+                ),
+            )
+        }
+        voiceJob = viewModelScope.launch {
+            val maxSec = settingsRepository.audioMaxDurationSec.first()
+            audioRecorder.start(maxSec)
+            audioRecorder.state
+                .takeWhile { it !is RecordingState.Finished }
+                .collect { recordingState ->
+                    if (recordingState is RecordingState.Recording) {
+                        _state.update {
+                            it.copy(
+                                composer = it.composer.copy(
+                                    voice = VoiceInputState.Recording(
+                                        elapsedSec = recordingState.elapsedSec,
+                                        maxSec = recordingState.maxSec,
+                                    ),
+                                ),
+                            )
+                        }
+                    }
+                }
+            (audioRecorder.state.value as? RecordingState.Finished)?.let { transcribeClip(it.path) }
+        }
+    }
+
+    /** Stops the in-flight capture; the recorder transitions to finished and transcription runs. */
+    fun onStopRecording() {
+        viewModelScope.launch { audioRecorder.stop() }
+    }
+
+    /** Discards the in-flight capture and its clip, returning the composer to idle. */
+    fun onDiscardRecording() {
+        voiceJob?.cancel()
+        voiceJob = null
+        audioRecorder.cancel()
+        _state.update { it.copy(composer = it.composer.copy(voice = VoiceInputState.Idle)) }
+    }
+
+    /**
+     * Imports a user-picked audio file and transcribes it.
+     *
+     * @param uri content URI string of the picked audio document.
+     */
+    fun onAudioFilePicked(uri: String) {
+        voiceJob?.cancel()
+        _state.update {
+            it.copy(
+                composer = it.composer.copy(
+                    audioChooserVisible = false,
+                    voiceNotice = null,
+                    voice = VoiceInputState.Transcribing,
+                ),
+            )
+        }
+        voiceJob = viewModelScope.launch {
+            val path = audioCaptureStore.importFromUri(uri).getOrNull()
+            if (path == null) {
+                _state.update { it.copy(composer = it.composer.copy(voice = VoiceInputState.Idle)) }
+                _attachmentErrorEvents.tryEmit(Unit)
+                return@launch
+            }
+            transcribeClip(path)
+        }
+    }
+
+    /**
+     * Runs the clip at [path] through [TranscribeAudioUseCase] and folds the
+     * outcome back into the composer: success drops the transcript into the input
+     * field; the blocked outcomes raise the matching calm notice; a hard failure
+     * pings the error snackbar.
+     */
+    private suspend fun transcribeClip(path: String) {
+        _state.update {
+            it.copy(composer = it.composer.copy(voice = VoiceInputState.Transcribing, voiceNotice = null))
+        }
+        when (val outcome = transcribeAudioUseCase(path)) {
+            is TranscriptionOutcome.Success -> _state.update {
+                it.copy(
+                    composer = it.composer.copy(
+                        voice = VoiceInputState.Idle,
+                        value = mergeTranscript(it.composer.value, outcome.transcript),
+                    ),
+                )
+            }
+
+            TranscriptionOutcome.NoActiveModel,
+            TranscriptionOutcome.ModelNotAudioCapable,
+            -> setVoiceNotice(ComposerVoiceNotice.NoAudioModel)
+
+            TranscriptionOutcome.EngineBusy -> {
+                // The use case keeps the clip on busy for a retry; this UI re-records
+                // instead of retrying the same path, so drop the orphan.
+                audioCaptureStore.delete(path)
+                setVoiceNotice(ComposerVoiceNotice.EngineBusy)
+            }
+
+            is TranscriptionOutcome.Failed -> {
+                _state.update { it.copy(composer = it.composer.copy(voice = VoiceInputState.Idle)) }
+                _attachmentErrorEvents.tryEmit(Unit)
+            }
+        }
+    }
+
+    private fun setVoiceNotice(notice: ComposerVoiceNotice) {
+        _state.update {
+            it.copy(composer = it.composer.copy(voice = VoiceInputState.Idle, voiceNotice = notice))
+        }
+    }
+
+    /** Dismisses the active voice notice (e.g. when the user starts typing). */
+    fun dismissVoiceNotice() {
+        if (_state.value.composer.voiceNotice == null) return
+        _state.update { it.copy(composer = it.composer.copy(voiceNotice = null)) }
+    }
+
+    /**
+     * Appends [transcript] to the existing composer [current] text (space-joined)
+     * so a transcription adds to, rather than clobbers, anything already typed.
+     */
+    private fun mergeTranscript(current: String, transcript: String): String = when {
+        transcript.isBlank() -> current
+        current.isBlank() -> transcript
+        else -> "${current.trimEnd()} $transcript"
     }
 
     /**

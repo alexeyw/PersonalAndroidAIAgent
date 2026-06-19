@@ -167,6 +167,71 @@ fun ChatCatalogContent() {
                 onStop = {},
                 state = ComposerState.Error(message = "Network unreachable"),
             )
+
+            SectionLabel(text = "ChatComposer — voice input")
+            ChatComposer(
+                value = "",
+                onValueChange = {},
+                onSend = {},
+                onStop = {},
+                state = ComposerState.Idle,
+                onMic = {},
+            )
+            ChatComposer(
+                value = "",
+                onValueChange = {},
+                onSend = {},
+                onStop = {},
+                state = ComposerState.Recording(elapsedSec = 7, maxSec = 30),
+            )
+            ChatComposer(
+                value = "",
+                onValueChange = {},
+                onSend = {},
+                onStop = {},
+                state = ComposerState.Recording(elapsedSec = 27, maxSec = 30),
+            )
+            ChatComposer(
+                value = "",
+                onValueChange = {},
+                onSend = {},
+                onStop = {},
+                state = ComposerState.Transcribing,
+            )
+            ChatComposer(
+                value = "",
+                onValueChange = {},
+                onSend = {},
+                onStop = {},
+                state = ComposerState.Idle,
+                onMic = {},
+                voiceNotice = ComposerVoiceNotice.NoAudioModel,
+            )
+            ChatComposer(
+                value = "",
+                onValueChange = {},
+                onSend = {},
+                onStop = {},
+                state = ComposerState.Idle,
+                onMic = {},
+                voiceNotice = ComposerVoiceNotice.EngineBusy,
+            )
+            ChatComposer(
+                value = "",
+                onValueChange = {},
+                onSend = {},
+                onStop = {},
+                state = ComposerState.Idle,
+                onMic = {},
+                voiceNotice = ComposerVoiceNotice.PermissionDenied,
+            )
+
+            SectionLabel(text = "AudioSourceChooserSheet")
+            AudioSourceChooserSheetContent(
+                maxDurationLabel = "0:30",
+                onPickRecord = {},
+                onPickFile = {},
+            )
         }
     }
 }

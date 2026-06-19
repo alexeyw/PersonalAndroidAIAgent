@@ -5,10 +5,19 @@
 package app.knotwork.design.components.chat
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.StartOffset
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -16,12 +25,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Mic
@@ -32,11 +44,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
@@ -49,6 +63,8 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
+import app.knotwork.design.components.buttons.KnotworkButtonSize
+import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
@@ -77,6 +93,46 @@ sealed interface ComposerState {
      * @property message user-visible error description.
      */
     data class Error(val message: String) : ComposerState
+
+    /**
+     * Recording a voice clip. The recording bar **replaces** the input row
+     * (the user can't type mid-record): discard ✕ · pulsing REC dot · mono
+     * timer `elapsed / max` · decorative amplitude strip · Stop. In the last
+     * [RECORDING_WARN_SECONDS] before [maxSec] the timer and bar outline turn
+     * to the warn palette (not an error — it's an expected boundary) with a
+     * caption that the clip auto-stops and transcribes at the limit.
+     *
+     * @property elapsedSec seconds elapsed since recording started.
+     * @property maxSec the recording limit, after which capture auto-stops.
+     */
+    data class Recording(val elapsedSec: Int, val maxSec: Int) : ComposerState {
+        /** Whether the elapsed time is within the warn window of the limit. */
+        val nearLimit: Boolean get() = maxSec - elapsedSec <= RECORDING_WARN_SECONDS
+    }
+
+    /**
+     * The recorded/picked clip is being transcribed by the multimodal model.
+     * The input row shows a spinner + "Transcribing…" and the send affordance
+     * is disabled until the transcript lands in the field.
+     */
+    data object Transcribing : ComposerState
+}
+
+/**
+ * A calm, non-alarmist notice shown above the composer input row when a
+ * voice-input action cannot proceed. The input row dims while a notice is
+ * present. Copy and visuals are owned by the design system per case; the
+ * caller only selects the case and supplies the relevant action handler.
+ */
+enum class ComposerVoiceNotice {
+    /** The active model is not marked audio-capable. Offers "Change model". */
+    NoAudioModel,
+
+    /** A pipeline run holds the engine; transcription is paused. No action. */
+    EngineBusy,
+
+    /** Microphone permission is denied. Offers "Open settings". */
+    PermissionDenied,
 }
 
 /**
@@ -145,9 +201,15 @@ sealed interface ComposerAttachment {
  *  non-null a leading "add image" button is shown in the pill; pass `null` to
  *  hide the attachment affordance entirely.
  * @param onRemoveAttachment invoked when the user taps the ✕ on the preview.
+ * @param onStopRecording invoked when the user taps Stop in [ComposerState.Recording].
+ * @param onDiscardRecording invoked when the user taps the discard ✕ in [ComposerState.Recording].
+ * @param voiceNotice a calm blocked/permission notice shown above a dimmed input
+ *  row when a voice-input action cannot proceed, or `null` when none.
+ * @param onChangeModel invoked from the [ComposerVoiceNotice.NoAudioModel] action.
+ * @param onOpenSettings invoked from the [ComposerVoiceNotice.PermissionDenied] action.
  */
 @Composable
-@Suppress("LongParameterList")
+@Suppress("LongParameterList", "LongMethod")
 fun ChatComposer(
     value: String,
     onValueChange: (String) -> Unit,
@@ -159,6 +221,11 @@ fun ChatComposer(
     attachment: ComposerAttachment? = null,
     onAttach: (() -> Unit)? = null,
     onRemoveAttachment: () -> Unit = {},
+    onStopRecording: () -> Unit = {},
+    onDiscardRecording: () -> Unit = {},
+    voiceNotice: ComposerVoiceNotice? = null,
+    onChangeModel: () -> Unit = {},
+    onOpenSettings: () -> Unit = {},
 ) {
     Column(
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
@@ -170,42 +237,68 @@ fun ChatComposer(
         if (state is ComposerState.Error) {
             ErrorBanner(message = state.message)
         }
+        if (voiceNotice != null) {
+            VoiceNoticeBanner(
+                notice = voiceNotice,
+                onChangeModel = onChangeModel,
+                onOpenSettings = onOpenSettings,
+            )
+        }
         if (attachment != null) {
             ComposerAttachmentPreview(attachment = attachment, onRemove = onRemoveAttachment)
         }
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(KnotworkTheme.shapes.full)
-                .background(color = KnotworkTheme.extended.surface1)
-                .padding(
-                    start = if (onAttach != null) KnotworkTheme.spacing.sp1 else KnotworkTheme.spacing.sp4,
-                    end = KnotworkTheme.spacing.sp1,
-                    top = KnotworkTheme.spacing.sp1,
-                    bottom = KnotworkTheme.spacing.sp1,
-                ),
-        ) {
-            if (onAttach != null) {
-                ComposerAttachButton(onClick = onAttach)
-            }
-            ComposerInput(
-                value = value,
-                onValueChange = onValueChange,
-                modifier = Modifier.weight(1f),
-            )
-            ActionButton(
+        if (state is ComposerState.Recording) {
+            // The recording bar replaces the input row outright.
+            RecordingBar(
                 state = state,
-                value = value,
-                hasAttachment = attachment != null,
-                // Sending is blocked while the image is still downscaling, so the
-                // Send affordance renders disabled rather than firing a silent no-op.
-                sendEnabled = attachment !is ComposerAttachment.Processing,
-                onSend = onSend,
-                onStop = onStop,
-                onMic = onMic,
+                onStop = onStopRecording,
+                onDiscard = onDiscardRecording,
             )
+        } else {
+            // A blocked voice notice dims the row but keeps it in place.
+            val rowAlpha = if (voiceNotice != null) BLOCKED_ROW_ALPHA else 1f
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .graphicsLayer { alpha = rowAlpha }
+                    .clip(KnotworkTheme.shapes.full)
+                    .background(color = KnotworkTheme.extended.surface1)
+                    .padding(
+                        start = if (onAttach != null) KnotworkTheme.spacing.sp1 else KnotworkTheme.spacing.sp4,
+                        end = KnotworkTheme.spacing.sp1,
+                        top = KnotworkTheme.spacing.sp1,
+                        bottom = KnotworkTheme.spacing.sp1,
+                    ),
+            ) {
+                if (state is ComposerState.Transcribing) {
+                    TranscribingIndicator(modifier = Modifier.weight(1f))
+                } else {
+                    if (onAttach != null) {
+                        ComposerAttachButton(onClick = onAttach)
+                    }
+                    ComposerInput(
+                        value = value,
+                        onValueChange = onValueChange,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                ActionButton(
+                    state = state,
+                    value = value,
+                    hasAttachment = attachment != null,
+                    // Sending is blocked while the image is still downscaling or the
+                    // clip is transcribing, so Send renders disabled rather than
+                    // firing a silent no-op.
+                    sendEnabled = attachment !is ComposerAttachment.Processing &&
+                        state !is ComposerState.Transcribing &&
+                        voiceNotice == null,
+                    onSend = onSend,
+                    onStop = onStop,
+                    onMic = onMic,
+                )
+            }
         }
     }
 }
@@ -479,6 +572,9 @@ private fun resolveActionTarget(
 ): ActionTarget = when (state) {
     is ComposerState.Generating -> ActionTarget.Stop
     is ComposerState.Error -> ActionTarget.Retry
+    // Transcribing shows a disabled Send (gated by `sendEnabled`); Recording
+    // replaces the row entirely, so its target is never actually rendered.
+    is ComposerState.Transcribing, is ComposerState.Recording -> ActionTarget.Send
     // An attachment alone enables send (image-only is allowed); the mic only
     // shows when there is neither text nor an attachment.
     is ComposerState.Idle ->
@@ -577,3 +673,326 @@ private const val ERROR_BANNER_BG_ALPHA = 0.12f
 /** Foreground colour for the error banner label — keeps body legible on the tinted strip. */
 @Composable
 private fun errorBannerForeground(): Color = MaterialTheme.colorScheme.onSurface
+
+/**
+ * The recording bar that replaces the input row while a clip is being captured.
+ * Layout L→R: discard ✕ · pulsing REC dot · mono `elapsed / max` timer ·
+ * decorative amplitude strip · Stop. Near the limit the timer + bar outline turn
+ * to the warn palette and a caption announces the imminent auto-stop. The pulse
+ * and amplitude animation collapse to static under reduced motion.
+ */
+@Composable
+private fun RecordingBar(state: ComposerState.Recording, onStop: () -> Unit, onDiscard: () -> Unit) {
+    val warn = KnotworkTheme.extended.signalWarn
+    Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(KnotworkTheme.shapes.full)
+                .background(color = KnotworkTheme.extended.surface2)
+                .then(
+                    if (state.nearLimit) {
+                        Modifier.border(BorderStroke(1.dp, warn), shape = KnotworkTheme.shapes.full)
+                    } else {
+                        Modifier
+                    },
+                )
+                .padding(
+                    start = KnotworkTheme.spacing.sp1,
+                    end = KnotworkTheme.spacing.sp1,
+                    top = KnotworkTheme.spacing.sp1,
+                    bottom = KnotworkTheme.spacing.sp1,
+                ),
+        ) {
+            RecordingCircleButton(
+                icon = AppIcons.X,
+                contentDescription = stringResource(R.string.knotwork_composer_recording_discard),
+                container = Color.Transparent,
+                content = KnotworkTheme.extended.onSurface2,
+                onClick = onDiscard,
+            )
+            RecDot()
+            Text(
+                text = stringResource(
+                    R.string.knotwork_composer_recording_timer,
+                    formatClock(state.elapsedSec),
+                    formatClock(state.maxSec),
+                ),
+                style = KnotworkTextStyles.MonoSm,
+                color = if (state.nearLimit) warn else MaterialTheme.colorScheme.onSurface,
+            )
+            Amplitude(dim = state.nearLimit, modifier = Modifier.weight(1f))
+            RecordingCircleButton(
+                icon = AppIcons.Stop,
+                contentDescription = stringResource(R.string.knotwork_composer_recording_stop),
+                container = MaterialTheme.colorScheme.primary,
+                content = MaterialTheme.colorScheme.onPrimary,
+                onClick = onStop,
+            )
+        }
+        if (state.nearLimit) {
+            Text(
+                text = stringResource(
+                    R.string.knotwork_composer_recording_limit_caption,
+                    formatClock(state.maxSec),
+                ),
+                style = KnotworkTextStyles.MonoSm,
+                color = warn,
+                modifier = Modifier.padding(start = KnotworkTheme.spacing.sp2),
+            )
+        }
+    }
+}
+
+/** A 40 dp circular button used inside the recording bar (discard / stop). */
+@Composable
+private fun RecordingCircleButton(
+    icon: ImageVector,
+    contentDescription: String,
+    container: Color,
+    content: Color,
+    onClick: () -> Unit,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .minimumInteractiveComponentSize()
+            .size(RECORDING_BUTTON_SIZE)
+            .clip(CircleShape)
+            .background(color = container)
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                role = Role.Button,
+                onClick = onClick,
+            )
+            .semantics {
+                this.contentDescription = contentDescription
+                this.role = Role.Button
+            },
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = content,
+            modifier = Modifier.size(COMPOSER_ACTION_ICON_SIZE),
+        )
+    }
+}
+
+/** Pulsing recording-indicator dot (static under reduced motion). */
+@Composable
+private fun RecDot() {
+    val reduced = KnotworkTheme.a11y.reducedMotion()
+    val transition = rememberInfiniteTransition(label = "rec-dot")
+    val pulse by transition.animateFloat(
+        initialValue = 1f,
+        targetValue = REC_DOT_MIN_ALPHA,
+        animationSpec = infiniteRepeatable(tween(REC_DOT_PULSE_MS), RepeatMode.Reverse),
+        label = "rec-dot-alpha",
+    )
+    val description = stringResource(R.string.knotwork_composer_recording_indicator)
+    Box(
+        modifier = Modifier
+            .size(REC_DOT_SIZE)
+            .graphicsLayer { alpha = if (reduced) 1f else pulse }
+            .clip(CircleShape)
+            .background(KnotworkTheme.extended.riskDestructive)
+            .semantics { contentDescription = description },
+    )
+}
+
+/** Decorative amplitude strip — staggered bars, static under reduced motion. */
+@Composable
+private fun Amplitude(dim: Boolean, modifier: Modifier = Modifier) {
+    val reduced = KnotworkTheme.a11y.reducedMotion()
+    val transition = rememberInfiniteTransition(label = "amp")
+    val color = if (dim) KnotworkTheme.extended.onSurfaceDim else MaterialTheme.colorScheme.primary
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(AMPLITUDE_BAR_GAP),
+        modifier = modifier.height(AMPLITUDE_STRIP_HEIGHT),
+    ) {
+        AMPLITUDE_BAR_HEIGHTS.forEachIndexed { index, heightDp ->
+            val scale by transition.animateFloat(
+                initialValue = AMPLITUDE_BAR_MIN_SCALE,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(AMPLITUDE_BAR_PERIOD_MS),
+                    repeatMode = RepeatMode.Reverse,
+                    initialStartOffset = StartOffset(index * AMPLITUDE_BAR_STAGGER_MS),
+                ),
+                label = "amp-bar-$index",
+            )
+            Box(
+                modifier = Modifier
+                    .width(AMPLITUDE_BAR_WIDTH)
+                    .height(heightDp)
+                    .graphicsLayer { scaleY = if (reduced) 1f else scale }
+                    .clip(RoundedCornerShape(percent = 100))
+                    .background(color),
+            )
+        }
+    }
+}
+
+/** Spinner + "Transcribing…" shown inside the pill while a clip is transcribed. */
+@Composable
+private fun TranscribingIndicator(modifier: Modifier = Modifier) {
+    val reduced = KnotworkTheme.a11y.reducedMotion()
+    val transition = rememberInfiniteTransition(label = "transcribe")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = FULL_ROTATION_DEGREES,
+        animationSpec = infiniteRepeatable(tween(TRANSCRIBE_SPIN_MS, easing = LinearEasing)),
+        label = "transcribe-spin",
+    )
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        modifier = modifier.heightIn(min = COMPOSER_INPUT_MIN_HEIGHT),
+    ) {
+        Icon(
+            imageVector = AppIcons.Refresh,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .size(COMPOSER_ACTION_ICON_SIZE)
+                .graphicsLayer { rotationZ = if (reduced) 0f else rotation },
+        )
+        Text(
+            text = stringResource(R.string.knotwork_composer_transcribing),
+            style = KnotworkTextStyles.BodyBase,
+            color = KnotworkTheme.extended.onSurface2,
+        )
+    }
+}
+
+/**
+ * Calm, non-alarmist notice shown above the (dimmed) input row when a
+ * voice-input action is blocked. Maps each [ComposerVoiceNotice] case to its
+ * icon, copy, tone, and optional action.
+ */
+@Composable
+private fun VoiceNoticeBanner(notice: ComposerVoiceNotice, onChangeModel: () -> Unit, onOpenSettings: () -> Unit) {
+    val warn = notice == ComposerVoiceNotice.PermissionDenied
+    val borderColor = if (warn) KnotworkTheme.extended.signalWarn else KnotworkTheme.extended.outlineStrong
+    val icon = when (notice) {
+        ComposerVoiceNotice.NoAudioModel -> AppIcons.Chip
+        ComposerVoiceNotice.EngineBusy -> AppIcons.Hourglass
+        ComposerVoiceNotice.PermissionDenied -> AppIcons.Mic
+    }
+    val title = when (notice) {
+        ComposerVoiceNotice.NoAudioModel -> R.string.knotwork_voice_no_model_title
+        ComposerVoiceNotice.EngineBusy -> R.string.knotwork_voice_busy_title
+        ComposerVoiceNotice.PermissionDenied -> R.string.knotwork_voice_permission_title
+    }
+    val body = when (notice) {
+        ComposerVoiceNotice.NoAudioModel -> R.string.knotwork_voice_no_model_body
+        ComposerVoiceNotice.EngineBusy -> R.string.knotwork_voice_busy_body
+        ComposerVoiceNotice.PermissionDenied -> R.string.knotwork_voice_permission_body
+    }
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(BorderStroke(1.dp, borderColor), shape = KnotworkTheme.shapes.md)
+            .padding(KnotworkTheme.spacing.sp3),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (warn) KnotworkTheme.extended.signalWarn else KnotworkTheme.extended.onSurface2,
+        )
+        Column(
+            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+            modifier = Modifier.weight(1f),
+        ) {
+            Text(
+                text = stringResource(title),
+                style = KnotworkTextStyles.LabelMd,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(body),
+                style = KnotworkTextStyles.BodySm,
+                color = KnotworkTheme.extended.onSurface2,
+            )
+            when (notice) {
+                ComposerVoiceNotice.NoAudioModel -> KnotworkSecondaryButton(
+                    text = stringResource(R.string.knotwork_voice_no_model_action),
+                    onClick = onChangeModel,
+                    size = KnotworkButtonSize.Sm,
+                    leadingIcon = AppIcons.ArrowR,
+                )
+                ComposerVoiceNotice.PermissionDenied -> KnotworkSecondaryButton(
+                    text = stringResource(R.string.knotwork_voice_permission_action),
+                    onClick = onOpenSettings,
+                    size = KnotworkButtonSize.Sm,
+                    leadingIcon = AppIcons.Cog,
+                )
+                ComposerVoiceNotice.EngineBusy -> Unit
+            }
+        }
+    }
+}
+
+/** Formats a whole-second count as `m:ss` (e.g. 7 → `0:07`, 90 → `1:30`). */
+private fun formatClock(totalSeconds: Int): String {
+    val safe = totalSeconds.coerceAtLeast(0)
+    val minutes = safe / SECONDS_PER_MINUTE
+    val seconds = safe % SECONDS_PER_MINUTE
+    return "$minutes:${seconds.toString().padStart(2, '0')}"
+}
+
+/** Seconds before the recording limit at which the bar enters its warn state. */
+const val RECORDING_WARN_SECONDS = 5
+
+private const val SECONDS_PER_MINUTE = 60
+
+/** Diameter of the discard / stop buttons in the recording bar. */
+private val RECORDING_BUTTON_SIZE = 40.dp
+
+/** Diameter of the pulsing REC dot. */
+private val REC_DOT_SIZE = 10.dp
+
+/** Lowest alpha the REC dot fades to at the bottom of its pulse. */
+private const val REC_DOT_MIN_ALPHA = 0.35f
+
+/** Period of one REC-dot pulse half-cycle, in ms. */
+private const val REC_DOT_PULSE_MS = 1100
+
+/** Heights of the decorative amplitude bars (px-equivalent dp from the mockup). */
+private val AMPLITUDE_BAR_HEIGHTS = listOf(
+    6.dp, 11.dp, 18.dp, 9.dp, 22.dp, 14.dp, 26.dp, 12.dp, 20.dp, 8.dp, 15.dp, 10.dp, 7.dp,
+)
+
+/** Overall height of the amplitude strip. */
+private val AMPLITUDE_STRIP_HEIGHT = 26.dp
+
+/** Width of a single amplitude bar. */
+private val AMPLITUDE_BAR_WIDTH = 2.5.dp
+
+/** Gap between amplitude bars. */
+private val AMPLITUDE_BAR_GAP = 2.5.dp
+
+/** Lowest scale an amplitude bar shrinks to. */
+private const val AMPLITUDE_BAR_MIN_SCALE = 0.35f
+
+/** Period of one amplitude-bar oscillation half-cycle, in ms. */
+private const val AMPLITUDE_BAR_PERIOD_MS = 900
+
+/** Per-bar animation start stagger, in ms. */
+private const val AMPLITUDE_BAR_STAGGER_MS = 70
+
+/** Period of one full transcribe-spinner rotation, in ms. */
+private const val TRANSCRIBE_SPIN_MS = 900
+
+/** A full rotation in degrees. */
+private const val FULL_ROTATION_DEGREES = 360f
+
+/** Alpha applied to the input row while a blocked voice notice is shown. */
+private const val BLOCKED_ROW_ALPHA = 0.6f
