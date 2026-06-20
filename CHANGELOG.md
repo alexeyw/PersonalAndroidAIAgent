@@ -234,6 +234,12 @@ details.
 
 ### Fixed
 
+- **Scheduled-task confirmation message showed a literal placeholder.** The
+  reply confirming a scheduled task ("Task successfully scheduled to run every
+  …") rendered the raw `$intervalHours` / `$delayMinutes` text instead of the
+  actual interval/delay numbers (an escaped string template). It now reports the
+  real values.
+
 - **Content slipping under the bottom navigation bar.** The Discover list,
   Discover detail and Pipeline library screens now zero their own
   `Scaffold` content insets (matching every other screen), so their bodies are
@@ -242,6 +248,13 @@ details.
   in-app bottom-nav strip.
 
 ### Changed
+
+- **Task scheduling extracted behind a domain port.** `ScheduleTaskUseCase` no
+  longer depends on `androidx.work` or the `data` layer: it now delegates to a
+  new `TaskScheduler` domain port (with a `ScheduledTaskConstraints` value type),
+  implemented by `WorkManagerTaskScheduler` in the `data` layer. Behaviour is
+  unchanged; this restores the Clean Architecture invariant that the `domain`
+  layer carries no framework dependencies.
 
 - **Cloud client and embedding factories are now retry-wrapped.** Cloud clients
   built by `KoogClientFactory` and the cloud/Ollama embedding clients are

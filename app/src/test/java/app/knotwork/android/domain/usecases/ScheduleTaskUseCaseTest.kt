@@ -1,11 +1,10 @@
 package app.knotwork.android.domain.usecases
 
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.OneTimeWorkRequest
-import androidx.work.PeriodicWorkRequest
-import androidx.work.WorkManager
-import app.knotwork.android.data.services.AgentWorker
+import app.knotwork.android.domain.services.ScheduledTaskConstraints
+import app.knotwork.android.domain.services.TaskScheduler
+import io.mockk.Runs
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
@@ -17,78 +16,88 @@ import org.junit.Test
 
 class ScheduleTaskUseCaseTest {
 
-    private lateinit var workManager: WorkManager
+    private lateinit var taskScheduler: TaskScheduler
     private lateinit var scheduleTaskUseCase: ScheduleTaskUseCase
 
     @Before
     fun setup() {
-        workManager = mockk()
-        every { workManager.enqueue(any<OneTimeWorkRequest>()) } returns mockk()
-        every {
-            workManager.enqueueUniquePeriodicWork(
-                any(),
-                any(),
-                any<PeriodicWorkRequest>(),
-            )
-        } returns mockk()
-        scheduleTaskUseCase = ScheduleTaskUseCase(workManager)
+        taskScheduler = mockk()
+        every { taskScheduler.scheduleOneTime(any(), any(), any(), any()) } just Runs
+        every { taskScheduler.schedulePeriodic(any(), any(), any(), any()) } just Runs
+        scheduleTaskUseCase = ScheduleTaskUseCase(taskScheduler)
     }
 
     @Test
-    fun `invoke with interval greater than 0 schedules unique periodic work`() {
-        val prompt = "check emails"
-        val result = scheduleTaskUseCase(prompt, intervalHours = 2, delayMinutes = 0)
+    fun `given positive interval when invoked then delegates to periodic scheduling`() {
+        val result = scheduleTaskUseCase("check emails", intervalHours = 2, delayMinutes = 0)
 
-        val nameSlot = slot<String>()
-        val policySlot = slot<ExistingPeriodicWorkPolicy>()
         verify {
-            workManager.enqueueUniquePeriodicWork(
-                capture(nameSlot),
-                capture(policySlot),
-                any<PeriodicWorkRequest>(),
+            taskScheduler.schedulePeriodic(
+                "check emails",
+                2L,
+                null,
+                ScheduledTaskConstraints(requiresBatteryNotLow = true),
             )
         }
-        assertTrue(nameSlot.captured.contains(prompt))
-        assertTrue(nameSlot.captured.contains("2h"))
-        assertEquals(ExistingPeriodicWorkPolicy.KEEP, policySlot.captured)
-        assertTrue(result.contains("successfully scheduled"))
+        verify(exactly = 0) { taskScheduler.scheduleOneTime(any(), any(), any(), any()) }
+        assertTrue(result.contains("every 2 hours"))
     }
 
     @Test
-    fun `invoke with interval 0 schedules one-time work`() {
-        val prompt = "check emails once"
-        val result = scheduleTaskUseCase(prompt, intervalHours = 0, delayMinutes = 10)
+    fun `given zero interval when invoked then delegates to one-time scheduling`() {
+        val result = scheduleTaskUseCase("check emails once", intervalHours = 0, delayMinutes = 10)
 
-        val slot = slot<OneTimeWorkRequest>()
-        verify { workManager.enqueue(capture(slot)) }
-        assertTrue(result.contains("successfully scheduled"))
+        verify {
+            taskScheduler.scheduleOneTime(
+                "check emails once",
+                10L,
+                null,
+                ScheduledTaskConstraints(requiresBatteryNotLow = true),
+            )
+        }
+        verify(exactly = 0) { taskScheduler.schedulePeriodic(any(), any(), any(), any()) }
+        assertTrue(result.contains("10 minutes delay"))
     }
 
     @Test
-    fun `invoke with session id carries it into one-time work input data`() {
+    fun `given session id when one-time then forwards session id to port`() {
+        val sessionSlot = slot<String?>()
+        every { taskScheduler.scheduleOneTime(any(), any(), captureNullable(sessionSlot), any()) } just Runs
+
         scheduleTaskUseCase("check emails once", sessionId = "session-7")
 
-        val slot = slot<OneTimeWorkRequest>()
-        verify { workManager.enqueue(capture(slot)) }
-        assertEquals("session-7", slot.captured.workSpec.input.getString(AgentWorker.KEY_SESSION_ID))
-        assertEquals("check emails once", slot.captured.workSpec.input.getString(AgentWorker.KEY_PROMPT))
+        assertEquals("session-7", sessionSlot.captured)
     }
 
     @Test
-    fun `invoke with session id carries it into periodic work input data`() {
+    fun `given session id when periodic then forwards session id to port`() {
+        val sessionSlot = slot<String?>()
+        every { taskScheduler.schedulePeriodic(any(), any(), captureNullable(sessionSlot), any()) } just Runs
+
         scheduleTaskUseCase("check emails", intervalHours = 2, sessionId = "session-7")
 
-        val requestSlot = slot<PeriodicWorkRequest>()
-        verify { workManager.enqueueUniquePeriodicWork(any(), any(), capture(requestSlot)) }
-        assertEquals("session-7", requestSlot.captured.workSpec.input.getString(AgentWorker.KEY_SESSION_ID))
+        assertEquals("session-7", sessionSlot.captured)
     }
 
     @Test
-    fun `invoke without session id leaves the input data key absent`() {
+    fun `given no session id when invoked then forwards null to port`() {
+        val sessionSlot = slot<String?>()
+        every { taskScheduler.scheduleOneTime(any(), any(), captureNullable(sessionSlot), any()) } just Runs
+
         scheduleTaskUseCase("check emails once")
 
-        val slot = slot<OneTimeWorkRequest>()
-        verify { workManager.enqueue(capture(slot)) }
-        assertNull(slot.captured.workSpec.input.getString(AgentWorker.KEY_SESSION_ID))
+        assertNull(sessionSlot.captured)
+    }
+
+    @Test
+    fun `given scheduler throws when invoked then returns failure message`() {
+        every {
+            taskScheduler.scheduleOneTime(any(), any(), any(), any())
+        } throws IllegalStateException("queue full")
+
+        val result = scheduleTaskUseCase("check emails once")
+
+        assertTrue(result.startsWith("Failed to schedule task:"))
+        assertTrue(result.contains("queue full"))
     }
 }
