@@ -31,6 +31,7 @@ import app.knotwork.android.data.repositories.LocalPromptPresetRepositoryImpl
 import app.knotwork.android.data.repositories.McpServerRepositoryImpl
 import app.knotwork.android.data.repositories.MemoryRepositoryImpl
 import app.knotwork.android.data.repositories.MetricsRepositoryImpl
+import app.knotwork.android.data.repositories.ModelDiscoveryRepositoryImpl
 import app.knotwork.android.data.repositories.ModelPerformanceRepositoryImpl
 import app.knotwork.android.data.repositories.NetworkActivityTrackerImpl
 import app.knotwork.android.data.repositories.NetworkStateRepositoryImpl
@@ -55,6 +56,7 @@ import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.McpServerRepository
 import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.MetricsRepository
+import app.knotwork.android.domain.repositories.ModelDiscoveryRepository
 import app.knotwork.android.domain.repositories.ModelDownloadManager
 import app.knotwork.android.domain.repositories.ModelPerformanceRepository
 import app.knotwork.android.domain.repositories.NetworkActivityTracker
@@ -167,6 +169,14 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindModelDownloadManager(downloadManager: AndroidModelDownloadManager): ModelDownloadManager
+
+    /**
+     * Binds the [ModelDiscoveryRepositoryImpl] implementation to the
+     * [ModelDiscoveryRepository] interface (Hugging Face model discovery).
+     */
+    @Binds
+    @Singleton
+    abstract fun bindModelDiscoveryRepository(repository: ModelDiscoveryRepositoryImpl): ModelDiscoveryRepository
 
     /**
      * Binds the [ChatRepositoryImpl] implementation to the [ChatRepository] interface.

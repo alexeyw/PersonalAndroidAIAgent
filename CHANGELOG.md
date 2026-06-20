@@ -15,6 +15,22 @@ details.
 
 ### Added
 
+- **Discover models from Hugging Face.** A new **Discover** screen (top-bar
+  action on the Models screen) browses and searches the curated
+  `litert-community` organisation on the Hugging Face Hub. Each result card shows
+  the repository's downloads, likes and licence; tapping it opens a detail screen
+  listing the repo's engine-compatible `.litertlm` files with sizes. **Install**
+  streams the chosen file through the existing download manager and registers it
+  locally — gated behind an explicit **licence confirmation** dialog. Files
+  already on disk render as **Installed**. Access-gated repositories show a lock
+  badge and an inline Hugging Face token field (reusing the existing encrypted
+  token store); a 401/403 download refusal surfaces a clear "accept the licence
+  on Hugging Face and add a token" hint. The discovery client is read-only, sends
+  no token for browsing (only the file download needs one), issues a request only
+  in response to a user action, supports pull-to-refresh, and shows a graceful
+  retry on network/parse errors. Built on raw OkHttp + `kotlinx.serialization`
+  (no new dependency).
+
 - **Model performance insights & benchmark.** The Models screen now shows a
   **Performance** card for the active model with its rolling-average
   **time-to-first-token**, **decode speed** (tokens/second) and **peak memory**,
@@ -215,6 +231,15 @@ details.
     stack: the parent replays to its `PIPELINE` node and continues the child
     run from its checkpoint rather than restarting it; the recorded graph hash
     is validated for every graph in the stack.
+
+### Fixed
+
+- **Content slipping under the bottom navigation bar.** The Discover list,
+  Discover detail and Pipeline library screens now zero their own
+  `Scaffold` content insets (matching every other screen), so their bodies are
+  positioned by the host shell's inner padding instead of double-handling the
+  system bars — the last row / install button no longer scrolls under the
+  in-app bottom-nav strip.
 
 ### Changed
 

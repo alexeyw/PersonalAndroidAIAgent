@@ -1,6 +1,5 @@
 package app.knotwork.android.presentation.ui.models
 
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import androidx.compose.material3.SnackbarHostState
@@ -17,6 +16,7 @@ import app.knotwork.android.R
 import app.knotwork.android.data.network.AndroidModelDownloadManager.DownloadError
 import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.usecases.BenchmarkRunPhase
+import app.knotwork.android.presentation.ui.common.readPlainClipboardText
 import app.knotwork.design.screens.models.ActiveModelRow
 import app.knotwork.design.screens.models.BenchmarkPhase
 import app.knotwork.design.screens.models.ModelsCallbacks
@@ -38,7 +38,12 @@ import app.knotwork.design.screens.models.PresetStatus
  * @param modifier Optional layout modifier.
  */
 @Composable
-fun ModelsScreen(modifier: Modifier = Modifier, viewModel: ModelsViewModel = hiltViewModel(), onBack: () -> Unit = {}) {
+fun ModelsScreen(
+    modifier: Modifier = Modifier,
+    viewModel: ModelsViewModel = hiltViewModel(),
+    onBack: () -> Unit = {},
+    onOpenDiscover: () -> Unit = {},
+) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -79,8 +84,9 @@ fun ModelsScreen(modifier: Modifier = Modifier, viewModel: ModelsViewModel = hil
         strings = strings.content,
         callbacks = ModelsCallbacks(
             onBack = onBack,
+            onDiscover = onOpenDiscover,
             onAuthTokenChange = viewModel::onAuthTokenChanged,
-            onAuthTokenPaste = { viewModel.onAuthTokenChanged(readClipboard(context)) },
+            onAuthTokenPaste = { viewModel.onAuthTokenChanged(readPlainClipboardText(context)) },
             onCustomUrlChange = viewModel::onCustomUrlChanged,
             onCustomUrlSubmit = {
                 val url = uiState.customUrlInput
@@ -130,13 +136,6 @@ fun ModelsScreen(modifier: Modifier = Modifier, viewModel: ModelsViewModel = hil
             onRetry = { /* unreachable: this screen never enters the Error state. */ },
         ),
     )
-}
-
-/** Pull the latest plain-text clipboard content for the HF auth-token paste action. */
-private fun readClipboard(context: Context): String {
-    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-    val item = clipboard?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
-    return item?.text?.toString().orEmpty()
 }
 
 /** Hands the formatted benchmark summary to the system share sheet as plain text. */
@@ -356,6 +355,7 @@ private fun modelsStrings(): LocalisedModelsStrings = LocalisedModelsStrings(
         emptyCta = stringResource(R.string.models_empty_cta),
         errorTitle = stringResource(R.string.models_error_title),
         errorRetry = stringResource(R.string.common_retry),
+        discoverCd = stringResource(R.string.models_discover_cd),
     ),
     subtitleFormat = stringResource(R.string.models_subtitle_format),
 )

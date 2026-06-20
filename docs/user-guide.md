@@ -91,6 +91,35 @@ list below the presets. Tap **Make Active** on the row you want to
 use. The active model is highlighted and labelled **Active**. Only
 one model can be active at a time.
 
+### Discovering models from Hugging Face
+
+You don't have to know a URL. Tap the **Discover** action in the Models
+screen top bar to browse the curated
+[`litert-community`](https://huggingface.co/litert-community) collection
+on Hugging Face — ready-to-run on-device models — without leaving the
+app:
+
+- **Browse and search.** Each card shows the model name, its downloads
+  and likes, and its licence. Type in the search box to filter, or pull
+  down to refresh. The app only contacts Hugging Face when you open the
+  screen, search, or open a card — never in the background.
+- **Open a model.** Tapping a card shows the repository's installable
+  `.litertlm` files with their sizes, the licence, and a **View on
+  Hugging Face** link to the full model card. Files you already have on
+  disk are marked **Installed**.
+- **Install.** Tap **Install** next to a file. You'll be asked to
+  **review and accept the licence** before the download starts; it then
+  streams through the same downloader as the rest of the screen and the
+  model appears in your **Downloaded** list, ready to activate.
+- **Gated models.** Some repositories require you to accept their
+  licence on the Hugging Face website and use a personal access token.
+  These show a **Gated** badge and an inline token field — paste your
+  token there (it is stored in the same encrypted slot as the download
+  token). If a download is refused (HTTP 401/403), the app tells you to
+  accept the licence on Hugging Face and add a token.
+- **Offline / errors.** If the network is unavailable, the screen shows
+  a clear message with a **Retry** button rather than failing silently.
+
 ### 4. Send a first message
 
 Open the **Chat** screen and type a message. The agent should reply
