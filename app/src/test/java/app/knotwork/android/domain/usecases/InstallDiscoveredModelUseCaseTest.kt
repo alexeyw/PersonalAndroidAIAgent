@@ -42,6 +42,7 @@ class InstallDiscoveredModelUseCaseTest {
             DownloadState.Downloading(50),
             DownloadState.Success("/data/gemma.litertlm"),
         )
+        coEvery { localModelRepository.findByFileName(file.fileName) } returns null
         val inserted = slot<LocalModel>()
         coEvery { localModelRepository.insertModel(capture(inserted)) } returns 7L
 
@@ -60,6 +61,28 @@ class InstallDiscoveredModelUseCaseTest {
         assertEquals("/data/gemma.litertlm", inserted.captured.path)
         assertEquals(2_048L, inserted.captured.size)
         assertEquals(false, inserted.captured.isActive)
+    }
+
+    @Test
+    fun `given an existing row for the file when invoked then updates instead of inserting a duplicate`() = runTest {
+        every { settingsRepository.huggingFaceAuthToken } returns flowOf(null)
+        every { downloadManager.downloadModel(any(), any(), any()) } returns flowOf(
+            DownloadState.Success("/data/gemma.litertlm"),
+        )
+        val existing = LocalModel(id = 9L, name = file.fileName, path = "/old/path", size = 0L, isActive = true)
+        coEvery { localModelRepository.findByFileName(file.fileName) } returns existing
+        val updated = slot<LocalModel>()
+        coEvery { localModelRepository.updateModel(capture(updated)) } returns Unit
+
+        useCase(file).toList()
+
+        coVerify(exactly = 0) { localModelRepository.insertModel(any()) }
+        coVerify { localModelRepository.updateModel(any()) }
+        // Path/size refreshed, identity and active flag preserved.
+        assertEquals(9L, updated.captured.id)
+        assertEquals("/data/gemma.litertlm", updated.captured.path)
+        assertEquals(2_048L, updated.captured.size)
+        assertEquals(true, updated.captured.isActive)
     }
 
     @Test

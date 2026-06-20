@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -221,9 +222,9 @@ private fun DiscoverListRow(row: DiscoverModelRow, onClick: () -> Unit) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            if (row.fileCountLabel != null) {
+            if (row.fileCount > 0) {
                 Text(
-                    text = row.fileCountLabel,
+                    text = pluralStringResource(R.plurals.knotwork_discover_file_count, row.fileCount, row.fileCount),
                     style = KnotworkTextStyles.MonoSm,
                     color = KnotworkTheme.extended.onSurfaceMuted,
                 )

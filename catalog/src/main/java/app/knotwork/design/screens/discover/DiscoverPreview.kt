@@ -12,19 +12,19 @@ internal object DiscoverPreview {
             repoId = "litert-community/gemma-4-E2B-it-litert-lm",
             name = "gemma-4-E2B-it-litert-lm",
             meta = "↓ 12.4k · ♥ 86 · apache-2.0",
-            fileCountLabel = "3 files",
+            fileCount = 3,
         ),
         DiscoverModelRow(
             repoId = "litert-community/gemma-4-E4B-it-litert-lm",
             name = "gemma-4-E4B-it-litert-lm",
             meta = "↓ 7.1k · ♥ 54 · apache-2.0",
-            fileCountLabel = "4 files",
+            fileCount = 4,
         ),
         DiscoverModelRow(
             repoId = "litert-community/Llama-3.2-1B-Instruct-litert-lm",
             name = "Llama-3.2-1B-Instruct-litert-lm",
             meta = "↓ 3.0k · ♥ 22 · llama3.2",
-            fileCountLabel = "2 files",
+            fileCount = 2,
             gated = true,
         ),
     )

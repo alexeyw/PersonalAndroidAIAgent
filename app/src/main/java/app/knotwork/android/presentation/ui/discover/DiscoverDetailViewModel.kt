@@ -52,6 +52,9 @@ class DiscoverDetailViewModel @Inject constructor(
     /** Per-file in-flight install jobs, keyed by on-disk file name. */
     private val installJobs = mutableMapOf<String, Job>()
 
+    /** In-flight detail-fetch job; cancelled before a new fetch supersedes it. */
+    private var loadJob: Job? = null
+
     private var repoId: String? = null
     private var tokenObserved = false
 
@@ -80,8 +83,9 @@ class DiscoverDetailViewModel @Inject constructor(
 
     private fun load() {
         val id = repoId ?: return
+        loadJob?.cancel()
         _uiState.update { it.copy(status = DiscoverDetailStatus.Loading) }
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             getDetail(id).fold(
                 onSuccess = { detail ->
                     _uiState.update {
@@ -167,10 +171,20 @@ class DiscoverDetailViewModel @Inject constructor(
     /**
      * Treats a 401/403 download refusal as an access-gated failure so the
      * screen can nudge the user toward accepting the licence and supplying a
-     * token. The download manager surfaces the HTTP code in the error message.
+     * token. Reads the typed HTTP status carried on [DownloadError.code]
+     * rather than parsing the free-text message (which also covers arbitrary
+     * transport-error strings).
      */
     private fun DownloadState.Error.isGatedRefusal(): Boolean {
-        val message = (error as? DownloadError)?.message ?: return false
-        return "401" in message || "403" in message
+        val code = (error as? DownloadError)?.code
+        return code == HTTP_UNAUTHORIZED || code == HTTP_FORBIDDEN
+    }
+
+    private companion object {
+        /** HTTP 401 — missing/invalid credentials for a gated repository. */
+        const val HTTP_UNAUTHORIZED = 401
+
+        /** HTTP 403 — licence not accepted for a gated repository. */
+        const val HTTP_FORBIDDEN = 403
     }
 }

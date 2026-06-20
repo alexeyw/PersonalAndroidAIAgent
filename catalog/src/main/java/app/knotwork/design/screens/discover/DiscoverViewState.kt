@@ -30,14 +30,17 @@ enum class DiscoverVisualState {
  * @property name short display name (mono, brand convention for identifiers).
  * @property meta pre-formatted stats line owned by the host
  *   (e.g. `"↓ 12.3k · ♥ 45 · apache-2.0"`); the catalog never formats numbers.
- * @property fileCountLabel pre-formatted "N files" hint, or `null` to hide it.
+ * @property fileCount number of installable `.litertlm` files; rendered as a
+ *   localised "N files" hint (only for visible rows), or hidden when `0`. Kept
+ *   as a raw count — not a pre-formatted string — so the host's row mapping
+ *   stays free of `@Composable` plural lookups.
  * @property gated `true` to render the access-gated lock badge.
  */
 data class DiscoverModelRow(
     val repoId: String,
     val name: String,
     val meta: String,
-    val fileCountLabel: String? = null,
+    val fileCount: Int = 0,
     val gated: Boolean = false,
 )
 

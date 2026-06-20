@@ -865,6 +865,10 @@
     <string name="knotwork_discover_back_cd">Back</string>
     <string name="knotwork_discover_search_placeholder">Search litert-community models</string>
     <string name="knotwork_discover_gated_badge">Gated</string>
+    <plurals name="knotwork_discover_file_count">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
     <string name="knotwork_discover_empty_title">No models found</string>
     <string name="knotwork_discover_empty_subtitle">Try a different search, or pull to refresh.</string>
     <string name="knotwork_discover_error_title">Couldn\'t load models</string>

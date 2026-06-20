@@ -52,16 +52,32 @@ class InstallDiscoveredModelUseCase @Inject constructor(
             downloadManager.downloadModel(url = file.resolveUrl, fileName = file.fileName, authToken = token)
                 .onEach { state ->
                     if (state is DownloadState.Success) {
-                        localModelRepository.insertModel(
-                            LocalModel(
-                                name = file.fileName,
-                                path = state.fileUri,
-                                size = file.sizeBytes,
-                                isActive = false,
-                            ),
+                        registerInstalledModel(
+                            fileName = file.fileName,
+                            path = state.fileUri,
+                            sizeBytes = file.sizeBytes,
                         )
                     }
                 },
         )
+    }
+
+    /**
+     * Records the freshly-downloaded file in the local model store. Updates the
+     * existing row in place when a model with the same on-disk name is already
+     * registered (the `local_models` table has no unique index on `name`, so a
+     * blind insert would create a duplicate row); otherwise inserts a new row.
+     * The active flag is left untouched — installing never changes the active
+     * model.
+     */
+    private suspend fun registerInstalledModel(fileName: String, path: String, sizeBytes: Long) {
+        val existing = localModelRepository.findByFileName(fileName)
+        if (existing != null) {
+            localModelRepository.updateModel(existing.copy(path = path, size = sizeBytes))
+        } else {
+            localModelRepository.insertModel(
+                LocalModel(name = fileName, path = path, size = sizeBytes, isActive = false),
+            )
+        }
     }
 }

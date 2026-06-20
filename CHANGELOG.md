@@ -232,6 +232,13 @@ details.
     run from its checkpoint rather than restarting it; the recorded graph hash
     is validated for every graph in the stack.
 
+### Fixed
+
+- **Bottom spacing under the system navigation bar.** The Models screen and the
+  Pipeline library now add the system navigation-bar inset to their list's
+  bottom padding, so the last card / row (and the pipeline FAB) clears the
+  gesture/button area instead of sitting flush against it.
+
 ### Changed
 
 - **Cloud client and embedding factories are now retry-wrapped.** Cloud clients

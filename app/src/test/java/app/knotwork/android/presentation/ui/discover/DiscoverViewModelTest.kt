@@ -103,4 +103,20 @@ class DiscoverViewModelTest {
         assertEquals(false, vm.uiState.value.refreshing)
         assertEquals(DiscoverStatus.Populated, vm.uiState.value.status)
     }
+
+    @Test
+    fun `given a populated list when refresh fails then keeps the list and clears refreshing`() = runTest {
+        coEvery { searchModels(any(), any()) } returns Result.success(listOf(summary("litert-community/a")))
+        val vm = DiscoverViewModel(searchModels)
+        advanceUntilIdle()
+
+        coEvery { searchModels(any(), any()) } returns Result.failure(RuntimeException("flaky"))
+        vm.onRefresh()
+        advanceUntilIdle()
+
+        // The previously loaded list survives a failed pull-to-refresh.
+        assertEquals(DiscoverStatus.Populated, vm.uiState.value.status)
+        assertEquals(1, vm.uiState.value.models.size)
+        assertEquals(false, vm.uiState.value.refreshing)
+    }
 }

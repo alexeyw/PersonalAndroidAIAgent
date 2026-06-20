@@ -5,7 +5,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import app.knotwork.android.R
@@ -18,9 +17,9 @@ import app.knotwork.design.screens.discover.DiscoverVisualState
 
 /**
  * App-side Discover list screen. Subscribes to [DiscoverViewModel.uiState],
- * folds it into the catalog [DiscoverViewState] (formatting stats and the
- * "N files" hint with locale/plural rules the catalog stays free of) and
- * renders [DiscoverContent].
+ * folds it into the catalog [DiscoverViewState] (formatting the stats line; the
+ * "N files" hint is rendered from a raw count by the catalog) and renders
+ * [DiscoverContent].
  *
  * @param viewModel Hilt-injected [DiscoverViewModel].
  * @param onBack navigation callback for the top-bar back arrow.
@@ -37,9 +36,11 @@ fun DiscoverScreen(
     val uiState by viewModel.uiState.collectAsState()
     val networkError = stringResource(R.string.discover_error_network)
 
-    val rows = uiState.models.map { it.toRow(fileCountLabel = fileCountLabel(it.litertFileCount)) }
-
-    val viewState = remember(uiState, rows, networkError) {
+    // Build the view state (including the row mapping) inside remember keyed on
+    // the data it derives from, so recompositions that don't change uiState
+    // (e.g. the snackbar host) don't re-map every model. The "N files" hint is
+    // formatted later, per visible row, by the catalog — toRow stays pure.
+    val viewState = remember(uiState, networkError) {
         when (uiState.status) {
             DiscoverStatus.Loading ->
                 DiscoverViewState(visualState = DiscoverVisualState.Loading, query = uiState.query)
@@ -53,7 +54,7 @@ fun DiscoverScreen(
             DiscoverStatus.Populated -> DiscoverViewState(
                 visualState = DiscoverVisualState.Populated,
                 query = uiState.query,
-                rows = rows,
+                rows = uiState.models.map { it.toRow() },
                 refreshing = uiState.refreshing,
             )
         }
@@ -73,16 +74,12 @@ fun DiscoverScreen(
     )
 }
 
-/** Localised "N files" hint for the row's file count. */
-@Composable
-private fun fileCountLabel(count: Int): String = pluralStringResource(R.plurals.discover_file_count, count, count)
-
 /** Folds a domain summary onto the catalog list row, building the stats line. */
-private fun DiscoverableModelSummary.toRow(fileCountLabel: String): DiscoverModelRow = DiscoverModelRow(
+private fun DiscoverableModelSummary.toRow(): DiscoverModelRow = DiscoverModelRow(
     repoId = repoId,
     name = displayName,
     meta = buildMeta(),
-    fileCountLabel = fileCountLabel,
+    fileCount = litertFileCount,
     gated = gated,
 )
 

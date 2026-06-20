@@ -131,7 +131,7 @@ class DiscoverDetailViewModelTest {
         coEvery { getDetail(any()) } returns Result.success(detail())
         every { installModel(any()) } returns flowOf(
             DownloadState.Pending,
-            DownloadState.Error(DownloadError("Server returned code: 401")),
+            DownloadState.Error(DownloadError("Server returned code: 401", code = 401)),
         )
         val vm = createBound()
         advanceUntilIdle()
@@ -146,6 +146,27 @@ class DiscoverDetailViewModelTest {
 
         val event = eventDeferred.await()
         assertTrue(event is DiscoverInstallEvent.Failed && event.gated)
+    }
+
+    @Test
+    fun `given a non-gated failure when install fails then emits a non-gated failure`() = runTest {
+        coEvery { getDetail(any()) } returns Result.success(detail())
+        every { installModel(any()) } returns flowOf(
+            DownloadState.Pending,
+            // A 5xx must NOT be treated as gated (regression guard for the old substring heuristic).
+            DownloadState.Error(DownloadError("Server returned code: 503", code = 503)),
+        )
+        val vm = createBound()
+        advanceUntilIdle()
+
+        val eventDeferred = async { vm.installEvents.first() }
+        runCurrent()
+
+        vm.onLicenseConfirm("gemma.litertlm")
+        advanceUntilIdle()
+
+        val event = eventDeferred.await()
+        assertTrue(event is DiscoverInstallEvent.Failed && !event.gated)
     }
 
     @Test

@@ -1,6 +1,5 @@
 package app.knotwork.android.presentation.ui.discover
 
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import androidx.compose.foundation.layout.Box
@@ -21,6 +20,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import app.knotwork.android.R
 import app.knotwork.android.domain.models.DiscoverableModelDetail
 import app.knotwork.android.domain.models.DiscoverableModelFile
+import app.knotwork.android.presentation.ui.common.readPlainClipboardText
 import app.knotwork.android.presentation.ui.models.gigabyteOrMegabyteLabel
 import app.knotwork.design.screens.discover.DiscoverDetailCallbacks
 import app.knotwork.design.screens.discover.DiscoverDetailContent
@@ -80,7 +80,7 @@ fun DiscoverDetailScreen(
                 onLicenseDismiss = viewModel::onLicenseDismiss,
                 onCancelInstall = viewModel::onCancelInstall,
                 onTokenChange = viewModel::onTokenChange,
-                onTokenPaste = { viewModel.onTokenChange(readClipboard(context)) },
+                onTokenPaste = { viewModel.onTokenChange(readPlainClipboardText(context)) },
                 onToggleTokenReveal = viewModel::onToggleTokenReveal,
             ),
         )
@@ -133,13 +133,6 @@ private fun DiscoverableModelFile.toRow(state: DiscoverDetailUiState): DiscoverF
         sizeLabel = sizeBytes.takeIf { it > 0L }?.let { gigabyteOrMegabyteLabel(it) },
         status = status,
     )
-}
-
-/** Pull the latest plain-text clipboard content for the token paste action. */
-private fun readClipboard(context: Context): String {
-    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-    val item = clipboard?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
-    return item?.text?.toString().orEmpty()
 }
 
 /** Opens [url] in the user's browser. */

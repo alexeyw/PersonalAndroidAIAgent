@@ -83,7 +83,16 @@ class DiscoverViewModel @Inject constructor(private val searchModels: SearchDisc
                     }
                 },
                 onFailure = {
-                    _uiState.update { it.copy(status = DiscoverStatus.Error, refreshing = false) }
+                    _uiState.update {
+                        // A failed pull-to-refresh keeps the already-shown list
+                        // (only the refresh indicator clears); a failed initial
+                        // load with nothing to show falls back to the error state.
+                        if (refresh && it.models.isNotEmpty()) {
+                            it.copy(refreshing = false)
+                        } else {
+                            it.copy(status = DiscoverStatus.Error, refreshing = false)
+                        }
+                    }
                 },
             )
         }

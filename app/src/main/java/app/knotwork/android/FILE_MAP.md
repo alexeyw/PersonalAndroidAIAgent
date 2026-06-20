@@ -455,6 +455,7 @@ This file maps the contents of the main application package.
     - `common/` - Cross-screen presentation helpers.
       - `UiText.kt` - Sealed `UiText` (`Resource` / `Dynamic` / `Joined` / `Empty`) used by `UiState`s to carry user-visible text without holding a `Context`.
       - `UiTextExt.kt` - `@Composable UiText.asString()` and `Context.resolve(UiText)` resolution helpers.
+      - `ClipboardText.kt` - `readPlainClipboardText(context)` — shared system-clipboard plain-text reader backing the HuggingFace-token "Paste" actions on the Models and Discover screens.
     - `components/` - Reusable UI components.
       - `VariableChipsRow.kt` - Horizontal chip row for inserting `$VARIABLE` tokens into prompt editors.
       - `PromptPreviewBottomSheet.kt` - Modal bottom sheet that renders a prompt with substituted values highlighted.

@@ -10,9 +10,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -344,7 +347,12 @@ private fun LibraryErrorState(state: PipelineLibraryViewState, callbacks: Pipeli
 private fun LibraryList(state: PipelineLibraryViewState, callbacks: PipelineLibraryCallbacks) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(bottom = KnotworkTheme.spacing.sp16),
+        // Add the system navigation-bar inset to the existing bottom slack so the
+        // last row (and the FAB it sits under) clears the gesture/button area.
+        contentPadding = PaddingValues(
+            bottom = KnotworkTheme.spacing.sp16 +
+                WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+        ),
     ) {
         item(key = "library-header") { LibrarySectionHeader() }
         items(items = state.pipelines, key = { it.id }) { row ->
