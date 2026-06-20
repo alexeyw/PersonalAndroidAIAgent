@@ -136,32 +136,20 @@ class ChatHomeHitlDelegate(
             )
         }
         scope.launch {
-            when (submitClarificationAnswerUseCase(sessionId, pending.id, trimmed)) {
-                PendingSubmissionOutcome.LiveResumed -> Unit
-                PendingSubmissionOutcome.Resumed -> attachToLiveRun(sessionId, PipelineRunStatus.QUEUED)
-                PendingSubmissionOutcome.GraphChanged -> {
-                    emitResumeFeedback(ResumeFeedbackEvent.GraphChanged)
-                    state.update { it.copy(visual = it.restingVisual()) }
-                }
-                PendingSubmissionOutcome.Expired -> {
-                    emitResumeFeedback(ResumeFeedbackEvent.Expired)
-                    state.update { it.copy(visual = it.restingVisual()) }
-                }
-                PendingSubmissionOutcome.NothingPending -> {
-                    // Neither a live deferred nor a parked record consumed
-                    // the reply — record in-thread that the agent proceeded
-                    // without it, exactly like the legacy undelivered path.
-                    state.update { it.copy(visual = it.restingVisual()) }
-                    if (sessionId.isNotBlank()) {
-                        chatRepository.saveMessage(
-                            ChatMessage(
-                                sessionId = sessionId,
-                                role = Role.SYSTEM,
-                                content = SYSTEM_MESSAGE_CLARIFICATION_REPLY_NOT_DELIVERED,
-                                timestamp = System.currentTimeMillis(),
-                            ),
-                        )
-                    }
+            routePendingOutcome(submitClarificationAnswerUseCase(sessionId, pending.id, trimmed), sessionId) {
+                // Neither a live deferred nor a parked record consumed the reply
+                // — record in-thread that the agent proceeded without it, exactly
+                // like the legacy undelivered path.
+                state.update { it.copy(visual = it.restingVisual()) }
+                if (sessionId.isNotBlank()) {
+                    chatRepository.saveMessage(
+                        ChatMessage(
+                            sessionId = sessionId,
+                            role = Role.SYSTEM,
+                            content = SYSTEM_MESSAGE_CLARIFICATION_REPLY_NOT_DELIVERED,
+                            timestamp = System.currentTimeMillis(),
+                        ),
+                    )
                 }
             }
         }
@@ -204,13 +192,35 @@ class ChatHomeHitlDelegate(
     /**
      * Routes the user's approve / deny decision through
      * [SubmitApprovalDecisionUseCase] (live gate first, then the parked record)
-     * and maps the persistent-phase outcomes onto the resume plumbing: a resumed
-     * parked run attaches exactly like a resumed interrupted run; failures
-     * surface through [emitResumeFeedback] and settle the visual back to its
-     * resting state so the chat is not stuck on `Generating`.
+     * and folds the outcome onto the resume plumbing via [routePendingOutcome].
      */
     private suspend fun submitApprovalDecision(sessionId: String, isApproved: Boolean) {
-        when (submitApprovalDecisionUseCase(sessionId, isApproved)) {
+        routePendingOutcome(submitApprovalDecisionUseCase(sessionId, isApproved), sessionId) {
+            state.update { it.copy(visual = it.restingVisual()) }
+        }
+    }
+
+    /**
+     * Maps a [PendingSubmissionOutcome] from a parked approval / clarification
+     * submission onto the shared resume plumbing: a resumed parked run attaches
+     * exactly like a resumed interrupted run; `GraphChanged` / `Expired` surface
+     * through [emitResumeFeedback] and settle the visual back to its resting
+     * state so the chat is not stuck on `Generating`. The only caller-specific
+     * behaviour is [onNothingPending] — the approval path just settles the
+     * visual, while the clarification path also records an undelivered-reply
+     * SYSTEM row.
+     *
+     * @param outcome The submission outcome to route.
+     * @param sessionId The session whose run is being resumed.
+     * @param onNothingPending Caller-specific handling when neither a live
+     *   deferred nor a parked record consumed the submission.
+     */
+    private suspend fun routePendingOutcome(
+        outcome: PendingSubmissionOutcome,
+        sessionId: String,
+        onNothingPending: suspend () -> Unit,
+    ) {
+        when (outcome) {
             PendingSubmissionOutcome.LiveResumed -> Unit
             PendingSubmissionOutcome.Resumed -> attachToLiveRun(sessionId, PipelineRunStatus.QUEUED)
             PendingSubmissionOutcome.GraphChanged -> {
@@ -221,8 +231,7 @@ class ChatHomeHitlDelegate(
                 emitResumeFeedback(ResumeFeedbackEvent.Expired)
                 state.update { it.copy(visual = it.restingVisual()) }
             }
-            PendingSubmissionOutcome.NothingPending ->
-                state.update { it.copy(visual = it.restingVisual()) }
+            PendingSubmissionOutcome.NothingPending -> onNothingPending()
         }
     }
 

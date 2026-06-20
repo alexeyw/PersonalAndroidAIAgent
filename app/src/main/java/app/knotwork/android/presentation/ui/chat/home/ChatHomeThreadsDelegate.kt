@@ -122,7 +122,7 @@ class ChatHomeThreadsDelegate(
 
     /**
      * Auto-renames a newly-created chat to the first user message (truncated to
-     * [ChatHomeViewModel.AUTO_RENAME_CHAR_LIMIT] characters). Invoked by the
+     * [AUTO_RENAME_CHAR_LIMIT] characters). Invoked by the
      * send path so the drawer entry reflects the user's framing.
      *
      * @param sessionId The session being renamed.
@@ -131,9 +131,9 @@ class ChatHomeThreadsDelegate(
     fun autoRenameIfDefault(sessionId: String, prompt: String) {
         if (prompt.isBlank()) return
         val session = sessions.firstOrNull { it.id == sessionId } ?: return
-        if (session.name != ChatHomeViewModel.DEFAULT_NEW_CHAT_NAME) return
-        val truncated = if (prompt.length > ChatHomeViewModel.AUTO_RENAME_CHAR_LIMIT) {
-            prompt.take(ChatHomeViewModel.AUTO_RENAME_CHAR_LIMIT) + ChatHomeViewModel.AUTO_RENAME_SUFFIX
+        if (session.name != DEFAULT_NEW_CHAT_NAME) return
+        val truncated = if (prompt.length > AUTO_RENAME_CHAR_LIMIT) {
+            prompt.take(AUTO_RENAME_CHAR_LIMIT) + AUTO_RENAME_SUFFIX
         } else {
             prompt
         }
@@ -154,7 +154,7 @@ class ChatHomeThreadsDelegate(
             chatRepository.saveSession(
                 ChatSession(
                     id = newId,
-                    name = ChatHomeViewModel.DEFAULT_NEW_CHAT_NAME,
+                    name = DEFAULT_NEW_CHAT_NAME,
                     updatedAt = System.currentTimeMillis(),
                     pipelineId = pipelineId,
                 ),
@@ -264,8 +264,17 @@ class ChatHomeThreadsDelegate(
     private fun formatThreadSubtitle(updatedAt: Long): String =
         SimpleDateFormat(THREAD_SUBTITLE_PATTERN, Locale.getDefault()).format(Date(updatedAt))
 
-    private companion object {
+    companion object {
+        /** Default name of a freshly-created chat session — must match legacy `ChatViewModel` for compatibility. */
+        const val DEFAULT_NEW_CHAT_NAME: String = "New Chat"
+
+        /** Maximum characters of the first user message used as the auto-generated session name. */
+        const val AUTO_RENAME_CHAR_LIMIT: Int = 20
+
+        /** Suffix appended to a truncated auto-rename name. */
+        const val AUTO_RENAME_SUFFIX: String = "..."
+
         /** Pattern used for the drawer thread subtitle (e.g. `Mon 14:32`). */
-        const val THREAD_SUBTITLE_PATTERN: String = "EEE HH:mm"
+        private const val THREAD_SUBTITLE_PATTERN: String = "EEE HH:mm"
     }
 }

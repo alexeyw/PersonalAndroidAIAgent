@@ -26,6 +26,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Reattach / background-run / interrupted-run delegate of [ChatHomeViewModel].
@@ -241,7 +244,7 @@ class ChatHomeReattachDelegate(
         val pending = InterruptedRunPending(
             runId = run.id,
             nodeLabel = nodeLabel,
-            timestamp = ChatHomeViewModel.formatMessageTimestamp(run.finishedAt ?: run.startedAt),
+            timestamp = formatInterruptedAt(run.finishedAt ?: run.startedAt),
             resumable = resumable,
         )
         state.update { current ->
@@ -316,6 +319,15 @@ class ChatHomeReattachDelegate(
         }
     }
 
+    /**
+     * Formats the interruption instant for the status card with the in-chat
+     * message timestamp pattern (`HH:mm`, locale-aware). Captured once when the
+     * card is built so it shows a stable, truthful time rather than re-deriving
+     * "now" on every recomposition.
+     */
+    private fun formatInterruptedAt(epochMs: Long): String =
+        SimpleDateFormat(INTERRUPTED_TIMESTAMP_PATTERN, Locale.getDefault()).format(Date(epochMs))
+
     companion object {
         /**
          * Fallback node label rendered on the interrupted-run card when the run
@@ -326,5 +338,8 @@ class ChatHomeReattachDelegate(
 
         /** Milliseconds in one hour, for the resume-window pre-check on the interrupted card. */
         private const val MILLIS_PER_HOUR: Long = 3_600_000L
+
+        /** Timestamp pattern for the interrupted-run card (24h, matches the in-chat message clock). */
+        private const val INTERRUPTED_TIMESTAMP_PATTERN: String = "HH:mm"
     }
 }

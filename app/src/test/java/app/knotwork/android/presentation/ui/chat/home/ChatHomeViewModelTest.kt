@@ -556,7 +556,7 @@ class ChatHomeViewModelTest {
 
         // The chat keeps its default name — the instruction text must not become the title.
         assertEquals(
-            ChatHomeViewModel.DEFAULT_NEW_CHAT_NAME,
+            ChatHomeThreadsDelegate.DEFAULT_NEW_CHAT_NAME,
             sessionsFlow.value.first { it.id == sessionId }.name,
         )
     }
@@ -754,7 +754,7 @@ class ChatHomeViewModelTest {
         val sessionId = viewModel.state.value.thread.currentSessionId
         // initializeSession() created a session named DEFAULT_NEW_CHAT_NAME
         assertEquals(
-            ChatHomeViewModel.DEFAULT_NEW_CHAT_NAME,
+            ChatHomeThreadsDelegate.DEFAULT_NEW_CHAT_NAME,
             sessionsFlow.value.first { it.id == sessionId }.name,
         )
         coEvery { agentOrchestratorUseCase(sessionId, any(), any()) } returns flowOf(
@@ -774,7 +774,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
         val sessionId = viewModel.state.value.thread.currentSessionId
-        val long = "x".repeat(ChatHomeViewModel.AUTO_RENAME_CHAR_LIMIT + 5)
+        val long = "x".repeat(ChatHomeThreadsDelegate.AUTO_RENAME_CHAR_LIMIT + 5)
         coEvery { agentOrchestratorUseCase(sessionId, any(), any()) } returns flowOf(
             AgentOrchestratorState.Completed("ok"),
         )
@@ -785,7 +785,7 @@ class ChatHomeViewModelTest {
 
         val renamed = sessionsFlow.value.first { it.id == sessionId }.name
         assertEquals(
-            "x".repeat(ChatHomeViewModel.AUTO_RENAME_CHAR_LIMIT) + ChatHomeViewModel.AUTO_RENAME_SUFFIX,
+            "x".repeat(ChatHomeThreadsDelegate.AUTO_RENAME_CHAR_LIMIT) + ChatHomeThreadsDelegate.AUTO_RENAME_SUFFIX,
             renamed,
         )
     }

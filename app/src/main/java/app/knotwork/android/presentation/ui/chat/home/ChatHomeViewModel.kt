@@ -557,7 +557,7 @@ class ChatHomeViewModel @Inject constructor(
                 chatRepository.saveSession(
                     ChatSession(
                         id = newId,
-                        name = DEFAULT_NEW_CHAT_NAME,
+                        name = ChatHomeThreadsDelegate.DEFAULT_NEW_CHAT_NAME,
                         updatedAt = System.currentTimeMillis(),
                     ),
                 )
@@ -791,15 +791,6 @@ class ChatHomeViewModel @Inject constructor(
     }
 
     companion object {
-        /** Default name of a freshly-created chat session — must match legacy `ChatViewModel` for compatibility. */
-        const val DEFAULT_NEW_CHAT_NAME: String = "New Chat"
-
-        /** Maximum characters of the first user message used as the auto-generated session name. */
-        const val AUTO_RENAME_CHAR_LIMIT: Int = 20
-
-        /** Suffix appended to a truncated auto-rename name. */
-        const val AUTO_RENAME_SUFFIX: String = "..."
-
         /** Fallback message for `Throwable` instances surfaced via [ChatHomeUiState.Error] without a cause. */
         const val UNKNOWN_ERROR_FALLBACK: String = "Unknown error"
 
@@ -828,10 +819,6 @@ class ChatHomeViewModel @Inject constructor(
 
         /** Pre-formatted timestamp format used in [ChatMetadata.timestamp] (24h, locale-aware). */
         private const val TIMESTAMP_PATTERN: String = "HH:mm"
-
-        /** Formats an epoch-millis instant with the in-chat message timestamp pattern (`HH:mm`). */
-        fun formatMessageTimestamp(epochMs: Long): String =
-            SimpleDateFormat(TIMESTAMP_PATTERN, Locale.getDefault()).format(Date(epochMs))
 
         /**
          * Projects a domain [ChatMessage] onto the design-system row
