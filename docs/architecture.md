@@ -102,6 +102,35 @@ canvas), and any `sheet/...` route. While the user is on a tab's
 start-destination, `BackHandler` short-circuits the system Back gesture
 to `activity.finish()` so Back exits the app rather than switching tabs.
 
+### 1.2. Presentation: ViewModel facades and domain delegates
+
+A screen ViewModel consolidates everything its screen renders into a single
+immutable state class exposed through one `StateFlow` (e.g.
+`ChatHomeViewModel` → `ChatHomeScreenState`), and every mutation funnels
+through `_state.update { it.copy(...) }`. As a surface accretes responsibilities
+this ViewModel can grow into a God-object, so a cohesive block of logic that
+maps to **one sub-structure of the state** is extracted into a *delegate* class
+while the ViewModel stays a thin facade:
+
+- The delegate is constructed by the ViewModel and shares two things with it:
+  the `viewModelScope` (passed into the delegate's constructor, so its
+  coroutines live and die with the ViewModel) and the single
+  `MutableStateFlow` of screen state (the **common reducer** — the delegate
+  mutates only its own slice via the same `update { it.copy(slice = ...) }`).
+- The ViewModel keeps its public intent surface intact and **forwards** each
+  call to the delegate, so the screen and the existing tests keep calling
+  `viewModel.*` and observable behaviour is unchanged. One-shot events the
+  delegate owns (e.g. console copy snackbars) are re-exposed from the
+  ViewModel by forwarding the delegate's `SharedFlow`.
+
+The reference implementation is `ChatHomeConsoleDelegate`, which owns the
+console pane (live `ConsoleLog` / `PipelineTrace` / `NodeIO` aggregation,
+persisted-trace replay, per-run caches, and the console intent methods) and
+writes only the `console` slice of `ChatHomeScreenState`. This is the
+established direction for further thinning of large ViewModels; a full
+decomposition of the remaining surface is intentionally out of scope and
+proceeds one cohesive delegate at a time.
+
 ---
 
 ## 2. Data flow — life of a user message

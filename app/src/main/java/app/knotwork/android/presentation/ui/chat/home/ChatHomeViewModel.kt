@@ -9,14 +9,12 @@ import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.ClarificationRequest
-import app.knotwork.android.domain.models.ConsoleEvent
 import app.knotwork.android.domain.models.MessageAttachment
 import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.Role
-import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.ClarificationRepository
@@ -58,8 +56,6 @@ import app.knotwork.design.components.console.ConsoleLine
 import app.knotwork.design.components.console.ConsoleSnap
 import app.knotwork.design.components.console.ConsoleSource
 import app.knotwork.design.components.console.ConsoleTab
-import app.knotwork.design.components.console.ConsoleTraceSpan
-import app.knotwork.design.components.console.ConsoleVarRow
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
 import app.knotwork.design.screens.chat.ChatHomeThreadRow
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -80,7 +76,6 @@ import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import timber.log.Timber
@@ -106,13 +101,18 @@ import javax.inject.Inject
  *
  * Covers the user-prompted generation cycle (`Idle → Generating →
  * Idle / Error`), HITL (`WaitingForApproval`) and Clarification
- * (`AwaitingClarification`) wiring, Console pane (`ConsoleLog`) streaming
- * plus persisted-trace replay on session open (baseline from
- * [RunTraceRepository], live snapshots merged by [ConsoleEvent.seq]),
- * pipeline binding + deleted-pipeline fallback, session initialisation +
- * thread switching, the token counter, and the drawer / composer / overflow
- * secondary actions (new-thread, rename, favorite, import, model picker,
- * settings).
+ * (`AwaitingClarification`) wiring, pipeline binding + deleted-pipeline
+ * fallback, session initialisation + thread switching, the token counter, and
+ * the drawer / composer / overflow secondary actions (new-thread, rename,
+ * favorite, import, model picker, settings).
+ *
+ * The console pane responsibility — `ConsoleLog` / `PipelineTrace` / `NodeIO`
+ * streaming plus persisted-trace replay on session open — is delegated to
+ * [ChatHomeConsoleDelegate], which shares this ViewModel's [viewModelScope] and
+ * the single [_state] reducer. The console intent surface stays here as thin
+ * forwarders so the screen contract is unchanged; this delegate is the
+ * established pattern for further thinning of the surface (see
+ * `docs/architecture.md`, presentation section).
  *
  * Everything the screen renders is aggregated into a single immutable
  * [ChatHomeScreenState] exposed through [state]; every mutation funnels
@@ -125,11 +125,13 @@ import javax.inject.Inject
 @Suppress(
     // Reason: Chat home is the single entry-point for every user-visible
     // agent interaction. The render state is consolidated into one
-    // ChatHomeScreenState flow, but the *intent* surface remains wide by
-    // design: messaging, session switching, console pane, HITL +
-    // clarification, model picker, import/export each contribute public
-    // intent methods plus their private observers — well above the
-    // 25-function gate. Splitting would scatter one screen's contract
+    // ChatHomeScreenState flow, and the console pane's implementation has been
+    // extracted into ChatHomeConsoleDelegate, but the *intent* surface remains
+    // wide by design: messaging, session switching, console (thin forwarders),
+    // HITL + clarification, model picker, import/export each contribute public
+    // intent methods plus their private observers — still above the 25-function
+    // gate. Further extraction (HITL / reattach delegates) is the path; until
+    // then splitting the remaining surface would scatter one screen's contract
     // across artificial helper classes.
     "TooManyFunctions",
 )
@@ -170,8 +172,6 @@ class ChatHomeViewModel @Inject constructor(
     val state: StateFlow<ChatHomeScreenState> = _state.asStateFlow()
 
     private val _pipelineFallbackEvents: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 1)
-    private val _consoleSnackbarEvents: MutableSharedFlow<ConsoleSnackbarEvent> =
-        MutableSharedFlow(extraBufferCapacity = 1)
     private val _exportEvents: MutableSharedFlow<ChatExportPayload> = MutableSharedFlow(extraBufferCapacity = 1)
     private val _importErrorEvents: MutableSharedFlow<String> = MutableSharedFlow(extraBufferCapacity = 1)
     private val _memorySaveEvents: MutableSharedFlow<MemorySaveEvent> = MutableSharedFlow(extraBufferCapacity = 1)
@@ -193,9 +193,10 @@ class ChatHomeViewModel @Inject constructor(
      * One-shot stream of snackbar events raised by the console pane (line
      * copied, full log copied). The screen mirrors each emission into the
      * shared `SnackbarHostState`; the clipboard write itself is performed
-     * by the Composable (which owns `LocalClipboardManager`).
+     * by the Composable (which owns `LocalClipboardManager`). Forwarded from
+     * [consoleDelegate], which owns the console responsibility.
      */
-    val consoleSnackbarEvents: SharedFlow<ConsoleSnackbarEvent> = _consoleSnackbarEvents.asSharedFlow()
+    val consoleSnackbarEvents: SharedFlow<ConsoleSnackbarEvent> get() = consoleDelegate.consoleSnackbarEvents
 
     /**
      * One-shot stream raised when the user picks `Export chat` from the
@@ -269,70 +270,40 @@ class ChatHomeViewModel @Inject constructor(
     private var activeRunSessionIds: Set<String> = emptySet()
 
     /**
-     * Number of [ConsoleEvent]s the user has already dismissed via
-     * `Clear`. The engine emits cumulative [AgentOrchestratorState.ConsoleLog]
-     * snapshots on every step, so the next snapshot post-Clear still
-     * carries every previously-visible event; the baseline trims the
-     * leading slice so cleared rows do not pop back in. Reset on every new
-     * send / session switch (legacy `ChatViewModel.consoleClearBaseline`).
-     */
-    private var consoleClearBaseline: Int = 0
-
-    /**
-     * Per-node ordered map of the latest [AgentOrchestratorState.NodeIO]
-     * snapshot for the active run. Kept on the VM (not in the flow) so
-     * repeated emissions for the same node id (e.g. a queue-processor loop
-     * revisiting the same body node) overwrite the previous I/O instead of
-     * appending duplicate Vars rows.
-     */
-    private val nodeIoSnapshots: LinkedHashMap<String, AgentOrchestratorState.NodeIO> = LinkedHashMap()
-
-    /** Counts of trace-step landings; used to assign a deterministic startedAt to each span. */
-    private val traceStepStartMs: MutableList<Long> = mutableListOf()
-
-    /**
-     * Console replay baseline loaded from the persistent run trace when the
-     * session opens, or `null` when none is loaded. The run id and its
-     * replayed events travel as one value ([ReplayedBaseline]) so they can
-     * never desynchronize: a live [AgentOrchestratorState.ConsoleLog]
-     * snapshot merges with the events only when it carries the same run id —
-     * events of a *different* run replace the baseline outright (a fresh
-     * send already cleared it via [resetConsoleCachesForNewRun]).
-     */
-    private var replayedBaseline: ReplayedBaseline? = null
-
-    /**
-     * Latest merged (replay baseline + live) console events of the **top-level**
-     * run (depth 0). Held separately from [nestedConsoleByRun] so the merged
-     * Logs list can be recomputed whenever either the root or a sub-pipeline
-     * emits, without re-deriving the root's replay/live seam each time.
-     */
-    private var rootConsoleEvents: List<ConsoleEvent> = emptyList()
-
-    /**
-     * Latest cumulative console events of each **sub-pipeline** run (depth > 0),
-     * keyed by child run id. A nested run's [AgentOrchestratorState.ConsoleLog]
-     * is forwarded up by `PipelineNodeExecutor` carrying the child run id and a
-     * depth-stamped event list; the merged Logs list interleaves these with the
-     * root events by timestamp, and each event renders indented by its depth.
-     */
-    private val nestedConsoleByRun: LinkedHashMap<String, List<ConsoleEvent>> = LinkedHashMap()
-
-    /**
      * Dispatcher carrying the CPU-bound projection of a replayed trace
      * (filtering and mapping the full record list to console rows). Off-main
      * by default so a long run's one-shot projection cannot jank the session
-     * open; swapped for the test dispatcher in unit tests.
+     * open; swapped for the test dispatcher in unit tests. Read lazily by
+     * [consoleDelegate] on every replay, so a test that sets it after
+     * construction is honoured.
      */
     @VisibleForTesting
     internal var traceProjectionDispatcher: CoroutineDispatcher = Dispatchers.Default
+
+    /**
+     * Console-pane responsibility extracted from this God-object into a
+     * delegate that shares [viewModelScope] and the single [_state] reducer.
+     * The ViewModel keeps a thin forwarding surface (the screen and existing
+     * tests call the same `viewModel.*` console methods), while the live
+     * stream aggregation, persisted-trace replay, per-run caches and console
+     * intent logic live in [ChatHomeConsoleDelegate]. This is the established
+     * pattern for further thinning of the surface (see `docs/architecture.md`).
+     */
+    private val consoleDelegate = ChatHomeConsoleDelegate(
+        scope = viewModelScope,
+        state = _state,
+        settingsRepository = settingsRepository,
+        runTraceRepository = runTraceRepository,
+        pipelineRunRepository = pipelineRunRepository,
+        traceProjectionDispatcher = { traceProjectionDispatcher },
+    )
 
     init {
         observeAvailablePipelines()
         observeDefaultPipelineId()
         observeSessions()
         observeMaxContextSize()
-        observeConsolePreferredTab()
+        consoleDelegate.startObservers()
         observeInstalledModels()
         observeActiveRuns()
         initializeSession()
@@ -914,133 +885,57 @@ class ChatHomeViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Opens the console pane at the given [snap] (default: Partial). The
-     * pane is an independent overlay — the underlying [ChatHomeScreenState.visual]
-     * is left untouched, so the user can drill into pipeline activity during
-     * Generating / HitlConfirm / Clarification without losing their place.
-     */
-    fun openConsole(snap: ConsoleSnap = ConsoleSnap.Partial) {
-        _state.update { it.copy(console = it.console.copy(snap = snap)) }
-    }
+    // ─────────────────────────── Console pane ───────────────────────────
+    //
+    // Thin forwarders onto [consoleDelegate], which owns the console
+    // responsibility. The public surface is preserved verbatim so the screen
+    // and the existing tests keep calling `viewModel.*`; the logic lives in
+    // [ChatHomeConsoleDelegate].
 
-    /**
-     * Updates the snap point of the currently-open console pane. No-op
-     * when the pane is closed.
-     */
-    fun setConsoleSnap(snap: ConsoleSnap) {
-        _state.update { current ->
-            if (current.console.snap != null) {
-                current.copy(console = current.console.copy(snap = snap))
-            } else {
-                current
-            }
-        }
-    }
+    /** Opens the console pane at the given [snap] (default: Partial). */
+    fun openConsole(snap: ConsoleSnap = ConsoleSnap.Partial) = consoleDelegate.openConsole(snap)
+
+    /** Updates the snap point of the currently-open console pane. No-op when the pane is closed. */
+    fun setConsoleSnap(snap: ConsoleSnap) = consoleDelegate.setConsoleSnap(snap)
 
     /** Dismisses the console pane without touching the underlying chat state. */
-    fun closeConsole() {
-        _state.update { it.copy(console = it.console.copy(snap = null)) }
-    }
+    fun closeConsole() = consoleDelegate.closeConsole()
 
     /** Toggles the console inline-search field. Cycles `null → "" → null`. */
-    fun toggleConsoleSearch() {
-        _state.update { current ->
-            val next = if (current.console.searchQuery == null) "" else null
-            current.copy(console = current.console.copy(searchQuery = next))
-        }
-    }
+    fun toggleConsoleSearch() = consoleDelegate.toggleConsoleSearch()
 
     /** Updates the console inline-search query while the field is visible. */
-    fun onConsoleSearchQueryChange(query: String) {
-        _state.update { it.copy(console = it.console.copy(searchQuery = query)) }
-    }
+    fun onConsoleSearchQueryChange(query: String) = consoleDelegate.onConsoleSearchQueryChange(query)
 
     /** Replaces the active console source-set filter. */
-    fun onConsoleFilterChange(filter: ConsoleFilter) {
-        _state.update { it.copy(console = it.console.copy(filter = filter)) }
-    }
+    fun onConsoleFilterChange(filter: ConsoleFilter) = consoleDelegate.onConsoleFilterChange(filter)
 
     /** Reacts to the long-press "Only show this source" menu item. */
-    fun filterConsoleByLineSource(source: ConsoleSource) {
-        _state.update { it.copy(console = it.console.copy(filter = ConsoleFilter(sources = setOf(source)))) }
-    }
+    fun filterConsoleByLineSource(source: ConsoleSource) = consoleDelegate.filterConsoleByLineSource(source)
 
-    /**
-     * Persists the user's currently-selected console tab. Mirrors the
-     * change into the local console state synchronously so the catalog
-     * tab strip re-renders without waiting for the DataStore round-trip.
-     */
-    fun onConsoleTabChange(tab: ConsoleTab) {
-        if (_state.value.console.tab == tab) return
-        _state.update { it.copy(console = it.console.copy(tab = tab)) }
-        viewModelScope.launch {
-            settingsRepository.setConsolePreferredConsoleTabName(tab.name)
-        }
-    }
+    /** Persists the user's currently-selected console tab. */
+    fun onConsoleTabChange(tab: ConsoleTab) = consoleDelegate.onConsoleTabChange(tab)
 
-    /**
-     * Requests the destructive "Clear console for this session?" dialog —
-     * the screen renders an [AlertDialog] driven by
-     * [ChatHomeScreenState.consoleClearConfirmRequested]. The actual clear
-     * runs on [confirmConsoleClear] so the user has a chance to back out.
-     */
-    fun requestConsoleClear() {
-        if (_state.value.console.logs.isEmpty()) return
-        _state.update { it.copy(consoleClearConfirmRequested = true) }
-    }
+    /** Requests the destructive "Clear console for this session?" dialog. */
+    fun requestConsoleClear() = consoleDelegate.requestConsoleClear()
 
     /** Dismisses the confirmation dialog without altering the log. */
-    fun dismissConsoleClear() {
-        _state.update { it.copy(consoleClearConfirmRequested = false) }
-    }
+    fun dismissConsoleClear() = consoleDelegate.dismissConsoleClear()
 
-    /**
-     * Advances [consoleClearBaseline] by the count of currently-visible
-     * lines and clears the console Logs tab. The next cumulative engine
-     * snapshot trims its leading slice, so cleared rows do not pop back in.
-     */
-    fun confirmConsoleClear() {
-        val visible = _state.value.console.logs
-        _state.update { it.copy(consoleClearConfirmRequested = false) }
-        if (visible.isEmpty()) return
-        consoleClearBaseline += visible.size
-        _state.update { it.copy(console = it.console.copy(logs = emptyList())) }
-    }
+    /** Clears the console Logs tab, advancing the clear baseline so cleared rows do not pop back in. */
+    fun confirmConsoleClear() = consoleDelegate.confirmConsoleClear()
 
-    /**
-     * Emits a one-shot snackbar event after the screen has placed the
-     * single-line clipboard payload on the system clipboard. The
-     * `ClipboardManager` interaction itself happens inside the Composable
-     * layer (which has access to `LocalClipboardManager`).
-     */
-    fun signalConsoleLineCopied() {
-        _consoleSnackbarEvents.tryEmit(ConsoleSnackbarEvent.LineCopied)
-    }
+    /** Emits a one-shot snackbar event after the screen copies a single console line. */
+    fun signalConsoleLineCopied() = consoleDelegate.signalConsoleLineCopied()
 
     /** One-shot snackbar event raised after the full filtered log is copied. */
-    fun signalConsoleAllCopied() {
-        _consoleSnackbarEvents.tryEmit(ConsoleSnackbarEvent.AllCopied)
-    }
+    fun signalConsoleAllCopied() = consoleDelegate.signalConsoleAllCopied()
 
-    /**
-     * Renders a single [ConsoleLine] as the plain-text clipboard payload
-     * inserted by `onConsoleCopyLine`. Format: `[timestamp] [source] text`.
-     * Public for testability — kept on the VM (not the screen) so unit
-     * tests can pin the format without spinning up the Compose tooling.
-     */
-    fun buildConsoleLineCopyPayload(line: ConsoleLine): String =
-        "[${line.timestamp}] [${line.source.name}] ${line.text}"
+    /** Renders a single [ConsoleLine] as the plain-text clipboard payload. */
+    fun buildConsoleLineCopyPayload(line: ConsoleLine): String = consoleDelegate.buildConsoleLineCopyPayload(line)
 
-    /**
-     * Renders the supplied list of [ConsoleLine]s as the multi-line
-     * clipboard payload inserted by `onConsoleCopyAll`. The caller is
-     * expected to apply the current [ConsoleFilter] / search query before
-     * passing the list in — the chat-home `Copy all` action only copies
-     * what the user is actively looking at.
-     */
-    fun buildConsoleAllCopyPayload(lines: List<ConsoleLine>): String =
-        lines.joinToString(separator = "\n") { buildConsoleLineCopyPayload(it) }
+    /** Renders the supplied [ConsoleLine]s as the multi-line clipboard payload. */
+    fun buildConsoleAllCopyPayload(lines: List<ConsoleLine>): String = consoleDelegate.buildConsoleAllCopyPayload(lines)
 
     /**
      * Debug-only escape hatch used by the triple-tap state picker to force
@@ -1186,21 +1081,6 @@ class ChatHomeViewModel @Inject constructor(
     }
 
     /**
-     * Hydrates the console tab from the persisted DataStore preference. An
-     * unrecognised value (e.g. an enum entry removed in a future version)
-     * falls back to [ConsoleTab.Logs] so the surface never renders an
-     * undefined tab.
-     */
-    private fun observeConsolePreferredTab() {
-        viewModelScope.launch {
-            settingsRepository.consolePreferredConsoleTabName.collect { name ->
-                val tab = ConsoleTab.entries.firstOrNull { it.name == name } ?: ConsoleTab.Logs
-                _state.update { it.copy(console = it.console.copy(tab = tab)) }
-            }
-        }
-    }
-
-    /**
      * Subscribes the message stream to [sessionId], cancelling any prior
      * subscription. Each emission is projected through
      * [chatMessageToRow] and folded into [ChatHomeScreenState.messages];
@@ -1282,9 +1162,9 @@ class ChatHomeViewModel @Inject constructor(
         when (state) {
             is AgentOrchestratorState.WaitingForApproval -> handleWaitingForApproval(state)
             is AgentOrchestratorState.AwaitingClarification -> handleAwaitingClarification(state.request)
-            is AgentOrchestratorState.ConsoleLog -> handleConsoleLog(state.events, state.runId)
-            is AgentOrchestratorState.PipelineTrace -> handlePipelineTrace(state.steps)
-            is AgentOrchestratorState.NodeIO -> handleNodeIo(state)
+            is AgentOrchestratorState.ConsoleLog -> consoleDelegate.onConsoleLog(state.events, state.runId)
+            is AgentOrchestratorState.PipelineTrace -> consoleDelegate.onPipelineTrace(state.steps)
+            is AgentOrchestratorState.NodeIO -> consoleDelegate.onNodeIo(state)
             is AgentOrchestratorState.Thinking ->
                 // Approximate-token estimate from the cumulative partial text
                 // length divided by `TOKEN_CHARS_PER_TOKEN`. Same heuristic
@@ -1327,119 +1207,6 @@ class ChatHomeViewModel @Inject constructor(
     }
 
     /**
-     * Mirrors a cumulative [AgentOrchestratorState.ConsoleLog.events]
-     * snapshot into the console Logs tab. The snapshot is first merged with
-     * the replayed baseline of the same run (deduplicated by
-     * [ConsoleEvent.seq]), then the clear baseline is applied so events the
-     * user just dismissed via [confirmConsoleClear] stay hidden until the
-     * next session switch / send.
-     */
-    private fun handleConsoleLog(events: List<ConsoleEvent>, runId: String?) {
-        // Each ConsoleLog snapshot belongs to exactly one run, so all of its
-        // events share one nesting depth. Depth 0 is the top-level run; a
-        // forwarded sub-pipeline snapshot (depth > 0) is bucketed by its child
-        // run id and interleaved with the root by timestamp on recompute.
-        val depth = events.firstOrNull()?.depth ?: 0
-        if (depth == 0) {
-            rootConsoleEvents = mergeWithReplayedBaseline(events, runId)
-        } else if (runId != null) {
-            nestedConsoleByRun[runId] = events
-        }
-        recomputeConsoleLogs()
-    }
-
-    /**
-     * Recomputes the Logs tab from the top-level run's events plus every
-     * sub-pipeline run's events, ordered by wall-clock time (then in-run seq
-     * for ties) so a nested run's lines fall between the `▶`/`✓` of the
-     * `PIPELINE` node that spawned them, and trimmed by the clear baseline.
-     */
-    private fun recomputeConsoleLogs() {
-        val merged = (rootConsoleEvents + nestedConsoleByRun.values.flatten())
-            .sortedWith(compareBy({ it.timestamp }, { it.seq }))
-        val trimmed = applyConsoleClearBaseline(merged)
-        _state.update { it.copy(console = it.console.copy(logs = trimmed.map(ConsoleEvent::toConsoleLine))) }
-    }
-
-    /**
-     * Merges a live cumulative console snapshot with the replayed baseline
-     * via [mergeConsoleEventsBySeq]. When the live snapshot belongs to a
-     * different run — or to no persisted run at all — the baseline is
-     * irrelevant and the live snapshot passes through untouched.
-     *
-     * @param live The cumulative live snapshot from the engine.
-     * @param liveRunId The persistent run the live snapshot belongs to.
-     * @return The merged event list ordered by seq.
-     */
-    private fun mergeWithReplayedBaseline(live: List<ConsoleEvent>, liveRunId: String?): List<ConsoleEvent> {
-        val baseline = replayedBaseline ?: return live
-        if (baseline.events.isEmpty() || liveRunId == null || liveRunId != baseline.runId) return live
-        return mergeConsoleEventsBySeq(baseline.events, live)
-    }
-
-    /**
-     * Loads the persisted trace of [run] — resolved once by [reattachToRun]
-     * — and installs it as the console baseline: Logs from the replayed
-     * console events, Vars and Traces re-projected from the replayed
-     * per-node I/O records through the exact same mappers as the live path.
-     * The CPU-bound projection of the full trace runs on
-     * [traceProjectionDispatcher]; only the VM-confined cache and state
-     * installation happen back on the main dispatcher. A run without a
-     * persisted trace leaves the console empty, which matches the
-     * pre-replay behaviour. Must complete before the live collector
-     * subscribes (see the ordering note on [reattachToRun]).
-     */
-    private suspend fun replayConsoleTrace(run: PipelineRun) {
-        // Project the whole run tree, not just the top-level run: a finished
-        // (or reattached) run with sub-pipelines stored its nested execution in
-        // descendant run records, so the console rebuilds the hierarchy by
-        // merging each run's persisted trace. Descendant traces ride the same
-        // depth-stamped records, so they render indented under their parent.
-        val descendants = pipelineRunRepository.getDescendantRuns(run.id)
-        val rootTrace = runTraceRepository.getTraceForRun(run.id)
-        val childTraces = descendants.map { it.id to runTraceRepository.getTraceForRun(it.id) }
-        if (rootTrace.isEmpty() && childTraces.all { it.second.isEmpty() }) return
-        val projection = withContext(traceProjectionDispatcher) {
-            val rootEvents = rootTrace
-                .filterIsInstance<RunTraceRecord.ConsoleEntry>()
-                .map(::consoleEntryToConsoleEvent)
-            val nestedEvents = childTraces
-                .map { (id, t) ->
-                    id to
-                        t.filterIsInstance<RunTraceRecord.ConsoleEntry>().map(::consoleEntryToConsoleEvent)
-                }
-                .filter { it.second.isNotEmpty() }
-            // All runs' node I/O, ordered by wall-clock time so the Vars and
-            // Traces tabs interleave a sub-pipeline's nodes between the start
-            // and end of the PIPELINE node that spawned them.
-            val allNodeIo = (rootTrace + childTraces.flatMap { it.second })
-                .filterIsInstance<RunTraceRecord.NodeIo>()
-                .sortedBy { it.timestamp }
-            val snapshots = allNodeIo.map { it.nodeId to nodeIoRecordToNodeIo(it) }
-            ReplayProjection(
-                baseline = ReplayedBaseline(runId = run.id, events = rootEvents),
-                rootEvents = rootEvents,
-                nestedConsoleByRun = nestedEvents,
-                nodeIoSnapshots = snapshots,
-                vars = snapshots.flatMap { (_, io) -> nodeIoToVarRows(io) },
-                traces = allNodeIo.map(::nodeIoRecordToConsoleSpan),
-            )
-        }
-        replayedBaseline = projection.baseline
-        rootConsoleEvents = projection.rootEvents
-        nestedConsoleByRun.clear()
-        projection.nestedConsoleByRun.forEach { (id, events) -> nestedConsoleByRun[id] = events }
-        nodeIoSnapshots.clear()
-        projection.nodeIoSnapshots.forEach { (nodeId, io) -> nodeIoSnapshots[nodeId] = io }
-        _state.update {
-            it.copy(console = it.console.copy(vars = projection.vars, traces = projection.traces))
-        }
-        // Logs are the merge of root + nested buckets; recompute once both are
-        // installed (also applies the clear baseline).
-        recomputeConsoleLogs()
-    }
-
-    /**
      * Chat reattach protocol — resolves the session's run record once and
      * re-binds the UI to whatever it says when the session is opened (cold
      * start or thread switch). The single lookup feeds both the console
@@ -1478,7 +1245,7 @@ class ChatHomeViewModel @Inject constructor(
             // the lookup suspended — applying the stale branch would bleed
             // the previous thread's run state into the new one.
             if (_state.value.thread.currentSessionId != sessionId) return@launch
-            if (baselineRun != null) replayConsoleTrace(baselineRun)
+            if (baselineRun != null) consoleDelegate.replayTrace(baselineRun)
             when {
                 activeRun != null -> attachToLiveRun(sessionId, activeRun.status)
                 baselineRun?.status == PipelineRunStatus.INTERRUPTED -> presentInterruptedRun(baselineRun)
@@ -1754,93 +1521,23 @@ class ChatHomeViewModel @Inject constructor(
         this is ChatHomeUiState.Loading || this is ChatHomeUiState.Empty || this is ChatHomeUiState.Idle
 
     /**
-     * Mirrors the latest [AgentOrchestratorState.PipelineTrace.steps]
-     * snapshot into the console Traces tab. The catalog span requires a
-     * pre-formatted `startedAt` — we observe wall-clock time the first
-     * time we see each step index and reuse it for subsequent emissions of
-     * the same step so the displayed start does not jitter on every
-     * snapshot.
-     */
-    private fun handlePipelineTrace(steps: List<AgentOrchestratorState.TraceStep>) {
-        val nowMs = System.currentTimeMillis()
-        // Grow the start-timestamp cache to match the step count; existing entries are preserved.
-        while (traceStepStartMs.size < steps.size) {
-            traceStepStartMs.add(nowMs)
-        }
-        val rootSpans = steps.mapIndexed { index, step ->
-            traceStepToConsoleSpan(step, traceStepStartMs[index])
-        }
-        // A live PipelineTrace carries only the top-level run's steps (a
-        // sub-pipeline's trace is not forwarded live — see
-        // `PipelineNodeExecutor.forwardIfObservable`). Preserve any nested
-        // (depth > 0) spans restored from a replay projection so reattaching to
-        // an active nested run does not drop the sub-pipeline span hierarchy;
-        // they are re-merged by start time.
-        _state.update { state ->
-            val nested = state.console.traces.filter { it.depth > 0 }
-            val merged = (rootSpans + nested).sortedBy { it.startedAt }
-            state.copy(console = state.console.copy(traces = merged))
-        }
-    }
-
-    /**
-     * Captures a per-node I/O snapshot and re-projects the console Vars tab
-     * from the accumulated map so repeated emissions for the same node id
-     * overwrite (not duplicate) the previous Vars rows.
-     */
-    private fun handleNodeIo(io: AgentOrchestratorState.NodeIO) {
-        nodeIoSnapshots[io.nodeId] = io
-        val vars = nodeIoSnapshots.values.flatMap(::nodeIoToVarRows)
-        _state.update { it.copy(console = it.console.copy(vars = vars)) }
-    }
-
-    /**
-     * Trims the leading [consoleClearBaseline] entries off a cumulative
-     * [AgentOrchestratorState.ConsoleLog.events] snapshot. When the
-     * baseline already covers the snapshot (no new events since the last
-     * Clear) the result is an empty list.
-     */
-    private fun applyConsoleClearBaseline(events: List<ConsoleEvent>): List<ConsoleEvent> {
-        if (consoleClearBaseline <= 0) return events
-        if (consoleClearBaseline >= events.size) return emptyList()
-        return events.subList(consoleClearBaseline, events.size)
-    }
-
-    /**
-     * Drops the VM-side console caches (clear baseline, per-node I/O map,
-     * trace start timestamps). Called at the start of each new run, always
-     * paired with [withConsoleProjectionsCleared] inside the caller's
-     * single `_state.update` block so the flow emission stays atomic.
+     * Drops the run-scoped console caches and cancels any in-flight reattach
+     * lookup at the start of each new run / thread switch. The console caches
+     * (clear baseline, per-node I/O, trace timestamps, replay baseline) live in
+     * [consoleDelegate]; the reattach job is a ViewModel concern. Always paired
+     * with [withConsoleProjectionsCleared] inside the caller's single
+     * `_state.update` block so the flow emission stays atomic.
+     *
+     * A new run (or a thread switch) invalidates the replayed baseline: the
+     * next live snapshot belongs to a different run, and a thread switch reloads
+     * its own baseline via [reattachToRun]. The reattach job is cancelled here
+     * so a stale in-flight lookup neither re-installs the old baseline nor
+     * re-subscribes the collector.
      */
     private fun resetConsoleCachesForNewRun() {
-        consoleClearBaseline = 0
-        nodeIoSnapshots.clear()
-        traceStepStartMs.clear()
-        rootConsoleEvents = emptyList()
-        nestedConsoleByRun.clear()
-        // A new run (or a thread switch) invalidates the replayed baseline:
-        // the next live snapshot belongs to a different run, and a thread
-        // switch reloads its own baseline via reattachToRun. The reattach
-        // job is cancelled with it — a stale in-flight lookup must neither
-        // re-install the old baseline nor re-subscribe the collector.
+        consoleDelegate.resetForNewRun()
         reattachJob?.cancel()
-        replayedBaseline = null
     }
-
-    /**
-     * Pure transformer: clears the console Logs / Vars / Traces projections
-     * of the previous run. The pane's snap, tab, filter, and search query
-     * survive — only run-scoped data is dropped. Composed into the caller's
-     * `_state.update` block (never its own emission) so multi-field
-     * transitions remain a single atomic flow emission.
-     */
-    private fun ChatHomeScreenState.withConsoleProjectionsCleared(): ChatHomeScreenState = copy(
-        console = console.copy(
-            logs = emptyList(),
-            vars = emptyList(),
-            traces = emptyList(),
-        ),
-    )
 
     /**
      * Approves the tool the orchestrator is paused on. For a destructive
@@ -2357,41 +2054,6 @@ class ChatHomeViewModel @Inject constructor(
             }
         }
     }
-
-    /**
-     * Console replay baseline of one persisted run: the run id and its
-     * replayed console events as a single value, so the merge guard can
-     * never see one without the other.
-     *
-     * @property runId Id of the run whose trace was replayed.
-     * @property events The run's replayed console events, ordered by seq.
-     */
-    private data class ReplayedBaseline(val runId: String, val events: List<ConsoleEvent>)
-
-    /**
-     * Result of projecting a persisted run trace into console rows, built
-     * off the main dispatcher by [replayConsoleTrace] and installed on the
-     * main dispatcher in one step.
-     *
-     * @property baseline The top-level run's replay/live merge baseline.
-     * @property rootEvents The top-level run's replayed console events, used to
-     *   seed [ChatHomeViewModel.rootConsoleEvents].
-     * @property nestedConsoleByRun Each sub-pipeline run's replayed console
-     *   events, keyed by child run id, used to seed
-     *   [ChatHomeViewModel.nestedConsoleByRun].
-     * @property nodeIoSnapshots Per-node I/O snapshots across the whole run
-     *   tree in trace order, ready to seed [ChatHomeViewModel.nodeIoSnapshots].
-     * @property vars Pre-rendered Vars-tab rows (whole tree).
-     * @property traces Pre-rendered Traces-tab spans (whole tree, depth-stamped).
-     */
-    private data class ReplayProjection(
-        val baseline: ReplayedBaseline,
-        val rootEvents: List<ConsoleEvent>,
-        val nestedConsoleByRun: List<Pair<String, List<ConsoleEvent>>>,
-        val nodeIoSnapshots: List<Pair<String, AgentOrchestratorState.NodeIO>>,
-        val vars: List<ConsoleVarRow>,
-        val traces: List<ConsoleTraceSpan>,
-    )
 
     companion object {
         /** Default name of a freshly-created chat session — must match legacy `ChatViewModel` for compatibility. */

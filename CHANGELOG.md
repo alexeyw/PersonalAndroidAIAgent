@@ -249,6 +249,14 @@ details.
 
 ### Changed
 
+- **Chat-home console pane extracted into a delegate.** The console
+  responsibility (live log / trace / node-I/O aggregation, persisted-trace
+  replay, and the console intent surface) moved out of the large
+  `ChatHomeViewModel` into a new `ChatHomeConsoleDelegate` that shares the
+  ViewModel's scope and single state flow. The ViewModel keeps thin forwarders,
+  so behaviour and the screen contract are unchanged; this establishes the
+  delegate pattern for thinning large presentation ViewModels.
+
 - **Task scheduling extracted behind a domain port.** `ScheduleTaskUseCase` no
   longer depends on `androidx.work` or the `data` layer: it now delegates to a
   new `TaskScheduler` domain port (with a `ScheduledTaskConstraints` value type),
