@@ -88,14 +88,17 @@ class PipelineRunDaoTest {
 
     @Test
     fun deleteTerminalRunsBeyondSessionLimit_neverDeletesWaitingRuns() = runBlocking {
-        // A parked WAITING_APPROVAL run older than the whole window must
-        // survive: retention only ever deletes terminal statuses. It still
-        // occupies a window slot (the window counts runs of any status), so
-        // the oldest terminal run falls out of a window of 2.
-        insertRun(runId = "waiting", sessionId = "s1", startedAt = 0L, status = "WAITING_APPROVAL", finishedAt = null)
-        insertRun(runId = "old-done", sessionId = "s1", startedAt = 1L)
-        insertRun(runId = "new-done-1", sessionId = "s1", startedAt = 2L)
-        insertRun(runId = "new-done-2", sessionId = "s1", startedAt = 3L)
+        // A parked WAITING_APPROVAL run that sits inside the recency window
+        // occupies one of its slots — the window counts top-level runs of *any*
+        // status (ORDER BY startedAt DESC) — and is itself never deleted, since
+        // retention only ever deletes terminal statuses. With a window of 2 and
+        // the waiting run holding the second-newest slot, only the single
+        // most-recent terminal run is spared; the two older terminal runs fall
+        // out of the window and are deleted.
+        insertRun(runId = "oldest-done", sessionId = "s1", startedAt = 0L)
+        insertRun(runId = "older-done", sessionId = "s1", startedAt = 1L)
+        insertRun(runId = "waiting", sessionId = "s1", startedAt = 2L, status = "WAITING_APPROVAL", finishedAt = null)
+        insertRun(runId = "newest-done", sessionId = "s1", startedAt = 3L)
 
         val deleted = pipelineRunDao.deleteTerminalRunsBeyondSessionLimit(
             keepPerSession = 2,
@@ -104,9 +107,9 @@ class PipelineRunDaoTest {
 
         assertEquals(2, deleted)
         assertNotNull(pipelineRunDao.getRun("waiting"))
-        assertNull(pipelineRunDao.getRun("old-done"))
-        assertNull(pipelineRunDao.getRun("new-done-1"))
-        assertNotNull(pipelineRunDao.getRun("new-done-2"))
+        assertNull(pipelineRunDao.getRun("oldest-done"))
+        assertNull(pipelineRunDao.getRun("older-done"))
+        assertNotNull(pipelineRunDao.getRun("newest-done"))
     }
 
     @Test
