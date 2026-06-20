@@ -122,7 +122,7 @@ data class ImageViewerTarget(
  *   screen recompositions never own the text.
  * @property typedConfirm typed-confirm input shown next to the Destructive
  *   HITL confirmation row; must equal the magic word
- *   ([ChatHomeViewModel.DESTRUCTIVE_TYPED_CONFIRM_WORD], case-insensitive)
+ *   ([ChatHomeHitlDelegate.DESTRUCTIVE_TYPED_CONFIRM_WORD], case-insensitive)
  *   before a destructive tool can be approved.
  * @property attachment pending image attachment shown above the input row, or
  *   `null` when none is attached.

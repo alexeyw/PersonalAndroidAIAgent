@@ -136,19 +136,33 @@ internal fun mockChatHomeViewModel(
 
     val vm = mockk<ChatHomeViewModel>(relaxed = true)
     every { vm.state } returns stateFlow
-    every { vm.pipelineFallbackEvents } returns MutableSharedFlow()
-    every { vm.consoleSnackbarEvents } returns MutableSharedFlow()
-    every { vm.exportEvents } returns MutableSharedFlow()
-    every { vm.importErrorEvents } returns MutableSharedFlow()
-    every { vm.memorySaveEvents } returns MutableSharedFlow()
-    every { vm.resumeFeedbackEvents } returns MutableSharedFlow()
-    // These one-shot event SharedFlows are collected in dedicated LaunchedEffects
-    // (ChatHomeScreen). `SharedFlow.collect` is typed `Nothing`; a relaxed-mock
-    // default returns a *completing* flow, so the collect returns and trips
-    // `KotlinNothingValueException`. Stub them with a never-completing flow.
-    every { vm.attachmentErrorEvents } returns MutableSharedFlow()
-    every { vm.voiceErrorEvents } returns MutableSharedFlow()
-    every { vm.currentPipelineId() } returns null
+    val pipelineBindingDelegate = mockk<ChatHomePipelineBindingDelegate>(relaxed = true)
+    every { pipelineBindingDelegate.pipelineFallbackEvents } returns MutableSharedFlow()
+    every { pipelineBindingDelegate.currentPipelineId() } returns null
+    every { vm.pipelineBinding } returns pipelineBindingDelegate
+    val threadsDelegate = mockk<ChatHomeThreadsDelegate>(relaxed = true)
+    every { vm.threads } returns threadsDelegate
+    val reattachDelegate = mockk<ChatHomeReattachDelegate>(relaxed = true)
+    every { reattachDelegate.resumeFeedbackEvents } returns MutableSharedFlow()
+    every { vm.reattach } returns reattachDelegate
+    val hitlDelegate = mockk<ChatHomeHitlDelegate>(relaxed = true)
+    every { vm.hitl } returns hitlDelegate
+    // Delegates (variant B); the screen calls `vm.<delegate>.*`. Stub delegate
+    // mocks whose collected SharedFlows never complete (see the note below).
+    val consoleDelegate = mockk<ChatHomeConsoleDelegate>(relaxed = true)
+    every { consoleDelegate.consoleSnackbarEvents } returns MutableSharedFlow()
+    every { vm.console } returns consoleDelegate
+    val voiceDelegate = mockk<ChatHomeVoiceDelegate>(relaxed = true)
+    every { voiceDelegate.voiceErrorEvents } returns MutableSharedFlow()
+    every { vm.voice } returns voiceDelegate
+    val attachmentDelegate = mockk<ChatHomeAttachmentDelegate>(relaxed = true)
+    every { attachmentDelegate.attachmentErrorEvents } returns MutableSharedFlow()
+    every { vm.attachments } returns attachmentDelegate
+    val transferDelegate = mockk<ChatHomeTransferDelegate>(relaxed = true)
+    every { transferDelegate.exportEvents } returns MutableSharedFlow()
+    every { transferDelegate.importErrorEvents } returns MutableSharedFlow()
+    every { transferDelegate.memorySaveEvents } returns MutableSharedFlow()
+    every { vm.transfer } returns transferDelegate
 
     return vm to ChatHomeMockHandles(state = stateFlow)
 }

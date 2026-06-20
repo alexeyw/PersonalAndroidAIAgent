@@ -72,7 +72,7 @@ class ChatHomeClarificationFlowTest {
         composeTestRule.onNodeWithText("Blue").performClick()
         composeTestRule.waitForIdle()
 
-        verify(exactly = 1) { viewModel.submitClarificationReply("Blue") }
+        verify(exactly = 1) { viewModel.hitl.submitClarificationReply("Blue") }
     }
 
     @Test

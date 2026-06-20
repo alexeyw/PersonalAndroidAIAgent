@@ -19,7 +19,7 @@ import app.knotwork.design.R as KnotworkR
  * test is enough — no Hilt graph required. The test pre-mocks the VM with
  * deterministic StateFlows via [mockChatHomeViewModel], taps the `⋮`
  * icon to open the menu, taps `Delete chat`, confirms the destructive
- * `AlertDialog`, and verifies `viewModel.deleteCurrentSession()` was
+ * `AlertDialog`, and verifies `viewModel.threads.deleteCurrentSession()` was
  * called exactly once.
  */
 class ChatHomeOverflowMenuTest {
@@ -48,6 +48,6 @@ class ChatHomeOverflowMenuTest {
         composeTestRule.onNodeWithText(confirmLabel).performClick()
         composeTestRule.waitForIdle()
 
-        verify(exactly = 1) { viewModel.deleteCurrentSession() }
+        verify(exactly = 1) { viewModel.threads.deleteCurrentSession() }
     }
 }
