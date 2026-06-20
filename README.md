@@ -116,6 +116,16 @@ configured it.
 - **Local model manager** with an inline Active card, HuggingFace
   token + custom URL download fields, and preset rows showing live
   download progress / on-disk status.
+- **Discover models** — browse and search the curated
+  [`litert-community`](https://huggingface.co/litert-community) organisation on
+  Hugging Face right inside the app (top-bar action on the Models screen). Each
+  card shows downloads, likes and licence; the detail screen lists a repo's
+  `.litertlm` files with sizes and an **Install** action that reuses the existing
+  download manager, gated behind an explicit **licence confirmation**. Models
+  already on disk are marked **Installed**. Access-gated repos show a lock badge
+  and an inline Hugging Face token field; a 401/403 refusal returns a clear
+  "accept the licence and add a token" hint. The list is read-only and only ever
+  calls the Hub in response to a user action, with a graceful retry on error.
 - **Model performance insights & benchmark** — a Performance card on the
   Models screen showing the active model's rolling-average **time-to-first-token**,
   **decode speed** (tok/s) and **peak memory** over its recent runs, plus a

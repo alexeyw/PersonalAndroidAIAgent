@@ -38,7 +38,12 @@ import app.knotwork.design.screens.models.PresetStatus
  * @param modifier Optional layout modifier.
  */
 @Composable
-fun ModelsScreen(modifier: Modifier = Modifier, viewModel: ModelsViewModel = hiltViewModel(), onBack: () -> Unit = {}) {
+fun ModelsScreen(
+    modifier: Modifier = Modifier,
+    viewModel: ModelsViewModel = hiltViewModel(),
+    onBack: () -> Unit = {},
+    onOpenDiscover: () -> Unit = {},
+) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -79,6 +84,7 @@ fun ModelsScreen(modifier: Modifier = Modifier, viewModel: ModelsViewModel = hil
         strings = strings.content,
         callbacks = ModelsCallbacks(
             onBack = onBack,
+            onDiscover = onOpenDiscover,
             onAuthTokenChange = viewModel::onAuthTokenChanged,
             onAuthTokenPaste = { viewModel.onAuthTokenChanged(readClipboard(context)) },
             onCustomUrlChange = viewModel::onCustomUrlChanged,
@@ -356,6 +362,7 @@ private fun modelsStrings(): LocalisedModelsStrings = LocalisedModelsStrings(
         emptyCta = stringResource(R.string.models_empty_cta),
         errorTitle = stringResource(R.string.models_error_title),
         errorRetry = stringResource(R.string.common_retry),
+        discoverCd = stringResource(R.string.models_discover_cd),
     ),
     subtitleFormat = stringResource(R.string.models_subtitle_format),
 )

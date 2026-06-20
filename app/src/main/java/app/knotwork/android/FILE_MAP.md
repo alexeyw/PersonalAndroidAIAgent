@@ -86,6 +86,7 @@ This file maps the contents of the main application package.
   - `mappers/` - Data mapping layer.
     - `LocalModelMapper.kt` - Mapper for local models.
     - `ModelPerformanceMapper.kt` - Entity ↔ domain mappers for `ModelPerformanceSample`.
+    - `HuggingFaceModelMapper.kt` - Pure DTO → domain projection for model discovery: parses licence (card-data, falling back to the `license:` tag) and the polymorphic `gated` field, filters to `.litertlm` siblings, builds each file's `resolve` URL and stamps installed flags.
     - `ChatMessageMapper.kt` - Mapper for chat messages.
     - `ChatSessionMapper.kt` - Mapper for chat sessions.
   - `mcp/` - Model Context Protocol (MCP) clients.
@@ -93,6 +94,11 @@ This file maps the contents of the main application package.
     - `McpClient.kt` - Generic MCP client interface/impl.
   - `network/` - Network handling.
     - `AndroidModelDownloadManager.kt` - Download manager for models.
+    - `huggingface/` - Read-only Hugging Face Hub client for model discovery.
+      - `HuggingFaceModelApi.kt` - Raw-OkHttp + `kotlinx.serialization` client: `GET /api/models?author=litert-community&full=true` (list/search) and `GET /api/models/{repoId}?blobs=true` (detail with file sizes). Host injected via `@HuggingFaceBaseUrl`; no token sent (browsing is public); non-2xx → `HuggingFaceApiException`.
+      - `HuggingFaceDto.kt` - `@Serializable` wire DTOs (`HfModelDto`/`HfSiblingDto`/`HfCardDataDto`) shared by the list and detail endpoints; `gated` decoded as an opaque `JsonElement`.
+      - `HuggingFaceApiException.kt` - `IOException` subtype carrying the Hub HTTP status code.
+      - `HuggingFaceBaseUrl.kt` - `@Qualifier` for the injected Hub base URL (production = public Hub; tests = mock server).
   - `repositories/` - Repository implementations.
     - `BestEffortStore.kt` - Shared `absorbingStoreFailure` helper implementing the best-effort persistence contract (absorb storage failures, re-throw `CancellationException` first) reused by the run-record and run-trace repositories.
     - `ChatRepositoryImpl.kt` - Chat repository implementation.
@@ -110,6 +116,7 @@ This file maps the contents of the main application package.
     - `MemoryRepositoryImpl.kt` - Memory repository implementation.
     - `MetricsRepositoryImpl.kt` - Metrics repository implementation.
     - `ModelPerformanceRepositoryImpl.kt` - Room-backed `ModelPerformanceRepository`. `record` inserts a sample on `Dispatchers.IO` **best-effort** (swallows storage errors, re-throws cancellation — a metrics write must never break a run); `observeRecentForModel` maps entities → domain, newest-first.
+    - `ModelDiscoveryRepositoryImpl.kt` - `ModelDiscoveryRepository` over `HuggingFaceModelApi`: maps DTOs via `HuggingFaceModelMapper`, drops repos with no `.litertlm`, enriches the detail with `LocalModelRepository.isInstalled` flags, and converts success/failure to `Result` (re-throws `CancellationException` first; never `runCatching`).
     - `NetworkActivityTrackerImpl.kt` - Records `System.currentTimeMillis()` on every outbound cloud-LLM and MCP call. Drives the More tab footer privacy pill via `NetworkActivityTracker.lastOutboundAt`.
     - `NetworkStateRepositoryImpl.kt` - Network state repository implementation.
     - `PendingInteractionRepositoryImpl.kt` - Room-backed `PendingInteractionRepository`. Maps enums to `name` strings and answer options to a JSON array; `save` reports success explicitly (a park must not happen without a durable record), everything else is best-effort.
@@ -167,6 +174,7 @@ This file maps the contents of the main application package.
   - `ApplicationScope.kt` - `@Qualifier` for the application-lifetime `CoroutineScope` provided by `CoroutinesModule`.
   - `DataModule.kt` - Data layer DI module.
   - `EmbeddingModule.kt` - Hilt multibinding for the `EmbeddingProvider` map (`use` / `openai_3_small` / `ollama`) and the `KoogEmbedderFactory` binding.
+  - `HuggingFaceModule.kt` - Provides the `@HuggingFaceBaseUrl` Hub host (public Hub in production; mock-server URL in tests) consumed by `HuggingFaceModelApi`.
   - `LocalToolsModule.kt` - Hilt multibinding for `LocalToolExecutor` map and bindings for `CloudLlmClientFactory` / `CloudLlmModelResolver`.
   - `PromptTemplateModule.kt` - Hilt multibinding module for prompt variable providers.
 - `domain/` - Domain layer containing core business logic and Use Cases.
@@ -174,6 +182,7 @@ This file maps the contents of the main application package.
     - `DefaultPrompts.kt` - Default system prompts.
     - `PromptPresetConstants.kt` - Cross-module limits + `LLM_DRIVEN_NODE_TYPES` set shared by the prompt-preset domain: `MAX_NAME_LENGTH = 60`, `MAX_SYSTEM_PROMPT_LENGTH = 8000`, and the set of node types that can host a system-prompt preset.
     - `NotificationChannels.kt` - Canonical ids of every Android `NotificationChannel` (foreground service status, approval prompts, long-running pings, scheduled-task results).
+    - `ModelDiscoveryConstants.kt` - Cross-layer constants for Hugging Face model discovery: Hub base URL, curated `litert-community` author, `.litertlm` extension, default page size, and the `resolve`/model-card URL builders.
     - `OnboardingModelCatalog.kt` - Maps the catalog-side `OnboardingLiteRtModel.id` (`gemma_4_e2b` / `gemma_4_e4b`) to the on-disk filename + HuggingFace URL consumed by `OnboardingViewModel.startDownload` and `LocalModelRepository.isInstalled`. Also derives a filename from the user-supplied custom URL row.
     - `PerformanceConstants.kt` - Tunables for the model performance feature: `SAMPLE_WINDOW` (runs averaged into the Performance card) and `MEMORY_SAMPLE_INTERVAL_MS` (peak-native-heap sampling cadence). Code-level (no Settings UI).
     - `PipelineExecutionDefaults.kt` - Engine-level timing and log-size constants consumed by `GraphExecutionEngine` and the LLM-backed node executors (post-emit pause, LiteRT pre-warm delay, node-IO log char limit).
@@ -248,6 +257,7 @@ This file maps the contents of the main application package.
     - `AgentTool.kt` - Agent tool model.
     - `AppError.kt` - App error model.
     - `ChatHistorySummary.kt` - Domain model of a session's cached compressed-history summary (`sessionId`, `summary`, incremental `coveredMessageCount` cursor, `updatedAt`).
+    - `DiscoverableModel.kt` - Domain models for Hugging Face discovery: `DiscoverableModelSummary` (list card — repoId/name/downloads/likes/licence/gated/file-count), `DiscoverableModelDetail` (+ model-card URL and the per-file breakdown) and `DiscoverableModelFile` (`.litertlm` file: name/size/resolve URL/installed).
     - `ChatMessage.kt` - Chat message model.
     - `ChatSession.kt` - Chat session model.
     - `ClarificationRequest.kt` - Domain model describing a clarification question issued by the agent (id, question, options, timeoutMs).
@@ -324,6 +334,7 @@ This file maps the contents of the main application package.
     - `CrashReportingRepository.kt` - Domain gateway for anonymous crash reporting (opt-in). All methods are no-op until `SettingsRepository.crashReportingEnabled` becomes `true`.
     - `IdentityRepository.kt` - Read-only gateway exposing the device-local identity snapshot. Data-layer impl: `IdentityRepositoryImpl`.
     - `LocalModelRepository.kt` - Local model repository interface.
+    - `ModelDiscoveryRepository.kt` - Read-only Hugging Face model-discovery interface (`searchModels`, `getModelDetail`); both return `Result`. Data-layer impl: `ModelDiscoveryRepositoryImpl`.
     - `MemoryRepository.kt` - Memory repository interface.
     - `MetricsRepository.kt` - Metrics repository interface.
     - `ModelDownloadManager.kt` - Model download manager interface.
@@ -388,6 +399,9 @@ This file maps the contents of the main application package.
     - `LoadModelUseCase.kt` - Use case to load a model. Accepts `requireVision` / `requireAudio`: a modality-carrying run forces a vision-/audio-enabling re-initialization of the LiteRT engine (re-uses an engine already in the needed mode for the same model; vision and audio are independent and never forced onto a freshly loaded model that does not need them).
     - `GetModelPerformanceUseCase.kt` - Folds a model's most recent `PerformanceConstants.SAMPLE_WINDOW` samples into a `ModelPerformanceSummary` (mean TTFT/decode, worst-case peak) on the fly, or `null` when there are no runs yet. Backs the Performance card's rolling averages.
     - `RunBenchmarkUseCase.kt` - Controlled one-shot model benchmark: refuses while the engine is busy (`TaskQueueManager.globalState` → `EngineBusy`), loads the active model, runs `DefaultPrompts.BENCHMARK_PROMPT` as a warm-up (discarded) then a measured pass (timed + peak-sampled like a real run), persists the measured `ModelPerformanceSample` (`isBenchmark = true`) and returns a `BenchmarkReport`. Reports `BenchmarkRunPhase` (WARMING_UP → MEASURING) via a callback; foreground-only, shares the engine generation mutex, cancellable.
+    - `SearchDiscoverableModelsUseCase.kt` - Lists/searches discoverable models via `ModelDiscoveryRepository` (normalises a blank query to null, fixes the default page size); returns `Result`.
+    - `GetDiscoverableModelDetailUseCase.kt` - Fetches a single discoverable model's detail via `ModelDiscoveryRepository`; returns `Result`.
+    - `InstallDiscoveredModelUseCase.kt` - Streams a chosen `.litertlm` file through `ModelDownloadManager` (with the stored Hugging Face token) and, on success, registers a `LocalModel` carrying the Hub-reported size (not auto-activated). Reuses the existing download path.
     - `TranscribeAudioUseCase.kt` - Voice-input preprocessing: transcribes a recorded/picked audio clip into text **before** any pipeline (audio never travels the graph). Refuses while a run is active (`TaskQueueManager.globalState` busy gate → `EngineBusy`), checks the active model's `supportsAudio` (`NoActiveModel` / `ModelNotAudioCapable`), loads it with `requireAudio`, collects `LlmInferenceEngine.transcribe`, and deletes the ephemeral clip via `AudioCaptureStore` on success and terminal failure (kept only on `EngineBusy` for retry). Returns a `TranscriptionOutcome` sealed result.
     - `ResolveEntryInferenceUseCase.kt` - Classifies the inference entry of the pipeline a chat session would run (`EntryInferenceKind` = `LOCAL` / `CLOUD` / `NONE`) by resolving the bound-or-default graph: `CLOUD` when the `INPUT` successor is a cloud node, `LOCAL` when a vision sink (`LITE_RT` node with `originalTask`) is reachable from `INPUT`, else `NONE`. Mirrors the engine's delivery predicate so the multimodal send-time pre-flight blocks cloud-first / non-vision-model / no-sink pipelines instead of silently dropping the image.
     - `LoadPipelineFromPresetUseCase.kt` - Materialises a `PipelinePreset` into a concrete `PipelineGraph` with fresh ids (pipeline + nodes + connections), drops orphan connections, validates, persists via `PipelineRepository.savePipeline`, returns the new pipeline id.
@@ -482,6 +496,14 @@ This file maps the contents of the main application package.
       - `ModelsViewModel.kt` - Models ViewModel. Adds `cancelDownload` (cancels the active download job) and `deleteModel`. Observes the active model's `GetModelPerformanceUseCase` summary (re-subscribes on active-model change) and the engine-busy signal; drives the benchmark (`onRunBenchmark`/`onCancelBenchmark`/`onShareBenchmark`/`onDismissBenchmark`) via `RunBenchmarkUseCase`, emitting one-shot share/error events.
       - `ByteSizeLabel.kt` - Shared GiB/MiB byte-label ladder (`gigabyteOrMegabyteLabel`, Locale.US, "1.8 GB" / "640 MB", with a rounding-boundary guard so it never prints "1024 MB"). Single source for the Models surface's model-size labels (`ModelsScreen`) and the Performance card's peak memory (`PerformanceFormatting`), so the two can't drift.
       - `PerformanceFormatting.kt` - App-side display formatting for the Performance card and the benchmark share text (TTFT ms→s, decode tok/s, peak memory via `ByteSizeLabel` or `null`, total seconds, "avg · last N runs" caption, plain-text share payload). Kept out of the catalog so the design layer holds no number/unit logic.
+    - `discover/` - Hugging Face model-discovery screens (list + detail).
+      - `DiscoverScreen.kt` - Slim mapper. Folds `DiscoverUiState` into the catalog `DiscoverContent` (loading/populated/empty/error), formatting the stats line and pluralised "N files" hint; wires search/refresh/retry and opens a card via `onOpenModel(repoId)`.
+      - `DiscoverUiState.kt` - List UI state: `DiscoverStatus` branch + query + model summaries + `refreshing` flag.
+      - `DiscoverViewModel.kt` - List ViewModel over `SearchDiscoverableModelsUseCase`: owns the search text and the fetch lifecycle (initial load, search, pull-to-refresh, retry), mapping `Result` success/failure to populated/empty/error.
+      - `DiscoverDetailScreen.kt` - Slim mapper for the detail surface; folds `DiscoverDetailUiState` into the catalog `DiscoverDetailContent`, overlays a `SnackbarHost` for install outcomes, reads the clipboard for the token-paste action and opens the model card in the browser.
+      - `DiscoverDetailUiState.kt` - Detail UI state: `DiscoverDetailStatus` branch + loaded `DiscoverableModelDetail` + per-file download progress + post-install `installed` overlay + pending-licence file + token field state; plus `DiscoverInstallEvent` (Success / Failed(gated)) one-shot results.
+      - `DiscoverDetailViewModel.kt` - Detail ViewModel over `GetDiscoverableModelDetailUseCase` / `InstallDiscoveredModelUseCase` / `SettingsRepository`: loads the detail, gates each install behind a licence confirmation, tracks per-file install jobs/progress, detects a 401/403 gated refusal, and reads/writes the shared Hugging Face token.
+      - `DiscoverFormatting.kt` - Shared `formatHfCount` (thousands/millions abbreviation) used by both Discover screens so download/like figures format identically.
     - `monitoring/` - Monitoring screen components.
       - `MonitoringScreen.kt` - Slim mapper. Folds `MonitoringUiState` into the catalog `MonitoringViewState` and renders `MonitoringContent`.
       - `MonitoringUiState.kt` - Monitoring UI state.

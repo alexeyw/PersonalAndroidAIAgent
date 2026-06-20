@@ -615,6 +615,41 @@ Peak memory is **process-wide and approximate** (it excludes the model's mmap'd
 pages and reads low under ZRAM); this caveat is carried verbatim into the UI and
 the shared text so the figure is never presented as the model's exact footprint.
 
+### 3.9. Model discovery (Hugging Face)
+
+Discovering models is a **read-only data flow** that lets the user browse the
+curated `litert-community` organisation on the Hugging Face Hub and hand a chosen
+file to the existing download path — no new download mechanism.
+
+1. **Fetch.** `HuggingFaceModelApi` (data layer) issues the Hub calls on raw
+   OkHttp (the project has no Retrofit; the model downloader uses raw OkHttp too)
+   and decodes with `kotlinx.serialization`: `GET /api/models?author=litert-community&full=true`
+   for the list/search and `GET /api/models/{repoId}?blobs=true` for the per-file
+   detail (the `blobs` flag is what carries file sizes). The Hub host is injected
+   (`@HuggingFaceBaseUrl`) so tests point the client at a mock server. No token is
+   sent — the listing and metadata are public even for gated repos; only the file
+   *download* needs one.
+2. **Map.** The pure `HuggingFaceModelMapper` projects the DTOs onto the domain
+   `DiscoverableModelSummary` / `DiscoverableModelDetail`: it parses the licence
+   (model-card front-matter, falling back to the `license:` tag), interprets the
+   polymorphic `gated` field (`false` vs `"auto"`/`"manual"`), filters to
+   engine-compatible `.litertlm` siblings and builds each file's `resolve` URL.
+3. **Enrich + wrap.** `ModelDiscoveryRepositoryImpl` stamps each detail file's
+   "already installed" flag from `LocalModelRepository.isInstalled`, drops repos
+   with no `.litertlm` file, and converts success/failure into a `Result` (the
+   suspend network calls re-throw `CancellationException` from a dedicated first
+   catch before mapping other failures — never `runCatching`). `SearchDiscoverableModelsUseCase`
+   / `GetDiscoverableModelDetailUseCase` expose it to the `DiscoverViewModel` /
+   `DiscoverDetailViewModel`, which only call the Hub in response to a user action
+   (open, search, refresh, open-card).
+4. **Install.** `InstallDiscoveredModelUseCase` is the bridge back to the existing
+   path: it streams the chosen file through `ModelDownloadManager.downloadModel`
+   (with the stored Hugging Face token) and, on `DownloadState.Success`, registers
+   a `LocalModel` carrying the **Hub-reported size**. The detail screen gates each
+   install behind a licence-confirmation dialog; a 401/403 download refusal is
+   surfaced as an access-gated hint. The discovery feature therefore adds a
+   *catalogue* surface on top of the unchanged download/registration machinery.
+
 ---
 
 ## 4. Integrations

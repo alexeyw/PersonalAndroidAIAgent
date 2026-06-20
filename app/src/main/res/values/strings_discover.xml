@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Model discovery (Hugging Face litert-community). User-facing copy that
+         the catalog screens consume via the app's string bundle. -->
+    <string name="discover_error_network">Couldn\'t reach Hugging Face. Check your connection and try again.</string>
+    <string name="discover_detail_load_error">Couldn\'t load this model\'s details.</string>
+    <string name="discover_install_success">Installed %1$s</string>
+    <string name="discover_install_gated">This model is access-gated. Accept its licence on Hugging Face and add a token, then try again.</string>
+    <string name="discover_install_failed">Download failed. Check your connection and try again.</string>
+
+    <plurals name="discover_file_count">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
+</resources>

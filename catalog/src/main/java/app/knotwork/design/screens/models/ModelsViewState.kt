@@ -122,6 +122,7 @@ data class ModelsViewState(
 @Suppress("LongParameterList") // Documented public API.
 class ModelsCallbacks(
     val onBack: () -> Unit = {},
+    val onDiscover: () -> Unit = {},
     val onAuthTokenChange: (String) -> Unit = {},
     val onAuthTokenPaste: () -> Unit = {},
     val onCustomUrlChange: (String) -> Unit = {},

@@ -860,4 +860,29 @@
     <string name="knotwork_files_collision_replace_sub">Overwrite the existing file</string>
     <string name="knotwork_files_collision_cancel">Cancel</string>
 
+    <!-- Discover models (Hugging Face litert-community) -->
+    <string name="knotwork_discover_title">Discover models</string>
+    <string name="knotwork_discover_back_cd">Back</string>
+    <string name="knotwork_discover_search_placeholder">Search litert-community models</string>
+    <string name="knotwork_discover_gated_badge">Gated</string>
+    <string name="knotwork_discover_empty_title">No models found</string>
+    <string name="knotwork_discover_empty_subtitle">Try a different search, or pull to refresh.</string>
+    <string name="knotwork_discover_error_title">Couldn\'t load models</string>
+    <string name="knotwork_discover_error_retry">Retry</string>
+    <string name="knotwork_discover_detail_title_fallback">Model</string>
+    <string name="knotwork_discover_detail_files_header">FILES</string>
+    <string name="knotwork_discover_detail_license">License: %1$s</string>
+    <string name="knotwork_discover_install">Install</string>
+    <string name="knotwork_discover_installed">Installed</string>
+    <string name="knotwork_discover_cancel_cd">Cancel download</string>
+    <string name="knotwork_discover_view_on_hf">View on Hugging Face</string>
+    <string name="knotwork_discover_gated_notice">This model is access-gated. Accept its licence on Hugging Face, then paste a personal access token below.</string>
+    <string name="knotwork_discover_token_placeholder">Hugging Face token</string>
+    <string name="knotwork_discover_token_paste">Paste</string>
+    <string name="knotwork_discover_license_title">Review the licence</string>
+    <string name="knotwork_discover_license_body">This model is distributed under the %1$s licence. Installing it means you accept its terms.</string>
+    <string name="knotwork_discover_license_body_unknown">This model\'s licence is not declared on Hugging Face. Review it on the model card before installing.</string>
+    <string name="knotwork_discover_license_accept">Accept &amp; install</string>
+    <string name="knotwork_discover_license_cancel">Cancel</string>
+
 </resources>

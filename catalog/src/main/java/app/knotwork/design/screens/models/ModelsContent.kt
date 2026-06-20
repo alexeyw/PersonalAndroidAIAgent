@@ -138,9 +138,17 @@ private fun ModelsTopBar(state: ModelsViewState, strings: ModelsStrings, callbac
                 )
             }
         },
-        // No top-bar overflow: the model-management actions it would host are
-        // not part of v0.x, so the affordance is omitted rather than shown as a
-        // dead button.
+        // Single top-bar action: open the Hugging Face model-discovery
+        // surface. Other model-management actions are not part of v0.x.
+        actions = {
+            IconButton(onClick = callbacks.onDiscover) {
+                Icon(
+                    imageVector = AppIcons.Hub,
+                    contentDescription = strings.discoverCd,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
@@ -752,6 +760,7 @@ data class ModelsStrings(
     val emptyCta: String = "Add model",
     val errorTitle: String = "Couldn't load models",
     val errorRetry: String = "Retry",
+    val discoverCd: String = "Discover models",
     val visionLabel: String = "Image support",
     val visionDescription: String = "Let this model read attached photos",
     val audioLabel: String = "Audio support",
