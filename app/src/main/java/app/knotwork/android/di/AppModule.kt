@@ -24,11 +24,13 @@ import app.knotwork.android.data.local.dao.PromptPresetDao
 import app.knotwork.android.data.local.dao.PromptTemplateDao
 import app.knotwork.android.data.local.dao.SkillDao
 import app.knotwork.android.data.local.dao.TraceStepDao
+import app.knotwork.android.data.services.WorkManagerTaskScheduler
 import app.knotwork.android.data.tools.local.AppFunctionDataCodec
 import app.knotwork.android.data.tools.local.LocalAppFunctionManager
 import app.knotwork.android.domain.services.ApprovalNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.services.ScheduledTaskNotifier
+import app.knotwork.android.domain.services.TaskScheduler
 import app.knotwork.android.presentation.notifications.ApprovalNotificationManager
 import app.knotwork.android.presentation.notifications.ClarificationNotificationManager
 import app.knotwork.android.presentation.notifications.ScheduledTaskNotifierImpl
@@ -293,6 +295,15 @@ object AppModule {
     @Provides
     @Singleton
     fun provideWorkManager(@ApplicationContext appContext: Context): WorkManager = WorkManager.getInstance(appContext)
+
+    /**
+     * Binds the `WorkManager`-backed [WorkManagerTaskScheduler] to the
+     * domain-level [TaskScheduler] port consumed by `ScheduleTaskUseCase`,
+     * keeping the use case free of any `androidx.work` dependency.
+     */
+    @Provides
+    @Singleton
+    fun provideTaskScheduler(impl: WorkManagerTaskScheduler): TaskScheduler = impl
 
     /**
      * Provides the Firebase Crashlytics singleton.
