@@ -10,12 +10,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -217,11 +214,7 @@ private fun ModelsBody(
             start = KnotworkTheme.spacing.sp4,
             end = KnotworkTheme.spacing.sp4,
             top = KnotworkTheme.spacing.sp2,
-            // Add the system navigation-bar inset so the last card clears the
-            // gesture/button area (the host shell does not pad the bottom for
-            // secondary screens).
-            bottom = KnotworkTheme.spacing.sp4 +
-                WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding(),
+            bottom = KnotworkTheme.spacing.sp4,
         ),
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
     ) {

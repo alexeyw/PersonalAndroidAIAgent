@@ -234,10 +234,12 @@ details.
 
 ### Fixed
 
-- **Bottom spacing under the system navigation bar.** The Models screen and the
-  Pipeline library now add the system navigation-bar inset to their list's
-  bottom padding, so the last card / row (and the pipeline FAB) clears the
-  gesture/button area instead of sitting flush against it.
+- **Content slipping under the bottom navigation bar.** The Discover list,
+  Discover detail and Pipeline library screens now zero their own
+  `Scaffold` content insets (matching every other screen), so their bodies are
+  positioned by the host shell's inner padding instead of double-handling the
+  system bars — the last row / install button no longer scrolls under the
+  in-app bottom-nav strip.
 
 ### Changed
 
