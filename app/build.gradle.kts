@@ -789,6 +789,11 @@ dependencies {
     // notification builder, and Doze (`ShadowPowerManager`) paths under
     // `data.services`. The version is pinned in `gradle/libs.versions.toml`.
     testImplementation(libs.robolectric)
+    // Konsist (Apache-2.0) backs the architecture guard suite under
+    // `app/src/test/.../architecture/`: JVM JUnit tests that fail `check`
+    // when Clean Architecture layer boundaries regress (e.g. a `domain`
+    // class importing `data`/`presentation` or the Android SDK).
+    testImplementation(libs.konsist)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))

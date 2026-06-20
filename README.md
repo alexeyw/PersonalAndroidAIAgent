@@ -295,6 +295,7 @@ After installing:
 | Image loading    | Coil 3 (attachment thumbnails / viewer)                 |
 | Local storage    | Room + DataStore                                        |
 | Testing          | JUnit + MockK                                           |
+| Architecture tests | Konsist (Clean-Architecture layer guard, in `check`)  |
 
 ## Documentation
 
