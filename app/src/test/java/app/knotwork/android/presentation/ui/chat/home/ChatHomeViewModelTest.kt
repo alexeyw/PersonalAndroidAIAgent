@@ -947,7 +947,7 @@ class ChatHomeViewModelTest {
         // Await the one-shot event on the foreground test scope. Subscribe
         // before the switch — the event flow has no replay, so a late
         // subscriber would miss it.
-        val fallbackEvent = async { viewModel.pipelineFallbackEvents.first() }
+        val fallbackEvent = async { viewModel.pipelineBinding.pipelineFallbackEvents.first() }
         testScheduler.runCurrent()
 
         viewModel.selectThread(target)
@@ -962,9 +962,9 @@ class ChatHomeViewModelTest {
     fun `openDrawer + closeDrawer with no messages settles back on Empty`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        viewModel.openDrawer()
+        viewModel.threads.openDrawer()
         assertEquals(ChatHomeUiState.DrawerOpen, viewModel.state.value.visual)
-        viewModel.closeDrawer()
+        viewModel.threads.closeDrawer()
         assertEquals(ChatHomeUiState.Empty, viewModel.state.value.visual)
     }
 
@@ -1301,7 +1301,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.createNewSessionWithPipeline(pipelineId = "pipe-42")
+        viewModel.threads.createNewSessionWithPipeline(pipelineId = "pipe-42")
         advanceUntilIdle()
 
         coVerify { chatRepository.saveSession(match { it.pipelineId == "pipe-42" }) }
@@ -1314,7 +1314,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.renameSession("thread-x", "   New name   ")
+        viewModel.threads.renameSession("thread-x", "   New name   ")
         advanceUntilIdle()
 
         coVerify { chatRepository.renameSession("thread-x", "New name") }
@@ -1325,7 +1325,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.renameSession("thread-x", "    ")
+        viewModel.threads.renameSession("thread-x", "    ")
         advanceUntilIdle()
 
         coVerify(exactly = 0) { chatRepository.renameSession(any(), any()) }
@@ -1341,7 +1341,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.toggleFavoriteCurrent()
+        viewModel.threads.toggleFavoriteCurrent()
         advanceUntilIdle()
 
         coVerify { chatRepository.setSessionFavorite(sessionId, true) }
@@ -1406,7 +1406,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.deleteCurrentSession()
+        viewModel.threads.deleteCurrentSession()
         advanceUntilIdle()
 
         coVerify { chatRepository.deleteSession(sessionId) }
@@ -1426,7 +1426,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.deleteCurrentSession()
+        viewModel.threads.deleteCurrentSession()
         advanceUntilIdle()
 
         coVerify { chatRepository.deleteSession(sessionId) }
@@ -1882,9 +1882,9 @@ class ChatHomeViewModelTest {
         advanceUntilIdle()
         assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
 
-        viewModel.openDrawer()
+        viewModel.threads.openDrawer()
         assertEquals(ChatHomeUiState.DrawerOpen, viewModel.state.value.visual)
-        viewModel.closeDrawer()
+        viewModel.threads.closeDrawer()
 
         // The resting visual must resolve back to Interrupted while the
         // snapshot is pending — otherwise Resume / Discard become
@@ -1903,7 +1903,7 @@ class ChatHomeViewModelTest {
 
             viewModel = createViewModel()
             // Drawer goes up before the reattach lookup lands.
-            viewModel.openDrawer()
+            viewModel.threads.openDrawer()
             advanceUntilIdle()
 
             // The overlay is never yanked away…
@@ -1911,7 +1911,7 @@ class ChatHomeViewModelTest {
             // …but the pending snapshot is installed, so closing the drawer
             // settles straight onto the interrupted card.
             assertNotNull(viewModel.state.value.pending.interrupted)
-            viewModel.closeDrawer()
+            viewModel.threads.closeDrawer()
             assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
         }
 

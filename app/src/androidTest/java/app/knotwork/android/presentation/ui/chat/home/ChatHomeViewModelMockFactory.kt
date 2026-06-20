@@ -136,7 +136,12 @@ internal fun mockChatHomeViewModel(
 
     val vm = mockk<ChatHomeViewModel>(relaxed = true)
     every { vm.state } returns stateFlow
-    every { vm.pipelineFallbackEvents } returns MutableSharedFlow()
+    val pipelineBindingDelegate = mockk<ChatHomePipelineBindingDelegate>(relaxed = true)
+    every { pipelineBindingDelegate.pipelineFallbackEvents } returns MutableSharedFlow()
+    every { pipelineBindingDelegate.currentPipelineId() } returns null
+    every { vm.pipelineBinding } returns pipelineBindingDelegate
+    val threadsDelegate = mockk<ChatHomeThreadsDelegate>(relaxed = true)
+    every { vm.threads } returns threadsDelegate
     // Delegates (variant B); the screen calls `vm.<delegate>.*`. Stub delegate
     // mocks whose collected SharedFlows never complete (see the note below).
     val consoleDelegate = mockk<ChatHomeConsoleDelegate>(relaxed = true)
@@ -154,11 +159,6 @@ internal fun mockChatHomeViewModel(
     every { transferDelegate.memorySaveEvents } returns MutableSharedFlow()
     every { vm.transfer } returns transferDelegate
     every { vm.resumeFeedbackEvents } returns MutableSharedFlow()
-    // These one-shot event SharedFlows are collected in dedicated LaunchedEffects
-    // (ChatHomeScreen). `SharedFlow.collect` is typed `Nothing`; a relaxed-mock
-    // default returns a *completing* flow, so the collect returns and trips
-    // `KotlinNothingValueException`. Stub them with a never-completing flow.
-    every { vm.currentPipelineId() } returns null
 
     return vm to ChatHomeMockHandles(state = stateFlow)
 }

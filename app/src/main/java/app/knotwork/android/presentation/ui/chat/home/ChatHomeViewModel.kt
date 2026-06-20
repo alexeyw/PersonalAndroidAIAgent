@@ -47,7 +47,6 @@ import app.knotwork.design.components.chat.ChatMetadata
 import app.knotwork.design.components.chat.ChatRole
 import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
-import app.knotwork.design.screens.chat.ChatHomeThreadRow
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -157,18 +156,8 @@ class ChatHomeViewModel @Inject constructor(
      */
     val state: StateFlow<ChatHomeScreenState> = _state.asStateFlow()
 
-    private val _pipelineFallbackEvents: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 1)
     private val _resumeFeedbackEvents: MutableSharedFlow<ResumeFeedbackEvent> =
         MutableSharedFlow(extraBufferCapacity = 1)
-
-    /**
-     * One-shot signal raised when the binding of the active chat points
-     * at a pipeline that no longer exists in the library (deleted, or
-     * stale at thread-switch time) and the chat is rebound to the default
-     * pipeline. The screen surfaces a `KnotworkSnackbar` so the user is
-     * told their selection moved — the rebind is never silent.
-     */
-    val pipelineFallbackEvents: SharedFlow<Unit> = _pipelineFallbackEvents.asSharedFlow()
 
     /**
      * One-shot signal raised when a Resume tap on the interrupted-run card
@@ -190,19 +179,9 @@ class ChatHomeViewModel @Inject constructor(
      */
     private var attachmentSendInFlight: Boolean = false
     private var tokenCounterJob: Job? = null
-    private var sessions: List<ChatSession> = emptyList()
-    private var availablePipelinesObserved: Boolean = false
-    private var defaultPipelineId: String? = null
 
     /** Serializes reattach lookups so a rapid thread switch cannot interleave run branches. */
     private var reattachJob: Job? = null
-
-    /**
-     * Session ids that currently own a pipeline run in a non-terminal status.
-     * Fed by [observeActiveRuns] and projected into the drawer thread rows as
-     * the in-progress badge ([buildThreadRows]).
-     */
-    private var activeRunSessionIds: Set<String> = emptySet()
 
     /**
      * Dispatcher carrying the CPU-bound projection of a replayed trace
@@ -222,7 +201,7 @@ class ChatHomeViewModel @Inject constructor(
      * delegate shares [viewModelScope] and the single [_state] reducer and owns
      * the `console` slice. See `docs/architecture.md` §1.2.
      */
-    val console = ChatHomeConsoleDelegate(
+    val console: ChatHomeConsoleDelegate = ChatHomeConsoleDelegate(
         scope = viewModelScope,
         state = _state,
         settingsRepository = settingsRepository,
@@ -236,7 +215,7 @@ class ChatHomeViewModel @Inject constructor(
      * the `composer.voice` / `voiceNotice` / `audioChooser` state and the
      * `voiceErrorEvents` one-shot. The screen calls `viewModel.voice.*`.
      */
-    val voice = ChatHomeVoiceDelegate(
+    val voice: ChatHomeVoiceDelegate = ChatHomeVoiceDelegate(
         scope = viewModelScope,
         state = _state,
         settingsRepository = settingsRepository,
@@ -251,12 +230,12 @@ class ChatHomeViewModel @Inject constructor(
      * `sourceChooserVisible` and `imageViewer` state and `attachmentErrorEvents`.
      * The send path consults [ChatHomeAttachmentDelegate.preflightBlockReason].
      */
-    val attachments = ChatHomeAttachmentDelegate(
+    val attachments: ChatHomeAttachmentDelegate = ChatHomeAttachmentDelegate(
         scope = viewModelScope,
         state = _state,
         attachmentStore = attachmentStore,
         resolveEntryInferenceUseCase = resolveEntryInferenceUseCase,
-        sessions = { sessions },
+        sessions = { threads.sessionsSnapshot() },
     )
 
     /**
@@ -264,7 +243,7 @@ class ChatHomeViewModel @Inject constructor(
      * `importErrorEvents` and `memorySaveEvents` one-shots and exposes
      * [ChatHomeTransferDelegate.textForRow] for the long-press context menu.
      */
-    val transfer = ChatHomeTransferDelegate(
+    val transfer: ChatHomeTransferDelegate = ChatHomeTransferDelegate(
         scope = viewModelScope,
         state = _state,
         chatRepository = chatRepository,
@@ -272,14 +251,42 @@ class ChatHomeViewModel @Inject constructor(
         selectThread = ::selectThread,
     )
 
+    /**
+     * Pipeline-binding delegate (library cache, TopAppBar subtitle, deleted-
+     * pipeline fallback). Owns `availablePipelines` / `pipelineName` and the
+     * `pipelineFallbackEvents` one-shot; reads the session cache via a provider.
+     */
+    val pipelineBinding: ChatHomePipelineBindingDelegate = ChatHomePipelineBindingDelegate(
+        scope = viewModelScope,
+        state = _state,
+        settingsRepository = settingsRepository,
+        pipelineRepository = pipelineRepository,
+        chatRepository = chatRepository,
+        sessions = { threads.sessionsSnapshot() },
+    )
+
+    /**
+     * Threads / sessions delegate (session cache, drawer rows + overlay,
+     * session CRUD, metadata refresh). Owns the `thread` slice. The thread
+     * switch itself stays in the ViewModel ([selectThread]) — it orchestrates
+     * run-lifecycle concerns — and CRUD routes back through it.
+     */
+    val threads: ChatHomeThreadsDelegate = ChatHomeThreadsDelegate(
+        scope = viewModelScope,
+        state = _state,
+        chatRepository = chatRepository,
+        pipelineRunRepository = pipelineRunRepository,
+        selectThread = ::selectThread,
+        pipelineNameRefresher = pipelineBinding::pipelineNameRefreshed,
+        onSessionsChanged = pipelineBinding::handleDeletedBoundPipeline,
+    )
+
     init {
-        observeAvailablePipelines()
-        observeDefaultPipelineId()
-        observeSessions()
+        pipelineBinding.startObservers()
+        threads.startObservers()
         observeMaxContextSize()
         console.startObservers()
         observeInstalledModels()
-        observeActiveRuns()
         initializeSession()
     }
 
@@ -379,7 +386,7 @@ class ChatHomeViewModel @Inject constructor(
 
         val sessionId = _state.value.thread.currentSessionId
         if (sessionId.isBlank()) return
-        val pipelineId = sessions.firstOrNull { it.id == sessionId }?.pipelineId
+        val pipelineId = threads.sessionsSnapshot().firstOrNull { it.id == sessionId }?.pipelineId
 
         // Fresh run = fresh cumulative log upstream; the baseline carried
         // over from a previous run's mid-stream Clear no longer applies
@@ -402,7 +409,7 @@ class ChatHomeViewModel @Inject constructor(
         // Rename from the user's own text, not the effective prompt: an
         // image-only message (empty draft) must not title the chat with the
         // internal default instruction.
-        autoRenameIfDefault(sessionId, draftText)
+        threads.autoRenameIfDefault(sessionId, draftText)
 
         generationJob?.cancel()
         generationJob = viewModelScope.launch {
@@ -481,22 +488,6 @@ class ChatHomeViewModel @Inject constructor(
         }
     }
 
-    /** Opens the drawer overlay. */
-    fun openDrawer() {
-        _state.update { it.copy(visual = ChatHomeUiState.DrawerOpen) }
-    }
-
-    /** Closes the drawer overlay, settling on the right state for the current message list. */
-    fun closeDrawer() {
-        _state.update { current ->
-            if (current.visual is ChatHomeUiState.DrawerOpen) {
-                current.copy(visual = current.restingVisual())
-            } else {
-                current
-            }
-        }
-    }
-
     /**
      * Switches the active chat session. Persists the selection, cancels
      * any in-flight generation, and re-subscribes the message stream to
@@ -515,13 +506,15 @@ class ChatHomeViewModel @Inject constructor(
         resetConsoleCachesForNewRun()
         _state.update { current ->
             val cleared = current.withPendingCleared().withConsoleProjectionsCleared()
-            cleared.copy(
-                console = cleared.console.copy(snap = null),
-                messages = emptyList(),
-                tokens = cleared.tokens.copy(used = 0),
-                visual = ChatHomeUiState.Empty,
-                thread = cleared.thread.copy(currentSessionId = threadId),
-            ).withSessionMetadataRefreshed()
+            threads.sessionMetadataRefreshed(
+                cleared.copy(
+                    console = cleared.console.copy(snap = null),
+                    messages = emptyList(),
+                    tokens = cleared.tokens.copy(used = 0),
+                    visual = ChatHomeUiState.Empty,
+                    thread = cleared.thread.copy(currentSessionId = threadId),
+                ),
+            )
         }
         observeMessages(threadId)
         reattachToRun(threadId)
@@ -532,7 +525,7 @@ class ChatHomeViewModel @Inject constructor(
             // emission would otherwise reach the task queue silently.
             // Re-running the deleted-binding check here rebinds the chat
             // to the default and surfaces the one-shot Snackbar instead.
-            handleDeletedBoundPipeline(_state.value.availablePipelines)
+            pipelineBinding.handleDeletedBoundPipeline()
         }
     }
 
@@ -570,30 +563,10 @@ class ChatHomeViewModel @Inject constructor(
                 savedSessionId
             }
             _state.update {
-                it.copy(thread = it.thread.copy(currentSessionId = sessionId)).withSessionMetadataRefreshed()
+                threads.sessionMetadataRefreshed(it.copy(thread = it.thread.copy(currentSessionId = sessionId)))
             }
             observeMessages(sessionId)
             reattachToRun(sessionId)
-        }
-    }
-
-    /**
-     * Continuously observes the pipeline library. Used for three things:
-     *  1. Caching the available pipelines so [sendMessage] can resolve
-     *     the bound pipeline name.
-     *  2. Recomputing the TopAppBar subtitle ([ChatHomeScreenState.pipelineName]).
-     *  3. Detecting deletion of the pipeline bound to the active chat
-     *     and rebinding it to the default pipeline, surfacing a one-shot
-     *     Snackbar via [pipelineFallbackEvents].
-     */
-    private fun observeAvailablePipelines() {
-        viewModelScope.launch {
-            pipelineRepository.getAllPipelines().collect { graphs ->
-                val summaries = graphs.map { PipelineSummary(id = it.id, name = it.name) }
-                _state.update { it.copy(availablePipelines = summaries).withPipelineNameRefreshed() }
-                availablePipelinesObserved = true
-                handleDeletedBoundPipeline(summaries)
-            }
         }
     }
 
@@ -617,56 +590,6 @@ class ChatHomeViewModel @Inject constructor(
                     )
                 }
             }
-        }
-    }
-
-    /** Observes the user-set default pipeline id and refreshes the subtitle when it changes. */
-    private fun observeDefaultPipelineId() {
-        viewModelScope.launch {
-            settingsRepository.defaultPipelineId.collect { id ->
-                defaultPipelineId = id
-                _state.update { it.withPipelineNameRefreshed() }
-            }
-        }
-    }
-
-    /** Observes the session list. Keeps a cache for pipeline-id lookups and refreshes the title + subtitle. */
-    private fun observeSessions() {
-        viewModelScope.launch {
-            chatRepository.getSessionsFlow().collect { current ->
-                sessions = current
-                _state.update { it.withSessionMetadataRefreshed() }
-                handleDeletedBoundPipeline(_state.value.availablePipelines)
-            }
-        }
-    }
-
-    /**
-     * Projects the live [sessions] cache into drawer thread rows. Favorited
-     * sessions sort to the top of the drawer; the rest follow the
-     * repository's `updatedAt DESC` ordering. The catalog drawer renders
-     * the `selected`/`active` chrome from the matching flags here. Pure
-     * projection — composed into a state update by
-     * [withSessionMetadataRefreshed].
-     *
-     * @param activeId id of the active session used for the
-     *   `selected`/`active` flags.
-     */
-    private fun buildThreadRows(activeId: String): List<ChatHomeThreadRow> {
-        val sorted = sessions.sortedWith(
-            compareByDescending<ChatSession> { it.isStarred }
-                .thenByDescending { it.updatedAt },
-        )
-        return sorted.map { session ->
-            ChatHomeThreadRow(
-                id = session.id,
-                title = session.name.ifBlank { ChatHomeThreadState.DEFAULT_TITLE },
-                subtitle = formatThreadSubtitle(session.updatedAt),
-                selected = session.id == activeId,
-                active = session.id == activeId,
-                starred = session.isStarred,
-                running = session.id in activeRunSessionIds,
-            )
         }
     }
 
@@ -1090,27 +1013,6 @@ class ChatHomeViewModel @Inject constructor(
     }
 
     /**
-     * Mirrors the set of sessions owning a non-terminal run into
-     * [activeRunSessionIds] and re-projects the drawer rows, so threads with
-     * a run still working in the background render the in-progress badge.
-     * The repository flow is already deduplicated, and only the rows are
-     * rebuilt — title / pipeline-name resolution is untouched because a
-     * badge flip cannot change either.
-     */
-    private fun observeActiveRuns() {
-        viewModelScope.launch {
-            pipelineRunRepository.observeActiveRunSessionIds().collect { sessionIds ->
-                activeRunSessionIds = sessionIds
-                _state.update { current ->
-                    current.copy(
-                        thread = current.thread.copy(rows = buildThreadRows(current.thread.currentSessionId)),
-                    )
-                }
-            }
-        }
-    }
-
-    /**
      * Whether this visual is a resting or cold-start state that a reattach
      * branch may safely overwrite. Active overlays (Generating, HITL,
      * Clarification, Error, Drawer) are user-facing context that the
@@ -1331,171 +1233,6 @@ class ChatHomeViewModel @Inject constructor(
         _state.value.composer.typedConfirm.trim().equals(DESTRUCTIVE_TYPED_CONFIRM_WORD, ignoreCase = true)
 
     /**
-     * Auto-renames a newly-created chat to the first user message
-     * (truncated to [AUTO_RENAME_CHAR_LIMIT] characters). Mirrors legacy
-     * `ChatViewModel` behaviour so the drawer entry reflects the user's
-     * framing.
-     */
-    private fun autoRenameIfDefault(sessionId: String, prompt: String) {
-        if (prompt.isBlank()) return
-        val session = sessions.firstOrNull { it.id == sessionId } ?: return
-        if (session.name != DEFAULT_NEW_CHAT_NAME) return
-        val truncated = if (prompt.length > AUTO_RENAME_CHAR_LIMIT) {
-            prompt.take(AUTO_RENAME_CHAR_LIMIT) + AUTO_RENAME_SUFFIX
-        } else {
-            prompt
-        }
-        viewModelScope.launch {
-            chatRepository.saveSession(session.copy(name = truncated))
-        }
-    }
-
-    /**
-     * Rebinds the active chat to the default pipeline when its binding
-     * points at a pipeline that no longer exists in the library, and
-     * raises the one-shot [pipelineFallbackEvents] Snackbar. Invoked from
-     * the pipelines / sessions observers (deletion while the chat is
-     * active) and from [selectThread] (binding already stale when the
-     * thread is opened). No-op while the pipeline flow has not produced
-     * its initial snapshot — without this guard a startup race would
-     * misread the empty initial pipeline list as "the bound pipeline no
-     * longer exists" and silently rebind every chat to the default.
-     */
-    private suspend fun handleDeletedBoundPipeline(summaries: List<PipelineSummary>) {
-        if (!availablePipelinesObserved) return
-        val session = sessions.firstOrNull { it.id == _state.value.thread.currentSessionId } ?: return
-        val boundId = session.pipelineId ?: return
-        if (summaries.any { it.id == boundId }) return
-        chatRepository.saveSession(session.copy(pipelineId = null))
-        _pipelineFallbackEvents.tryEmit(Unit)
-    }
-
-    /**
-     * Pure transformer: recomputes the pipeline subtitle for this snapshot
-     * from the [sessions] / [defaultPipelineId] caches. Composed into the
-     * caller's `_state.update` block (never its own emission) so refreshes
-     * ride the same atomic emission as the change that triggered them.
-     */
-    private fun ChatHomeScreenState.withPipelineNameRefreshed(): ChatHomeScreenState = copy(
-        pipelineName = resolvePipelineName(
-            sessions = sessions,
-            currentSessionId = thread.currentSessionId,
-            summaries = availablePipelines,
-            defaultPipelineId = defaultPipelineId,
-        ),
-    )
-
-    /**
-     * Resolves the pipeline display name for the active chat — explicit
-     * binding when set, otherwise the user-marked default. Returns `null`
-     * when neither resolves (empty library, or no default marked): the
-     * subtitle must not advertise a pipeline that execution would never
-     * pick, so there is no order-dependent "first in the library" fallback.
-     */
-    private fun resolvePipelineName(
-        sessions: List<ChatSession>,
-        currentSessionId: String,
-        summaries: List<PipelineSummary>,
-        defaultPipelineId: String?,
-    ): String? {
-        if (summaries.isEmpty()) return null
-        val session = sessions.firstOrNull { it.id == currentSessionId }
-        val boundId = session?.pipelineId
-        val boundMatch = boundId?.let { id -> summaries.firstOrNull { it.id == id } }
-        if (boundMatch != null) return boundMatch.name
-        return defaultPipelineId?.let { id -> summaries.firstOrNull { it.id == id } }?.name
-    }
-
-    /**
-     * Pure transformer: recomputes thread title + favorite, the drawer
-     * rows, and the pipeline subtitle for this snapshot from the latest
-     * session/pipeline caches. Composed into the caller's single
-     * `_state.update` block so one upstream emission (sessions flow,
-     * session init, thread switch) produces exactly one state emission —
-     * collectors never observe a frame with a fresh title but stale rows.
-     *
-     * Title/favorite are left untouched when the active session id is
-     * non-blank but missing from the cache (mid-deletion window) —
-     * mirrors the pre-consolidation behaviour.
-     */
-    private fun ChatHomeScreenState.withSessionMetadataRefreshed(): ChatHomeScreenState {
-        val currentId = thread.currentSessionId
-        val session = sessions.firstOrNull { it.id == currentId }
-        val refreshedThread = when {
-            session != null -> thread.copy(
-                title = session.name.ifBlank { ChatHomeThreadState.DEFAULT_TITLE },
-                favorite = session.isStarred,
-            )
-            currentId.isBlank() -> thread.copy(
-                title = ChatHomeThreadState.DEFAULT_TITLE,
-                favorite = false,
-            )
-            else -> thread
-        }
-        return copy(thread = refreshedThread.copy(rows = buildThreadRows(currentId)))
-            .withPipelineNameRefreshed()
-    }
-
-    /**
-     * Returns the active session's pipeline binding (or `null` when the
-     * session inherits the default). Surfaced to the screen so the
-     * new-thread picker can pre-select the same pipeline as the current
-     * chat, matching legacy `ChatViewModel.requestNewSession` ergonomics.
-     */
-    fun currentPipelineId(): String? =
-        sessions.firstOrNull { it.id == _state.value.thread.currentSessionId }?.pipelineId
-
-    /**
-     * Creates a new chat session bound to [pipelineId] and switches to it.
-     * Mirrors legacy `ChatViewModel.createNewSession` so the new-thread
-     * picker behaves identically across both surfaces.
-     *
-     * @param pipelineId Pipeline identifier to bind, or `null` to inherit
-     *   the application-wide default pipeline.
-     */
-    fun createNewSessionWithPipeline(pipelineId: String?) {
-        viewModelScope.launch {
-            val newId = UUID.randomUUID().toString()
-            chatRepository.saveSession(
-                ChatSession(
-                    id = newId,
-                    name = DEFAULT_NEW_CHAT_NAME,
-                    updatedAt = System.currentTimeMillis(),
-                    pipelineId = pipelineId,
-                ),
-            )
-            selectThread(newId)
-        }
-    }
-
-    /**
-     * Renames the chat session identified by [threadId]. Trims the input
-     * and short-circuits when the trimmed value is blank — the rename
-     * sheet's Save button is already gated on a non-blank value, but the
-     * VM mirrors the gate defensively.
-     */
-    fun renameSession(threadId: String, newName: String) {
-        val trimmed = newName.trim()
-        if (threadId.isBlank() || trimmed.isEmpty()) return
-        viewModelScope.launch {
-            chatRepository.renameSession(threadId, trimmed)
-        }
-    }
-
-    /**
-     * Flips the session-level favorite flag on the currently active chat.
-     * No-op when no session is loaded.
-     */
-    fun toggleFavoriteCurrent() {
-        val sessionId = _state.value.thread.currentSessionId
-        if (sessionId.isBlank()) return
-        val current = sessions.firstOrNull { it.id == sessionId }?.isStarred ?: false
-        viewModelScope.launch {
-            chatRepository.setSessionFavorite(sessionId, !current)
-        }
-    }
-
-    /**
      * Activates the LiteRT model identified by [modelId] and reloads the
      * inference engine. Subsequent `sendMessage` calls run against the
      * freshly-loaded model.
@@ -1504,26 +1241,6 @@ class ChatHomeViewModel @Inject constructor(
         viewModelScope.launch {
             localModelRepository.setActiveModel(modelId)
             loadModelUseCase()
-        }
-    }
-
-    /**
-     * Deletes the currently active session and auto-selects the next
-     * available thread; when no other session exists, creates a fresh
-     * unbound chat so the user is never stranded on a non-existent
-     * session id.
-     */
-    fun deleteCurrentSession() {
-        val sessionId = _state.value.thread.currentSessionId
-        if (sessionId.isBlank()) return
-        viewModelScope.launch {
-            chatRepository.deleteSession(sessionId)
-            val remaining = sessions.filter { it.id != sessionId }
-            if (remaining.isNotEmpty()) {
-                selectThread(remaining.first().id)
-            } else {
-                createNewSessionWithPipeline(pipelineId = null)
-            }
         }
     }
 
@@ -1599,13 +1316,6 @@ class ChatHomeViewModel @Inject constructor(
 
         /** Pre-formatted timestamp format used in [ChatMetadata.timestamp] (24h, locale-aware). */
         private const val TIMESTAMP_PATTERN: String = "HH:mm"
-
-        /** Pattern used for the drawer thread subtitle (e.g. `Mon 14:32`). */
-        private const val THREAD_SUBTITLE_PATTERN: String = "EEE HH:mm"
-
-        /** Formats a session `updatedAt` timestamp as the drawer thread subtitle. */
-        fun formatThreadSubtitle(updatedAt: Long): String =
-            SimpleDateFormat(THREAD_SUBTITLE_PATTERN, Locale.getDefault()).format(Date(updatedAt))
 
         /** Formats an epoch-millis instant with the in-chat message timestamp pattern (`HH:mm`). */
         fun formatMessageTimestamp(epochMs: Long): String =

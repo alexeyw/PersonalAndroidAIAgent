@@ -99,7 +99,7 @@ class ChatHomeDrawerTest {
         composeTestRule.waitForIdle()
 
         verify(exactly = 1) { viewModel.selectThread("thread-other") }
-        verify(atLeast = 1) { viewModel.closeDrawer() }
+        verify(atLeast = 1) { viewModel.threads.closeDrawer() }
     }
 
     @Test
@@ -152,7 +152,7 @@ class ChatHomeDrawerTest {
         composeTestRule.onNodeWithText(createLabel).performClick()
         composeTestRule.waitForIdle()
 
-        verify(exactly = 1) { viewModel.createNewSessionWithPipeline("pipe-deep") }
+        verify(exactly = 1) { viewModel.threads.createNewSessionWithPipeline("pipe-deep") }
     }
 
     @Test

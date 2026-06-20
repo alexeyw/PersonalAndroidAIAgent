@@ -193,7 +193,7 @@ fun ChatHomeScreen(
     val resumeUnavailableMessage = stringResource(R.string.chat_snackbar_resume_unavailable)
 
     LaunchedEffect(viewModel) {
-        viewModel.pipelineFallbackEvents.collect {
+        viewModel.pipelineBinding.pipelineFallbackEvents.collect {
             snackbarHostState.showSnackbar(message = pipelineFallbackMessage)
         }
     }
@@ -340,8 +340,8 @@ fun ChatHomeScreen(
                 ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
             )
         },
-        onOpenDrawer = viewModel::openDrawer,
-        onCloseDrawer = viewModel::closeDrawer,
+        onOpenDrawer = viewModel.threads::openDrawer,
+        onCloseDrawer = viewModel.threads::closeDrawer,
         onSelectThread = viewModel::selectThread,
         onNewThread = { newThreadSheetVisible = true },
         onOpenModelPicker = { modelPickerVisible = true },
@@ -377,7 +377,7 @@ fun ChatHomeScreen(
         onDiscardRun = viewModel::discardInterruptedRun,
         onErrorRetry = viewModel::retryAfterError,
         onTitleTripleTap = { debugPickerExpanded = true },
-        onToggleFavorite = viewModel::toggleFavoriteCurrent,
+        onToggleFavorite = viewModel.threads::toggleFavoriteCurrent,
         onEditThread = { threadId ->
             val session = screenState.thread.rows.firstOrNull { it.id == threadId }
             renameDraft = session?.title.orEmpty()
@@ -539,7 +539,7 @@ fun ChatHomeScreen(
                         destructive = true,
                         onClick = {
                             deleteDialogVisible = false
-                            viewModel.deleteCurrentSession()
+                            viewModel.threads.deleteCurrentSession()
                         },
                     )
                 },
@@ -561,7 +561,7 @@ fun ChatHomeScreen(
                     value = renameDraft,
                     onValueChange = { renameDraft = it },
                     onSave = {
-                        viewModel.renameSession(targetId, renameDraft)
+                        viewModel.threads.renameSession(targetId, renameDraft)
                         renameTargetId = null
                     },
                     onCancel = { renameTargetId = null },
@@ -576,11 +576,11 @@ fun ChatHomeScreen(
             ) {
                 NewThreadPipelinePickerSheetContent(
                     pipelines = screenState.availablePipelines,
-                    initialPipelineId = viewModel.currentPipelineId(),
+                    initialPipelineId = viewModel.pipelineBinding.currentPipelineId(),
                     onCancel = { newThreadSheetVisible = false },
                     onCreate = { pipelineId ->
                         newThreadSheetVisible = false
-                        viewModel.createNewSessionWithPipeline(pipelineId)
+                        viewModel.threads.createNewSessionWithPipeline(pipelineId)
                     },
                 )
             }
