@@ -373,7 +373,7 @@ class ChatHomeViewModelTest {
     fun `typed-confirm value is hoisted via onTypedConfirmChange`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        viewModel.onTypedConfirmChange("yes")
+        viewModel.hitl.onTypedConfirmChange("yes")
         assertEquals("yes", viewModel.state.value.composer.typedConfirm)
     }
 
@@ -1075,7 +1075,7 @@ class ChatHomeViewModelTest {
         viewModel.sendMessage()
         advanceUntilIdle()
 
-        viewModel.approveTool()
+        viewModel.hitl.approveTool()
         advanceUntilIdle()
 
         coVerify { submitApprovalDecisionUseCase(sessionId, true, null) }
@@ -1102,7 +1102,7 @@ class ChatHomeViewModelTest {
         viewModel.sendMessage()
         advanceUntilIdle()
 
-        viewModel.rejectTool()
+        viewModel.hitl.rejectTool()
         advanceUntilIdle()
 
         coVerify { submitApprovalDecisionUseCase(sessionId, false, null) }
@@ -1141,14 +1141,14 @@ class ChatHomeViewModelTest {
         advanceUntilIdle()
 
         // Empty typed-confirm — Allow must be refused.
-        viewModel.approveTool()
+        viewModel.hitl.approveTool()
         advanceUntilIdle()
         coVerify(exactly = 0) { submitApprovalDecisionUseCase(any(), true, any()) }
         assertTrue(viewModel.state.value.visual is ChatHomeUiState.HitlConfirm)
 
         // Typing the canonical magic word unlocks the gate.
-        viewModel.onTypedConfirmChange("yes")
-        viewModel.approveTool()
+        viewModel.hitl.onTypedConfirmChange("yes")
+        viewModel.hitl.approveTool()
         advanceUntilIdle()
         coVerify { submitApprovalDecisionUseCase(sessionId, true, null) }
         assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
@@ -1199,7 +1199,7 @@ class ChatHomeViewModelTest {
         viewModel.sendMessage()
         advanceUntilIdle()
 
-        viewModel.submitClarificationReply(" Yes  ")
+        viewModel.hitl.submitClarificationReply(" Yes  ")
         advanceUntilIdle()
 
         coVerify { submitClarificationAnswerUseCase(sessionId, "req-7", "Yes") }
@@ -1261,7 +1261,7 @@ class ChatHomeViewModelTest {
         viewModel.sendMessage()
         advanceUntilIdle()
 
-        viewModel.submitClarificationReply("   ")
+        viewModel.hitl.submitClarificationReply("   ")
         advanceUntilIdle()
 
         coVerify { submitClarificationAnswerUseCase(sessionId, "req-blank", "") }
@@ -1723,7 +1723,7 @@ class ChatHomeViewModelTest {
             advanceUntilIdle()
 
             assertEquals(
-                ChatHomeViewModel.INTERRUPTED_UNKNOWN_NODE_LABEL,
+                ChatHomeReattachDelegate.INTERRUPTED_UNKNOWN_NODE_LABEL,
                 viewModel.state.value.pending.interrupted?.nodeLabel,
             )
         }
@@ -1779,7 +1779,7 @@ class ChatHomeViewModelTest {
         advanceUntilIdle()
         assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
 
-        viewModel.discardInterruptedRun()
+        viewModel.reattach.discardInterruptedRun()
         advanceUntilIdle()
 
         assertNull(viewModel.state.value.pending.interrupted)
@@ -1800,7 +1800,7 @@ class ChatHomeViewModelTest {
         assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
         assertTrue(viewModel.state.value.pending.interrupted?.resumable == true)
 
-        viewModel.resumeInterruptedRun()
+        viewModel.reattach.resumeInterruptedRun()
         advanceUntilIdle()
 
         assertNull(viewModel.state.value.pending.interrupted)
@@ -1821,11 +1821,11 @@ class ChatHomeViewModelTest {
 
         val events = mutableListOf<ResumeFeedbackEvent>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            viewModel.resumeFeedbackEvents.collect { events.add(it) }
+            viewModel.reattach.resumeFeedbackEvents.collect { events.add(it) }
         }
         runCurrent()
 
-        viewModel.resumeInterruptedRun()
+        viewModel.reattach.resumeInterruptedRun()
         advanceUntilIdle()
 
         assertEquals(listOf(ResumeFeedbackEvent.GraphChanged), events)
@@ -1846,11 +1846,11 @@ class ChatHomeViewModelTest {
 
         val events = mutableListOf<ResumeFeedbackEvent>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            viewModel.resumeFeedbackEvents.collect { events.add(it) }
+            viewModel.reattach.resumeFeedbackEvents.collect { events.add(it) }
         }
         runCurrent()
 
-        viewModel.resumeInterruptedRun()
+        viewModel.reattach.resumeInterruptedRun()
         advanceUntilIdle()
 
         assertEquals(listOf(ResumeFeedbackEvent.Expired), events)
@@ -1968,14 +1968,14 @@ class ChatHomeViewModelTest {
         viewModel.sendMessage()
         runCurrent()
 
-        viewModel.submitClarificationReply("Work")
+        viewModel.hitl.submitClarificationReply("Work")
         advanceUntilIdle()
 
         coVerify {
             chatRepository.saveMessage(
                 match {
                     it.role == Role.SYSTEM &&
-                        it.content == ChatHomeViewModel.SYSTEM_MESSAGE_CLARIFICATION_REPLY_NOT_DELIVERED
+                        it.content == ChatHomeHitlDelegate.SYSTEM_MESSAGE_CLARIFICATION_REPLY_NOT_DELIVERED
                 },
             )
         }

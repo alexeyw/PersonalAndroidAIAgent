@@ -35,3 +35,13 @@ internal fun ChatHomeScreenState.withPendingCleared(): ChatHomeScreenState = cop
     pending = ChatHomePendingState(),
     composer = composer.copy(typedConfirm = ""),
 )
+
+/**
+ * Whether this visual is a resting or cold-start state that a reattach branch
+ * may safely overwrite. Active overlays (Generating, HITL, Clarification, Error,
+ * Drawer) are user-facing context that the asynchronous reattach lookup must
+ * never yank away. Shared by the ViewModel's live-run collector and the reattach
+ * delegate.
+ */
+internal fun ChatHomeUiState.isRestingOrCold(): Boolean =
+    this is ChatHomeUiState.Loading || this is ChatHomeUiState.Empty || this is ChatHomeUiState.Idle

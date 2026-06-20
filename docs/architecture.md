@@ -102,34 +102,48 @@ canvas), and any `sheet/...` route. While the user is on a tab's
 start-destination, `BackHandler` short-circuits the system Back gesture
 to `activity.finish()` so Back exits the app rather than switching tabs.
 
-### 1.2. Presentation: ViewModel facades and domain delegates
+### 1.2. Presentation: ViewModel coordinator and domain delegates
 
 A screen ViewModel consolidates everything its screen renders into a single
 immutable state class exposed through one `StateFlow` (e.g.
 `ChatHomeViewModel` → `ChatHomeScreenState`), and every mutation funnels
-through `_state.update { it.copy(...) }`. As a surface accretes responsibilities
-this ViewModel can grow into a God-object, so a cohesive block of logic that
-maps to **one sub-structure of the state** is extracted into a *delegate* class
-while the ViewModel stays a thin facade:
+through `_state.update { it.copy(...) }`. To stop such a ViewModel growing into
+a God-object, each cohesive responsibility is extracted into a **delegate**
+class and the ViewModel becomes a thin coordinator:
 
-- The delegate is constructed by the ViewModel and shares two things with it:
-  the `viewModelScope` (passed into the delegate's constructor, so its
-  coroutines live and die with the ViewModel) and the single
-  `MutableStateFlow` of screen state (the **common reducer** — the delegate
-  mutates only its own slice via the same `update { it.copy(slice = ...) }`).
-- The ViewModel keeps its public intent surface intact and **forwards** each
-  call to the delegate, so the screen and the existing tests keep calling
-  `viewModel.*` and observable behaviour is unchanged. One-shot events the
-  delegate owns (e.g. console copy snackbars) are re-exposed from the
-  ViewModel by forwarding the delegate's `SharedFlow`.
+- A delegate shares two things with the ViewModel: the `viewModelScope` (passed
+  into its constructor, so its coroutines live and die with the ViewModel) and
+  the single `MutableStateFlow` of screen state — the **common reducer**, which
+  the delegate mutates through the same `update { it.copy(slice = ...) }`. So the
+  screen still collects one `StateFlow<ChatHomeScreenState>` and observable
+  behaviour is unchanged.
+- Delegates are **exposed** on the ViewModel (`val console`, `val voice`, …) and
+  the screen calls `viewModel.<delegate>.method()`; one-shot events live on the
+  delegate that owns them (`viewModel.<delegate>.<events>`). The ViewModel keeps
+  only the cross-cutting **core**: in chat-home that is the send cycle, the live
+  run collector (`attachToLiveRun` + `handleOrchestratorState`), the
+  thread-switch hub (`selectThread`), session init / message stream / token
+  meter, and the resting-state machine.
+- Where a responsibility genuinely spans two delegates (e.g. the pipeline
+  subtitle depends on both the session cache and the default-pipeline binding),
+  the delegates are wired with **lambda seams** rather than hard references, so a
+  single atomic state emission is preserved without a construction cycle. The
+  same pattern lets a delegate drive a core operation it does not own — the HITL
+  and reattach delegates re-attach the live collector through an `attachToLiveRun`
+  seam, and the reattach delegate restores suspension cards through seams into
+  the HITL delegate.
 
-The reference implementation is `ChatHomeConsoleDelegate`, which owns the
-console pane (live `ConsoleLog` / `PipelineTrace` / `NodeIO` aggregation,
-persisted-trace replay, per-run caches, and the console intent methods) and
-writes only the `console` slice of `ChatHomeScreenState`. This is the
-established direction for further thinning of large ViewModels; a full
-decomposition of the remaining surface is intentionally out of scope and
-proceeds one cohesive delegate at a time.
+`ChatHomeViewModel` is decomposed into eight delegates — `ChatHomeConsoleDelegate`
+(console pane), `ChatHomeVoiceDelegate` (voice input), `ChatHomeAttachmentDelegate`
+(image attachments), `ChatHomeTransferDelegate` (import / export / save-to-memory),
+`ChatHomePipelineBindingDelegate` (pipeline subtitle + fallback),
+`ChatHomeThreadsDelegate` (sessions + drawer + CRUD), `ChatHomeHitlDelegate`
+(approval / clarification), and `ChatHomeReattachDelegate` (reattach /
+interrupted-run) — each owning a slice of `ChatHomeScreenState`. Shared pure
+transformers (`restingVisual`, `withPendingCleared`, `isRestingOrCold`,
+`withConsoleProjectionsCleared`) live as `internal` top-level functions in
+`ChatHomeStateReducers.kt` / the console delegate file. The coordinator itself is
+left around the agent-execution core that the delegates orchestrate around.
 
 ---
 

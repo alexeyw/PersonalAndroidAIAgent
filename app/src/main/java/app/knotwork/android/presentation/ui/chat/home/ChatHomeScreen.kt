@@ -222,7 +222,7 @@ fun ChatHomeScreen(
         }
     }
     LaunchedEffect(viewModel) {
-        viewModel.resumeFeedbackEvents.collect { event ->
+        viewModel.reattach.resumeFeedbackEvents.collect { event ->
             val message = when (event) {
                 ResumeFeedbackEvent.GraphChanged -> resumeGraphChangedMessage
                 ResumeFeedbackEvent.Expired -> resumeExpiredMessage
@@ -369,12 +369,12 @@ fun ChatHomeScreen(
         },
         onConsoleClear = viewModel.console::requestConsoleClear,
         onCloseConsole = viewModel.console::closeConsole,
-        onHitlAllowOnce = viewModel::approveTool,
-        onHitlReject = viewModel::rejectTool,
-        onHitlTypedConfirmChange = viewModel::onTypedConfirmChange,
-        onClarificationReply = viewModel::submitClarificationReply,
-        onResumeRun = viewModel::resumeInterruptedRun,
-        onDiscardRun = viewModel::discardInterruptedRun,
+        onHitlAllowOnce = viewModel.hitl::approveTool,
+        onHitlReject = viewModel.hitl::rejectTool,
+        onHitlTypedConfirmChange = viewModel.hitl::onTypedConfirmChange,
+        onClarificationReply = viewModel.hitl::submitClarificationReply,
+        onResumeRun = viewModel.reattach::resumeInterruptedRun,
+        onDiscardRun = viewModel.reattach::discardInterruptedRun,
         onErrorRetry = viewModel::retryAfterError,
         onTitleTripleTap = { debugPickerExpanded = true },
         onToggleFavorite = viewModel.threads::toggleFavoriteCurrent,

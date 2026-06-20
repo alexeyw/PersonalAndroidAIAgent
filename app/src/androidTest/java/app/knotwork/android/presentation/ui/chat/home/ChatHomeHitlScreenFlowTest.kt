@@ -49,7 +49,7 @@ class ChatHomeHitlScreenFlowTest {
         composeTestRule.onNodeWithText(allowLabel).performClick()
         composeTestRule.waitForIdle()
 
-        verify(exactly = 1) { viewModel.approveTool() }
+        verify(exactly = 1) { viewModel.hitl.approveTool() }
     }
 
     @Test
@@ -72,7 +72,7 @@ class ChatHomeHitlScreenFlowTest {
         composeTestRule.onNodeWithText(rejectLabel).performClick()
         composeTestRule.waitForIdle()
 
-        verify(exactly = 1) { viewModel.rejectTool() }
+        verify(exactly = 1) { viewModel.hitl.rejectTool() }
     }
 
     @Test
@@ -125,7 +125,7 @@ class ChatHomeHitlScreenFlowTest {
         composeTestRule.onAllNodesWithText(allowLabel)[0].performClick()
         composeTestRule.waitForIdle()
 
-        verify(exactly = 1) { viewModel.approveTool() }
+        verify(exactly = 1) { viewModel.hitl.approveTool() }
     }
 
     @Test

@@ -142,6 +142,11 @@ internal fun mockChatHomeViewModel(
     every { vm.pipelineBinding } returns pipelineBindingDelegate
     val threadsDelegate = mockk<ChatHomeThreadsDelegate>(relaxed = true)
     every { vm.threads } returns threadsDelegate
+    val reattachDelegate = mockk<ChatHomeReattachDelegate>(relaxed = true)
+    every { reattachDelegate.resumeFeedbackEvents } returns MutableSharedFlow()
+    every { vm.reattach } returns reattachDelegate
+    val hitlDelegate = mockk<ChatHomeHitlDelegate>(relaxed = true)
+    every { vm.hitl } returns hitlDelegate
     // Delegates (variant B); the screen calls `vm.<delegate>.*`. Stub delegate
     // mocks whose collected SharedFlows never complete (see the note below).
     val consoleDelegate = mockk<ChatHomeConsoleDelegate>(relaxed = true)
@@ -158,7 +163,6 @@ internal fun mockChatHomeViewModel(
     every { transferDelegate.importErrorEvents } returns MutableSharedFlow()
     every { transferDelegate.memorySaveEvents } returns MutableSharedFlow()
     every { vm.transfer } returns transferDelegate
-    every { vm.resumeFeedbackEvents } returns MutableSharedFlow()
 
     return vm to ChatHomeMockHandles(state = stateFlow)
 }
