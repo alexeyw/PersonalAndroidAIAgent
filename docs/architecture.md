@@ -650,6 +650,39 @@ file to the existing download path — no new download mechanism.
    surfaced as an access-gated hint. The discovery feature therefore adds a
    *catalogue* surface on top of the unchanged download/registration machinery.
 
+### 3.10. Voice input (audio transcription)
+
+Voice input is **transcription, not an audio pipeline**: the audio is turned
+into text *before* a run starts, so the graph itself stays text-only — the
+deliberate counterpart to the image contract in §3.7 (an image rides the user
+message into one node; audio never enters the graph at all).
+
+1. **Capture.** The composer records a clip through `AudioRecorder` (data impl
+   `AudioRecorderImpl`) as canonical **16 kHz mono WAV** — a hand-written
+   `WavHeader` wraps the PCM so the engine receives a well-formed file — or the
+   user picks an existing clip. Either way the bytes land as a temporary file in
+   the audio cache via `AudioCaptureStore` (impl `AudioCaptureStoreImpl`, rooted
+   at `cacheDir/audio/`). Recording shows a live timer and auto-stops at
+   `audioMaxDurationSec` (DataStore, default 30 s, sized to the model's audio
+   window).
+2. **Transcribe before the graph.** `TranscribeAudioUseCase` loads the active
+   model in audio mode (`LoadModelUseCase(requireAudio = true)`) and calls the
+   engine's `transcribe(...)`, which sends a `Content.AudioFile` to LiteRT-LM
+   (the engine is initialised with `enableAudio`). This runs entirely outside
+   `GraphExecutionEngine` — the transcript is the only thing that reaches the
+   pipeline, as ordinary editable text dropped into the input field.
+3. **Capability and guards.** As with vision, the runtime exposes no probe, so
+   `LocalModel.supportsAudio` is a **manual per-model flag** (Models screen
+   *Audio support* toggle, default `false`, schema v40→v41 `MIGRATION_40_41`).
+   Three conditions each surface a calm, non-blocking notice instead of failing:
+   a text-only active model, a denied `RECORD_AUDIO` permission, or a busy
+   engine — transcription **shares the single generation mutex** with the agent,
+   so it waits its turn rather than interrupting a run.
+4. **Cleanup.** The clip is **deleted as soon as transcription succeeds**; only
+   the text survives. The audio bytes are never persisted in the database and
+   never travel the graph (see [`SECURITY.md`](../SECURITY.md), *Message
+   attachments*).
+
 ---
 
 ## 4. Integrations
@@ -1046,6 +1079,13 @@ a daily `AttachmentOrphanCleanupWorker` (mirroring `RunRetentionWorker`) sweeps
 files no message references — the same charging + idle maintenance window. The
 sweep skips files younger than a 24 h grace window, so an attachment that is
 already on disk but not yet sent (still in the composer) is never reclaimed.
+
+**Audio clips (transient, not a storage tier).** Voice-input clips are *not*
+persisted alongside attachments: `AudioCaptureStore` writes them to the app
+**cache** (`cacheDir/audio/`, FBE + sandbox, OS-evictable) and they are deleted
+the moment transcription succeeds (§3.10). They never reach the database and
+never enter the pipeline graph, so they appear in no storage tier above — only
+the resulting transcript text does, as an ordinary chat message.
 
 ### 5.3. JSON parsing
 
