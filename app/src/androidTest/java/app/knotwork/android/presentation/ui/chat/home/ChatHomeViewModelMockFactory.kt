@@ -142,6 +142,12 @@ internal fun mockChatHomeViewModel(
     every { vm.importErrorEvents } returns MutableSharedFlow()
     every { vm.memorySaveEvents } returns MutableSharedFlow()
     every { vm.resumeFeedbackEvents } returns MutableSharedFlow()
+    // These one-shot event SharedFlows are collected in dedicated LaunchedEffects
+    // (ChatHomeScreen). `SharedFlow.collect` is typed `Nothing`; a relaxed-mock
+    // default returns a *completing* flow, so the collect returns and trips
+    // `KotlinNothingValueException`. Stub them with a never-completing flow.
+    every { vm.attachmentErrorEvents } returns MutableSharedFlow()
+    every { vm.voiceErrorEvents } returns MutableSharedFlow()
     every { vm.currentPipelineId() } returns null
 
     return vm to ChatHomeMockHandles(state = stateFlow)

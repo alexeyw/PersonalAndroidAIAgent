@@ -159,6 +159,9 @@ class ChatHomeDrawerTest {
     fun composerSendAffordance_remainsPresent_inHitlConfirmState() {
         val (viewModel, _) = mockChatHomeViewModel(
             initialState = ChatHomeUiState.HitlConfirm(risk = Risk.Sensitive),
+            // A non-empty draft keeps the trailing affordance on Send: with an
+            // empty composer the voice-input feature shows the Mic button instead.
+            initialComposerValue = "draft",
             initialPendingTool = HitlPending(
                 toolName = "calendar.create_event",
                 arguments = "{}",
@@ -179,6 +182,8 @@ class ChatHomeDrawerTest {
     fun composerSendAffordance_remainsPresent_inClarificationState() {
         val (viewModel, _) = mockChatHomeViewModel(
             initialState = ChatHomeUiState.Clarification,
+            // Non-empty draft → Send affordance (empty composer shows Mic instead).
+            initialComposerValue = "draft",
             initialPendingClarification = ClarificationRequest(
                 id = "clar-x",
                 sessionId = "session-1",
@@ -201,6 +206,8 @@ class ChatHomeDrawerTest {
     fun composerSendAffordance_remainsPresent_whenConsoleExpanded() {
         val (viewModel, _) = mockChatHomeViewModel(
             initialState = ChatHomeUiState.Idle,
+            // Non-empty draft → Send affordance (empty composer shows Mic instead).
+            initialComposerValue = "draft",
             initialConsoleSnap = ConsoleSnap.Partial,
         )
 
