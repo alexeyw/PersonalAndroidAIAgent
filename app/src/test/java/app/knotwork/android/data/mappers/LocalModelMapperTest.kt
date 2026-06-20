@@ -18,6 +18,8 @@ class LocalModelMapperTest {
             path = "/data/local/tmp/model.tflite",
             size = 1024L,
             isActive = true,
+            supportsVision = true,
+            supportsAudio = true,
         )
 
         val domain = entity.toDomain()
@@ -27,6 +29,8 @@ class LocalModelMapperTest {
         assertEquals("/data/local/tmp/model.tflite", domain.path)
         assertEquals(1024L, domain.size)
         assertEquals(true, domain.isActive)
+        assertEquals(true, domain.supportsVision)
+        assertEquals(true, domain.supportsAudio)
     }
 
     @Test
@@ -37,6 +41,8 @@ class LocalModelMapperTest {
             path = "/path/to/another/model.bin",
             size = 2048L,
             isActive = false,
+            supportsVision = true,
+            supportsAudio = true,
         )
 
         val entity = domain.toEntity()
@@ -46,5 +52,7 @@ class LocalModelMapperTest {
         assertEquals("/path/to/another/model.bin", entity.path)
         assertEquals(2048L, entity.size)
         assertEquals(false, entity.isActive)
+        assertEquals(true, entity.supportsVision)
+        assertEquals(true, entity.supportsAudio)
     }
 }

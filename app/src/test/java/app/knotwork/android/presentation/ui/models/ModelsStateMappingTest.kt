@@ -1,7 +1,12 @@
 package app.knotwork.android.presentation.ui.models
 
 import app.knotwork.android.domain.models.LocalModel
+import app.knotwork.android.domain.models.ModelPerformanceSummary
+import app.knotwork.android.domain.usecases.BenchmarkReport
+import app.knotwork.android.domain.usecases.BenchmarkRunPhase
+import app.knotwork.design.screens.models.BenchmarkPhase
 import app.knotwork.design.screens.models.ModelsVisualState
+import app.knotwork.design.screens.models.PerformanceCardState
 import app.knotwork.design.screens.models.PresetStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -74,5 +79,69 @@ class ModelsStateMappingTest {
     fun `given pristine state when mapped then visualState is Default`() {
         val result = ModelsUiState().toViewState(subtitleFormat)
         assertEquals(ModelsVisualState.Default, result.visualState)
+    }
+
+    @Test
+    fun `given no active model when mapped then performance card is NoModel`() {
+        val result = ModelsUiState().toViewState(subtitleFormat)
+        assertEquals(PerformanceCardState.NoModel, result.performance)
+    }
+
+    @Test
+    fun `given active model with no history when mapped then performance card is Empty`() {
+        val result = activeState().toViewState(subtitleFormat)
+        assertEquals(PerformanceCardState.Empty, result.performance)
+    }
+
+    @Test
+    fun `given active model and a summary when mapped then performance card is Populated and formatted`() {
+        val state = activeState().copy(
+            performanceSummary = ModelPerformanceSummary(
+                sampleCount = 8,
+                avgTtftMs = 420,
+                avgDecodeTokensPerSec = 12.4f,
+                peakNativeHeapBytes = (1.8 * 1024 * 1024 * 1024).toLong(),
+            ),
+        )
+
+        val card = state.toViewState(subtitleFormat).performance
+        assertTrue(card is PerformanceCardState.Populated)
+        card as PerformanceCardState.Populated
+        assertEquals("420 ms", card.ttft)
+        assertEquals("12.4 tok/s", card.decode)
+        assertEquals("1.8 GB", card.peakMemory)
+        assertEquals("avg · last 8 runs", card.sampleCaption)
+    }
+
+    @Test
+    fun `given engine busy when mapped then performance card is EngineBusy`() {
+        val state = activeState().copy(engineBusy = true)
+        assertEquals(PerformanceCardState.EngineBusy, state.toViewState(subtitleFormat).performance)
+    }
+
+    @Test
+    fun `given a running benchmark when mapped then performance card is Running with the mapped phase`() {
+        val state = activeState().copy(benchmark = BenchmarkUiState.Running(BenchmarkRunPhase.MEASURING))
+        assertEquals(
+            PerformanceCardState.Running(BenchmarkPhase.Measuring),
+            state.toViewState(subtitleFormat).performance,
+        )
+    }
+
+    @Test
+    fun `given a benchmark result when mapped then performance card is Result and formatted`() {
+        val report = BenchmarkReport("m", 390, 13.1f, 2_600, (1.8 * 1024 * 1024 * 1024).toLong())
+        val state = activeState().copy(benchmark = BenchmarkUiState.Result(report))
+
+        val card = state.toViewState(subtitleFormat).performance
+        assertTrue(card is PerformanceCardState.Result)
+        card as PerformanceCardState.Result
+        assertEquals("390 ms", card.ttft)
+        assertEquals("2.6 s", card.total)
+    }
+
+    private fun activeState(): ModelsUiState {
+        val model = LocalModel(id = 7, name = "gemma.litertlm", path = "/x", size = 1_400_000_000L, isActive = true)
+        return ModelsUiState(downloadedModels = listOf(model), activeModel = model)
     }
 }

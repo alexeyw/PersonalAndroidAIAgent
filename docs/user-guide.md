@@ -91,6 +91,35 @@ list below the presets. Tap **Make Active** on the row you want to
 use. The active model is highlighted and labelled **Active**. Only
 one model can be active at a time.
 
+### Discovering models from Hugging Face
+
+You don't have to know a URL. Tap the **Discover** action in the Models
+screen top bar to browse the curated
+[`litert-community`](https://huggingface.co/litert-community) collection
+on Hugging Face — ready-to-run on-device models — without leaving the
+app:
+
+- **Browse and search.** Each card shows the model name, its downloads
+  and likes, and its licence. Type in the search box to filter, or pull
+  down to refresh. The app only contacts Hugging Face when you open the
+  screen, search, or open a card — never in the background.
+- **Open a model.** Tapping a card shows the repository's installable
+  `.litertlm` files with their sizes, the licence, and a **View on
+  Hugging Face** link to the full model card. Files you already have on
+  disk are marked **Installed**.
+- **Install.** Tap **Install** next to a file. You'll be asked to
+  **review and accept the licence** before the download starts; it then
+  streams through the same downloader as the rest of the screen and the
+  model appears in your **Downloaded** list, ready to activate.
+- **Gated models.** Some repositories require you to accept their
+  licence on the Hugging Face website and use a personal access token.
+  These show a **Gated** badge and an inline token field — paste your
+  token there (it is stored in the same encrypted slot as the download
+  token). If a download is refused (HTTP 401/403), the app tells you to
+  accept the licence on Hugging Face and add a token.
+- **Offline / errors.** If the network is unavailable, the screen shows
+  a clear message with a **Retry** button rather than failing silently.
+
 ### 4. Send a first message
 
 Open the **Chat** screen and type a message. The agent should reply
@@ -210,6 +239,91 @@ into the composer), **Rate** the reply, or **Save to memory** — which
 stores the message verbatim in long-term memory as a manual entry and
 confirms with a *Saved to memory* snackbar. Saved entries show up under
 **More → Memory** with the **Manual** source.
+
+### Attaching an image
+
+Tap the **image** button in the composer to attach a picture to your next
+message. A small sheet offers two sources:
+
+- **Photo library** — the system photo picker (your gallery and
+  screenshots). No storage permission is requested; the picker runs in its
+  own process and hands back only the image you choose.
+- **Camera** — take a photo now.
+
+The chosen image is **downscaled on the device** (its aspect ratio is kept —
+never cropped to a square) and re-encoded to JPEG before it is stored; the
+original file is never copied into the app. A removable preview appears above
+the input row while you finish typing — tap the **✕** to drop it. You can send
+an image on its own, without any caption.
+
+Once sent, the message bubble shows a thumbnail; tap it to view the image
+full-screen, and use back, the close button, or a tap outside the image to
+dismiss. If an image was later cleared to save space (see *Run history and
+retention*), the thumbnail and viewer say so plainly — the message text stays
+in the chat.
+
+### Image understanding (vision)
+
+For the agent to actually *read* the picture, the active local model must be
+**vision-capable** (for example a Gemma 4 model). Because the on-device runtime
+does not advertise this, you tell the app which models can see: open
+**Models**, and on the active model's card flip the **Image support** toggle on.
+The setting is per model and off by default.
+
+When you send an image, the picture is handed to the **first on-device step of
+the pipeline** together with your message; from there the rest of the pipeline
+works on text as usual. The agent console shows an `Image input: W×H, N KB`
+line at the start of the run so you can see the image was taken in.
+
+Safety checks run **before** a run starts, so you get a clear message instead of
+a failure mid-answer (your draft and the attached image are always kept):
+
+- **Cloud-first pipeline.** Images **never leave your device** — they are not
+  sent to cloud models. If the pipeline bound to the chat begins with a cloud
+  step, sending an image is blocked with a note to use an on-device pipeline.
+- **Text-only model.** If the active model is not marked vision-capable, the app
+  explains that it can't read images and points you to the Models toggle (or to
+  switch models).
+- **No on-device image step.** If the bound pipeline has no on-device model step
+  that could read the picture, the send is blocked rather than quietly ignoring
+  the image.
+
+For a pipeline that branches, the image goes to the first on-device model step
+on the path the run actually takes. If a branch is taken that has no such step,
+the agent says so on the console (`Image not used …`) instead of pretending the
+model saw the picture.
+
+### Voice input
+
+Tap the **microphone** button in the composer to add voice. A small sheet
+offers two ways in:
+
+- **Record voice** — the app asks for microphone permission the first time,
+  then records. While recording, the input row becomes a bar with a live timer
+  (`0:07 / 0:30`), a discard ✕, and a Stop button. Recording **auto-stops** at
+  the limit (set by *Audio recording length*, default 30 seconds) — the timer
+  turns amber in the last few seconds to warn you.
+- **Choose audio file** — pick an existing clip from your device.
+
+Either way, the clip is **transcribed to text by your active model before
+anything runs** — the audio never travels the pipeline. You'll see
+*Transcribing…* in the composer; when it finishes, the transcript drops into
+the input field as **ordinary editable text**. Read it, fix anything, and send
+it like any other message.
+
+Transcription needs an **audio-capable** model:
+
+- **Text-only model.** A calm note ("This model can't transcribe audio") points
+  you to the **Audio support** toggle on the Models screen (next to *Image
+  support*) — turn it on for a multimodal model such as Gemma 4.
+- **Microphone off.** If you declined the permission, a note offers to open
+  system settings so you can grant it.
+- **A task is running.** Transcription shares the single on-device engine with
+  the agent, so it waits until the current run finishes rather than interrupting
+  it; a note tells you to try again in a moment.
+
+The recorded or picked clip is **temporary** — it is deleted as soon as it has
+been transcribed (only the text remains).
 
 ---
 
@@ -1365,6 +1479,38 @@ LLMs.
 - The **Available presets** list shows curated models, each row in
   one of three states: `Get` (not downloaded), progress bar with
   cancel-X (downloading), or `✓ ON DISK` (ready to activate).
+
+### Model performance & benchmark
+
+Below the Active card, the **Performance** card shows how the active
+model actually performs *on your device* — picking a model is a
+speed/quality/memory trade-off, and the numbers make it concrete instead
+of a guess:
+
+- **Time to first token** — how long after a run starts the model emits
+  its first token (model-load time excluded). Shown in milliseconds, or
+  seconds once it passes one second.
+- **Decode speed** — sustained generation throughput in tokens per second.
+- **Peak memory** — the highest process-wide native-heap usage seen during
+  a run. This is deliberately labelled **approximate**: it covers the whole
+  app process (not just the model), excludes the model file's
+  memory-mapped pages, and can read low on devices that compress memory. It
+  is a useful relative indicator, **not** the model's exact footprint.
+
+These figures are **averaged over the model's most recent runs** and update
+automatically — every on-device generation you trigger (chatting, running a
+pipeline) records a sample. A freshly installed model that hasn't run yet
+shows a calm **"No runs yet"** state.
+
+Tap **Run benchmark** to measure the model on demand. It runs a fixed
+prompt twice — a **warm-up** run (not counted) followed by a **measured**
+run — then shows a one-shot report (TTFT, decode speed, total time, peak
+memory) with a **BENCHMARK** badge. **Share** hands a plain-text summary to
+any app (messages, notes, a bug report); **Done** returns to the rolling
+averages. You can **Cancel** a benchmark while it runs. The benchmark only
+runs in the foreground and **waits its turn** if a pipeline is currently
+using the engine — it never interrupts an active run (you'll see a calm
+"Busy with a task" notice in that case).
 
 ## Prompt library
 

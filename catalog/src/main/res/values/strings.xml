@@ -104,6 +104,87 @@
     <!-- ContentDescription for the trailing mic button (Idle state with empty input and an onMic callback). -->
     <string name="knotwork_composer_mic">Voice input</string>
 
+    <!-- ============ Voice input (recording + transcribing) ============ -->
+
+    <!-- ContentDescription for the discard button in the recording bar. -->
+    <string name="knotwork_composer_recording_discard">Discard recording</string>
+    <!-- ContentDescription for the stop button in the recording bar. -->
+    <string name="knotwork_composer_recording_stop">Stop recording</string>
+    <!-- ContentDescription for the live recording indicator dot. -->
+    <string name="knotwork_composer_recording_indicator">Recording</string>
+    <!-- Mono caption shown in the last seconds before the recording limit. %1$s is the limit clock, e.g. 0:30. -->
+    <string name="knotwork_composer_recording_limit_caption">approaching %1$s limit · auto-stops &amp; transcribes</string>
+    <!-- Label shown in the composer while the clip is being transcribed. -->
+    <string name="knotwork_composer_transcribing">Transcribing…</string>
+    <!-- Separator between the elapsed and limit clocks in the recording timer (e.g. 0:07 / 0:30). -->
+    <string name="knotwork_composer_recording_timer">%1$s / %2$s</string>
+
+    <!-- Blocked notice: the active model cannot transcribe audio. -->
+    <string name="knotwork_voice_no_model_title">This model can\'t transcribe audio</string>
+    <string name="knotwork_voice_no_model_body">The active model isn\'t marked as audio-capable. Switch to an audio model to record or transcribe a clip.</string>
+    <string name="knotwork_voice_no_model_action">Change model</string>
+    <!-- Blocked notice: a pipeline run holds the inference engine. -->
+    <string name="knotwork_voice_busy_title">Busy with a task</string>
+    <string name="knotwork_voice_busy_body">Transcription pauses while a pipeline is running. Try again once the current task finishes.</string>
+    <!-- Permission notice: microphone access is denied. -->
+    <string name="knotwork_voice_permission_title">Microphone access is off</string>
+    <string name="knotwork_voice_permission_body">To record voice, allow microphone access for this app in system settings.</string>
+    <string name="knotwork_voice_permission_action">Open settings</string>
+
+    <!-- ============ Audio source chooser ============ -->
+
+    <!-- Title of the voice-input source chooser bottom sheet. -->
+    <string name="knotwork_audio_source_title">Add voice</string>
+    <!-- Record-voice source row. -->
+    <string name="knotwork_audio_source_record">Record voice</string>
+    <!-- Record-voice source row subtitle. %1$s is the limit clock (e.g. 0:30). -->
+    <string name="knotwork_audio_source_record_sub">Up to %1$s · 16 kHz mono</string>
+    <!-- Choose-audio-file source row. -->
+    <string name="knotwork_audio_source_file">Choose audio file</string>
+    <!-- Choose-audio-file source row subtitle. -->
+    <string name="knotwork_audio_source_file_sub">Pick a clip to transcribe</string>
+
+    <!-- ============ Image attachments ============ -->
+
+    <!-- ContentDescription for the composer attachment (add image) button. -->
+    <string name="knotwork_attachment_add">Add image</string>
+    <!-- ContentDescription for the remove-attachment button on the composer preview. -->
+    <string name="knotwork_attachment_remove">Remove image</string>
+    <!-- Title shown on the composer preview strip once an image is attached. -->
+    <string name="knotwork_attachment_attached">Image attached</string>
+    <!-- Title shown on the composer preview strip while the image is being downscaled. -->
+    <string name="knotwork_attachment_processing">Processing…</string>
+    <!-- Mono caption shown while the image is being downscaled. -->
+    <string name="knotwork_attachment_processing_detail">downscale · 1536px cap · JPEG</string>
+    <!-- ContentDescription for an attached-image thumbnail. -->
+    <string name="knotwork_attachment_thumbnail">Attached image</string>
+    <!-- Title shown in place of a thumbnail whose file is no longer on the device. -->
+    <string name="knotwork_attachment_unavailable">Image unavailable</string>
+    <!-- Mono subtitle explaining why an attachment thumbnail is missing. -->
+    <string name="knotwork_attachment_removed">removed by retention sweep</string>
+
+    <!-- ============ SourceChooserSheet ============ -->
+
+    <!-- Title of the image-source chooser bottom sheet. -->
+    <string name="knotwork_source_title">Add image</string>
+    <!-- Photo-library (gallery / screenshots) source row. -->
+    <string name="knotwork_source_photo_library">Photo library</string>
+    <!-- Camera (take a photo) source row. -->
+    <string name="knotwork_source_camera">Camera</string>
+
+    <!-- ============ ImageViewer ============ -->
+
+    <!-- ContentDescription for the viewer close button. -->
+    <string name="knotwork_image_viewer_close">Close</string>
+    <!-- ContentDescription for the viewer share button. -->
+    <string name="knotwork_image_viewer_share">Share image</string>
+    <!-- ContentDescription for the full-screen image. -->
+    <string name="knotwork_image_viewer_image">Attached image, full screen</string>
+    <!-- Title shown in the viewer when the underlying file is gone. -->
+    <string name="knotwork_image_viewer_missing_title">Image no longer available</string>
+    <!-- Body shown in the viewer when the underlying file is gone. -->
+    <string name="knotwork_image_viewer_missing_body">The file was cleared from this device to save space. The message text is still in the chat.</string>
+
     <!-- ============ ConsolePane ============ -->
 
     <!-- ContentDescription for the Search header action. -->
@@ -778,5 +859,34 @@
     <string name="knotwork_files_collision_replace">Replace</string>
     <string name="knotwork_files_collision_replace_sub">Overwrite the existing file</string>
     <string name="knotwork_files_collision_cancel">Cancel</string>
+
+    <!-- Discover models (Hugging Face litert-community) -->
+    <string name="knotwork_discover_title">Discover models</string>
+    <string name="knotwork_discover_back_cd">Back</string>
+    <string name="knotwork_discover_search_placeholder">Search litert-community models</string>
+    <string name="knotwork_discover_gated_badge">Gated</string>
+    <plurals name="knotwork_discover_file_count">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
+    <string name="knotwork_discover_empty_title">No models found</string>
+    <string name="knotwork_discover_empty_subtitle">Try a different search, or pull to refresh.</string>
+    <string name="knotwork_discover_error_title">Couldn\'t load models</string>
+    <string name="knotwork_discover_error_retry">Retry</string>
+    <string name="knotwork_discover_detail_title_fallback">Model</string>
+    <string name="knotwork_discover_detail_files_header">FILES</string>
+    <string name="knotwork_discover_detail_license">License: %1$s</string>
+    <string name="knotwork_discover_install">Install</string>
+    <string name="knotwork_discover_installed">Installed</string>
+    <string name="knotwork_discover_cancel_cd">Cancel download</string>
+    <string name="knotwork_discover_view_on_hf">View on Hugging Face</string>
+    <string name="knotwork_discover_gated_notice">This model is access-gated. Accept its licence on Hugging Face, then paste a personal access token below.</string>
+    <string name="knotwork_discover_token_placeholder">Hugging Face token</string>
+    <string name="knotwork_discover_token_paste">Paste</string>
+    <string name="knotwork_discover_license_title">Review the licence</string>
+    <string name="knotwork_discover_license_body">This model is distributed under the %1$s licence. Installing it means you accept its terms.</string>
+    <string name="knotwork_discover_license_body_unknown">This model\'s licence is not declared on Hugging Face. Review it on the model card before installing.</string>
+    <string name="knotwork_discover_license_accept">Accept &amp; install</string>
+    <string name="knotwork_discover_license_cancel">Cancel</string>
 
 </resources>

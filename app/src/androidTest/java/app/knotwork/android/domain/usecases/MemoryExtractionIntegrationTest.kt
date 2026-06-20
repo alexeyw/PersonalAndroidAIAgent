@@ -81,7 +81,7 @@ class MemoryExtractionIntegrationTest {
         coEvery { promptTemplateEngine.render(any(), any()) } answers { firstArg() }
         coEvery { embeddingProviderResolver.resolve() } returns embeddingProvider
         every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(2)
-        every { llmInferenceEngine.generateResponseStream(any(), any()) } returns
+        every { llmInferenceEngine.generateResponseStream(any(), any(), any()) } returns
             flowOf("""[{"type": "preference", "text": "Prefers dark mode"}]""")
 
         useCase = MemoryExtractionUseCase(

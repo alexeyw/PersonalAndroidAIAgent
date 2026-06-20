@@ -6,6 +6,7 @@ import app.knotwork.android.domain.engine.TaskQueueManager
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTask
 import app.knotwork.android.domain.models.ChatMessage
+import app.knotwork.android.domain.models.EngineImageInput
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
@@ -17,6 +18,7 @@ import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.services.AttachmentStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +54,7 @@ class TaskQueueManagerImpl @Inject constructor(
     private val graphExecutionEngine: GraphExecutionEngine,
     private val pipelineRunRepository: PipelineRunRepository,
     private val runTraceRepository: RunTraceRepository,
+    private val attachmentStore: AttachmentStore,
 ) : TaskQueueManager {
 
     @VisibleForTesting
@@ -159,12 +162,18 @@ class TaskQueueManagerImpl @Inject constructor(
         // on one consistent row.
         pipelineRunRepository.createRun(task.toQueuedRun())
 
-        // 1. Save user message
+        // 1. Save user message, carrying any image attachment from the task so
+        // it is persisted on the message and rendered in the chat bubble. By
+        // contract only the prompt text flows along the pipeline graph.
         val userMessage = ChatMessage(
             sessionId = task.sessionId,
             role = Role.USER,
-            content = task.prompt,
+            // For an image-only message `displayContent` is the empty caption so
+            // the bubble shows just the thumbnail; `prompt` (the internal default
+            // instruction) still travels the graph.
+            content = task.displayContent ?: task.prompt,
             timestamp = System.currentTimeMillis(),
+            attachment = task.attachment,
         )
         chatRepository.saveMessage(userMessage)
 
@@ -286,24 +295,39 @@ class TaskQueueManagerImpl @Inject constructor(
         // its WAITING_* status until the user responds or the approval window
         // expires.
         var runParked = false
-        try {
-            graphExecutionEngine(task.sessionId, task.prompt, pipeline, task.id, resume).collect { state ->
-                // Terminal engine states are mirrored into the persistent run
-                // record as they pass through, so the record is already
-                // settled when the in-memory flow reaches its observers.
-                when (state) {
-                    is AgentOrchestratorState.Completed ->
-                        pipelineRunRepository.finishRun(task.id, PipelineRunStatus.COMPLETED)
-                    is AgentOrchestratorState.Error ->
-                        pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, state.message)
-                    is AgentOrchestratorState.SuspendedInBackground -> runParked = true
-                    else -> Unit
-                }
-                // `emit` (vs. `tryEmit`) back-pressures the engine if the
-                // buffer ever fills, so we never silently drop an event.
-                stateFlow.emit(state)
-                _globalState.value = state
+        // Resolve the run's image attachment into the engine's shape: absolute
+        // path (for `Content.ImageFile`) + on-disk byte size (for the console
+        // line). Only for a fresh run with an attachment — a resumed run replays
+        // a trace and must never re-deliver the image.
+        val imageInput = task.attachment
+            ?.takeIf { resume == null }
+            ?.let { attachment ->
+                EngineImageInput(
+                    absolutePath = attachmentStore.absolutePathFor(attachment.path),
+                    width = attachment.width,
+                    height = attachment.height,
+                    sizeBytes = attachmentStore.sizeBytes(attachment.path),
+                )
             }
+        try {
+            graphExecutionEngine(task.sessionId, task.prompt, pipeline, task.id, resume, imageInput = imageInput)
+                .collect { state ->
+                    // Terminal engine states are mirrored into the persistent run
+                    // record as they pass through, so the record is already
+                    // settled when the in-memory flow reaches its observers.
+                    when (state) {
+                        is AgentOrchestratorState.Completed ->
+                            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.COMPLETED)
+                        is AgentOrchestratorState.Error ->
+                            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, state.message)
+                        is AgentOrchestratorState.SuspendedInBackground -> runParked = true
+                        else -> Unit
+                    }
+                    // `emit` (vs. `tryEmit`) back-pressures the engine if the
+                    // buffer ever fills, so we never silently drop an event.
+                    stateFlow.emit(state)
+                    _globalState.value = state
+                }
         } catch (e: CancellationException) {
             // Cancellation (user Stop, scope teardown) is not a failure:
             // mapping it to `Error` would both surface a false error banner

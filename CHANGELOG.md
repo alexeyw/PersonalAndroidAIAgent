@@ -15,6 +15,76 @@ details.
 
 ### Added
 
+- **Discover models from Hugging Face.** A new **Discover** screen (top-bar
+  action on the Models screen) browses and searches the curated
+  `litert-community` organisation on the Hugging Face Hub. Each result card shows
+  the repository's downloads, likes and licence; tapping it opens a detail screen
+  listing the repo's engine-compatible `.litertlm` files with sizes. **Install**
+  streams the chosen file through the existing download manager and registers it
+  locally — gated behind an explicit **licence confirmation** dialog. Files
+  already on disk render as **Installed**. Access-gated repositories show a lock
+  badge and an inline Hugging Face token field (reusing the existing encrypted
+  token store); a 401/403 download refusal surfaces a clear "accept the licence
+  on Hugging Face and add a token" hint. The discovery client is read-only, sends
+  no token for browsing (only the file download needs one), issues a request only
+  in response to a user action, supports pull-to-refresh, and shows a graceful
+  retry on network/parse errors. Built on raw OkHttp + `kotlinx.serialization`
+  (no new dependency).
+
+- **Model performance insights & benchmark.** The Models screen now shows a
+  **Performance** card for the active model with its rolling-average
+  **time-to-first-token**, **decode speed** (tokens/second) and **peak memory**,
+  averaged over the last few runs — so choosing a model is an informed
+  speed/quality/memory trade-off instead of a guess. Every on-device generation
+  records a sample automatically; a model with no runs yet shows a calm "no runs
+  yet" state. A **Run benchmark** action measures the model on demand with a
+  fixed prompt (a warm-up run followed by a measured run) and produces a one-shot
+  report you can **share as plain text**. The benchmark is foreground-only and
+  waits its turn when a pipeline is using the engine. Peak memory is measured via
+  the process native heap and is labelled **approximate** throughout — it is a
+  process-wide figure, not the model's exact footprint.
+
+- **Voice input (on-device transcription).** The composer mic now records a
+  short voice clip — or you can pick an existing audio file — and a multimodal
+  local model **transcribes it to text before anything runs**. The transcript
+  lands in the input field as ordinary, editable text you review and send;
+  the audio itself never travels the pipeline (a deliberate simplification that
+  keeps the whole graph text-only). Recording captures canonical 16 kHz mono
+  WAV, shows a live timer, and auto-stops at a configurable limit
+  (`audioMaxDurationSec`, default 30 s, to match the model's audio window).
+  Transcription requires the active model to be marked audio-capable via a new
+  **"Audio support"** toggle on the Models screen (default off); a text-only
+  model, a denied microphone permission, or a busy engine each surface a calm,
+  non-blocking notice instead of failing. The clip is temporary and deleted
+  after a successful transcription.
+
+- **On-device image understanding (vision inference).** A vision-capable local
+  model (e.g. Gemma 4) now actually reads an attached image. The image is
+  delivered to the **first on-device step of the pipeline** alongside the user's
+  prompt; the rest of the graph continues to operate on text, so the contract
+  stays "the attachment belongs to the user message, the graph carries text".
+  Images are **never sent to cloud models** (a privacy guarantee of this
+  release). Because the LiteRT runtime exposes no capability probe, each model
+  carries a manual **"Image support"** toggle on the Models screen (default off);
+  the agent reads it in a **pre-flight check before a run starts** — sending an
+  image to a text-only model, or to a pipeline that begins with a cloud step,
+  surfaces a clear, non-blocking explanation instead of failing mid-inference.
+  The agent console announces the multimodal input at the start of the run
+  (`Image input: W×H, N KB`).
+
+- **Image attachments in chat.** A message can now carry one image, attached
+  from the system **Photo Picker** (gallery / screenshots, no storage
+  permission) or the **camera**. The picked image is downscaled on-device
+  (aspect ratio preserved, longest side ≤ 1536 px) and re-encoded to JPEG into
+  private app storage — the original is never kept. A removable preview shows in
+  the composer before sending; the sent message renders a thumbnail in its
+  bubble that opens a full-screen viewer on tap. An image may be sent without a
+  caption (an internal default instruction then accompanies it). Attachment
+  files are deleted with their message or session, with a daily background sweep
+  reclaiming any orphaned files. On-device multimodal inference over the image
+  is a later change; for now the attachment travels with the user message while
+  the pipeline graph continues to operate on text.
+
 - **Chat-history compression for long sessions.** Long conversations no longer
   blow the on-device context window or crowd out memory and tool results. Once a
   session's verbatim history exceeds a configurable token budget, the messages
@@ -161,6 +231,15 @@ details.
     stack: the parent replays to its `PIPELINE` node and continues the child
     run from its checkpoint rather than restarting it; the recorded graph hash
     is validated for every graph in the stack.
+
+### Fixed
+
+- **Content slipping under the bottom navigation bar.** The Discover list,
+  Discover detail and Pipeline library screens now zero their own
+  `Scaffold` content insets (matching every other screen), so their bodies are
+  positioned by the host shell's inner padding instead of double-handling the
+  system bars — the last row / install button no longer scrolls under the
+  in-app bottom-nav strip.
 
 ### Changed
 

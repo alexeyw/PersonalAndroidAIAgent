@@ -38,7 +38,7 @@ class LoadModelUseCaseTest {
         val result = loadModelUseCase()
 
         assertTrue(result is Result.Error)
-        coVerify(exactly = 0) { llmInferenceEngine.initialize(any()) }
+        coVerify(exactly = 0) { llmInferenceEngine.initialize(any(), any(), any()) }
     }
 
     @Test
@@ -53,7 +53,7 @@ class LoadModelUseCaseTest {
         val result = loadModelUseCase()
 
         assertTrue(result is Result.Success)
-        coVerify(exactly = 0) { llmInferenceEngine.initialize(any()) }
+        coVerify(exactly = 0) { llmInferenceEngine.initialize(any(), any(), any()) }
     }
 
     @Test
@@ -64,7 +64,7 @@ class LoadModelUseCaseTest {
         val result = loadModelUseCase()
 
         assertTrue(result is Result.Error)
-        coVerify(exactly = 0) { llmInferenceEngine.initialize(any()) }
+        coVerify(exactly = 0) { llmInferenceEngine.initialize(any(), any(), any()) }
     }
 
     @Test
@@ -80,6 +80,80 @@ class LoadModelUseCaseTest {
         val result = loadModelUseCase()
 
         assertTrue(result is Result.Success)
-        coVerify(exactly = 1) { llmInferenceEngine.initialize(tempFile.absolutePath) }
+        coVerify(exactly = 1) {
+            llmInferenceEngine.initialize(tempFile.absolutePath, enableVision = false, enableAudio = false)
+        }
+    }
+
+    @Test
+    fun `invoke re-initializes with vision when an image run hits a text-only loaded engine`() = runTest {
+        val tempFile = File.createTempFile("test_model", ".bin")
+        tempFile.deleteOnExit()
+        val path = tempFile.absolutePath
+
+        // Same model already loaded, but text-only — an image run must force a
+        // vision-enabling re-initialization rather than reuse.
+        every { llmInferenceEngine.isInitialized } returns true
+        every { llmInferenceEngine.currentModelPath } returns path
+        every { llmInferenceEngine.isVisionEnabled } returns false
+        coEvery {
+            llmInferenceEngine.initialize(path, enableVision = true, enableAudio = false)
+        } returns Result.Success(Unit)
+
+        val result = loadModelUseCase(path, requireVision = true)
+
+        assertTrue(result is Result.Success)
+        coVerify(exactly = 1) { llmInferenceEngine.initialize(path, enableVision = true, enableAudio = false) }
+    }
+
+    @Test
+    fun `invoke reuses an already vision-enabled engine for an image run`() = runTest {
+        val path = "/path/to/model.bin"
+
+        every { llmInferenceEngine.isInitialized } returns true
+        every { llmInferenceEngine.currentModelPath } returns path
+        every { llmInferenceEngine.isVisionEnabled } returns true
+
+        val result = loadModelUseCase(path, requireVision = true)
+
+        // Vision already on for this exact model → no re-initialization.
+        assertTrue(result is Result.Success)
+        coVerify(exactly = 0) { llmInferenceEngine.initialize(any(), any(), any()) }
+    }
+
+    @Test
+    fun `invoke re-initializes with audio when a transcription hits an audio-less loaded engine`() = runTest {
+        val tempFile = File.createTempFile("test_model", ".bin")
+        tempFile.deleteOnExit()
+        val path = tempFile.absolutePath
+
+        // Same model already loaded, but without audio — a transcription must force
+        // an audio-enabling re-initialization rather than reuse.
+        every { llmInferenceEngine.isInitialized } returns true
+        every { llmInferenceEngine.currentModelPath } returns path
+        every { llmInferenceEngine.isAudioEnabled } returns false
+        coEvery {
+            llmInferenceEngine.initialize(path, enableVision = false, enableAudio = true)
+        } returns Result.Success(Unit)
+
+        val result = loadModelUseCase(path, requireAudio = true)
+
+        assertTrue(result is Result.Success)
+        coVerify(exactly = 1) { llmInferenceEngine.initialize(path, enableVision = false, enableAudio = true) }
+    }
+
+    @Test
+    fun `invoke reuses an already audio-enabled engine for a transcription`() = runTest {
+        val path = "/path/to/model.bin"
+
+        every { llmInferenceEngine.isInitialized } returns true
+        every { llmInferenceEngine.currentModelPath } returns path
+        every { llmInferenceEngine.isAudioEnabled } returns true
+
+        val result = loadModelUseCase(path, requireAudio = true)
+
+        // Audio already on for this exact model → no re-initialization.
+        assertTrue(result is Result.Success)
+        coVerify(exactly = 0) { llmInferenceEngine.initialize(any(), any(), any()) }
     }
 }

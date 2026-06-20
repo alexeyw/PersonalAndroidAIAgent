@@ -2,6 +2,7 @@ package app.knotwork.android.domain.engine.executors
 
 import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.engine.LlmInferenceEngine
+import app.knotwork.android.domain.engine.StreamInferenceMeter
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ExecutionScope
 import app.knotwork.android.domain.models.NodeExecutionResult
@@ -10,8 +11,10 @@ import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.MetricsRepository
+import app.knotwork.android.domain.repositories.ModelPerformanceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
+import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -38,6 +41,8 @@ class LiteRtNodeExecutor @Inject constructor(
     private val chatRepository: ChatRepository,
     private val settingsRepository: SettingsRepository,
     private val metricsRepository: MetricsRepository,
+    private val modelPerformanceRepository: ModelPerformanceRepository,
+    private val nativeMemorySampler: NativeMemorySampler,
     private val loadModelUseCase: LoadModelUseCase,
 ) : NodeExecutor {
 
@@ -61,26 +66,34 @@ class LiteRtNodeExecutor @Inject constructor(
 
         val startTime = System.currentTimeMillis()
 
-        val loadResult = loadModelUseCase(node.modelPath)
+        // The engine only ever sees an image on the node the engine chose to
+        // deliver it to (the first vision-eligible LITE_RT node); every other
+        // node has `scope.imagePath == null`. An image-carrying node needs the
+        // engine loaded in vision mode, so request it on the load.
+        val imagePath = scope.imagePath
+        val loadResult = loadModelUseCase(node.modelPath, requireVision = imagePath != null)
         if (loadResult is Result.Error) {
             emit(NodeOutput.State(AgentOrchestratorState.Error("Error loading local model")))
             emit(NodeOutput.Result(NodeExecutionResult(error = "Error loading local model")))
             return@flow
         }
 
-        val responseStream = llmEngine.generateResponseStream(fullPrompt)
+        val responseStream = llmEngine.generateResponseStream(fullPrompt, imagePath = imagePath)
 
         val accumulatedResponse = StringBuilder()
         var emittedThinking = false
-        var approximateTokenCount = 0
+
+        // Performance instrumentation: TTFT is measured from the start of stream
+        // consumption (after the model is loaded), and peak native memory is
+        // sampled at a throttled cadence across the generation window. The meter
+        // is the single source shared with the benchmark.
+        val meter = StreamInferenceMeter(nativeMemorySampler)
 
         try {
             responseStream.collect { token ->
-                accumulatedResponse.append(token)
-                // Each emitted token from LiteRT is one model token, not a string of arbitrary
-                // length — counting by `+= 1` matches the real generation count.
-                approximateTokenCount += 1
+                meter.onToken(System.currentTimeMillis())
 
+                accumulatedResponse.append(token)
                 if (!emittedThinking) {
                     emit(NodeOutput.State(AgentOrchestratorState.Thinking(accumulatedResponse.toString())))
                     emittedThinking = true
@@ -102,10 +115,23 @@ class LiteRtNodeExecutor @Inject constructor(
         }
 
         val endTime = System.currentTimeMillis()
-        metricsRepository.updateMetrics(endTime - startTime, approximateTokenCount)
+        metricsRepository.updateMetrics(endTime - startTime, meter.tokenCount)
+
+        // Record a per-model performance sample for the Performance card's
+        // rolling average, keyed by the engine's concrete loaded path (robust to
+        // the blank "Active model" sentinel in `node.modelPath`). Skipped for a
+        // generation that produced no tokens (no useful timing to record).
+        // `record` is best-effort at the repository boundary — a metrics-write
+        // failure never reaches here — so no defensive wrapper is needed.
+        val resolvedModelPath = llmEngine.currentModelPath
+        if (resolvedModelPath != null && meter.tokenCount > 0) {
+            modelPerformanceRepository.record(
+                meter.toSample(resolvedModelPath, endMs = endTime, isBenchmark = false, createdAt = endTime),
+            )
+        }
 
         val fullResponseText = accumulatedResponse.toString().trim()
 
-        emit(NodeOutput.Result(NodeExecutionResult(outputText = fullResponseText, tokenCount = approximateTokenCount)))
+        emit(NodeOutput.Result(NodeExecutionResult(outputText = fullResponseText, tokenCount = meter.tokenCount)))
     }
 }

@@ -17,6 +17,8 @@ import app.knotwork.android.domain.models.ProviderId
 import app.knotwork.android.presentation.ui.about.AboutScreen
 import app.knotwork.android.presentation.ui.chat.home.ChatHomeScreen
 import app.knotwork.android.presentation.ui.chat.home.ChatHomeViewModel
+import app.knotwork.android.presentation.ui.discover.DiscoverDetailScreen
+import app.knotwork.android.presentation.ui.discover.DiscoverScreen
 import app.knotwork.android.presentation.ui.files.FilesScreen
 import app.knotwork.android.presentation.ui.memory.MemoryScreen
 import app.knotwork.android.presentation.ui.models.ModelsScreen
@@ -293,6 +295,31 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
             ModelsScreen(
                 modifier = Modifier.fillMaxSize(),
                 onBack = { navController.popBackStack() },
+                onOpenDiscover = { navController.navigate(NavRoutes.DISCOVER) },
+            )
+        }
+        composable(NavRoutes.DISCOVER) {
+            DiscoverScreen(
+                modifier = Modifier.fillMaxSize(),
+                onBack = { navController.popBackStack() },
+                onOpenModel = { repoId -> navController.navigate(NavRoutes.discoverDetailRoute(repoId)) },
+            )
+        }
+        composable(
+            route = NavRoutes.DISCOVER_DETAIL,
+            arguments = listOf(
+                navArgument(NavRoutes.DISCOVER_DETAIL_REPO_ID_ARG) {
+                    type = NavType.StringType
+                    nullable = false
+                    defaultValue = ""
+                },
+            ),
+        ) { entry ->
+            val repoId = entry.arguments?.getString(NavRoutes.DISCOVER_DETAIL_REPO_ID_ARG).orEmpty()
+            DiscoverDetailScreen(
+                repoId = repoId,
+                onBack = { navController.popBackStack() },
+                modifier = Modifier.fillMaxSize(),
             )
         }
         composable(NavRoutes.MONITORING) {

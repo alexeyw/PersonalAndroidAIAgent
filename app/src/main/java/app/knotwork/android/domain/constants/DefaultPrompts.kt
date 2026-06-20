@@ -70,6 +70,44 @@ object DefaultPrompts {
     const val SYSTEM_PROMPT_PREFIX = "You are a helpful AI assistant running on an Android device."
 
     /**
+     * Prompt text used as the effective user message when an image is sent with
+     * no caption. Image-only messages are allowed, but the pipeline graph only
+     * carries text, so this internal default becomes the prompt that travels the
+     * graph (the chat bubble still shows just the thumbnail). Wiring the image
+     * itself into the first inference node is a later, multimodal-inference
+     * concern; this constant only ensures the run has a sensible instruction.
+     */
+    const val IMAGE_ONLY_DEFAULT_INSTRUCTION = "Describe what you see in this image."
+
+    /**
+     * Instruction sent alongside an audio clip when transcribing voice input.
+     * Transcription is a **preprocessing** step run by the active multimodal
+     * model before any pipeline: the audio never travels the execution graph —
+     * only this transcript text does, landing in the composer as an editable
+     * message the user reviews before sending. The instruction asks for a
+     * verbatim transcript and nothing else (no commentary, no translation) so
+     * the model's output can be used directly as the message text.
+     */
+    const val AUDIO_TRANSCRIPTION_INSTRUCTION =
+        "Transcribe the spoken words in this audio exactly as said. " +
+            "Output only the transcript text, with no added commentary, labels, or translation."
+
+    /**
+     * Fixed prompt used by the model benchmark
+     * ([app.knotwork.android.domain.usecases.RunBenchmarkUseCase]). It is held
+     * constant so successive benchmark runs — and runs across different models —
+     * stay comparable: the only variables are the device and the model, never the
+     * input. It asks for a short, self-contained generation so the measured run
+     * exercises real decoding without dragging on, while still producing enough
+     * tokens to derive a stable decode-speed figure. The benchmark never shows
+     * this text or the model's answer to the user; only the timing numbers
+     * surface.
+     */
+    const val BENCHMARK_PROMPT =
+        "Write a short, friendly paragraph (about four sentences) explaining what " +
+            "an AI assistant running entirely on a phone can do for its user."
+
+    /**
      * Tool-usage instruction surfaced to user-authored prompts when the agent
      * wants to advertise the available tools. The literal `[TOOL_LIST]`
      * placeholder is substituted by the caller (currently consumed by

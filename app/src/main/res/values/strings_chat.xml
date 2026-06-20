@@ -54,6 +54,10 @@
     <string name="chat_snackbar_save_to_memory_failed">Couldn\'t save to memory</string>
     <string name="chat_snackbar_console_copied">Console log copied</string>
     <string name="chat_snackbar_console_line_copied">Line copied</string>
+    <!-- Shown when a picked/captured image could not be attached (decode/read failed). -->
+    <string name="chat_snackbar_attachment_failed">Couldn\'t attach that image. Try a different one.</string>
+    <!-- Shown when voice input fails (recording, audio-file import, or transcription error). -->
+    <string name="chat_snackbar_voice_failed">Couldn\'t process the recording. Try again.</string>
     <!-- Shown when a Resume tap finds the run no longer resumable (raced discard, legacy record). -->
     <string name="chat_snackbar_resume_unavailable">This run can no longer be resumed</string>
     <!-- Shown when the pipeline graph was edited or deleted after the interrupted run started. -->

@@ -18,6 +18,7 @@ import app.knotwork.design.icons.imagevector.knotworkBookmarkAddIcon
 import app.knotwork.design.icons.imagevector.knotworkBookmarkIcon
 import app.knotwork.design.icons.imagevector.knotworkBrainIcon
 import app.knotwork.design.icons.imagevector.knotworkBranchIcon
+import app.knotwork.design.icons.imagevector.knotworkCameraIcon
 import app.knotwork.design.icons.imagevector.knotworkChatActiveIcon
 import app.knotwork.design.icons.imagevector.knotworkChatIcon
 import app.knotwork.design.icons.imagevector.knotworkCheckIcon
@@ -37,6 +38,7 @@ import app.knotwork.design.icons.imagevector.knotworkExtensionIcon
 import app.knotwork.design.icons.imagevector.knotworkExternalIcon
 import app.knotwork.design.icons.imagevector.knotworkEyeIcon
 import app.knotwork.design.icons.imagevector.knotworkEyeOffIcon
+import app.knotwork.design.icons.imagevector.knotworkFileAudioIcon
 import app.knotwork.design.icons.imagevector.knotworkFileBinIcon
 import app.knotwork.design.icons.imagevector.knotworkFileIcon
 import app.knotwork.design.icons.imagevector.knotworkFileTextIcon
@@ -45,12 +47,15 @@ import app.knotwork.design.icons.imagevector.knotworkFlowActiveIcon
 import app.knotwork.design.icons.imagevector.knotworkFlowIcon
 import app.knotwork.design.icons.imagevector.knotworkFolderIcon
 import app.knotwork.design.icons.imagevector.knotworkFolderOpenIcon
+import app.knotwork.design.icons.imagevector.knotworkGaugeIcon
 import app.knotwork.design.icons.imagevector.knotworkGlobeIcon
 import app.knotwork.design.icons.imagevector.knotworkGridIcon
 import app.knotwork.design.icons.imagevector.knotworkGridOffIcon
 import app.knotwork.design.icons.imagevector.knotworkHistoryIcon
 import app.knotwork.design.icons.imagevector.knotworkHourglassIcon
 import app.knotwork.design.icons.imagevector.knotworkHubIcon
+import app.knotwork.design.icons.imagevector.knotworkImageIcon
+import app.knotwork.design.icons.imagevector.knotworkImageOffIcon
 import app.knotwork.design.icons.imagevector.knotworkImportFileIcon
 import app.knotwork.design.icons.imagevector.knotworkInfoIcon
 import app.knotwork.design.icons.imagevector.knotworkKeyIcon
@@ -263,6 +268,9 @@ object AppIcons {
     /** `I.monitor` — monitoring / metrics. */
     val Monitor: ImageVector get() = knotworkMonitorIcon
 
+    /** `I.gauge` — speedometer; model Performance-card header (speed/throughput). */
+    val Gauge: ImageVector get() = knotworkGaugeIcon
+
     /** `I.history` — history. */
     val History: ImageVector get() = knotworkHistoryIcon
 
@@ -371,6 +379,18 @@ object AppIcons {
 
     /** `I.mic` — voice input. */
     val Mic: ImageVector get() = knotworkMicIcon
+
+    /** `I.fileAudio` — an audio document (file + mini waveform); "Choose audio file" source. */
+    val FileAudio: ImageVector get() = knotworkFileAudioIcon
+
+    /** `I.image` — image attachment affordance / Photo-library row / thumbnail. */
+    val Image: ImageVector get() = knotworkImageIcon
+
+    /** `I.camera` — camera capture source. */
+    val Camera: ImageVector get() = knotworkCameraIcon
+
+    /** `I.imageOff` — broken / missing image fallback. */
+    val ImageOff: ImageVector get() = knotworkImageOffIcon
 
     /** `I.archive` — archive. */
     val Archive: ImageVector get() = knotworkArchiveIcon

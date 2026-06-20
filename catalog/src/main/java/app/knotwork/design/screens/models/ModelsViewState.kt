@@ -27,8 +27,20 @@ enum class ModelsVisualState {
  *
  * @property displayName monospace model filename or human-readable label.
  * @property meta "1.4 GB · NPU · QNN backend"-style mono description.
+ * @property visionSupported whether the user has marked this model as able to
+ *   read image attachments. Drives the "Image support" toggle on the active
+ *   card; defaults to `false` (text-only).
+ * @property audioSupported whether the user has marked this model as able to
+ *   transcribe audio clips. Drives the "Audio support" toggle on the active
+ *   card; defaults to `false`.
  */
-data class ActiveModelRow(val id: Long, val displayName: String, val meta: String)
+data class ActiveModelRow(
+    val id: Long,
+    val displayName: String,
+    val meta: String,
+    val visionSupported: Boolean = false,
+    val audioSupported: Boolean = false,
+)
 
 /** Per-preset row content. */
 data class PresetRow(val id: String, val name: String, val source: String, val status: PresetStatus)
@@ -82,6 +94,9 @@ sealed interface PresetStatus {
  * section so the user can find and activate them.
  * @property subtitle TopAppBar subtitle (e.g. `"1 active · 2 on disk · 3.3 GB"`).
  * @property errorMessage user-visible error when [visualState] is [ModelsVisualState.Error].
+ * @property performance state of the Performance card rendered below the
+ * Active-model card (per-model TTFT / decode speed / peak memory + benchmark),
+ * or `null` to omit the card entirely.
  */
 data class ModelsViewState(
     val visualState: ModelsVisualState,
@@ -94,6 +109,7 @@ data class ModelsViewState(
     val downloadedRows: List<PresetRow> = emptyList(),
     val subtitle: String = "",
     val errorMessage: String? = null,
+    val performance: PerformanceCardState? = null,
 ) {
     init {
         require((visualState == ModelsVisualState.Error) == (errorMessage != null)) {
@@ -106,6 +122,7 @@ data class ModelsViewState(
 @Suppress("LongParameterList") // Documented public API.
 class ModelsCallbacks(
     val onBack: () -> Unit = {},
+    val onDiscover: () -> Unit = {},
     val onAuthTokenChange: (String) -> Unit = {},
     val onAuthTokenPaste: () -> Unit = {},
     val onCustomUrlChange: (String) -> Unit = {},
@@ -117,7 +134,13 @@ class ModelsCallbacks(
     val onCustomDownloadCancel: () -> Unit = {},
     val onActiveOpen: () -> Unit = {},
     val onOverflowMenu: () -> Unit = {},
+    val onToggleVision: (Boolean) -> Unit = {},
+    val onToggleAudio: (Boolean) -> Unit = {},
     val onRetry: () -> Unit = {},
+    val onRunBenchmark: () -> Unit = {},
+    val onCancelBenchmark: () -> Unit = {},
+    val onShareBenchmark: () -> Unit = {},
+    val onDismissBenchmark: () -> Unit = {},
 )
 
 /** Convenience factory returning a no-op callback bundle. */

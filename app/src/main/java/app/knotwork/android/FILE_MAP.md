@@ -18,8 +18,14 @@ This file maps the contents of the main application package.
     - `MediaPipeTextEmbeddingEngine.kt` - MediaPipe text embedding engine.
     - `TaskQueueManagerImpl.kt` - Task queue manager implementation.
     - `TextEmbedderFactory.kt` - Factory for text embedders.
+  - `audio/` - Voice-input capture.
+    - `AudioRecorderImpl.kt` - `AudioRecorder` backed by platform `AudioRecord`: captures 16 kHz mono 16-bit PCM into a WAV inside `AudioCaptureStore`, ticks elapsed seconds into `RecordingState`, and auto-stops at the limit. Mic opened only after the composer permission gate (`@SuppressLint("MissingPermission")`). Excluded from Kover (Android-bound).
+    - `WavHeader.kt` - Pure builder for the 44-byte canonical PCM WAV (RIFF) header (16 kHz mono 16-bit), split out from the recorder so the byte layout is JVM-unit-testable.
   - `local/` - Local database and data storage components (Room DB, DataStore).
+    - `AttachmentStoreImpl.kt` - Filesystem-backed `AttachmentStore` rooted at `files/attachments/` (`Context.filesDir`). `ingest`/`ingestUri` decode → EXIF-rotate → aspect-preserving downscale (longest side ≤ `MAX_LONGEST_SIDE_PX` = 1536, never a square crop) → JPEG re-encode (`JPEG_QUALITY`) into a UUID-named file; the original is never stored. `delete` (path-traversal-guarded, idempotent), `listStoredPaths` (for the orphan sweep), and `absolutePathFor` (Coil model resolution). File writes serialise on a `Mutex`; blocking work on an overridable `dispatcher`.
+    - `AudioCaptureStoreImpl.kt` - Filesystem-backed `AudioCaptureStore` rooted at the ephemeral `cacheDir/audio/`. `newRecordingFile` mints a unique UUID `.wav` path for the recorder; `importFromUri` copies a picked audio content URI into the store (best-effort extension from resolver MIME / URL) so it has a stable absolute path for `Content.AudioFile`; `delete` is idempotent and store-scoped (rejects any path outside `cacheDir/audio/`). Blocking I/O on an overridable `dispatcher`.
     - `AgentWorkspaceImpl.kt` - Filesystem-backed `AgentWorkspace` rooted at `files/agent_workspace/` (`Context.filesDir`); the single canonicalisation gate (`canonicalResolve`) enforces path containment (rejects `../` traversal / absolute paths / escaping symlinks via canonical-path prefix + `File.separator`), enforces per-file and total-size quotas (cached total-bytes counter under a write `Mutex`), and serves UTF-8 text read/write/edit/delete/list with binary files listable but not text-readable. Writes are atomic (staged scratch file + rename, scratch hidden from listings/quota) and quota-checked before any bytes land; `editText` runs the anchored find-replace as one locked read-modify-write; `delete` keeps the cached total in step. Adds the Files-screen surface: `usage` (used/limit bytes), `readTextPreview` (bounded leading slice, never `TooLarge`), `importBytes` (byte-faithful atomic import sharing the same quota/overwrite checks as `writeText`) and `exportTo` (streams a file out with no size/text cap).
+    - `AndroidNativeMemorySampler.kt` - `NativeMemorySampler` impl reading `Debug.getNativeHeapAllocatedSize()` (cheap, unthrottled — unlike `getMemoryInfo()`/PSS); used to sample peak native heap across an inference window for the Performance card.
     - `ApiKeyManager.kt` - API key manager (`KeystoreBackedPrefsStore`-backed); an undecryptable value is dropped and reported as unset — keys are user re-enterable, opposite policy to the DB passphrase.
     - `AppDatabase.kt` - Room database definition.
     - `Converters.kt` - Type converters for Room.
@@ -40,6 +46,7 @@ This file maps the contents of the main application package.
       - `ChatHistorySummaryDao.kt` - Per-session compressed-history summary DAO (`chat_history_summaries` table, v38); get-by-session + REPLACE upsert.
       - `LocalModelDao.kt` - Local models DAO.
       - `MemoryDao.kt` - Memory chunks DAO.
+      - `ModelPerformanceDao.kt` - DAO for `model_performance_samples` (v42): `insertAndTrim` (insert + per-model retention cap in one `@Transaction`), `observeRecentForModel(modelPath, limit)` (newest-first) backing the rolling window, and `deleteForModel` (orphan cleanup on model removal).
       - `PendingInteractionDao.kt` - Parked HITL interaction DAO (`pending_interactions` table). Response-recording updates carry `IS NULL` guards so the first writer wins.
       - `PipelineDao.kt` - Pipelines DAO.
       - `PipelinePresetDao.kt` - User-saved pipeline-preset DAO. Backs the `pipeline_presets` table; bundled presets live in `assets/presets/pipelines/` and never reach this DAO.
@@ -55,6 +62,7 @@ This file maps the contents of the main application package.
       - `ConnectionEntity.kt` - Pipeline connection entity.
       - `LocalModelEntity.kt` - Local model entity.
       - `MemoryChunkEntity.kt` - Memory chunk entity.
+      - `ModelPerformanceSampleEntity.kt` - One inference performance sample (`model_performance_samples`, v42): TTFT / decode tok-s / total / token count / peak native-heap / `isBenchmark` / `createdAt`, keyed by `modelPath` (no FK — survives model-row edits), indexed `(modelPath, id)`.
       - `NodeEntity.kt` - Pipeline node entity.
       - `PendingInteractionEntity.kt` - Parked HITL interaction row (`pending_interactions`): the durable request snapshot (tool name/args/risk or question/options) plus the one-shot recorded decision/answer of the two-phase background wait.
       - `PipelineEntity.kt` - Pipeline entity.
@@ -77,6 +85,8 @@ This file maps the contents of the main application package.
     - `DeviceVariableProvider.kt` - Resolves `$DEVICE` to a short "manufacturer · model · Android version" descriptor.
   - `mappers/` - Data mapping layer.
     - `LocalModelMapper.kt` - Mapper for local models.
+    - `ModelPerformanceMapper.kt` - Entity ↔ domain mappers for `ModelPerformanceSample`.
+    - `HuggingFaceModelMapper.kt` - Pure DTO → domain projection for model discovery: parses licence (card-data, falling back to the `license:` tag) and the polymorphic `gated` field, filters to `.litertlm` siblings, builds each file's `resolve` URL and stamps installed flags.
     - `ChatMessageMapper.kt` - Mapper for chat messages.
     - `ChatSessionMapper.kt` - Mapper for chat sessions.
   - `mcp/` - Model Context Protocol (MCP) clients.
@@ -84,6 +94,11 @@ This file maps the contents of the main application package.
     - `McpClient.kt` - Generic MCP client interface/impl.
   - `network/` - Network handling.
     - `AndroidModelDownloadManager.kt` - Download manager for models.
+    - `huggingface/` - Read-only Hugging Face Hub client for model discovery.
+      - `HuggingFaceModelApi.kt` - Raw-OkHttp + `kotlinx.serialization` client: `GET /api/models?author=litert-community&full=true` (list/search) and `GET /api/models/{repoId}?blobs=true` (detail with file sizes). Host injected via `@HuggingFaceBaseUrl`; no token sent (browsing is public); non-2xx → `HuggingFaceApiException`.
+      - `HuggingFaceDto.kt` - `@Serializable` wire DTOs (`HfModelDto`/`HfSiblingDto`/`HfCardDataDto`) shared by the list and detail endpoints; `gated` decoded as an opaque `JsonElement`.
+      - `HuggingFaceApiException.kt` - `IOException` subtype carrying the Hub HTTP status code.
+      - `HuggingFaceBaseUrl.kt` - `@Qualifier` for the injected Hub base URL (production = public Hub; tests = mock server).
   - `repositories/` - Repository implementations.
     - `BestEffortStore.kt` - Shared `absorbingStoreFailure` helper implementing the best-effort persistence contract (absorb storage failures, re-throw `CancellationException` first) reused by the run-record and run-trace repositories.
     - `ChatRepositoryImpl.kt` - Chat repository implementation.
@@ -100,6 +115,8 @@ This file maps the contents of the main application package.
     - `McpServerRepositoryImpl.kt` - Per-server gateway over the raw `McpClient` transport; owns lazy connections, the 5-minute tool-list cache, and per-URL `McpConnectionStatus` flows consumed by `ToolsViewModel`.
     - `MemoryRepositoryImpl.kt` - Memory repository implementation.
     - `MetricsRepositoryImpl.kt` - Metrics repository implementation.
+    - `ModelPerformanceRepositoryImpl.kt` - Room-backed `ModelPerformanceRepository`. `record` inserts a sample on `Dispatchers.IO` **best-effort** (swallows storage errors, re-throws cancellation — a metrics write must never break a run); `observeRecentForModel` maps entities → domain, newest-first.
+    - `ModelDiscoveryRepositoryImpl.kt` - `ModelDiscoveryRepository` over `HuggingFaceModelApi`: maps DTOs via `HuggingFaceModelMapper`, drops repos with no `.litertlm`, enriches the detail with `LocalModelRepository.isInstalled` flags, and converts success/failure to `Result` (re-throws `CancellationException` first; never `runCatching`).
     - `NetworkActivityTrackerImpl.kt` - Records `System.currentTimeMillis()` on every outbound cloud-LLM and MCP call. Drives the More tab footer privacy pill via `NetworkActivityTracker.lastOutboundAt`.
     - `NetworkStateRepositoryImpl.kt` - Network state repository implementation.
     - `PendingInteractionRepositoryImpl.kt` - Room-backed `PendingInteractionRepository`. Maps enums to `name` strings and answer options to a JSON array; `save` reports success explicitly (a park must not happen without a durable record), everything else is best-effort.
@@ -118,6 +135,8 @@ This file maps the contents of the main application package.
     - `MemoryCompactionScheduler.kt` - Owns the WorkManager scheduling of `MemoryCompactionWorker`: a daily periodic job (charging + device-idle) plus an out-of-schedule `startHardLimitWatch` that fires an immediate relaxed-constraint pass when the chunk count crosses `maxMemoryChunks`. Wired from `MainActivity.onCreate`.
     - `RunRetentionScheduler.kt` - Owns the WorkManager scheduling of `RunRetentionWorker`: a daily periodic job in the same charging + device-idle maintenance window as memory compaction, unique-name + KEEP so cold-start re-scheduling never stacks. Wired from `MainActivity.onCreate`.
     - `RunRetentionWorker.kt` - `@HiltWorker` running one pipeline-run retention pass; thin delegate of `CleanupPipelineRunsUseCase` (no agent-busy gate — it deletes terminal runs only).
+    - `AttachmentOrphanCleanupScheduler.kt` - Owns the WorkManager scheduling of `AttachmentOrphanCleanupWorker`: a daily charging + device-idle job (unique-name + KEEP), same window as run retention. Wired from `MainActivity.onCreate`.
+    - `AttachmentOrphanCleanupWorker.kt` - `@HiltWorker` running one orphaned-attachment cleanup pass; thin delegate of `CleanupOrphanAttachmentsUseCase` (backstop for files left behind by a failed eager delete).
     - `MemoryCompactionWorker.kt` - `@HiltWorker` that runs one long-term memory compaction pass. Gates on `SettingsRepository.memoryCompactionEnabled` and delegates clustering/consolidation to `MemoryCompactionUseCase`.
     - `MemoryReembedWorker.kt` - `@HiltWorker` that re-embeds memory chunks flagged `needsReembedding` (imported under a different provider) off the hot path, delegating to `RecomputePendingEmbeddingsUseCase`; `Result.retry()` on failure so WorkManager backs off and retries.
     - `WorkManagerMemoryReembedScheduler.kt` - Data-layer `MemoryReembedScheduler`: enqueues a unique one-off `MemoryReembedWorker` (relaxed constraints + exponential backoff, `KEEP` coalescing) when an import flags chunks for re-embedding.
@@ -151,8 +170,11 @@ This file maps the contents of the main application package.
         - `HttpRequestExecutor.kt` - `LocalToolExecutor` for the outbound `http_request` tool (GET/POST/PUT/DELETE over the shared `OkHttpClient`). Enforces the security stack before any byte leaves the device: method gate, domain allowlist (`SettingsRepository.allowedHttpDomains` — empty ⇒ refuse), https-only for public hosts (local-IP cleartext exception), stored-credential leak refusal (`ApiKeyRepository` values), manual redirect following with per-hop allowlist re-validation, and a `httpToolMaxResponseBytes`-capped response with a truncation marker. Per-method risk (`GET` SENSITIVE / writes DESTRUCTIVE) is resolved upstream by `ToolRepositoryImpl.getRisk` from the same `HttpRequestPolicy`.
 - `di/` - Dependency Injection configurations (Hilt).
   - `AppModule.kt` - General app-level DI module.
+  - `CoroutinesModule.kt` - Provides the `@ApplicationScope` application-lifetime `CoroutineScope` (`SupervisorJob` + `Dispatchers.Default`) for singletons that own fire-and-forget background work (e.g. the voice recorder).
+  - `ApplicationScope.kt` - `@Qualifier` for the application-lifetime `CoroutineScope` provided by `CoroutinesModule`.
   - `DataModule.kt` - Data layer DI module.
   - `EmbeddingModule.kt` - Hilt multibinding for the `EmbeddingProvider` map (`use` / `openai_3_small` / `ollama`) and the `KoogEmbedderFactory` binding.
+  - `HuggingFaceModule.kt` - Provides the `@HuggingFaceBaseUrl` Hub host (public Hub in production; mock-server URL in tests) consumed by `HuggingFaceModelApi`.
   - `LocalToolsModule.kt` - Hilt multibinding for `LocalToolExecutor` map and bindings for `CloudLlmClientFactory` / `CloudLlmModelResolver`.
   - `PromptTemplateModule.kt` - Hilt multibinding module for prompt variable providers.
 - `domain/` - Domain layer containing core business logic and Use Cases.
@@ -160,7 +182,9 @@ This file maps the contents of the main application package.
     - `DefaultPrompts.kt` - Default system prompts.
     - `PromptPresetConstants.kt` - Cross-module limits + `LLM_DRIVEN_NODE_TYPES` set shared by the prompt-preset domain: `MAX_NAME_LENGTH = 60`, `MAX_SYSTEM_PROMPT_LENGTH = 8000`, and the set of node types that can host a system-prompt preset.
     - `NotificationChannels.kt` - Canonical ids of every Android `NotificationChannel` (foreground service status, approval prompts, long-running pings, scheduled-task results).
+    - `ModelDiscoveryConstants.kt` - Cross-layer constants for Hugging Face model discovery: Hub base URL, curated `litert-community` author, `.litertlm` extension, default page size, and the `resolve`/model-card URL builders.
     - `OnboardingModelCatalog.kt` - Maps the catalog-side `OnboardingLiteRtModel.id` (`gemma_4_e2b` / `gemma_4_e4b`) to the on-disk filename + HuggingFace URL consumed by `OnboardingViewModel.startDownload` and `LocalModelRepository.isInstalled`. Also derives a filename from the user-supplied custom URL row.
+    - `PerformanceConstants.kt` - Tunables for the model performance feature: `SAMPLE_WINDOW` (runs averaged into the Performance card) and `MEMORY_SAMPLE_INTERVAL_MS` (peak-native-heap sampling cadence). Code-level (no Settings UI).
     - `PipelineExecutionDefaults.kt` - Engine-level timing and log-size constants consumed by `GraphExecutionEngine` and the LLM-backed node executors (post-emit pause, LiteRT pre-warm delay, node-IO log char limit).
     - `SettingsDefaults.kt` - Default values for every user-tunable preference (sampling params, timeouts, pipeline-step bounds, Ollama context window). Single source of truth shared by `SettingsManager`, `SettingsViewModel`, and the visual orchestrator.
     - `TimeAndIdConstants.kt` - Cross-module numeric constants for time-unit conversion (`MS_PER_SECOND`, `MS_PER_MINUTE`) and the notification-id partition range shared by approval-publish/receive paths.
@@ -173,6 +197,8 @@ This file maps the contents of the main application package.
     - `LlmInferenceEngine.kt` - LLM engine interface.
     - `MemoryAccessLogFormatter.kt` - Pure formatter for the `MemoryAccess` console event. Renders the terse one-line summary (`query` + hit count + scores) and, when verbose memory logging is on, the per-hit snippet/score expansion. Used by `GraphExecutionEngine`.
     - `NodeContextBuilder.kt` - Assembles a node's executor input by concatenating only the context blocks enabled by its `NodeContextConfig` (Original Task, Chat History, Long-Term Memory, Tool Results, Previous Node Output).
+    - `PeakHeapSampler.kt` - Per-run helper tracking the peak native-heap reading across an inference window; reads `NativeMemorySampler` at a throttled (~150 ms) cadence. Used by `StreamInferenceMeter`.
+    - `StreamInferenceMeter.kt` - Per-generation instrumentation shared by `LiteRtNodeExecutor` and `RunBenchmarkUseCase`: stamps the TTFT baseline at construction, counts tokens + first-token time + drives `PeakHeapSampler` via `onToken`, and folds into a `ModelPerformanceSample` via `toSample`. Keeps the *measurement* (not just the `fromTimings` arithmetic) identical between real runs and the benchmark.
     - `PipelineExecutionContext.kt` - Immutable per-iteration snapshot of pipeline-scoped data (original user message, chat history, previous node output, tool invocation results, memory entries) consumed by `NodeContextBuilder`.
     - `TaskQueueManager.kt` - Task queue manager interface.
     - `TextEmbeddingEngine.kt` - Text embedding engine interface.
@@ -222,11 +248,16 @@ This file maps the contents of the main application package.
   - `models/` - Domain entity models.
     - `ActiveModelMeta.kt` - Rich metadata for the currently active local model rendered on the Settings local-model card.
     - `AgentMetrics.kt` - Agent metrics model.
+    - `ModelPerformanceSample.kt` - One persisted inference measurement (TTFT / decode tok-s / total / peak native heap / `isBenchmark`), keyed by model path; `fromTimings(...)` derives the figures from raw timings (shared by executor + benchmark). Also hosts `ModelPerformanceSummary` (rolling-average fold; excludes degenerate 0-ttft / 0-decode samples from the means, keeps the window count, or `null` when empty).
     - `AgentOrchestratorState.kt` - Orchestrator state model.
     - `AgentTask.kt` - Agent task model.
+    - `MessageAttachment.kt` - Image attached to a user `ChatMessage`: store-relative `path`, `mimeType` (always `image/jpeg` this phase), and downscaled pixel `width`/`height`. Pure-Kotlin value class carried on `ChatMessage` and `AgentTask`.
+    - `EngineImageInput.kt` - A run's single image resolved for the engine: absolute JPEG path (for LiteRT-LM `Content.ImageFile`) plus pixel `width`/`height` and on-disk `sizeBytes` (for the `Image input: W×H, N KB` console line). Built by `TaskQueueManagerImpl` from the saved `MessageAttachment` and threaded into `GraphExecutionEngine`.
+    - `RunImageDelivery.kt` - Tree-shared mutable holder (mirroring `RunStepBudget`) carrying the run's `EngineImageInput` + a `consumed` flag. Threaded through every `PIPELINE` node's sub-pipeline invocation (via `ExecutionScope.imageDelivery`) so the image reaches the first vision sink (`LITE_RT` with `originalTask`) anywhere in the run tree — including nested sub-pipelines — and exactly once.
     - `AgentTool.kt` - Agent tool model.
     - `AppError.kt` - App error model.
     - `ChatHistorySummary.kt` - Domain model of a session's cached compressed-history summary (`sessionId`, `summary`, incremental `coveredMessageCount` cursor, `updatedAt`).
+    - `DiscoverableModel.kt` - Domain models for Hugging Face discovery: `DiscoverableModelSummary` (list card — repoId/name/downloads/likes/licence/gated/file-count), `DiscoverableModelDetail` (+ model-card URL and the per-file breakdown) and `DiscoverableModelFile` (`.litertlm` file: name/size/resolve URL/installed).
     - `ChatMessage.kt` - Chat message model.
     - `ChatSession.kt` - Chat session model.
     - `ClarificationRequest.kt` - Domain model describing a clarification question issued by the agent (id, question, options, timeoutMs).
@@ -303,9 +334,11 @@ This file maps the contents of the main application package.
     - `CrashReportingRepository.kt` - Domain gateway for anonymous crash reporting (opt-in). All methods are no-op until `SettingsRepository.crashReportingEnabled` becomes `true`.
     - `IdentityRepository.kt` - Read-only gateway exposing the device-local identity snapshot. Data-layer impl: `IdentityRepositoryImpl`.
     - `LocalModelRepository.kt` - Local model repository interface.
+    - `ModelDiscoveryRepository.kt` - Read-only Hugging Face model-discovery interface (`searchModels`, `getModelDetail`); both return `Result`. Data-layer impl: `ModelDiscoveryRepositoryImpl`.
     - `MemoryRepository.kt` - Memory repository interface.
     - `MetricsRepository.kt` - Metrics repository interface.
     - `ModelDownloadManager.kt` - Model download manager interface.
+    - `ModelPerformanceRepository.kt` - Persists/queries per-model inference samples keyed by on-disk path: best-effort `record` (insert + retention-cap trim), `observeRecentForModel(modelPath, limit)` for the rolling window, and `deleteForModel` (orphan cleanup, called from `LocalModelRepository` on model removal). Unlike `MetricsRepository` (session-scoped, in-memory), this survives process death. Data-layer impl: `ModelPerformanceRepositoryImpl`.
     - `NetworkActivityTracker.kt` - Domain interface tracking the timestamp of the most recent outbound LLM / MCP call. Used by the More tab privacy footer to compute "no network calls in last N m" without observing connectivity.
     - `NetworkStateRepository.kt` - Network state repository interface.
     - `PipelinePresetRepository.kt` - Domain gateway over the two-tier pipeline-preset catalogue: bundled (read-only, from APK assets) + user-saved (mutable, Room-backed). Data-layer impl: `LocalPipelinePresetRepositoryImpl`.
@@ -321,6 +354,10 @@ This file maps the contents of the main application package.
     - `ToolRepository.kt` - Tool repository interface.
   - `services/` - Domain-level services.
     - `PipelineCompositionValidator.kt` - Static cross-pipeline validator for `NodeType.PIPELINE` composition: walks the call graph (resolving each `targetPipelineId` transitively through `PipelineRepository`) and reports cycles (incl. self-reference), dangling target references, and chains nested deeper than `SettingsRepository.pipelineMaxNestingDepth`. The authoritative defence used by `SavePipelineUseCase`; the structural single-graph checks (incl. a PIPELINE node with no target) stay in `PipelineGraph.validate`. Also powers the editor target picker via `classifyTargets` (reuses the reachability walk to mark each candidate Selectable / Self / Cycle / Depth) and the delete-warning via the pure `findDependentPipelines` helper.
+    - `AttachmentStore.kt` - Domain interface for the on-device image-attachment store (`ingest` bytes / `ingestUri` content URI → downscaled JPEG, `delete`, `listStoredPaths`, `absolutePathFor`). Operations return `kotlin.Result`. Data-layer impl: `AttachmentStoreImpl`.
+    - `AudioCaptureStore.kt` - Domain interface for the ephemeral voice-input audio store under `cacheDir/audio/` (`newRecordingFile` → recorder capture path, `importFromUri` → copy a picked audio document to a stable path, `delete` idempotent). Clips are short-lived (deleted after transcription). Operations return `kotlin.Result`. Data-layer impl: `AudioCaptureStoreImpl`.
+    - `AudioRecorder.kt` - Domain interface for single-shot mic capture (`start(maxDurationSec)` / `stop` / `cancel`) publishing a `RecordingState` (`Idle` / `Recording(elapsedSec, maxSec)` / `Finished(path)`). Writes 16 kHz mono PCM WAV into `AudioCaptureStore` and auto-stops at the limit. Data-layer impl: `AudioRecorderImpl`.
+    - `NativeMemorySampler.kt` - `fun interface` reading the process's current native-heap bytes, so the domain layer can sample memory during inference without importing `android.os.Debug`. KDoc carries the honesty contract (process-wide, excludes mmap'd model pages, low under ZRAM → approximate only). Data-layer impl: `AndroidNativeMemorySampler`.
     - `AgentWorkspace.kt` - Domain interface for the agent's jailed file sandbox (`resolve` / `readText` / `writeText` / `editText` / `delete` / `list`, plus the Files-screen surface `usage` / `readTextPreview` / `importBytes` / `exportTo`); the single trust boundary for agent file I/O (path containment + size quotas + text-only agent surface; byte-faithful stream import/export for the user-facing screen). Operations return typed `WorkspaceResult`/`WorkspaceError` instead of throwing. Data-layer impl: `AgentWorkspaceImpl`.
     - `WorkspaceGlob.kt` - Pure, dependency-free glob→`Regex` matcher for workspace-relative paths (`*` within a segment, `**` across directories, `?` single char); backs the `find_files` tool.
     - `WorkspaceTextEdit.kt` - Pure, dependency-free anchored find-replace primitive backing `edit_file`: requires exactly one literal, non-overlapping occurrence of the anchor (`Replaced` / `AnchorNotFound` / `AnchorNotUnique(count)`); the I/O lives in `AgentWorkspace.editText`.
@@ -359,7 +396,14 @@ This file maps the contents of the main application package.
     - `InitializeAppUseCase.kt` - First-launch initialiser: persists the default system prompts and materialises the bundled `showcase_full_agent` preset (via `LoadPipelineFromPresetUseCase`) as the seed/default pipeline, falling back to `DefaultPipelineFactory` if the preset asset is unavailable. Idempotent on `isFirstLaunch`. On **every** launch it also runs `SeedBundledSkillsUseCase` (so upgrading users receive the bundled skills) and sweeps orphaned runs.
     - `FindPipelinesUsingSkillUseCase.kt` - Scans saved pipelines for SKILL-node references to a skill (for the delete-with-usage warning). Dormant — returns empty until the SKILL node ships; the single reference check is the only edit then.
     - `SeedBundledSkillsUseCase.kt` - Idempotently seeds the bundled skills into the `skills` table (delegates the asset I/O to `SkillRepository.seedBundledSkills`). Invoked from `InitializeAppUseCase` on every launch.
-    - `LoadModelUseCase.kt` - Use case to load a model.
+    - `LoadModelUseCase.kt` - Use case to load a model. Accepts `requireVision` / `requireAudio`: a modality-carrying run forces a vision-/audio-enabling re-initialization of the LiteRT engine (re-uses an engine already in the needed mode for the same model; vision and audio are independent and never forced onto a freshly loaded model that does not need them).
+    - `GetModelPerformanceUseCase.kt` - Folds a model's most recent `PerformanceConstants.SAMPLE_WINDOW` samples into a `ModelPerformanceSummary` (mean TTFT/decode, worst-case peak) on the fly, or `null` when there are no runs yet. Backs the Performance card's rolling averages.
+    - `RunBenchmarkUseCase.kt` - Controlled one-shot model benchmark: refuses while the engine is busy (`TaskQueueManager.globalState` → `EngineBusy`), loads the active model, runs `DefaultPrompts.BENCHMARK_PROMPT` as a warm-up (discarded) then a measured pass (timed + peak-sampled like a real run), persists the measured `ModelPerformanceSample` (`isBenchmark = true`) and returns a `BenchmarkReport`. Reports `BenchmarkRunPhase` (WARMING_UP → MEASURING) via a callback; foreground-only, shares the engine generation mutex, cancellable.
+    - `SearchDiscoverableModelsUseCase.kt` - Lists/searches discoverable models via `ModelDiscoveryRepository` (normalises a blank query to null, fixes the default page size); returns `Result`.
+    - `GetDiscoverableModelDetailUseCase.kt` - Fetches a single discoverable model's detail via `ModelDiscoveryRepository`; returns `Result`.
+    - `InstallDiscoveredModelUseCase.kt` - Streams a chosen `.litertlm` file through `ModelDownloadManager` (with the stored Hugging Face token) and, on success, registers a `LocalModel` carrying the Hub-reported size (not auto-activated). Reuses the existing download path.
+    - `TranscribeAudioUseCase.kt` - Voice-input preprocessing: transcribes a recorded/picked audio clip into text **before** any pipeline (audio never travels the graph). Refuses while a run is active (`TaskQueueManager.globalState` busy gate → `EngineBusy`), checks the active model's `supportsAudio` (`NoActiveModel` / `ModelNotAudioCapable`), loads it with `requireAudio`, collects `LlmInferenceEngine.transcribe`, and deletes the ephemeral clip via `AudioCaptureStore` on success and terminal failure (kept only on `EngineBusy` for retry). Returns a `TranscriptionOutcome` sealed result.
+    - `ResolveEntryInferenceUseCase.kt` - Classifies the inference entry of the pipeline a chat session would run (`EntryInferenceKind` = `LOCAL` / `CLOUD` / `NONE`) by resolving the bound-or-default graph: `CLOUD` when the `INPUT` successor is a cloud node, `LOCAL` when a vision sink (`LITE_RT` node with `originalTask`) is reachable from `INPUT`, else `NONE`. Mirrors the engine's delivery predicate so the multimodal send-time pre-flight blocks cloud-first / non-vision-model / no-sink pipelines instead of silently dropping the image.
     - `LoadPipelineFromPresetUseCase.kt` - Materialises a `PipelinePreset` into a concrete `PipelineGraph` with fresh ids (pipeline + nodes + connections), drops orphan connections, validates, persists via `PipelineRepository.savePipeline`, returns the new pipeline id.
     - `LoadPipelineUseCase.kt` - Use case to load a pipeline.
     - `RenamePipelineUseCase.kt` - Validates and applies a new display name to an existing pipeline; canonical name-validation gate (trim + length).
@@ -375,6 +419,7 @@ This file maps the contents of the main application package.
     - `TaskRouterUseCase.kt` - Use case to route tasks.
     - `ResetSamplingDefaultsUseCase.kt` - Resets temperature / top-K / top-P / repetition penalty / max context / max steps to the documented defaults.
     - `ResumePipelineRunUseCase.kt` - Validates and launches the checkpoint resume of a non-live run — INTERRUPTED (resume-window age) or persistently waiting WAITING_* (parked record + approval window) — with graph content-hash preconditions and the guarded status → QUEUED transition. Hosts the `ResumeOutcome` sealed result.
+    - `CleanupOrphanAttachmentsUseCase.kt` - One orphaned-attachment sweep: diffs files in the attachment store (`AttachmentStore.listStoredPaths`) against the paths still referenced by messages (`ChatRepository.getReferencedAttachmentPaths`) and deletes the difference. Read-only w.r.t. the DB. Driven by `AttachmentOrphanCleanupWorker`.
     - `CleanupPipelineRunsUseCase.kt` - One run-history retention pass: deletes terminal runs beyond `traceRetentionRunsPerSession` per chat or older than `traceRetentionMaxAgeDays` (traces cascade via the `trace_steps.runId` FK), plus aged legacy pre-run trace rows. WAITING_* runs are never candidates. Driven by `RunRetentionWorker`.
     - `ParkedRunResumer.kt` - Shared submission tail of the background-HITL decision use cases: notification teardown, lazy approval-window expiry, first-writer-wins response write, checkpoint resume, and the `failPark` settlement shared with the maintenance worker. Hosts `PendingSubmissionOutcome`.
     - `SubmitApprovalDecisionUseCase.kt` - Single entry point of the user's approve / deny decision: live in-process gate first, then the parked pending-interaction record (notification actions address it by run id, the chat card by session).
@@ -410,6 +455,7 @@ This file maps the contents of the main application package.
     - `common/` - Cross-screen presentation helpers.
       - `UiText.kt` - Sealed `UiText` (`Resource` / `Dynamic` / `Joined` / `Empty`) used by `UiState`s to carry user-visible text without holding a `Context`.
       - `UiTextExt.kt` - `@Composable UiText.asString()` and `Context.resolve(UiText)` resolution helpers.
+      - `ClipboardText.kt` - `readPlainClipboardText(context)` — shared system-clipboard plain-text reader backing the HuggingFace-token "Paste" actions on the Models and Discover screens.
     - `components/` - Reusable UI components.
       - `VariableChipsRow.kt` - Horizontal chip row for inserting `$VARIABLE` tokens into prompt editors.
       - `PromptPreviewBottomSheet.kt` - Modal bottom sheet that renders a prompt with substituted values highlighted.
@@ -446,9 +492,19 @@ This file maps the contents of the main application package.
       - `MemoryUiState.kt` - Memory UI state: raw chunk list + size + last-compacted + session-name cache, plus the view selections (category / sort / date / semantic-search) and transient detail/dialog flags.
       - `MemoryViewModel.kt` - Memory ViewModel. Loads chunks/stats/last-compacted/session-names; owns category/sort/date selection, debounced semantic search (`RetrieveRelevantMemoryUseCase.retrieveScored`), inline edit + tag editing, manual add (`SaveMessageToMemoryUseCase`), pin toggling, manual compaction (`MemoryCompactionUseCase` + `EstimateCompactionUseCase`), and full export.
     - `models/` - Models screen components (Knotwork redesign with inline Active card + HF auth + Custom URL + Presets list).
-      - `ModelsScreen.kt` - Slim mapper. Folds `ModelsUiState` into the catalog `ModelsViewState` (Active card / HF auth section / Custom URL / Presets list with Idle / Downloading / OnDisk variants).
-      - `ModelsUiState.kt` - Models UI state. Adds `activeDownloadFileName: String?` so the catalog can render the in-flight progress on the matching preset row.
-      - `ModelsViewModel.kt` - Models ViewModel. Adds `cancelDownload` (cancels the active download job) and `deleteModel`.
+      - `ModelsScreen.kt` - Slim mapper. Folds `ModelsUiState` into the catalog `ModelsViewState` (Active card / HF auth section / Custom URL / Presets list with Idle / Downloading / OnDisk variants). Also builds the Performance card state via `toPerformanceCardState()` (NoModel / Empty / Populated / Running / Result / EngineBusy) and wires the benchmark callbacks; collects `benchmarkShareEvents` to fire an `ACTION_SEND` text share and `benchmarkErrorEvents` to a snackbar.
+      - `ModelsUiState.kt` - Models UI state. Adds `activeDownloadFileName: String?` so the catalog can render the in-flight progress on the matching preset row. Adds `performanceSummary` (active-model rolling averages), `benchmark` (`BenchmarkUiState` Idle/Running/Result), and `engineBusy` for the Performance card.
+      - `ModelsViewModel.kt` - Models ViewModel. Adds `cancelDownload` (cancels the active download job) and `deleteModel`. Observes the active model's `GetModelPerformanceUseCase` summary (re-subscribes on active-model change) and the engine-busy signal; drives the benchmark (`onRunBenchmark`/`onCancelBenchmark`/`onShareBenchmark`/`onDismissBenchmark`) via `RunBenchmarkUseCase`, emitting one-shot share/error events.
+      - `ByteSizeLabel.kt` - Shared GiB/MiB byte-label ladder (`gigabyteOrMegabyteLabel`, Locale.US, "1.8 GB" / "640 MB", with a rounding-boundary guard so it never prints "1024 MB"). Single source for the Models surface's model-size labels (`ModelsScreen`) and the Performance card's peak memory (`PerformanceFormatting`), so the two can't drift.
+      - `PerformanceFormatting.kt` - App-side display formatting for the Performance card and the benchmark share text (TTFT ms→s, decode tok/s, peak memory via `ByteSizeLabel` or `null`, total seconds, "avg · last N runs" caption, plain-text share payload). Kept out of the catalog so the design layer holds no number/unit logic.
+    - `discover/` - Hugging Face model-discovery screens (list + detail).
+      - `DiscoverScreen.kt` - Slim mapper. Folds `DiscoverUiState` into the catalog `DiscoverContent` (loading/populated/empty/error), formatting the stats line and pluralised "N files" hint; wires search/refresh/retry and opens a card via `onOpenModel(repoId)`.
+      - `DiscoverUiState.kt` - List UI state: `DiscoverStatus` branch + query + model summaries + `refreshing` flag.
+      - `DiscoverViewModel.kt` - List ViewModel over `SearchDiscoverableModelsUseCase`: owns the search text and the fetch lifecycle (initial load, search, pull-to-refresh, retry), mapping `Result` success/failure to populated/empty/error.
+      - `DiscoverDetailScreen.kt` - Slim mapper for the detail surface; folds `DiscoverDetailUiState` into the catalog `DiscoverDetailContent`, overlays a `SnackbarHost` for install outcomes, reads the clipboard for the token-paste action and opens the model card in the browser.
+      - `DiscoverDetailUiState.kt` - Detail UI state: `DiscoverDetailStatus` branch + loaded `DiscoverableModelDetail` + per-file download progress + post-install `installed` overlay + pending-licence file + token field state; plus `DiscoverInstallEvent` (Success / Failed(gated)) one-shot results.
+      - `DiscoverDetailViewModel.kt` - Detail ViewModel over `GetDiscoverableModelDetailUseCase` / `InstallDiscoveredModelUseCase` / `SettingsRepository`: loads the detail, gates each install behind a licence confirmation, tracks per-file install jobs/progress, detects a 401/403 gated refusal, and reads/writes the shared Hugging Face token.
+      - `DiscoverFormatting.kt` - Shared `formatHfCount` (thousands/millions abbreviation) used by both Discover screens so download/like figures format identically.
     - `monitoring/` - Monitoring screen components.
       - `MonitoringScreen.kt` - Slim mapper. Folds `MonitoringUiState` into the catalog `MonitoringViewState` and renders `MonitoringContent`.
       - `MonitoringUiState.kt` - Monitoring UI state.

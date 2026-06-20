@@ -18,7 +18,7 @@ class EngineStructuredInferenceClientTest {
 
     @Test
     fun `given streamed tokens when infer then returns the concatenation`() = runTest {
-        every { engine.generateResponseStream(any(), any()) } returns flowOf("Hel", "lo")
+        every { engine.generateResponseStream(any(), any(), any()) } returns flowOf("Hel", "lo")
 
         val result = EngineStructuredInferenceClient(engine).infer("prompt", temperature = null)
 
@@ -27,16 +27,16 @@ class EngineStructuredInferenceClientTest {
 
     @Test
     fun `given a temperature when infer then it is forwarded to the engine`() = runTest {
-        every { engine.generateResponseStream(any(), any()) } returns flowOf("ok")
+        every { engine.generateResponseStream(any(), any(), any()) } returns flowOf("ok")
 
         EngineStructuredInferenceClient(engine).infer("prompt", temperature = 0.1f)
 
-        verify { engine.generateResponseStream("prompt", 0.1f) }
+        verify { engine.generateResponseStream("prompt", null, 0.1f) }
     }
 
     @Test
     fun `given an onToken hook when infer then every token is forwarded before being appended`() = runTest {
-        every { engine.generateResponseStream(any(), any()) } returns flowOf("a", "b", "c")
+        every { engine.generateResponseStream(any(), any(), any()) } returns flowOf("a", "b", "c")
         val seen = mutableListOf<String>()
 
         val result = EngineStructuredInferenceClient(engine) { seen += it }.infer("prompt", temperature = null)

@@ -95,6 +95,21 @@ object NavRoutes {
     /** Local model management (under More). */
     const val MODELS: String = "models"
 
+    /** Hugging Face model-discovery list (reached from Models). */
+    const val DISCOVER: String = "discover"
+
+    /**
+     * Hugging Face model-discovery detail. The repository id contains a `/`,
+     * so it travels as a URL-encoded query argument rather than a path segment.
+     */
+    const val DISCOVER_DETAIL: String = "discover/detail?repoId={repoId}"
+
+    /** Query-argument key for [DISCOVER_DETAIL]. */
+    const val DISCOVER_DETAIL_REPO_ID_ARG: String = "repoId"
+
+    /** Builds the concrete discover-detail route for [repoId]. */
+    fun discoverDetailRoute(repoId: String): String = "discover/detail?repoId=${android.net.Uri.encode(repoId)}"
+
     /** Long-term memory browser (under More). */
     const val MEMORY: String = "memory"
 

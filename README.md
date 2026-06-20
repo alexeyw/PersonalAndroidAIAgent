@@ -88,6 +88,26 @@ configured it.
   background chat-history compression that summarises older turns so a long
   session never overflows the context window. All three are configurable and
   surface their activity on the agent console.
+- **Image attachments** — attach one image per message from the system Photo
+  Picker (gallery / screenshots, no storage permission) or the camera. Images
+  are downscaled on-device (aspect-preserved) and re-encoded to JPEG in private
+  storage; the original is never kept. A removable composer preview, a bubble
+  thumbnail, and a tap-to-fullscreen viewer; attachment files are cleaned up
+  with their message and by a daily orphan sweep.
+- **On-device image understanding** — a vision-capable local model (e.g.
+  Gemma 4) reads the attached image entirely on-device. The image is handed to
+  the first on-device pipeline step alongside the prompt and **never sent to
+  cloud models**. Mark a model vision-capable with the **Image support** toggle
+  on the Models screen; a pre-flight check blocks (with a clear message) sending
+  an image to a text-only model or to a cloud-first pipeline before the run
+  starts.
+- **Voice input** — record a short clip (or pick an audio file) and a
+  multimodal local model **transcribes it to editable text before the pipeline
+  runs** — the audio never travels the graph. Canonical 16 kHz mono capture, a
+  live timer, and an auto-stop limit (default 30 s); mark a model audio-capable
+  with the **Audio support** toggle on the Models screen. A text-only model, a
+  denied mic permission, or a busy engine each surface a calm, non-blocking
+  notice. The clip is deleted after a successful transcription.
 - Redesigned **Settings** screen with identity card, structured
   HITL restrictions, sampling/repetition controls, memory dashboard
   (Chunks · Size · Threads · Avg score + Export / Import / Re-embed / Clear),
@@ -96,6 +116,22 @@ configured it.
 - **Local model manager** with an inline Active card, HuggingFace
   token + custom URL download fields, and preset rows showing live
   download progress / on-disk status.
+- **Discover models** — browse and search the curated
+  [`litert-community`](https://huggingface.co/litert-community) organisation on
+  Hugging Face right inside the app (top-bar action on the Models screen). Each
+  card shows downloads, likes and licence; the detail screen lists a repo's
+  `.litertlm` files with sizes and an **Install** action that reuses the existing
+  download manager, gated behind an explicit **licence confirmation**. Models
+  already on disk are marked **Installed**. Access-gated repos show a lock badge
+  and an inline Hugging Face token field; a 401/403 refusal returns a clear
+  "accept the licence and add a token" hint. The list is read-only and only ever
+  calls the Hub in response to a user action, with a graceful retry on error.
+- **Model performance insights & benchmark** — a Performance card on the
+  Models screen showing the active model's rolling-average **time-to-first-token**,
+  **decode speed** (tok/s) and **peak memory** over its recent runs, plus a
+  **Run benchmark** action (fixed prompt, warm-up + measured run) that produces a
+  shareable one-shot report. Samples are recorded automatically from real runs;
+  peak memory is a process-wide native-heap figure, labelled **approximate**.
 - **Prompt library** — `ScrollableTabRow` of categories, per-card
   edit / delete / duplicate actions, inline `$VAR` highlighting in
   the body, and a `ModalBottomSheet` editor with `INSERT` chip row.
@@ -256,6 +292,7 @@ After installing:
 | Async            | Coroutines / Flow                                       |
 | Serialization    | kotlinx.serialization (structured-output validation)    |
 | Network          | OkHttp + Ktor (via Koog)                                |
+| Image loading    | Coil 3 (attachment thumbnails / viewer)                 |
 | Local storage    | Room + DataStore                                        |
 | Testing          | JUnit + MockK                                           |
 

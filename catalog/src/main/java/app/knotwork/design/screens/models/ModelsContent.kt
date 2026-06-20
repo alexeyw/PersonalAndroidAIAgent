@@ -21,6 +21,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -43,6 +44,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
+import app.knotwork.design.components.controls.LabeledSwitchRow
 import app.knotwork.design.components.misc.EmptyState
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
@@ -136,9 +138,17 @@ private fun ModelsTopBar(state: ModelsViewState, strings: ModelsStrings, callbac
                 )
             }
         },
-        // No top-bar overflow: the model-management actions it would host are
-        // not part of v0.x, so the affordance is omitted rather than shown as a
-        // dead button.
+        // Single top-bar action: open the Hugging Face model-discovery
+        // surface. Other model-management actions are not part of v0.x.
+        actions = {
+            IconButton(onClick = callbacks.onDiscover) {
+                Icon(
+                    imageVector = AppIcons.Hub,
+                    contentDescription = strings.discoverCd,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
@@ -210,7 +220,21 @@ private fun ModelsBody(
     ) {
         state.active?.let { active ->
             item(key = "active") {
-                ActiveModelCard(active = active, strings = strings)
+                ActiveModelCard(active = active, strings = strings, callbacks = callbacks)
+            }
+        }
+        state.performance?.let { performance ->
+            item(key = "performance") {
+                PerformanceCard(
+                    state = performance,
+                    strings = strings.performance,
+                    callbacks = PerformanceCallbacks(
+                        onRunBenchmark = callbacks.onRunBenchmark,
+                        onCancelBenchmark = callbacks.onCancelBenchmark,
+                        onShareReport = callbacks.onShareBenchmark,
+                        onDismissReport = callbacks.onDismissBenchmark,
+                    ),
+                )
             }
         }
         item(key = "hf-section") {
@@ -332,50 +356,72 @@ private fun SectionHeader(label: String, modifier: Modifier = Modifier, trailing
 }
 
 @Composable
-private fun ActiveModelCard(active: ActiveModelRow, strings: ModelsStrings) {
-    // Non-interactive status card: there is no active-model detail surface in
-    // v0.x, so the card neither clicks nor shows a trailing chevron (a chevron
-    // would falsely imply navigation).
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+private fun ActiveModelCard(active: ActiveModelRow, strings: ModelsStrings, callbacks: ModelsCallbacks) {
+    // Status card with a single interactive affordance: the image-support
+    // toggle below the identity row. The identity row itself stays
+    // non-interactive (no active-model detail surface in v0.x).
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(KnotworkTheme.shapes.md)
-            .background(color = KnotworkTheme.extended.surface3)
-            .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp3),
+            .background(color = KnotworkTheme.extended.surface3),
     ) {
-        LeadingChipTile(background = MaterialTheme.colorScheme.surface)
-        Column(
-            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
-            modifier = Modifier.weight(1f),
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp3),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            LeadingChipTile(background = MaterialTheme.colorScheme.surface)
+            Column(
+                verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+                modifier = Modifier.weight(1f),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = strings.activeBadge,
+                        style = KnotworkTextStyles.LabelSm,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Box(
+                        modifier = Modifier
+                            .padding(start = KnotworkTheme.spacing.sp1)
+                            .size(ActiveDotSize)
+                            .background(
+                                color = KnotworkTheme.extended.signalSuccess,
+                                shape = KnotworkTheme.shapes.full,
+                            ),
+                    )
+                }
                 Text(
-                    text = strings.activeBadge,
-                    style = KnotworkTextStyles.LabelSm,
+                    text = active.displayName,
+                    style = KnotworkTextStyles.MonoBase,
                     color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                Box(
-                    modifier = Modifier
-                        .padding(start = KnotworkTheme.spacing.sp1)
-                        .size(ActiveDotSize)
-                        .background(color = KnotworkTheme.extended.signalSuccess, shape = KnotworkTheme.shapes.full),
+                Text(
+                    text = active.meta,
+                    style = KnotworkTextStyles.MonoSm,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
                 )
             }
-            Text(
-                text = active.displayName,
-                style = KnotworkTextStyles.MonoBase,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                text = active.meta,
-                style = KnotworkTextStyles.MonoSm,
-                color = KnotworkTheme.extended.onSurfaceMuted,
-            )
         }
+        HorizontalDivider(color = KnotworkTheme.extended.divider)
+        LabeledSwitchRow(
+            label = strings.visionLabel,
+            description = strings.visionDescription,
+            checked = active.visionSupported,
+            onToggle = { callbacks.onToggleVision(!active.visionSupported) },
+        )
+        HorizontalDivider(color = KnotworkTheme.extended.divider)
+        LabeledSwitchRow(
+            label = strings.audioLabel,
+            description = strings.audioDescription,
+            checked = active.audioSupported,
+            onToggle = { callbacks.onToggleAudio(!active.audioSupported) },
+        )
     }
 }
 
@@ -714,4 +760,10 @@ data class ModelsStrings(
     val emptyCta: String = "Add model",
     val errorTitle: String = "Couldn't load models",
     val errorRetry: String = "Retry",
+    val discoverCd: String = "Discover models",
+    val visionLabel: String = "Image support",
+    val visionDescription: String = "Let this model read attached photos",
+    val audioLabel: String = "Audio support",
+    val audioDescription: String = "Record or pick a clip to transcribe",
+    val performance: PerformanceStrings = PerformanceStrings(),
 )

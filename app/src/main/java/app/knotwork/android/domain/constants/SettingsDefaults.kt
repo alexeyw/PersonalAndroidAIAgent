@@ -200,6 +200,20 @@ object SettingsDefaults {
     const val CHAT_HISTORY_LIVE_WINDOW_MAX: Int = 50
 
     /**
+     * Default maximum voice-recording length, in seconds, before the recorder
+     * auto-stops and hands the clip to transcription. Set to 30 s to match the
+     * effective audio window of the multimodal on-device models (longer clips
+     * risk silent truncation by the model's audio frontend); user-adjustable.
+     */
+    const val AUDIO_MAX_DURATION_SEC_DEFAULT: Int = 30
+
+    /** Lower bound enforced when the user edits the recording length. */
+    const val AUDIO_MAX_DURATION_SEC_MIN: Int = 5
+
+    /** Upper bound enforced when the user edits the recording length. */
+    const val AUDIO_MAX_DURATION_SEC_MAX: Int = 120
+
+    /**
      * Default minimum cosine-similarity score a memory chunk must reach to be
      * surfaced during retrieval. Chunks below this are filtered out before
      * reaching the prompt.

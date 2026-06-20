@@ -273,4 +273,126 @@ class AppDatabaseMigrationTest {
             depth.contains("NOT NULL") && depth.contains("DEFAULT 0"),
         )
     }
+
+    @Test
+    fun `MIGRATION_38_39 targets versions 38 to 39`() {
+        val migration = AppDatabase.MIGRATION_38_39
+
+        assertEquals(38, migration.startVersion)
+        assertEquals(39, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_38_39 adds four nullable attachment columns to chat_messages`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val statements = mutableListOf<String>()
+
+        AppDatabase.MIGRATION_38_39.migrate(db)
+
+        verify(exactly = 4) { db.execSQL(capture(statements)) }
+        val joined = statements.joinToString(" | ").uppercase()
+        listOf("ATTACHMENTPATH", "ATTACHMENTMIMETYPE", "ATTACHMENTWIDTH", "ATTACHMENTHEIGHT").forEach { column ->
+            assertTrue(
+                "Expected ALTER chat_messages ADD $column, got: $joined",
+                joined.contains("ALTER TABLE `CHAT_MESSAGES` ADD COLUMN `$column`"),
+            )
+        }
+        // Additive nullable columns — never NOT NULL, so existing rows keep NULL (no attachment).
+        assertTrue(
+            "Attachment columns must be nullable (no NOT NULL): $joined",
+            !joined.contains("NOT NULL"),
+        )
+    }
+
+    @Test
+    fun `MIGRATION_39_40 targets versions 39 to 40`() {
+        val migration = AppDatabase.MIGRATION_39_40
+
+        assertEquals(39, migration.startVersion)
+        assertEquals(40, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_39_40 adds supportsVision column to local_models with default 0`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val statements = mutableListOf<String>()
+
+        AppDatabase.MIGRATION_39_40.migrate(db)
+
+        verify(exactly = 1) { db.execSQL(capture(statements)) }
+        val sql = statements.single().uppercase()
+        assertTrue(
+            "Expected ALTER local_models ADD supportsVision, got: $sql",
+            sql.contains("ALTER TABLE `LOCAL_MODELS` ADD COLUMN `SUPPORTSVISION`"),
+        )
+        // Backfilled to text-only (0) for every existing row.
+        assertTrue("supportsVision must be NOT NULL DEFAULT 0: $sql", sql.contains("NOT NULL DEFAULT 0"))
+    }
+
+    @Test
+    fun `MIGRATION_40_41 targets versions 40 to 41`() {
+        val migration = AppDatabase.MIGRATION_40_41
+
+        assertEquals(40, migration.startVersion)
+        assertEquals(41, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_40_41 adds supportsAudio column to local_models with default 0`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val statements = mutableListOf<String>()
+
+        AppDatabase.MIGRATION_40_41.migrate(db)
+
+        verify(exactly = 1) { db.execSQL(capture(statements)) }
+        val sql = statements.single().uppercase()
+        assertTrue(
+            "Expected ALTER local_models ADD supportsAudio, got: $sql",
+            sql.contains("ALTER TABLE `LOCAL_MODELS` ADD COLUMN `SUPPORTSAUDIO`"),
+        )
+        // Backfilled to audio-incapable (0) for every existing row.
+        assertTrue("supportsAudio must be NOT NULL DEFAULT 0: $sql", sql.contains("NOT NULL DEFAULT 0"))
+    }
+
+    @Test
+    fun `MIGRATION_41_42 targets versions 41 to 42`() {
+        val migration = AppDatabase.MIGRATION_41_42
+
+        assertEquals(41, migration.startVersion)
+        assertEquals(42, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_41_42 creates model_performance_samples table with its index`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val statements = mutableListOf<String>()
+
+        AppDatabase.MIGRATION_41_42.migrate(db)
+
+        // CREATE TABLE + CREATE INDEX.
+        verify(exactly = 2) { db.execSQL(capture(statements)) }
+
+        val createTable = statements.first().uppercase()
+        assertTrue(
+            "Expected CREATE TABLE model_performance_samples, got: ${statements.first()}",
+            createTable.contains("CREATE TABLE") && createTable.contains("MODEL_PERFORMANCE_SAMPLES"),
+        )
+        listOf(
+            "ID", "MODELPATH", "TTFTMS", "DECODETOKENSPERSEC", "TOTALMS",
+            "TOKENCOUNT", "PEAKNATIVEHEAPBYTES", "ISBENCHMARK", "CREATEDAT",
+        ).forEach { column ->
+            assertTrue("Missing column $column in: ${statements.first()}", createTable.contains(column))
+        }
+        // Samples are keyed by path, not a foreign key onto local_models.
+        assertTrue(
+            "Samples must not carry a foreign key (keyed by model path): ${statements.first()}",
+            !createTable.contains("FOREIGN KEY"),
+        )
+
+        val index = statements[1].uppercase()
+        assertTrue(
+            "Missing (modelPath, id) index for the rolling-window query: ${statements[1]}",
+            index.contains("INDEX_MODEL_PERFORMANCE_SAMPLES_MODELPATH_ID"),
+        )
+    }
 }

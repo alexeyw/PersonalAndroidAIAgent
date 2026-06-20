@@ -52,6 +52,16 @@ class ModelsContentSnapshotTest {
         ModelsContent(state = ModelsPreview.error())
     }
 
+    @Test
+    fun models_vision_on_light() = snapshot(name = "vision_on", dark = false) {
+        ModelsContent(state = ModelsPreview.visionOn())
+    }
+
+    @Test
+    fun models_vision_on_dark() = snapshot(name = "vision_on", dark = true) {
+        ModelsContent(state = ModelsPreview.visionOn())
+    }
+
     private fun snapshot(name: String, dark: Boolean, content: @Composable () -> Unit) {
         composeTestRule.setContent {
             CompositionLocalProvider(LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true)) {
@@ -124,5 +134,10 @@ internal object ModelsPreview {
     fun error(): ModelsViewState = ModelsViewState(
         visualState = ModelsVisualState.Error,
         errorMessage = "Couldn't read the local model directory: permission denied.",
+    )
+
+    /** Default surface with the active model's image-support toggle switched ON. */
+    fun visionOn(): ModelsViewState = default().copy(
+        active = active().copy(visionSupported = true),
     )
 }

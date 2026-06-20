@@ -3,6 +3,7 @@ package app.knotwork.android.data.repositories
 import app.knotwork.android.data.local.dao.LocalModelDao
 import app.knotwork.android.data.local.models.LocalModelEntity
 import app.knotwork.android.domain.models.LocalModel
+import app.knotwork.android.domain.repositories.ModelPerformanceRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -18,12 +19,14 @@ import java.io.File
 class LocalModelRepositoryImplTest {
 
     private lateinit var localModelDao: LocalModelDao
+    private lateinit var modelPerformanceRepository: ModelPerformanceRepository
     private lateinit var repository: LocalModelRepositoryImpl
 
     @Before
     fun setup() {
         localModelDao = mockk(relaxed = true)
-        repository = LocalModelRepositoryImpl(localModelDao)
+        modelPerformanceRepository = mockk(relaxed = true)
+        repository = LocalModelRepositoryImpl(localModelDao, modelPerformanceRepository)
     }
 
     @Test
@@ -76,6 +79,13 @@ class LocalModelRepositoryImplTest {
     }
 
     @Test
+    fun `setVisionSupport delegates to the dao with the given id and flag`() = runTest {
+        repository.setVisionSupport(id = 5L, enabled = true)
+
+        coVerify(exactly = 1) { localModelDao.setVisionSupport(5L, true) }
+    }
+
+    @Test
     fun `deleteModelById deletes the on-disk file then the record`() = runTest {
         val file = File.createTempFile("model", ".task").apply { writeBytes(byteArrayOf(1, 2, 3)) }
         val entity = LocalModelEntity(7, "Model", file.absolutePath, 3L, false)
@@ -85,6 +95,8 @@ class LocalModelRepositoryImplTest {
 
         assertFalse("model weights file must be removed from disk", file.exists())
         coVerify(exactly = 1) { localModelDao.deleteModelById(7) }
+        // The model's performance history is dropped too (samples carry no FK).
+        coVerify(exactly = 1) { modelPerformanceRepository.deleteForModel(file.absolutePath) }
     }
 
     @Test

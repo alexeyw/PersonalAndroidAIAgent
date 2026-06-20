@@ -48,6 +48,14 @@ import javax.inject.Inject
  * [Answering][app.knotwork.android.domain.models.AgentOrchestratorState.Answering] states
  * during streaming, with the final aggregated text emitted as a
  * [NodeOutput.Result] together with an approximate token count for metrics.
+ *
+ * **Privacy contract — attachments never reach the cloud.** A run's image
+ * attachment is delivered by [GraphExecutionEngine][app.knotwork.android.domain.engine.GraphExecutionEngine]
+ * exclusively to an on-device `LITE_RT` node (via [ExecutionScope.imagePath]).
+ * This executor deliberately ignores [ExecutionScope.imagePath] and only ever
+ * sends the assembled text `inputText`, so a user's image is never transmitted
+ * off-device. The send-time pre-flight guard blocks an image message whose
+ * pipeline starts on a CLOUD node before it can run.
  */
 class CloudLlmNodeExecutor @Inject constructor(
     private val toolRepository: ToolRepository,

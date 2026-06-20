@@ -3,12 +3,14 @@ package app.knotwork.android.presentation.ui.chat.home
 import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.ClarificationRequest
 import app.knotwork.android.domain.models.ConsoleEvent
+import app.knotwork.android.domain.models.MessageAttachment
 import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
@@ -24,22 +26,32 @@ import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.services.AttachmentStore
+import app.knotwork.android.domain.services.AudioCaptureStore
+import app.knotwork.android.domain.services.AudioRecorder
 import app.knotwork.android.domain.services.ChatHistoryCompressionCoordinator
 import app.knotwork.android.domain.services.MemoryAutoExtractionCoordinator
+import app.knotwork.android.domain.services.RecordingState
+import app.knotwork.android.domain.services.isTerminal
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
+import app.knotwork.android.domain.usecases.EntryInferenceKind
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.PendingSubmissionOutcome
+import app.knotwork.android.domain.usecases.ResolveEntryInferenceUseCase
 import app.knotwork.android.domain.usecases.ResumeOutcome
 import app.knotwork.android.domain.usecases.ResumePipelineRunUseCase
 import app.knotwork.android.domain.usecases.SaveMessageToMemoryUseCase
 import app.knotwork.android.domain.usecases.SaveToMemoryOutcome
 import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
 import app.knotwork.android.domain.usecases.SubmitClarificationAnswerUseCase
+import app.knotwork.android.domain.usecases.TranscribeAudioUseCase
+import app.knotwork.android.domain.usecases.TranscriptionOutcome
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ChatMessageStatus
 import app.knotwork.design.components.chat.ChatMetadata
 import app.knotwork.design.components.chat.ChatRole
+import app.knotwork.design.components.chat.ComposerVoiceNotice
 import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.components.console.ConsoleFilter
 import app.knotwork.design.components.console.ConsoleLine
@@ -65,6 +77,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -139,6 +152,11 @@ class ChatHomeViewModel @Inject constructor(
     private val pendingInteractionRepository: PendingInteractionRepository,
     private val submitApprovalDecisionUseCase: SubmitApprovalDecisionUseCase,
     private val submitClarificationAnswerUseCase: SubmitClarificationAnswerUseCase,
+    private val attachmentStore: AttachmentStore,
+    private val resolveEntryInferenceUseCase: ResolveEntryInferenceUseCase,
+    private val audioRecorder: AudioRecorder,
+    private val audioCaptureStore: AudioCaptureStore,
+    private val transcribeAudioUseCase: TranscribeAudioUseCase,
 ) : ViewModel() {
 
     private val _state: MutableStateFlow<ChatHomeScreenState> = MutableStateFlow(ChatHomeScreenState())
@@ -159,6 +177,8 @@ class ChatHomeViewModel @Inject constructor(
     private val _memorySaveEvents: MutableSharedFlow<MemorySaveEvent> = MutableSharedFlow(extraBufferCapacity = 1)
     private val _resumeFeedbackEvents: MutableSharedFlow<ResumeFeedbackEvent> =
         MutableSharedFlow(extraBufferCapacity = 1)
+    private val _attachmentErrorEvents: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 1)
+    private val _voiceErrorEvents: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 1)
 
     /**
      * One-shot signal raised when the binding of the active chat points
@@ -206,8 +226,33 @@ class ChatHomeViewModel @Inject constructor(
      */
     val resumeFeedbackEvents: SharedFlow<ResumeFeedbackEvent> = _resumeFeedbackEvents.asSharedFlow()
 
+    /**
+     * One-shot signal raised when ingesting a picked/captured image fails. The
+     * screen surfaces a transient `KnotworkSnackbar`; deliberately not modelled
+     * as a [ChatHomeUiState.Error] so a failed attachment never clobbers the
+     * surface's main visual state (e.g. an in-flight `Generating` run).
+     */
+    val attachmentErrorEvents: SharedFlow<Unit> = _attachmentErrorEvents.asSharedFlow()
+
+    /**
+     * One-shot signal raised when voice input fails (recording failed to capture,
+     * a picked audio file could not be imported, or transcription errored). The
+     * screen shows a voice-specific snackbar — distinct from the image-attachment
+     * failure message.
+     */
+    val voiceErrorEvents: SharedFlow<Unit> = _voiceErrorEvents.asSharedFlow()
+
     private var messagesJob: Job? = null
     private var generationJob: Job? = null
+
+    /**
+     * Re-entrancy guard for the image send path: the attachment pre-flight is
+     * asynchronous (it resolves the pipeline graph), so a second `sendMessage`
+     * could slip through the synchronous `Generating` guard before the first
+     * pre-flight flips the surface. Set synchronously the moment a pre-flight
+     * launches, cleared when it settles to a block or a started run.
+     */
+    private var attachmentSendInFlight: Boolean = false
     private var tokenCounterJob: Job? = null
     private var sessions: List<ChatSession> = emptyList()
     private var availablePipelinesObserved: Boolean = false
@@ -295,7 +340,9 @@ class ChatHomeViewModel @Inject constructor(
 
     /** Updates the composer input value. Hoisted to the VM so screen recompositions never own the text. */
     fun onComposerValueChange(value: String) {
-        _state.update { it.copy(composer = it.composer.copy(value = value)) }
+        // Typing dismisses any blocked voice notice so it never wedges Send
+        // (which is disabled while a notice is shown).
+        _state.update { it.copy(composer = it.composer.copy(value = value, voiceNotice = null)) }
     }
 
     /** Updates the typed-confirm input shown next to the Destructive HITL confirmation row. */
@@ -317,8 +364,12 @@ class ChatHomeViewModel @Inject constructor(
      * the `isFinal = true` row when the pipeline reaches OUTPUT.
      */
     fun sendMessage() {
-        val draft = _state.value.composer.value.trim()
-        if (draft.isEmpty()) return
+        val draftText = _state.value.composer.value.trim()
+        val readyAttachment = (_state.value.composer.attachment as? ComposerAttachmentDraft.Ready)?.attachment
+        // Block while the attachment is still being downscaled, and refuse a
+        // wholly empty send (no text and no image).
+        if (_state.value.composer.attachment is ComposerAttachmentDraft.Processing) return
+        if (draftText.isEmpty() && readyAttachment == null) return
         if (_state.value.visual is ChatHomeUiState.Generating) return
         if (!llmInferenceEngine.isInitialized) {
             // Surface the error with copy that matches what Retry actually
@@ -329,7 +380,85 @@ class ChatHomeViewModel @Inject constructor(
             _state.update { it.copy(visual = ChatHomeUiState.Error(MODEL_NOT_LOADED_MESSAGE)) }
             return
         }
-        _state.update { it.copy(composer = it.composer.copy(value = "")) }
+        // Multimodal pre-flight: an image can only travel into a run that starts
+        // on-device against a vision-capable model. The check resolves the
+        // pipeline graph, so it suspends — run it before clearing the composer so
+        // a blocked send keeps the user's draft and attachment intact (mirrors
+        // the "model not loaded" guard above, which also returns before clearing).
+        //
+        // The suspend gap means the synchronous `Generating` guard above cannot
+        // cover the window between two rapid sends; `attachmentSendInFlight` is
+        // set synchronously here (before the coroutine suspends) so a second tap
+        // is rejected until this pre-flight resolves to either a block or a run.
+        if (readyAttachment != null) {
+            // Guard without its own `return` keeps the function's return count
+            // within the detekt ceiling; a second tap simply finds the flag set
+            // and falls through to the trailing `return` doing nothing.
+            if (!attachmentSendInFlight) {
+                attachmentSendInFlight = true
+                viewModelScope.launch {
+                    try {
+                        val block = attachmentPreflightBlockReason()
+                        if (block != null) {
+                            _state.update { it.copy(visual = ChatHomeUiState.Error(block)) }
+                        } else {
+                            proceedSend(draftText, readyAttachment)
+                        }
+                    } finally {
+                        attachmentSendInFlight = false
+                    }
+                }
+            }
+            return
+        }
+        proceedSend(draftText, readyAttachment = null)
+    }
+
+    /**
+     * Resolves whether an image message must be blocked before it is enqueued,
+     * returning the user-facing block reason or `null` when the send may proceed.
+     *
+     * Three guards, in precedence order:
+     * 1. The run starts on a `CLOUD` node — attachments are never sent off-device
+     *    ([CLOUD_ATTACHMENT_BLOCKED_MESSAGE]).
+     * 2. The active local model is not marked vision-capable — it cannot read an
+     *    image ([MODEL_NO_VISION_MESSAGE]); the most common, most actionable fix.
+     * 3. The pipeline has no on-device step that could receive the image (no
+     *    reachable vision sink), so the picture would be silently ignored
+     *    ([PIPELINE_NO_VISION_MESSAGE]).
+     *
+     * @return The block reason, or `null` to allow the send.
+     */
+    private suspend fun attachmentPreflightBlockReason(): String? {
+        val sessionId = _state.value.thread.currentSessionId
+        val pipelineId = sessions.firstOrNull { it.id == sessionId }?.pipelineId
+        val entryKind = resolveEntryInferenceUseCase(pipelineId)
+        if (entryKind == EntryInferenceKind.CLOUD) return CLOUD_ATTACHMENT_BLOCKED_MESSAGE
+        val activeSupportsVision = _state.value.model.let { model ->
+            model.installed.firstOrNull { it.id == model.activeId }?.supportsVision == true
+        }
+        if (!activeSupportsVision) return MODEL_NO_VISION_MESSAGE
+        if (entryKind == EntryInferenceKind.NONE) return PIPELINE_NO_VISION_MESSAGE
+        return null
+    }
+
+    /**
+     * Performs the actual send once any pre-flight guard has passed: builds the
+     * effective prompt, clears the composer, flips the surface to Generating and
+     * launches the orchestrator collection.
+     *
+     * @param draftText The user's trimmed caption text (may be empty for an
+     *   image-only message).
+     * @param readyAttachment The resolved image attachment to send, or `null`.
+     */
+    private fun proceedSend(draftText: String, readyAttachment: MessageAttachment?) {
+        // Image-only message: an empty caption is replaced by the internal
+        // default instruction so the all-text pipeline graph has a prompt to
+        // travel; the saved message keeps the empty caption so the bubble shows
+        // just the thumbnail.
+        val prompt = draftText.ifEmpty { DefaultPrompts.IMAGE_ONLY_DEFAULT_INSTRUCTION }
+        val displayContent = if (draftText.isEmpty()) "" else null
+        _state.update { it.copy(composer = it.composer.copy(value = "", attachment = null)) }
 
         val sessionId = _state.value.thread.currentSessionId
         if (sessionId.isBlank()) return
@@ -353,11 +482,14 @@ class ChatHomeViewModel @Inject constructor(
             )
         }
 
-        autoRenameIfDefault(sessionId, draft)
+        // Rename from the user's own text, not the effective prompt: an
+        // image-only message (empty draft) must not title the chat with the
+        // internal default instruction.
+        autoRenameIfDefault(sessionId, draftText)
 
         generationJob?.cancel()
         generationJob = viewModelScope.launch {
-            agentOrchestratorUseCase(sessionId, draft, pipelineId)
+            agentOrchestratorUseCase(sessionId, prompt, pipelineId, readyAttachment, displayContent)
                 .catch { error ->
                     _state.update {
                         it.copy(visual = ChatHomeUiState.Error(error.message ?: UNKNOWN_ERROR_FALLBACK))
@@ -365,6 +497,301 @@ class ChatHomeViewModel @Inject constructor(
                 }
                 .collect { orchestratorState -> handleOrchestratorState(orchestratorState) }
         }
+    }
+
+    /** Opens the image-source chooser sheet (Photo library / Camera). */
+    fun onAttachClicked() {
+        _state.update { it.copy(sourceChooserVisible = true) }
+    }
+
+    /** Dismisses the image-source chooser sheet without a choice. */
+    fun dismissSourceChooser() {
+        _state.update { it.copy(sourceChooserVisible = false) }
+    }
+
+    /**
+     * Ingests a picked/captured image: marks the composer attachment
+     * [ComposerAttachmentDraft.Processing], downscales + re-encodes it through
+     * [AttachmentStore], then settles to [ComposerAttachmentDraft.Ready] (or
+     * clears the draft and surfaces an error on failure).
+     *
+     * @param uri content URI string of the picked/captured image.
+     */
+    fun onImagePicked(uri: String) {
+        // Discard any prior pending attachment's file (it was never sent) before
+        // replacing the draft, so a re-pick doesn't leave an orphan behind.
+        val replacedPath = (_state.value.composer.attachment as? ComposerAttachmentDraft.Ready)?.attachment?.path
+        _state.update {
+            it.copy(
+                sourceChooserVisible = false,
+                composer = it.composer.copy(attachment = ComposerAttachmentDraft.Processing),
+            )
+        }
+        viewModelScope.launch {
+            if (replacedPath != null) {
+                attachmentStore.delete(replacedPath)
+            }
+            val stored = attachmentStore.ingestUri(uri).getOrNull()
+            if (stored != null) {
+                val ready = ComposerAttachmentDraft.Ready(
+                    attachment = stored,
+                    absolutePath = attachmentStore.absolutePathFor(stored.path),
+                    detail = attachmentDetailLabel(stored.width, stored.height, attachmentStore.sizeBytes(stored.path)),
+                )
+                _state.update { it.copy(composer = it.composer.copy(attachment = ready)) }
+            } else {
+                // Transient failure — surface a snackbar rather than flipping the
+                // whole surface to Error (which would clobber an in-flight run).
+                _state.update { it.copy(composer = it.composer.copy(attachment = null)) }
+                _attachmentErrorEvents.tryEmit(Unit)
+            }
+        }
+    }
+
+    /** Removes the pending composer attachment without sending it, deleting its file. */
+    fun removeAttachment() {
+        val path = (_state.value.composer.attachment as? ComposerAttachmentDraft.Ready)?.attachment?.path
+        _state.update { it.copy(composer = it.composer.copy(attachment = null)) }
+        if (path != null) {
+            viewModelScope.launch { attachmentStore.delete(path) }
+        }
+    }
+
+    // ──────────────────────────── Voice input ────────────────────────────
+    //
+    // Voice is a preprocessing step: a clip is recorded (or picked) and the
+    // multimodal model transcribes it to text BEFORE any pipeline runs — the
+    // audio never travels the graph. [voiceJob] owns the active record→transcribe
+    // (or pick→transcribe) flow so a discard / re-start cancels it cleanly.
+
+    private var voiceJob: Job? = null
+
+    /** Opens the voice-input source chooser (Record voice / Choose audio file). */
+    fun onMicClicked() {
+        viewModelScope.launch {
+            val maxSec = settingsRepository.audioMaxDurationSec.first()
+            _state.update {
+                it.copy(
+                    composer = it.composer.copy(
+                        audioChooserVisible = true,
+                        voiceNotice = null,
+                        audioMaxDurationSec = maxSec,
+                    ),
+                )
+            }
+        }
+    }
+
+    /** Dismisses the voice-input source chooser without a choice. */
+    fun dismissAudioChooser() {
+        _state.update { it.copy(composer = it.composer.copy(audioChooserVisible = false)) }
+    }
+
+    /**
+     * Surfaces the microphone-permission notice when the user denied the
+     * `RECORD_AUDIO` request from the screen's permission gate.
+     */
+    fun onMicPermissionDenied() {
+        _state.update {
+            it.copy(
+                composer = it.composer.copy(
+                    audioChooserVisible = false,
+                    voiceNotice = ComposerVoiceNotice.PermissionDenied,
+                ),
+            )
+        }
+    }
+
+    /**
+     * Starts a microphone capture (invoked by the screen after the `RECORD_AUDIO`
+     * permission is granted). Observes the recorder, mirroring its elapsed time
+     * into the composer's recording bar, and dispatches on the **terminal** state:
+     * a finished clip is transcribed, a failed capture resets the composer and
+     * pings the error snackbar. The limit is the value already loaded by
+     * [onMicClicked] (no second DataStore read, and the bar starts at the real
+     * limit rather than a `0:00` placeholder).
+     */
+    fun startRecording() {
+        voiceJob?.cancel()
+        val maxSec = _state.value.composer.audioMaxDurationSec
+        _state.update {
+            it.copy(
+                composer = it.composer.copy(
+                    audioChooserVisible = false,
+                    voiceNotice = null,
+                    voice = VoiceInputState.Recording(elapsedSec = 0, maxSec = maxSec),
+                ),
+            )
+        }
+        voiceJob = viewModelScope.launch {
+            audioRecorder.start(maxSec)
+            // Mirror elapsed time until capture reaches a terminal state
+            // (Finished or Failed) — collecting only on `!is Finished` would
+            // hang forever on the Failed/Idle path.
+            audioRecorder.state
+                .takeWhile { !it.isTerminal }
+                .collect { recordingState ->
+                    if (recordingState is RecordingState.Recording) {
+                        _state.update {
+                            it.copy(
+                                composer = it.composer.copy(
+                                    voice = VoiceInputState.Recording(
+                                        elapsedSec = recordingState.elapsedSec,
+                                        maxSec = recordingState.maxSec,
+                                    ),
+                                ),
+                            )
+                        }
+                    }
+                }
+            when (val terminal = audioRecorder.state.value) {
+                is RecordingState.Finished -> transcribeClip(terminal.path)
+                RecordingState.Failed -> {
+                    _state.update { it.copy(composer = it.composer.copy(voice = VoiceInputState.Idle)) }
+                    _voiceErrorEvents.tryEmit(Unit)
+                }
+                // Idle here means a concurrent cancel raced in; just reset.
+                else -> _state.update { it.copy(composer = it.composer.copy(voice = VoiceInputState.Idle)) }
+            }
+        }
+    }
+
+    /** Stops the in-flight capture; the recorder transitions to finished and transcription runs. */
+    fun onStopRecording() {
+        viewModelScope.launch { audioRecorder.stop() }
+    }
+
+    /** Discards the in-flight capture and its clip, returning the composer to idle. */
+    fun onDiscardRecording() {
+        voiceJob?.cancel()
+        voiceJob = null
+        audioRecorder.cancel()
+        _state.update { it.copy(composer = it.composer.copy(voice = VoiceInputState.Idle)) }
+    }
+
+    /**
+     * Imports a user-picked audio file and transcribes it.
+     *
+     * @param uri content URI string of the picked audio document.
+     */
+    fun onAudioFilePicked(uri: String) {
+        voiceJob?.cancel()
+        _state.update {
+            it.copy(
+                composer = it.composer.copy(
+                    audioChooserVisible = false,
+                    voiceNotice = null,
+                    voice = VoiceInputState.Transcribing,
+                ),
+            )
+        }
+        voiceJob = viewModelScope.launch {
+            val path = audioCaptureStore.importFromUri(uri).getOrNull()
+            if (path == null) {
+                _state.update { it.copy(composer = it.composer.copy(voice = VoiceInputState.Idle)) }
+                _voiceErrorEvents.tryEmit(Unit)
+                return@launch
+            }
+            transcribeClip(path)
+        }
+    }
+
+    /**
+     * Runs the clip at [path] through [TranscribeAudioUseCase] and folds the
+     * outcome back into the composer: success drops the transcript into the input
+     * field; the blocked outcomes raise the matching calm notice; a hard failure
+     * pings the error snackbar.
+     */
+    private suspend fun transcribeClip(path: String) {
+        _state.update {
+            it.copy(composer = it.composer.copy(voice = VoiceInputState.Transcribing, voiceNotice = null))
+        }
+        when (val outcome = transcribeAudioUseCase(path)) {
+            is TranscriptionOutcome.Success -> _state.update {
+                it.copy(
+                    composer = it.composer.copy(
+                        voice = VoiceInputState.Idle,
+                        value = mergeTranscript(it.composer.value, outcome.transcript),
+                    ),
+                )
+            }
+
+            TranscriptionOutcome.NoActiveModel,
+            TranscriptionOutcome.ModelNotAudioCapable,
+            -> setVoiceNotice(ComposerVoiceNotice.NoAudioModel)
+
+            TranscriptionOutcome.EngineBusy -> {
+                // The use case keeps the clip on busy for a retry; this UI re-records
+                // instead of retrying the same path, so drop the orphan.
+                audioCaptureStore.delete(path)
+                setVoiceNotice(ComposerVoiceNotice.EngineBusy)
+            }
+
+            is TranscriptionOutcome.Failed -> {
+                _state.update { it.copy(composer = it.composer.copy(voice = VoiceInputState.Idle)) }
+                _voiceErrorEvents.tryEmit(Unit)
+            }
+        }
+    }
+
+    private fun setVoiceNotice(notice: ComposerVoiceNotice) {
+        _state.update {
+            it.copy(composer = it.composer.copy(voice = VoiceInputState.Idle, voiceNotice = notice))
+        }
+    }
+
+    /**
+     * Appends [transcript] to the existing composer [current] text (space-joined)
+     * so a transcription adds to, rather than clobbers, anything already typed.
+     */
+    private fun mergeTranscript(current: String, transcript: String): String = when {
+        transcript.isBlank() -> current
+        current.isBlank() -> transcript
+        else -> "${current.trimEnd()} $transcript"
+    }
+
+    /**
+     * Opens the full-screen viewer for [attachment]. The existence check and
+     * size read run off the main thread (via [AttachmentStore]) so tapping a
+     * bubble never blocks the UI; the viewer renders the calm "no longer
+     * available" state when retention has cleared the file.
+     *
+     * @param attachment the attachment of the tapped message bubble.
+     */
+    fun openImageViewer(attachment: MessageAttachment) {
+        val absolutePath = attachmentStore.absolutePathFor(attachment.path)
+        viewModelScope.launch {
+            val exists = attachmentStore.exists(attachment.path)
+            val detail =
+                attachmentDetailLabel(attachment.width, attachment.height, attachmentStore.sizeBytes(attachment.path))
+            _state.update {
+                it.copy(
+                    imageViewer = ImageViewerTarget(
+                        model = if (exists) absolutePath else null,
+                        fileName = attachment.path,
+                        dimensionsLabel = detail,
+                        isMissing = !exists,
+                    ),
+                )
+            }
+        }
+    }
+
+    /** Closes the full-screen image viewer. */
+    fun dismissImageViewer() {
+        _state.update { it.copy(imageViewer = null) }
+    }
+
+    /**
+     * Builds the mono dimensions/size label shown on the composer preview and
+     * the viewer top bar, e.g. `712×1536 · 84 KB`. Pure: [sizeBytes] is read by
+     * the caller off the main thread. Falls back to dimensions only when the
+     * size is unknown.
+     */
+    private fun attachmentDetailLabel(width: Int, height: Int, sizeBytes: Long): String {
+        val sizeKb = (sizeBytes / BYTES_PER_KB).toInt()
+        val dimensions = "$width×$height"
+        return if (sizeKb > 0) "$dimensions · $sizeKb KB" else dimensions
     }
 
     /**
@@ -796,7 +1223,20 @@ class ChatHomeViewModel @Inject constructor(
         messagesJob = viewModelScope.launch {
             chatRepository.getDisplayMessagesForSession(sessionId).collect { incoming ->
                 _state.update { current ->
-                    current.copy(messages = incoming.map { chatMessageToRow(it, current.model.name) })
+                    current.copy(
+                        messages = incoming.map { message ->
+                            val attachment = message.attachment
+                            chatMessageToRow(
+                                message = message,
+                                activeModelName = current.model.name,
+                                // Pure path arithmetic (no disk I/O on the main
+                                // thread); the thumbnail's own error slot renders
+                                // the missing state if the file is gone.
+                                attachmentModel = attachment?.let { attachmentStore.absolutePathFor(it.path) },
+                                onImageTap = attachment?.let { { openImageViewer(it) } },
+                            )
+                        },
+                    )
                 }
                 rebalanceRestingState()
                 tokenCounterJob?.cancel()
@@ -1612,6 +2052,7 @@ class ChatHomeViewModel @Inject constructor(
      * framing.
      */
     private fun autoRenameIfDefault(sessionId: String, prompt: String) {
+        if (prompt.isBlank()) return
         val session = sessions.firstOrNull { it.id == sessionId } ?: return
         if (session.name != DEFAULT_NEW_CHAT_NAME) return
         val truncated = if (prompt.length > AUTO_RENAME_CHAR_LIMIT) {
@@ -1985,8 +2426,41 @@ class ChatHomeViewModel @Inject constructor(
         const val NO_ACTIVE_MODEL_MESSAGE: String =
             "No active model. Open Settings → Models to install or activate one."
 
+        /**
+         * Surfaced when the user attaches an image but the active local model is
+         * not marked vision-capable. The run is blocked before it starts so the
+         * native inference layer never receives an image it cannot decode; the
+         * draft and attachment are preserved so the user can switch models and
+         * resend. Calm, non-alarmist copy in line with the attachment UX.
+         */
+        const val MODEL_NO_VISION_MESSAGE: String =
+            "This model can't read images. Turn on image support for it on the Models screen, " +
+                "or switch to a vision-capable model."
+
+        /**
+         * Surfaced when the user attaches an image but the bound pipeline starts
+         * on a CLOUD node. Attachments stay on-device by design, so the run is
+         * blocked before it starts rather than silently dropping the image.
+         */
+        const val CLOUD_ATTACHMENT_BLOCKED_MESSAGE: String =
+            "Images stay on your device and aren't sent to cloud models. Use a pipeline that starts " +
+                "with an on-device step to send a picture."
+
+        /**
+         * Surfaced when the user attaches an image but the bound pipeline has no
+         * on-device step that could read it (no reachable `LITE_RT` node that
+         * carries the original task). Blocking is honest: the engine would
+         * otherwise drop the image silently while the run looks normal.
+         */
+        const val PIPELINE_NO_VISION_MESSAGE: String =
+            "This pipeline has no on-device step that can read an image. Pick a pipeline with an " +
+                "on-device model step to send a picture."
+
         /** Rough chars-per-token divisor used for the v0.1 token counter (`text.length / 4`). */
         const val TOKEN_CHARS_PER_TOKEN: Int = 4
+
+        /** Divisor used to render an attachment's file size in kilobytes. */
+        const val BYTES_PER_KB: Long = 1024L
 
         /**
          * Magic word the user must type to confirm a destructive tool call.
@@ -2050,7 +2524,12 @@ class ChatHomeViewModel @Inject constructor(
          * model. Kept on the companion so the mapping can be unit-tested
          * without spinning up the VM.
          */
-        fun chatMessageToRow(message: ChatMessage, activeModelName: String): ChatHomeMessageRow {
+        fun chatMessageToRow(
+            message: ChatMessage,
+            activeModelName: String,
+            attachmentModel: Any? = null,
+            onImageTap: (() -> Unit)? = null,
+        ): ChatHomeMessageRow {
             val role = when (message.role) {
                 Role.USER -> ChatRole.User
                 Role.AGENT -> ChatRole.Assistant
@@ -2070,13 +2549,25 @@ class ChatHomeViewModel @Inject constructor(
                 ChatRole.Tool -> "t"
             }
             val rowId = message.id?.let { "$idPrefix-$it" } ?: "$idPrefix-${UUID.randomUUID()}"
-            // Agent + tool bubbles can carry markdown (headings / lists / code
-            // fences from the LLM); surface as `ChatContent.Markdown` so the
-            // host-supplied renderer formats them. User input never carries
-            // intentional markdown — stick with plain text to avoid e.g. a
-            // stray `#` turning into a heading.
-            val content = when (role) {
-                ChatRole.Assistant, ChatRole.Tool -> ChatContent.Markdown(message.content)
+            // A user message carrying an image renders as an image bubble:
+            // thumbnail (aspect-fit) + the caption below (null for image-only,
+            // so the bubble shrinks to the thumbnail). Otherwise: agent + tool
+            // bubbles can carry markdown (headings / lists / code fences from
+            // the LLM); user text stays plain to avoid a stray `#` becoming a
+            // heading.
+            val attachment = message.attachment
+            val content = when {
+                role == ChatRole.User && attachment != null -> ChatContent.Image(
+                    model = attachmentModel,
+                    caption = message.content.ifEmpty { null },
+                    aspectRatio = if (attachment.height > 0) {
+                        attachment.width.toFloat() / attachment.height
+                    } else {
+                        1f
+                    },
+                    onTap = onImageTap,
+                )
+                role == ChatRole.Assistant || role == ChatRole.Tool -> ChatContent.Markdown(message.content)
                 else -> ChatContent.Text(message.content)
             }
             return ChatHomeMessageRow(

@@ -51,6 +51,7 @@ import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
+import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.usecases.EvaluateIfConditionUseCase
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
@@ -130,6 +131,7 @@ class ShowcaseResearchToFilePresetIntegrationTest {
     @Before
     fun setup() {
         llmEngine = mockk()
+        every { llmEngine.currentModelPath } returns null
         toolRepository = mockk()
         chatRepository = mockk(relaxed = true)
         settingsRepository = mockk()
@@ -184,6 +186,8 @@ class ShowcaseResearchToFilePresetIntegrationTest {
                 chatRepository,
                 settingsRepository,
                 metricsRepository,
+                mockk(relaxed = true),
+                NativeMemorySampler { 0L },
                 loadModelUseCase,
             ),
             CloudLlmNodeExecutor(
@@ -251,7 +255,7 @@ class ShowcaseResearchToFilePresetIntegrationTest {
         // Scripted LLM: one canned answer per node / arg-generation pass. The second
         // (temperature) argument is matched so structured-output repair re-inferences are
         // answered too.
-        every { llmEngine.generateResponseStream(any(), any()) } answers {
+        every { llmEngine.generateResponseStream(any(), any(), any()) } answers {
             flowOf(scriptFor(firstArg()))
         }
         coEvery { getContextWindowUseCase(any()) } returns ""

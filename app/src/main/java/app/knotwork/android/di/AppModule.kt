@@ -15,6 +15,7 @@ import app.knotwork.android.data.local.dao.ChatDao
 import app.knotwork.android.data.local.dao.ChatHistorySummaryDao
 import app.knotwork.android.data.local.dao.LocalModelDao
 import app.knotwork.android.data.local.dao.MemoryDao
+import app.knotwork.android.data.local.dao.ModelPerformanceDao
 import app.knotwork.android.data.local.dao.PendingInteractionDao
 import app.knotwork.android.data.local.dao.PipelineDao
 import app.knotwork.android.data.local.dao.PipelinePresetDao
@@ -54,6 +55,7 @@ import javax.inject.Singleton
  */
 @Module
 @InstallIn(SingletonComponent::class)
+@Suppress("TooManyFunctions") // Provider-only module: one @Provides per database / DAO singleton.
 object AppModule {
 
     private const val USER_PREFERENCES_NAME = "agent_preferences"
@@ -165,6 +167,10 @@ object AppModule {
                 AppDatabase.MIGRATION_35_36,
                 AppDatabase.MIGRATION_36_37,
                 AppDatabase.MIGRATION_37_38,
+                AppDatabase.MIGRATION_38_39,
+                AppDatabase.MIGRATION_39_40,
+                AppDatabase.MIGRATION_40_41,
+                AppDatabase.MIGRATION_41_42,
             )
             // No destructive fallback on upgrade: every version bump must supply an explicit
             // migration above so user data survives. Destructive recreation is kept only for the
@@ -249,6 +255,13 @@ object AppModule {
      */
     @Provides
     fun provideChatHistorySummaryDao(database: AppDatabase): ChatHistorySummaryDao = database.chatHistorySummaryDao()
+
+    /**
+     * Provides the [ModelPerformanceDao] backing the per-model inference
+     * performance samples shown on the model screen.
+     */
+    @Provides
+    fun provideModelPerformanceDao(database: AppDatabase): ModelPerformanceDao = database.modelPerformanceDao()
 
     /**
      * Provides the singleton instance of Converters for Room mapping.

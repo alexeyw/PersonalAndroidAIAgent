@@ -28,12 +28,31 @@ class LoadModelUseCase @Inject constructor(
      * Retrieves the specified model or the currently active model from the repository, checks if the file exists on disk,
      * and initializes the LLM engine with the model path.
      *
-     * If the requested model is already loaded in the engine, it returns [Result.Success] immediately.
+     * If the requested model is already loaded in the engine — and already in the
+     * vision/audio modes the caller needs — it returns [Result.Success]
+     * immediately. A modality-carrying run ([requireVision] / [requireAudio] =
+     * `true`) against an engine currently loaded without that backend forces a
+     * re-initialization, since the runtime fixes its vision and audio backends at
+     * construction time. Vision and audio are independent: a transcription
+     * ([requireAudio] = `true`) keeps any already-enabled vision backend for the
+     * same model rather than downgrading it, and vice versa.
      *
      * @param modelPath Optional absolute path to the model file. If null, the globally active model is used.
+     * @param requireVision When `true`, the engine must be (re-)initialized with
+     *   its vision backend so the run can attach an image. Defaults to `false`
+     *   for every text-only run. The pre-flight send guard guarantees the active
+     *   model is vision-capable before a `true` load is requested.
+     * @param requireAudio When `true`, the engine must be (re-)initialized with
+     *   its audio backend so the active model can transcribe an audio clip.
+     *   Defaults to `false`. The voice-input pre-flight guarantees the active
+     *   model is audio-capable before a `true` load is requested.
      * @return [Result.Success] if the model was successfully loaded, or [Result.Error] otherwise.
      */
-    suspend operator fun invoke(modelPath: String? = null): Result<Unit, AppError> = withContext(Dispatchers.IO) {
+    suspend operator fun invoke(
+        modelPath: String? = null,
+        requireVision: Boolean = false,
+        requireAudio: Boolean = false,
+    ): Result<Unit, AppError> = withContext(Dispatchers.IO) {
         try {
             // Blank `modelPath` is the "Active model" sentinel persisted by
             // the LITE_RT node form — fall back to `getActiveModel()` just
@@ -46,8 +65,20 @@ class LoadModelUseCase @Inject constructor(
                     message = "No active model found. Please select a model in settings or provide a path.",
                 )
 
-            // Check if the engine is already initialized with this exact model
-            if (llmInferenceEngine.isInitialized && llmInferenceEngine.currentModelPath == pathToLoad) {
+            // Reuse the loaded engine only when it already covers the requested
+            // modalities — an image run needs vision on and a transcription
+            // needs audio on, but a run that needs neither is happy to reuse an
+            // already-enabled engine (no point downgrading). The `!require* ||`
+            // ordering short-circuits so each modality flag is only consulted
+            // when that modality is actually required.
+            val visionModeSatisfied = !requireVision || llmInferenceEngine.isVisionEnabled
+            val audioModeSatisfied = !requireAudio || llmInferenceEngine.isAudioEnabled
+            if (
+                llmInferenceEngine.isInitialized &&
+                llmInferenceEngine.currentModelPath == pathToLoad &&
+                visionModeSatisfied &&
+                audioModeSatisfied
+            ) {
                 return@withContext Result.Success(Unit)
             }
 
@@ -59,7 +90,21 @@ class LoadModelUseCase @Inject constructor(
                 )
             }
 
-            return@withContext llmInferenceEngine.initialize(pathToLoad)
+            // Keep vision on if it was already enabled for THIS model (a prior
+            // image run). Re-initialization is a full model reload (unload +
+            // reconstruct the engine), so downgrading just to drop the vision
+            // encoder would cost far more than the memory it reclaims — the
+            // encoder is released instead when the engine is unloaded on
+            // background / memory-trim. A model switch resets to the requested
+            // mode, so vision is never forced onto a freshly loaded text-only model.
+            val sameModel = llmInferenceEngine.currentModelPath == pathToLoad
+            val enableVision = requireVision || (llmInferenceEngine.isVisionEnabled && sameModel)
+            val enableAudio = requireAudio || (llmInferenceEngine.isAudioEnabled && sameModel)
+            return@withContext llmInferenceEngine.initialize(
+                pathToLoad,
+                enableVision = enableVision,
+                enableAudio = enableAudio,
+            )
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

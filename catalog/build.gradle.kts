@@ -117,6 +117,10 @@ dependencies {
     // typography / color factories don't have to redeclare the dep.
     api(libs.markdown.m3)
 
+    // Image loading (Coil 3) for the attachment thumbnail / viewer components.
+    // `api` so the app reuses the same `AsyncImage` / preview-handler surface.
+    api(libs.coil.compose)
+
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)

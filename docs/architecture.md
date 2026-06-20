@@ -526,6 +526,163 @@ block order of §3.2 is preserved). The first time compression changes what
 a run sees, a single `HistoryCompression` console event is emitted under the
 `MEMORY` source.
 
+### 3.7. Multimodal image delivery
+
+A user message may carry one image attachment (stored as in §5.2). Its journey
+into a run is deliberately narrow so the rest of the engine stays text-only:
+
+1. **Resolve.** When `TaskQueueManagerImpl` starts a fresh run, it turns the
+   message's `MessageAttachment` into an `EngineImageInput` — the absolute path
+   of the stored JPEG (resolved through `AttachmentStore`) plus its pixel size
+   and byte size — and threads it into `GraphExecutionEngine.invoke(...)`. A
+   resumed run never re-delivers (it replays a trace), so `imageInput` is `null`
+   there.
+2. **Announce.** At run start the engine emits one `Image input: W×H, N KB`
+   console line (`SystemMessage`).
+3. **Deliver to exactly one node, anywhere in the tree.** Delivery state is a
+   tree-shared `RunImageDelivery` holder (mirroring the shared `RunStepBudget`):
+   a `PIPELINE` node threads it into its sub-pipeline's engine invocation via
+   `ExecutionScope.imageDelivery`. The engine hands the image to the **first
+   `LITE_RT` node whose context includes the original task** in execution order
+   *across the whole run tree* — including a node nested inside a sub-pipeline —
+   via `ExecutionScope.imagePath`, then marks the holder consumed. Every other
+   node, and every `CLOUD` node, sees `null`. This realises the contract *"the
+   attachment belongs to the user prompt; the graph carries text"* even for the
+   composed (sub-pipeline) showcase pipelines.
+4. **Infer.** `LiteRtNodeExecutor` loads the model in vision mode
+   (`LoadModelUseCase(requireVision = true)`, which re-initialises the LiteRT
+   engine with a vision backend only when needed) and calls
+   `generateResponseStream(prompt, imagePath = …)`, which sends a multimodal
+   `Contents(image, text)` to LiteRT-LM.
+
+**Capability and privacy guards.** The LiteRT runtime exposes no vision-capability
+probe, so `LocalModel.supportsVision` is a manual per-model flag (Models screen
+toggle, default `false`). Before enqueueing an image message, `ChatHomeViewModel`
+runs a pre-flight on `ResolveEntryInferenceUseCase`, which classifies the bound
+pipeline the same way the engine delivers: `CLOUD` when the run starts on a cloud
+node, `LOCAL` when a **vision sink** (a `LITE_RT` node carrying the original task)
+is reachable from `INPUT` — **recursing into `PIPELINE` nodes' sub-graphs**, since
+the engine forwards the image there — else `NONE`. The three guards, in order, are: `CLOUD`
+→ blocked (attachments never leave the device); active model not vision-capable →
+blocked; `NONE` (no reachable vision sink) → blocked. Each preserves the draft and
+shows a clear message. Branch-dependent routing can still take a path that skips
+the sink even when one exists; the engine emits an *"Image not used"* console note
+in that case rather than letting the earlier `Image input` line imply otherwise.
+`CloudLlmNodeExecutor` structurally ignores `ExecutionScope.imagePath`, so an
+image can never reach a cloud provider.
+
+### 3.8. Per-model performance samples
+
+Distinct from `MetricsRepository` — which holds **session-scoped, process-local**
+figures not keyed by model — per-model performance is **persisted** so the Models
+screen can show rolling averages and a benchmark result that survive process
+death.
+
+1. **Measure.** `LiteRtNodeExecutor` times every on-device generation through the
+   shared `StreamInferenceMeter`: it captures **time-to-first-token** from the
+   start of stream consumption (after model load) to the first emitted token,
+   **decode speed** over the first-to-last-token window, and **peak native heap**
+   sampled at a throttled (~150 ms) cadence across the window via the domain
+   `NativeMemorySampler` seam (data impl reads `Debug.getNativeHeapAllocatedSize()`
+   — cheap and unthrottled, unlike PSS). The meter folds into a sample via
+   `ModelPerformanceSample.fromTimings(...)`; the benchmark drives the *same* meter,
+   so the two measure identically.
+2. **Record.** It writes one `ModelPerformanceSample` through
+   `ModelPerformanceRepository` into the `model_performance_samples` table,
+   **keyed by the engine's concrete loaded path** (robust to the blank "Active
+   model" sentinel). Recording is best-effort at the repository boundary (a write
+   failure never reaches the run) and is skipped for a generation that produced no
+   tokens. Each insert trims the model's rows to `RETENTION_PER_MODEL` in one
+   transaction so the table stays bounded; removing a model drops its samples
+   (`deleteForModel`, wired into `LocalModelRepository`) since they carry no
+   foreign key.
+3. **Aggregate.** `GetModelPerformanceUseCase` folds the most recent
+   `PerformanceConstants.SAMPLE_WINDOW` rows for the active model into a
+   `ModelPerformanceSummary` (mean TTFT, mean decode, worst-case peak) **on the
+   fly** — no precomputed aggregate table. Degenerate runs (a blank generation with
+   no tokens, or a single-token generation with no decode window) are excluded from
+   the metric means so they can't drag the displayed figures down, while the sample
+   count still reflects the window. `ModelsViewModel` exposes the summary to the card.
+4. **Benchmark.** `RunBenchmarkUseCase` reuses the same `StreamInferenceMeter` for a
+   controlled run: it refuses while the engine is busy (`TaskQueueManager`'s global
+   state) — **re-checking after the warm-up**, since a background run may have
+   started during it — runs a fixed prompt (`DefaultPrompts.BENCHMARK_PROMPT`) as a
+   warm-up plus a measured pass, persists the measured sample (`isBenchmark = true`),
+   and returns a `BenchmarkReport` for the inline one-shot view. It is foreground-only
+   and shares the engine's generation mutex, so it can never interleave with a real run.
+
+Peak memory is **process-wide and approximate** (it excludes the model's mmap'd
+pages and reads low under ZRAM); this caveat is carried verbatim into the UI and
+the shared text so the figure is never presented as the model's exact footprint.
+
+### 3.9. Model discovery (Hugging Face)
+
+Discovering models is a **read-only data flow** that lets the user browse the
+curated `litert-community` organisation on the Hugging Face Hub and hand a chosen
+file to the existing download path — no new download mechanism.
+
+1. **Fetch.** `HuggingFaceModelApi` (data layer) issues the Hub calls on raw
+   OkHttp (the project has no Retrofit; the model downloader uses raw OkHttp too)
+   and decodes with `kotlinx.serialization`: `GET /api/models?author=litert-community&full=true`
+   for the list/search and `GET /api/models/{repoId}?blobs=true` for the per-file
+   detail (the `blobs` flag is what carries file sizes). The Hub host is injected
+   (`@HuggingFaceBaseUrl`) so tests point the client at a mock server. No token is
+   sent — the listing and metadata are public even for gated repos; only the file
+   *download* needs one.
+2. **Map.** The pure `HuggingFaceModelMapper` projects the DTOs onto the domain
+   `DiscoverableModelSummary` / `DiscoverableModelDetail`: it parses the licence
+   (model-card front-matter, falling back to the `license:` tag), interprets the
+   polymorphic `gated` field (`false` vs `"auto"`/`"manual"`), filters to
+   engine-compatible `.litertlm` siblings and builds each file's `resolve` URL.
+3. **Enrich + wrap.** `ModelDiscoveryRepositoryImpl` stamps each detail file's
+   "already installed" flag from `LocalModelRepository.isInstalled`, drops repos
+   with no `.litertlm` file, and converts success/failure into a `Result` (the
+   suspend network calls re-throw `CancellationException` from a dedicated first
+   catch before mapping other failures — never `runCatching`). `SearchDiscoverableModelsUseCase`
+   / `GetDiscoverableModelDetailUseCase` expose it to the `DiscoverViewModel` /
+   `DiscoverDetailViewModel`, which only call the Hub in response to a user action
+   (open, search, refresh, open-card).
+4. **Install.** `InstallDiscoveredModelUseCase` is the bridge back to the existing
+   path: it streams the chosen file through `ModelDownloadManager.downloadModel`
+   (with the stored Hugging Face token) and, on `DownloadState.Success`, registers
+   a `LocalModel` carrying the **Hub-reported size**. The detail screen gates each
+   install behind a licence-confirmation dialog; a 401/403 download refusal is
+   surfaced as an access-gated hint. The discovery feature therefore adds a
+   *catalogue* surface on top of the unchanged download/registration machinery.
+
+### 3.10. Voice input (audio transcription)
+
+Voice input is **transcription, not an audio pipeline**: the audio is turned
+into text *before* a run starts, so the graph itself stays text-only — the
+deliberate counterpart to the image contract in §3.7 (an image rides the user
+message into one node; audio never enters the graph at all).
+
+1. **Capture.** The composer records a clip through `AudioRecorder` (data impl
+   `AudioRecorderImpl`) as canonical **16 kHz mono WAV** — a hand-written
+   `WavHeader` wraps the PCM so the engine receives a well-formed file — or the
+   user picks an existing clip. Either way the bytes land as a temporary file in
+   the audio cache via `AudioCaptureStore` (impl `AudioCaptureStoreImpl`, rooted
+   at `cacheDir/audio/`). Recording shows a live timer and auto-stops at
+   `audioMaxDurationSec` (DataStore, default 30 s, sized to the model's audio
+   window).
+2. **Transcribe before the graph.** `TranscribeAudioUseCase` loads the active
+   model in audio mode (`LoadModelUseCase(requireAudio = true)`) and calls the
+   engine's `transcribe(...)`, which sends a `Content.AudioFile` to LiteRT-LM
+   (the engine is initialised with `enableAudio`). This runs entirely outside
+   `GraphExecutionEngine` — the transcript is the only thing that reaches the
+   pipeline, as ordinary editable text dropped into the input field.
+3. **Capability and guards.** As with vision, the runtime exposes no probe, so
+   `LocalModel.supportsAudio` is a **manual per-model flag** (Models screen
+   *Audio support* toggle, default `false`, schema v40→v41 `MIGRATION_40_41`).
+   Three conditions each surface a calm, non-blocking notice instead of failing:
+   a text-only active model, a denied `RECORD_AUDIO` permission, or a busy
+   engine — transcription **shares the single generation mutex** with the agent,
+   so it waits its turn rather than interrupting a run.
+4. **Cleanup.** The clip is **deleted as soon as transcription succeeds**; only
+   the text survives. The audio bytes are never persisted in the database and
+   never travel the graph (see [`SECURITY.md`](../SECURITY.md), *Message
+   attachments*).
+
 ---
 
 ## 4. Integrations
@@ -903,6 +1060,32 @@ explicitly in [`SECURITY.md`](../SECURITY.md) (*Agent file workspace*).
 | **Keystore-backed stores** (`KeystoreBackedPrefsStore`) | SQLCipher passphrase, cloud-provider API keys, HuggingFace access token                                        | **AES-256-GCM per value**, key non-exportable in the Android Keystore      |
 | **DataStore** (Preferences)   | Non-sensitive settings: sampling params, timeouts, default pipeline id, opt-in flags, `allowed_http_domains`, `app_function_risk_overrides` | **FBE + app sandbox only** (plaintext within the sandbox; no app cipher)   |
 | **Agent workspace** (`files/agent_workspace/`) | Agent-produced and user-imported files (reports, exports, inputs)                                              | **FBE + app sandbox only** — *not* SQLCipher-encrypted (see `SECURITY.md`) |
+| **Attachment store** (`files/attachments/`) | Downscaled JPEG image attachments of chat messages                                                            | **FBE + app sandbox only** — *not* SQLCipher-encrypted (same posture as the workspace) |
+
+**Image attachments.** A user message can carry one image. The picked /
+captured content URI is read, decoded, EXIF-rotated, downscaled **preserving
+aspect ratio** (longest side ≤ 1536 px — a client-side storage bound; the model
+does its own token-budget resize at inference time) and re-encoded to JPEG into
+`files/attachments/` by `AttachmentStore` (domain interface; impl
+`data/local/AttachmentStoreImpl`). Only the derived file is kept; the original
+is never copied. The store-relative path plus MIME and pixel dimensions are
+persisted on `chat_messages` (nullable columns added in `MIGRATION_38_39`,
+schema v39) and carried on the domain `ChatMessage` / `AgentTask` as
+`MessageAttachment`. By contract the attachment rides the **user message** but
+does **not** travel the pipeline graph — only text does; an image-only message
+substitutes an internal default instruction (`DefaultPrompts`) as the prompt.
+Files are deleted with their owning message/session (`ChatRepositoryImpl`), and
+a daily `AttachmentOrphanCleanupWorker` (mirroring `RunRetentionWorker`) sweeps
+files no message references — the same charging + idle maintenance window. The
+sweep skips files younger than a 24 h grace window, so an attachment that is
+already on disk but not yet sent (still in the composer) is never reclaimed.
+
+**Audio clips (transient, not a storage tier).** Voice-input clips are *not*
+persisted alongside attachments: `AudioCaptureStore` writes them to the app
+**cache** (`cacheDir/audio/`, FBE + sandbox, OS-evictable) and they are deleted
+the moment transcription succeeds (§3.10). They never reach the database and
+never enter the pipeline graph, so they appear in no storage tier above — only
+the resulting transcript text does, as an ordinary chat message.
 
 ### 5.3. JSON parsing
 

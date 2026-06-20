@@ -28,4 +28,9 @@
     <string name="models_empty_cta">Add model</string>
     <string name="models_error_title">Couldn\'t load models</string>
     <string name="models_overflow_cd">More options</string>
+    <string name="models_discover_cd">Discover models</string>
+
+    <!-- Performance card / benchmark. -->
+    <string name="models_benchmark_failed">Couldn\'t run the benchmark</string>
+    <string name="models_benchmark_share_subject">Model benchmark</string>
 </resources>

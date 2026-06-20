@@ -1,19 +1,25 @@
 package app.knotwork.android.domain.engine.executors
 
 import app.knotwork.android.domain.engine.LlmInferenceEngine
+import app.knotwork.android.domain.models.ExecutionScope
+import app.knotwork.android.domain.models.ModelPerformanceSample
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.MetricsRepository
+import app.knotwork.android.domain.repositories.ModelPerformanceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
+import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
@@ -30,6 +36,8 @@ class LiteRtNodeExecutorTest {
     private lateinit var chatRepository: ChatRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var metricsRepository: MetricsRepository
+    private lateinit var modelPerformanceRepository: ModelPerformanceRepository
+    private lateinit var nativeMemorySampler: NativeMemorySampler
     private lateinit var loadModelUseCase: LoadModelUseCase
     private lateinit var executor: LiteRtNodeExecutor
 
@@ -40,7 +48,13 @@ class LiteRtNodeExecutorTest {
         chatRepository = mockk(relaxed = true)
         settingsRepository = mockk()
         metricsRepository = mockk(relaxed = true)
+        modelPerformanceRepository = mockk(relaxed = true)
+        nativeMemorySampler = mockk(relaxed = true)
         loadModelUseCase = mockk()
+
+        // The executor reads the engine's concrete loaded path after load to key
+        // the performance sample.
+        every { llmEngine.currentModelPath } returns "/models/active.litertlm"
 
         executor = LiteRtNodeExecutor(
             llmEngine,
@@ -48,6 +62,8 @@ class LiteRtNodeExecutorTest {
             chatRepository,
             settingsRepository,
             metricsRepository,
+            modelPerformanceRepository,
+            nativeMemorySampler,
             loadModelUseCase,
         )
     }
@@ -126,6 +142,85 @@ class LiteRtNodeExecutorTest {
 
         val result = outputs.filterIsInstance<NodeOutput.Result>().single().result
         assertEquals(5, result.tokenCount)
+    }
+
+    @Test
+    fun `given scope carries an image path when execute then engine and loader run in vision mode`() = runTest {
+        val node = NodeModel("1", NodeType.LITE_RT, 0f, 0f, modelPath = "model-path")
+        every { settingsRepository.systemPromptPrefix } returns flowOf("")
+        coEvery { loadModelUseCase(any(), any()) } returns Result.Success(Unit)
+        every { llmEngine.generateResponseStream(any(), any(), any()) } returns flowOf("ok")
+
+        executor.execute(
+            node = node,
+            inputText = "input",
+            sessionId = "session-1",
+            originalPrompt = "prompt",
+            scope = ExecutionScope(imagePath = "/abs/photo.jpg"),
+        ).toList()
+
+        // The image path the engine chose for this node must reach both the model
+        // loader (so it initialises in vision mode) and the generation call.
+        coVerify { loadModelUseCase("model-path", requireVision = true) }
+        verify { llmEngine.generateResponseStream(any(), "/abs/photo.jpg", any()) }
+    }
+
+    @Test
+    fun `given no image path when execute then engine and loader run in text mode`() = runTest {
+        val node = NodeModel("1", NodeType.LITE_RT, 0f, 0f, modelPath = "model-path")
+        every { settingsRepository.systemPromptPrefix } returns flowOf("")
+        coEvery { loadModelUseCase(any(), any()) } returns Result.Success(Unit)
+        every { llmEngine.generateResponseStream(any(), any(), any()) } returns flowOf("ok")
+
+        // Default scope → no image: a text node must never request vision nor pass
+        // an image to the engine.
+        executor.execute(node, "input", "session-1", "prompt").toList()
+
+        coVerify { loadModelUseCase("model-path", requireVision = false) }
+        verify { llmEngine.generateResponseStream(any(), null, any()) }
+    }
+
+    @Test
+    fun `execute records a performance sample keyed by the loaded model path`() = runTest {
+        val node = NodeModel("1", NodeType.LITE_RT, 0f, 0f)
+        every { settingsRepository.systemPromptPrefix } returns flowOf("")
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("a", "b", "c")
+
+        executor.execute(node, "input", "session-1", "prompt").toList()
+
+        val sampleSlot = slot<ModelPerformanceSample>()
+        coVerify { modelPerformanceRepository.record(capture(sampleSlot)) }
+        val sample = sampleSlot.captured
+        assertEquals("/models/active.litertlm", sample.modelPath)
+        assertEquals(3, sample.tokenCount)
+        assertFalse(sample.isBenchmark)
+    }
+
+    @Test
+    fun `execute does not record a sample when the generation produced no tokens`() = runTest {
+        val node = NodeModel("1", NodeType.LITE_RT, 0f, 0f)
+        every { settingsRepository.systemPromptPrefix } returns flowOf("")
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+        // Empty stream → zero tokens → no useful timing → skip recording.
+        every { llmEngine.generateResponseStream(any()) } returns flowOf()
+
+        executor.execute(node, "input", "session-1", "prompt").toList()
+
+        coVerify(exactly = 0) { modelPerformanceRepository.record(any()) }
+    }
+
+    @Test
+    fun `execute does not record a sample when the engine reports no loaded path`() = runTest {
+        val node = NodeModel("1", NodeType.LITE_RT, 0f, 0f)
+        every { settingsRepository.systemPromptPrefix } returns flowOf("")
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("token")
+        every { llmEngine.currentModelPath } returns null
+
+        executor.execute(node, "input", "session-1", "prompt").toList()
+
+        coVerify(exactly = 0) { modelPerformanceRepository.record(any()) }
     }
 
     @Test

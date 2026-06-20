@@ -6,6 +6,7 @@ import app.knotwork.android.data.mappers.toEntity
 import app.knotwork.android.domain.models.ActiveModelMeta
 import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.repositories.LocalModelRepository
+import app.knotwork.android.domain.repositories.ModelPerformanceRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
@@ -19,7 +20,10 @@ import javax.inject.Singleton
  * Implementation of [LocalModelRepository] that uses [LocalModelDao] as the data source.
  */
 @Singleton
-class LocalModelRepositoryImpl @Inject constructor(private val localModelDao: LocalModelDao) : LocalModelRepository {
+class LocalModelRepositoryImpl @Inject constructor(
+    private val localModelDao: LocalModelDao,
+    private val modelPerformanceRepository: ModelPerformanceRepository,
+) : LocalModelRepository {
 
     override fun getAllModels(): Flow<List<LocalModel>> = localModelDao.getAllModels()
         .map { entities ->
@@ -63,6 +67,9 @@ class LocalModelRepositoryImpl @Inject constructor(private val localModelDao: Lo
                 val file = File(entity.path)
                 if (file.exists()) file.delete()
             }
+            // Drop the model's performance history too — samples are keyed by
+            // path with no foreign key, so they would otherwise be orphaned.
+            modelPerformanceRepository.deleteForModel(entity.path)
         }
         localModelDao.deleteModelById(id)
     }
@@ -70,6 +77,14 @@ class LocalModelRepositoryImpl @Inject constructor(private val localModelDao: Lo
     override suspend fun setActiveModel(id: Long): Unit = withContext(Dispatchers.IO) {
         localModelDao.deactivateAllModels()
         localModelDao.activateModelById(id)
+    }
+
+    override suspend fun setVisionSupport(id: Long, enabled: Boolean): Unit = withContext(Dispatchers.IO) {
+        localModelDao.setVisionSupport(id, enabled)
+    }
+
+    override suspend fun setAudioSupport(id: Long, enabled: Boolean): Unit = withContext(Dispatchers.IO) {
+        localModelDao.setAudioSupport(id, enabled)
     }
 
     override suspend fun isInstalled(fileName: String): Boolean = withContext(Dispatchers.IO) {

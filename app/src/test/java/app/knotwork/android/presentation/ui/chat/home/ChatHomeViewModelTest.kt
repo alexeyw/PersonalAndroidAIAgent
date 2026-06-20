@@ -1,5 +1,6 @@
 package app.knotwork.android.presentation.ui.chat.home
 
+import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.constants.SettingsDefaults
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AgentOrchestratorState
@@ -7,6 +8,7 @@ import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.ClarificationRequest
 import app.knotwork.android.domain.models.LocalModel
+import app.knotwork.android.domain.models.MessageAttachment
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
@@ -24,18 +26,27 @@ import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.services.AttachmentStore
+import app.knotwork.android.domain.services.AudioCaptureStore
+import app.knotwork.android.domain.services.AudioRecorder
+import app.knotwork.android.domain.services.RecordingState
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
+import app.knotwork.android.domain.usecases.EntryInferenceKind
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.PendingSubmissionOutcome
+import app.knotwork.android.domain.usecases.ResolveEntryInferenceUseCase
 import app.knotwork.android.domain.usecases.ResumeOutcome
 import app.knotwork.android.domain.usecases.ResumePipelineRunUseCase
 import app.knotwork.android.domain.usecases.SaveMessageToMemoryUseCase
 import app.knotwork.android.domain.usecases.SaveToMemoryOutcome
 import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
 import app.knotwork.android.domain.usecases.SubmitClarificationAnswerUseCase
+import app.knotwork.android.domain.usecases.TranscribeAudioUseCase
+import app.knotwork.android.domain.usecases.TranscriptionOutcome
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ChatRole
+import app.knotwork.design.components.chat.ComposerVoiceNotice
 import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.components.console.ConsoleSnap
 import io.mockk.coEvery
@@ -61,6 +72,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -107,6 +119,11 @@ class ChatHomeViewModelTest {
     private lateinit var pendingInteractionRepository: PendingInteractionRepository
     private lateinit var submitApprovalDecisionUseCase: SubmitApprovalDecisionUseCase
     private lateinit var submitClarificationAnswerUseCase: SubmitClarificationAnswerUseCase
+    private lateinit var attachmentStore: AttachmentStore
+    private lateinit var resolveEntryInferenceUseCase: ResolveEntryInferenceUseCase
+    private lateinit var audioRecorder: AudioRecorder
+    private lateinit var audioCaptureStore: AudioCaptureStore
+    private lateinit var transcribeAudioUseCase: TranscribeAudioUseCase
 
     private lateinit var sessionsFlow: MutableStateFlow<List<ChatSession>>
     private lateinit var localModelsFlow: MutableStateFlow<List<LocalModel>>
@@ -139,6 +156,16 @@ class ChatHomeViewModelTest {
         pendingInteractionRepository = mockk(relaxed = true)
         coEvery { pendingInteractionRepository.getForSession(any()) } returns null
         submitApprovalDecisionUseCase = mockk(relaxed = true)
+        attachmentStore = mockk(relaxed = true)
+        resolveEntryInferenceUseCase = mockk()
+        audioRecorder = mockk(relaxed = true)
+        every { audioRecorder.state } returns MutableStateFlow(RecordingState.Idle)
+        audioCaptureStore = mockk(relaxed = true)
+        transcribeAudioUseCase = mockk(relaxed = true)
+        // Default: the bound pipeline starts on-device, so the attachment
+        // pre-flight only depends on the active model's vision flag. Tests that
+        // exercise the CLOUD-entry block override this.
+        coEvery { resolveEntryInferenceUseCase(any()) } returns EntryInferenceKind.LOCAL
         coEvery { submitApprovalDecisionUseCase(any(), any(), any()) } returns PendingSubmissionOutcome.LiveResumed
         submitClarificationAnswerUseCase = mockk(relaxed = true)
         coEvery {
@@ -185,6 +212,7 @@ class ChatHomeViewModelTest {
         every { settingsRepository.currentChatSessionId } returns savedSessionIdFlow
         every { settingsRepository.defaultPipelineId } returns defaultPipelineIdFlow
         every { settingsRepository.maxContextLength } returns maxContextLengthFlow
+        every { settingsRepository.audioMaxDurationSec } returns flowOf(AUDIO_LIMIT_SEC)
         every { settingsRepository.consolePreferredConsoleTabName } returns consolePreferredConsoleTabNameFlow
         coEvery { settingsRepository.setConsolePreferredConsoleTabName(any()) } answers {
             consolePreferredConsoleTabNameFlow.value = firstArg()
@@ -219,6 +247,11 @@ class ChatHomeViewModelTest {
         pendingInteractionRepository,
         submitApprovalDecisionUseCase,
         submitClarificationAnswerUseCase,
+        attachmentStore,
+        resolveEntryInferenceUseCase,
+        audioRecorder,
+        audioCaptureStore,
+        transcribeAudioUseCase,
     ).also { vm ->
         // Keep the replay projection on the test scheduler so
         // advanceUntilIdle() deterministically covers it.
@@ -393,6 +426,242 @@ class ChatHomeViewModelTest {
         assertEquals(ChatHomeUiState.Empty, viewModel.state.value.visual) // no messages persisted in this stub
         coVerify { agentOrchestratorUseCase(sessionId, "hi", null) }
     }
+
+    @Test
+    fun `onAttachClicked shows chooser and dismissSourceChooser hides it`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAttachClicked()
+        assertTrue(viewModel.state.value.sourceChooserVisible)
+
+        viewModel.dismissSourceChooser()
+        assertFalse(viewModel.state.value.sourceChooserVisible)
+    }
+
+    @Test
+    fun `onImagePicked ingests and settles composer attachment to Ready`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val stored = MessageAttachment(path = "p.jpg", mimeType = "image/jpeg", width = 712, height = 1536)
+        coEvery { attachmentStore.ingestUri("content://pick") } returns kotlin.Result.success(stored)
+        every { attachmentStore.absolutePathFor("p.jpg") } returns "/tmp/p.jpg"
+
+        viewModel.onImagePicked("content://pick")
+        advanceUntilIdle()
+
+        val draft = viewModel.state.value.composer.attachment
+        assertTrue(draft is ComposerAttachmentDraft.Ready)
+        val ready = draft as ComposerAttachmentDraft.Ready
+        assertEquals(stored, ready.attachment)
+        assertTrue("detail should carry dimensions", ready.detail.contains("712×1536"))
+        assertFalse(viewModel.state.value.sourceChooserVisible)
+    }
+
+    @Test
+    fun `onImagePicked failure clears draft and emits a transient error event without clobbering visual`() =
+        runTest(testDispatcher) {
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            val visualBefore = viewModel.state.value.visual
+            coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.failure(RuntimeException("bad"))
+            val events = mutableListOf<Unit>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                viewModel.attachmentErrorEvents.collect { events.add(it) }
+            }
+
+            viewModel.onImagePicked("content://bad")
+            advanceUntilIdle()
+
+            assertNull(viewModel.state.value.composer.attachment)
+            assertEquals(1, events.size)
+            // The surface's main visual axis is untouched (no Error clobber).
+            assertEquals(visualBefore, viewModel.state.value.visual)
+        }
+
+    @Test
+    fun `removeAttachment clears the pending draft`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val stored = MessageAttachment(path = "p.jpg", mimeType = "image/jpeg", width = 100, height = 100)
+        coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.success(stored)
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/p.jpg"
+        viewModel.onImagePicked("content://pick")
+        advanceUntilIdle()
+
+        viewModel.removeAttachment()
+
+        assertNull(viewModel.state.value.composer.attachment)
+    }
+
+    @Test
+    fun `sendMessage with image and no caption sends the default instruction with empty display`() =
+        runTest(testDispatcher) {
+            // The active model must be vision-capable or the multimodal pre-flight
+            // blocks the send.
+            localModelsFlow.value = listOf(
+                LocalModel(id = 1L, name = "Vision", path = "/v", size = 0L, isActive = true, supportsVision = true),
+            )
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            val sessionId = viewModel.state.value.thread.currentSessionId
+            val stored = MessageAttachment(path = "p.jpg", mimeType = "image/jpeg", width = 712, height = 1536)
+            coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.success(stored)
+            every { attachmentStore.absolutePathFor(any()) } returns "/tmp/p.jpg"
+            coEvery {
+                agentOrchestratorUseCase(
+                    sessionId,
+                    DefaultPrompts.IMAGE_ONLY_DEFAULT_INSTRUCTION,
+                    null,
+                    stored,
+                    "",
+                )
+            } returns flow { emit(AgentOrchestratorState.Completed("done")) }
+
+            viewModel.onImagePicked("content://pick")
+            advanceUntilIdle()
+            viewModel.sendMessage()
+            advanceUntilIdle()
+
+            coVerify {
+                agentOrchestratorUseCase(
+                    sessionId,
+                    DefaultPrompts.IMAGE_ONLY_DEFAULT_INSTRUCTION,
+                    null,
+                    stored,
+                    "",
+                )
+            }
+            assertNull(viewModel.state.value.composer.attachment)
+        }
+
+    @Test
+    fun `image-only send does not rename the chat to the internal default instruction`() = runTest(testDispatcher) {
+        localModelsFlow.value = listOf(
+            LocalModel(id = 1L, name = "Vision", path = "/v", size = 0L, isActive = true, supportsVision = true),
+        )
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        val stored = MessageAttachment(path = "p.jpg", mimeType = "image/jpeg", width = 712, height = 1536)
+        coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.success(stored)
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/p.jpg"
+        coEvery { agentOrchestratorUseCase(sessionId, any(), any(), any(), any()) } returns
+            flow { emit(AgentOrchestratorState.Completed("done")) }
+
+        viewModel.onImagePicked("content://pick")
+        advanceUntilIdle()
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        // The chat keeps its default name — the instruction text must not become the title.
+        assertEquals(
+            ChatHomeViewModel.DEFAULT_NEW_CHAT_NAME,
+            sessionsFlow.value.first { it.id == sessionId }.name,
+        )
+    }
+
+    @Test
+    fun `sendMessage with image blocks and surfaces vision error when active model is text-only`() =
+        runTest(testDispatcher) {
+            // Active model is NOT vision-capable.
+            localModelsFlow.value = listOf(
+                LocalModel(id = 1L, name = "Text", path = "/t", size = 0L, isActive = true, supportsVision = false),
+            )
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            val stored = MessageAttachment(path = "p.jpg", mimeType = "image/jpeg", width = 100, height = 100)
+            coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.success(stored)
+            every { attachmentStore.absolutePathFor(any()) } returns "/tmp/p.jpg"
+
+            viewModel.onImagePicked("content://pick")
+            advanceUntilIdle()
+            viewModel.sendMessage()
+            advanceUntilIdle()
+
+            val visual = viewModel.state.value.visual
+            assertTrue(visual is ChatHomeUiState.Error)
+            assertEquals(ChatHomeViewModel.MODEL_NO_VISION_MESSAGE, (visual as ChatHomeUiState.Error).message)
+            // The run never starts and the draft attachment is preserved.
+            coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any(), any(), any()) }
+            assertNotNull(viewModel.state.value.composer.attachment)
+        }
+
+    @Test
+    fun `sendMessage with image blocks when the pipeline has no on-device vision sink`() = runTest(testDispatcher) {
+        localModelsFlow.value = listOf(
+            LocalModel(id = 1L, name = "Vision", path = "/v", size = 0L, isActive = true, supportsVision = true),
+        )
+        coEvery { resolveEntryInferenceUseCase(any()) } returns EntryInferenceKind.NONE
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val stored = MessageAttachment(path = "p.jpg", mimeType = "image/jpeg", width = 100, height = 100)
+        coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.success(stored)
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/p.jpg"
+
+        viewModel.onImagePicked("content://pick")
+        advanceUntilIdle()
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        val visual = viewModel.state.value.visual
+        assertTrue(visual is ChatHomeUiState.Error)
+        assertEquals(ChatHomeViewModel.PIPELINE_NO_VISION_MESSAGE, (visual as ChatHomeUiState.Error).message)
+        coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `two rapid image sends enqueue only one run (no double-send race)`() = runTest(testDispatcher) {
+        localModelsFlow.value = listOf(
+            LocalModel(id = 1L, name = "Vision", path = "/v", size = 0L, isActive = true, supportsVision = true),
+        )
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        val stored = MessageAttachment(path = "p.jpg", mimeType = "image/jpeg", width = 100, height = 100)
+        coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.success(stored)
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/p.jpg"
+        coEvery { agentOrchestratorUseCase(sessionId, any(), any(), any(), any()) } returns
+            flow { emit(AgentOrchestratorState.Completed("done")) }
+
+        viewModel.onImagePicked("content://pick")
+        advanceUntilIdle()
+        // Both taps land before the async pre-flight resolves; the in-flight guard
+        // must reject the second so only one run is enqueued.
+        viewModel.sendMessage()
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { agentOrchestratorUseCase(sessionId, any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `sendMessage with image blocks and surfaces cloud error when pipeline starts on a cloud node`() =
+        runTest(testDispatcher) {
+            // Active model is vision-capable, so only the CLOUD-entry guard can block.
+            localModelsFlow.value = listOf(
+                LocalModel(id = 1L, name = "Vision", path = "/v", size = 0L, isActive = true, supportsVision = true),
+            )
+            coEvery { resolveEntryInferenceUseCase(any()) } returns EntryInferenceKind.CLOUD
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            val stored = MessageAttachment(path = "p.jpg", mimeType = "image/jpeg", width = 100, height = 100)
+            coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.success(stored)
+            every { attachmentStore.absolutePathFor(any()) } returns "/tmp/p.jpg"
+
+            viewModel.onImagePicked("content://pick")
+            advanceUntilIdle()
+            viewModel.sendMessage()
+            advanceUntilIdle()
+
+            val visual = viewModel.state.value.visual
+            assertTrue(visual is ChatHomeUiState.Error)
+            assertEquals(
+                ChatHomeViewModel.CLOUD_ATTACHMENT_BLOCKED_MESSAGE,
+                (visual as ChatHomeUiState.Error).message,
+            )
+            coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any(), any(), any()) }
+        }
 
     @Test
     fun `sendMessage clears pending approval and flips to Generating in one atomic emission`() =
@@ -1735,8 +2004,107 @@ class ChatHomeViewModelTest {
 
     // endregion
 
+    // region Voice input
+
+    @Test
+    fun `onMicClicked opens the audio chooser with the configured duration`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onMicClicked()
+        advanceUntilIdle()
+
+        val composer = viewModel.state.value.composer
+        assertTrue(composer.audioChooserVisible)
+        assertEquals(AUDIO_LIMIT_SEC, composer.audioMaxDurationSec)
+    }
+
+    @Test
+    fun `onMicPermissionDenied surfaces the permission notice and closes the chooser`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onMicPermissionDenied()
+
+        val composer = viewModel.state.value.composer
+        assertEquals(ComposerVoiceNotice.PermissionDenied, composer.voiceNotice)
+        assertFalse(composer.audioChooserVisible)
+    }
+
+    @Test
+    fun `onAudioFilePicked transcribes the clip into the composer`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        coEvery { audioCaptureStore.importFromUri("content://clip") } returns kotlin.Result.success("/cache/clip.wav")
+        coEvery { transcribeAudioUseCase("/cache/clip.wav") } returns TranscriptionOutcome.Success("hello world")
+        advanceUntilIdle()
+
+        viewModel.onAudioFilePicked("content://clip")
+        advanceUntilIdle()
+
+        val composer = viewModel.state.value.composer
+        assertEquals("hello world", composer.value)
+        assertEquals(VoiceInputState.Idle, composer.voice)
+    }
+
+    @Test
+    fun `transcription against a non-audio model surfaces the no-audio notice`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        coEvery { audioCaptureStore.importFromUri(any()) } returns kotlin.Result.success("/cache/clip.wav")
+        coEvery { transcribeAudioUseCase(any()) } returns TranscriptionOutcome.ModelNotAudioCapable
+        advanceUntilIdle()
+
+        viewModel.onAudioFilePicked("content://clip")
+        advanceUntilIdle()
+
+        assertEquals(ComposerVoiceNotice.NoAudioModel, viewModel.state.value.composer.voiceNotice)
+    }
+
+    @Test
+    fun `onDiscardRecording cancels the recorder and resets the voice state`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onDiscardRecording()
+
+        verify { audioRecorder.cancel() }
+        assertEquals(VoiceInputState.Idle, viewModel.state.value.composer.voice)
+    }
+
+    @Test
+    fun `startRecording transcribes the finished clip`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        every { audioRecorder.state } returns MutableStateFlow(RecordingState.Finished("/cache/clip.wav"))
+        coEvery { transcribeAudioUseCase("/cache/clip.wav") } returns TranscriptionOutcome.Success("hi there")
+        advanceUntilIdle()
+
+        viewModel.startRecording()
+        advanceUntilIdle()
+
+        val composer = viewModel.state.value.composer
+        assertEquals("hi there", composer.value)
+        assertEquals(VoiceInputState.Idle, composer.voice)
+    }
+
+    @Test
+    fun `startRecording resets the composer when capture fails`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        // A failed capture emits the terminal Failed state (not Finished); the VM
+        // must stop collecting and reset rather than hang forever.
+        every { audioRecorder.state } returns MutableStateFlow(RecordingState.Failed)
+        advanceUntilIdle()
+
+        viewModel.startRecording()
+        advanceUntilIdle()
+
+        assertEquals(VoiceInputState.Idle, viewModel.state.value.composer.voice)
+        coVerify(exactly = 0) { transcribeAudioUseCase(any()) }
+    }
+
+    // endregion
+
     private companion object {
         const val DEFAULT_TOKENS_MAX: Int = 4096
         const val ALT_TOKENS_MAX: Int = 8192
+        const val AUDIO_LIMIT_SEC: Int = 30
     }
 }

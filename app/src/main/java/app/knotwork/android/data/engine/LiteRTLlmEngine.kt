@@ -10,10 +10,12 @@ import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.repositories.SettingsRepository
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Content
+import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
+import com.google.ai.edge.litertlm.Message
 import com.google.ai.edge.litertlm.SamplerConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -46,6 +48,8 @@ class LiteRTLlmEngine @Inject constructor(
     private var engine: Engine? = null
     private var conversation: Conversation? = null
     private var _currentModelPath: String? = null
+    private var _isVisionEnabled: Boolean = false
+    private var _isAudioEnabled: Boolean = false
 
     /**
      * Serialises every [generateResponseStream] call. LiteRT-LM allows only
@@ -68,6 +72,16 @@ class LiteRTLlmEngine @Inject constructor(
      */
     override val currentModelPath: String? get() = _currentModelPath
 
+    /**
+     * Whether the loaded engine was constructed with its vision backend enabled.
+     */
+    override val isVisionEnabled: Boolean get() = _isVisionEnabled
+
+    /**
+     * Whether the loaded engine was constructed with its audio backend enabled.
+     */
+    override val isAudioEnabled: Boolean get() = _isAudioEnabled
+
     init {
         context.registerComponentCallbacks(this)
     }
@@ -82,89 +96,24 @@ class LiteRTLlmEngine @Inject constructor(
      * specified model path.
      *
      * @param modelPath The exact path to the locally downloaded model file.
+     * @param enableVision When `true`, the engine is built with a vision backend
+     *   (mirroring the compute [Backend]) and a one-image budget so a
+     *   vision-capable model can read an attached image; when `false` the vision
+     *   backend is left unset, keeping text-only runs lean. The flag is recorded
+     *   in [isVisionEnabled] so the loader can detect a needed mode switch.
+     * @param enableAudio When `true`, the engine is built with an audio backend
+     *   (mirroring the compute [Backend]) so a multimodal model can transcribe an
+     *   audio clip; when `false` the audio backend is left unset. The flag is
+     *   recorded in [isAudioEnabled] so the loader can detect a needed mode switch.
      * @return [Result.Success] on successful initialization, or [Result.Error] on failure.
      */
-    override suspend fun initialize(modelPath: String): Result<Unit, AppError> = withContext(Dispatchers.IO) {
+    override suspend fun initialize(
+        modelPath: String,
+        enableVision: Boolean,
+        enableAudio: Boolean,
+    ): Result<Unit, AppError> = withContext(Dispatchers.IO) {
         try {
-            val file = File(modelPath)
-            if (!file.exists()) {
-                val errorMsg = "Model file does not exist at path: $modelPath"
-                Timber.e(errorMsg)
-                _currentModelPath = null
-                return@withContext Result.Error(
-                    error = LlmSystemError,
-                    message = errorMsg,
-                )
-            }
-
-            // Close existing engine if present to release previous resources
-            unload()
-
-            val maxTokens = settingsRepository.maxContextLength.first()
-            val configuredKey = settingsRepository.localModelBackend.first()
-            val configured = LocalBackend.fromKey(configuredKey) ?: LocalBackend.CPU
-
-            // Crash-recovery: if the previous attempt crashed the process
-            // mid-init with this exact backend (sentinel still set), force
-            // CPU and reset the persisted backend so subsequent restarts
-            // are stable. The native LiteRT dispatch failure ("No dispatch
-            // library found …" for GPU / NPU on devices that don't ship
-            // one) can SIGABRT before Kotlin try/catch fires, so we have
-            // to gate the attempt before it starts.
-            val previousAttempt = settingsRepository.lastInitBackendAttempt.first()
-            val resolved = if (
-                configured != LocalBackend.CPU &&
-                previousAttempt == configured.key
-            ) {
-                Timber.w(
-                    "LiteRT backend '%s' crashed during previous init — falling back to CPU.",
-                    configured.key,
-                )
-                settingsRepository.setLocalModelBackend(LocalBackend.CPU.key)
-                settingsRepository.setLastInitBackendAttempt(null)
-                LocalBackend.CPU
-            } else {
-                configured
-            }
-
-            // Drop the breadcrumb before invoking the native engine.
-            // Cleared after a successful init (and after the recovery
-            // path above forces CPU). CPU is intentionally not gated:
-            // the CPU backend ships in-process and cannot fail to find
-            // its dispatch library.
-            if (resolved != LocalBackend.CPU) {
-                settingsRepository.setLastInitBackendAttempt(resolved.key)
-            } else {
-                settingsRepository.setLastInitBackendAttempt(null)
-            }
-
-            val backend = when (resolved) {
-                LocalBackend.GPU -> Backend.GPU()
-                LocalBackend.NPU -> Backend.NPU()
-                LocalBackend.CPU -> Backend.CPU()
-            }
-
-            // Initialize Engine Configuration
-            val config = EngineConfig(
-                modelPath = modelPath,
-                backend = backend,
-                visionBackend = null,
-                audioBackend = null,
-                maxNumTokens = maxTokens,
-                cacheDir = context.cacheDir.absolutePath,
-            )
-
-            // Create Engine from config and initialize
-            engine = Engine(config).apply {
-                initialize()
-            }
-            _currentModelPath = modelPath
-            // Init succeeded — clear the crash-recovery breadcrumb so the
-            // next launch trusts the persisted backend.
-            settingsRepository.setLastInitBackendAttempt(null)
-            Timber.i("LiteRT-LM Engine successfully initialized with $modelPath")
-
-            Result.Success(Unit)
+            initializeInternal(modelPath, enableVision, enableAudio)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -177,6 +126,8 @@ class LiteRTLlmEngine @Inject constructor(
             // auto-falls back to CPU.
             Timber.e(e, "Failed to initialize LiteRTLlmEngine")
             _currentModelPath = null
+            _isVisionEnabled = false
+            _isAudioEnabled = false
             Result.Error(
                 error = LlmSystemError,
                 message = e.localizedMessage ?: "Unknown initialization error",
@@ -186,9 +137,128 @@ class LiteRTLlmEngine @Inject constructor(
     }
 
     /**
+     * Performs the actual engine construction. Split out from [initialize] so the
+     * `Dispatchers.IO` + try/catch boundary stays in one place while the body
+     * reads top-to-bottom.
+     *
+     * @param modelPath The exact path to the locally downloaded model file.
+     * @param enableVision Whether to configure the vision backend (see [initialize]).
+     * @param enableAudio Whether to configure the audio backend (see [initialize]).
+     * @return [Result.Success] on successful initialization, or [Result.Error] on failure.
+     */
+    private suspend fun initializeInternal(
+        modelPath: String,
+        enableVision: Boolean,
+        enableAudio: Boolean,
+    ): Result<Unit, AppError> {
+        val file = File(modelPath)
+        if (!file.exists()) {
+            val errorMsg = "Model file does not exist at path: $modelPath"
+            Timber.e(errorMsg)
+            _currentModelPath = null
+            _isVisionEnabled = false
+            _isAudioEnabled = false
+            return Result.Error(
+                error = LlmSystemError,
+                message = errorMsg,
+            )
+        }
+
+        // Close existing engine if present to release previous resources
+        unload()
+
+        val maxTokens = settingsRepository.maxContextLength.first()
+        val configuredKey = settingsRepository.localModelBackend.first()
+        val configured = LocalBackend.fromKey(configuredKey) ?: LocalBackend.CPU
+
+        // Crash-recovery: if the previous attempt crashed the process
+        // mid-init with this exact backend (sentinel still set), force
+        // CPU and reset the persisted backend so subsequent restarts
+        // are stable. The native LiteRT dispatch failure ("No dispatch
+        // library found …" for GPU / NPU on devices that don't ship
+        // one) can SIGABRT before Kotlin try/catch fires, so we have
+        // to gate the attempt before it starts.
+        val previousAttempt = settingsRepository.lastInitBackendAttempt.first()
+        val resolved = if (
+            configured != LocalBackend.CPU &&
+            previousAttempt == configured.key
+        ) {
+            Timber.w(
+                "LiteRT backend '%s' crashed during previous init — falling back to CPU.",
+                configured.key,
+            )
+            settingsRepository.setLocalModelBackend(LocalBackend.CPU.key)
+            settingsRepository.setLastInitBackendAttempt(null)
+            LocalBackend.CPU
+        } else {
+            configured
+        }
+
+        // Drop the breadcrumb before invoking the native engine.
+        // Cleared after a successful init (and after the recovery
+        // path above forces CPU). CPU is intentionally not gated:
+        // the CPU backend ships in-process and cannot fail to find
+        // its dispatch library.
+        if (resolved != LocalBackend.CPU) {
+            settingsRepository.setLastInitBackendAttempt(resolved.key)
+        } else {
+            settingsRepository.setLastInitBackendAttempt(null)
+        }
+
+        val backend = newBackend(resolved)
+
+        // The vision encoder runs on a fresh backend instance of the same
+        // compute family as text (LiteRT-LM fixes the vision backend at engine
+        // construction). A text-only init leaves it `null` so no vision encoder
+        // is loaded. `maxNumImages` mirrors the one-attachment-per-message
+        // contract of this phase.
+        val visionBackend = if (enableVision) newBackend(resolved) else null
+
+        // The audio encoder, like vision, runs on a fresh backend instance of the
+        // same compute family and is fixed at engine construction (LiteRT-LM
+        // exposes no `maxNumAudio` budget — the audio backend's presence alone
+        // enables transcription). A non-audio init leaves it `null`.
+        val audioBackend = if (enableAudio) newBackend(resolved) else null
+
+        // Initialize Engine Configuration
+        val config = EngineConfig(
+            modelPath = modelPath,
+            backend = backend,
+            visionBackend = visionBackend,
+            audioBackend = audioBackend,
+            maxNumTokens = maxTokens,
+            maxNumImages = if (enableVision) MAX_NUM_IMAGES else null,
+            cacheDir = context.cacheDir.absolutePath,
+        )
+
+        // Create Engine from config and initialize
+        engine = Engine(config).apply {
+            initialize()
+        }
+        _currentModelPath = modelPath
+        _isVisionEnabled = enableVision
+        _isAudioEnabled = enableAudio
+        // Init succeeded — clear the crash-recovery breadcrumb so the
+        // next launch trusts the persisted backend.
+        settingsRepository.setLastInitBackendAttempt(null)
+        Timber.i(
+            "LiteRT-LM Engine successfully initialized with $modelPath " +
+                "(vision=$enableVision, audio=$enableAudio)",
+        )
+
+        return Result.Success(Unit)
+    }
+
+    /**
      * Generates a response stream from the LLM based on the provided prompt.
      *
      * @param prompt The input text prompt for the LLM.
+     * @param imagePath Absolute path of an image to send with [prompt], or `null`
+     *   for a text-only generation. When non-`null` the message is built as an
+     *   ordered [Contents] of the image (`Content.ImageFile`) followed by the
+     *   text, which requires the engine to have been initialized with
+     *   `enableVision = true`; the caller (`LiteRtNodeExecutor` via
+     *   `LoadModelUseCase`) guarantees that before issuing an image generation.
      * @param temperature Optional sampling-temperature override. When `null` the
      *   conversation is opened with no [SamplerConfig] so LiteRT-LM keeps the
      *   model's native sampler (the ordinary, unchanged path). When non-`null`
@@ -196,55 +266,91 @@ class LiteRTLlmEngine @Inject constructor(
      *   at the requested temperature — used by the structured-output repair loop.
      * @return A [Flow] of strings representing the generated tokens as they are produced.
      */
-    override fun generateResponseStream(prompt: String, temperature: Float?): Flow<String> = flow {
-        val currentEngine = engine
-        if (currentEngine == null) {
-            Timber.e("Engine is not initialized")
-            throw IllegalStateException("LLM Engine not initialized")
+    override fun generateResponseStream(prompt: String, imagePath: String?, temperature: Float?): Flow<String> =
+        // With an image, the message is a multimodal [Contents] (image then text);
+        // without, the plain-string overload keeps the text path byte-identical.
+        streamConversation(temperature) { conversation ->
+            if (imagePath == null) {
+                conversation.sendMessageAsync(prompt)
+            } else {
+                conversation.sendMessageAsync(Contents.of(Content.ImageFile(imagePath), Content.Text(prompt)))
+            }
         }
 
-        try {
-            Timber.d("Starting inference for prompt: %s", prompt)
+    /**
+     * Transcribes a single audio clip into text. Runs through the same
+     * single-conversation [streamConversation] discipline as
+     * [generateResponseStream] but builds the message from an audio file
+     * (`Content.AudioFile`) followed by the transcription instruction, which
+     * requires the engine to have been initialized with `enableAudio = true`
+     * (guaranteed by `LoadModelUseCase` loading the model in audio mode first).
+     * Transcription is a pre-pipeline step: the resulting text, not the audio,
+     * is what later travels the execution graph.
+     *
+     * @param audioPath Absolute path of the audio clip (16 kHz mono PCM WAV).
+     * @param prompt The rendered transcription instruction.
+     * @return A [Flow] of transcript token chunks, emitted on [Dispatchers.IO].
+     */
+    override fun transcribe(audioPath: String, prompt: String): Flow<String> =
+        streamConversation(temperature = null) { conversation ->
+            conversation.sendMessageAsync(Contents.of(Content.AudioFile(audioPath), Content.Text(prompt)))
+        }
 
-            // Serialise the whole generation: closing/recreating the single
-            // conversation and streaming its tokens must not interleave with
-            // another concurrent generation (foreground pipeline vs background
-            // memory extraction), which would tear down an in-flight session.
-            generationMutex.withLock {
-                // LiteRT-LM allows only one active session. Since the Orchestrator manually
-                // supplies the full history context every time, we must close the old conversation
-                // and create a fresh one to prevent token accumulation and OOM crashes.
-                conversation?.close()
-                // A temperature override replaces the whole sampler (LiteRT-LM
-                // has no "override one field" path), so the override case supplies
-                // conventional top-k / top-p alongside the requested temperature;
-                // the low repair temperature does the determinism work. The
-                // default (`null`) path passes no config, leaving the native
-                // sampler exactly as before.
-                conversation = if (temperature == null) {
-                    currentEngine.createConversation()
-                } else {
-                    currentEngine.createConversation(repairConversationConfig(temperature))
-                }
+    /**
+     * Shared single-conversation streaming discipline for [generateResponseStream]
+     * and [transcribe]. Serialises on [generationMutex] so closing/recreating the
+     * single LiteRT-LM [Conversation] and streaming its tokens never interleaves
+     * with another concurrent generation (which would tear down an in-flight
+     * session), opens a fresh conversation (with a repair [SamplerConfig] when
+     * [temperature] is non-`null`), sends the caller-built message, and re-emits
+     * each chunk's [Content.Text] parts as they arrive.
+     *
+     * @param temperature Optional sampling-temperature override (see
+     *   [generateResponseStream]); `null` leaves the model's native sampler.
+     * @param openResponses Builds and sends the message on the freshly opened
+     *   [Conversation], returning the LiteRT-LM response [Message] stream.
+     * @return A [Flow] of generated text chunks, emitted on [Dispatchers.IO].
+     */
+    private fun streamConversation(temperature: Float?, openResponses: (Conversation) -> Flow<Message>): Flow<String> =
+        flow {
+            val currentEngine = engine
+            if (currentEngine == null) {
+                Timber.e("Engine is not initialized")
+                throw IllegalStateException("LLM Engine not initialized")
+            }
 
-                // Stream the tokens directly from the LiteRT-LM conversation
-                conversation?.let { conversation ->
-                    conversation.sendMessageAsync(prompt).collect { chunk ->
-                        val textParts = chunk.contents.contents.filterIsInstance<Content.Text>()
-                        val text = textParts.joinToString("") { it.text }
-                        if (text.isNotEmpty()) {
-                            emit(text)
+            try {
+                generationMutex.withLock {
+                    // LiteRT-LM allows only one active session. The orchestrator supplies
+                    // the full history every time, so we close the old conversation and
+                    // open a fresh one to prevent token accumulation and OOM crashes. A
+                    // temperature override replaces the whole sampler (LiteRT-LM has no
+                    // "override one field" path); the default (`null`) path passes no
+                    // config, leaving the native sampler exactly as before.
+                    conversation?.close()
+                    conversation = if (temperature == null) {
+                        currentEngine.createConversation()
+                    } else {
+                        currentEngine.createConversation(repairConversationConfig(temperature))
+                    }
+                    conversation?.let { conversation ->
+                        openResponses(conversation).collect { chunk ->
+                            val text = chunk.contents.contents
+                                .filterIsInstance<Content.Text>()
+                                .joinToString(separator = "") { it.text }
+                            if (text.isNotEmpty()) {
+                                emit(text)
+                            }
                         }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.e(e, "Error during conversation streaming")
+                throw e
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Timber.e(e, "Error during text generation")
-            throw e
-        }
-    }.flowOn(Dispatchers.IO)
+        }.flowOn(Dispatchers.IO)
 
     /**
      * Unloads the engine from memory, releasing heavy resources.
@@ -260,6 +366,8 @@ class LiteRTLlmEngine @Inject constructor(
             conversation = null
             engine = null
             _currentModelPath = null
+            _isVisionEnabled = false
+            _isAudioEnabled = false
         }
     }
 
@@ -316,6 +424,20 @@ class LiteRTLlmEngine @Inject constructor(
      * @param temperature The repair sampling temperature to apply.
      * @return A conversation config carrying the repair [SamplerConfig].
      */
+    /**
+     * Builds a fresh LiteRT-LM [Backend] instance for the given [LocalBackend].
+     * Used for both the compute backend and (when vision is enabled) the vision
+     * backend, so the GPU/NPU/CPU mapping lives in exactly one place.
+     *
+     * @param backend The resolved on-device execution backend.
+     * @return A new [Backend] of the matching family.
+     */
+    private fun newBackend(backend: LocalBackend): Backend = when (backend) {
+        LocalBackend.GPU -> Backend.GPU()
+        LocalBackend.NPU -> Backend.NPU()
+        LocalBackend.CPU -> Backend.CPU()
+    }
+
     private fun repairConversationConfig(temperature: Float): ConversationConfig = ConversationConfig(
         samplerConfig = SamplerConfig(
             topK = REPAIR_SAMPLER_TOP_K,
@@ -326,6 +448,12 @@ class LiteRTLlmEngine @Inject constructor(
     )
 
     private companion object {
+        /**
+         * Per-message image budget when vision is enabled. This phase carries a
+         * single attachment per user message, so one image suffices.
+         */
+        const val MAX_NUM_IMAGES: Int = 1
+
         /**
          * Top-k for the temperature-override (repair) sampler. Conventional
          * Gemma-family value; paired with [REPAIR_SAMPLER_TOP_P] it is only ever

@@ -3,6 +3,7 @@ package app.knotwork.android.domain.usecases
 import app.knotwork.android.domain.engine.TaskQueueManager
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTask
+import app.knotwork.android.domain.models.MessageAttachment
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.TaskPriority
 import kotlinx.coroutines.flow.Flow
@@ -70,18 +71,29 @@ class AgentOrchestratorUseCase @Inject constructor(private val taskQueueManager:
      *   the value of `ChatSession.pipelineId` so each chat executes against its
      *   own bound pipeline. `null` defers to the application-wide
      *   default pipeline.
+     * @param attachment Optional image attached to the user message. It is
+     *   persisted on the saved user message and rendered in the chat bubble;
+     *   only [userPrompt] text travels the pipeline graph in this phase.
+     * @param displayContent Text to persist on the saved user message when it
+     *   must differ from [userPrompt] (image-only message: empty display, while
+     *   [userPrompt] carries the internal default instruction). `null` saves
+     *   [userPrompt] verbatim.
      * @return A [Flow] of [AgentOrchestratorState] emitting the progress of the agent.
      */
     operator fun invoke(
         sessionId: String,
         userPrompt: String,
         pipelineId: String? = null,
+        attachment: MessageAttachment? = null,
+        displayContent: String? = null,
     ): Flow<AgentOrchestratorState> {
         val task = AgentTask(
             sessionId = sessionId,
             prompt = userPrompt,
             priority = TaskPriority.HIGH, // High priority for active UI requests
             pipelineId = pipelineId,
+            attachment = attachment,
+            displayContent = displayContent,
         )
         taskQueueManager.enqueueTask(task)
         return taskQueueManager.observeTaskState(sessionId)

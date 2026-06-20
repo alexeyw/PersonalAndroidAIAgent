@@ -46,7 +46,7 @@ class AndroidModelDownloadManager @Inject constructor(
             val response = client.newCall(request).execute()
 
             if (!response.isSuccessful) {
-                emit(DownloadState.Error(DownloadError("Server returned code: ${response.code}")))
+                emit(DownloadState.Error(DownloadError("Server returned code: ${response.code}", code = response.code)))
                 return@flow
             }
 
@@ -98,8 +98,12 @@ class AndroidModelDownloadManager @Inject constructor(
      * A simple implementation of [AppError.Network] for download failures.
      *
      * @property message The error message detailing the failure.
+     * @property code The HTTP status code when the failure was a non-2xx
+     *   response, or `null` for transport/IO failures. Carried as a typed
+     *   field so consumers can branch on the status (e.g. an access-gated
+     *   401/403) without parsing it back out of [message].
      */
-    data class DownloadError(val message: String) : AppError.Network
+    data class DownloadError(val message: String, val code: Int? = null) : AppError.Network
 
     private companion object {
         /** Size, in bytes, of the chunk read from the network and flushed to disk on each loop. */

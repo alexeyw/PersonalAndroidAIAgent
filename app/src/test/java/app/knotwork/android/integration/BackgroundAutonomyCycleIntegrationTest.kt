@@ -48,6 +48,7 @@ import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
+import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.ParkedRunResumer
@@ -346,6 +347,8 @@ class BackgroundAutonomyCycleIntegrationTest {
                 chatRepository,
                 settingsRepository,
                 mockk(relaxed = true),
+                mockk(relaxed = true),
+                NativeMemorySampler { 0L },
                 loadModelUseCase,
             ),
             CloudLlmNodeExecutor(
@@ -417,6 +420,7 @@ class BackgroundAutonomyCycleIntegrationTest {
             graphExecutionEngine = engine,
             pipelineRunRepository = runRepository,
             runTraceRepository = traceRepository,
+            attachmentStore = mockk(relaxed = true),
         ).apply { dispatcher = testDispatcher }
 
         val resumeRun = ResumePipelineRunUseCase(
@@ -452,6 +456,7 @@ class BackgroundAutonomyCycleIntegrationTest {
      * replay vs. live re-execution).
      */
     private fun scriptedLlmEngine(): LlmInferenceEngine = mockk {
+        every { currentModelPath } returns null
         every { generateResponseStream(any()) } answers {
             val prompt = firstArg<String>()
             flowOf(

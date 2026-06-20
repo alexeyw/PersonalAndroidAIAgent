@@ -1,7 +1,7 @@
 package app.knotwork.android.presentation.ui.models
 
-import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -15,15 +15,18 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import app.knotwork.android.R
 import app.knotwork.android.data.network.AndroidModelDownloadManager.DownloadError
 import app.knotwork.android.domain.models.LocalModel
+import app.knotwork.android.domain.usecases.BenchmarkRunPhase
+import app.knotwork.android.presentation.ui.common.readPlainClipboardText
 import app.knotwork.design.screens.models.ActiveModelRow
+import app.knotwork.design.screens.models.BenchmarkPhase
 import app.knotwork.design.screens.models.ModelsCallbacks
 import app.knotwork.design.screens.models.ModelsContent
 import app.knotwork.design.screens.models.ModelsStrings
 import app.knotwork.design.screens.models.ModelsViewState
 import app.knotwork.design.screens.models.ModelsVisualState
+import app.knotwork.design.screens.models.PerformanceCardState
 import app.knotwork.design.screens.models.PresetRow
 import app.knotwork.design.screens.models.PresetStatus
-import java.util.Locale
 
 /**
  * Slim app-side Models mapper. Subscribes to [ModelsViewModel.uiState],
@@ -35,12 +38,19 @@ import java.util.Locale
  * @param modifier Optional layout modifier.
  */
 @Composable
-fun ModelsScreen(modifier: Modifier = Modifier, viewModel: ModelsViewModel = hiltViewModel(), onBack: () -> Unit = {}) {
+fun ModelsScreen(
+    modifier: Modifier = Modifier,
+    viewModel: ModelsViewModel = hiltViewModel(),
+    onBack: () -> Unit = {},
+    onOpenDiscover: () -> Unit = {},
+) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
     val unknownErrorText = stringResource(R.string.models_error_unknown)
     val defaultCustomFilename = stringResource(R.string.models_default_custom_filename)
+    val benchmarkFailedText = stringResource(R.string.models_benchmark_failed)
+    val benchmarkShareSubject = stringResource(R.string.models_benchmark_share_subject)
     val strings = modelsStrings()
 
     LaunchedEffect(uiState.downloadError) {
@@ -54,6 +64,18 @@ fun ModelsScreen(modifier: Modifier = Modifier, viewModel: ModelsViewModel = hil
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.benchmarkShareEvents.collect { shareText ->
+            shareBenchmarkText(context, shareText, benchmarkShareSubject)
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.benchmarkErrorEvents.collect {
+            snackbarHostState.showSnackbar(benchmarkFailedText)
+        }
+    }
+
     val viewState = remember(uiState) { uiState.toViewState(strings.subtitleFormat) }
 
     ModelsContent(
@@ -62,8 +84,9 @@ fun ModelsScreen(modifier: Modifier = Modifier, viewModel: ModelsViewModel = hil
         strings = strings.content,
         callbacks = ModelsCallbacks(
             onBack = onBack,
+            onDiscover = onOpenDiscover,
             onAuthTokenChange = viewModel::onAuthTokenChanged,
-            onAuthTokenPaste = { viewModel.onAuthTokenChanged(readClipboard(context)) },
+            onAuthTokenPaste = { viewModel.onAuthTokenChanged(readPlainClipboardText(context)) },
             onCustomUrlChange = viewModel::onCustomUrlChanged,
             onCustomUrlSubmit = {
                 val url = uiState.customUrlInput
@@ -94,6 +117,16 @@ fun ModelsScreen(modifier: Modifier = Modifier, viewModel: ModelsViewModel = hil
                     ?.let { viewModel.deleteModel(it.id) }
             },
             onCustomDownloadCancel = { viewModel.cancelDownload() },
+            onToggleVision = { enabled ->
+                uiState.activeModel?.let { viewModel.setVisionSupport(it.id, enabled) }
+            },
+            onToggleAudio = { enabled ->
+                uiState.activeModel?.let { viewModel.setAudioSupport(it.id, enabled) }
+            },
+            onRunBenchmark = viewModel::onRunBenchmark,
+            onCancelBenchmark = viewModel::onCancelBenchmark,
+            onShareBenchmark = viewModel::onShareBenchmark,
+            onDismissBenchmark = viewModel::onDismissBenchmark,
             // `onActiveOpen` / `onOverflowMenu` are intentionally left at their
             // default no-ops: the catalog no longer renders those affordances
             // (the active-model card is a passive status row and the TopAppBar
@@ -105,11 +138,14 @@ fun ModelsScreen(modifier: Modifier = Modifier, viewModel: ModelsViewModel = hil
     )
 }
 
-/** Pull the latest plain-text clipboard content for the HF auth-token paste action. */
-private fun readClipboard(context: Context): String {
-    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-    val item = clipboard?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)
-    return item?.text?.toString().orEmpty()
+/** Hands the formatted benchmark summary to the system share sheet as plain text. */
+private fun shareBenchmarkText(context: Context, text: String, subject: String) {
+    val sendIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "text/plain"
+        putExtra(Intent.EXTRA_SUBJECT, subject)
+        putExtra(Intent.EXTRA_TEXT, text)
+    }
+    context.startActivity(Intent.createChooser(sendIntent, subject))
 }
 
 /**
@@ -142,6 +178,8 @@ internal fun ModelsUiState.toViewState(subtitleFormat: String): ModelsViewState 
             id = model.id,
             displayName = model.name,
             meta = model.toMetaLine(backendLabel = backendLabel),
+            visionSupported = model.supportsVision,
+            audioSupported = model.supportsAudio,
         )
     }
     val downloadingName = activeDownloadFileName
@@ -208,7 +246,42 @@ internal fun ModelsUiState.toViewState(subtitleFormat: String): ModelsViewState 
         presets = presets,
         downloadedRows = downloadedRows,
         subtitle = subtitle,
+        performance = toPerformanceCardState(),
     )
+}
+
+/**
+ * Collapses the active model, its rolling performance summary, the live
+ * engine-busy signal and the benchmark sub-state into the single
+ * [PerformanceCardState] the catalog card renders.
+ */
+private fun ModelsUiState.toPerformanceCardState(): PerformanceCardState {
+    if (activeModel == null) return PerformanceCardState.NoModel
+    return when (val bench = benchmark) {
+        is BenchmarkUiState.Running -> PerformanceCardState.Running(bench.phase.toCatalogPhase())
+        is BenchmarkUiState.Result -> PerformanceCardState.Result(
+            ttft = PerformanceFormatting.ttft(bench.report.ttftMs),
+            decode = PerformanceFormatting.decode(bench.report.decodeTokensPerSec),
+            total = PerformanceFormatting.totalSeconds(bench.report.totalMs),
+            peakMemory = PerformanceFormatting.memory(bench.report.peakNativeHeapBytes),
+        )
+        BenchmarkUiState.Idle -> when {
+            engineBusy -> PerformanceCardState.EngineBusy
+            performanceSummary != null -> PerformanceCardState.Populated(
+                ttft = PerformanceFormatting.ttft(performanceSummary.avgTtftMs),
+                decode = PerformanceFormatting.decode(performanceSummary.avgDecodeTokensPerSec),
+                peakMemory = PerformanceFormatting.memory(performanceSummary.peakNativeHeapBytes),
+                sampleCaption = PerformanceFormatting.sampleCaption(performanceSummary.sampleCount),
+            )
+            else -> PerformanceCardState.Empty
+        }
+    }
+}
+
+/** Maps the domain benchmark phase onto the catalog card's phase enum. */
+private fun BenchmarkRunPhase.toCatalogPhase(): BenchmarkPhase = when (this) {
+    BenchmarkRunPhase.WARMING_UP -> BenchmarkPhase.WarmingUp
+    BenchmarkRunPhase.MEASURING -> BenchmarkPhase.Measuring
 }
 
 private fun LocalModel.toMetaLine(backendLabel: String): String {
@@ -247,19 +320,9 @@ private fun String.toShortSource(): String {
 
 private const val MAX_SOURCE_LEN = 44
 
-private fun Long.toGigabytesLabel(): String {
-    if (this <= 0L) return "0 GB"
-    val gb = this.toDouble() / GIGABYTE
-    return if (gb >= 1.0) {
-        String.format(Locale.US, "%.1f GB", gb)
-    } else {
-        val mb = this.toDouble() / MEGABYTE
-        String.format(Locale.US, "%.0f MB", mb)
-    }
-}
-
-private const val MEGABYTE = 1024.0 * 1024.0
-private const val GIGABYTE = MEGABYTE * 1024.0
+// Reuses the shared GiB/MiB ladder ([gigabyteOrMegabyteLabel]); model sizes
+// render "0 GB" for an unknown/zero size rather than nothing.
+private fun Long.toGigabytesLabel(): String = if (this <= 0L) "0 GB" else gigabyteOrMegabyteLabel(this)
 
 /** Bundle of localised display strings threaded into [ModelsContent]. */
 private data class LocalisedModelsStrings(val content: ModelsStrings, val subtitleFormat: String)
@@ -292,6 +355,7 @@ private fun modelsStrings(): LocalisedModelsStrings = LocalisedModelsStrings(
         emptyCta = stringResource(R.string.models_empty_cta),
         errorTitle = stringResource(R.string.models_error_title),
         errorRetry = stringResource(R.string.common_retry),
+        discoverCd = stringResource(R.string.models_discover_cd),
     ),
     subtitleFormat = stringResource(R.string.models_subtitle_format),
 )
