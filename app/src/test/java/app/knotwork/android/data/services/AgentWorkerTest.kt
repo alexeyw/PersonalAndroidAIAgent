@@ -312,7 +312,8 @@ class AgentWorkerTest {
     @Test
     fun `given input contains the canonical keys when fetched then matches the public contract`() {
         // The public keys are the wire-level contract between the worker and
-        // `ScheduleTaskUseCase` — a typo here breaks the integration silently.
+        // `WorkManagerTaskScheduler` (the sole writer of the input data) — a
+        // typo here breaks the integration silently.
         assertEquals("agent_prompt", AgentWorker.KEY_PROMPT)
         assertEquals("agent_session_id", AgentWorker.KEY_SESSION_ID)
         assertEquals("current_stage", AgentWorker.KEY_CURRENT_STAGE)

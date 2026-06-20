@@ -41,6 +41,7 @@ class WorkManagerTaskSchedulerTest {
     fun `given positive interval when schedulePeriodic then enqueues unique periodic work keyed by interval`() {
         val nameSlot = slot<String>()
         val policySlot = slot<ExistingPeriodicWorkPolicy>()
+        val requestSlot = slot<PeriodicWorkRequest>()
 
         scheduler.schedulePeriodic("check emails", intervalHours = 2, sessionId = null, constraints = constraints)
 
@@ -48,12 +49,17 @@ class WorkManagerTaskSchedulerTest {
             workManager.enqueueUniquePeriodicWork(
                 capture(nameSlot),
                 capture(policySlot),
-                any<PeriodicWorkRequest>(),
+                capture(requestSlot),
             )
         }
         assertTrue(nameSlot.captured.contains("check emails"))
         assertTrue(nameSlot.captured.contains("2h"))
         assertEquals(ExistingPeriodicWorkPolicy.KEEP, policySlot.captured)
+        // The periodic request is built at the requested cadence (hours), carries
+        // the prompt, and maps the battery constraint — parity with the one-time path.
+        assertEquals(2L * 60L * 60L * 1000L, requestSlot.captured.workSpec.intervalDuration)
+        assertEquals("check emails", requestSlot.captured.workSpec.input.getString(AgentWorker.KEY_PROMPT))
+        assertTrue(requestSlot.captured.workSpec.constraints.requiresBatteryNotLow())
     }
 
     @Test

@@ -13,7 +13,7 @@ package app.knotwork.android.domain.services
  * @property requiresBatteryNotLow When `true`, the task is held back while the
  *   device reports a low-battery state and released once charge recovers.
  */
-data class ScheduledTaskConstraints(val requiresBatteryNotLow: Boolean = true)
+data class ScheduledTaskConstraints(val requiresBatteryNotLow: Boolean)
 
 /**
  * Domain port that abstracts the scheduling of future and recurring agent
@@ -49,9 +49,12 @@ interface TaskScheduler {
     /**
      * Schedules a task to run repeatedly on a fixed interval.
      *
-     * Recurring tasks are de-duplicated by `(prompt, intervalHours)`: scheduling
-     * the same recurring task again keeps the existing schedule rather than
-     * stacking a duplicate. This contract is honoured by the implementation.
+     * Recurring tasks are de-duplicated by the **exact** `(prompt, intervalHours)`
+     * pair: scheduling the same recurring task again keeps the existing schedule
+     * rather than stacking a duplicate. The match is on the verbatim prompt string
+     * (no trimming/case-folding) and deliberately ignores [sessionId] — two
+     * schedules with the same prompt and interval but different bound sessions
+     * collapse to the first one. This contract is honoured by the implementation.
      *
      * @param prompt The prompt the agent should execute on every run.
      * @param intervalHours The repeat interval, in hours. Must be positive;
