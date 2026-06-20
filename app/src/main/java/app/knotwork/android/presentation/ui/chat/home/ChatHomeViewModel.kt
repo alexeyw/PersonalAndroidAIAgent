@@ -29,10 +29,8 @@ import app.knotwork.android.domain.services.AudioCaptureStore
 import app.knotwork.android.domain.services.AudioRecorder
 import app.knotwork.android.domain.services.ChatHistoryCompressionCoordinator
 import app.knotwork.android.domain.services.MemoryAutoExtractionCoordinator
-import app.knotwork.android.domain.services.RecordingState
 import app.knotwork.android.domain.services.isTerminal
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
-import app.knotwork.android.domain.usecases.EntryInferenceKind
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.PendingSubmissionOutcome
@@ -40,22 +38,14 @@ import app.knotwork.android.domain.usecases.ResolveEntryInferenceUseCase
 import app.knotwork.android.domain.usecases.ResumeOutcome
 import app.knotwork.android.domain.usecases.ResumePipelineRunUseCase
 import app.knotwork.android.domain.usecases.SaveMessageToMemoryUseCase
-import app.knotwork.android.domain.usecases.SaveToMemoryOutcome
 import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
 import app.knotwork.android.domain.usecases.SubmitClarificationAnswerUseCase
 import app.knotwork.android.domain.usecases.TranscribeAudioUseCase
-import app.knotwork.android.domain.usecases.TranscriptionOutcome
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ChatMessageStatus
 import app.knotwork.design.components.chat.ChatMetadata
 import app.knotwork.design.components.chat.ChatRole
-import app.knotwork.design.components.chat.ComposerVoiceNotice
 import app.knotwork.design.components.chips.Risk
-import app.knotwork.design.components.console.ConsoleFilter
-import app.knotwork.design.components.console.ConsoleLine
-import app.knotwork.design.components.console.ConsoleSnap
-import app.knotwork.design.components.console.ConsoleSource
-import app.knotwork.design.components.console.ConsoleTab
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
 import app.knotwork.design.screens.chat.ChatHomeThreadRow
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -73,12 +63,8 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
-import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import org.json.JSONArray
-import org.json.JSONObject
-import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -172,13 +158,8 @@ class ChatHomeViewModel @Inject constructor(
     val state: StateFlow<ChatHomeScreenState> = _state.asStateFlow()
 
     private val _pipelineFallbackEvents: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 1)
-    private val _exportEvents: MutableSharedFlow<ChatExportPayload> = MutableSharedFlow(extraBufferCapacity = 1)
-    private val _importErrorEvents: MutableSharedFlow<String> = MutableSharedFlow(extraBufferCapacity = 1)
-    private val _memorySaveEvents: MutableSharedFlow<MemorySaveEvent> = MutableSharedFlow(extraBufferCapacity = 1)
     private val _resumeFeedbackEvents: MutableSharedFlow<ResumeFeedbackEvent> =
         MutableSharedFlow(extraBufferCapacity = 1)
-    private val _attachmentErrorEvents: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 1)
-    private val _voiceErrorEvents: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 1)
 
     /**
      * One-shot signal raised when the binding of the active chat points
@@ -190,58 +171,12 @@ class ChatHomeViewModel @Inject constructor(
     val pipelineFallbackEvents: SharedFlow<Unit> = _pipelineFallbackEvents.asSharedFlow()
 
     /**
-     * One-shot stream of snackbar events raised by the console pane (line
-     * copied, full log copied). The screen mirrors each emission into the
-     * shared `SnackbarHostState`; the clipboard write itself is performed
-     * by the Composable (which owns `LocalClipboardManager`). Forwarded from
-     * [consoleDelegate], which owns the console responsibility.
-     */
-    val consoleSnackbarEvents: SharedFlow<ConsoleSnackbarEvent> get() = consoleDelegate.consoleSnackbarEvents
-
-    /**
-     * One-shot stream raised when the user picks `Export chat` from the
-     * overflow menu. The screen consumes each payload via a `LaunchedEffect`
-     * and dispatches a system share-sheet (`Intent.ACTION_SEND`).
-     */
-    val exportEvents: SharedFlow<ChatExportPayload> = _exportEvents.asSharedFlow()
-
-    /**
-     * One-shot stream of import-failure messages. Surfaced via the shared
-     * `SnackbarHostState`; the carried string is a localised user-visible
-     * description ("Could not read the selected file", JSON parse error, …).
-     */
-    val importErrorEvents: SharedFlow<String> = _importErrorEvents.asSharedFlow()
-
-    /**
-     * One-shot stream of "Save to memory" outcomes raised by the message
-     * long-press action. The screen maps each event to a snackbar
-     * ("Saved to memory" / failure copy).
-     */
-    val memorySaveEvents: SharedFlow<MemorySaveEvent> = _memorySaveEvents.asSharedFlow()
-
-    /**
      * One-shot signal raised when a Resume tap on the interrupted-run card
      * could not start the checkpoint resume. Each variant maps to its own
      * snackbar copy on the screen; a successful resume emits nothing here —
      * the surface flips to `Generating` and the live state flow takes over.
      */
     val resumeFeedbackEvents: SharedFlow<ResumeFeedbackEvent> = _resumeFeedbackEvents.asSharedFlow()
-
-    /**
-     * One-shot signal raised when ingesting a picked/captured image fails. The
-     * screen surfaces a transient `KnotworkSnackbar`; deliberately not modelled
-     * as a [ChatHomeUiState.Error] so a failed attachment never clobbers the
-     * surface's main visual state (e.g. an in-flight `Generating` run).
-     */
-    val attachmentErrorEvents: SharedFlow<Unit> = _attachmentErrorEvents.asSharedFlow()
-
-    /**
-     * One-shot signal raised when voice input fails (recording failed to capture,
-     * a picked audio file could not be imported, or transcription errored). The
-     * screen shows a voice-specific snackbar — distinct from the image-attachment
-     * failure message.
-     */
-    val voiceErrorEvents: SharedFlow<Unit> = _voiceErrorEvents.asSharedFlow()
 
     private var messagesJob: Job? = null
     private var generationJob: Job? = null
@@ -274,22 +209,20 @@ class ChatHomeViewModel @Inject constructor(
      * (filtering and mapping the full record list to console rows). Off-main
      * by default so a long run's one-shot projection cannot jank the session
      * open; swapped for the test dispatcher in unit tests. Read lazily by
-     * [consoleDelegate] on every replay, so a test that sets it after
-     * construction is honoured.
+     * [console] on every replay, so a test that sets it after construction is
+     * honoured.
      */
     @VisibleForTesting
     internal var traceProjectionDispatcher: CoroutineDispatcher = Dispatchers.Default
 
     /**
-     * Console-pane responsibility extracted from this God-object into a
-     * delegate that shares [viewModelScope] and the single [_state] reducer.
-     * The ViewModel keeps a thin forwarding surface (the screen and existing
-     * tests call the same `viewModel.*` console methods), while the live
-     * stream aggregation, persisted-trace replay, per-run caches and console
-     * intent logic live in [ChatHomeConsoleDelegate]. This is the established
-     * pattern for further thinning of the surface (see `docs/architecture.md`).
+     * Console-pane delegate (live `ConsoleLog` / `PipelineTrace` / `NodeIO`
+     * aggregation, persisted-trace replay, per-run caches, console intents).
+     * Exposed directly (the screen and tests call `viewModel.console.*`) — the
+     * delegate shares [viewModelScope] and the single [_state] reducer and owns
+     * the `console` slice. See `docs/architecture.md` §1.2.
      */
-    private val consoleDelegate = ChatHomeConsoleDelegate(
+    val console = ChatHomeConsoleDelegate(
         scope = viewModelScope,
         state = _state,
         settingsRepository = settingsRepository,
@@ -298,12 +231,53 @@ class ChatHomeViewModel @Inject constructor(
         traceProjectionDispatcher = { traceProjectionDispatcher },
     )
 
+    /**
+     * Voice-input delegate (record / pick → transcribe into the composer). Owns
+     * the `composer.voice` / `voiceNotice` / `audioChooser` state and the
+     * `voiceErrorEvents` one-shot. The screen calls `viewModel.voice.*`.
+     */
+    val voice = ChatHomeVoiceDelegate(
+        scope = viewModelScope,
+        state = _state,
+        settingsRepository = settingsRepository,
+        audioRecorder = audioRecorder,
+        audioCaptureStore = audioCaptureStore,
+        transcribeAudioUseCase = transcribeAudioUseCase,
+    )
+
+    /**
+     * Image-attachment delegate (source chooser, ingest/preview, full-screen
+     * viewer, multimodal pre-flight). Owns the `composer.attachment`,
+     * `sourceChooserVisible` and `imageViewer` state and `attachmentErrorEvents`.
+     * The send path consults [ChatHomeAttachmentDelegate.preflightBlockReason].
+     */
+    val attachments = ChatHomeAttachmentDelegate(
+        scope = viewModelScope,
+        state = _state,
+        attachmentStore = attachmentStore,
+        resolveEntryInferenceUseCase = resolveEntryInferenceUseCase,
+        sessions = { sessions },
+    )
+
+    /**
+     * Chat import / export / save-to-memory delegate. Owns the `exportEvents`,
+     * `importErrorEvents` and `memorySaveEvents` one-shots and exposes
+     * [ChatHomeTransferDelegate.textForRow] for the long-press context menu.
+     */
+    val transfer = ChatHomeTransferDelegate(
+        scope = viewModelScope,
+        state = _state,
+        chatRepository = chatRepository,
+        saveMessageToMemoryUseCase = saveMessageToMemoryUseCase,
+        selectThread = ::selectThread,
+    )
+
     init {
         observeAvailablePipelines()
         observeDefaultPipelineId()
         observeSessions()
         observeMaxContextSize()
-        consoleDelegate.startObservers()
+        console.startObservers()
         observeInstalledModels()
         observeActiveRuns()
         initializeSession()
@@ -369,7 +343,7 @@ class ChatHomeViewModel @Inject constructor(
                 attachmentSendInFlight = true
                 viewModelScope.launch {
                     try {
-                        val block = attachmentPreflightBlockReason()
+                        val block = attachments.preflightBlockReason()
                         if (block != null) {
                             _state.update { it.copy(visual = ChatHomeUiState.Error(block)) }
                         } else {
@@ -383,34 +357,6 @@ class ChatHomeViewModel @Inject constructor(
             return
         }
         proceedSend(draftText, readyAttachment = null)
-    }
-
-    /**
-     * Resolves whether an image message must be blocked before it is enqueued,
-     * returning the user-facing block reason or `null` when the send may proceed.
-     *
-     * Three guards, in precedence order:
-     * 1. The run starts on a `CLOUD` node — attachments are never sent off-device
-     *    ([CLOUD_ATTACHMENT_BLOCKED_MESSAGE]).
-     * 2. The active local model is not marked vision-capable — it cannot read an
-     *    image ([MODEL_NO_VISION_MESSAGE]); the most common, most actionable fix.
-     * 3. The pipeline has no on-device step that could receive the image (no
-     *    reachable vision sink), so the picture would be silently ignored
-     *    ([PIPELINE_NO_VISION_MESSAGE]).
-     *
-     * @return The block reason, or `null` to allow the send.
-     */
-    private suspend fun attachmentPreflightBlockReason(): String? {
-        val sessionId = _state.value.thread.currentSessionId
-        val pipelineId = sessions.firstOrNull { it.id == sessionId }?.pipelineId
-        val entryKind = resolveEntryInferenceUseCase(pipelineId)
-        if (entryKind == EntryInferenceKind.CLOUD) return CLOUD_ATTACHMENT_BLOCKED_MESSAGE
-        val activeSupportsVision = _state.value.model.let { model ->
-            model.installed.firstOrNull { it.id == model.activeId }?.supportsVision == true
-        }
-        if (!activeSupportsVision) return MODEL_NO_VISION_MESSAGE
-        if (entryKind == EntryInferenceKind.NONE) return PIPELINE_NO_VISION_MESSAGE
-        return null
     }
 
     /**
@@ -468,301 +414,6 @@ class ChatHomeViewModel @Inject constructor(
                 }
                 .collect { orchestratorState -> handleOrchestratorState(orchestratorState) }
         }
-    }
-
-    /** Opens the image-source chooser sheet (Photo library / Camera). */
-    fun onAttachClicked() {
-        _state.update { it.copy(sourceChooserVisible = true) }
-    }
-
-    /** Dismisses the image-source chooser sheet without a choice. */
-    fun dismissSourceChooser() {
-        _state.update { it.copy(sourceChooserVisible = false) }
-    }
-
-    /**
-     * Ingests a picked/captured image: marks the composer attachment
-     * [ComposerAttachmentDraft.Processing], downscales + re-encodes it through
-     * [AttachmentStore], then settles to [ComposerAttachmentDraft.Ready] (or
-     * clears the draft and surfaces an error on failure).
-     *
-     * @param uri content URI string of the picked/captured image.
-     */
-    fun onImagePicked(uri: String) {
-        // Discard any prior pending attachment's file (it was never sent) before
-        // replacing the draft, so a re-pick doesn't leave an orphan behind.
-        val replacedPath = (_state.value.composer.attachment as? ComposerAttachmentDraft.Ready)?.attachment?.path
-        _state.update {
-            it.copy(
-                sourceChooserVisible = false,
-                composer = it.composer.copy(attachment = ComposerAttachmentDraft.Processing),
-            )
-        }
-        viewModelScope.launch {
-            if (replacedPath != null) {
-                attachmentStore.delete(replacedPath)
-            }
-            val stored = attachmentStore.ingestUri(uri).getOrNull()
-            if (stored != null) {
-                val ready = ComposerAttachmentDraft.Ready(
-                    attachment = stored,
-                    absolutePath = attachmentStore.absolutePathFor(stored.path),
-                    detail = attachmentDetailLabel(stored.width, stored.height, attachmentStore.sizeBytes(stored.path)),
-                )
-                _state.update { it.copy(composer = it.composer.copy(attachment = ready)) }
-            } else {
-                // Transient failure — surface a snackbar rather than flipping the
-                // whole surface to Error (which would clobber an in-flight run).
-                _state.update { it.copy(composer = it.composer.copy(attachment = null)) }
-                _attachmentErrorEvents.tryEmit(Unit)
-            }
-        }
-    }
-
-    /** Removes the pending composer attachment without sending it, deleting its file. */
-    fun removeAttachment() {
-        val path = (_state.value.composer.attachment as? ComposerAttachmentDraft.Ready)?.attachment?.path
-        _state.update { it.copy(composer = it.composer.copy(attachment = null)) }
-        if (path != null) {
-            viewModelScope.launch { attachmentStore.delete(path) }
-        }
-    }
-
-    // ──────────────────────────── Voice input ────────────────────────────
-    //
-    // Voice is a preprocessing step: a clip is recorded (or picked) and the
-    // multimodal model transcribes it to text BEFORE any pipeline runs — the
-    // audio never travels the graph. [voiceJob] owns the active record→transcribe
-    // (or pick→transcribe) flow so a discard / re-start cancels it cleanly.
-
-    private var voiceJob: Job? = null
-
-    /** Opens the voice-input source chooser (Record voice / Choose audio file). */
-    fun onMicClicked() {
-        viewModelScope.launch {
-            val maxSec = settingsRepository.audioMaxDurationSec.first()
-            _state.update {
-                it.copy(
-                    composer = it.composer.copy(
-                        audioChooserVisible = true,
-                        voiceNotice = null,
-                        audioMaxDurationSec = maxSec,
-                    ),
-                )
-            }
-        }
-    }
-
-    /** Dismisses the voice-input source chooser without a choice. */
-    fun dismissAudioChooser() {
-        _state.update { it.copy(composer = it.composer.copy(audioChooserVisible = false)) }
-    }
-
-    /**
-     * Surfaces the microphone-permission notice when the user denied the
-     * `RECORD_AUDIO` request from the screen's permission gate.
-     */
-    fun onMicPermissionDenied() {
-        _state.update {
-            it.copy(
-                composer = it.composer.copy(
-                    audioChooserVisible = false,
-                    voiceNotice = ComposerVoiceNotice.PermissionDenied,
-                ),
-            )
-        }
-    }
-
-    /**
-     * Starts a microphone capture (invoked by the screen after the `RECORD_AUDIO`
-     * permission is granted). Observes the recorder, mirroring its elapsed time
-     * into the composer's recording bar, and dispatches on the **terminal** state:
-     * a finished clip is transcribed, a failed capture resets the composer and
-     * pings the error snackbar. The limit is the value already loaded by
-     * [onMicClicked] (no second DataStore read, and the bar starts at the real
-     * limit rather than a `0:00` placeholder).
-     */
-    fun startRecording() {
-        voiceJob?.cancel()
-        val maxSec = _state.value.composer.audioMaxDurationSec
-        _state.update {
-            it.copy(
-                composer = it.composer.copy(
-                    audioChooserVisible = false,
-                    voiceNotice = null,
-                    voice = VoiceInputState.Recording(elapsedSec = 0, maxSec = maxSec),
-                ),
-            )
-        }
-        voiceJob = viewModelScope.launch {
-            audioRecorder.start(maxSec)
-            // Mirror elapsed time until capture reaches a terminal state
-            // (Finished or Failed) — collecting only on `!is Finished` would
-            // hang forever on the Failed/Idle path.
-            audioRecorder.state
-                .takeWhile { !it.isTerminal }
-                .collect { recordingState ->
-                    if (recordingState is RecordingState.Recording) {
-                        _state.update {
-                            it.copy(
-                                composer = it.composer.copy(
-                                    voice = VoiceInputState.Recording(
-                                        elapsedSec = recordingState.elapsedSec,
-                                        maxSec = recordingState.maxSec,
-                                    ),
-                                ),
-                            )
-                        }
-                    }
-                }
-            when (val terminal = audioRecorder.state.value) {
-                is RecordingState.Finished -> transcribeClip(terminal.path)
-                RecordingState.Failed -> {
-                    _state.update { it.copy(composer = it.composer.copy(voice = VoiceInputState.Idle)) }
-                    _voiceErrorEvents.tryEmit(Unit)
-                }
-                // Idle here means a concurrent cancel raced in; just reset.
-                else -> _state.update { it.copy(composer = it.composer.copy(voice = VoiceInputState.Idle)) }
-            }
-        }
-    }
-
-    /** Stops the in-flight capture; the recorder transitions to finished and transcription runs. */
-    fun onStopRecording() {
-        viewModelScope.launch { audioRecorder.stop() }
-    }
-
-    /** Discards the in-flight capture and its clip, returning the composer to idle. */
-    fun onDiscardRecording() {
-        voiceJob?.cancel()
-        voiceJob = null
-        audioRecorder.cancel()
-        _state.update { it.copy(composer = it.composer.copy(voice = VoiceInputState.Idle)) }
-    }
-
-    /**
-     * Imports a user-picked audio file and transcribes it.
-     *
-     * @param uri content URI string of the picked audio document.
-     */
-    fun onAudioFilePicked(uri: String) {
-        voiceJob?.cancel()
-        _state.update {
-            it.copy(
-                composer = it.composer.copy(
-                    audioChooserVisible = false,
-                    voiceNotice = null,
-                    voice = VoiceInputState.Transcribing,
-                ),
-            )
-        }
-        voiceJob = viewModelScope.launch {
-            val path = audioCaptureStore.importFromUri(uri).getOrNull()
-            if (path == null) {
-                _state.update { it.copy(composer = it.composer.copy(voice = VoiceInputState.Idle)) }
-                _voiceErrorEvents.tryEmit(Unit)
-                return@launch
-            }
-            transcribeClip(path)
-        }
-    }
-
-    /**
-     * Runs the clip at [path] through [TranscribeAudioUseCase] and folds the
-     * outcome back into the composer: success drops the transcript into the input
-     * field; the blocked outcomes raise the matching calm notice; a hard failure
-     * pings the error snackbar.
-     */
-    private suspend fun transcribeClip(path: String) {
-        _state.update {
-            it.copy(composer = it.composer.copy(voice = VoiceInputState.Transcribing, voiceNotice = null))
-        }
-        when (val outcome = transcribeAudioUseCase(path)) {
-            is TranscriptionOutcome.Success -> _state.update {
-                it.copy(
-                    composer = it.composer.copy(
-                        voice = VoiceInputState.Idle,
-                        value = mergeTranscript(it.composer.value, outcome.transcript),
-                    ),
-                )
-            }
-
-            TranscriptionOutcome.NoActiveModel,
-            TranscriptionOutcome.ModelNotAudioCapable,
-            -> setVoiceNotice(ComposerVoiceNotice.NoAudioModel)
-
-            TranscriptionOutcome.EngineBusy -> {
-                // The use case keeps the clip on busy for a retry; this UI re-records
-                // instead of retrying the same path, so drop the orphan.
-                audioCaptureStore.delete(path)
-                setVoiceNotice(ComposerVoiceNotice.EngineBusy)
-            }
-
-            is TranscriptionOutcome.Failed -> {
-                _state.update { it.copy(composer = it.composer.copy(voice = VoiceInputState.Idle)) }
-                _voiceErrorEvents.tryEmit(Unit)
-            }
-        }
-    }
-
-    private fun setVoiceNotice(notice: ComposerVoiceNotice) {
-        _state.update {
-            it.copy(composer = it.composer.copy(voice = VoiceInputState.Idle, voiceNotice = notice))
-        }
-    }
-
-    /**
-     * Appends [transcript] to the existing composer [current] text (space-joined)
-     * so a transcription adds to, rather than clobbers, anything already typed.
-     */
-    private fun mergeTranscript(current: String, transcript: String): String = when {
-        transcript.isBlank() -> current
-        current.isBlank() -> transcript
-        else -> "${current.trimEnd()} $transcript"
-    }
-
-    /**
-     * Opens the full-screen viewer for [attachment]. The existence check and
-     * size read run off the main thread (via [AttachmentStore]) so tapping a
-     * bubble never blocks the UI; the viewer renders the calm "no longer
-     * available" state when retention has cleared the file.
-     *
-     * @param attachment the attachment of the tapped message bubble.
-     */
-    fun openImageViewer(attachment: MessageAttachment) {
-        val absolutePath = attachmentStore.absolutePathFor(attachment.path)
-        viewModelScope.launch {
-            val exists = attachmentStore.exists(attachment.path)
-            val detail =
-                attachmentDetailLabel(attachment.width, attachment.height, attachmentStore.sizeBytes(attachment.path))
-            _state.update {
-                it.copy(
-                    imageViewer = ImageViewerTarget(
-                        model = if (exists) absolutePath else null,
-                        fileName = attachment.path,
-                        dimensionsLabel = detail,
-                        isMissing = !exists,
-                    ),
-                )
-            }
-        }
-    }
-
-    /** Closes the full-screen image viewer. */
-    fun dismissImageViewer() {
-        _state.update { it.copy(imageViewer = null) }
-    }
-
-    /**
-     * Builds the mono dimensions/size label shown on the composer preview and
-     * the viewer top bar, e.g. `712×1536 · 84 KB`. Pure: [sizeBytes] is read by
-     * the caller off the main thread. Falls back to dimensions only when the
-     * size is unknown.
-     */
-    private fun attachmentDetailLabel(width: Int, height: Int, sizeBytes: Long): String {
-        val sizeKb = (sizeBytes / BYTES_PER_KB).toInt()
-        val dimensions = "$width×$height"
-        return if (sizeKb > 0) "$dimensions · $sizeKb KB" else dimensions
     }
 
     /**
@@ -884,58 +535,6 @@ class ChatHomeViewModel @Inject constructor(
             handleDeletedBoundPipeline(_state.value.availablePipelines)
         }
     }
-
-    // ─────────────────────────── Console pane ───────────────────────────
-    //
-    // Thin forwarders onto [consoleDelegate], which owns the console
-    // responsibility. The public surface is preserved verbatim so the screen
-    // and the existing tests keep calling `viewModel.*`; the logic lives in
-    // [ChatHomeConsoleDelegate].
-
-    /** Opens the console pane at the given [snap] (default: Partial). */
-    fun openConsole(snap: ConsoleSnap = ConsoleSnap.Partial) = consoleDelegate.openConsole(snap)
-
-    /** Updates the snap point of the currently-open console pane. No-op when the pane is closed. */
-    fun setConsoleSnap(snap: ConsoleSnap) = consoleDelegate.setConsoleSnap(snap)
-
-    /** Dismisses the console pane without touching the underlying chat state. */
-    fun closeConsole() = consoleDelegate.closeConsole()
-
-    /** Toggles the console inline-search field. Cycles `null → "" → null`. */
-    fun toggleConsoleSearch() = consoleDelegate.toggleConsoleSearch()
-
-    /** Updates the console inline-search query while the field is visible. */
-    fun onConsoleSearchQueryChange(query: String) = consoleDelegate.onConsoleSearchQueryChange(query)
-
-    /** Replaces the active console source-set filter. */
-    fun onConsoleFilterChange(filter: ConsoleFilter) = consoleDelegate.onConsoleFilterChange(filter)
-
-    /** Reacts to the long-press "Only show this source" menu item. */
-    fun filterConsoleByLineSource(source: ConsoleSource) = consoleDelegate.filterConsoleByLineSource(source)
-
-    /** Persists the user's currently-selected console tab. */
-    fun onConsoleTabChange(tab: ConsoleTab) = consoleDelegate.onConsoleTabChange(tab)
-
-    /** Requests the destructive "Clear console for this session?" dialog. */
-    fun requestConsoleClear() = consoleDelegate.requestConsoleClear()
-
-    /** Dismisses the confirmation dialog without altering the log. */
-    fun dismissConsoleClear() = consoleDelegate.dismissConsoleClear()
-
-    /** Clears the console Logs tab, advancing the clear baseline so cleared rows do not pop back in. */
-    fun confirmConsoleClear() = consoleDelegate.confirmConsoleClear()
-
-    /** Emits a one-shot snackbar event after the screen copies a single console line. */
-    fun signalConsoleLineCopied() = consoleDelegate.signalConsoleLineCopied()
-
-    /** One-shot snackbar event raised after the full filtered log is copied. */
-    fun signalConsoleAllCopied() = consoleDelegate.signalConsoleAllCopied()
-
-    /** Renders a single [ConsoleLine] as the plain-text clipboard payload. */
-    fun buildConsoleLineCopyPayload(line: ConsoleLine): String = consoleDelegate.buildConsoleLineCopyPayload(line)
-
-    /** Renders the supplied [ConsoleLine]s as the multi-line clipboard payload. */
-    fun buildConsoleAllCopyPayload(lines: List<ConsoleLine>): String = consoleDelegate.buildConsoleAllCopyPayload(lines)
 
     /**
      * Debug-only escape hatch used by the triple-tap state picker to force
@@ -1113,7 +712,7 @@ class ChatHomeViewModel @Inject constructor(
                                 // thread); the thumbnail's own error slot renders
                                 // the missing state if the file is gone.
                                 attachmentModel = attachment?.let { attachmentStore.absolutePathFor(it.path) },
-                                onImageTap = attachment?.let { { openImageViewer(it) } },
+                                onImageTap = attachment?.let { { attachments.openImageViewer(it) } },
                             )
                         },
                     )
@@ -1162,9 +761,9 @@ class ChatHomeViewModel @Inject constructor(
         when (state) {
             is AgentOrchestratorState.WaitingForApproval -> handleWaitingForApproval(state)
             is AgentOrchestratorState.AwaitingClarification -> handleAwaitingClarification(state.request)
-            is AgentOrchestratorState.ConsoleLog -> consoleDelegate.onConsoleLog(state.events, state.runId)
-            is AgentOrchestratorState.PipelineTrace -> consoleDelegate.onPipelineTrace(state.steps)
-            is AgentOrchestratorState.NodeIO -> consoleDelegate.onNodeIo(state)
+            is AgentOrchestratorState.ConsoleLog -> console.onConsoleLog(state.events, state.runId)
+            is AgentOrchestratorState.PipelineTrace -> console.onPipelineTrace(state.steps)
+            is AgentOrchestratorState.NodeIO -> console.onNodeIo(state)
             is AgentOrchestratorState.Thinking ->
                 // Approximate-token estimate from the cumulative partial text
                 // length divided by `TOKEN_CHARS_PER_TOKEN`. Same heuristic
@@ -1245,7 +844,7 @@ class ChatHomeViewModel @Inject constructor(
             // the lookup suspended — applying the stale branch would bleed
             // the previous thread's run state into the new one.
             if (_state.value.thread.currentSessionId != sessionId) return@launch
-            if (baselineRun != null) consoleDelegate.replayTrace(baselineRun)
+            if (baselineRun != null) console.replayTrace(baselineRun)
             when {
                 activeRun != null -> attachToLiveRun(sessionId, activeRun.status)
                 baselineRun?.status == PipelineRunStatus.INTERRUPTED -> presentInterruptedRun(baselineRun)
@@ -1524,7 +1123,7 @@ class ChatHomeViewModel @Inject constructor(
      * Drops the run-scoped console caches and cancels any in-flight reattach
      * lookup at the start of each new run / thread switch. The console caches
      * (clear baseline, per-node I/O, trace timestamps, replay baseline) live in
-     * [consoleDelegate]; the reattach job is a ViewModel concern. Always paired
+     * [console]; the reattach job is a ViewModel concern. Always paired
      * with [withConsoleProjectionsCleared] inside the caller's single
      * `_state.update` block so the flow emission stays atomic.
      *
@@ -1535,7 +1134,7 @@ class ChatHomeViewModel @Inject constructor(
      * re-subscribes the collector.
      */
     private fun resetConsoleCachesForNewRun() {
-        consoleDelegate.resetForNewRun()
+        console.resetForNewRun()
         reattachJob?.cancel()
     }
 
@@ -1732,17 +1331,6 @@ class ChatHomeViewModel @Inject constructor(
         _state.value.composer.typedConfirm.trim().equals(DESTRUCTIVE_TYPED_CONFIRM_WORD, ignoreCase = true)
 
     /**
-     * Pure transformer: drops every pending HITL / clarification snapshot
-     * and resets the typed-confirm input. Composed into the caller's
-     * `_state.update` block (never its own emission) so multi-field
-     * transitions remain a single atomic flow emission.
-     */
-    private fun ChatHomeScreenState.withPendingCleared(): ChatHomeScreenState = copy(
-        pending = ChatHomePendingState(),
-        composer = composer.copy(typedConfirm = ""),
-    )
-
-    /**
      * Auto-renames a newly-created chat to the first user message
      * (truncated to [AUTO_RENAME_CHAR_LIMIT] characters). Mirrors legacy
      * `ChatViewModel` behaviour so the drawer entry reflects the user's
@@ -1858,59 +1446,6 @@ class ChatHomeViewModel @Inject constructor(
         sessions.firstOrNull { it.id == _state.value.thread.currentSessionId }?.pipelineId
 
     /**
-     * Extracts the plain-text body of a chat-home row by its catalog id
-     * (`ChatHomeMessageRow.id`). Returns `null` for rows whose content
-     * is not a plain-text bubble (Clarification cards, HITL
-     * confirmations, tool-call tiles, inline errors) — those have their
-     * own affordances and don't expose a copyable payload.
-     *
-     * Used by the long-press context menu (`onMessageContextAction`) to
-     * resolve Copy / Rerun targets.
-     */
-    fun textForRow(rowId: String): String? {
-        val row = _state.value.messages.firstOrNull { it.id == rowId } ?: return null
-        return when (val content = row.content) {
-            is ChatContent.Text -> content.text
-            is ChatContent.Markdown -> content.source
-            else -> null
-        }
-    }
-
-    /**
-     * Persists the text of the message identified by [rowId] into long-term
-     * memory as a manual entry, then raises a [MemorySaveEvent] so the screen
-     * can confirm via snackbar. Rows without a copyable text payload, and
-     * blank texts, are silently ignored (no event).
-     *
-     * Backs the long-press "Save to memory" context action.
-     */
-    fun saveMessageToMemory(rowId: String) {
-        val text = textForRow(rowId) ?: return
-        viewModelScope.launch {
-            when (saveMessageToMemoryUseCase(text)) {
-                is SaveToMemoryOutcome.Saved -> _memorySaveEvents.tryEmit(MemorySaveEvent.Saved)
-                is SaveToMemoryOutcome.Failed -> _memorySaveEvents.tryEmit(MemorySaveEvent.Failed)
-                SaveToMemoryOutcome.Skipped -> Unit
-            }
-        }
-    }
-
-    /**
-     * Resting (non-overlay) visual for this snapshot — `Interrupted` while
-     * an interrupted-run snapshot is pending (the status card must survive
-     * transient overlays like the drawer; dropping to Idle would strand the
-     * Resume / Discard actions until the next thread switch), otherwise
-     * `Empty` / `Idle` by message-list presence. Derived from the receiver
-     * (never `_state.value`) so calls inside an `_state.update` lambda stay
-     * consistent with the snapshot being transformed.
-     */
-    private fun ChatHomeScreenState.restingVisual(): ChatHomeUiState = when {
-        pending.interrupted != null -> ChatHomeUiState.Interrupted
-        messages.isEmpty() -> ChatHomeUiState.Empty
-        else -> ChatHomeUiState.Idle
-    }
-
-    /**
      * Creates a new chat session bound to [pipelineId] and switches to it.
      * Mirrors legacy `ChatViewModel.createNewSession` so the new-thread
      * picker behaves identically across both surfaces.
@@ -1961,28 +1496,6 @@ class ChatHomeViewModel @Inject constructor(
     }
 
     /**
-     * Imports a chat from a JSON document. Surfaces a snackbar event on
-     * failure via [importErrorEvents]; on success the newly created
-     * session becomes the active thread.
-     *
-     * @param json Raw JSON payload (export shape or bare message array).
-     */
-    fun importChatFromJson(json: String) {
-        viewModelScope.launch {
-            try {
-                val newId = chatRepository.importChat(json)
-                selectThread(newId)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                _importErrorEvents.tryEmit(
-                    e.localizedMessage ?: IMPORT_GENERIC_FAILURE_MESSAGE,
-                )
-            }
-        }
-    }
-
-    /**
      * Activates the LiteRT model identified by [modelId] and reloads the
      * inference engine. Subsequent `sendMessage` calls run against the
      * freshly-loaded model.
@@ -1991,47 +1504,6 @@ class ChatHomeViewModel @Inject constructor(
         viewModelScope.launch {
             localModelRepository.setActiveModel(modelId)
             loadModelUseCase()
-        }
-    }
-
-    /**
-     * Serialises the currently active session and emits the resulting
-     * [ChatExportPayload] via [exportEvents]. The screen consumes the
-     * payload and dispatches a system share-sheet (`Intent.ACTION_SEND`)
-     * — kept in the screen because Hilt-ViewModels stay free of `Context`.
-     */
-    fun exportCurrentSession() {
-        val sessionId = _state.value.thread.currentSessionId
-        if (sessionId.isBlank()) return
-        viewModelScope.launch {
-            try {
-                val rawMessages = chatRepository.getMessagesForSession(sessionId).first()
-                val session = chatRepository.getSessionById(sessionId)
-                val sessionName = session?.name ?: EXPORT_FALLBACK_SESSION_NAME
-                val messagesArray = JSONArray()
-                rawMessages.forEach { message ->
-                    messagesArray.put(
-                        JSONObject()
-                            .put("role", message.role.name)
-                            .put("text", message.content)
-                            .put("timestamp", message.timestamp),
-                    )
-                }
-                val root = JSONObject()
-                    .put("sessionId", sessionId)
-                    .put("sessionName", sessionName)
-                    .put("exportedAt", System.currentTimeMillis())
-                    .put("messages", messagesArray)
-                val payload =
-                    ChatExportPayload(sessionName = sessionName, json = root.toString(EXPORT_JSON_INDENT))
-                _exportEvents.tryEmit(payload)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                // Mirrors the previous silent-failure contract: an export
-                // that cannot be serialised simply emits nothing.
-                Timber.w(e, "Chat export failed")
-            }
         }
     }
 
@@ -2088,41 +1560,8 @@ class ChatHomeViewModel @Inject constructor(
         const val NO_ACTIVE_MODEL_MESSAGE: String =
             "No active model. Open Settings → Models to install or activate one."
 
-        /**
-         * Surfaced when the user attaches an image but the active local model is
-         * not marked vision-capable. The run is blocked before it starts so the
-         * native inference layer never receives an image it cannot decode; the
-         * draft and attachment are preserved so the user can switch models and
-         * resend. Calm, non-alarmist copy in line with the attachment UX.
-         */
-        const val MODEL_NO_VISION_MESSAGE: String =
-            "This model can't read images. Turn on image support for it on the Models screen, " +
-                "or switch to a vision-capable model."
-
-        /**
-         * Surfaced when the user attaches an image but the bound pipeline starts
-         * on a CLOUD node. Attachments stay on-device by design, so the run is
-         * blocked before it starts rather than silently dropping the image.
-         */
-        const val CLOUD_ATTACHMENT_BLOCKED_MESSAGE: String =
-            "Images stay on your device and aren't sent to cloud models. Use a pipeline that starts " +
-                "with an on-device step to send a picture."
-
-        /**
-         * Surfaced when the user attaches an image but the bound pipeline has no
-         * on-device step that could read it (no reachable `LITE_RT` node that
-         * carries the original task). Blocking is honest: the engine would
-         * otherwise drop the image silently while the run looks normal.
-         */
-        const val PIPELINE_NO_VISION_MESSAGE: String =
-            "This pipeline has no on-device step that can read an image. Pick a pipeline with an " +
-                "on-device model step to send a picture."
-
         /** Rough chars-per-token divisor used for the v0.1 token counter (`text.length / 4`). */
         const val TOKEN_CHARS_PER_TOKEN: Int = 4
-
-        /** Divisor used to render an attachment's file size in kilobytes. */
-        const val BYTES_PER_KB: Long = 1024L
 
         /**
          * Magic word the user must type to confirm a destructive tool call.
@@ -2163,15 +1602,6 @@ class ChatHomeViewModel @Inject constructor(
 
         /** Pattern used for the drawer thread subtitle (e.g. `Mon 14:32`). */
         private const val THREAD_SUBTITLE_PATTERN: String = "EEE HH:mm"
-
-        /** Fallback session name forwarded as the share-sheet subject when the session has no name. */
-        const val EXPORT_FALLBACK_SESSION_NAME: String = "Chat"
-
-        /** JSON pretty-print indent used for export payloads. */
-        const val EXPORT_JSON_INDENT: Int = 2
-
-        /** Fallback localised-error string used when the import path throws without a message. */
-        const val IMPORT_GENERIC_FAILURE_MESSAGE: String = "Could not import the chat."
 
         /** Formats a session `updatedAt` timestamp as the drawer thread subtitle. */
         fun formatThreadSubtitle(updatedAt: Long): String =

@@ -137,17 +137,27 @@ internal fun mockChatHomeViewModel(
     val vm = mockk<ChatHomeViewModel>(relaxed = true)
     every { vm.state } returns stateFlow
     every { vm.pipelineFallbackEvents } returns MutableSharedFlow()
-    every { vm.consoleSnackbarEvents } returns MutableSharedFlow()
-    every { vm.exportEvents } returns MutableSharedFlow()
-    every { vm.importErrorEvents } returns MutableSharedFlow()
-    every { vm.memorySaveEvents } returns MutableSharedFlow()
+    // Delegates (variant B); the screen calls `vm.<delegate>.*`. Stub delegate
+    // mocks whose collected SharedFlows never complete (see the note below).
+    val consoleDelegate = mockk<ChatHomeConsoleDelegate>(relaxed = true)
+    every { consoleDelegate.consoleSnackbarEvents } returns MutableSharedFlow()
+    every { vm.console } returns consoleDelegate
+    val voiceDelegate = mockk<ChatHomeVoiceDelegate>(relaxed = true)
+    every { voiceDelegate.voiceErrorEvents } returns MutableSharedFlow()
+    every { vm.voice } returns voiceDelegate
+    val attachmentDelegate = mockk<ChatHomeAttachmentDelegate>(relaxed = true)
+    every { attachmentDelegate.attachmentErrorEvents } returns MutableSharedFlow()
+    every { vm.attachments } returns attachmentDelegate
+    val transferDelegate = mockk<ChatHomeTransferDelegate>(relaxed = true)
+    every { transferDelegate.exportEvents } returns MutableSharedFlow()
+    every { transferDelegate.importErrorEvents } returns MutableSharedFlow()
+    every { transferDelegate.memorySaveEvents } returns MutableSharedFlow()
+    every { vm.transfer } returns transferDelegate
     every { vm.resumeFeedbackEvents } returns MutableSharedFlow()
     // These one-shot event SharedFlows are collected in dedicated LaunchedEffects
     // (ChatHomeScreen). `SharedFlow.collect` is typed `Nothing`; a relaxed-mock
     // default returns a *completing* flow, so the collect returns and trips
     // `KotlinNothingValueException`. Stub them with a never-completing flow.
-    every { vm.attachmentErrorEvents } returns MutableSharedFlow()
-    every { vm.voiceErrorEvents } returns MutableSharedFlow()
     every { vm.currentPipelineId() } returns null
 
     return vm to ChatHomeMockHandles(state = stateFlow)

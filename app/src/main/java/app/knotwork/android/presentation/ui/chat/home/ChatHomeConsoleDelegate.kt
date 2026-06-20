@@ -59,7 +59,7 @@ import kotlinx.coroutines.withContext
  *   [ChatHomeViewModel.traceProjectionDispatcher] test seam set after
  *   construction is honoured on every replay.
  */
-internal class ChatHomeConsoleDelegate(
+class ChatHomeConsoleDelegate(
     private val scope: CoroutineScope,
     private val state: MutableStateFlow<ChatHomeScreenState>,
     private val settingsRepository: SettingsRepository,

@@ -344,9 +344,9 @@ class ChatHomeConsoleStreamingTest {
             orchestratorStateFlow.emit(AgentOrchestratorState.ConsoleLog(listOf(a, b)))
             advanceUntilIdle()
 
-            viewModel.requestConsoleClear()
+            viewModel.console.requestConsoleClear()
             assertTrue(viewModel.state.value.consoleClearConfirmRequested)
-            viewModel.confirmConsoleClear()
+            viewModel.console.confirmConsoleClear()
             advanceUntilIdle()
 
             assertTrue(viewModel.state.value.console.logs.isEmpty())
@@ -369,7 +369,7 @@ class ChatHomeConsoleStreamingTest {
             advanceUntilIdle()
             assertEquals(ConsoleTab.Logs, viewModel.state.value.console.tab)
 
-            viewModel.onConsoleTabChange(ConsoleTab.Traces)
+            viewModel.console.onConsoleTabChange(ConsoleTab.Traces)
             advanceUntilIdle()
 
             assertEquals(ConsoleTab.Traces, viewModel.state.value.console.tab)
@@ -486,8 +486,8 @@ class ChatHomeConsoleStreamingTest {
         advanceUntilIdle()
         assertEquals(2, viewModel.state.value.console.logs.size)
 
-        viewModel.requestConsoleClear()
-        viewModel.confirmConsoleClear()
+        viewModel.console.requestConsoleClear()
+        viewModel.console.confirmConsoleClear()
         advanceUntilIdle()
 
         assertTrue(viewModel.state.value.console.logs.isEmpty())

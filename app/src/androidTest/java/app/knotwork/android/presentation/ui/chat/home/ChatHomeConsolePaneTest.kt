@@ -87,7 +87,7 @@ class ChatHomeConsolePaneTest {
         composeTestRule.onNodeWithText(ConsoleTab.Vars.name).performClick()
         composeTestRule.waitForIdle()
 
-        verify(exactly = 1) { viewModel.onConsoleTabChange(ConsoleTab.Vars) }
+        verify(exactly = 1) { viewModel.console.onConsoleTabChange(ConsoleTab.Vars) }
     }
 
     @Test
@@ -100,7 +100,7 @@ class ChatHomeConsolePaneTest {
         composeTestRule.onNodeWithText(ConsoleTab.Traces.name).performClick()
         composeTestRule.waitForIdle()
 
-        verify(exactly = 1) { viewModel.onConsoleTabChange(ConsoleTab.Traces) }
+        verify(exactly = 1) { viewModel.console.onConsoleTabChange(ConsoleTab.Traces) }
     }
 
     @Test
@@ -117,7 +117,7 @@ class ChatHomeConsolePaneTest {
         composeTestRule.waitForIdle()
 
         verify(exactly = 1) {
-            viewModel.onConsoleFilterChange(
+            viewModel.console.onConsoleFilterChange(
                 match {
                     it.sources == setOf(
                         ConsoleSource.TOOL,
@@ -165,7 +165,7 @@ class ChatHomeConsolePaneTest {
         composeTestRule.waitForIdle()
 
         verify(exactly = 1) {
-            viewModel.onConsoleFilterChange(
+            viewModel.console.onConsoleFilterChange(
                 match {
                     it.sources == setOf(
                         ConsoleSource.NODE,
@@ -190,7 +190,7 @@ class ChatHomeConsolePaneTest {
         composeTestRule.onNodeWithContentDescription(searchCd).performClick()
         composeTestRule.waitForIdle()
 
-        verify(exactly = 1) { viewModel.toggleConsoleSearch() }
+        verify(exactly = 1) { viewModel.console.toggleConsoleSearch() }
     }
 
     @Test
@@ -207,7 +207,7 @@ class ChatHomeConsolePaneTest {
         composeTestRule.onNodeWithContentDescription(fieldCd).performTextInput("err")
         composeTestRule.waitForIdle()
 
-        verify(atLeast = 1) { viewModel.onConsoleSearchQueryChange(any()) }
+        verify(atLeast = 1) { viewModel.console.onConsoleSearchQueryChange(any()) }
     }
 
     @Test
@@ -222,7 +222,7 @@ class ChatHomeConsolePaneTest {
         composeTestRule.onNodeWithContentDescription(clearCd).performClick()
         composeTestRule.waitForIdle()
 
-        verify(atLeast = 1) { viewModel.requestConsoleClear() }
+        verify(atLeast = 1) { viewModel.console.requestConsoleClear() }
     }
 
     @Test
@@ -238,7 +238,7 @@ class ChatHomeConsolePaneTest {
         composeTestRule.onNodeWithText(confirmLabel).performClick()
         composeTestRule.waitForIdle()
 
-        verify(exactly = 1) { viewModel.confirmConsoleClear() }
+        verify(exactly = 1) { viewModel.console.confirmConsoleClear() }
     }
 
     @Test
@@ -254,7 +254,7 @@ class ChatHomeConsolePaneTest {
         composeTestRule.onNodeWithText(cancelLabel).performClick()
         composeTestRule.waitForIdle()
 
-        verify(atLeast = 1) { viewModel.dismissConsoleClear() }
+        verify(atLeast = 1) { viewModel.console.dismissConsoleClear() }
     }
 
     @Test
@@ -265,7 +265,7 @@ class ChatHomeConsolePaneTest {
             initialConsoleLines = listOf(line),
             initialConsoleFilter = ConsoleFilter.allOn,
         )
-        every { viewModel.buildConsoleLineCopyPayload(line) } returns "12:00:00.000 [NODE] the line we copy"
+        every { viewModel.console.buildConsoleLineCopyPayload(line) } returns "12:00:00.000 [NODE] the line we copy"
         val clipboard = RecordingClipboardManager()
         setContentWithConsoleOpen(viewModel, clipboard = clipboard)
 
@@ -285,7 +285,7 @@ class ChatHomeConsolePaneTest {
         assert(clipboard.lastText?.text == "12:00:00.000 [NODE] the line we copy") {
             "Clipboard payload mismatch — got: ${clipboard.lastText?.text}"
         }
-        verify(exactly = 1) { viewModel.signalConsoleLineCopied() }
+        verify(exactly = 1) { viewModel.console.signalConsoleLineCopied() }
     }
 
     private fun sampleLine(text: String): ConsoleLine = ConsoleLine(

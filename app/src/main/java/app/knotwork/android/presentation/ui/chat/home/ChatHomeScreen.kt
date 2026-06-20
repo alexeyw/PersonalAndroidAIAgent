@@ -198,7 +198,7 @@ fun ChatHomeScreen(
         }
     }
     LaunchedEffect(viewModel) {
-        viewModel.consoleSnackbarEvents.collect { event ->
+        viewModel.console.consoleSnackbarEvents.collect { event ->
             val message = when (event) {
                 ConsoleSnackbarEvent.LineCopied -> consoleLineCopiedMessage
                 ConsoleSnackbarEvent.AllCopied -> consoleAllCopiedMessage
@@ -207,7 +207,7 @@ fun ChatHomeScreen(
         }
     }
     LaunchedEffect(viewModel) {
-        viewModel.exportEvents.collect { payload ->
+        viewModel.transfer.exportEvents.collect { payload ->
             val sendIntent = Intent(Intent.ACTION_SEND).apply {
                 type = MIME_JSON
                 putExtra(Intent.EXTRA_SUBJECT, payload.sessionName)
@@ -217,7 +217,7 @@ fun ChatHomeScreen(
         }
     }
     LaunchedEffect(viewModel) {
-        viewModel.importErrorEvents.collect { reason ->
+        viewModel.transfer.importErrorEvents.collect { reason ->
             snackbarHostState.showSnackbar(message = importFailedTemplate.format(reason))
         }
     }
@@ -232,7 +232,7 @@ fun ChatHomeScreen(
         }
     }
     LaunchedEffect(viewModel) {
-        viewModel.memorySaveEvents.collect { event ->
+        viewModel.transfer.memorySaveEvents.collect { event ->
             val message = when (event) {
                 MemorySaveEvent.Saved -> savedToMemoryMessage
                 MemorySaveEvent.Failed -> saveToMemoryFailedMessage
@@ -241,12 +241,12 @@ fun ChatHomeScreen(
         }
     }
     LaunchedEffect(viewModel) {
-        viewModel.attachmentErrorEvents.collect {
+        viewModel.attachments.attachmentErrorEvents.collect {
             snackbarHostState.showSnackbar(message = attachmentFailedMessage)
         }
     }
     LaunchedEffect(viewModel) {
-        viewModel.voiceErrorEvents.collect {
+        viewModel.voice.voiceErrorEvents.collect {
             snackbarHostState.showSnackbar(message = voiceFailedMessage)
         }
     }
@@ -264,7 +264,7 @@ fun ChatHomeScreen(
             if (json.isNullOrBlank()) {
                 snackbarHostState.showSnackbar(message = importUnreadableMessage)
             } else {
-                viewModel.importChatFromJson(json)
+                viewModel.transfer.importChatFromJson(json)
             }
         }
     }
@@ -274,7 +274,7 @@ fun ChatHomeScreen(
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
     ) { uri ->
-        if (uri != null) viewModel.onImagePicked(uri.toString())
+        if (uri != null) viewModel.attachments.onImagePicked(uri.toString())
     }
     // Camera capture into a FileProvider URI, ingested on success. The capture
     // URI is created when the camera is chosen and remembered until the result.
@@ -283,7 +283,7 @@ fun ChatHomeScreen(
         contract = ActivityResultContracts.TakePicture(),
     ) { success ->
         val uri = pendingCaptureUri
-        if (success && uri != null) viewModel.onImagePicked(uri.toString())
+        if (success && uri != null) viewModel.attachments.onImagePicked(uri.toString())
         pendingCaptureUri = null
     }
 
@@ -293,12 +293,12 @@ fun ChatHomeScreen(
     val recordAudioPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { granted ->
-        if (granted) viewModel.startRecording() else viewModel.onMicPermissionDenied()
+        if (granted) viewModel.voice.startRecording() else viewModel.voice.onMicPermissionDenied()
     }
     val audioPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri ->
-        if (uri != null) viewModel.onAudioFilePicked(uri.toString())
+        if (uri != null) viewModel.voice.onAudioFilePicked(uri.toString())
     }
     val requestRecordAudio: () -> Unit = {
         val granted = ContextCompat.checkSelfPermission(
@@ -306,7 +306,7 @@ fun ChatHomeScreen(
             Manifest.permission.RECORD_AUDIO,
         ) == PackageManager.PERMISSION_GRANTED
         if (granted) {
-            viewModel.startRecording()
+            viewModel.voice.startRecording()
         } else {
             recordAudioPermissionLauncher.launch(
                 Manifest.permission.RECORD_AUDIO,
@@ -326,11 +326,11 @@ fun ChatHomeScreen(
         onComposerValueChange = viewModel::onComposerValueChange,
         onSend = viewModel::sendMessage,
         onStop = viewModel::stopGeneration,
-        onAttach = viewModel::onAttachClicked,
-        onRemoveAttachment = viewModel::removeAttachment,
-        onMic = viewModel::onMicClicked,
-        onStopRecording = viewModel::onStopRecording,
-        onDiscardRecording = viewModel::onDiscardRecording,
+        onAttach = viewModel.attachments::onAttachClicked,
+        onRemoveAttachment = viewModel.attachments::removeAttachment,
+        onMic = viewModel.voice::onMicClicked,
+        onStopRecording = viewModel.voice::onStopRecording,
+        onDiscardRecording = viewModel.voice::onDiscardRecording,
         onChangeModel = onOpenModels,
         onOpenAppSettings = {
             context.startActivity(
@@ -347,16 +347,16 @@ fun ChatHomeScreen(
         onOpenModelPicker = { modelPickerVisible = true },
         onOverflow = { overflowExpanded = true },
         onSamplePrompt = viewModel::onComposerValueChange,
-        onConsoleSnapChange = viewModel::setConsoleSnap,
-        onConsoleTabChange = viewModel::onConsoleTabChange,
-        onConsoleFilterChange = viewModel::onConsoleFilterChange,
-        onConsoleSearch = viewModel::toggleConsoleSearch,
-        onConsoleSearchQueryChange = viewModel::onConsoleSearchQueryChange,
+        onConsoleSnapChange = viewModel.console::setConsoleSnap,
+        onConsoleTabChange = viewModel.console::onConsoleTabChange,
+        onConsoleFilterChange = viewModel.console::onConsoleFilterChange,
+        onConsoleSearch = viewModel.console::toggleConsoleSearch,
+        onConsoleSearchQueryChange = viewModel.console::onConsoleSearchQueryChange,
         onConsoleCopyLine = { line ->
-            clipboardManager.setText(AnnotatedString(viewModel.buildConsoleLineCopyPayload(line)))
-            viewModel.signalConsoleLineCopied()
+            clipboardManager.setText(AnnotatedString(viewModel.console.buildConsoleLineCopyPayload(line)))
+            viewModel.console.signalConsoleLineCopied()
         },
-        onConsoleFilterByLineSource = viewModel::filterConsoleByLineSource,
+        onConsoleFilterByLineSource = viewModel.console::filterConsoleByLineSource,
         // The catalog applies `console.filter` + `console.searchQuery` itself
         // before rendering rows; the `Copy all` payload mirrors what the
         // user is actively looking at, so the screen reproduces the same
@@ -364,11 +364,11 @@ fun ChatHomeScreen(
         onConsoleCopyAll = {
             val console = screenState.console
             val visible = visibleConsoleLogs(console.logs, console.filter, console.searchQuery)
-            clipboardManager.setText(AnnotatedString(viewModel.buildConsoleAllCopyPayload(visible)))
-            viewModel.signalConsoleAllCopied()
+            clipboardManager.setText(AnnotatedString(viewModel.console.buildConsoleAllCopyPayload(visible)))
+            viewModel.console.signalConsoleAllCopied()
         },
-        onConsoleClear = viewModel::requestConsoleClear,
-        onCloseConsole = viewModel::closeConsole,
+        onConsoleClear = viewModel.console::requestConsoleClear,
+        onCloseConsole = viewModel.console::closeConsole,
         onHitlAllowOnce = viewModel::approveTool,
         onHitlReject = viewModel::rejectTool,
         onHitlTypedConfirmChange = viewModel::onTypedConfirmChange,
@@ -388,11 +388,11 @@ fun ChatHomeScreen(
         onSamplePromptCard = { card -> viewModel.onComposerValueChange(card.title) },
         // Tapping the agent-status pill above the composer opens the
         // console pane at the Partial snap — a one-tap drill-in affordance.
-        onAgentStatusClick = { viewModel.openConsole() },
+        onAgentStatusClick = { viewModel.console.openConsole() },
         onMessageContextAction = { rowId, action ->
             when (action) {
                 ChatContextAction.Copy -> {
-                    val text = viewModel.textForRow(rowId)
+                    val text = viewModel.transfer.textForRow(rowId)
                     if (!text.isNullOrEmpty()) {
                         clipboardManager.setText(AnnotatedString(text))
                         coroutineScope.launch {
@@ -401,10 +401,10 @@ fun ChatHomeScreen(
                     }
                 }
                 ChatContextAction.Rerun -> {
-                    viewModel.textForRow(rowId)?.let(viewModel::onComposerValueChange)
+                    viewModel.transfer.textForRow(rowId)?.let(viewModel::onComposerValueChange)
                 }
                 ChatContextAction.SaveToMemory -> {
-                    viewModel.saveMessageToMemory(rowId)
+                    viewModel.transfer.saveMessageToMemory(rowId)
                 }
                 ChatContextAction.Rate -> {
                     coroutineScope.launch {
@@ -472,7 +472,7 @@ fun ChatHomeScreen(
                 // forces the underlying chat state.
                 val snap = debugConsoleSnapForId(id)
                 if (snap != null) {
-                    viewModel.openConsole(snap)
+                    viewModel.console.openConsole(snap)
                 } else {
                     debugStateForId(id)?.let(viewModel::forceState)
                 }
@@ -490,7 +490,7 @@ fun ChatHomeScreen(
                     text = { Text(stringResource(R.string.chat_overflow_export)) },
                     onClick = {
                         overflowExpanded = false
-                        viewModel.exportCurrentSession()
+                        viewModel.transfer.exportCurrentSession()
                     },
                 )
                 DropdownMenuItem(
@@ -504,26 +504,26 @@ fun ChatHomeScreen(
                     text = { Text(stringResource(R.string.chat_overflow_clear_console)) },
                     onClick = {
                         overflowExpanded = false
-                        viewModel.requestConsoleClear()
+                        viewModel.console.requestConsoleClear()
                     },
                 )
             }
         }
         if (screenState.consoleClearConfirmRequested) {
             AlertDialog(
-                onDismissRequest = viewModel::dismissConsoleClear,
+                onDismissRequest = viewModel.console::dismissConsoleClear,
                 title = { Text(stringResource(R.string.chat_console_clear_dialog_title)) },
                 text = { Text(stringResource(R.string.chat_console_clear_dialog_text)) },
                 confirmButton = {
                     KnotworkTextButton(
                         text = stringResource(R.string.chat_console_clear_dialog_confirm),
-                        onClick = viewModel::confirmConsoleClear,
+                        onClick = viewModel.console::confirmConsoleClear,
                     )
                 },
                 dismissButton = {
                     KnotworkTextButton(
                         text = stringResource(R.string.chat_console_clear_dialog_cancel),
-                        onClick = viewModel::dismissConsoleClear,
+                        onClick = viewModel.console::dismissConsoleClear,
                     )
                 },
             )
@@ -607,15 +607,15 @@ fun ChatHomeScreen(
         }
         if (screenState.sourceChooserVisible) {
             SourceChooserSheet(
-                onDismiss = viewModel::dismissSourceChooser,
+                onDismiss = viewModel.attachments::dismissSourceChooser,
                 onPickPhotoLibrary = {
-                    viewModel.dismissSourceChooser()
+                    viewModel.attachments.dismissSourceChooser()
                     photoPickerLauncher.launch(
                         PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
                     )
                 },
                 onPickCamera = {
-                    viewModel.dismissSourceChooser()
+                    viewModel.attachments.dismissSourceChooser()
                     val uri = createImageCaptureUri(context)
                     pendingCaptureUri = uri
                     cameraLauncher.launch(uri)
@@ -625,13 +625,13 @@ fun ChatHomeScreen(
         if (screenState.composer.audioChooserVisible) {
             AudioSourceChooserSheet(
                 maxDurationSec = screenState.composer.audioMaxDurationSec,
-                onDismiss = viewModel::dismissAudioChooser,
+                onDismiss = viewModel.voice::dismissAudioChooser,
                 onPickRecord = {
-                    viewModel.dismissAudioChooser()
+                    viewModel.voice.dismissAudioChooser()
                     requestRecordAudio()
                 },
                 onPickFile = {
-                    viewModel.dismissAudioChooser()
+                    viewModel.voice.dismissAudioChooser()
                     audioPickerLauncher.launch(arrayOf(AUDIO_MIME_FILTER))
                 },
             )
@@ -642,7 +642,7 @@ fun ChatHomeScreen(
                 fileName = viewer.fileName,
                 dimensionsLabel = viewer.dimensionsLabel,
                 isMissing = viewer.isMissing,
-                onDismiss = viewModel::dismissImageViewer,
+                onDismiss = viewModel.attachments::dismissImageViewer,
             )
         }
     }
