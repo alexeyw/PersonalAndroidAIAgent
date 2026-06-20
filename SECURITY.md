@@ -177,6 +177,75 @@ much of that derived content exists at all:
 - Deleting a chat session removes its runs and traces immediately,
   independent of the retention schedule.
 
+### Message attachments — images and audio (on-device guarantee)
+
+A chat message can now carry **multimodal** input: one image attachment
+(gallery / screenshot / camera) and a voice clip that is transcribed before a
+run starts. Both are the most sensitive content a user can hand the agent, so
+their handling is constrained more tightly than text — and the constraints are
+**structural**, not advisory.
+
+- **Processed strictly on-device.** Image understanding and audio transcription
+  run only through the on-device LiteRT-LM engine. No attachment, and nothing
+  derived from one, is transmitted off-device as part of normal operation.
+- **Attachments never reach a cloud node (release guarantee).** This is the
+  central invariant of the multimodal feature: an image is delivered to **at
+  most one on-device `LITE_RT` node** and `CloudLlmNodeExecutor` *structurally*
+  ignores the image-delivery channel, so no code path can hand an attachment to
+  a cloud provider. A pre-flight check (`ResolveEntryInferenceUseCase`) runs
+  **before** the run is enqueued and blocks an image message whenever the bound
+  pipeline would start on — or only reach — a cloud step, with a clear message
+  that the draft and attachment are preserved. Audio never travels the graph at
+  all (see below). The honest framing: this is a guarantee of the **current
+  release**, enforced by the delivery code and the pre-flight gate, not a
+  property the user has to configure.
+- **Image storage is FBE-protected, not SQLCipher-encrypted.** The picked or
+  captured image is decoded, EXIF-rotated, downscaled (aspect ratio preserved,
+  longest side ≤ 1536 px) and re-encoded to JPEG into the app-private
+  `files/attachments/` directory; the **original is never copied in**. That
+  directory has the **same weaker-than-the-database at-rest posture as the agent
+  workspace** (*Agent file workspace*, above): it is covered by the device's
+  **file-based encryption (FBE)** and the app sandbox, but **not** additionally
+  wrapped with the app's SQLCipher key. The same asymmetry caveat applies — an
+  attacker who can already read app-private storage on an unlocked,
+  post-authentication device is out of scope (see *Out of scope*), but the
+  difference is called out here so it is not a surprise.
+- **Image retention and cleanup.** A stored image is deleted together with its
+  owning message and session. Independently, a daily
+  `AttachmentOrphanCleanupWorker` (the same charging + idle maintenance window
+  as run retention) reclaims any attachment file that no message references,
+  with a **24-hour grace window** so a freshly-picked image that is still in the
+  composer is never swept out from under the user.
+- **Audio clips are ephemeral and deleted after transcription.** A recorded or
+  picked clip is written as a temporary file in the app cache
+  (`cacheDir/audio/`, FBE + sandbox, and subject to OS cache eviction). It is
+  transcribed to text **before any pipeline runs**, and the clip is **deleted as
+  soon as transcription succeeds** — only the resulting text survives, as an
+  ordinary editable message the user reviews and sends. The audio bytes
+  therefore never enter the pipeline graph, are never persisted in the database,
+  and never leave the device.
+- **Capability flags do not weaken the privacy boundary.** Because the LiteRT
+  runtime exposes no capability probe, vision and audio support are **manual
+  per-model toggles** (*Image support* / *Audio support* on the Models screen,
+  both off by default). They gate whether the agent *attempts* multimodal
+  inference; they have **no bearing** on the cloud-exclusion guarantee, which is
+  enforced separately and unconditionally.
+
+### Hugging Face access token
+
+Model discovery can browse the curated `litert-community` organisation and
+install a chosen file. A user-supplied **Hugging Face access token** (needed
+only for gated repositories) is handled exactly like a cloud-provider key:
+
+- Stored exclusively in the **Keystore-backed encrypted store** (AES-256-GCM
+  under a dedicated Android Keystore key) — never in plain DataStore, log files,
+  exported archives, or anything committed to the repository. An earlier
+  development build kept it in plain DataStore; a **one-time migration moves any
+  legacy value into the Keystore store and removes the plaintext entry**.
+- **Sent only on the file download** that needs it. Browsing and metadata calls
+  are public and carry **no token**, so the token is never put on the wire for
+  ordinary discovery traffic.
+
 ### API keys for cloud providers
 
 - Keys for optional cloud LLM providers (OpenAI, Anthropic, Google, DeepSeek,
@@ -194,8 +263,10 @@ much of that derived content exists at all:
 - The app reaches the network only for explicitly user-initiated actions:
   - Sending a request to a cloud LLM provider that the user has configured
     with their own API key.
-  - Downloading a model file from a URL the user supplied (for example,
-    Hugging Face).
+  - Browsing or searching the curated `litert-community` organisation on the
+    Hugging Face Hub from the **Discover** screen, and downloading a model
+    file the user selects there or supplies by URL. Browsing is read-only and
+    anonymous; only a gated-file download carries the user's token.
   - The `http_request` tool reaching a host the user has explicitly added
     to the **allowed-domains allowlist** (empty by default; see *Outbound
     HTTP and the exfiltration chain* below).

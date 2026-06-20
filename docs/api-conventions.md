@@ -110,6 +110,10 @@ interface Tool {
   key; see [architecture.md](architecture.md) §5.2) — never in plain
   DataStore, log files, exported pipelines, or anything committed to the
   repository.
+- The **Hugging Face access token** used to install gated models from the
+  Discover screen lives in the **same Keystore-backed store** (keyed
+  `hugging_face_token`), never in plain DataStore. It is sent only on the file
+  download that needs it — discovery browsing and metadata calls are anonymous.
 - Requests include a `timeout` of 60 seconds (OkHttp).
 - Use the unified `CLOUD` pipeline node with a `provider` parameter — do
   not add per-provider node types to the pipeline graph.
