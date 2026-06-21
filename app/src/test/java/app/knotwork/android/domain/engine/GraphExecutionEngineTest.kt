@@ -659,7 +659,10 @@ class GraphExecutionEngineTest {
 
         val states = engine(sessionId, "query", graph).toList()
 
-        assertTrue("Expected Completed via the Cancel branch, got: ${states.last()}", states.last() is AgentOrchestratorState.Completed)
+        assertTrue(
+            "Expected Completed via the Cancel branch, got: ${states.last()}",
+            states.last() is AgentOrchestratorState.Completed,
+        )
     }
 
     @Test

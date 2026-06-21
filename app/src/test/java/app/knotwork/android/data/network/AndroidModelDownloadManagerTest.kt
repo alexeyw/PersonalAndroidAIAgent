@@ -108,8 +108,11 @@ class AndroidModelDownloadManagerTest {
         job.join()
 
         assertTrue(emissions.last() is DownloadState.Error)
-        val errorMsg = ((emissions.last() as DownloadState.Error).error as AndroidModelDownloadManager.DownloadError).message
-        assertTrue("Expected invalid-name error, got: $errorMsg", errorMsg.contains("Invalid model file name"))
+        val error = (emissions.last() as DownloadState.Error).error as AndroidModelDownloadManager.DownloadError
+        assertTrue(
+            "Expected invalid-name error, got: ${error.message}",
+            error.message.contains("Invalid model file name"),
+        )
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
