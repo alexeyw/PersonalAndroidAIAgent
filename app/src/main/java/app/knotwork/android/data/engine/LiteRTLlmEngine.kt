@@ -22,6 +22,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -54,6 +56,18 @@ class LiteRTLlmEngine @Inject constructor(
     private var _currentModelPath: String? = null
     private var _isVisionEnabled: Boolean = false
     private var _isAudioEnabled: Boolean = false
+
+    /**
+     * The coroutine [Job] of the generation currently holding [generationMutex],
+     * or `null` when none is streaming. Captured so a memory-pressure unload
+     * ([onTrimMemory] / [onLowMemory]) can **cancel** the in-flight decode rather
+     * than wait for it — otherwise `unload()` would block on the mutex for the
+     * whole generation and free nothing while the OS demands memory now.
+     * `@Volatile` because it is written on the generation coroutine and read from
+     * the system `ComponentCallbacks2` thread.
+     */
+    @Volatile
+    private var activeGenerationJob: Job? = null
 
     /**
      * Serialises every native-session access: each [generateResponseStream]
@@ -365,6 +379,8 @@ class LiteRTLlmEngine @Inject constructor(
                     currentEngine.createConversation(repairConversationConfig(temperature))
                 }
                 conversation = activeConversation
+                val generationJob = currentCoroutineContext()[Job]
+                activeGenerationJob = generationJob
                 try {
                     openResponses(activeConversation).collect { chunk ->
                         val text = chunk.contents.contents
@@ -386,6 +402,9 @@ class LiteRTLlmEngine @Inject constructor(
                     activeConversation.close()
                     if (conversation === activeConversation) {
                         conversation = null
+                    }
+                    if (activeGenerationJob === generationJob) {
+                        activeGenerationJob = null
                     }
                 }
             }
@@ -450,7 +469,21 @@ class LiteRTLlmEngine @Inject constructor(
      */
     override fun onLowMemory() {
         Timber.w("onLowMemory called, unloading engine")
+        // Cancel any in-flight decode first so `unload()` doesn't block on the
+        // mutex for the whole generation — under memory pressure the model must
+        // be freed promptly, not after the current answer finishes.
+        cancelActiveGeneration()
         appScope.launch { unload() }
+    }
+
+    /**
+     * Cancels the generation currently holding [generationMutex], if any. The
+     * cancelled stream runs its `finally` (closing the native conversation) and
+     * releases the mutex, letting a pending memory-pressure [unload] acquire it
+     * and free the engine without waiting for the full decode.
+     */
+    private fun cancelActiveGeneration() {
+        activeGenerationJob?.cancel(CancellationException("Engine unload requested under memory pressure"))
     }
 
     /**
@@ -462,9 +495,11 @@ class LiteRTLlmEngine @Inject constructor(
     override fun onTrimMemory(level: Int) {
         if (level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
             Timber.w("onTrimMemory called with level %d, unloading engine", level)
-            // [unload] serialises on `generationMutex`, so a background run that
-            // is still streaming is allowed to finish before the engine is freed
-            // rather than being torn down mid-generation.
+            // Cancel the in-flight decode so the memory-pressure unload frees the
+            // engine promptly instead of waiting for the whole generation; the
+            // cancelled stream still tears its native session down safely in its
+            // `finally`, and `unload()` then acquires the released mutex.
+            cancelActiveGeneration()
             appScope.launch { unload() }
         }
     }
