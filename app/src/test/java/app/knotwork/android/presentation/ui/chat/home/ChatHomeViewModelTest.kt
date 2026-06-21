@@ -428,6 +428,45 @@ class ChatHomeViewModelTest {
     }
 
     @Test
+    fun `send drops the replayed previous-run terminal and stays Generating`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        // Reproduces the second-send case: the per-session replay-1 flow hands the
+        // new collector the PREVIOUS run's Completed first. With no live state yet,
+        // the fresh run must remain Generating rather than settling immediately.
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(AgentOrchestratorState.Completed("previous answer"))
+        }
+
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.visual is ChatHomeUiState.Generating)
+    }
+
+    @Test
+    fun `send still settles after dropping the stale terminal when the new run completes`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        // Stale Completed (dropped) followed by the fresh run's own lifecycle:
+        // the real terminal still settles the surface out of Generating.
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(AgentOrchestratorState.Completed("stale replay"))
+            emit(AgentOrchestratorState.Loading)
+            emit(AgentOrchestratorState.Completed("fresh answer"))
+        }
+
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.visual !is ChatHomeUiState.Generating)
+    }
+
+    @Test
     fun `onAttachClicked shows chooser and dismissSourceChooser hides it`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()

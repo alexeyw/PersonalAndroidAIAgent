@@ -234,6 +234,12 @@ details.
 
 ### Fixed
 
+- **Live progress shows on every message, not just the first.** A second message
+  in the same chat no longer loses its generating indicator and console updates:
+  the per-session state stream replayed the previous run's "completed" state to
+  the new collector, which immediately settled the fresh run out of its
+  generating state, so the answer appeared with no visible progress. The replayed
+  stale terminal is now ignored when a new run starts.
 - **New-chat picker is usable with many pipelines.** The "Start a new chat"
   sheet's pipeline list now scrolls with the Cancel/Create button pinned, so a
   large pipeline library no longer pushes the button off-screen; the model

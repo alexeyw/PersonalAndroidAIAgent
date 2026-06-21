@@ -416,15 +416,42 @@ class ChatHomeViewModel @Inject constructor(
 
         generationJob?.cancel()
         generationJob = viewModelScope.launch {
+            // The per-session orchestrator flow (a replay-1 SharedFlow) replays
+            // the PREVIOUS run's terminal state (Completed/Error) — or the seed
+            // Idle — to this freshly attached collector. A run enqueued micro-
+            // seconds ago cannot have reached a terminal state in the synchronous
+            // window before this subscription, so a leading terminal/resting
+            // emission is that stale replay. Drop it once: otherwise the replayed
+            // Completed would immediately settle the new run out of `Generating`,
+            // hiding all live progress (no indicator, stale console) until the
+            // answer silently lands. The first run worked only because its seed
+            // was Idle, which `handleOrchestratorState` already ignores.
+            var awaitingFirstRunState = true
             agentOrchestratorUseCase(sessionId, prompt, pipelineId, readyAttachment, displayContent)
                 .catch { error ->
                     _state.update {
                         it.copy(visual = ChatHomeUiState.Error(error.message ?: UNKNOWN_ERROR_FALLBACK))
                     }
                 }
-                .collect { orchestratorState -> handleOrchestratorState(orchestratorState) }
+                .collect { orchestratorState ->
+                    if (awaitingFirstRunState) {
+                        awaitingFirstRunState = false
+                        if (orchestratorState.isStaleReplayOnSend()) return@collect
+                    }
+                    handleOrchestratorState(orchestratorState)
+                }
         }
     }
+
+    /**
+     * Whether [this] is a terminal/resting state that, when seen as the very
+     * first emission after [proceedSend] subscribes, must be the previous run's
+     * replayed value (a just-enqueued run cannot have settled yet). Used to drop
+     * that one stale replay so it cannot end the fresh run's `Generating` state.
+     */
+    private fun AgentOrchestratorState.isStaleReplayOnSend(): Boolean = this is AgentOrchestratorState.Completed ||
+        this is AgentOrchestratorState.Error ||
+        this == AgentOrchestratorState.Idle
 
     /**
      * Handles the Retry CTA on the chat error tile. The previous behaviour
