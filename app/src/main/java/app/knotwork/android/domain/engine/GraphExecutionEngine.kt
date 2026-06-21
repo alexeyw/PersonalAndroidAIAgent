@@ -1024,11 +1024,22 @@ class GraphExecutionEngine @Inject constructor(
 
         val targetNodeId = if (currentNode.type == NodeType.IF_CONDITION) {
             val expectedLabel = if (conditionResult == true) "True" else "False"
-            edges.find { it.label.equals(expectedLabel, ignoreCase = true) }?.targetNodeId
-                ?: edges.firstOrNull()?.targetNodeId
+            val oppositeLabel = if (conditionResult == true) "False" else "True"
+            val exactTarget = edges.find { it.label.equals(expectedLabel, ignoreCase = true) }?.targetNodeId
+            when {
+                exactTarget != null -> exactTarget
+                // The author wired the opposite branch but left this one
+                // unconnected: terminate the branch (-> "terminated without
+                // OUTPUT") instead of silently falling through to an arbitrary
+                // first edge and running the wrong branch on this verdict.
+                edges.any { it.label.equals(oppositeLabel, ignoreCase = true) } -> null
+                // No True/False labels at all — a single default edge. Keep the
+                // legacy fall-through so an unlabelled pass-through still routes.
+                else -> edges.firstOrNull()?.targetNodeId
+            }
         } else if (currentNode.type == NodeType.INTENT_ROUTER && routingKey != null) {
             val matchedEdge = edges.find { it.label?.equals(routingKey, ignoreCase = true) == true }
-                ?: edges.find { !it.label.isNullOrBlank() && routingKey.contains(it.label, ignoreCase = true) }
+                ?: edges.find { !it.label.isNullOrBlank() && routingKeyContainsLabelAsWord(routingKey, it.label) }
             matchedEdge?.targetNodeId ?: edges.firstOrNull()?.targetNodeId
         } else if (currentNode.type == NodeType.EVALUATION && routingKey != null) {
             // EVALUATION emits a Pass / Retry / Fail verdict as the routing key;
@@ -1044,6 +1055,21 @@ class GraphExecutionEngine @Inject constructor(
         Timber.tag("PipelineDebug").d("[ROUTE] from=${currentNode.id} label=$edgeLabel -> to=$targetNodeId")
         return targetNodeId
     }
+
+    /**
+     * INTENT_ROUTER fallback match: `true` when [routingKey] contains [label] as
+     * a **whole word** (case-insensitive). Used only after an exact label match
+     * fails, to tolerate a model that wraps the chosen label in a sentence
+     * ("I choose Cancel") while still rejecting incidental substring hits — an
+     * unanchored `contains` would route the key "Cancel" to a port labelled
+     * "can". [label] is regex-escaped so punctuation in port names is literal.
+     *
+     * @param routingKey The router's chosen routing key (model output).
+     * @param label The candidate edge label to test against [routingKey].
+     * @return `true` if [label] appears as a standalone word inside [routingKey].
+     */
+    private fun routingKeyContainsLabelAsWord(routingKey: String, label: String): Boolean =
+        Regex("\\b${Regex.escape(label)}\\b", RegexOption.IGNORE_CASE).containsMatchIn(routingKey)
 
     /**
      * Mirrors a human-in-the-loop suspension (and its resolution) into the
