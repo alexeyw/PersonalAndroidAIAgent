@@ -234,6 +234,10 @@ details.
 
 ### Fixed
 
+- **Agent messages keep the model that generated them.** Each agent answer now
+  records the model it was produced with, so the name under a message no longer
+  changes to whatever model is currently active after you switch models. Older
+  messages saved before this fall back to the active model name.
 - **Token count stays visible in the chat top bar.** A long pipeline name no
   longer truncates the token counter in the chat's top app-bar subtitle — the
   count is pinned and the pipeline name ellipsizes instead.

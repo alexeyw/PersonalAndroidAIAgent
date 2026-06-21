@@ -424,4 +424,29 @@ class AppDatabaseMigrationTest {
             sql.contains("INDEX_CHAT_MESSAGES_SESSIONID"),
         )
     }
+
+    @Test
+    fun `MIGRATION_43_44 targets versions 43 to 44`() {
+        val migration = AppDatabase.MIGRATION_43_44
+
+        assertEquals(43, migration.startVersion)
+        assertEquals(44, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_43_44 adds a nullable modelName column to chat_messages`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val sqlSlot = slot<String>()
+
+        AppDatabase.MIGRATION_43_44.migrate(db)
+
+        verify(exactly = 1) { db.execSQL(capture(sqlSlot)) }
+        val sql = sqlSlot.captured.uppercase()
+        assertTrue(
+            "Expected ALTER chat_messages ADD modelName, got: ${sqlSlot.captured}",
+            sql.contains("ALTER TABLE `CHAT_MESSAGES` ADD COLUMN `MODELNAME`"),
+        )
+        // Additive + nullable so legacy rows keep NULL (no recorded model).
+        assertTrue("modelName must be nullable (no NOT NULL): ${sqlSlot.captured}", !sql.contains("NOT NULL"))
+    }
 }

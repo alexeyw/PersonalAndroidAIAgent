@@ -176,6 +176,40 @@ class ChatMessageMapperTest {
     }
 
     @Test
+    fun `modelName round-trips through both mappers and defaults to null`() {
+        val entity = ChatMessageEntity(
+            id = 30L,
+            sessionId = "model",
+            role = "AGENT",
+            content = "answer",
+            timestamp = 1700000020L,
+            modelName = "Gemma 4",
+        )
+        assertEquals("Gemma 4", entity.toDomain().modelName)
+
+        val domain = ChatMessage(
+            id = 31L,
+            sessionId = "model",
+            role = Role.AGENT,
+            content = "answer",
+            timestamp = 1700000021L,
+            modelName = "Gemma 4",
+        )
+        assertEquals("Gemma 4", domain.toEntity().modelName)
+
+        // Legacy rows / non-agent messages carry no recorded model.
+        assertNull(
+            ChatMessageEntity(
+                id = 32L,
+                sessionId = "legacy",
+                role = "USER",
+                content = "hi",
+                timestamp = 1700000022L,
+            ).toDomain().modelName,
+        )
+    }
+
+    @Test
     fun `toDomain yields null attachment when path absent`() {
         val entity = ChatMessageEntity(
             id = 22L,

@@ -297,7 +297,7 @@ class ShowcaseCompositionIntegrationTest {
         )
         val factory = NodeExecutorFactory(
             InputNodeExecutor(),
-            OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+            OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository, mockk(relaxed = true)),
             IfConditionNodeExecutor(mockk<EvaluateIfConditionUseCase>(relaxed = true)),
             toolNodeExecutor,
             LiteRtNodeExecutor(

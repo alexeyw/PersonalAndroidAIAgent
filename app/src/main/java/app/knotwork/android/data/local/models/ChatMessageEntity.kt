@@ -29,6 +29,9 @@ import androidx.room.PrimaryKey
  *   or `null` when there is no attachment.
  * @property attachmentHeight Pixel height of the stored (downscaled) attachment,
  *   or `null` when there is no attachment.
+ * @property modelName Display name of the model that generated this message,
+ *   snapshotted at save time. `null` for user/system messages and for legacy
+ *   AGENT rows persisted before `MIGRATION_43_44` added the column.
  */
 @Entity(
     tableName = "chat_messages",
@@ -52,4 +55,5 @@ data class ChatMessageEntity(
     val attachmentMimeType: String? = null,
     val attachmentWidth: Int? = null,
     val attachmentHeight: Int? = null,
+    val modelName: String? = null,
 )

@@ -171,7 +171,7 @@ class GraphExecutionEngineTest {
         }
 
         val inputNodeExecutor = InputNodeExecutor()
-        val outputNodeExecutor = OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository)
+        val outputNodeExecutor = OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository, mockk(relaxed = true))
         val ifConditionNodeExecutor = IfConditionNodeExecutor(evaluateIfConditionUseCase)
         val queueProcessorNodeExecutor = QueueProcessorNodeExecutor()
 
@@ -1217,7 +1217,7 @@ class GraphExecutionEngineTest {
         // and there is no risk of state from setUp() leaking in.
         val realFactory = NodeExecutorFactory(
             InputNodeExecutor(),
-            OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+            OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository, mockk(relaxed = true)),
             IfConditionNodeExecutor(evaluateIfConditionUseCase),
             ToolNodeExecutor(
                 llmEngine,
@@ -1436,7 +1436,7 @@ class GraphExecutionEngineTest {
 
             val realFactory = NodeExecutorFactory(
                 InputNodeExecutor(),
-                OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+                OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository, mockk(relaxed = true)),
                 IfConditionNodeExecutor(evaluateIfConditionUseCase),
                 ToolNodeExecutor(
                     llmEngine,

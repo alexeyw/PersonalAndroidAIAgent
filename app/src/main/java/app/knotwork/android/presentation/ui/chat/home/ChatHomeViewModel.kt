@@ -867,7 +867,10 @@ class ChatHomeViewModel @Inject constructor(
                 .format(Date(message.timestamp))
             val metadata = ChatMetadata(
                 timestamp = formattedTimestamp,
-                model = if (role == ChatRole.Assistant) activeModelName else null,
+                // Attribute the answer to the model that actually generated it
+                // (snapshotted on the message), not the currently-active one;
+                // legacy rows without a recorded model fall back to the active name.
+                model = if (role == ChatRole.Assistant) message.modelName ?: activeModelName else null,
                 status = ChatMessageStatus.Sent,
             )
             val idPrefix = when (role) {

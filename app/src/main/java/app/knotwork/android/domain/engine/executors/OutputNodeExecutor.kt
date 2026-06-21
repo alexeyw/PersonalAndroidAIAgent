@@ -11,6 +11,7 @@ import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.repositories.ChatRepository
+import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -47,6 +48,7 @@ class OutputNodeExecutor @Inject constructor(
     private val llmEngine: LlmInferenceEngine,
     private val loadModelUseCase: LoadModelUseCase,
     private val chatRepository: ChatRepository,
+    private val localModelRepository: LocalModelRepository,
 ) : NodeExecutor {
     override fun execute(
         node: NodeModel,
@@ -56,6 +58,10 @@ class OutputNodeExecutor @Inject constructor(
         runId: String?,
         scope: ExecutionScope,
     ): Flow<NodeOutput> = flow {
+        // Snapshot the active model so this answer stays attributed to the model
+        // that produced it even after the user switches the active model. Only
+        // resolved for the root run, which is the one that persists to chat.
+        val generatingModelName = if (scope.depth == 0) localModelRepository.getActiveModel()?.name else null
         val nodeSystemPrompt = node.systemPrompt
         if (!nodeSystemPrompt.isNullOrBlank()) {
             val fullPrompt = DefaultPrompts.renderTemplate(
@@ -130,6 +136,7 @@ class OutputNodeExecutor @Inject constructor(
                         role = Role.AGENT,
                         content = finalOutput,
                         timestamp = System.currentTimeMillis(),
+                        modelName = generatingModelName,
                     ),
                 )
             }
@@ -145,6 +152,7 @@ class OutputNodeExecutor @Inject constructor(
                         role = Role.AGENT,
                         content = inputText,
                         timestamp = System.currentTimeMillis(),
+                        modelName = generatingModelName,
                     ),
                 )
             }

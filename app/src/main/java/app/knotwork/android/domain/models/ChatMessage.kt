@@ -17,6 +17,11 @@ package app.knotwork.android.domain.models
  *   are surfaced via the chat-screen "starred only" filter.
  * @property attachment The image attached to this message, or `null` when the
  *   message has no attachment. Only user messages carry attachments in this phase.
+ * @property modelName Display name of the model that generated this message,
+ *   captured at generation time so the chat keeps attributing the answer to the
+ *   right model even after the user switches the active model. Only AGENT
+ *   answers carry it; `null` for user/system messages and for legacy AGENT rows
+ *   saved before this was recorded.
  */
 data class ChatMessage(
     val id: Long? = null,
@@ -27,4 +32,5 @@ data class ChatMessage(
     val isFinal: Boolean = true,
     val isStarred: Boolean = false,
     val attachment: MessageAttachment? = null,
+    val modelName: String? = null,
 )
