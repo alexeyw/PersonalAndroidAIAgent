@@ -14,6 +14,7 @@ import app.knotwork.android.domain.constants.SettingsDefaults
 import app.knotwork.android.domain.models.McpAuth
 import app.knotwork.android.domain.models.McpServerConfig
 import app.knotwork.android.domain.models.McpTransport
+import app.knotwork.android.domain.models.ToolApprovalPolicy
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.models.UpdateMcpServerResult
 import io.mockk.every
@@ -1260,6 +1261,70 @@ class SettingsManagerTest {
             assertEquals("ollama", manager.activeEmbeddingProviderId.first())
             assertEquals("pipeline-123", manager.defaultPipelineId.first())
             assertEquals("gpu", manager.localModelBackend.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `resetToRecommendedDefaults restores security toggles to a fresh-install state`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            // Drive the typed policy and the superseded boolean off their defaults
+            // (in this order so the boolean ends up `true`, opposite its default).
+            manager.setToolApprovalPolicy(ToolApprovalPolicy.NeverPrompt)
+            manager.setRequiresUserConfirmation(true)
+
+            manager.resetToRecommendedDefaults()
+
+            assertEquals(ToolApprovalPolicy.DEFAULT, manager.toolApprovalPolicy.first())
+            // Matches a fresh install: the superseded flag returns to its documented
+            // default (false), not the policy-derived `true`.
+            assertEquals(
+                SettingsDefaults.REQUIRES_USER_CONFIRMATION_DEFAULT,
+                manager.requiresUserConfirmation.first(),
+            )
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `resetToRecommendedDefaults covers every persistable key except documented exclusions`() = runTest {
+        val (manager, ds, scope) = freshManagerWithExposedDataStore()
+        try {
+            manager.resetToRecommendedDefaults()
+            // Keys the reset actually wrote = those present after a reset on a fresh store.
+            val written = ds.data.first().asMap().keys.map { it.name }.toSet()
+            val allKeys = manager.knownPreferenceKeyNames()
+
+            // User-owned content / configuration / transient state the reset must
+            // never touch (mirrors the SettingsRepository.resetToRecommendedDefaults
+            // contract). A new tunable key forgotten in the reset, or a user-data key
+            // wrongly added to it, fails one of the assertions below.
+            val excluded = setOf(
+                "is_first_launch", "has_completed_onboarding", "hugging_face_token",
+                "system_prompt_prefix", "tool_usage_instruction",
+                "mcp_server_urls", "mcp_servers_json",
+                "disabled_app_functions", "disabled_mcp_tools", "app_function_risk_overrides",
+                "current_chat_session_id", "memory_last_compacted_at",
+                "local_model_backend", "last_init_backend_attempt",
+                "default_pipeline_id", "console_preferred_tab", "last_test_probe_result",
+                "active_embedding_provider_id", "last_reembed_provider_id",
+                "allowed_http_domains",
+            )
+
+            val uncovered = allKeys - written - excluded
+            assertTrue(
+                "Persistable keys neither reset nor explicitly excluded " +
+                    "(wire them into resetToRecommendedDefaults or add to the exclusion list): $uncovered",
+                uncovered.isEmpty(),
+            )
+            val wronglyReset = written intersect excluded
+            assertTrue(
+                "Excluded user-data keys must never be written by the reset: $wronglyReset",
+                wronglyReset.isEmpty(),
+            )
         } finally {
             scope.cancel()
         }

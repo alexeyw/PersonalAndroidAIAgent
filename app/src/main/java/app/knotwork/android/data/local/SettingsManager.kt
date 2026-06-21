@@ -1,7 +1,9 @@
 package app.knotwork.android.data.local
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -1628,44 +1630,34 @@ class SettingsManager @Inject constructor(
         }
     }
 
+    /**
+     * Writes the local-generation sampling + pipeline/structured-output/cloud-retry
+     * defaults into [preferences]. Shared by [resetSamplingDefaults] (the
+     * per-card "Reset to defaults") and [resetToRecommendedDefaults] (the global
+     * reset) so the two paths cannot drift on these ten keys.
+     */
+    private fun MutablePreferences.applySamplingDefaults() {
+        this[PreferencesKeys.TEMPERATURE] = SettingsDefaults.TEMPERATURE_DEFAULT
+        this[PreferencesKeys.TOP_K] = SettingsDefaults.TOP_K_DEFAULT
+        this[PreferencesKeys.TOP_P] = SettingsDefaults.TOP_P_DEFAULT
+        this[PreferencesKeys.REPETITION_PENALTY] = SettingsDefaults.REPETITION_PENALTY_DEFAULT
+        this[PreferencesKeys.MAX_CONTEXT_LENGTH] = SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT
+        this[PreferencesKeys.PIPELINE_MAX_STEPS] = SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT
+        this[PreferencesKeys.PIPELINE_MAX_NESTING_DEPTH] = SettingsDefaults.PIPELINE_MAX_NESTING_DEPTH_DEFAULT
+        this[PreferencesKeys.STRUCTURED_OUTPUT_MAX_REPAIRS] = SettingsDefaults.STRUCTURED_OUTPUT_MAX_REPAIRS_DEFAULT
+        this[PreferencesKeys.CLOUD_RETRY_MAX_ATTEMPTS] = SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_DEFAULT
+        this[PreferencesKeys.CLOUD_RETRY_BASE_DELAY_MS] = SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_DEFAULT
+    }
+
     override suspend fun resetSamplingDefaults() {
-        dataStore.edit { preferences ->
-            preferences[PreferencesKeys.TEMPERATURE] = SettingsDefaults.TEMPERATURE_DEFAULT
-            preferences[PreferencesKeys.TOP_K] = SettingsDefaults.TOP_K_DEFAULT
-            preferences[PreferencesKeys.TOP_P] = SettingsDefaults.TOP_P_DEFAULT
-            preferences[PreferencesKeys.REPETITION_PENALTY] = SettingsDefaults.REPETITION_PENALTY_DEFAULT
-            preferences[PreferencesKeys.MAX_CONTEXT_LENGTH] = SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT
-            preferences[PreferencesKeys.PIPELINE_MAX_STEPS] = SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT
-            preferences[PreferencesKeys.PIPELINE_MAX_NESTING_DEPTH] =
-                SettingsDefaults.PIPELINE_MAX_NESTING_DEPTH_DEFAULT
-            preferences[PreferencesKeys.STRUCTURED_OUTPUT_MAX_REPAIRS] =
-                SettingsDefaults.STRUCTURED_OUTPUT_MAX_REPAIRS_DEFAULT
-            preferences[PreferencesKeys.CLOUD_RETRY_MAX_ATTEMPTS] =
-                SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_DEFAULT
-            preferences[PreferencesKeys.CLOUD_RETRY_BASE_DELAY_MS] =
-                SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_DEFAULT
-        }
+        dataStore.edit { preferences -> preferences.applySamplingDefaults() }
     }
 
     @Suppress("LongMethod") // Flat list of independent key→default writes; splitting it would only obscure it.
     override suspend fun resetToRecommendedDefaults() {
         dataStore.edit { preferences ->
-            // Sampling / generation.
-            preferences[PreferencesKeys.TEMPERATURE] = SettingsDefaults.TEMPERATURE_DEFAULT
-            preferences[PreferencesKeys.TOP_K] = SettingsDefaults.TOP_K_DEFAULT
-            preferences[PreferencesKeys.TOP_P] = SettingsDefaults.TOP_P_DEFAULT
-            preferences[PreferencesKeys.REPETITION_PENALTY] = SettingsDefaults.REPETITION_PENALTY_DEFAULT
-            preferences[PreferencesKeys.MAX_CONTEXT_LENGTH] = SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT
-            // Pipeline / structured output / cloud retry.
-            preferences[PreferencesKeys.PIPELINE_MAX_STEPS] = SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT
-            preferences[PreferencesKeys.PIPELINE_MAX_NESTING_DEPTH] =
-                SettingsDefaults.PIPELINE_MAX_NESTING_DEPTH_DEFAULT
-            preferences[PreferencesKeys.STRUCTURED_OUTPUT_MAX_REPAIRS] =
-                SettingsDefaults.STRUCTURED_OUTPUT_MAX_REPAIRS_DEFAULT
-            preferences[PreferencesKeys.CLOUD_RETRY_MAX_ATTEMPTS] =
-                SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_DEFAULT
-            preferences[PreferencesKeys.CLOUD_RETRY_BASE_DELAY_MS] =
-                SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_DEFAULT
+            // Sampling / generation + pipeline / structured output / cloud retry.
+            preferences.applySamplingDefaults()
             // Tool / workspace / http limits.
             preferences[PreferencesKeys.TOOL_CALL_TIMEOUT_MS] = SettingsDefaults.TOOL_CALL_TIMEOUT_MS_DEFAULT
             preferences[PreferencesKeys.WORKSPACE_MAX_FILE_SIZE_BYTES] =
@@ -1710,10 +1702,12 @@ class SettingsManager @Inject constructor(
                 SettingsDefaults.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_DEFAULT
             preferences[PreferencesKeys.CHAT_HISTORY_LIVE_WINDOW_SIZE] =
                 SettingsDefaults.CHAT_HISTORY_LIVE_WINDOW_DEFAULT
-            // Security toggles. Keep the legacy boolean coherent with the typed policy.
+            // Security toggles. Both legacy boolean and typed policy go to their
+            // documented defaults so a reset matches a fresh install exactly (the
+            // typed key is what the migration reads; the boolean is superseded).
             preferences[PreferencesKeys.TOOL_APPROVAL_POLICY] = ToolApprovalPolicy.DEFAULT.key
             preferences[PreferencesKeys.REQUIRES_USER_CONFIRMATION] =
-                ToolApprovalPolicy.DEFAULT != ToolApprovalPolicy.NeverPrompt
+                SettingsDefaults.REQUIRES_USER_CONFIRMATION_DEFAULT
             preferences[PreferencesKeys.BLOCK_DESTRUCTIVE_TOOLS] =
                 SettingsDefaults.BLOCK_DESTRUCTIVE_TOOLS_DEFAULT
             preferences[PreferencesKeys.BLOCK_NETWORK_FROM_LOCAL_MODEL] =
@@ -1727,6 +1721,20 @@ class SettingsManager @Inject constructor(
                 SettingsDefaults.CRASH_REPORTING_ENABLED_DEFAULT
         }
     }
+
+    /**
+     * Reflectively enumerates the wire names of every preference declared in
+     * [PreferencesKeys]. Exposed only so the test-suite can assert that every
+     * persistable key is either restored by [resetToRecommendedDefaults] or
+     * listed among the deliberately-excluded user-data keys — catching the case
+     * where a future setting is added but silently escapes the reset.
+     */
+    @VisibleForTesting
+    internal fun knownPreferenceKeyNames(): Set<String> =
+        PreferencesKeys::class.java.declaredFields.mapNotNull { field ->
+            field.isAccessible = true
+            (field.get(PreferencesKeys) as? Preferences.Key<*>)?.name
+        }.toSet()
 
     private fun encodeTestProbeResult(result: TestProbeResult): String = JSONObject().apply {
         put("tokens", result.tokensGenerated)

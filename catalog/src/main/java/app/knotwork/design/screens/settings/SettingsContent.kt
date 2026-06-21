@@ -138,7 +138,8 @@ fun SettingsContent(
                 )
                 // Settings reset touches no user data — plain confirm dialog.
                 DestructiveActionKind.ResetSettings -> ResetConfirmDialog(
-                    payload = state.destructiveAction,
+                    title = state.destructiveAction.title,
+                    body = state.destructiveAction.body,
                     onConfirm = callbacks.onDestructiveConfirm,
                     onCancel = callbacks.onDestructiveCancel,
                 )
@@ -1289,20 +1290,20 @@ private fun DestructiveTypedConfirmDialog(
 /**
  * Plain confirm/cancel dialog for "Reset all settings". Unlike the
  * [DestructiveTypedConfirmDialog], it has no typed-keyword gate because the
- * action restores tunable preferences only and never touches user data — the
- * [DestructiveActionState.keyword] / [DestructiveActionState.hint] /
- * [DestructiveActionState.pendingInput] fields are intentionally ignored here.
+ * action restores tunable preferences only and never touches user data — so it
+ * needs only the dialog copy, not the typed-confirm payload.
  *
- * @param payload Dialog texts ([DestructiveActionState.title] / [DestructiveActionState.body]).
+ * @param title Localized dialog headline.
+ * @param body Localized dialog body explaining the scope of the reset.
  * @param onConfirm Invoked on confirm tap.
  * @param onCancel Invoked on dismiss (button or outside tap).
  */
 @Composable
-private fun ResetConfirmDialog(payload: DestructiveActionState, onConfirm: () -> Unit, onCancel: () -> Unit) {
+private fun ResetConfirmDialog(title: String, body: String, onConfirm: () -> Unit, onCancel: () -> Unit) {
     AlertDialog(
         onDismissRequest = onCancel,
-        title = { Text(payload.title) },
-        text = { Text(text = payload.body, style = KnotworkTextStyles.BodyBase) },
+        title = { Text(title) },
+        text = { Text(text = body, style = KnotworkTextStyles.BodyBase) },
         confirmButton = {
             KnotworkPrimaryButton(
                 text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_destructive_confirm),

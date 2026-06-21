@@ -458,29 +458,28 @@ private fun buildViewState(uiState: SettingsUiState, context: android.content.Co
         ),
     )
     val destructive = uiState.pendingDestructive?.let { kind ->
+        val isClearMemory = kind == PendingDestructiveAction.ClearMemory
         DestructiveActionState(
             title = stringResource(
-                if (kind == PendingDestructiveAction.ClearMemory) {
+                if (isClearMemory) {
                     R.string.settings_destructive_clear_memory_title
                 } else {
                     R.string.settings_destructive_reset_title
                 },
             ),
             body = stringResource(
-                if (kind == PendingDestructiveAction.ClearMemory) {
+                if (isClearMemory) {
                     R.string.settings_destructive_clear_memory_body
                 } else {
                     R.string.settings_destructive_reset_body
                 },
             ),
-            keyword = stringResource(R.string.destructive_typed_keyword),
-            hint = stringResource(R.string.settings_destructive_typed_hint),
-            pendingInput = uiState.destructiveTypedInput,
-            kind = if (kind == PendingDestructiveAction.ClearMemory) {
-                DestructiveActionKind.ClearMemory
-            } else {
-                DestructiveActionKind.ResetSettings
-            },
+            // Typed-gate fields are consumed only by the ClearMemory typed-confirm
+            // dialog; the ResetSettings plain dialog ignores them, so don't resolve them.
+            keyword = if (isClearMemory) stringResource(R.string.destructive_typed_keyword) else "",
+            hint = if (isClearMemory) stringResource(R.string.settings_destructive_typed_hint) else "",
+            pendingInput = if (isClearMemory) uiState.destructiveTypedInput else "",
+            kind = if (isClearMemory) DestructiveActionKind.ClearMemory else DestructiveActionKind.ResetSettings,
         )
     }
     val visualState = when {
