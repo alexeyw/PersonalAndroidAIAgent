@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -74,6 +75,7 @@ import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.screens.chat.ChatHomeCallbacks
 import app.knotwork.design.screens.chat.ChatHomeContent
 import app.knotwork.design.theme.KnotworkTheme
+import app.knotwork.design.tokens.KnotworkTextStyles
 import com.mikepenz.markdown.m3.Markdown
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -799,15 +801,25 @@ private fun NewThreadPipelinePickerSheetContent(
  */
 @Composable
 private fun PipelinePickerRow(label: String, selected: Boolean, onClick: () -> Unit) {
-    ListItem(
-        headlineContent = { Text(label, style = MaterialTheme.typography.titleMedium) },
-        leadingContent = {
-            RadioButton(selected = selected, onClick = onClick)
-        },
+    // A compact radio row (not an M3 `ListItem`, whose ~56dp min-height and
+    // `bodyLarge` headline read as oversized in this picker). Mirrors the
+    // catalog `PromptPresetPickerSheet` row: a tight `Row` with a `BodyBase`
+    // (15sp) label, so a long pipeline list stays scannable.
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-    )
+            .clickable(onClick = onClick)
+            .padding(vertical = KnotworkTheme.spacing.sp1),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = onClick)
+        Spacer(modifier = Modifier.width(KnotworkTheme.spacing.sp2))
+        Text(
+            text = label,
+            style = KnotworkTextStyles.BodyBase,
+            modifier = Modifier.weight(1f),
+        )
+    }
 }
 
 /** Minimal projection of a local model row in the model-picker sheet. */
@@ -855,7 +867,7 @@ private fun ModelPickerSheetContent(
             ) {
                 models.forEach { model ->
                     ListItem(
-                        headlineContent = { Text(model.name, style = MaterialTheme.typography.titleMedium) },
+                        headlineContent = { Text(model.name, style = KnotworkTextStyles.BodyBase) },
                         trailingContent = if (model.id == activeId) {
                             {
                                 Icon(
