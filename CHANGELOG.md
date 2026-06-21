@@ -234,6 +234,9 @@ details.
 
 ### Fixed
 
+- **Token count stays visible in the chat top bar.** A long pipeline name no
+  longer truncates the token counter in the chat's top app-bar subtitle — the
+  count is pinned and the pipeline name ellipsizes instead.
 - **Live progress shows on every message, not just the first.** A second message
   in the same chat no longer loses its generating indicator and console updates:
   the per-session state stream replayed the previous run's "completed" state to
