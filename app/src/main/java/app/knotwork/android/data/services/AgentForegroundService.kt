@@ -142,6 +142,14 @@ class AgentForegroundService : Service() {
                     is AgentOrchestratorState.Idle,
                     is AgentOrchestratorState.Completed,
                     is AgentOrchestratorState.Error,
+                    // Suspension states wait on a human (HITL approval,
+                    // clarification, durable background park) that may never come
+                    // soon — release the CPU wake lock instead of pinning it
+                    // awake until the 10-minute safety timeout; the next active
+                    // state re-acquires it when the user responds.
+                    is AgentOrchestratorState.WaitingForApproval,
+                    is AgentOrchestratorState.AwaitingClarification,
+                    is AgentOrchestratorState.SuspendedInBackground,
                     -> releaseWakeLock()
                     else -> Unit
                 }
