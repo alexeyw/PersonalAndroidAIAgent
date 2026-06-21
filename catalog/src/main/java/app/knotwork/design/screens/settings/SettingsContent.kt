@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Shield
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -43,6 +44,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -59,6 +61,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
+import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.ChipStyle
@@ -125,12 +128,21 @@ fun SettingsContent(
             )
         }
         if (state.visualState == SettingsVisualState.DestructiveAction && state.destructiveAction != null) {
-            DestructiveTypedConfirmDialog(
-                payload = state.destructiveAction,
-                onTypedConfirmChange = callbacks.onDestructiveTypedConfirmChange,
-                onConfirm = callbacks.onDestructiveConfirm,
-                onCancel = callbacks.onDestructiveCancel,
-            )
+            when (state.destructiveAction.kind) {
+                // Irreversible memory wipe — typed-keyword gate.
+                DestructiveActionKind.ClearMemory -> DestructiveTypedConfirmDialog(
+                    payload = state.destructiveAction,
+                    onTypedConfirmChange = callbacks.onDestructiveTypedConfirmChange,
+                    onConfirm = callbacks.onDestructiveConfirm,
+                    onCancel = callbacks.onDestructiveCancel,
+                )
+                // Settings reset touches no user data — plain confirm dialog.
+                DestructiveActionKind.ResetSettings -> ResetConfirmDialog(
+                    payload = state.destructiveAction,
+                    onConfirm = callbacks.onDestructiveConfirm,
+                    onCancel = callbacks.onDestructiveCancel,
+                )
+            }
         }
     }
 }
@@ -1179,6 +1191,11 @@ private fun PrivacyCard(state: PrivacyCardState, callbacks: SettingsCallbacks) {
             text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_reset_button),
             onClick = callbacks.onResetSettingsClick,
         )
+        Text(
+            text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_reset_hint),
+            style = KnotworkTextStyles.BodySm,
+            color = KnotworkTheme.extended.onSurfaceMuted,
+        )
     }
 }
 
@@ -1269,6 +1286,38 @@ private fun DestructiveTypedConfirmDialog(
     )
 }
 
+/**
+ * Plain confirm/cancel dialog for "Reset all settings". Unlike the
+ * [DestructiveTypedConfirmDialog], it has no typed-keyword gate because the
+ * action restores tunable preferences only and never touches user data — the
+ * [DestructiveActionState.keyword] / [DestructiveActionState.hint] /
+ * [DestructiveActionState.pendingInput] fields are intentionally ignored here.
+ *
+ * @param payload Dialog texts ([DestructiveActionState.title] / [DestructiveActionState.body]).
+ * @param onConfirm Invoked on confirm tap.
+ * @param onCancel Invoked on dismiss (button or outside tap).
+ */
+@Composable
+private fun ResetConfirmDialog(payload: DestructiveActionState, onConfirm: () -> Unit, onCancel: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(payload.title) },
+        text = { Text(text = payload.body, style = KnotworkTextStyles.BodyBase) },
+        confirmButton = {
+            KnotworkPrimaryButton(
+                text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_destructive_confirm),
+                onClick = onConfirm,
+                modifier = Modifier.testTag(RESET_CONFIRM_BUTTON_TEST_TAG),
+            )
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) {
+                Text(text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_destructive_cancel))
+            }
+        },
+    )
+}
+
 // ─── Constants ─────────────────────────────────────────────────────────────
 
 /** Test tag for the scrollable Settings body — used by instrumented tests. */
@@ -1278,6 +1327,9 @@ const val SYSTEM_INSTRUCTIONS_FIELD_TEST_TAG: String = "settings_system_instruct
 const val RESTART_BANNER_TEST_TAG: String = "settings_restart_banner"
 const val DESTRUCTIVE_TYPED_FIELD_TEST_TAG: String = "settings_destructive_typed_field"
 const val DESTRUCTIVE_CONFIRM_BUTTON_TEST_TAG: String = "settings_destructive_confirm"
+
+/** Test tag for the confirm button of the plain "Reset all settings" dialog. */
+const val RESET_CONFIRM_BUTTON_TEST_TAG: String = "settings_reset_confirm"
 const val SLIDER_ROW_TAG_PREFIX: String = "settings_slider_"
 const val PROVIDER_ROW_TAG_PREFIX: String = "settings_provider_row_"
 

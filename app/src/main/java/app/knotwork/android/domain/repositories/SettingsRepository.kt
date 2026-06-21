@@ -1010,4 +1010,21 @@ interface SettingsRepository {
      * "Reset to defaults" action in Settings → LLM parameters.
      */
     suspend fun resetSamplingDefaults()
+
+    /**
+     * Restores **every tunable preference** to its recommended default from
+     * [app.knotwork.android.domain.constants.SettingsDefaults], in a single
+     * atomic write. Backs the "Reset all settings" action in Settings → Privacy.
+     *
+     * Strictly scoped to *tunable values* — it deliberately does **not** touch
+     * user-entered content or configuration: long-term memory, chats,
+     * pipelines, presets, skills, secrets (API keys / HuggingFace token),
+     * MCP servers, the `http_request` domain allowlist, per-tool enable/disable
+     * and risk overrides, the user-authored system-instructions prefix and
+     * tool-usage instruction, the active embedding provider (and its re-embed
+     * marker), the default-pipeline binding, the selected local backend, and
+     * onboarding / transient state. Everything it resets has a documented
+     * recommended default; everything it leaves alone is the user's own data.
+     */
+    suspend fun resetToRecommendedDefaults()
 }

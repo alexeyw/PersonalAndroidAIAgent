@@ -374,7 +374,8 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.REQUIRES_USER_CONFIRMATION] ?: true
+            preferences[PreferencesKeys.REQUIRES_USER_CONFIRMATION]
+                ?: SettingsDefaults.REQUIRES_USER_CONFIRMATION_DEFAULT
         }
 
     override suspend fun setRequiresUserConfirmation(required: Boolean) {
@@ -1414,7 +1415,8 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.CRASH_REPORTING_ENABLED] ?: false
+            preferences[PreferencesKeys.CRASH_REPORTING_ENABLED]
+                ?: SettingsDefaults.CRASH_REPORTING_ENABLED_DEFAULT
         }
 
     override suspend fun setCrashReportingEnabled(enabled: Boolean) {
@@ -1433,7 +1435,8 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.MEMORY_SUMMARY_DEFAULT_LIMIT] ?: DEFAULT_MEMORY_SUMMARY_LIMIT
+            preferences[PreferencesKeys.MEMORY_SUMMARY_DEFAULT_LIMIT]
+                ?: SettingsDefaults.MEMORY_SUMMARY_DEFAULT_LIMIT_DEFAULT
         }
 
     override suspend fun setMemorySummaryDefaultLimit(limit: Int) {
@@ -1487,7 +1490,8 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.BLOCK_DESTRUCTIVE_TOOLS] ?: false
+            preferences[PreferencesKeys.BLOCK_DESTRUCTIVE_TOOLS]
+                ?: SettingsDefaults.BLOCK_DESTRUCTIVE_TOOLS_DEFAULT
         }
 
     override suspend fun setBlockDestructiveTools(blocked: Boolean) {
@@ -1506,7 +1510,8 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.BLOCK_NETWORK_FROM_LOCAL_MODEL] ?: false
+            preferences[PreferencesKeys.BLOCK_NETWORK_FROM_LOCAL_MODEL]
+                ?: SettingsDefaults.BLOCK_NETWORK_FROM_LOCAL_MODEL_DEFAULT
         }
 
     override suspend fun setBlockNetworkFromLocalModel(blocked: Boolean) {
@@ -1553,7 +1558,10 @@ class SettingsManager @Inject constructor(
 
     override suspend fun setAutoSummarizeThreshold(threshold: Float) {
         dataStore.edit { preferences ->
-            preferences[PreferencesKeys.AUTO_SUMMARIZE_THRESHOLD] = threshold.coerceIn(0f, 1f)
+            preferences[PreferencesKeys.AUTO_SUMMARIZE_THRESHOLD] = threshold.coerceIn(
+                SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_MIN,
+                SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_MAX,
+            )
         }
     }
 
@@ -1567,7 +1575,8 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.LONG_RUNNING_TASKS_NOTIFICATIONS] ?: true
+            preferences[PreferencesKeys.LONG_RUNNING_TASKS_NOTIFICATIONS]
+                ?: SettingsDefaults.LONG_RUNNING_TASK_NOTIFICATIONS_ENABLED_DEFAULT
         }
 
     override suspend fun setLongRunningTaskNotificationsEnabled(enabled: Boolean) {
@@ -1586,7 +1595,8 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.SCHEDULED_TASK_NOTIFICATIONS] ?: true
+            preferences[PreferencesKeys.SCHEDULED_TASK_NOTIFICATIONS]
+                ?: SettingsDefaults.SCHEDULED_TASK_NOTIFICATIONS_ENABLED_DEFAULT
         }
 
     override suspend fun setScheduledTaskNotificationsEnabled(enabled: Boolean) {
@@ -1637,6 +1647,87 @@ class SettingsManager @Inject constructor(
         }
     }
 
+    @Suppress("LongMethod") // Flat list of independent key→default writes; splitting it would only obscure it.
+    override suspend fun resetToRecommendedDefaults() {
+        dataStore.edit { preferences ->
+            // Sampling / generation.
+            preferences[PreferencesKeys.TEMPERATURE] = SettingsDefaults.TEMPERATURE_DEFAULT
+            preferences[PreferencesKeys.TOP_K] = SettingsDefaults.TOP_K_DEFAULT
+            preferences[PreferencesKeys.TOP_P] = SettingsDefaults.TOP_P_DEFAULT
+            preferences[PreferencesKeys.REPETITION_PENALTY] = SettingsDefaults.REPETITION_PENALTY_DEFAULT
+            preferences[PreferencesKeys.MAX_CONTEXT_LENGTH] = SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT
+            // Pipeline / structured output / cloud retry.
+            preferences[PreferencesKeys.PIPELINE_MAX_STEPS] = SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT
+            preferences[PreferencesKeys.PIPELINE_MAX_NESTING_DEPTH] =
+                SettingsDefaults.PIPELINE_MAX_NESTING_DEPTH_DEFAULT
+            preferences[PreferencesKeys.STRUCTURED_OUTPUT_MAX_REPAIRS] =
+                SettingsDefaults.STRUCTURED_OUTPUT_MAX_REPAIRS_DEFAULT
+            preferences[PreferencesKeys.CLOUD_RETRY_MAX_ATTEMPTS] =
+                SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_DEFAULT
+            preferences[PreferencesKeys.CLOUD_RETRY_BASE_DELAY_MS] =
+                SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_DEFAULT
+            // Tool / workspace / http limits.
+            preferences[PreferencesKeys.TOOL_CALL_TIMEOUT_MS] = SettingsDefaults.TOOL_CALL_TIMEOUT_MS_DEFAULT
+            preferences[PreferencesKeys.WORKSPACE_MAX_FILE_SIZE_BYTES] =
+                SettingsDefaults.WORKSPACE_MAX_FILE_SIZE_BYTES_DEFAULT
+            preferences[PreferencesKeys.WORKSPACE_MAX_TOTAL_BYTES] =
+                SettingsDefaults.WORKSPACE_MAX_TOTAL_BYTES_DEFAULT
+            preferences[PreferencesKeys.WORKSPACE_READ_TOKEN_BUDGET] =
+                SettingsDefaults.WORKSPACE_READ_TOKEN_BUDGET_DEFAULT
+            preferences[PreferencesKeys.HTTP_TOOL_MAX_RESPONSE_BYTES] =
+                SettingsDefaults.HTTP_TOOL_MAX_RESPONSE_BYTES_DEFAULT
+            // Run lifecycle windows / retention.
+            preferences[PreferencesKeys.RESUME_MAX_AGE_HOURS] = SettingsDefaults.RESUME_MAX_AGE_HOURS_DEFAULT
+            preferences[PreferencesKeys.BACKGROUND_APPROVAL_WINDOW_HOURS] =
+                SettingsDefaults.BACKGROUND_APPROVAL_WINDOW_HOURS_DEFAULT
+            preferences[PreferencesKeys.TRACE_RETENTION_RUNS_PER_SESSION] =
+                SettingsDefaults.TRACE_RETENTION_RUNS_PER_SESSION_DEFAULT
+            preferences[PreferencesKeys.TRACE_RETENTION_MAX_AGE_DAYS] =
+                SettingsDefaults.TRACE_RETENTION_MAX_AGE_DAYS_DEFAULT
+            // Audio.
+            preferences[PreferencesKeys.AUDIO_MAX_DURATION_SEC] = SettingsDefaults.AUDIO_MAX_DURATION_SEC_DEFAULT
+            // Memory tuning.
+            preferences[PreferencesKeys.MEMORY_SUMMARY_DEFAULT_LIMIT] =
+                SettingsDefaults.MEMORY_SUMMARY_DEFAULT_LIMIT_DEFAULT
+            preferences[PreferencesKeys.MEMORY_SEARCH_TOP_K] = SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT
+            preferences[PreferencesKeys.MEMORY_SEARCH_THRESHOLD] = SettingsDefaults.MEMORY_SEARCH_THRESHOLD_DEFAULT
+            preferences[PreferencesKeys.MEMORY_RECENCY_HALF_LIFE_DAYS] =
+                SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_DEFAULT
+            preferences[PreferencesKeys.MEMORY_COMPACTION_ENABLED] =
+                SettingsDefaults.MEMORY_COMPACTION_ENABLED_DEFAULT
+            preferences[PreferencesKeys.MEMORY_COMPACTION_AGE_DAYS] =
+                SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT
+            preferences[PreferencesKeys.MAX_MEMORY_CHUNKS] = SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT
+            preferences[PreferencesKeys.AUTO_EXTRACT_ENABLED] = SettingsDefaults.AUTO_EXTRACT_ENABLED_DEFAULT
+            preferences[PreferencesKeys.AUTO_SUMMARIZE_THRESHOLD] =
+                SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_DEFAULT
+            preferences[PreferencesKeys.VERBOSE_MEMORY_LOGGING_ENABLED] =
+                SettingsDefaults.VERBOSE_MEMORY_LOGGING_ENABLED_DEFAULT
+            // Chat-history compression.
+            preferences[PreferencesKeys.CHAT_HISTORY_COMPRESSION_ENABLED] =
+                SettingsDefaults.CHAT_HISTORY_COMPRESSION_ENABLED_DEFAULT
+            preferences[PreferencesKeys.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS] =
+                SettingsDefaults.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_DEFAULT
+            preferences[PreferencesKeys.CHAT_HISTORY_LIVE_WINDOW_SIZE] =
+                SettingsDefaults.CHAT_HISTORY_LIVE_WINDOW_DEFAULT
+            // Security toggles. Keep the legacy boolean coherent with the typed policy.
+            preferences[PreferencesKeys.TOOL_APPROVAL_POLICY] = ToolApprovalPolicy.DEFAULT.key
+            preferences[PreferencesKeys.REQUIRES_USER_CONFIRMATION] =
+                ToolApprovalPolicy.DEFAULT != ToolApprovalPolicy.NeverPrompt
+            preferences[PreferencesKeys.BLOCK_DESTRUCTIVE_TOOLS] =
+                SettingsDefaults.BLOCK_DESTRUCTIVE_TOOLS_DEFAULT
+            preferences[PreferencesKeys.BLOCK_NETWORK_FROM_LOCAL_MODEL] =
+                SettingsDefaults.BLOCK_NETWORK_FROM_LOCAL_MODEL_DEFAULT
+            // Notifications + privacy.
+            preferences[PreferencesKeys.LONG_RUNNING_TASKS_NOTIFICATIONS] =
+                SettingsDefaults.LONG_RUNNING_TASK_NOTIFICATIONS_ENABLED_DEFAULT
+            preferences[PreferencesKeys.SCHEDULED_TASK_NOTIFICATIONS] =
+                SettingsDefaults.SCHEDULED_TASK_NOTIFICATIONS_ENABLED_DEFAULT
+            preferences[PreferencesKeys.CRASH_REPORTING_ENABLED] =
+                SettingsDefaults.CRASH_REPORTING_ENABLED_DEFAULT
+        }
+    }
+
     private fun encodeTestProbeResult(result: TestProbeResult): String = JSONObject().apply {
         put("tokens", result.tokensGenerated)
         put("durationMs", result.durationMs)
@@ -1668,8 +1759,6 @@ class SettingsManager @Inject constructor(
 
         /** Android Keystore alias of the AEAD key dedicated to the settings-secrets store. */
         const val SECRETS_KEY_ALIAS = "knotwork.settings_secrets"
-
-        const val DEFAULT_MEMORY_SUMMARY_LIMIT = 5
 
         /**
          * Default value for [PreferencesKeys.CONSOLE_PREFERRED_TAB] on a

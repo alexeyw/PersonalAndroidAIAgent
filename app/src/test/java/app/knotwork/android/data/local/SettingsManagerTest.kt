@@ -186,14 +186,16 @@ class SettingsManagerTest {
     }
 
     @Test
-    fun `requiresUserConfirmation returns true by default`() = runTest {
+    fun `requiresUserConfirmation returns the documented default when unset`() = runTest {
         val prefs = mockk<Preferences>()
         every { prefs[requiresUserConfirmationKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
         val settingsManager = SettingsManager(dataStore, context, cipher)
         val result = settingsManager.requiresUserConfirmation.first()
-        assertTrue(result)
+        // `false`: READ_ONLY tools run silently out of the box; the typed
+        // ToolApprovalPolicy (not this superseded flag) governs real prompts.
+        assertEquals(SettingsDefaults.REQUIRES_USER_CONFIRMATION_DEFAULT, result)
     }
 
     @Test
@@ -1167,6 +1169,97 @@ class SettingsManagerTest {
             manager.setActiveEmbeddingProviderId("ollama")
 
             assertEquals("ollama", manager.activeEmbeddingProviderId.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `resetToRecommendedDefaults restores every tunable preference to its default`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            // Drive a representative spread of tunable preferences off their defaults.
+            manager.setTemperature(0.1f)
+            manager.setTopK(7)
+            manager.setMaxContextLength(1234)
+            manager.setPipelineMaxSteps(SettingsDefaults.PIPELINE_MAX_STEPS_MAX)
+            manager.setPipelineMaxNestingDepth(SettingsDefaults.PIPELINE_MAX_NESTING_DEPTH_MAX)
+            manager.setAudioMaxDurationSec(99)
+            manager.setMaxMemoryChunks(9_999)
+            manager.setMemorySummaryDefaultLimit(42)
+            manager.setBlockDestructiveTools(true)
+            manager.setBlockNetworkFromLocalModel(true)
+            manager.setCrashReportingEnabled(true)
+            manager.setVerboseMemoryLoggingEnabled(true)
+            manager.setLongRunningTaskNotificationsEnabled(false)
+            manager.setScheduledTaskNotificationsEnabled(false)
+            manager.setChatHistoryCompressionEnabled(false)
+
+            manager.resetToRecommendedDefaults()
+
+            assertEquals(SettingsDefaults.TEMPERATURE_DEFAULT, manager.temperature.first())
+            assertEquals(SettingsDefaults.TOP_K_DEFAULT, manager.topK.first())
+            assertEquals(SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT, manager.maxContextLength.first())
+            assertEquals(SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT, manager.pipelineMaxSteps.first())
+            assertEquals(
+                SettingsDefaults.PIPELINE_MAX_NESTING_DEPTH_DEFAULT,
+                manager.pipelineMaxNestingDepth.first(),
+            )
+            assertEquals(SettingsDefaults.AUDIO_MAX_DURATION_SEC_DEFAULT, manager.audioMaxDurationSec.first())
+            assertEquals(SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT, manager.maxMemoryChunks.first())
+            assertEquals(
+                SettingsDefaults.MEMORY_SUMMARY_DEFAULT_LIMIT_DEFAULT,
+                manager.memorySummaryDefaultLimit.first(),
+            )
+            assertEquals(SettingsDefaults.BLOCK_DESTRUCTIVE_TOOLS_DEFAULT, manager.blockDestructiveTools.first())
+            assertEquals(
+                SettingsDefaults.BLOCK_NETWORK_FROM_LOCAL_MODEL_DEFAULT,
+                manager.blockNetworkFromLocalModel.first(),
+            )
+            assertEquals(SettingsDefaults.CRASH_REPORTING_ENABLED_DEFAULT, manager.crashReportingEnabled.first())
+            assertEquals(
+                SettingsDefaults.VERBOSE_MEMORY_LOGGING_ENABLED_DEFAULT,
+                manager.verboseMemoryLoggingEnabled.first(),
+            )
+            assertEquals(
+                SettingsDefaults.LONG_RUNNING_TASK_NOTIFICATIONS_ENABLED_DEFAULT,
+                manager.longRunningTaskNotificationsEnabled.first(),
+            )
+            assertEquals(
+                SettingsDefaults.SCHEDULED_TASK_NOTIFICATIONS_ENABLED_DEFAULT,
+                manager.scheduledTaskNotificationsEnabled.first(),
+            )
+            assertEquals(
+                SettingsDefaults.CHAT_HISTORY_COMPRESSION_ENABLED_DEFAULT,
+                manager.chatHistoryCompressionEnabled.first(),
+            )
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `resetToRecommendedDefaults leaves user data and configuration untouched`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            // Seed user-owned content / configuration that the reset must never touch.
+            manager.setSystemPromptPrefix("my custom prefix")
+            manager.setToolUsageInstruction("my custom tool instruction")
+            manager.setAllowedHttpDomains(listOf("api.example.com"))
+            manager.addMcpServer(McpServerConfig(url = "http://mcp", name = "My MCP"))
+            manager.setActiveEmbeddingProviderId("ollama")
+            manager.setDefaultPipelineId("pipeline-123")
+            manager.setLocalModelBackend("gpu")
+
+            manager.resetToRecommendedDefaults()
+
+            assertEquals("my custom prefix", manager.systemPromptPrefix.first())
+            assertEquals("my custom tool instruction", manager.toolUsageInstruction.first())
+            assertEquals(listOf("api.example.com"), manager.allowedHttpDomains.first())
+            assertEquals(listOf("http://mcp"), manager.mcpServers.first().map { it.url })
+            assertEquals("ollama", manager.activeEmbeddingProviderId.first())
+            assertEquals("pipeline-123", manager.defaultPipelineId.first())
+            assertEquals("gpu", manager.localModelBackend.first())
         } finally {
             scope.cancel()
         }

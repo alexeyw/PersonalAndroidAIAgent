@@ -249,6 +249,21 @@ details.
 
 ### Changed
 
+- **"Reset all settings" now restores every tunable preference, behind a plain
+  confirm dialog.** Settings → Privacy → *Reset all settings* previously reset
+  only a subset of preferences (and used a typed-keyword gate). It now restores
+  **every** tunable setting — sampling, context, workspace/HTTP limits,
+  pipeline/retry/retention/resume windows, audio, memory tuning, notifications
+  and security toggles — to its recommended default in a single atomic write,
+  confirmed by a lightweight dialog since no user data is touched. The reset is
+  strictly scoped: chats, long-term memory, pipelines, presets, skills,
+  connections, the `http_request` allowlist, custom prompts, the active embedding
+  provider and API keys are all left untouched (it no longer clears the
+  system-instructions prefix or re-points the embedding provider). The remaining
+  inline default values were centralised into `SettingsDefaults`, and the
+  defaults surface is documented as sensible starting points refined through
+  real-world use.
+
 - **Chat-home ViewModel decomposed into domain delegates.** The large
   `ChatHomeViewModel` (~2.7k lines) is now a thin coordinator over eight
   delegates — console, voice, attachments, import/export, pipeline-binding,

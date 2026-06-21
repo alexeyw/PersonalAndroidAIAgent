@@ -1444,9 +1444,14 @@ The action trio:
   runs older than this are deleted regardless of the per-chat count.
   Runs still waiting on an approval or clarification are never removed
   by retention.
-- **Reset all settings** — typed-confirm dialog that restores
-  every preference to defaults (API keys, downloaded models, and
-  memory are untouched).
+- **Reset all settings** — a confirm dialog that restores every
+  tunable setting to its recommended default in one step. It touches
+  *settings only*: your chats, long-term memory, pipelines, presets,
+  skills, MCP/cloud connections, the `http_request` allowlist, custom
+  prompts, the active embedding provider, and API keys are all left
+  untouched. The defaults are sensible starting points rather than
+  tuned optimums — they are refined as the app sees real-world use, so
+  resetting is a safe way to get back to a known-good baseline.
 
 ---
 

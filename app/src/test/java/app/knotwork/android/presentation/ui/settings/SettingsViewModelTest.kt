@@ -21,6 +21,7 @@ import app.knotwork.android.domain.usecases.MemoryImportUseCase
 import app.knotwork.android.domain.usecases.PromptVariableCatalogEntry
 import app.knotwork.android.domain.usecases.ReembedAllMemoriesUseCase
 import app.knotwork.android.domain.usecases.ResetSamplingDefaultsUseCase
+import app.knotwork.android.domain.usecases.ResetToRecommendedDefaultsUseCase
 import app.knotwork.android.domain.usecases.TestBackendUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -66,6 +67,7 @@ class SettingsViewModelTest {
     private val crashReporting = mockk<CrashReportingRepository>(relaxed = true)
     private val testBackend = mockk<TestBackendUseCase>(relaxed = true)
     private val resetSampling = mockk<ResetSamplingDefaultsUseCase>(relaxed = true)
+    private val resetToRecommended = mockk<ResetToRecommendedDefaultsUseCase>(relaxed = true)
     private val clearMemory = mockk<ClearAllMemoryUseCase>(relaxed = true)
     private val exportMemory = mockk<ExportMemoryBaseUseCase>(relaxed = true)
     private val memoryImport = mockk<MemoryImportUseCase>(relaxed = true)
@@ -479,36 +481,28 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `confirmDestructive ResetSettings resets multiple preferences`() = runTest {
-        every { context.getString(app.knotwork.android.R.string.destructive_typed_keyword) } returns "yes"
+    fun `confirmDestructive ResetSettings resets via use case without a typed keyword`() = runTest {
         advanceUntilIdle()
         viewModel.stageResetSettings()
-        viewModel.updateDestructiveTypedInput("YES")
+        // No typed input — the plain confirm dialog has no keyword gate.
         viewModel.confirmDestructive()
         advanceUntilIdle()
-        coVerify { resetSampling() }
-        coVerify { settings.setToolApprovalPolicy(ToolApprovalPolicy.DEFAULT) }
-        coVerify { settings.setBlockDestructiveTools(false) }
-        coVerify { settings.setBlockNetworkFromLocalModel(false) }
-        coVerify { settings.setAutoSummarizeThreshold(SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_DEFAULT) }
+        coVerify { resetToRecommended() }
+        // Reset consent must also flip the live Crashlytics collector, not just the flag.
+        coVerify { crashReporting.setEnabled(SettingsDefaults.CRASH_REPORTING_ENABLED_DEFAULT) }
+        assertNotNull(viewModel.uiState.value.snackbarMessage)
+        assertNull(viewModel.uiState.value.pendingDestructive)
     }
 
     @Test
-    fun `confirmDestructive ResetSettings also reverts memory tuning to defaults`() = runTest {
-        every { context.getString(app.knotwork.android.R.string.destructive_typed_keyword) } returns "yes"
+    fun `confirmDestructive ResetSettings leaves user-authored prompts and embedding provider untouched`() = runTest {
         advanceUntilIdle()
         viewModel.stageResetSettings()
-        viewModel.updateDestructiveTypedInput("yes")
         viewModel.confirmDestructive()
         advanceUntilIdle()
-        coVerify { settings.setAutoExtractEnabled(SettingsDefaults.AUTO_EXTRACT_ENABLED_DEFAULT) }
-        coVerify { settings.setMemorySearchTopK(SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT) }
-        coVerify { settings.setMemorySearchThreshold(SettingsDefaults.MEMORY_SEARCH_THRESHOLD_DEFAULT) }
-        coVerify { settings.setMemoryRecencyHalfLifeDays(SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_DEFAULT) }
-        coVerify { settings.setMemoryCompactionEnabled(SettingsDefaults.MEMORY_COMPACTION_ENABLED_DEFAULT) }
-        coVerify { settings.setMemoryCompactionAgeDays(SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT) }
-        coVerify { settings.setMaxMemoryChunks(SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT) }
-        coVerify { settings.setActiveEmbeddingProviderId(SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT) }
+        // Scope guarantee: reset never rewrites user content / memory configuration.
+        coVerify(exactly = 0) { settings.setSystemPromptPrefix(any()) }
+        coVerify(exactly = 0) { settings.setActiveEmbeddingProviderId(any()) }
     }
 
     @Test
@@ -653,6 +647,7 @@ class SettingsViewModelTest {
         crashReportingRepository = crashReporting,
         testBackendUseCase = testBackend,
         resetSamplingDefaultsUseCase = resetSampling,
+        resetToRecommendedDefaultsUseCase = resetToRecommended,
         clearAllMemoryUseCase = clearMemory,
         exportMemoryBaseUseCase = exportMemory,
         memoryImportUseCase = memoryImport,
