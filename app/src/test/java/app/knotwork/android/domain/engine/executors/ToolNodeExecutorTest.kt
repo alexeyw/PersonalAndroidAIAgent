@@ -670,6 +670,35 @@ class ToolNodeExecutorTest {
     }
 
     @Test
+    fun `given parked approval but policy relaxed to NeverPrompt when execute then clears the record and runs`() =
+        runTest {
+            // Run parked under a stricter policy; the user then switched to
+            // NeverPrompt before resuming, so no fresh approval is needed — but
+            // the durable record must still be cleared, not orphaned.
+            armSensitiveGate()
+            every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.NeverPrompt)
+            coEvery { pendingInteractionRepository.getForRun("run-1") } returns PendingInteraction(
+                runId = "run-1",
+                sessionId = "session-1",
+                kind = PendingInteractionKind.APPROVAL,
+                toolName = "MyTool",
+                toolArgs = "args",
+                risk = ToolRisk.SENSITIVE,
+                decision = null,
+                requestedAt = 0L,
+            )
+            coEvery { toolRepository.executeTool("MyTool", "args", any()) } returns "ok"
+            val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = "MyTool")
+
+            val states = executor.execute(node, "Do", "session-1", "", runId = "run-1").toList().unwrap()
+
+            val result = states.filterIsInstance<NodeExecutionResult>().last()
+            assertEquals("ok", result.outputText)
+            assertTrue(states.filterIsInstance<AgentOrchestratorState.WaitingForApproval>().isEmpty())
+            coVerify { pendingInteractionRepository.delete("run-1") }
+        }
+
+    @Test
     fun `given recorded DENIED decision with matching args when execute then denies without a new gate`() = runTest {
         armSensitiveGate()
         coEvery { pendingInteractionRepository.getForRun("run-1") } returns PendingInteraction(
