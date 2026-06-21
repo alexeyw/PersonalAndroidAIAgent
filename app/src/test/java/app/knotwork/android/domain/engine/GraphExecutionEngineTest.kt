@@ -666,6 +666,36 @@ class GraphExecutionEngineTest {
     }
 
     @Test
+    fun `INTENT_ROUTER fuzzy fallback matches a label that ends with a non-word character`() = runTest {
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val routerNode = NodeModel("router", NodeType.INTENT_ROUTER, 0f, 0f)
+        // Label "C#" ends in a non-word char: a `\b`-anchored regex would fail to
+        // match it, falling through to the first edge. The lookaround form matches.
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+        val deadNode = NodeModel("dead", NodeType.LITE_RT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g1",
+            name = "Router non-word label",
+            nodes = listOf(inputNode, routerNode, deadNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "router"),
+                ConnectionModel("c2", "router", "dead", label = "Java"),
+                ConnectionModel("c3", "router", "output", label = "C#"),
+            ),
+        )
+
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("Use C# here")
+
+        val states = engine(sessionId, "query", graph).toList()
+
+        assertTrue(
+            "Expected Completed via the C# branch, got: ${states.last()}",
+            states.last() is AgentOrchestratorState.Completed,
+        )
+    }
+
+    @Test
     fun `output node uses systemPrompt and llmEngine if prompt is provided`() = runTest {
         val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
         val outputNode = NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = "Format this text:")
