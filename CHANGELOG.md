@@ -235,9 +235,21 @@ details.
 ### Fixed
 
 - **Agent messages keep the model that generated them.** Each agent answer now
-  records the model it was produced with, so the name under a message no longer
-  changes to whatever model is currently active after you switch models. Older
-  messages saved before this fall back to the active model name.
+  records the model it was produced with — the answering node's on-device model
+  or cloud provider, not just whatever model happens to be active — so the name
+  under a message no longer changes after you switch models. Older messages saved
+  before this fall back to the active model name.
+- **Routing handles ports labelled with symbols.** An `INTENT_ROUTER` edge whose
+  label contains a non-word character (e.g. `C#`) is now matched correctly
+  instead of falling through to the wrong branch.
+- **MCP credentials survive edits and transient Keystore hiccups.** Editing or
+  adding one server no longer rewrites other servers' stored credentials, a
+  momentarily-unreadable secret is no longer deleted, and concurrent changes
+  can't drop a server or orphan its secret.
+- **Memory-pressure model unload is prompt.** Under low memory the engine now
+  cancels the in-flight generation so the model is freed immediately instead of
+  after the current answer finishes; the wake lock is also held while the final
+  answer streams.
 - **Token count stays visible in the chat top bar.** A long pipeline name no
   longer truncates the token counter in the chat's top app-bar subtitle — the
   count is pinned and the pipeline name ellipsizes instead.
