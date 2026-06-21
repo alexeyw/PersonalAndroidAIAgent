@@ -8,11 +8,12 @@ package app.knotwork.android.domain.models
  * Persisted in `McpServerConfig.auth`; surfaced in the form as a
  * single-pick chip row with conditional fields underneath.
  *
- * Storage note: tokens / passwords live in the same JSON-encoded
- * `MCP_SERVERS_JSON` DataStore entry as the rest of the config. They
- * are **not** routed through the Keystore-backed encrypted store today
- * — the threat model matches the existing arbitrary-headers field.
- * Hardening this to use the encrypted store is tracked as a follow-up.
+ * Storage note: tokens / passwords are persisted in the **Keystore-backed
+ * encrypted store** (AES-GCM under a dedicated Android Keystore key), keyed per
+ * server by a hash of its URL — never in the plain `MCP_SERVERS_JSON` DataStore
+ * entry, which carries only non-secret metadata (URL, transport, name, custom
+ * headers). Auth embedded inline by earlier releases is migrated into the
+ * encrypted store on first read and stripped from the JSON.
  */
 sealed interface McpAuth {
     /** No authentication. */

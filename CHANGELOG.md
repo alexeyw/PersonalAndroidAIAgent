@@ -251,6 +251,12 @@ details.
   substring (so a key "…Cancel" no longer routes to a port named "can").
 - **Faster chat loads.** `chat_messages` is now indexed by `sessionId`, so
   opening a chat and deleting a session no longer scan the whole message table.
+- **MCP credentials are now encrypted at rest.** Bearer tokens, Basic passwords
+  and API-key values for configured MCP servers move from the plain settings
+  store into the Keystore-backed encrypted store (keyed per server by a hash of
+  its URL); the plain entry keeps only non-secret metadata. Credentials saved by
+  an earlier build are migrated automatically on first read and stripped from
+  the plaintext entry.
 - **Hardened model install & networking.** A downloaded model file name is
   sanitised against path traversal, the shared HTTP client has connect/read/write
   timeouts, and the plain settings store is excluded from cloud backup and device
