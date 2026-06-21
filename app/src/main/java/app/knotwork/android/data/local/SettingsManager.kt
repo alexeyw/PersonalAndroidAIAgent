@@ -38,6 +38,7 @@ import org.json.JSONException
 import org.json.JSONObject
 import timber.log.Timber
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 /**
@@ -457,7 +458,7 @@ class SettingsManager @Inject constructor(
         )
     }
 
-    override suspend fun addMcpServer(config: McpServerConfig) {
+    override suspend fun addMcpServer(config: McpServerConfig) = mcpMutex.withLock {
         val previous = mcpServers.first()
         val next = previous.filterNot { it.url == config.url } + config
         dataStore.edit { preferences ->
@@ -467,35 +468,34 @@ class SettingsManager @Inject constructor(
         reconcileMcpSecrets(previous, next)
     }
 
-    override suspend fun updateMcpServer(originalUrl: String, updated: McpServerConfig): UpdateMcpServerResult {
-        // Read the current list once outside `edit { … }` so the collision
-        // check can short-circuit *before* opening the write transaction.
-        // DataStore serialises edits, so a concurrent write between this
-        // read and the edit would only widen the window for a duplicate
-        // to slip in by milliseconds — and the next call still detects
-        // it. The user-visible bug is the silent collision; a transient
-        // race is acceptable here.
-        val snapshot = mcpServers.first()
-        McpServerCollisionCheck
-            .detectCollision(currentList = snapshot, originalUrl = originalUrl, newUrl = updated.url)
-            ?.let { return it }
-        val index = snapshot.indexOfFirst { it.url == originalUrl }
-        val next = if (index >= 0) {
-            snapshot.toMutableList().also { it[index] = updated }
-        } else {
-            snapshot + updated
+    override suspend fun updateMcpServer(originalUrl: String, updated: McpServerConfig): UpdateMcpServerResult =
+        mcpMutex.withLock {
+            // The whole read-modify-write runs under `mcpMutex`, so the collision
+            // check and the edit see a consistent list and concurrent mutations
+            // cannot interleave (the prior "transient race is acceptable" caveat
+            // no longer applies).
+            val snapshot = mcpServers.first()
+            McpServerCollisionCheck
+                .detectCollision(currentList = snapshot, originalUrl = originalUrl, newUrl = updated.url)
+                ?.let { return@withLock it }
+            val index = snapshot.indexOfFirst { it.url == originalUrl }
+            val next = if (index >= 0) {
+                snapshot.toMutableList().also { it[index] = updated }
+            } else {
+                snapshot + updated
+            }
+            dataStore.edit { preferences ->
+                preferences[PreferencesKeys.MCP_SERVERS_JSON] = encodeMcpServers(next)
+                preferences.remove(PreferencesKeys.MCP_SERVER_URLS)
+            }
+            // Reconciling against the prior snapshot drops the old URL's secret on
+            // a URL change and writes the credentials under the new URL only when
+            // they changed.
+            reconcileMcpSecrets(snapshot, next)
+            UpdateMcpServerResult.Success
         }
-        dataStore.edit { preferences ->
-            preferences[PreferencesKeys.MCP_SERVERS_JSON] = encodeMcpServers(next)
-            preferences.remove(PreferencesKeys.MCP_SERVER_URLS)
-        }
-        // Reconciling against the prior snapshot drops the old URL's secret on a
-        // URL change and writes the (possibly updated) credentials under the new.
-        reconcileMcpSecrets(snapshot, next)
-        return UpdateMcpServerResult.Success
-    }
 
-    override suspend fun removeMcpServer(url: String) {
+    override suspend fun removeMcpServer(url: String) = mcpMutex.withLock {
         val previous = mcpServers.first()
         val next = previous.filterNot { it.url == url }
         dataStore.edit { preferences ->
@@ -506,19 +506,44 @@ class SettingsManager @Inject constructor(
     }
 
     /**
+     * In-memory cache of decrypted MCP auth, keyed by server URL. `decodeMcpServers`
+     * is run on every `mcpServers` emission by every consumer (cold flow), so
+     * without this cache each emission would perform one Keystore AES-GCM decrypt
+     * per configured server. The encrypted store stays the source of truth;
+     * [writeMcpAuth] / [removeMcpAuth] keep the cache coherent, and an
+     * undecryptable read is deliberately NOT cached so it retries.
+     */
+    private val mcpAuthCache = ConcurrentHashMap<String, McpAuth>()
+
+    /**
+     * Serialises the read-modify-write of the server list and its secret
+     * reconcile across [addMcpServer] / [updateMcpServer] / [removeMcpServer], so
+     * two concurrent mutations cannot interleave their `mcpServers.first()` read
+     * with another's `dataStore.edit` — which would drop a server from the JSON
+     * and orphan its just-written secret.
+     */
+    private val mcpMutex = Mutex()
+
+    /**
      * Reconciles the per-server MCP auth secrets against a settings change:
-     * removes the encrypted entry of every server dropped (or whose URL changed)
-     * and (re)writes the auth of every server in [next].
+     * removes the encrypted entry of every server dropped (or whose URL changed),
+     * and (re)writes a secret **only for a server whose auth actually changed** —
+     * so editing one server never rewrites (and cannot clobber) another's secret.
      */
     private fun reconcileMcpSecrets(previous: List<McpServerConfig>, next: List<McpServerConfig>) {
         val nextUrls = next.mapTo(mutableSetOf()) { it.url }
         previous.forEach { config ->
-            if (config.url !in nextUrls) secretsStore.remove(SecretKeys.mcpAuthKey(config.url))
+            if (config.url !in nextUrls) removeMcpAuth(config.url)
         }
-        next.forEach { writeMcpAuth(it.url, it.auth) }
+        val previousByUrl = previous.associateBy { it.url }
+        next.forEach { config ->
+            if (previousByUrl[config.url]?.auth != config.auth) {
+                writeMcpAuth(config.url, config.auth)
+            }
+        }
     }
 
-    /** Persists (or clears, for [McpAuth.None]) a single server's auth in the encrypted store. */
+    /** Persists (or clears, for [McpAuth.None]) a single server's auth in the encrypted store and the cache. */
     private fun writeMcpAuth(url: String, auth: McpAuth) {
         val key = SecretKeys.mcpAuthKey(url)
         val encoded = encodeAuth(auth)
@@ -527,28 +552,43 @@ class SettingsManager @Inject constructor(
         } else {
             secretsStore.putString(key, encoded.toString(), synchronous = true)
         }
+        mcpAuthCache[url] = auth
+    }
+
+    /** Removes a server's auth from both the encrypted store and the cache. */
+    private fun removeMcpAuth(url: String) {
+        secretsStore.remove(SecretKeys.mcpAuthKey(url))
+        mcpAuthCache.remove(url)
     }
 
     /**
-     * Reads a server's auth from the encrypted store, applying the
-     * re-enterable-secret recovery policy: an undecryptable or corrupt entry is
-     * dropped and reported as [McpAuth.None] rather than propagated as an error.
+     * Reads a server's auth from the cache or the encrypted store. A *corrupt*
+     * (un-parseable) entry is reported as [McpAuth.None] and cached. An
+     * *undecryptable* entry (e.g. a momentarily-locked Keystore) is reported as
+     * [McpAuth.None] but **not** removed or cached, so a transient failure cannot
+     * destroy a valid credential and a later read recovers it.
      */
     private fun readMcpAuth(url: String): McpAuth {
+        mcpAuthCache[url]?.let { return it }
         val key = SecretKeys.mcpAuthKey(url)
         val raw = try {
             secretsStore.getString(key)
         } catch (e: SecureValueUnreadableException) {
-            Timber.e(e, "Stored MCP auth for a server is unreadable; treating it as no-auth.")
-            secretsStore.remove(key)
+            Timber.e(e, "Stored MCP auth for a server is unreadable; treating it as no-auth for now.")
             return McpAuth.None
-        } ?: return McpAuth.None
-        return try {
-            decodeAuth(JSONObject(raw))
-        } catch (e: JSONException) {
-            Timber.e(e, "Stored MCP auth JSON is corrupt; treating it as no-auth.")
-            McpAuth.None
         }
+        val auth = if (raw == null) {
+            McpAuth.None
+        } else {
+            try {
+                decodeAuth(JSONObject(raw))
+            } catch (e: JSONException) {
+                Timber.e(e, "Stored MCP auth JSON is corrupt; treating it as no-auth.")
+                McpAuth.None
+            }
+        }
+        mcpAuthCache[url] = auth
+        return auth
     }
 
     /** Serializes the legacy-DataStore MCP-auth migration so concurrent collectors run it once. */
