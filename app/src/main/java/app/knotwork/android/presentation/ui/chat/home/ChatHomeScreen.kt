@@ -753,7 +753,14 @@ private fun NewThreadPipelinePickerSheetContent(
             style = MaterialTheme.typography.titleMedium,
         )
         Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp3))
-        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+        // The option list scrolls within the bounded sheet height (weight caps it
+        // to the remaining space) so a long pipeline library never pushes the
+        // Cancel/Create row off-screen — the action row below stays pinned.
+        Column(
+            modifier = Modifier
+                .weight(1f, fill = false)
+                .verticalScroll(rememberScrollState()),
+        ) {
             PipelinePickerRow(
                 label = useDefaultLabel,
                 selected = selectedId == null,
@@ -793,7 +800,7 @@ private fun NewThreadPipelinePickerSheetContent(
 @Composable
 private fun PipelinePickerRow(label: String, selected: Boolean, onClick: () -> Unit) {
     ListItem(
-        headlineContent = { Text(label) },
+        headlineContent = { Text(label, style = MaterialTheme.typography.titleMedium) },
         leadingContent = {
             RadioButton(selected = selected, onClick = onClick)
         },
@@ -839,10 +846,16 @@ private fun ModelPickerSheetContent(
                 onClick = onOpenModels,
             )
         } else {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+            // Same pinned-footer scroll discipline as the pipeline picker: a long
+            // model list scrolls instead of overflowing the sheet.
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState()),
+            ) {
                 models.forEach { model ->
                     ListItem(
-                        headlineContent = { Text(model.name) },
+                        headlineContent = { Text(model.name, style = MaterialTheme.typography.titleMedium) },
                         trailingContent = if (model.id == activeId) {
                             {
                                 Icon(
