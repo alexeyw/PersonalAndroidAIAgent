@@ -132,6 +132,15 @@ class LiteRtNodeExecutor @Inject constructor(
 
         val fullResponseText = accumulatedResponse.toString().trim()
 
+        // Record which model produced this answer so the root OUTPUT can attribute
+        // the persisted chat message to it rather than to whatever model is active
+        // at render time. The most-recent answering node wins (this is the last
+        // LITE_RT before OUTPUT on the taken path).
+        scope.generatingModel?.let { gm ->
+            gm.localModelPath = resolvedModelPath
+            gm.cloudLabel = null
+        }
+
         emit(NodeOutput.Result(NodeExecutionResult(outputText = fullResponseText, tokenCount = meter.tokenCount)))
     }
 }

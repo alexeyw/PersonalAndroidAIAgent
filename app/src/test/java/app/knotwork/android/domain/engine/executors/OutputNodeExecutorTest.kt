@@ -9,6 +9,7 @@ import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.Result
+import app.knotwork.android.domain.models.RunGeneratingModel
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.usecases.LoadModelUseCase
@@ -117,6 +118,53 @@ class OutputNodeExecutorTest {
 
         // The answer is attributed to the model that generated it, snapshotted now.
         assertEquals("Gemma 4", saved.captured.modelName)
+    }
+
+    @Test
+    fun `root OUTPUT attributes a cloud answer to the recorded provider label, not the active model`() = runTest {
+        val llmEngine = mockk<LlmInferenceEngine>()
+        val loadModelUseCase = mockk<LoadModelUseCase>()
+        val chatRepository = mockk<ChatRepository>(relaxed = true)
+        val localModelRepository = mockk<LocalModelRepository>()
+        coEvery { localModelRepository.getActiveModel() } returns
+            mockk<LocalModel> { every { name } returns "Local Gemma" }
+        val executor = OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository, localModelRepository)
+        val node = NodeModel("1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+
+        val saved = slot<ChatMessage>()
+        coEvery { chatRepository.saveMessage(capture(saved)) } returns Unit
+
+        // A CLOUD node recorded its provider label on the run holder.
+        val scope = ExecutionScope(generatingModel = RunGeneratingModel(cloudLabel = "openai"))
+        executor.execute(node, "answer", "session-1", "prompt", runId = null, scope = scope).toList().unwrap()
+
+        assertEquals("openai", saved.captured.modelName)
+    }
+
+    @Test
+    fun `root OUTPUT resolves the recorded on-device model path to its display name`() = runTest {
+        val llmEngine = mockk<LlmInferenceEngine>()
+        val loadModelUseCase = mockk<LoadModelUseCase>()
+        val chatRepository = mockk<ChatRepository>(relaxed = true)
+        val localModelRepository = mockk<LocalModelRepository>()
+        every { localModelRepository.getAllModels() } returns flowOf(
+            listOf(
+                mockk<LocalModel> {
+                    every { path } returns "/models/m.litertlm"
+                    every { name } returns "Gemma 4 4B"
+                },
+            ),
+        )
+        val executor = OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository, localModelRepository)
+        val node = NodeModel("1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+
+        val saved = slot<ChatMessage>()
+        coEvery { chatRepository.saveMessage(capture(saved)) } returns Unit
+
+        val scope = ExecutionScope(generatingModel = RunGeneratingModel(localModelPath = "/models/m.litertlm"))
+        executor.execute(node, "answer", "session-1", "prompt", runId = null, scope = scope).toList().unwrap()
+
+        assertEquals("Gemma 4 4B", saved.captured.modelName)
     }
 
     @Test

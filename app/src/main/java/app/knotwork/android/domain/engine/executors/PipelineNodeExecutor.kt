@@ -180,6 +180,7 @@ class PipelineNodeExecutor @Inject constructor(
                 depth = scope.depth + 1,
                 stepBudget = scope.stepBudget,
                 imageDelivery = scope.imageDelivery,
+                generatingModel = scope.generatingModel,
             ).collect { state ->
                 when (state) {
                     is AgentOrchestratorState.Completed -> finalResponse = state.finalResponse
@@ -221,6 +222,7 @@ class PipelineNodeExecutor @Inject constructor(
                 depth = scope.depth + 1,
                 stepBudget = scope.stepBudget,
                 imageDelivery = scope.imageDelivery,
+                generatingModel = scope.generatingModel,
             ).collect { state ->
                 when (state) {
                     is AgentOrchestratorState.Completed -> finalResponse = state.finalResponse

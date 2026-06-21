@@ -15,6 +15,7 @@ import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import timber.log.Timber
 import javax.inject.Inject
@@ -58,10 +59,13 @@ class OutputNodeExecutor @Inject constructor(
         runId: String?,
         scope: ExecutionScope,
     ): Flow<NodeOutput> = flow {
-        // Snapshot the active model so this answer stays attributed to the model
-        // that produced it even after the user switches the active model. Only
-        // resolved for the root run, which is the one that persists to chat.
-        val generatingModelName = if (scope.depth == 0) localModelRepository.getActiveModel()?.name else null
+        // Resolve the model that actually produced this answer so it stays
+        // attributed correctly even after the user switches the active model.
+        // Preference: the cloud provider label or on-device model recorded by the
+        // answering node (scope.generatingModel), then the active model as a
+        // fallback for legacy graphs. Only computed for the root run, which is
+        // the one that persists to chat.
+        val generatingModelName = if (scope.depth == 0) resolveGeneratingModelName(scope) else null
         val nodeSystemPrompt = node.systemPrompt
         if (!nodeSystemPrompt.isNullOrBlank()) {
             val fullPrompt = DefaultPrompts.renderTemplate(
@@ -159,5 +163,25 @@ class OutputNodeExecutor @Inject constructor(
             emit(NodeOutput.State(AgentOrchestratorState.Completed(inputText)))
             emit(NodeOutput.Result(NodeExecutionResult(outputText = inputText)))
         }
+    }
+
+    /**
+     * Resolves the display name of the model that generated this answer:
+     *  1. the cloud provider label recorded by a `CLOUD` answering node, else
+     *  2. the on-device model name resolved from the path recorded by a `LITE_RT`
+     *     answering node, else
+     *  3. the active model name (legacy graphs / no recorded answering node).
+     *
+     * @param scope The execution scope carrying the run tree's
+     *   [RunGeneratingModel][app.knotwork.android.domain.models.RunGeneratingModel].
+     * @return The model display name, or `null` when none can be resolved.
+     */
+    private suspend fun resolveGeneratingModelName(scope: ExecutionScope): String? {
+        val generating = scope.generatingModel
+        generating?.cloudLabel?.let { return it }
+        generating?.localModelPath?.let { path ->
+            localModelRepository.getAllModels().first().firstOrNull { it.path == path }?.name?.let { return it }
+        }
+        return localModelRepository.getActiveModel()?.name
     }
 }
