@@ -234,6 +234,27 @@ details.
 
 ### Fixed
 
+- **On-device model could crash when freed mid-generation.** The LiteRT engine
+  serialised concurrent generations but freed/rebuilt the native session
+  (idle-timeout unload, low-battery, memory-trim, model switch) without that
+  lock — a native use-after-free under a running decode loop. Engine load,
+  unload and streaming now share one mutex, a cancelled generation closes its
+  native session, and the CPU wake lock is released while the agent waits on the
+  user instead of being pinned until the safety timeout.
+- **MCP tool calls and the session-state stream could race.** The MCP client
+  pool reconcile is now serialised (it could leak a connection under concurrent
+  refreshes), and the active-sessions snapshot is read under its monitor
+  (previously a possible `ConcurrentModificationException` on the enqueue path).
+- **Pipeline routing fall-throughs.** An `IF_CONDITION` whose verdict had no
+  wired branch no longer silently runs the opposite branch, and the
+  `INTENT_ROUTER` fuzzy fallback matches a whole word instead of an incidental
+  substring (so a key "…Cancel" no longer routes to a port named "can").
+- **Faster chat loads.** `chat_messages` is now indexed by `sessionId`, so
+  opening a chat and deleting a session no longer scan the whole message table.
+- **Hardened model install & networking.** A downloaded model file name is
+  sanitised against path traversal, the shared HTTP client has connect/read/write
+  timeouts, and the plain settings store is excluded from cloud backup and device
+  transfer. A failed audio import no longer leaves a truncated clip behind.
 - **Scheduled-task confirmation message showed a literal placeholder.** The
   reply confirming a scheduled task ("Task successfully scheduled to run every
   …") rendered the raw `$intervalHours` / `$delayMinutes` text instead of the
