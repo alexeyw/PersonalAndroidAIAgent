@@ -245,17 +245,36 @@ private fun ChatHomeTopBar(state: ChatHomeViewState, callbacks: ChatHomeCallback
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    text = formatChatSubtitle(
-                        pipelineName = state.pipelineName,
-                        tokensUsed = state.tokensUsed,
-                        tokensMax = state.tokensMax,
-                    ),
-                    style = KnotworkTextStyles.MonoSm,
-                    color = KnotworkTheme.extended.onSurfaceMuted,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Pipeline name yields space first (weighted + ellipsis), so a
+                    // long name truncates instead of pushing the token count out.
+                    Text(
+                        text = stringResource(
+                            R.string.knotwork_chat_home_topbar_pipeline,
+                            state.pipelineName,
+                        ),
+                        style = KnotworkTextStyles.MonoSm,
+                        color = KnotworkTheme.extended.onSurfaceMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (state.tokensMax > 0) {
+                        // Pinned (non-weighted, no ellipsis) so the token count is
+                        // always fully visible regardless of the pipeline name.
+                        Text(
+                            text = " · " + stringResource(
+                                R.string.knotwork_chat_home_topbar_tokens,
+                                formatTokenCount(state.tokensUsed),
+                                formatTokenCount(state.tokensMax),
+                            ),
+                            style = KnotworkTextStyles.MonoSm,
+                            color = KnotworkTheme.extended.onSurfaceMuted,
+                            maxLines = 1,
+                            softWrap = false,
+                        )
+                    }
+                }
             }
         },
         navigationIcon = {
@@ -292,23 +311,6 @@ private fun ChatHomeTopBar(state: ChatHomeViewState, callbacks: ChatHomeCallback
             titleContentColor = MaterialTheme.colorScheme.onSurface,
         ),
     )
-}
-
-/**
- * Builds the TopAppBar subtitle string ("Pipeline · default · 1.4k / 8k tok").
- * The token segment is omitted when [tokensMax] is zero so the placeholder
- * "0 / 0 tok" never reaches the surface.
- */
-@Composable
-private fun formatChatSubtitle(pipelineName: String, tokensUsed: Int, tokensMax: Int): String {
-    val pipelinePart = stringResource(R.string.knotwork_chat_home_topbar_pipeline, pipelineName)
-    if (tokensMax <= 0) return pipelinePart
-    val tokensPart = stringResource(
-        R.string.knotwork_chat_home_topbar_tokens,
-        formatTokenCount(tokensUsed),
-        formatTokenCount(tokensMax),
-    )
-    return "$pipelinePart · $tokensPart"
 }
 
 /** "1432" → "1.4k", "8000" → "8k". Falls back to the raw integer for small values. */

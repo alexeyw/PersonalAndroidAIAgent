@@ -51,6 +51,12 @@ package app.knotwork.android.domain.models
  *   letting a vision sink nested inside a sub-pipeline consume the image. Only
  *   [PipelineNodeExecutor][app.knotwork.android.domain.engine.executors.PipelineNodeExecutor]
  *   reads it; the engine sets [imagePath] from it for the actual delivery node.
+ * @property generatingModel The run tree's shared holder for the model that
+ *   produced the answer, or `null` when the engine was invoked without one.
+ *   Threaded through unchanged so a `PIPELINE` node forwards it to its
+ *   sub-pipeline; the answering `LITE_RT`/`CLOUD` node writes it and the root
+ *   `OUTPUT` node reads it to attribute the persisted message. See
+ *   [RunGeneratingModel].
  */
 data class ExecutionScope(
     val depth: Int = 0,
@@ -59,4 +65,5 @@ data class ExecutionScope(
     val routingChoices: List<String> = emptyList(),
     val imagePath: String? = null,
     val imageDelivery: RunImageDelivery? = null,
+    val generatingModel: RunGeneratingModel? = null,
 )

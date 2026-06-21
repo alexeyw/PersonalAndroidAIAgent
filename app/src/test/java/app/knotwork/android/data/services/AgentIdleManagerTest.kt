@@ -2,9 +2,9 @@ package app.knotwork.android.data.services
 
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AgentOrchestratorState
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -55,11 +55,11 @@ class AgentIdleManagerTest {
 
         // Advance time just before timeout
         advanceTimeBy(900L)
-        verify(exactly = 0) { llmEngine.unload() }
+        coVerify(exactly = 0) { llmEngine.unload() }
 
         // Advance time to pass the timeout
         advanceTimeBy(200L)
-        verify(exactly = 1) { llmEngine.unload() }
+        coVerify(exactly = 1) { llmEngine.unload() }
     }
 
     @Test
@@ -81,7 +81,7 @@ class AgentIdleManagerTest {
         advanceTimeBy(600L) // Total 1100L from the start of Idle
 
         // Timer should have been cancelled, so unload is not called
-        verify(exactly = 0) { llmEngine.unload() }
+        coVerify(exactly = 0) { llmEngine.unload() }
     }
 
     @Test
@@ -99,7 +99,7 @@ class AgentIdleManagerTest {
 
         // Advance time past timeout
         advanceTimeBy(1100L)
-        verify(exactly = 1) { llmEngine.unload() }
+        coVerify(exactly = 1) { llmEngine.unload() }
     }
 
     @Test
@@ -117,7 +117,7 @@ class AgentIdleManagerTest {
         stateFlow.value = AgentOrchestratorState.Idle
         advanceTimeBy(1100L)
 
-        verify(exactly = 0) { llmEngine.unload() }
+        coVerify(exactly = 0) { llmEngine.unload() }
     }
 
     @Test
@@ -132,7 +132,7 @@ class AgentIdleManagerTest {
         stateFlow.value = AgentOrchestratorState.Idle
         advanceTimeBy(5000L)
 
-        verify(exactly = 0) { llmEngine.unload() }
+        coVerify(exactly = 0) { llmEngine.unload() }
     }
 
     @Test
@@ -149,7 +149,7 @@ class AgentIdleManagerTest {
         stateFlow.value = AgentOrchestratorState.Loading
         advanceTimeBy(5000L)
 
-        verify(exactly = 0) { llmEngine.unload() }
+        coVerify(exactly = 0) { llmEngine.unload() }
     }
 
     @Test
@@ -165,7 +165,7 @@ class AgentIdleManagerTest {
         stateFlow.value = AgentOrchestratorState.Error("boom")
         advanceTimeBy(1100L)
 
-        verify(exactly = 1) { llmEngine.unload() }
+        coVerify(exactly = 1) { llmEngine.unload() }
     }
 
     @Test
@@ -184,11 +184,13 @@ class AgentIdleManagerTest {
     }
 
     @Test
-    fun `concurrent idle timers do not call unload more than once via Mutex`() = runTest(testDispatcher) {
-        // Defect 2 regression guard: replacing `synchronized(engine)` with `Mutex.withLock`
-        // must still serialise the unload path. We force several rapid Idle→Active→Idle
-        // transitions; only the most recent timer survives (`collectLatest` cancels the
-        // previous launch), so unload must fire exactly once after the final timeout.
+    fun `concurrent idle timers do not call unload more than once`() = runTest(testDispatcher) {
+        // Regression guard: the unload path must stay serialised. Timer ownership
+        // alone guarantees this here — we force several rapid Idle→Active→Idle
+        // transitions; only the most recent timer survives (`collectLatest` plus
+        // `cancelIdleTimer` cancel the previous launch), and the engine itself now
+        // serialises teardown on its own native-session mutex, so unload must fire
+        // exactly once after the final timeout.
         idleManager = AgentIdleManager(
             scope = CoroutineScope(testDispatcher),
             engine = llmEngine,
@@ -207,6 +209,6 @@ class AgentIdleManagerTest {
         stateFlow.value = AgentOrchestratorState.Idle
         advanceTimeBy(1100L)
 
-        verify(exactly = 1) { llmEngine.unload() }
+        coVerify(exactly = 1) { llmEngine.unload() }
     }
 }

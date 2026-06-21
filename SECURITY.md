@@ -255,6 +255,17 @@ only for gated repositories) is handled exactly like a cloud-provider key:
 - Keys are never written to plain `SharedPreferences`, DataStore, log files,
   exported chat archives, or any artifact checked into the repository.
 
+### MCP server credentials
+
+- Credentials for a configured MCP server (a Bearer token, Basic password, or
+  API-key value) are stored in the **same Keystore-backed encrypted store**,
+  keyed per server by a hash of its URL.
+- The plain `mcp_servers_json` DataStore entry holds only **non-secret**
+  metadata (URL, transport, display name, custom headers) — never the auth
+  payload. An earlier build embedded auth inline in that entry; a **one-time
+  migration moves any inline auth into the encrypted store and strips it from
+  the JSON**.
+
 ### On-device processing by default
 
 - All inference performed through the on-device LiteRT-LM engine is local.

@@ -185,6 +185,24 @@ class AgentForegroundServiceTest {
     }
 
     @Test
+    fun `given Thinking then WaitingForApproval when collector runs then wake lock is released`() {
+        val controller = newController()
+        controller.create()
+        flushAll()
+        globalState.value = AgentOrchestratorState.Thinking("…")
+        flushAll()
+
+        // Waiting on a human must not pin the CPU awake until the safety timeout.
+        globalState.value = AgentOrchestratorState.WaitingForApproval("delete_file", "{}", ToolRisk.DESTRUCTIVE)
+        flushAll()
+
+        assertFalse(
+            "WakeLock must be released while awaiting user approval",
+            org.robolectric.shadows.ShadowPowerManager.getLatestWakeLock().isHeld,
+        )
+    }
+
+    @Test
     fun `given orchestrator emits ExecutingTool when collector runs then wake lock is acquired`() {
         val controller = newController()
         controller.create()

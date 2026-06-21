@@ -92,10 +92,14 @@ class StructuredOutputGate @Inject constructor() {
      * tokens — e.g. `{"True","False"}`, `{"Pass","Retry","Fail"}`, or the labelled
      * edge keys of an `INTENT_ROUTER`.
      *
-     * The first whole-word token from [allowed] found anywhere in the output
+     * The first standalone token from [allowed] found anywhere in the output
      * wins (case-insensitive); the returned value is the **canonical** spelling
      * from [allowed], so callers can match it directly against their edge labels
-     * without re-normalising case.
+     * without re-normalising case. The token boundary is expressed with
+     * alphanumeric-adjacency lookarounds rather than `\b` so a token that begins
+     * or ends with a non-word character (e.g. an `INTENT_ROUTER` edge labelled
+     * `C#`) still matches, while an incidental substring inside a longer word
+     * (`can` in `Cancel`) still does not.
      *
      * @param inference The engine seam to run the prompt against.
      * @param prompt The fully-rendered initial prompt.
@@ -116,7 +120,7 @@ class StructuredOutputGate @Inject constructor() {
         require(allowed.isNotEmpty()) { "allowed token set must not be empty" }
         val canonicalByUpper = allowed.associateBy { it.uppercase() }
         val tokenRegex = Regex(
-            """\b(${allowed.joinToString("|") { Regex.escape(it) }})\b""",
+            "(?<![A-Za-z0-9])(${allowed.joinToString("|") { Regex.escape(it) }})(?![A-Za-z0-9])",
             RegexOption.IGNORE_CASE,
         )
         return runLoop(

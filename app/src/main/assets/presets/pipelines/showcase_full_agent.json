@@ -2,10 +2,11 @@
   "schemaVersion": 1,
   "id": "showcase_full_agent",
   "name": "Showcase — full agent",
-  "description": "The full breadth of the on-device agent in one pipeline: intent routing (chat / factual / task), an IF-condition complexity gate, task and query decomposition feeding queue-processor loops, Wikipedia tool lookups, and research / task synthesis. Each subtask runs as a composed sub-pipeline (Clarify / Lookup / Act / Process) through PIPELINE nodes, including a human-in-the-loop clarification.",
+  "description": "A vision intake step turns any attached image into text up front, then the full breadth of the on-device agent runs: intent routing (chat / factual / task), an IF-condition complexity gate, task and query decomposition feeding queue-processor loops, Wikipedia tool lookups, and research / task synthesis. Each subtask runs as a composed sub-pipeline (Clarify / Lookup / Act / Process) through PIPELINE nodes, including a human-in-the-loop clarification.",
   "category": "other",
   "tags": [
     "showcase",
+    "vision",
     "routing",
     "decomposition",
     "tools",
@@ -44,6 +45,43 @@
         "type": "INPUT",
         "title": "Input",
         "inputName": "user.message"
+      }
+    },
+    {
+      "id": "node-23",
+      "type": "LITE_RT",
+      "position": {
+        "x": 190,
+        "y": 82
+      },
+      "label": "Vision intake",
+      "config": {
+        "systemPrompt": "You are the intake step of an agent pipeline. You receive the user's message and, sometimes, an attached image.\n\nToday is $DATE. Work in the user's language ($LANG).\n\nYour only job is to make the request fully understandable to later steps that cannot see the image:\n- If an image is attached, look at it and write a faithful, detailed description of what it shows that is relevant to the user's message (objects, text, quantities, layout — whatever the request needs).\n- If there is no image, leave the description empty.\n- Do NOT answer, solve, or act on the request — only restate it and describe the image.\n\nOutput plain text in exactly this shape and nothing else:\nRequest: <the user's original request, unchanged>\nImage: <your description, or 'none'>",
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "LITE_RT",
+        "title": "Vision intake",
+        "modelId": "",
+        "systemPrompt": "You are the intake step of an agent pipeline. You receive the user's message and, sometimes, an attached image.\n\nToday is $DATE. Work in the user's language ($LANG).\n\nYour only job is to make the request fully understandable to later steps that cannot see the image:\n- If an image is attached, look at it and write a faithful, detailed description of what it shows that is relevant to the user's message (objects, text, quantities, layout — whatever the request needs).\n- If there is no image, leave the description empty.\n- Do NOT answer, solve, or act on the request — only restate it and describe the image.\n\nOutput plain text in exactly this shape and nothing else:\nRequest: <the user's original request, unchanged>\nImage: <your description, or 'none'>",
+        "temperature": 0.7,
+        "topP": 0.9,
+        "maxNewTokens": 2048,
+        "stopTokens": []
       }
     },
     {
@@ -770,8 +808,14 @@
   ],
   "connections": [
     {
-      "id": "conn-1-output_1-3-input_1",
+      "id": "conn-1-output_1-23-input_1",
       "fromNodeId": "node-1",
+      "toNodeId": "node-23",
+      "label": null
+    },
+    {
+      "id": "conn-23-output_1-3-input_1",
+      "fromNodeId": "node-23",
       "toNodeId": "node-3",
       "label": null
     },

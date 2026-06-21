@@ -138,10 +138,24 @@ class AgentForegroundService : Service() {
                     is AgentOrchestratorState.Loading,
                     is AgentOrchestratorState.Thinking,
                     is AgentOrchestratorState.ExecutingTool,
+                    // Streaming the final answer is active CPU work too. Acquired
+                    // explicitly because a run resumed from a HITL/clarification
+                    // suspension can jump straight to Answering without passing
+                    // through Loading/Thinking, which would otherwise leave the
+                    // wake lock down (released on the suspension) during the decode.
+                    is AgentOrchestratorState.Answering,
                     -> acquireWakeLock()
                     is AgentOrchestratorState.Idle,
                     is AgentOrchestratorState.Completed,
                     is AgentOrchestratorState.Error,
+                    // Suspension states wait on a human (HITL approval,
+                    // clarification, durable background park) that may never come
+                    // soon — release the CPU wake lock instead of pinning it
+                    // awake until the 10-minute safety timeout; the next active
+                    // state re-acquires it when the user responds.
+                    is AgentOrchestratorState.WaitingForApproval,
+                    is AgentOrchestratorState.AwaitingClarification,
+                    is AgentOrchestratorState.SuspendedInBackground,
                     -> releaseWakeLock()
                     else -> Unit
                 }

@@ -4,6 +4,7 @@ import androidx.work.WorkManager
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.PowerState
 import app.knotwork.android.domain.repositories.PowerStateRepository
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -50,7 +51,7 @@ class AgentPowerManagerTest {
         powerStateFlow.value = PowerState(isBatteryLow = true, isCharging = false)
         kotlinx.coroutines.yield()
 
-        verify(exactly = 1) { engine.unload() }
+        coVerify(exactly = 1) { engine.unload() }
         verify(exactly = 0) { workManager.cancelAllWork() }
     }
 
@@ -72,7 +73,7 @@ class AgentPowerManagerTest {
         powerStateFlow.value = PowerState(isBatteryLow = true, isCharging = true)
         advanceUntilIdle()
 
-        verify(exactly = 0) { engine.unload() }
+        coVerify(exactly = 0) { engine.unload() }
         verify(exactly = 0) { workManager.cancelAllWork() }
     }
 
@@ -98,7 +99,7 @@ class AgentPowerManagerTest {
         powerStateFlow.value = PowerState(isBatteryLow = true, isCharging = true)
         kotlinx.coroutines.yield()
 
-        verify(exactly = 1) { engine.unload() }
+        coVerify(exactly = 1) { engine.unload() }
         verify(exactly = 0) { workManager.cancelAllWork() }
     }
 
@@ -123,7 +124,7 @@ class AgentPowerManagerTest {
         powerStateFlow.value = PowerState(isBatteryLow = true, isCharging = false)
         kotlinx.coroutines.yield()
 
-        verify(exactly = 1) { engine.unload() }
+        coVerify(exactly = 1) { engine.unload() }
     }
 
     @Test
@@ -142,7 +143,7 @@ class AgentPowerManagerTest {
         powerStateFlow.value = PowerState(isBatteryLow = true, isCharging = false)
         kotlinx.coroutines.yield()
 
-        verify(exactly = 0) { engine.unload() }
+        coVerify(exactly = 0) { engine.unload() }
     }
 
     @Test
@@ -163,7 +164,7 @@ class AgentPowerManagerTest {
         powerStateFlow.value = PowerState(isBatteryLow = false, isCharging = false)
         advanceUntilIdle()
 
-        verify(exactly = 0) { engine.unload() }
+        coVerify(exactly = 0) { engine.unload() }
         verify(exactly = 0) { workManager.cancelAllWork() }
     }
 }

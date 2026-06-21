@@ -206,8 +206,16 @@ class ToolInvocationGate @Inject constructor(
         }
         var isApproved = true
 
+        // Consume any parked approval decision up-front, regardless of the
+        // current policy. A run can park under SensitiveOrDestructive/AllCalls
+        // and then be resumed after the user relaxed the policy to NeverPrompt —
+        // then [needsApproval] is false and the durable record would otherwise
+        // never be deleted (orphaned until the maintenance sweep). Consuming it
+        // here clears the record in that case; when approval IS still required
+        // the captured decision drives the gate exactly as before.
+        val parkedDecision = consumeParkedDecision(runId, resolvedToolName, resolvedToolArgs)
+
         if (needsApproval) {
-            val parkedDecision = consumeParkedDecision(runId, resolvedToolName, resolvedToolArgs)
             if (parkedDecision != null) {
                 // A resumed run carries the user's one-shot decision for this
                 // exact request snapshot — apply it without raising a new gate.

@@ -11,6 +11,9 @@ import app.knotwork.android.data.local.AppDatabase
 import app.knotwork.android.data.local.Converters
 import app.knotwork.android.data.local.DeferredPassphraseOpenHelperFactory
 import app.knotwork.android.data.local.EncryptedDbPassphraseProvider
+import app.knotwork.android.data.local.crypto.AeadCipher
+import app.knotwork.android.data.local.crypto.KeystoreBackedPrefsStore
+import app.knotwork.android.data.local.crypto.SecretStore
 import app.knotwork.android.data.local.dao.ChatDao
 import app.knotwork.android.data.local.dao.ChatHistorySummaryDao
 import app.knotwork.android.data.local.dao.LocalModelDao
@@ -45,6 +48,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
 /**
@@ -61,6 +65,20 @@ import javax.inject.Singleton
 object AppModule {
 
     private const val USER_PREFERENCES_NAME = "agent_preferences"
+
+    /** Connect/read/write timeout for the shared OkHttp client, in seconds. */
+    private const val HTTP_TIMEOUT_SECONDS = 60L
+
+    /**
+     * Backing file name of the settings-secrets store. Must stay byte-identical
+     * to the value previously baked into `SettingsManager`, or existing users'
+     * encrypted entries (API keys, Hugging Face token, MCP credentials) would be
+     * orphaned under a new file.
+     */
+    private const val SETTINGS_SECRETS_PREFS_NAME = "secure_settings_secrets"
+
+    /** Android Keystore alias of the AEAD key dedicated to the settings-secrets store. */
+    private const val SETTINGS_SECRETS_KEY_ALIAS = "knotwork.settings_secrets"
 
     /**
      * Provides the singleton instance of the DataStore preferences.
@@ -173,6 +191,8 @@ object AppModule {
                 AppDatabase.MIGRATION_39_40,
                 AppDatabase.MIGRATION_40_41,
                 AppDatabase.MIGRATION_41_42,
+                AppDatabase.MIGRATION_42_43,
+                AppDatabase.MIGRATION_43_44,
             )
             // No destructive fallback on upgrade: every version bump must supply an explicit
             // migration above so user data survives. Destructive recreation is kept only for the
@@ -273,11 +293,37 @@ object AppModule {
     fun provideConverters(): Converters = Converters()
 
     /**
-     * Provides the singleton instance of OkHttpClient.
+     * Provides the Keystore-backed secret store consumed by `SettingsManager`
+     * (API keys, the Hugging Face token, per-server MCP credentials). Exposed via
+     * the [SecretStore] seam so unit tests substitute an in-memory fake.
      */
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder().build()
+    fun provideSettingsSecretStore(@ApplicationContext context: Context, cipher: AeadCipher): SecretStore =
+        KeystoreBackedPrefsStore(
+            context = context,
+            prefsName = SETTINGS_SECRETS_PREFS_NAME,
+            keyAlias = SETTINGS_SECRETS_KEY_ALIAS,
+            cipher = cipher,
+        )
+
+    /**
+     * Provides the singleton instance of OkHttpClient.
+     *
+     * Connect/read/write timeouts are set (60s, per the project API conventions)
+     * so model downloads and Hugging Face discovery cannot pin a coroutine
+     * indefinitely on a stalled connection. No overall `callTimeout` is set on
+     * purpose: a multi-GB model download legitimately runs far longer than any
+     * single read, and the per-read timeout already trips a genuinely stalled
+     * transfer.
+     */
+    @Provides
+    @Singleton
+    fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(HTTP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .readTimeout(HTTP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .writeTimeout(HTTP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .build()
 
     /**
      * Provides the singleton instance of LocalAppFunctionManager.

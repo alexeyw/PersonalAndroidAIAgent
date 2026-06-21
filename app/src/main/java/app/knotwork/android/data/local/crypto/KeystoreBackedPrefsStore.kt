@@ -52,7 +52,7 @@ class KeystoreBackedPrefsStore(
     private val prefsName: String,
     private val keyAlias: String,
     private val cipher: AeadCipher,
-) {
+) : SecretStore {
 
     /**
      * Cached prefs instance. Not a `lazy`: [destroy] must drop the cache,
@@ -73,7 +73,7 @@ class KeystoreBackedPrefsStore(
      * @throws SecureValueUnreadableException When a value is present but
      *   cannot be decoded or does not pass authenticated decryption.
      */
-    fun getString(key: String): String? {
+    override fun getString(key: String): String? {
         val encoded = prefs().getString(key, null) ?: return null
         return try {
             val blob = Base64.getDecoder().decode(encoded)
@@ -93,7 +93,7 @@ class KeystoreBackedPrefsStore(
      *   the secret hit disk before it is used, e.g. a database passphrase
      *   that is about to encrypt a freshly created database.
      */
-    fun putString(key: String, value: String, synchronous: Boolean = false) {
+    override fun putString(key: String, value: String, synchronous: Boolean) {
         val blob = cipher.encrypt(keyAlias, associatedDataFor(key), value.toByteArray(Charsets.UTF_8))
         val encoded = Base64.getEncoder().encodeToString(blob)
         prefs().edit(commit = synchronous) {
@@ -106,7 +106,7 @@ class KeystoreBackedPrefsStore(
      *
      * @param key The entry to clear.
      */
-    fun remove(key: String) {
+    override fun remove(key: String) {
         prefs().edit {
             remove(key)
         }

@@ -121,6 +121,11 @@ interface LlmInferenceEngine {
      * Unloads the engine from memory, releasing heavy resources without fully destroying the manager.
      *
      * Used for temporary memory relief (e.g., when the app goes into the background or onTrimMemory).
+     *
+     * Suspends because tearing down the native session is serialised against any
+     * in-flight generation: freeing the native handle while a generation is still
+     * streaming would be a use-after-free. The call therefore waits for a running
+     * generation to finish (or be cancelled) before releasing.
      */
-    fun unload()
+    suspend fun unload()
 }

@@ -98,6 +98,12 @@ interface Tool {
   other failures to `ToolResult.Error`. `runCatching` is never used around
   these (suspending) calls — it would swallow cancellation; see
   [code-style.md](code-style.md) § Coroutines & Flow.
+- **MCP credentials** (Bearer tokens, Basic passwords, API-key values) are
+  stored in the **Keystore-backed encrypted store**, keyed per server by a hash
+  of its URL — never in the plain `mcp_servers_json` DataStore entry, which
+  holds only non-secret metadata (URL, transport, name, custom headers). Auth
+  embedded inline by earlier releases is migrated into the encrypted store on
+  first read and stripped from the JSON.
 
 ---
 

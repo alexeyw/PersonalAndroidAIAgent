@@ -66,7 +66,7 @@ import app.knotwork.android.data.local.models.TraceStepEntity
         ChatHistorySummaryEntity::class,
         ModelPerformanceSampleEntity::class,
     ],
-    version = 42,
+    version = 44,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -977,6 +977,33 @@ abstract class AppDatabase : RoomDatabase() {
                     "CREATE INDEX IF NOT EXISTS `index_model_performance_samples_modelPath_id` " +
                         "ON `model_performance_samples` (`modelPath`, `id`)",
                 )
+            }
+        }
+
+        /**
+         * Adds an index on `chat_messages.sessionId`, the filter column of every
+         * hot chat query (loading a chat, deleting a session's messages,
+         * collecting its attachment paths). Additive — index-only, no row is
+         * touched; the name matches Room's generated `index_<table>_<column>`.
+         */
+        val MIGRATION_42_43 = object : Migration(42, 43) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_chat_messages_sessionId` " +
+                        "ON `chat_messages` (`sessionId`)",
+                )
+            }
+        }
+
+        /**
+         * Adds the nullable `modelName` column to `chat_messages` so an AGENT
+         * answer records the model that generated it (snapshotted at save time)
+         * and the chat keeps attributing it correctly after the active model is
+         * switched. Additive and nullable — legacy rows keep `NULL`.
+         */
+        val MIGRATION_43_44 = object : Migration(43, 44) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `chat_messages` ADD COLUMN `modelName` TEXT")
             }
         }
     }

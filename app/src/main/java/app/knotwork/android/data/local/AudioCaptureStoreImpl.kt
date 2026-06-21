@@ -38,26 +38,34 @@ class AudioCaptureStoreImpl @Inject constructor(@ApplicationContext private val 
     override fun newRecordingFile(): String = File(rootDir(), "${UUID.randomUUID()}.$WAV_EXTENSION").absolutePath
 
     override suspend fun importFromUri(uri: String): Result<String> = withContext(dispatcher) {
+        // Tracked so a copy that throws (or is cancelled) midway, or a resolver
+        // that never opens, never leaves a truncated clip behind in the cache.
+        // `File.delete()` does not suspend, so calling it on the cancellation
+        // path before re-throwing is safe.
+        var target: File? = null
         try {
             val parsed = uri.toUri()
             val extension = extensionFor(uri)
-            val target = File(rootDir(), "${UUID.randomUUID()}.$extension")
+            val file = File(rootDir(), "${UUID.randomUUID()}.$extension").also { target = it }
             val copied = context.contentResolver.openInputStream(parsed)?.use { input ->
-                target.outputStream().use { output -> input.copyTo(output) }
+                file.outputStream().use { output -> input.copyTo(output) }
                 true
             } ?: false
             if (copied) {
-                Result.success(target.absolutePath)
+                Result.success(file.absolutePath)
             } else {
+                target?.delete()
                 Result.failure(IOException("Could not read audio URI: $uri"))
             }
         } catch (e: CancellationException) {
+            target?.delete()
             throw e
         } catch (e: Exception) {
             // Resolver failures vary by source (FileNotFoundException,
             // SecurityException, provider-specific RuntimeExceptions); any of them
             // means "could not import", surfaced as a failed Result.
             Timber.e(e, "Failed to import audio URI")
+            target?.delete()
             Result.failure(e)
         }
     }
