@@ -2,12 +2,15 @@ package app.knotwork.android.domain.engine.executors
 
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AgentOrchestratorState
+import app.knotwork.android.domain.models.ExecutionScope
 import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.Result
+import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.flowOf
@@ -51,5 +54,57 @@ class OutputNodeExecutorTest {
         assertTrue(results[0] is AgentOrchestratorState.Thinking)
         assertTrue(results[1] is AgentOrchestratorState.Completed)
         assertEquals("Formatted Response", (results[1] as AgentOrchestratorState.Completed).finalResponse)
+    }
+
+    @Test
+    fun `nested OUTPUT (depth greater than zero) returns the text without writing to chat`() = runTest {
+        val llmEngine = mockk<LlmInferenceEngine>()
+        val loadModelUseCase = mockk<LoadModelUseCase>()
+        val chatRepository = mockk<ChatRepository>(relaxed = true)
+        val executor = OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository)
+        val node = NodeModel("1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+
+        val results = executor
+            .execute(node, "final text", "session-1", "prompt", runId = null, scope = ExecutionScope(depth = 1))
+            .toList()
+            .unwrap()
+
+        // Result still flows up to the parent PIPELINE node…
+        assertTrue(results[0] is AgentOrchestratorState.Completed)
+        assertEquals("final text", (results[1] as NodeExecutionResult).outputText)
+        // …but a nested OUTPUT must NOT persist a chat message.
+        coVerify(exactly = 0) { chatRepository.saveMessage(any()) }
+    }
+
+    @Test
+    fun `nested OUTPUT with system prompt formats but still does not write to chat`() = runTest {
+        val llmEngine = mockk<LlmInferenceEngine>()
+        val loadModelUseCase = mockk<LoadModelUseCase>()
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("Formatted Response")
+        val chatRepository = mockk<ChatRepository>(relaxed = true)
+        val executor = OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository)
+        val node = NodeModel("1", NodeType.OUTPUT, 0f, 0f, systemPrompt = "Format please:")
+
+        val results = executor
+            .execute(node, "final text", "session-1", "prompt", runId = null, scope = ExecutionScope(depth = 1))
+            .toList()
+            .unwrap()
+
+        assertTrue(results.any { it is AgentOrchestratorState.Completed })
+        coVerify(exactly = 0) { chatRepository.saveMessage(any()) }
+    }
+
+    @Test
+    fun `root OUTPUT (depth zero) persists the chat message`() = runTest {
+        val llmEngine = mockk<LlmInferenceEngine>()
+        val loadModelUseCase = mockk<LoadModelUseCase>()
+        val chatRepository = mockk<ChatRepository>(relaxed = true)
+        val executor = OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository)
+        val node = NodeModel("1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null)
+
+        executor.execute(node, "final text", "session-1", "prompt").toList().unwrap()
+
+        coVerify(exactly = 1) { chatRepository.saveMessage(any()) }
     }
 }

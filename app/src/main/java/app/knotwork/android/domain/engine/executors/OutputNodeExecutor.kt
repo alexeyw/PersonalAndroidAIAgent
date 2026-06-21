@@ -37,6 +37,11 @@ import javax.inject.Inject
  * the final text is also emitted as
  * [Completed][app.knotwork.android.domain.models.AgentOrchestratorState.Completed] to signal
  * the end of the pipeline run.
+ *
+ * The chat message is persisted **only for the root run** ([ExecutionScope.depth] == 0).
+ * A sub-pipeline's OUTPUT (depth > 0) returns its text to the parent `PIPELINE`
+ * node as the node result (via `Completed`/`Result`) and does not write to chat,
+ * so nested results never flood the conversation.
  */
 class OutputNodeExecutor @Inject constructor(
     private val llmEngine: LlmInferenceEngine,
@@ -114,25 +119,35 @@ class OutputNodeExecutor @Inject constructor(
                 }
             }
 
-            chatRepository.saveMessage(
-                ChatMessage(
-                    sessionId = sessionId,
-                    role = Role.AGENT,
-                    content = finalOutput,
-                    timestamp = System.currentTimeMillis(),
-                ),
-            )
+            // Only the root run's OUTPUT writes to the user-facing chat. A nested
+            // sub-pipeline OUTPUT (depth > 0) returns its text up to the parent
+            // PIPELINE node via the Completed/Result below instead of flooding
+            // the chat with every intermediate sub-pipeline result.
+            if (scope.depth == 0) {
+                chatRepository.saveMessage(
+                    ChatMessage(
+                        sessionId = sessionId,
+                        role = Role.AGENT,
+                        content = finalOutput,
+                        timestamp = System.currentTimeMillis(),
+                    ),
+                )
+            }
             emit(NodeOutput.State(AgentOrchestratorState.Completed(finalOutput)))
             emit(NodeOutput.Result(NodeExecutionResult(outputText = finalOutput)))
         } else {
-            chatRepository.saveMessage(
-                ChatMessage(
-                    sessionId = sessionId,
-                    role = Role.AGENT,
-                    content = inputText,
-                    timestamp = System.currentTimeMillis(),
-                ),
-            )
+            // See above: nested OUTPUTs return their text as the PIPELINE node
+            // result rather than persisting a chat message.
+            if (scope.depth == 0) {
+                chatRepository.saveMessage(
+                    ChatMessage(
+                        sessionId = sessionId,
+                        role = Role.AGENT,
+                        content = inputText,
+                        timestamp = System.currentTimeMillis(),
+                    ),
+                )
+            }
             emit(NodeOutput.State(AgentOrchestratorState.Completed(inputText)))
             emit(NodeOutput.Result(NodeExecutionResult(outputText = inputText)))
         }
