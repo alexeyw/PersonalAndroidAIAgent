@@ -25,6 +25,8 @@ import app.knotwork.android.domain.services.HttpRequestPolicy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONException
 import org.json.JSONObject
 import timber.log.Timber
@@ -61,6 +63,17 @@ class ToolRepositoryImpl @Inject constructor(
      * tool call would fail with the old auth until the process restarted.
      */
     private val mcpClients = ConcurrentHashMap<String, ConnectedClient>()
+
+    /**
+     * Serialises [syncMcpClients]. The pool map is a [ConcurrentHashMap], but the
+     * reconcile is a multi-step read-modify-write with a suspending `connect()`
+     * between the per-URL `get` and `put`. Without this lock two concurrent
+     * callers (e.g. the Tools screen refreshing while a pipeline dispatches an
+     * MCP tool) could both observe `existing == null`, both connect, and both
+     * `put` — leaking one live client (socket/SSE) that is never disconnected and
+     * possibly double-connecting a non-idempotent server.
+     */
+    private val mcpSyncMutex = Mutex()
 
     /**
      * Snapshot of a live MCP connection: the [client] that owns the
@@ -244,7 +257,7 @@ class ToolRepositoryImpl @Inject constructor(
     private suspend fun distinctMcpConfigs(): List<McpServerConfig> =
         settingsRepository.mcpServers.first().distinctBy { it.url }
 
-    private suspend fun syncMcpClients() {
+    private suspend fun syncMcpClients() = mcpSyncMutex.withLock {
         val configs = distinctMcpConfigs()
         val persistedUrls = configs.mapTo(mutableSetOf()) { it.url }
 
