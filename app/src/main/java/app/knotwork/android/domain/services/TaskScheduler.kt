@@ -49,12 +49,16 @@ interface TaskScheduler {
     /**
      * Schedules a task to run repeatedly on a fixed interval.
      *
-     * Recurring tasks are de-duplicated by the **exact** `(prompt, intervalHours)`
-     * pair: scheduling the same recurring task again keeps the existing schedule
-     * rather than stacking a duplicate. The match is on the verbatim prompt string
-     * (no trimming/case-folding) and deliberately ignores [sessionId] — two
+     * Recurring tasks are de-duplicated by the `(intervalHours, sessionId,
+     * trimmed prompt)` triple: scheduling the same recurring task into the same
+     * session again keeps the existing schedule rather than stacking a
+     * duplicate. The prompt is matched after whitespace-trimming (so a stray
+     * leading/trailing space no longer slips past the de-dup), while the agent
+     * still executes the verbatim prompt. [sessionId] is part of the key, so two
      * schedules with the same prompt and interval but different bound sessions
-     * collapse to the first one. This contract is honoured by the implementation.
+     * stay independent; a `null` session collapses with other `null`-session
+     * schedules of the same prompt and interval. This contract is honoured by
+     * the implementation.
      *
      * @param prompt The prompt the agent should execute on every run.
      * @param intervalHours The repeat interval, in hours. Must be positive;

@@ -11,6 +11,7 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -60,6 +61,71 @@ class WorkManagerTaskSchedulerTest {
         assertEquals(2L * 60L * 60L * 1000L, requestSlot.captured.workSpec.intervalDuration)
         assertEquals("check emails", requestSlot.captured.workSpec.input.getString(AgentWorker.KEY_PROMPT))
         assertTrue(requestSlot.captured.workSpec.constraints.requiresBatteryNotLow())
+    }
+
+    @Test
+    fun `given same prompt and interval but different sessions when schedulePeriodic then unique names differ`() {
+        val names = mutableListOf<String>()
+
+        scheduler.schedulePeriodic(
+            "check emails",
+            intervalHours = 2,
+            sessionId = "session-a",
+            constraints = constraints,
+        )
+        scheduler.schedulePeriodic(
+            "check emails",
+            intervalHours = 2,
+            sessionId = "session-b",
+            constraints = constraints,
+        )
+
+        verify(exactly = 2) {
+            workManager.enqueueUniquePeriodicWork(capture(names), any(), any<PeriodicWorkRequest>())
+        }
+        // Schedules bound to different sessions must not collapse onto each other:
+        // each session keeps its own recurring task so results land where intended.
+        assertNotEquals(names[0], names[1])
+    }
+
+    @Test
+    fun `given prompts differing only by surrounding whitespace when schedulePeriodic then unique names match`() {
+        val names = mutableListOf<String>()
+
+        scheduler.schedulePeriodic(
+            "check emails ",
+            intervalHours = 2,
+            sessionId = "session-a",
+            constraints = constraints,
+        )
+        scheduler.schedulePeriodic(
+            "check emails",
+            intervalHours = 2,
+            sessionId = "session-a",
+            constraints = constraints,
+        )
+
+        verify(exactly = 2) {
+            workManager.enqueueUniquePeriodicWork(capture(names), any(), any<PeriodicWorkRequest>())
+        }
+        // A stray trailing space must not slip past the de-dup and stack a duplicate.
+        assertEquals(names[0], names[1])
+    }
+
+    @Test
+    fun `given prompt with surrounding whitespace when schedulePeriodic then input data keeps the verbatim prompt`() {
+        val requestSlot = slot<PeriodicWorkRequest>()
+
+        scheduler.schedulePeriodic(
+            "check emails ",
+            intervalHours = 2,
+            sessionId = "session-a",
+            constraints = constraints,
+        )
+
+        verify { workManager.enqueueUniquePeriodicWork(any(), any(), capture(requestSlot)) }
+        // Trimming is a de-dup-key concern only; the worker still runs the exact prompt.
+        assertEquals("check emails ", requestSlot.captured.workSpec.input.getString(AgentWorker.KEY_PROMPT))
     }
 
     @Test
