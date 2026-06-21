@@ -3,6 +3,7 @@ package app.knotwork.android.data.engine
 import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.res.Configuration
+import app.knotwork.android.di.ApplicationScope
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.LocalBackend
@@ -19,11 +20,13 @@ import com.google.ai.edge.litertlm.Message
 import com.google.ai.edge.litertlm.SamplerConfig
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -42,6 +45,7 @@ import javax.inject.Singleton
 class LiteRTLlmEngine @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settingsRepository: SettingsRepository,
+    @ApplicationScope private val appScope: CoroutineScope,
 ) : LlmInferenceEngine,
     ComponentCallbacks2 {
 
@@ -52,13 +56,17 @@ class LiteRTLlmEngine @Inject constructor(
     private var _isAudioEnabled: Boolean = false
 
     /**
-     * Serialises every [generateResponseStream] call. LiteRT-LM allows only
-     * one active [Conversation], and each generation tears the previous
-     * conversation down before opening a fresh one — so two overlapping
-     * generations (e.g. a foreground pipeline and a background memory-extraction
-     * pass) would corrupt each other's session and can crash the native layer.
-     * Holding this mutex for the whole stream guarantees one generation runs to
-     * completion (or is cancelled) before the next acquires the conversation.
+     * Serialises every native-session access: each [generateResponseStream]
+     * stream, [initialize] (engine construction) and [unload] (engine teardown).
+     * LiteRT-LM allows only one active [Conversation], and each generation tears
+     * the previous conversation down before opening a fresh one — so two
+     * overlapping generations (e.g. a foreground pipeline and a background
+     * memory-extraction pass) would corrupt each other's session. Just as
+     * dangerously, freeing the engine/conversation (idle unload, low-battery,
+     * `onTrimMemory`) while a generation is mid-stream is a native
+     * use-after-free. Holding this single mutex across generation, load and
+     * unload guarantees the native handles are never read on one path while
+     * being freed or rebuilt on another.
      */
     private val generationMutex = Mutex()
 
@@ -113,7 +121,14 @@ class LiteRTLlmEngine @Inject constructor(
         enableAudio: Boolean,
     ): Result<Unit, AppError> = withContext(Dispatchers.IO) {
         try {
-            initializeInternal(modelPath, enableVision, enableAudio)
+            // Hold the native-session mutex across the whole (re-)initialization
+            // so the check-then-build inside [initializeInternal] is atomic with
+            // respect to generations and to any concurrent load — two racing
+            // loads cannot interleave a teardown with another's freshly built
+            // engine, and the second observes the first's result.
+            generationMutex.withLock {
+                initializeInternal(modelPath, enableVision, enableAudio)
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -164,8 +179,23 @@ class LiteRTLlmEngine @Inject constructor(
             )
         }
 
-        // Close existing engine if present to release previous resources
-        unload()
+        // Atomic reuse check (runs under `generationMutex`, held by [initialize]):
+        // if the engine is already built for this exact model and modality set,
+        // a concurrent load that raced to here observes the finished result and
+        // skips a redundant teardown/rebuild. The caller (`LoadModelUseCase`)
+        // does an unlocked pre-check, so this is the race-safe confirmation.
+        if (
+            engine != null &&
+            _currentModelPath == modelPath &&
+            _isVisionEnabled == enableVision &&
+            _isAudioEnabled == enableAudio
+        ) {
+            return Result.Success(Unit)
+        }
+
+        // Close existing engine if present to release previous resources. Uses
+        // the non-locking teardown because the mutex is already held here.
+        unloadInternal()
 
         val maxTokens = settingsRepository.maxContextLength.first()
         val configuredKey = settingsRepository.localModelBackend.first()
@@ -313,49 +343,70 @@ class LiteRTLlmEngine @Inject constructor(
      */
     private fun streamConversation(temperature: Float?, openResponses: (Conversation) -> Flow<Message>): Flow<String> =
         flow {
-            val currentEngine = engine
-            if (currentEngine == null) {
-                Timber.e("Engine is not initialized")
-                throw IllegalStateException("LLM Engine not initialized")
-            }
+            generationMutex.withLock {
+                // Read the native engine handle inside the lock so it cannot be
+                // freed by a concurrent unload between the null-check and use.
+                val currentEngine = engine
+                if (currentEngine == null) {
+                    Timber.e("Engine is not initialized")
+                    throw IllegalStateException("LLM Engine not initialized")
+                }
 
-            try {
-                generationMutex.withLock {
-                    // LiteRT-LM allows only one active session. The orchestrator supplies
-                    // the full history every time, so we close the old conversation and
-                    // open a fresh one to prevent token accumulation and OOM crashes. A
-                    // temperature override replaces the whole sampler (LiteRT-LM has no
-                    // "override one field" path); the default (`null`) path passes no
-                    // config, leaving the native sampler exactly as before.
-                    conversation?.close()
-                    conversation = if (temperature == null) {
-                        currentEngine.createConversation()
-                    } else {
-                        currentEngine.createConversation(repairConversationConfig(temperature))
-                    }
-                    conversation?.let { conversation ->
-                        openResponses(conversation).collect { chunk ->
-                            val text = chunk.contents.contents
-                                .filterIsInstance<Content.Text>()
-                                .joinToString(separator = "") { it.text }
-                            if (text.isNotEmpty()) {
-                                emit(text)
-                            }
+                // LiteRT-LM allows only one active session. The orchestrator supplies
+                // the full history every time, so we close the old conversation and
+                // open a fresh one to prevent token accumulation and OOM crashes. A
+                // temperature override replaces the whole sampler (LiteRT-LM has no
+                // "override one field" path); the default (`null`) path passes no
+                // config, leaving the native sampler exactly as before.
+                conversation?.close()
+                val activeConversation = if (temperature == null) {
+                    currentEngine.createConversation()
+                } else {
+                    currentEngine.createConversation(repairConversationConfig(temperature))
+                }
+                conversation = activeConversation
+                try {
+                    openResponses(activeConversation).collect { chunk ->
+                        val text = chunk.contents.contents
+                            .filterIsInstance<Content.Text>()
+                            .joinToString(separator = "") { it.text }
+                        if (text.isNotEmpty()) {
+                            emit(text)
                         }
                     }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Timber.e(e, "Error during conversation streaming")
+                    throw e
+                } finally {
+                    // Close the native session on completion AND on cancellation
+                    // (Stop button, scope death) so a cancelled generation never
+                    // leaves a live conversation resident until the next call.
+                    activeConversation.close()
+                    if (conversation === activeConversation) {
+                        conversation = null
+                    }
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Timber.e(e, "Error during conversation streaming")
-                throw e
             }
         }.flowOn(Dispatchers.IO)
 
     /**
-     * Unloads the engine from memory, releasing heavy resources.
+     * Unloads the engine from memory, releasing heavy resources. Acquires
+     * [generationMutex] so the native handles are never freed while a generation
+     * is mid-stream — the call waits for any in-flight generation to finish or
+     * cancel before tearing down.
      */
-    override fun unload() {
+    override suspend fun unload() = generationMutex.withLock { unloadInternal() }
+
+    /**
+     * Performs the actual native teardown **without** acquiring [generationMutex].
+     * Callers must already hold the mutex (the public [unload] and the
+     * re-initialization path in [initializeInternal]). The mutex is not
+     * reentrant, so this split is what lets `initialize` release-then-rebuild
+     * under a single lock acquisition without self-deadlocking.
+     */
+    private fun unloadInternal() {
         try {
             conversation?.close()
             engine?.close()
@@ -373,9 +424,14 @@ class LiteRTLlmEngine @Inject constructor(
 
     /**
      * Closes the engine and removes the callbacks to prevent leaks.
+     *
+     * Invoked from synchronous Android lifecycle callbacks (e.g. the foreground
+     * service's `onDestroy`), so the mutex-guarded [unload] is dispatched on the
+     * application scope rather than blocked on; the callback de-registration runs
+     * immediately to stop further trim callbacks.
      */
     override fun close() {
-        unload()
+        appScope.launch { unload() }
         context.unregisterComponentCallbacks(this)
     }
 
@@ -394,7 +450,7 @@ class LiteRTLlmEngine @Inject constructor(
      */
     override fun onLowMemory() {
         Timber.w("onLowMemory called, unloading engine")
-        unload()
+        appScope.launch { unload() }
     }
 
     /**
@@ -405,8 +461,11 @@ class LiteRTLlmEngine @Inject constructor(
      */
     override fun onTrimMemory(level: Int) {
         if (level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
-            Timber.w("onTrimMemory called with critical level \$level, unloading engine")
-            unload()
+            Timber.w("onTrimMemory called with level %d, unloading engine", level)
+            // [unload] serialises on `generationMutex`, so a background run that
+            // is still streaming is allowed to finish before the engine is freed
+            // rather than being torn down mid-generation.
+            appScope.launch { unload() }
         }
     }
 
