@@ -234,6 +234,21 @@ details.
 
 ### Fixed
 
+- **New-chat picker is usable with many pipelines.** The "Start a new chat"
+  sheet's pipeline list now scrolls with the Cancel/Create button pinned, so a
+  large pipeline library no longer pushes the button off-screen; the model
+  picker got the same treatment, and the row labels match the app's standard
+  list style.
+- **Nested pipelines no longer flood the chat.** A sub-pipeline's OUTPUT returns
+  its result to the parent pipeline instead of writing a chat message — only the
+  top-level pipeline's final answer appears in the conversation.
+- **Hidden tools are now controllable.** Discovered on-device AppFunctions are
+  listed in the Tools screen with an enable/disable toggle. A tool disabled
+  there is removed from the agent everywhere, including pipelines — visibility
+  and agent-availability stay consistent.
+- **Showcase pipeline understands images.** A vision intake step turns an
+  attached image into text before routing, so an image request no longer loses
+  the photo when the pipeline decomposes it into subtasks.
 - **On-device model could crash when freed mid-generation.** The LiteRT engine
   serialised concurrent generations but freed/rebuilt the native session
   (idle-timeout unload, low-battery, memory-trim, model switch) without that
