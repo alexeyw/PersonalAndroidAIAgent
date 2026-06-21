@@ -234,6 +234,89 @@ details.
 
 ### Fixed
 
+- **Agent messages keep the model that generated them.** Each agent answer now
+  records the model it was produced with — the answering node's on-device model
+  or cloud provider, not just whatever model happens to be active — so the name
+  under a message no longer changes after you switch models. Older messages saved
+  before this fall back to the active model name.
+- **Routing handles ports labelled with symbols.** An `INTENT_ROUTER` edge whose
+  label contains a non-word character (e.g. `C#`) is now matched correctly
+  instead of falling through to the wrong branch.
+- **MCP credentials survive edits and transient Keystore hiccups.** Editing or
+  adding one server no longer rewrites other servers' stored credentials, a
+  momentarily-unreadable secret is no longer deleted, and concurrent changes
+  can't drop a server or orphan its secret.
+- **Memory-pressure model unload is prompt.** Under low memory the engine now
+  cancels the in-flight generation so the model is freed immediately instead of
+  after the current answer finishes; the wake lock is also held while the final
+  answer streams.
+- **Token count stays visible in the chat top bar.** A long pipeline name no
+  longer truncates the token counter in the chat's top app-bar subtitle — the
+  count is pinned and the pipeline name ellipsizes instead.
+- **Live progress shows on every message, not just the first.** A second message
+  in the same chat no longer loses its generating indicator and console updates:
+  the per-session state stream replayed the previous run's "completed" state to
+  the new collector, which immediately settled the fresh run out of its
+  generating state, so the answer appeared with no visible progress. The replayed
+  stale terminal is now ignored when a new run starts.
+- **New-chat picker is usable with many pipelines.** The "Start a new chat"
+  sheet's pipeline list now scrolls with the Cancel/Create button pinned, so a
+  large pipeline library no longer pushes the button off-screen; the model
+  picker got the same treatment, and the row labels match the app's standard
+  list style.
+- **Nested pipelines no longer flood the chat.** A sub-pipeline's OUTPUT returns
+  its result to the parent pipeline instead of writing a chat message — only the
+  top-level pipeline's final answer appears in the conversation.
+- **Hidden tools are now controllable.** Discovered on-device AppFunctions are
+  listed in the Tools screen with an enable/disable toggle. A tool disabled
+  there is removed from the agent everywhere, including pipelines — visibility
+  and agent-availability stay consistent.
+- **Showcase pipeline understands images.** A vision intake step turns an
+  attached image into text before routing, so an image request no longer loses
+  the photo when the pipeline decomposes it into subtasks.
+- **On-device model could crash when freed mid-generation.** The LiteRT engine
+  serialised concurrent generations but freed/rebuilt the native session
+  (idle-timeout unload, low-battery, memory-trim, model switch) without that
+  lock — a native use-after-free under a running decode loop. Engine load,
+  unload and streaming now share one mutex, a cancelled generation closes its
+  native session, and the CPU wake lock is released while the agent waits on the
+  user instead of being pinned until the safety timeout.
+- **MCP tool calls and the session-state stream could race.** The MCP client
+  pool reconcile is now serialised (it could leak a connection under concurrent
+  refreshes), and the active-sessions snapshot is read under its monitor
+  (previously a possible `ConcurrentModificationException` on the enqueue path).
+- **Pipeline routing fall-throughs.** An `IF_CONDITION` whose verdict had no
+  wired branch no longer silently runs the opposite branch, and the
+  `INTENT_ROUTER` fuzzy fallback matches a whole word instead of an incidental
+  substring (so a key "…Cancel" no longer routes to a port named "can").
+- **Faster chat loads.** `chat_messages` is now indexed by `sessionId`, so
+  opening a chat and deleting a session no longer scan the whole message table.
+- **MCP credentials are now encrypted at rest.** Bearer tokens, Basic passwords
+  and API-key values for configured MCP servers move from the plain settings
+  store into the Keystore-backed encrypted store (keyed per server by a hash of
+  its URL); the plain entry keeps only non-secret metadata. Credentials saved by
+  an earlier build are migrated automatically on first read and stripped from
+  the plaintext entry.
+- **Hardened model install & networking.** A downloaded model file name is
+  sanitised against path traversal, the shared HTTP client has connect/read/write
+  timeouts, and the plain settings store is excluded from cloud backup and device
+  transfer. A failed audio import no longer leaves a truncated clip behind.
+- **Recurring scheduled tasks no longer collapse across chats or stack
+  duplicates.** A recurring task's de-duplication key now includes the bound
+  chat session and trims the prompt, instead of keying on the verbatim prompt
+  and interval alone. Previously, scheduling the same recurring prompt from a
+  second chat was silently dropped (its results kept landing in the first
+  chat), while a prompt differing only by a stray trailing space slipped past
+  the de-dup and stacked a duplicate schedule. Schedules bound to different
+  sessions now stay independent, and cosmetic whitespace differences collapse
+  correctly; the agent still runs the verbatim prompt.
+
+- **Scheduled-task confirmation message showed a literal placeholder.** The
+  reply confirming a scheduled task ("Task successfully scheduled to run every
+  …") rendered the raw `$intervalHours` / `$delayMinutes` text instead of the
+  actual interval/delay numbers (an escaped string template). It now reports the
+  real values.
+
 - **Content slipping under the bottom navigation bar.** The Discover list,
   Discover detail and Pipeline library screens now zero their own
   `Scaffold` content insets (matching every other screen), so their bodies are
@@ -242,6 +325,38 @@ details.
   in-app bottom-nav strip.
 
 ### Changed
+
+- **"Reset all settings" now restores every tunable preference, behind a plain
+  confirm dialog.** Settings → Privacy → *Reset all settings* previously reset
+  only a subset of preferences (and used a typed-keyword gate). It now restores
+  **every** tunable setting — sampling, context, workspace/HTTP limits,
+  pipeline/retry/retention/resume windows, audio, memory tuning, notifications
+  and security toggles — to its recommended default in a single atomic write,
+  confirmed by a lightweight dialog since no user data is touched. The reset is
+  strictly scoped: chats, long-term memory, pipelines, presets, skills,
+  connections, the `http_request` allowlist, custom prompts, the active embedding
+  provider and API keys are all left untouched (it no longer clears the
+  system-instructions prefix or re-points the embedding provider). The remaining
+  inline default values were centralised into `SettingsDefaults`, and the
+  defaults surface is documented as sensible starting points refined through
+  real-world use.
+
+- **Chat-home ViewModel decomposed into domain delegates.** The large
+  `ChatHomeViewModel` (~2.7k lines) is now a thin coordinator over eight
+  delegates — console, voice, attachments, import/export, pipeline-binding,
+  threads, HITL/clarification and reattach — each owning a slice of the single
+  `ChatHomeScreenState` and sharing the ViewModel's scope and state flow. The
+  coordinator keeps only the agent-execution core (send cycle, live run
+  collector, thread switch, session/message/token plumbing). Behaviour and the
+  rendered state contract are unchanged; this establishes the delegation pattern
+  for thinning large presentation ViewModels.
+
+- **Task scheduling extracted behind a domain port.** `ScheduleTaskUseCase` no
+  longer depends on `androidx.work` or the `data` layer: it now delegates to a
+  new `TaskScheduler` domain port (with a `ScheduledTaskConstraints` value type),
+  implemented by `WorkManagerTaskScheduler` in the `data` layer. Behaviour is
+  unchanged; this restores the Clean Architecture invariant that the `domain`
+  layer carries no framework dependencies.
 
 - **Cloud client and embedding factories are now retry-wrapped.** Cloud clients
   built by `KoogClientFactory` and the cloud/Ollama embedding clients are

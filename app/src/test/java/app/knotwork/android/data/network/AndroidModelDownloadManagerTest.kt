@@ -16,6 +16,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -83,6 +84,97 @@ class AndroidModelDownloadManagerTest {
 
         // Cleanup
         expectedFile.delete()
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `downloadModel rejects a traversal-only file name`() = runTest {
+        val url = "http://example.com/model.bin"
+        val mockCall = mockk<Call>()
+        val mockResponse = Response.Builder()
+            .request(Request.Builder().url(url).build())
+            .protocol(Protocol.HTTP_1_1)
+            .code(200)
+            .message("OK")
+            .body("data".toResponseBody())
+            .build()
+        every { okHttpClient.newCall(any()) } returns mockCall
+        every { mockCall.execute() } returns mockResponse
+
+        val emissions = mutableListOf<DownloadState>()
+        val job = launch(UnconfinedTestDispatcher()) {
+            // "name" collapses to "..", which would escape the models dir.
+            sut.downloadModel(url, "..").toList(emissions)
+        }
+        job.join()
+
+        assertTrue(emissions.last() is DownloadState.Error)
+        val error = (emissions.last() as DownloadState.Error).error as AndroidModelDownloadManager.DownloadError
+        assertTrue(
+            "Expected invalid-name error, got: ${error.message}",
+            error.message.contains("Invalid model file name"),
+        )
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `downloadModel flattens path separators into a unique name inside the models dir`() = runTest {
+        val url = "http://example.com/model.bin"
+        val content = "payload"
+        val mockCall = mockk<Call>()
+        val mockResponse = Response.Builder()
+            .request(Request.Builder().url(url).build())
+            .protocol(Protocol.HTTP_1_1)
+            .code(200)
+            .message("OK")
+            .body(content.toResponseBody())
+            .build()
+        every { okHttpClient.newCall(any()) } returns mockCall
+        every { mockCall.execute() } returns mockResponse
+
+        val emissions = mutableListOf<DownloadState>()
+        val job = launch(UnconfinedTestDispatcher()) {
+            sut.downloadModel(url, "../../evil.bin").toList(emissions)
+        }
+        job.join()
+
+        val success = emissions.last() as DownloadState.Success
+        // Separators are flattened to '_' (not collapsed to the basename), so the
+        // file lands inside tempDir while preserving uniqueness across subdirs.
+        val expectedFile = File(tempDir, ".._.._evil.bin")
+        assertEquals(expectedFile.absolutePath, success.fileUri)
+        assertTrue("file must be written inside the models dir", expectedFile.exists())
+        assertEquals(content, expectedFile.readText())
+        expectedFile.delete()
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `downloadModel keeps subdir-differing names distinct on disk`() = runTest {
+        val url = "http://example.com/model.bin"
+        fun ok(body: String) = Response.Builder()
+            .request(Request.Builder().url(url).build())
+            .protocol(Protocol.HTTP_1_1).code(200).message("OK")
+            .body(body.toResponseBody()).build()
+        val call4 = mockk<Call>()
+        every { call4.execute() } returns ok("four")
+        val call8 = mockk<Call>()
+        every { call8.execute() } returns ok("eight")
+        every { okHttpClient.newCall(any()) } returnsMany listOf(call4, call8)
+
+        val e4 = mutableListOf<DownloadState>()
+        val e8 = mutableListOf<DownloadState>()
+        launch(UnconfinedTestDispatcher()) { sut.downloadModel(url, "q4/model.litertlm").toList(e4) }.join()
+        launch(UnconfinedTestDispatcher()) { sut.downloadModel(url, "q8/model.litertlm").toList(e8) }.join()
+
+        // The two subdir variants resolve to distinct files (no overwrite).
+        val f4 = (e4.last() as DownloadState.Success).fileUri
+        val f8 = (e8.last() as DownloadState.Success).fileUri
+        assertNotEquals(f4, f8)
+        assertEquals("four", File(f4).readText())
+        assertEquals("eight", File(f8).readText())
+        File(f4).delete()
+        File(f8).delete()
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)

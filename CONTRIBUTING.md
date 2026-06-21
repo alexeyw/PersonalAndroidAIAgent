@@ -86,7 +86,9 @@ request:
   [`config/detekt/detekt.yml`](config/detekt/detekt.yml)).
 - **ktlint** — formatting.
 - **Android lint** (`lintDebug`).
-- **Unit tests** (`testDebugUnitTest`).
+- **Unit tests** (`testDebugUnitTest`) — including the **Konsist**
+  architecture guard (Clean-Architecture layer boundaries; see
+  [`docs/static-analysis.md`](docs/static-analysis.md)).
 - **Kover** coverage verification (`koverVerifyDebug`).
 
 Run `./gradlew check` **locally before pushing**. Pushing without running

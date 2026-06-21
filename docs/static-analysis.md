@@ -29,6 +29,7 @@ This invokes (transitively):
 | `:app:testDebugUnitTest`                      | JVM unit tests for the debug variant.                                   |
 | `:app:koverVerifyDebug`                       | Test-coverage threshold enforcement.                                    |
 | `:app:checkNoInternalFqn`                     | Custom rule: forbid `app.knotwork.android.*` FQN references in code body.   |
+| `:app:testDebugUnitTest` (Konsist suite)      | Architecture guard: Clean-Architecture layer boundaries (see below).        |
 
 Pre-flight tip: run `./gradlew :app:ktlintFormat` first to auto-fix the
 safely-correctable subset before invoking `check`.
@@ -167,6 +168,47 @@ deliberate batch of fixes:
 **Reports**:
 - `app/build/reports/lint-results-debug.html`
 - `app/build/reports/lint-results-debug.xml`
+
+---
+
+## Konsist — architecture guard
+
+[Konsist](https://docs.konsist.lemonappdev.com/) (Apache-2.0) is a Kotlin
+static analyzer whose checks are written as ordinary JUnit tests. The project
+uses it for **one purpose only**: mechanically enforcing the Clean
+Architecture layer boundaries that were previously guarded by item 1 of the
+manual review checklist. Because the suite lives in the `test` source set, it
+runs as part of `:app:testDebugUnitTest` — no extra `check` wiring is needed.
+
+The suite lives in
+[`app/src/test/java/app/knotwork/android/architecture/`](../app/src/test/java/app/knotwork/android/architecture)
+and is pinned to the `app` module's **production** source set
+(`app/src/main`) via the shared `ArchitectureScope`. The pin is deliberate:
+a whole-project Konsist scope would also parse test sources (which
+legitimately cross layers) and any unrelated copies of the tree under the
+project root — notably stale git worktrees under `.claude/worktrees/` — and
+flag them with spurious, environment-dependent violations.
+
+| Rule (test class)                  | What it enforces                                                                                  |
+|------------------------------------|---------------------------------------------------------------------------------------------------|
+| `LayerDependencyKonsistTest`       | `data -> domain <- presentation`; `domain.dependsOnNothing()` (no `domain -> data`/`presentation`). |
+| `DomainPurityKonsistTest`          | `domain` imports no `android.*` / `androidx.*` — the only exception is annotation-only `androidx.annotation.*`. |
+| `RepositoryPlacementKonsistTest`   | `*Repository` interfaces reside in `domain`; `*RepositoryImpl` classes reside in `data`.          |
+| `ComposableUseCaseKonsistTest`     | No `@Composable` takes a `*UseCase` parameter (see scope note below).                             |
+
+**Why these rules and not more.** Konsist analyses *declarations*, not the
+data flow inside a function body, so it cannot prove a `@Composable` never
+*invokes* a use-case transitively. `ComposableUseCaseKonsistTest` therefore
+guards only the structural smell it can express precisely — a use-case handed
+to a Composable as a parameter. The deeper "presentation talks to ViewModels
+only" intent stays a **manual** review item; the layer-direction and
+domain-purity rules above are fully mechanical and supersede the manual
+"no Android imports in `domain`" / "repository placement" checks.
+
+The guard is regression-tested against the exact leak class it exists to
+catch: reintroducing a `domain -> data` import (or an `android.*` import in
+`domain`) turns both `LayerDependencyKonsistTest` and
+`DomainPurityKonsistTest` red — verified during the suite's introduction.
 
 ---
 

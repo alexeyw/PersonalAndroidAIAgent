@@ -413,4 +413,62 @@ object SettingsDefaults {
 
     /** Upper bound for the cloud-retry base delay. */
     const val CLOUD_RETRY_BASE_DELAY_MS_MAX: Long = 10_000L
+
+    /**
+     * Default for the legacy "ask before every tool call" override
+     * (`requiresUserConfirmation`). `false` so `READ_ONLY` tools run silently and
+     * the agent feels fluid — the per-tool risk classification and
+     * [app.knotwork.android.domain.models.ToolApprovalPolicy] govern when a prompt
+     * is actually shown. This flag is fully superseded by the typed policy and
+     * retained only for one-shot migration of pre-redesign installs.
+     */
+    const val REQUIRES_USER_CONFIRMATION_DEFAULT: Boolean = false
+
+    /**
+     * Default for the anonymous crash-reporting opt-in. `false` to honour the
+     * project's on-device privacy positioning: no telemetry leaves the device
+     * until the user explicitly opts in (Settings → Privacy).
+     */
+    const val CRASH_REPORTING_ENABLED_DEFAULT: Boolean = false
+
+    /**
+     * Default for the "Long-running tasks" notification toggle. `true` so a
+     * pipeline run that outlives the foreground surface can still surface a
+     * progress notification out of the box.
+     */
+    const val LONG_RUNNING_TASK_NOTIFICATIONS_ENABLED_DEFAULT: Boolean = true
+
+    /**
+     * Default for the "Scheduled task results" notification toggle. `true` so a
+     * scheduled background run announces its outcome (and deep-links into its
+     * session) without the user having to enable anything first.
+     */
+    const val SCHEDULED_TASK_NOTIFICATIONS_ENABLED_DEFAULT: Boolean = true
+
+    /**
+     * Default for the hard-block-every-destructive-tool flag. `false` so
+     * destructive tools are gated by the standard Human-in-the-loop prompt
+     * rather than refused outright — a blanket block is an opt-in safety stance.
+     */
+    const val BLOCK_DESTRUCTIVE_TOOLS_DEFAULT: Boolean = false
+
+    /**
+     * Default for local-only mode. `false` so configured cloud providers remain
+     * reachable; the user opts in to gate every cloud call (on-device + Ollama
+     * only) when they want a strict no-egress posture.
+     */
+    const val BLOCK_NETWORK_FROM_LOCAL_MODEL_DEFAULT: Boolean = false
+
+    /**
+     * Default number of recent memory chunks rendered by the `$MEMORY_SUMMARY`
+     * prompt variable. `5` keeps the injected block compact; the user can widen
+     * it up to [MEMORY_SUMMARY_LIMIT_MAX] in Settings → Memory.
+     */
+    const val MEMORY_SUMMARY_DEFAULT_LIMIT_DEFAULT: Int = 5
+
+    /** Lower bound (inclusive) of the auto-summarize trigger fraction. */
+    const val AUTO_SUMMARIZE_THRESHOLD_MIN: Float = 0f
+
+    /** Upper bound (inclusive) of the auto-summarize trigger fraction. */
+    const val AUTO_SUMMARIZE_THRESHOLD_MAX: Float = 1f
 }

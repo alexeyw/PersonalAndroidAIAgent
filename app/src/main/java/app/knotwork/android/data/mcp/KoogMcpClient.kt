@@ -180,10 +180,15 @@ class KoogMcpClient(private val networkActivityTracker: NetworkActivityTracker? 
 
         val kotlinxJsonArgs = Json.parseToJsonElement(arguments).jsonObject
         val koogJsonArgs = kotlinxJsonArgs.toKoogJSONObject()
+        // Fail with a descriptive error rather than an opaque NPE when a
+        // misbehaving MCP server / Koog tool yields null for the decoded args or
+        // the result; the caller (ToolInvocationGate) maps the throw to a tool
+        // error observation.
         val args = tool.decodeArgs(koogJsonArgs, serializer)
-
-        val result = tool.executeUnsafe(args!!)
-        tool.encodeResultToStringUnsafe(result!!, serializer)
+            ?: throw IllegalStateException("MCP tool $name produced null decoded arguments")
+        val result = tool.executeUnsafe(args)
+            ?: throw IllegalStateException("MCP tool $name produced a null result")
+        tool.encodeResultToStringUnsafe(result, serializer)
     }
 
     /** Header-composition + auth helpers shared across instances. */

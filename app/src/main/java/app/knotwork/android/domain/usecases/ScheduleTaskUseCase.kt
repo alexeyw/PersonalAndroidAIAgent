@@ -1,23 +1,20 @@
 package app.knotwork.android.domain.usecases
 
-import androidx.work.Constraints
-import androidx.work.Data
-import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.PeriodicWorkRequestBuilder
-import androidx.work.WorkManager
-import app.knotwork.android.data.services.AgentWorker
+import app.knotwork.android.domain.services.ScheduledTaskConstraints
+import app.knotwork.android.domain.services.TaskScheduler
 import timber.log.Timber
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Use case to schedule a future or periodic task for the agent.
- * Parses the interval and enqueues a work request to the WorkManager.
+ *
+ * Decides between a one-time and a recurring schedule based on the interval and
+ * delegates the actual enqueueing to the [TaskScheduler] domain port, keeping
+ * this use case free of any background-execution framework dependency.
  */
 @Singleton
-class ScheduleTaskUseCase @Inject constructor(private val workManager: WorkManager) {
+class ScheduleTaskUseCase @Inject constructor(private val taskScheduler: TaskScheduler) {
 
     /**
      * Schedules a task.
@@ -38,48 +35,19 @@ class ScheduleTaskUseCase @Inject constructor(private val workManager: WorkManag
         delayMinutes: Long = 0,
         sessionId: String? = null,
     ): String = try {
-        val inputData = Data.Builder()
-            .putString(AgentWorker.KEY_PROMPT, prompt)
-            .putString(AgentWorker.KEY_SESSION_ID, sessionId)
-            .build()
-
-        val constraints = Constraints.Builder()
-            .setRequiresBatteryNotLow(true) // Native WorkManager way to pause on low battery
-            .build()
+        val constraints = ScheduledTaskConstraints(requiresBatteryNotLow = true)
 
         if (intervalHours > 0) {
-            // Periodic task — keyed by (prompt, intervalHours) so re-scheduling
-            // the same recurring agent task does not stack duplicate
-            // PeriodicWorkRequests in the WorkManager queue. `KEEP` means the
-            // first schedule wins; a later identical call short-circuits.
-            val request = PeriodicWorkRequestBuilder<AgentWorker>(intervalHours, TimeUnit.HOURS)
-                .setInputData(inputData)
-                .setConstraints(constraints)
-                .build()
-            val uniqueName = "agent-periodic|${intervalHours}h|$prompt"
-            workManager.enqueueUniquePeriodicWork(
-                uniqueName,
-                ExistingPeriodicWorkPolicy.KEEP,
-                request,
-            )
-            Timber.d("Scheduled periodic task every \$intervalHours hours with prompt: \$prompt")
-            "Task successfully scheduled to run every \$intervalHours hours."
+            taskScheduler.schedulePeriodic(prompt, intervalHours, sessionId, constraints)
+            Timber.d("Scheduled periodic task every $intervalHours hours with prompt: $prompt")
+            "Task successfully scheduled to run every $intervalHours hours."
         } else {
-            // One-time task
-            val requestBuilder = OneTimeWorkRequestBuilder<AgentWorker>()
-                .setInputData(inputData)
-                .setConstraints(constraints)
-
-            if (delayMinutes > 0) {
-                requestBuilder.setInitialDelay(delayMinutes, TimeUnit.MINUTES)
-            }
-
-            workManager.enqueue(requestBuilder.build())
-            Timber.d("Scheduled one-time task with delay \$delayMinutes minutes. Prompt: \$prompt")
-            "One-time task successfully scheduled with \$delayMinutes minutes delay."
+            taskScheduler.scheduleOneTime(prompt, delayMinutes, sessionId, constraints)
+            Timber.d("Scheduled one-time task with delay $delayMinutes minutes. Prompt: $prompt")
+            "One-time task successfully scheduled with $delayMinutes minutes delay."
         }
     } catch (e: Exception) {
         Timber.e(e, "Failed to schedule task")
-        "Failed to schedule task: \${e.message}"
+        "Failed to schedule task: ${e.message}"
     }
 }

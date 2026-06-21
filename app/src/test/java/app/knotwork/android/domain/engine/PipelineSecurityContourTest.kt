@@ -174,7 +174,7 @@ class PipelineSecurityContourTest {
         )
         val nodeExecutorFactory = NodeExecutorFactory(
             InputNodeExecutor(),
-            OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+            OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository, mockk(relaxed = true)),
             IfConditionNodeExecutor(evaluateIfConditionUseCase),
             toolNodeExecutor,
             LiteRtNodeExecutor(

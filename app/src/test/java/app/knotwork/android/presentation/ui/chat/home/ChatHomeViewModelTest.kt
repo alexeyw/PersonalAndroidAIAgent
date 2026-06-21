@@ -328,10 +328,10 @@ class ChatHomeViewModelTest {
 
         val events = mutableListOf<MemorySaveEvent>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            viewModel.memorySaveEvents.collect { events.add(it) }
+            viewModel.transfer.memorySaveEvents.collect { events.add(it) }
         }
 
-        viewModel.saveMessageToMemory(rowId)
+        viewModel.transfer.saveMessageToMemory(rowId)
         advanceUntilIdle()
 
         coVerify(exactly = 1) { saveMessageToMemoryUseCase("remember me") }
@@ -352,10 +352,10 @@ class ChatHomeViewModelTest {
 
         val events = mutableListOf<MemorySaveEvent>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            viewModel.memorySaveEvents.collect { events.add(it) }
+            viewModel.transfer.memorySaveEvents.collect { events.add(it) }
         }
 
-        viewModel.saveMessageToMemory(rowId)
+        viewModel.transfer.saveMessageToMemory(rowId)
         advanceUntilIdle()
 
         assertEquals(listOf(MemorySaveEvent.Failed), events)
@@ -373,7 +373,7 @@ class ChatHomeViewModelTest {
     fun `typed-confirm value is hoisted via onTypedConfirmChange`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        viewModel.onTypedConfirmChange("yes")
+        viewModel.hitl.onTypedConfirmChange("yes")
         assertEquals("yes", viewModel.state.value.composer.typedConfirm)
     }
 
@@ -428,14 +428,53 @@ class ChatHomeViewModelTest {
     }
 
     @Test
+    fun `send drops the replayed previous-run terminal and stays Generating`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        // Reproduces the second-send case: the per-session replay-1 flow hands the
+        // new collector the PREVIOUS run's Completed first. With no live state yet,
+        // the fresh run must remain Generating rather than settling immediately.
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(AgentOrchestratorState.Completed("previous answer"))
+        }
+
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.visual is ChatHomeUiState.Generating)
+    }
+
+    @Test
+    fun `send still settles after dropping the stale terminal when the new run completes`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        // Stale Completed (dropped) followed by the fresh run's own lifecycle:
+        // the real terminal still settles the surface out of Generating.
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(AgentOrchestratorState.Completed("stale replay"))
+            emit(AgentOrchestratorState.Loading)
+            emit(AgentOrchestratorState.Completed("fresh answer"))
+        }
+
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.visual !is ChatHomeUiState.Generating)
+    }
+
+    @Test
     fun `onAttachClicked shows chooser and dismissSourceChooser hides it`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.onAttachClicked()
+        viewModel.attachments.onAttachClicked()
         assertTrue(viewModel.state.value.sourceChooserVisible)
 
-        viewModel.dismissSourceChooser()
+        viewModel.attachments.dismissSourceChooser()
         assertFalse(viewModel.state.value.sourceChooserVisible)
     }
 
@@ -447,7 +486,7 @@ class ChatHomeViewModelTest {
         coEvery { attachmentStore.ingestUri("content://pick") } returns kotlin.Result.success(stored)
         every { attachmentStore.absolutePathFor("p.jpg") } returns "/tmp/p.jpg"
 
-        viewModel.onImagePicked("content://pick")
+        viewModel.attachments.onImagePicked("content://pick")
         advanceUntilIdle()
 
         val draft = viewModel.state.value.composer.attachment
@@ -467,10 +506,10 @@ class ChatHomeViewModelTest {
             coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.failure(RuntimeException("bad"))
             val events = mutableListOf<Unit>()
             backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-                viewModel.attachmentErrorEvents.collect { events.add(it) }
+                viewModel.attachments.attachmentErrorEvents.collect { events.add(it) }
             }
 
-            viewModel.onImagePicked("content://bad")
+            viewModel.attachments.onImagePicked("content://bad")
             advanceUntilIdle()
 
             assertNull(viewModel.state.value.composer.attachment)
@@ -486,10 +525,10 @@ class ChatHomeViewModelTest {
         val stored = MessageAttachment(path = "p.jpg", mimeType = "image/jpeg", width = 100, height = 100)
         coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.success(stored)
         every { attachmentStore.absolutePathFor(any()) } returns "/tmp/p.jpg"
-        viewModel.onImagePicked("content://pick")
+        viewModel.attachments.onImagePicked("content://pick")
         advanceUntilIdle()
 
-        viewModel.removeAttachment()
+        viewModel.attachments.removeAttachment()
 
         assertNull(viewModel.state.value.composer.attachment)
     }
@@ -518,7 +557,7 @@ class ChatHomeViewModelTest {
                 )
             } returns flow { emit(AgentOrchestratorState.Completed("done")) }
 
-            viewModel.onImagePicked("content://pick")
+            viewModel.attachments.onImagePicked("content://pick")
             advanceUntilIdle()
             viewModel.sendMessage()
             advanceUntilIdle()
@@ -549,14 +588,14 @@ class ChatHomeViewModelTest {
         coEvery { agentOrchestratorUseCase(sessionId, any(), any(), any(), any()) } returns
             flow { emit(AgentOrchestratorState.Completed("done")) }
 
-        viewModel.onImagePicked("content://pick")
+        viewModel.attachments.onImagePicked("content://pick")
         advanceUntilIdle()
         viewModel.sendMessage()
         advanceUntilIdle()
 
         // The chat keeps its default name — the instruction text must not become the title.
         assertEquals(
-            ChatHomeViewModel.DEFAULT_NEW_CHAT_NAME,
+            ChatHomeThreadsDelegate.DEFAULT_NEW_CHAT_NAME,
             sessionsFlow.value.first { it.id == sessionId }.name,
         )
     }
@@ -574,14 +613,14 @@ class ChatHomeViewModelTest {
             coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.success(stored)
             every { attachmentStore.absolutePathFor(any()) } returns "/tmp/p.jpg"
 
-            viewModel.onImagePicked("content://pick")
+            viewModel.attachments.onImagePicked("content://pick")
             advanceUntilIdle()
             viewModel.sendMessage()
             advanceUntilIdle()
 
             val visual = viewModel.state.value.visual
             assertTrue(visual is ChatHomeUiState.Error)
-            assertEquals(ChatHomeViewModel.MODEL_NO_VISION_MESSAGE, (visual as ChatHomeUiState.Error).message)
+            assertEquals(ChatHomeAttachmentDelegate.MODEL_NO_VISION_MESSAGE, (visual as ChatHomeUiState.Error).message)
             // The run never starts and the draft attachment is preserved.
             coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any(), any(), any()) }
             assertNotNull(viewModel.state.value.composer.attachment)
@@ -599,14 +638,14 @@ class ChatHomeViewModelTest {
         coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.success(stored)
         every { attachmentStore.absolutePathFor(any()) } returns "/tmp/p.jpg"
 
-        viewModel.onImagePicked("content://pick")
+        viewModel.attachments.onImagePicked("content://pick")
         advanceUntilIdle()
         viewModel.sendMessage()
         advanceUntilIdle()
 
         val visual = viewModel.state.value.visual
         assertTrue(visual is ChatHomeUiState.Error)
-        assertEquals(ChatHomeViewModel.PIPELINE_NO_VISION_MESSAGE, (visual as ChatHomeUiState.Error).message)
+        assertEquals(ChatHomeAttachmentDelegate.PIPELINE_NO_VISION_MESSAGE, (visual as ChatHomeUiState.Error).message)
         coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any(), any(), any()) }
     }
 
@@ -624,7 +663,7 @@ class ChatHomeViewModelTest {
         coEvery { agentOrchestratorUseCase(sessionId, any(), any(), any(), any()) } returns
             flow { emit(AgentOrchestratorState.Completed("done")) }
 
-        viewModel.onImagePicked("content://pick")
+        viewModel.attachments.onImagePicked("content://pick")
         advanceUntilIdle()
         // Both taps land before the async pre-flight resolves; the in-flight guard
         // must reject the second so only one run is enqueued.
@@ -649,7 +688,7 @@ class ChatHomeViewModelTest {
             coEvery { attachmentStore.ingestUri(any()) } returns kotlin.Result.success(stored)
             every { attachmentStore.absolutePathFor(any()) } returns "/tmp/p.jpg"
 
-            viewModel.onImagePicked("content://pick")
+            viewModel.attachments.onImagePicked("content://pick")
             advanceUntilIdle()
             viewModel.sendMessage()
             advanceUntilIdle()
@@ -657,7 +696,7 @@ class ChatHomeViewModelTest {
             val visual = viewModel.state.value.visual
             assertTrue(visual is ChatHomeUiState.Error)
             assertEquals(
-                ChatHomeViewModel.CLOUD_ATTACHMENT_BLOCKED_MESSAGE,
+                ChatHomeAttachmentDelegate.CLOUD_ATTACHMENT_BLOCKED_MESSAGE,
                 (visual as ChatHomeUiState.Error).message,
             )
             coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any(), any(), any()) }
@@ -754,7 +793,7 @@ class ChatHomeViewModelTest {
         val sessionId = viewModel.state.value.thread.currentSessionId
         // initializeSession() created a session named DEFAULT_NEW_CHAT_NAME
         assertEquals(
-            ChatHomeViewModel.DEFAULT_NEW_CHAT_NAME,
+            ChatHomeThreadsDelegate.DEFAULT_NEW_CHAT_NAME,
             sessionsFlow.value.first { it.id == sessionId }.name,
         )
         coEvery { agentOrchestratorUseCase(sessionId, any(), any()) } returns flowOf(
@@ -774,7 +813,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
         val sessionId = viewModel.state.value.thread.currentSessionId
-        val long = "x".repeat(ChatHomeViewModel.AUTO_RENAME_CHAR_LIMIT + 5)
+        val long = "x".repeat(ChatHomeThreadsDelegate.AUTO_RENAME_CHAR_LIMIT + 5)
         coEvery { agentOrchestratorUseCase(sessionId, any(), any()) } returns flowOf(
             AgentOrchestratorState.Completed("ok"),
         )
@@ -785,7 +824,7 @@ class ChatHomeViewModelTest {
 
         val renamed = sessionsFlow.value.first { it.id == sessionId }.name
         assertEquals(
-            "x".repeat(ChatHomeViewModel.AUTO_RENAME_CHAR_LIMIT) + ChatHomeViewModel.AUTO_RENAME_SUFFIX,
+            "x".repeat(ChatHomeThreadsDelegate.AUTO_RENAME_CHAR_LIMIT) + ChatHomeThreadsDelegate.AUTO_RENAME_SUFFIX,
             renamed,
         )
     }
@@ -947,7 +986,7 @@ class ChatHomeViewModelTest {
         // Await the one-shot event on the foreground test scope. Subscribe
         // before the switch — the event flow has no replay, so a late
         // subscriber would miss it.
-        val fallbackEvent = async { viewModel.pipelineFallbackEvents.first() }
+        val fallbackEvent = async { viewModel.pipelineBinding.pipelineFallbackEvents.first() }
         testScheduler.runCurrent()
 
         viewModel.selectThread(target)
@@ -962,9 +1001,9 @@ class ChatHomeViewModelTest {
     fun `openDrawer + closeDrawer with no messages settles back on Empty`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        viewModel.openDrawer()
+        viewModel.threads.openDrawer()
         assertEquals(ChatHomeUiState.DrawerOpen, viewModel.state.value.visual)
-        viewModel.closeDrawer()
+        viewModel.threads.closeDrawer()
         assertEquals(ChatHomeUiState.Empty, viewModel.state.value.visual)
     }
 
@@ -973,7 +1012,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
         val stateBefore = viewModel.state.value.visual
-        viewModel.openConsole(ConsoleSnap.Full)
+        viewModel.console.openConsole(ConsoleSnap.Full)
         assertEquals(ConsoleSnap.Full, viewModel.state.value.console.snap)
         assertEquals(stateBefore, viewModel.state.value.visual)
     }
@@ -982,9 +1021,9 @@ class ChatHomeViewModelTest {
     fun `closeConsole clears consoleSnap without touching chat state`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        viewModel.openConsole(ConsoleSnap.Partial)
+        viewModel.console.openConsole(ConsoleSnap.Partial)
         val stateBefore = viewModel.state.value.visual
-        viewModel.closeConsole()
+        viewModel.console.closeConsole()
         assertNull(viewModel.state.value.console.snap)
         assertEquals(stateBefore, viewModel.state.value.visual)
     }
@@ -993,8 +1032,8 @@ class ChatHomeViewModelTest {
     fun `setConsoleSnap updates an open console pane`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        viewModel.openConsole(ConsoleSnap.Partial)
-        viewModel.setConsoleSnap(ConsoleSnap.Full)
+        viewModel.console.openConsole(ConsoleSnap.Partial)
+        viewModel.console.setConsoleSnap(ConsoleSnap.Full)
         assertEquals(ConsoleSnap.Full, viewModel.state.value.console.snap)
     }
 
@@ -1002,7 +1041,7 @@ class ChatHomeViewModelTest {
     fun `setConsoleSnap is a no-op when console is closed`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
-        viewModel.setConsoleSnap(ConsoleSnap.Full)
+        viewModel.console.setConsoleSnap(ConsoleSnap.Full)
         assertNull(viewModel.state.value.console.snap)
     }
 
@@ -1014,7 +1053,7 @@ class ChatHomeViewModelTest {
         // any of the streamed events.
         viewModel = createViewModel()
         advanceUntilIdle()
-        viewModel.openConsole(ConsoleSnap.Partial)
+        viewModel.console.openConsole(ConsoleSnap.Partial)
         viewModel.forceState(ChatHomeUiState.Idle)
         assertEquals(ConsoleSnap.Partial, viewModel.state.value.console.snap)
     }
@@ -1075,7 +1114,7 @@ class ChatHomeViewModelTest {
         viewModel.sendMessage()
         advanceUntilIdle()
 
-        viewModel.approveTool()
+        viewModel.hitl.approveTool()
         advanceUntilIdle()
 
         coVerify { submitApprovalDecisionUseCase(sessionId, true, null) }
@@ -1102,7 +1141,7 @@ class ChatHomeViewModelTest {
         viewModel.sendMessage()
         advanceUntilIdle()
 
-        viewModel.rejectTool()
+        viewModel.hitl.rejectTool()
         advanceUntilIdle()
 
         coVerify { submitApprovalDecisionUseCase(sessionId, false, null) }
@@ -1141,14 +1180,14 @@ class ChatHomeViewModelTest {
         advanceUntilIdle()
 
         // Empty typed-confirm — Allow must be refused.
-        viewModel.approveTool()
+        viewModel.hitl.approveTool()
         advanceUntilIdle()
         coVerify(exactly = 0) { submitApprovalDecisionUseCase(any(), true, any()) }
         assertTrue(viewModel.state.value.visual is ChatHomeUiState.HitlConfirm)
 
         // Typing the canonical magic word unlocks the gate.
-        viewModel.onTypedConfirmChange("yes")
-        viewModel.approveTool()
+        viewModel.hitl.onTypedConfirmChange("yes")
+        viewModel.hitl.approveTool()
         advanceUntilIdle()
         coVerify { submitApprovalDecisionUseCase(sessionId, true, null) }
         assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
@@ -1199,7 +1238,7 @@ class ChatHomeViewModelTest {
         viewModel.sendMessage()
         advanceUntilIdle()
 
-        viewModel.submitClarificationReply(" Yes  ")
+        viewModel.hitl.submitClarificationReply(" Yes  ")
         advanceUntilIdle()
 
         coVerify { submitClarificationAnswerUseCase(sessionId, "req-7", "Yes") }
@@ -1261,7 +1300,7 @@ class ChatHomeViewModelTest {
         viewModel.sendMessage()
         advanceUntilIdle()
 
-        viewModel.submitClarificationReply("   ")
+        viewModel.hitl.submitClarificationReply("   ")
         advanceUntilIdle()
 
         coVerify { submitClarificationAnswerUseCase(sessionId, "req-blank", "") }
@@ -1301,7 +1340,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.createNewSessionWithPipeline(pipelineId = "pipe-42")
+        viewModel.threads.createNewSessionWithPipeline(pipelineId = "pipe-42")
         advanceUntilIdle()
 
         coVerify { chatRepository.saveSession(match { it.pipelineId == "pipe-42" }) }
@@ -1314,7 +1353,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.renameSession("thread-x", "   New name   ")
+        viewModel.threads.renameSession("thread-x", "   New name   ")
         advanceUntilIdle()
 
         coVerify { chatRepository.renameSession("thread-x", "New name") }
@@ -1325,7 +1364,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.renameSession("thread-x", "    ")
+        viewModel.threads.renameSession("thread-x", "    ")
         advanceUntilIdle()
 
         coVerify(exactly = 0) { chatRepository.renameSession(any(), any()) }
@@ -1341,7 +1380,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.toggleFavoriteCurrent()
+        viewModel.threads.toggleFavoriteCurrent()
         advanceUntilIdle()
 
         coVerify { chatRepository.setSessionFavorite(sessionId, true) }
@@ -1406,7 +1445,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.deleteCurrentSession()
+        viewModel.threads.deleteCurrentSession()
         advanceUntilIdle()
 
         coVerify { chatRepository.deleteSession(sessionId) }
@@ -1426,7 +1465,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.deleteCurrentSession()
+        viewModel.threads.deleteCurrentSession()
         advanceUntilIdle()
 
         coVerify { chatRepository.deleteSession(sessionId) }
@@ -1440,7 +1479,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.importChatFromJson("""[{"role":"USER","text":"hi","timestamp":1}]""")
+        viewModel.transfer.importChatFromJson("""[{"role":"USER","text":"hi","timestamp":1}]""")
         advanceUntilIdle()
 
         coVerify { chatRepository.importChat(any()) }
@@ -1458,9 +1497,9 @@ class ChatHomeViewModelTest {
         // resumes once `tryEmit` lands. MutableSharedFlow(replay=0) only
         // delivers to subscribers active at emit time, so the await-then-emit
         // ordering is mandatory.
-        val received = async { viewModel.importErrorEvents.first() }
+        val received = async { viewModel.transfer.importErrorEvents.first() }
         runCurrent()
-        viewModel.importChatFromJson("not json")
+        viewModel.transfer.importChatFromJson("not json")
         advanceUntilIdle()
 
         assertEquals("bad shape", received.await())
@@ -1481,9 +1520,9 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        val payload = async { viewModel.exportEvents.first() }
+        val payload = async { viewModel.transfer.exportEvents.first() }
         runCurrent()
-        viewModel.exportCurrentSession()
+        viewModel.transfer.exportCurrentSession()
         advanceUntilIdle()
 
         val captured = payload.await()
@@ -1723,7 +1762,7 @@ class ChatHomeViewModelTest {
             advanceUntilIdle()
 
             assertEquals(
-                ChatHomeViewModel.INTERRUPTED_UNKNOWN_NODE_LABEL,
+                ChatHomeReattachDelegate.INTERRUPTED_UNKNOWN_NODE_LABEL,
                 viewModel.state.value.pending.interrupted?.nodeLabel,
             )
         }
@@ -1779,7 +1818,7 @@ class ChatHomeViewModelTest {
         advanceUntilIdle()
         assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
 
-        viewModel.discardInterruptedRun()
+        viewModel.reattach.discardInterruptedRun()
         advanceUntilIdle()
 
         assertNull(viewModel.state.value.pending.interrupted)
@@ -1800,7 +1839,7 @@ class ChatHomeViewModelTest {
         assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
         assertTrue(viewModel.state.value.pending.interrupted?.resumable == true)
 
-        viewModel.resumeInterruptedRun()
+        viewModel.reattach.resumeInterruptedRun()
         advanceUntilIdle()
 
         assertNull(viewModel.state.value.pending.interrupted)
@@ -1821,11 +1860,11 @@ class ChatHomeViewModelTest {
 
         val events = mutableListOf<ResumeFeedbackEvent>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            viewModel.resumeFeedbackEvents.collect { events.add(it) }
+            viewModel.reattach.resumeFeedbackEvents.collect { events.add(it) }
         }
         runCurrent()
 
-        viewModel.resumeInterruptedRun()
+        viewModel.reattach.resumeInterruptedRun()
         advanceUntilIdle()
 
         assertEquals(listOf(ResumeFeedbackEvent.GraphChanged), events)
@@ -1846,11 +1885,11 @@ class ChatHomeViewModelTest {
 
         val events = mutableListOf<ResumeFeedbackEvent>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
-            viewModel.resumeFeedbackEvents.collect { events.add(it) }
+            viewModel.reattach.resumeFeedbackEvents.collect { events.add(it) }
         }
         runCurrent()
 
-        viewModel.resumeInterruptedRun()
+        viewModel.reattach.resumeInterruptedRun()
         advanceUntilIdle()
 
         assertEquals(listOf(ResumeFeedbackEvent.Expired), events)
@@ -1882,9 +1921,9 @@ class ChatHomeViewModelTest {
         advanceUntilIdle()
         assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
 
-        viewModel.openDrawer()
+        viewModel.threads.openDrawer()
         assertEquals(ChatHomeUiState.DrawerOpen, viewModel.state.value.visual)
-        viewModel.closeDrawer()
+        viewModel.threads.closeDrawer()
 
         // The resting visual must resolve back to Interrupted while the
         // snapshot is pending — otherwise Resume / Discard become
@@ -1903,7 +1942,7 @@ class ChatHomeViewModelTest {
 
             viewModel = createViewModel()
             // Drawer goes up before the reattach lookup lands.
-            viewModel.openDrawer()
+            viewModel.threads.openDrawer()
             advanceUntilIdle()
 
             // The overlay is never yanked away…
@@ -1911,7 +1950,7 @@ class ChatHomeViewModelTest {
             // …but the pending snapshot is installed, so closing the drawer
             // settles straight onto the interrupted card.
             assertNotNull(viewModel.state.value.pending.interrupted)
-            viewModel.closeDrawer()
+            viewModel.threads.closeDrawer()
             assertEquals(ChatHomeUiState.Interrupted, viewModel.state.value.visual)
         }
 
@@ -1968,14 +2007,14 @@ class ChatHomeViewModelTest {
         viewModel.sendMessage()
         runCurrent()
 
-        viewModel.submitClarificationReply("Work")
+        viewModel.hitl.submitClarificationReply("Work")
         advanceUntilIdle()
 
         coVerify {
             chatRepository.saveMessage(
                 match {
                     it.role == Role.SYSTEM &&
-                        it.content == ChatHomeViewModel.SYSTEM_MESSAGE_CLARIFICATION_REPLY_NOT_DELIVERED
+                        it.content == ChatHomeHitlDelegate.SYSTEM_MESSAGE_CLARIFICATION_REPLY_NOT_DELIVERED
                 },
             )
         }
@@ -2011,7 +2050,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.onMicClicked()
+        viewModel.voice.onMicClicked()
         advanceUntilIdle()
 
         val composer = viewModel.state.value.composer
@@ -2024,7 +2063,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.onMicPermissionDenied()
+        viewModel.voice.onMicPermissionDenied()
 
         val composer = viewModel.state.value.composer
         assertEquals(ComposerVoiceNotice.PermissionDenied, composer.voiceNotice)
@@ -2038,7 +2077,7 @@ class ChatHomeViewModelTest {
         coEvery { transcribeAudioUseCase("/cache/clip.wav") } returns TranscriptionOutcome.Success("hello world")
         advanceUntilIdle()
 
-        viewModel.onAudioFilePicked("content://clip")
+        viewModel.voice.onAudioFilePicked("content://clip")
         advanceUntilIdle()
 
         val composer = viewModel.state.value.composer
@@ -2053,7 +2092,7 @@ class ChatHomeViewModelTest {
         coEvery { transcribeAudioUseCase(any()) } returns TranscriptionOutcome.ModelNotAudioCapable
         advanceUntilIdle()
 
-        viewModel.onAudioFilePicked("content://clip")
+        viewModel.voice.onAudioFilePicked("content://clip")
         advanceUntilIdle()
 
         assertEquals(ComposerVoiceNotice.NoAudioModel, viewModel.state.value.composer.voiceNotice)
@@ -2064,7 +2103,7 @@ class ChatHomeViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.onDiscardRecording()
+        viewModel.voice.onDiscardRecording()
 
         verify { audioRecorder.cancel() }
         assertEquals(VoiceInputState.Idle, viewModel.state.value.composer.voice)
@@ -2077,7 +2116,7 @@ class ChatHomeViewModelTest {
         coEvery { transcribeAudioUseCase("/cache/clip.wav") } returns TranscriptionOutcome.Success("hi there")
         advanceUntilIdle()
 
-        viewModel.startRecording()
+        viewModel.voice.startRecording()
         advanceUntilIdle()
 
         val composer = viewModel.state.value.composer
@@ -2093,7 +2132,7 @@ class ChatHomeViewModelTest {
         every { audioRecorder.state } returns MutableStateFlow(RecordingState.Failed)
         advanceUntilIdle()
 
-        viewModel.startRecording()
+        viewModel.voice.startRecording()
         advanceUntilIdle()
 
         assertEquals(VoiceInputState.Idle, viewModel.state.value.composer.voice)

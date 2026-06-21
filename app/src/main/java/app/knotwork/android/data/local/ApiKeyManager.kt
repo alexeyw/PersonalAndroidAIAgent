@@ -150,7 +150,7 @@ class ApiKeyManager @Inject constructor(@ApplicationContext private val context:
     override fun getOllamaContextWindowSize(): Flow<Int> = _ollamaContextFlow.asStateFlow()
 
     override suspend fun setOllamaContextWindowSize(size: Int) {
-        store.putString(Keys.OLLAMA_CONTEXT, size.toString())
+        store.putString(Keys.OLLAMA_CONTEXT, size.toString(), synchronous = false)
         _ollamaContextFlow.value = size
     }
 
@@ -170,7 +170,7 @@ class ApiKeyManager @Inject constructor(@ApplicationContext private val context:
         if (value == null) {
             store.remove(key)
         } else {
-            store.putString(key, value)
+            store.putString(key, value, synchronous = false)
         }
     }
 

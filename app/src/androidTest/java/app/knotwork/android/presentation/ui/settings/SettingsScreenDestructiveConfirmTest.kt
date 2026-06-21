@@ -1,15 +1,18 @@
 package app.knotwork.android.presentation.ui.settings
 
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import app.knotwork.android.domain.models.Identity
 import app.knotwork.design.screens.settings.DESTRUCTIVE_CONFIRM_BUTTON_TEST_TAG
 import app.knotwork.design.screens.settings.DESTRUCTIVE_TYPED_FIELD_TEST_TAG
+import app.knotwork.design.screens.settings.RESET_CONFIRM_BUTTON_TEST_TAG
 import io.mockk.verify
 import org.junit.Rule
 import org.junit.Test
@@ -69,6 +72,29 @@ class SettingsScreenDestructiveConfirmTest {
 
         composeTestRule.onNodeWithTag(testTag = DESTRUCTIVE_CONFIRM_BUTTON_TEST_TAG).assertIsEnabled()
         composeTestRule.onNodeWithTag(testTag = DESTRUCTIVE_CONFIRM_BUTTON_TEST_TAG).performClick()
+
+        verify(exactly = 1) { vm.confirmDestructive() }
+    }
+
+    @Test
+    fun pendingResetSettings_plainDialog_noTypedField_confirmForwards() {
+        val (vm, _) = mockSettingsViewModel(
+            initialUiState = SettingsUiState(
+                identity = identityStub(),
+                pendingDestructive = PendingDestructiveAction.ResetSettings,
+                destructiveTypedInput = "",
+            ),
+        )
+
+        composeTestRule.setContent {
+            MaterialTheme { SettingsScreen(viewModel = vm) }
+        }
+
+        // The plain reset dialog has no typed-keyword gate: its confirm is
+        // immediately enabled and there is no typed-confirm field on screen.
+        composeTestRule.onNodeWithTag(testTag = RESET_CONFIRM_BUTTON_TEST_TAG).assertIsDisplayed()
+        composeTestRule.onAllNodesWithTag(testTag = DESTRUCTIVE_TYPED_FIELD_TEST_TAG).assertCountEquals(0)
+        composeTestRule.onNodeWithTag(testTag = RESET_CONFIRM_BUTTON_TEST_TAG).performClick()
 
         verify(exactly = 1) { vm.confirmDestructive() }
     }

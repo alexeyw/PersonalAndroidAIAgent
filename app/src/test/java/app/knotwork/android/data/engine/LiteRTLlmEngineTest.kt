@@ -10,8 +10,11 @@ import io.mockk.mockk
 import io.mockk.mockkConstructor
 import io.mockk.unmockkAll
 import io.mockk.verify
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -29,6 +32,12 @@ class LiteRTLlmEngineTest {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var engine: LiteRTLlmEngine
 
+    // Drives the engine's fire-and-forget unload path (close / onTrimMemory).
+    // An unconfined dispatcher runs the launched unload eagerly on the calling
+    // thread until its first real suspension, so the uncontended teardown
+    // completes synchronously within the test body.
+    private val appScope = CoroutineScope(UnconfinedTestDispatcher())
+
     @Before
     fun setup() {
         context = mockk(relaxed = true)
@@ -45,12 +54,13 @@ class LiteRTLlmEngineTest {
         every { anyConstructed<Engine>().initialize() } returns Unit
         every { anyConstructed<Engine>().close() } returns Unit
 
-        engine = LiteRTLlmEngine(context, settingsRepository)
+        engine = LiteRTLlmEngine(context, settingsRepository, appScope)
     }
 
     @After
     fun teardown() {
         engine.close()
+        appScope.cancel()
         unmockkAll()
     }
 

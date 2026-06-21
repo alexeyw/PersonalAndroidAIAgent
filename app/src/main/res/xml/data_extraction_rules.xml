@@ -1,19 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
+   Data extraction rules (applied via android:dataExtractionRules on API >= 31).
    See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+
+   The DataStore preferences (files/datastore/) are excluded from BOTH cloud
+   backup and device-to-device transfer: they may carry settings the app treats
+   as on-device-only. The SQLCipher database and the Keystore-backed secret store
+   are left in because their key material is device-bound and non-exportable — a
+   restored copy is undecryptable — whereas the plain DataStore is not protected.
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <exclude domain="file" path="datastore/" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <exclude domain="file" path="datastore/" />
     </device-transfer>
-    -->
 </data-extraction-rules>

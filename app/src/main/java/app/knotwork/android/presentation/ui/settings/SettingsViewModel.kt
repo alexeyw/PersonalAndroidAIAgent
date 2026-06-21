@@ -27,6 +27,7 @@ import app.knotwork.android.domain.usecases.MemoryImportResult
 import app.knotwork.android.domain.usecases.MemoryImportUseCase
 import app.knotwork.android.domain.usecases.ReembedAllMemoriesUseCase
 import app.knotwork.android.domain.usecases.ResetSamplingDefaultsUseCase
+import app.knotwork.android.domain.usecases.ResetToRecommendedDefaultsUseCase
 import app.knotwork.android.domain.usecases.TestBackendUseCase
 import app.knotwork.design.components.dialogs.typedConfirmMatches
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -77,6 +78,7 @@ class SettingsViewModel @Inject constructor(
     private val crashReportingRepository: CrashReportingRepository,
     private val testBackendUseCase: TestBackendUseCase,
     private val resetSamplingDefaultsUseCase: ResetSamplingDefaultsUseCase,
+    private val resetToRecommendedDefaultsUseCase: ResetToRecommendedDefaultsUseCase,
     private val clearAllMemoryUseCase: ClearAllMemoryUseCase,
     private val exportMemoryBaseUseCase: ExportMemoryBaseUseCase,
     private val memoryImportUseCase: MemoryImportUseCase,
@@ -902,10 +904,14 @@ class SettingsViewModel @Inject constructor(
 
     fun confirmDestructive() {
         val pending = _uiState.value.pendingDestructive ?: return
-        val keyword = appContext.getString(R.string.destructive_typed_keyword)
-        if (!typedConfirmMatches(input = _uiState.value.destructiveTypedInput, keyword = keyword)) return
         when (pending) {
-            PendingDestructiveAction.ClearMemory -> performClearMemory()
+            // Wiping memory is irreversible — keep the typed-keyword gate.
+            PendingDestructiveAction.ClearMemory -> {
+                val keyword = appContext.getString(R.string.destructive_typed_keyword)
+                if (!typedConfirmMatches(input = _uiState.value.destructiveTypedInput, keyword = keyword)) return
+                performClearMemory()
+            }
+            // Resetting settings touches no user data — a plain confirm is enough.
             PendingDestructiveAction.ResetSettings -> performResetSettings()
         }
         _uiState.update { it.copy(pendingDestructive = null, destructiveTypedInput = "") }
@@ -922,41 +928,21 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Restores every tunable preference to its recommended default via
+     * [ResetToRecommendedDefaultsUseCase] (a single atomic write), then mirrors
+     * the reset crash-reporting consent into [CrashReportingRepository] so
+     * Crashlytics collection actually stops — the persisted flag alone does not
+     * flip the live collector. User data (memory, chats, pipelines, prompts,
+     * connections, secrets) is deliberately left untouched; the scope contract
+     * lives on [SettingsRepository.resetToRecommendedDefaults].
+     */
     private fun performResetSettings() {
         viewModelScope.launch {
-            resetSamplingDefaultsUseCase()
-            settingsRepository.setToolApprovalPolicy(ToolApprovalPolicy.DEFAULT)
-            settingsRepository.setBlockDestructiveTools(false)
-            settingsRepository.setBlockNetworkFromLocalModel(false)
-            settingsRepository.setAutoSummarizeThreshold(SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_DEFAULT)
-            settingsRepository.setLongRunningTaskNotificationsEnabled(true)
-            settingsRepository.setScheduledTaskNotificationsEnabled(true)
-            settingsRepository.setSystemPromptPrefix("")
-            resetMemoryTuningDefaults()
+            resetToRecommendedDefaultsUseCase()
+            crashReportingRepository.setEnabled(SettingsDefaults.CRASH_REPORTING_ENABLED_DEFAULT)
             emitSnackbar(appContext.getString(R.string.settings_reset_button))
         }
-    }
-
-    /**
-     * Restores every Settings → Memory tuning control to its documented default
-     * so "Reset settings" reverts the whole Memory card (not just the sampling
-     * sliders). Mirrors the bounds-free defaults in [SettingsDefaults]; the
-     * embedding provider returns to the on-device USE default.
-     */
-    private suspend fun resetMemoryTuningDefaults() {
-        settingsRepository.setAutoExtractEnabled(SettingsDefaults.AUTO_EXTRACT_ENABLED_DEFAULT)
-        settingsRepository.setMemorySearchTopK(SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT)
-        settingsRepository.setMemorySearchThreshold(SettingsDefaults.MEMORY_SEARCH_THRESHOLD_DEFAULT)
-        settingsRepository.setMemoryRecencyHalfLifeDays(SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_DEFAULT)
-        settingsRepository.setMemoryCompactionEnabled(SettingsDefaults.MEMORY_COMPACTION_ENABLED_DEFAULT)
-        settingsRepository.setMemoryCompactionAgeDays(SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT)
-        settingsRepository.setMaxMemoryChunks(SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT)
-        settingsRepository.setChatHistoryCompressionEnabled(SettingsDefaults.CHAT_HISTORY_COMPRESSION_ENABLED_DEFAULT)
-        settingsRepository.setChatHistoryCompressionThresholdTokens(
-            SettingsDefaults.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_DEFAULT,
-        )
-        settingsRepository.setChatHistoryLiveWindowSize(SettingsDefaults.CHAT_HISTORY_LIVE_WINDOW_DEFAULT)
-        settingsRepository.setActiveEmbeddingProviderId(SettingsDefaults.ACTIVE_EMBEDDING_PROVIDER_ID_DEFAULT)
     }
 
     // ─── Notifications + privacy ─────────────────────────────────────────

@@ -19,6 +19,7 @@ import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.ResumeContext
+import app.knotwork.android.domain.models.RunGeneratingModel
 import app.knotwork.android.domain.models.RunImageDelivery
 import app.knotwork.android.domain.models.RunStepBudget
 import app.knotwork.android.domain.models.RunTraceRecord
@@ -176,6 +177,7 @@ class GraphExecutionEngine @Inject constructor(
         stepBudget: RunStepBudget? = null,
         imageInput: EngineImageInput? = null,
         imageDelivery: RunImageDelivery? = null,
+        generatingModel: RunGeneratingModel? = null,
     ): Flow<AgentOrchestratorState> = flow {
         // Buffer of console events accumulated for this run. The engine emits a
         // fresh `ConsoleLog` snapshot on every append so the UI reactively
@@ -232,6 +234,12 @@ class GraphExecutionEngine @Inject constructor(
         // (threaded in via [imageDelivery]) so a vision sink nested inside a
         // sub-pipeline can consume the image, tracked once across the whole tree.
         val delivery = imageDelivery ?: imageInput?.let { RunImageDelivery(it) }
+
+        // The run tree's shared "which model produced the answer" holder. A
+        // top-level run seeds a fresh one; a sub-pipeline reuses the parent's
+        // instance (threaded in via [generatingModel]) so an answer produced
+        // inside a sub-pipeline still attributes at the root OUTPUT.
+        val genModel = generatingModel ?: RunGeneratingModel()
 
         // Honesty note for a run that carried an image but routed down a path with
         // no vision sink: the send-time pre-flight guarantees such a node *exists*,
@@ -667,6 +675,7 @@ class GraphExecutionEngine @Inject constructor(
                             routingChoices = routingChoices,
                             imagePath = imagePathForNode,
                             imageDelivery = delivery,
+                            generatingModel = genModel,
                         ),
                     )
                         .collect { output ->
@@ -1024,11 +1033,22 @@ class GraphExecutionEngine @Inject constructor(
 
         val targetNodeId = if (currentNode.type == NodeType.IF_CONDITION) {
             val expectedLabel = if (conditionResult == true) "True" else "False"
-            edges.find { it.label.equals(expectedLabel, ignoreCase = true) }?.targetNodeId
-                ?: edges.firstOrNull()?.targetNodeId
+            val oppositeLabel = if (conditionResult == true) "False" else "True"
+            val exactTarget = edges.find { it.label.equals(expectedLabel, ignoreCase = true) }?.targetNodeId
+            when {
+                exactTarget != null -> exactTarget
+                // The author wired the opposite branch but left this one
+                // unconnected: terminate the branch (-> "terminated without
+                // OUTPUT") instead of silently falling through to an arbitrary
+                // first edge and running the wrong branch on this verdict.
+                edges.any { it.label.equals(oppositeLabel, ignoreCase = true) } -> null
+                // No True/False labels at all — a single default edge. Keep the
+                // legacy fall-through so an unlabelled pass-through still routes.
+                else -> edges.firstOrNull()?.targetNodeId
+            }
         } else if (currentNode.type == NodeType.INTENT_ROUTER && routingKey != null) {
             val matchedEdge = edges.find { it.label?.equals(routingKey, ignoreCase = true) == true }
-                ?: edges.find { !it.label.isNullOrBlank() && routingKey.contains(it.label, ignoreCase = true) }
+                ?: edges.find { !it.label.isNullOrBlank() && routingKeyContainsLabelAsWord(routingKey, it.label) }
             matchedEdge?.targetNodeId ?: edges.firstOrNull()?.targetNodeId
         } else if (currentNode.type == NodeType.EVALUATION && routingKey != null) {
             // EVALUATION emits a Pass / Retry / Fail verdict as the routing key;
@@ -1044,6 +1064,32 @@ class GraphExecutionEngine @Inject constructor(
         Timber.tag("PipelineDebug").d("[ROUTE] from=${currentNode.id} label=$edgeLabel -> to=$targetNodeId")
         return targetNodeId
     }
+
+    /**
+     * INTENT_ROUTER fallback match: `true` when [routingKey] contains [label] as
+     * a **standalone token** (case-insensitive). Used only after an exact label
+     * match fails, to tolerate a model that wraps the chosen label in a sentence
+     * ("I choose Cancel") while still rejecting incidental substring hits — an
+     * unanchored `contains` would route the key "Cancel" to a port labelled
+     * "can".
+     *
+     * The boundary is expressed as alphanumeric-adjacency lookarounds rather than
+     * `\b`: a `\b`-based regex fails to match labels that begin or end with a
+     * non-word character (e.g. a port labelled `C#` or `node.js`), because `\b`
+     * requires a word↔non-word transition at the label edge. The lookarounds
+     * `(?<![A-Za-z0-9])` / `(?![A-Za-z0-9])` instead reject a match only when an
+     * alphanumeric character abuts the label, so `C#` matches in "Use C# here"
+     * while "can" still does not match inside "Cancel". [label] is regex-escaped
+     * so its own characters are literal.
+     *
+     * @param routingKey The router's chosen routing key (model output).
+     * @param label The candidate edge label to test against [routingKey].
+     * @return `true` if [label] appears as a standalone token inside [routingKey].
+     */
+    private fun routingKeyContainsLabelAsWord(routingKey: String, label: String): Boolean = Regex(
+        "(?<![A-Za-z0-9])${Regex.escape(label)}(?![A-Za-z0-9])",
+        RegexOption.IGNORE_CASE,
+    ).containsMatchIn(routingKey)
 
     /**
      * Mirrors a human-in-the-loop suspension (and its resolution) into the

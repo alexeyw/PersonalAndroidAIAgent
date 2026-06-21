@@ -2,6 +2,7 @@ package app.knotwork.android.data.local.models
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
@@ -28,8 +29,17 @@ import androidx.room.PrimaryKey
  *   or `null` when there is no attachment.
  * @property attachmentHeight Pixel height of the stored (downscaled) attachment,
  *   or `null` when there is no attachment.
+ * @property modelName Display name of the model that generated this message,
+ *   snapshotted at save time. `null` for user/system messages and for legacy
+ *   AGENT rows persisted before `MIGRATION_43_44` added the column.
  */
-@Entity(tableName = "chat_messages")
+@Entity(
+    tableName = "chat_messages",
+    // `sessionId` is the filter column for every hot chat query (load a chat,
+    // delete a session's messages, collect attachment paths). Without an index
+    // each is a full-table scan over all sessions' messages; this indexes it.
+    indices = [Index("sessionId")],
+)
 data class ChatMessageEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
@@ -45,4 +55,5 @@ data class ChatMessageEntity(
     val attachmentMimeType: String? = null,
     val attachmentWidth: Int? = null,
     val attachmentHeight: Int? = null,
+    val modelName: String? = null,
 )

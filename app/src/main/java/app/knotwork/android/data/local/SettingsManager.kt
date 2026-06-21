@@ -1,7 +1,8 @@
 package app.knotwork.android.data.local
 
-import android.content.Context
+import androidx.annotation.VisibleForTesting
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -9,8 +10,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
-import app.knotwork.android.data.local.crypto.AeadCipher
-import app.knotwork.android.data.local.crypto.KeystoreBackedPrefsStore
+import app.knotwork.android.data.local.crypto.SecretStore
 import app.knotwork.android.data.local.crypto.SecureValueUnreadableException
 import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.constants.SettingsDefaults
@@ -23,7 +23,6 @@ import app.knotwork.android.domain.models.ToolApprovalPolicy
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.models.UpdateMcpServerResult
 import app.knotwork.android.domain.repositories.SettingsRepository
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,34 +38,27 @@ import org.json.JSONException
 import org.json.JSONObject
 import timber.log.Timber
 import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 /**
  * Concrete implementation of [SettingsRepository] utilizing Androidx DataStore Preferences.
  *
- * Secret payloads are **not** kept in DataStore: the HuggingFace access token lives in a
- * [KeystoreBackedPrefsStore] (AES-GCM under a dedicated Android Keystore key), with the same
- * re-enterable-secret recovery policy as [ApiKeyManager] — an undecryptable value is dropped
- * and reported as unset. A token persisted by earlier releases in plain DataStore is migrated
- * into the encrypted store on the first read and removed from DataStore.
+ * Secret payloads are **not** kept in DataStore: the HuggingFace access token and per-server
+ * MCP credentials live in the injected [SecretStore] (AES-GCM under a dedicated Android Keystore
+ * key in production), with the same re-enterable-secret recovery policy as [ApiKeyManager] — an
+ * undecryptable value is dropped and reported as unset. Secrets persisted by earlier releases in
+ * plain DataStore (the HuggingFace token, inline MCP auth) are migrated into the secret store on
+ * the first read and removed from DataStore.
  *
  * @property dataStore The underlying DataStore instance for persistence.
- * @property context The application context backing the encrypted secrets store.
- * @param cipher The AEAD boundary used to protect stored secrets.
+ * @property secretsStore The encrypted store backing every secret payload.
  */
 @Suppress("LargeClass") // 31-field DataStore facade by design; per-section split planned post-v0.1.
 class SettingsManager @Inject constructor(
     private val dataStore: DataStore<Preferences>,
-    @ApplicationContext private val context: Context,
-    cipher: AeadCipher,
+    private val secretsStore: SecretStore,
 ) : SettingsRepository {
-
-    private val secretsStore = KeystoreBackedPrefsStore(
-        context = context,
-        prefsName = SECRETS_PREFS_NAME,
-        keyAlias = SECRETS_KEY_ALIAS,
-        cipher = cipher,
-    )
 
     private object PreferencesKeys {
         val IS_FIRST_LAUNCH = booleanPreferencesKey("is_first_launch")
@@ -171,6 +163,21 @@ class SettingsManager @Inject constructor(
      */
     private object SecretKeys {
         const val HUGGING_FACE_TOKEN = "hugging_face_token"
+
+        /**
+         * Encrypted-store key for a single MCP server's auth payload, namespaced
+         * by a hash of the server URL. The URL is hashed (not used verbatim) so
+         * the entry name does not leak the endpoint and stays a stable, valid
+         * preference key regardless of the URL's characters.
+         *
+         * @param url The MCP server URL the auth belongs to.
+         * @return The per-server secret-store entry name.
+         */
+        fun mcpAuthKey(url: String): String = "mcp_auth_" + sha256Hex(url)
+
+        private fun sha256Hex(value: String): String = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
@@ -374,7 +381,8 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.REQUIRES_USER_CONFIRMATION] ?: true
+            preferences[PreferencesKeys.REQUIRES_USER_CONFIRMATION]
+                ?: SettingsDefaults.REQUIRES_USER_CONFIRMATION_DEFAULT
         }
 
     override suspend fun setRequiresUserConfirmation(required: Boolean) {
@@ -421,77 +429,229 @@ class SettingsManager @Inject constructor(
         }
     }
 
-    override val mcpServers: Flow<List<McpServerConfig>> = dataStore.data
-        .catch { exception ->
-            if (exception is IOException) {
-                Timber.e(exception, "Error reading preferences")
-                emit(emptyPreferences())
-            } else {
-                throw exception
-            }
-        }
-        .map { preferences ->
-            val json = preferences[PreferencesKeys.MCP_SERVERS_JSON]
-            if (!json.isNullOrBlank()) {
-                decodeMcpServers(json)
-            } else {
-                // Legacy fallback: read the old URL-only key. The first write through
-                // [addMcpServer]/[updateMcpServer]/[removeMcpServer] persists the new
-                // JSON form and the next read short-circuits above.
-                (preferences[PreferencesKeys.MCP_SERVER_URLS] ?: emptySet())
-                    .map { url -> McpServerConfig(url = url) }
-            }
-        }
-
-    override suspend fun addMcpServer(config: McpServerConfig) {
-        dataStore.edit { preferences ->
-            val current = currentMcpServers(preferences)
-            val without = current.filterNot { it.url == config.url }
-            preferences[PreferencesKeys.MCP_SERVERS_JSON] = encodeMcpServers(without + config)
-            preferences.remove(PreferencesKeys.MCP_SERVER_URLS)
-        }
+    override val mcpServers: Flow<List<McpServerConfig>> = flow {
+        // Move any inline auth left in plain DataStore by earlier releases into
+        // the encrypted store before exposing the list (one-time, idempotent).
+        migrateLegacyMcpAuth()
+        emitAll(
+            dataStore.data
+                .catch { exception ->
+                    if (exception is IOException) {
+                        Timber.e(exception, "Error reading preferences")
+                        emit(emptyPreferences())
+                    } else {
+                        throw exception
+                    }
+                }
+                .map { preferences ->
+                    val json = preferences[PreferencesKeys.MCP_SERVERS_JSON]
+                    if (!json.isNullOrBlank()) {
+                        decodeMcpServers(json)
+                    } else {
+                        // Legacy fallback: read the old URL-only key. The first write through
+                        // [addMcpServer]/[updateMcpServer]/[removeMcpServer] persists the new
+                        // JSON form and the next read short-circuits above.
+                        (preferences[PreferencesKeys.MCP_SERVER_URLS] ?: emptySet())
+                            .map { url -> McpServerConfig(url = url) }
+                    }
+                },
+        )
     }
 
-    override suspend fun updateMcpServer(originalUrl: String, updated: McpServerConfig): UpdateMcpServerResult {
-        // Read the current list once outside `edit { … }` so the collision
-        // check can short-circuit *before* opening the write transaction.
-        // DataStore serialises edits, so a concurrent write between this
-        // read and the edit would only widen the window for a duplicate
-        // to slip in by milliseconds — and the next call still detects
-        // it. The user-visible bug is the silent collision; a transient
-        // race is acceptable here.
-        val snapshot = mcpServers.first()
-        McpServerCollisionCheck
-            .detectCollision(currentList = snapshot, originalUrl = originalUrl, newUrl = updated.url)
-            ?.let { return it }
+    override suspend fun addMcpServer(config: McpServerConfig) = mcpMutex.withLock {
+        val previous = mcpServers.first()
+        val next = previous.filterNot { it.url == config.url } + config
         dataStore.edit { preferences ->
-            val current = currentMcpServers(preferences)
-            val index = current.indexOfFirst { it.url == originalUrl }
-            val next = if (index >= 0) {
-                current.toMutableList().also { it[index] = updated }
-            } else {
-                current + updated
-            }
             preferences[PreferencesKeys.MCP_SERVERS_JSON] = encodeMcpServers(next)
             preferences.remove(PreferencesKeys.MCP_SERVER_URLS)
         }
-        return UpdateMcpServerResult.Success
+        reconcileMcpSecrets(previous, next)
     }
 
-    override suspend fun removeMcpServer(url: String) {
+    override suspend fun updateMcpServer(originalUrl: String, updated: McpServerConfig): UpdateMcpServerResult =
+        mcpMutex.withLock {
+            // The whole read-modify-write runs under `mcpMutex`, so the collision
+            // check and the edit see a consistent list and concurrent mutations
+            // cannot interleave (the prior "transient race is acceptable" caveat
+            // no longer applies).
+            val snapshot = mcpServers.first()
+            McpServerCollisionCheck
+                .detectCollision(currentList = snapshot, originalUrl = originalUrl, newUrl = updated.url)
+                ?.let { return@withLock it }
+            val index = snapshot.indexOfFirst { it.url == originalUrl }
+            val next = if (index >= 0) {
+                snapshot.toMutableList().also { it[index] = updated }
+            } else {
+                snapshot + updated
+            }
+            dataStore.edit { preferences ->
+                preferences[PreferencesKeys.MCP_SERVERS_JSON] = encodeMcpServers(next)
+                preferences.remove(PreferencesKeys.MCP_SERVER_URLS)
+            }
+            // Reconciling against the prior snapshot drops the old URL's secret on
+            // a URL change and writes the credentials under the new URL only when
+            // they changed.
+            reconcileMcpSecrets(snapshot, next)
+            UpdateMcpServerResult.Success
+        }
+
+    override suspend fun removeMcpServer(url: String) = mcpMutex.withLock {
+        val previous = mcpServers.first()
+        val next = previous.filterNot { it.url == url }
         dataStore.edit { preferences ->
-            val current = currentMcpServers(preferences)
-            preferences[PreferencesKeys.MCP_SERVERS_JSON] = encodeMcpServers(current.filterNot { it.url == url })
+            preferences[PreferencesKeys.MCP_SERVERS_JSON] = encodeMcpServers(next)
             preferences.remove(PreferencesKeys.MCP_SERVER_URLS)
+        }
+        reconcileMcpSecrets(previous, next)
+    }
+
+    /**
+     * In-memory cache of decrypted MCP auth, keyed by server URL. `decodeMcpServers`
+     * is run on every `mcpServers` emission by every consumer (cold flow), so
+     * without this cache each emission would perform one Keystore AES-GCM decrypt
+     * per configured server. The encrypted store stays the source of truth;
+     * [writeMcpAuth] / [removeMcpAuth] keep the cache coherent, and an
+     * undecryptable read is deliberately NOT cached so it retries.
+     */
+    private val mcpAuthCache = ConcurrentHashMap<String, McpAuth>()
+
+    /**
+     * Serialises the read-modify-write of the server list and its secret
+     * reconcile across [addMcpServer] / [updateMcpServer] / [removeMcpServer], so
+     * two concurrent mutations cannot interleave their `mcpServers.first()` read
+     * with another's `dataStore.edit` — which would drop a server from the JSON
+     * and orphan its just-written secret.
+     */
+    private val mcpMutex = Mutex()
+
+    /**
+     * Reconciles the per-server MCP auth secrets against a settings change:
+     * removes the encrypted entry of every server dropped (or whose URL changed),
+     * and (re)writes a secret **only for a server whose auth actually changed** —
+     * so editing one server never rewrites (and cannot clobber) another's secret.
+     */
+    private fun reconcileMcpSecrets(previous: List<McpServerConfig>, next: List<McpServerConfig>) {
+        val nextUrls = next.mapTo(mutableSetOf()) { it.url }
+        previous.forEach { config ->
+            if (config.url !in nextUrls) removeMcpAuth(config.url)
+        }
+        val previousByUrl = previous.associateBy { it.url }
+        next.forEach { config ->
+            if (previousByUrl[config.url]?.auth != config.auth) {
+                writeMcpAuth(config.url, config.auth)
+            }
         }
     }
 
-    /** Reads the current persisted list, falling back to the legacy URL-only key. */
-    private fun currentMcpServers(preferences: Preferences): List<McpServerConfig> {
-        val json = preferences[PreferencesKeys.MCP_SERVERS_JSON]
-        if (!json.isNullOrBlank()) return decodeMcpServers(json)
-        return (preferences[PreferencesKeys.MCP_SERVER_URLS] ?: emptySet())
-            .map { url -> McpServerConfig(url = url) }
+    /** Persists (or clears, for [McpAuth.None]) a single server's auth in the encrypted store and the cache. */
+    private fun writeMcpAuth(url: String, auth: McpAuth) {
+        val key = SecretKeys.mcpAuthKey(url)
+        val encoded = encodeAuth(auth)
+        if (encoded == null) {
+            secretsStore.remove(key)
+        } else {
+            secretsStore.putString(key, encoded.toString(), synchronous = true)
+        }
+        mcpAuthCache[url] = auth
+    }
+
+    /** Removes a server's auth from both the encrypted store and the cache. */
+    private fun removeMcpAuth(url: String) {
+        secretsStore.remove(SecretKeys.mcpAuthKey(url))
+        mcpAuthCache.remove(url)
+    }
+
+    /**
+     * Reads a server's auth from the cache or the encrypted store. A *corrupt*
+     * (un-parseable) entry is reported as [McpAuth.None] and cached. An
+     * *undecryptable* entry (e.g. a momentarily-locked Keystore) is reported as
+     * [McpAuth.None] but **not** removed or cached, so a transient failure cannot
+     * destroy a valid credential and a later read recovers it.
+     */
+    private fun readMcpAuth(url: String): McpAuth {
+        mcpAuthCache[url]?.let { return it }
+        val key = SecretKeys.mcpAuthKey(url)
+        val raw = try {
+            secretsStore.getString(key)
+        } catch (e: SecureValueUnreadableException) {
+            Timber.e(e, "Stored MCP auth for a server is unreadable; treating it as no-auth for now.")
+            return McpAuth.None
+        }
+        val auth = if (raw == null) {
+            McpAuth.None
+        } else {
+            try {
+                decodeAuth(JSONObject(raw))
+            } catch (e: JSONException) {
+                Timber.e(e, "Stored MCP auth JSON is corrupt; treating it as no-auth.")
+                McpAuth.None
+            }
+        }
+        mcpAuthCache[url] = auth
+        return auth
+    }
+
+    /** Serializes the legacy-DataStore MCP-auth migration so concurrent collectors run it once. */
+    private val mcpAuthMigrationMutex = Mutex()
+    private var mcpAuthMigrationDone = false
+
+    /**
+     * One-time move of MCP auth that earlier releases embedded inline in the plain
+     * `mcp_servers_json` DataStore entry into the encrypted store. The encrypted
+     * copy is written **before** the inline copy is stripped, so a crash in
+     * between leaves both rather than neither; an entry already present in the
+     * encrypted store is not overwritten. An [IOException] reading DataStore
+     * defers the migration to the next collection.
+     */
+    private suspend fun migrateLegacyMcpAuth() {
+        if (mcpAuthMigrationDone) return
+        mcpAuthMigrationMutex.withLock {
+            if (mcpAuthMigrationDone) return
+            val json = try {
+                dataStore.data.first()[PreferencesKeys.MCP_SERVERS_JSON]
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: IOException) {
+                Timber.e(e, "Cannot read preferences for the MCP-auth migration; retrying later.")
+                return
+            }
+            val rewritten = if (json.isNullOrBlank()) null else extractInlineMcpAuthToSecrets(json)
+            if (rewritten != null) {
+                dataStore.edit { it[PreferencesKeys.MCP_SERVERS_JSON] = rewritten }
+            }
+            mcpAuthMigrationDone = true
+        }
+    }
+
+    /**
+     * Pure (non-suspend) half of [migrateLegacyMcpAuth]: moves every server's
+     * inline `auth` object into the encrypted store (unless one is already there)
+     * and returns the JSON rewritten with the inline auth stripped, or `null`
+     * when nothing changed or the JSON is malformed.
+     */
+    private fun extractInlineMcpAuthToSecrets(json: String): String? = try {
+        val array = JSONArray(json)
+        var changed = false
+        for (i in 0 until array.length()) {
+            val obj = array.getJSONObject(i)
+            val url = obj.optString("url").takeIf { it.isNotBlank() } ?: continue
+            val inlineAuth = obj.optJSONObject("auth") ?: continue
+            val key = SecretKeys.mcpAuthKey(url)
+            val existing = try {
+                secretsStore.getString(key)
+            } catch (e: SecureValueUnreadableException) {
+                null
+            }
+            if (existing == null) {
+                secretsStore.putString(key, inlineAuth.toString(), synchronous = true)
+            }
+            obj.remove("auth")
+            changed = true
+        }
+        if (changed) array.toString() else null
+    } catch (e: JSONException) {
+        Timber.e(e, "MCP servers JSON is malformed; skipping the auth migration.")
+        null
     }
 
     private fun encodeMcpServers(servers: List<McpServerConfig>): String {
@@ -501,7 +661,8 @@ class SettingsManager @Inject constructor(
                 .put("url", config.url)
                 .put("transport", config.transport.wireId)
             if (!config.name.isNullOrBlank()) obj.put("name", config.name)
-            encodeAuth(config.auth)?.let { obj.put("auth", it) }
+            // Auth is NOT written here: credentials live in the encrypted store
+            // (see [writeMcpAuth] / [reconcileMcpSecrets]), keyed by server URL.
             if (config.headers.isNotEmpty()) {
                 val headers = JSONObject()
                 config.headers.forEach { (k, v) -> headers.put(k, v) }
@@ -549,7 +710,13 @@ class SettingsManager @Inject constructor(
                 val url = obj.optString("url").takeIf { it.isNotBlank() } ?: continue
                 val name = obj.optString("name").takeIf { it.isNotBlank() }
                 val transport = McpTransport.fromWireId(obj.optString("transport").takeIf { it.isNotBlank() })
-                val auth = decodeAuth(obj.optJSONObject("auth"))
+                // Auth normally comes from the encrypted store; a still-inline
+                // `auth` object is honoured too, covering the window before the
+                // one-time migration ([migrateLegacyMcpAuth]) has rewritten the
+                // JSON. Post-migration the JSON carries no auth and this reads
+                // the encrypted store.
+                val inlineAuth = obj.optJSONObject("auth")
+                val auth = if (inlineAuth != null) decodeAuth(inlineAuth) else readMcpAuth(url)
                 val headers = obj.optJSONObject("headers")?.let { headerObj ->
                     buildMap<String, String> {
                         val keys = headerObj.keys()
@@ -1414,7 +1581,8 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.CRASH_REPORTING_ENABLED] ?: false
+            preferences[PreferencesKeys.CRASH_REPORTING_ENABLED]
+                ?: SettingsDefaults.CRASH_REPORTING_ENABLED_DEFAULT
         }
 
     override suspend fun setCrashReportingEnabled(enabled: Boolean) {
@@ -1433,7 +1601,8 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.MEMORY_SUMMARY_DEFAULT_LIMIT] ?: DEFAULT_MEMORY_SUMMARY_LIMIT
+            preferences[PreferencesKeys.MEMORY_SUMMARY_DEFAULT_LIMIT]
+                ?: SettingsDefaults.MEMORY_SUMMARY_DEFAULT_LIMIT_DEFAULT
         }
 
     override suspend fun setMemorySummaryDefaultLimit(limit: Int) {
@@ -1487,7 +1656,8 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.BLOCK_DESTRUCTIVE_TOOLS] ?: false
+            preferences[PreferencesKeys.BLOCK_DESTRUCTIVE_TOOLS]
+                ?: SettingsDefaults.BLOCK_DESTRUCTIVE_TOOLS_DEFAULT
         }
 
     override suspend fun setBlockDestructiveTools(blocked: Boolean) {
@@ -1506,7 +1676,8 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.BLOCK_NETWORK_FROM_LOCAL_MODEL] ?: false
+            preferences[PreferencesKeys.BLOCK_NETWORK_FROM_LOCAL_MODEL]
+                ?: SettingsDefaults.BLOCK_NETWORK_FROM_LOCAL_MODEL_DEFAULT
         }
 
     override suspend fun setBlockNetworkFromLocalModel(blocked: Boolean) {
@@ -1553,7 +1724,10 @@ class SettingsManager @Inject constructor(
 
     override suspend fun setAutoSummarizeThreshold(threshold: Float) {
         dataStore.edit { preferences ->
-            preferences[PreferencesKeys.AUTO_SUMMARIZE_THRESHOLD] = threshold.coerceIn(0f, 1f)
+            preferences[PreferencesKeys.AUTO_SUMMARIZE_THRESHOLD] = threshold.coerceIn(
+                SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_MIN,
+                SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_MAX,
+            )
         }
     }
 
@@ -1567,7 +1741,8 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.LONG_RUNNING_TASKS_NOTIFICATIONS] ?: true
+            preferences[PreferencesKeys.LONG_RUNNING_TASKS_NOTIFICATIONS]
+                ?: SettingsDefaults.LONG_RUNNING_TASK_NOTIFICATIONS_ENABLED_DEFAULT
         }
 
     override suspend fun setLongRunningTaskNotificationsEnabled(enabled: Boolean) {
@@ -1586,7 +1761,8 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.SCHEDULED_TASK_NOTIFICATIONS] ?: true
+            preferences[PreferencesKeys.SCHEDULED_TASK_NOTIFICATIONS]
+                ?: SettingsDefaults.SCHEDULED_TASK_NOTIFICATIONS_ENABLED_DEFAULT
         }
 
     override suspend fun setScheduledTaskNotificationsEnabled(enabled: Boolean) {
@@ -1618,24 +1794,111 @@ class SettingsManager @Inject constructor(
         }
     }
 
+    /**
+     * Writes the local-generation sampling + pipeline/structured-output/cloud-retry
+     * defaults into [preferences]. Shared by [resetSamplingDefaults] (the
+     * per-card "Reset to defaults") and [resetToRecommendedDefaults] (the global
+     * reset) so the two paths cannot drift on these ten keys.
+     */
+    private fun MutablePreferences.applySamplingDefaults() {
+        this[PreferencesKeys.TEMPERATURE] = SettingsDefaults.TEMPERATURE_DEFAULT
+        this[PreferencesKeys.TOP_K] = SettingsDefaults.TOP_K_DEFAULT
+        this[PreferencesKeys.TOP_P] = SettingsDefaults.TOP_P_DEFAULT
+        this[PreferencesKeys.REPETITION_PENALTY] = SettingsDefaults.REPETITION_PENALTY_DEFAULT
+        this[PreferencesKeys.MAX_CONTEXT_LENGTH] = SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT
+        this[PreferencesKeys.PIPELINE_MAX_STEPS] = SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT
+        this[PreferencesKeys.PIPELINE_MAX_NESTING_DEPTH] = SettingsDefaults.PIPELINE_MAX_NESTING_DEPTH_DEFAULT
+        this[PreferencesKeys.STRUCTURED_OUTPUT_MAX_REPAIRS] = SettingsDefaults.STRUCTURED_OUTPUT_MAX_REPAIRS_DEFAULT
+        this[PreferencesKeys.CLOUD_RETRY_MAX_ATTEMPTS] = SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_DEFAULT
+        this[PreferencesKeys.CLOUD_RETRY_BASE_DELAY_MS] = SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_DEFAULT
+    }
+
     override suspend fun resetSamplingDefaults() {
+        dataStore.edit { preferences -> preferences.applySamplingDefaults() }
+    }
+
+    @Suppress("LongMethod") // Flat list of independent key→default writes; splitting it would only obscure it.
+    override suspend fun resetToRecommendedDefaults() {
         dataStore.edit { preferences ->
-            preferences[PreferencesKeys.TEMPERATURE] = SettingsDefaults.TEMPERATURE_DEFAULT
-            preferences[PreferencesKeys.TOP_K] = SettingsDefaults.TOP_K_DEFAULT
-            preferences[PreferencesKeys.TOP_P] = SettingsDefaults.TOP_P_DEFAULT
-            preferences[PreferencesKeys.REPETITION_PENALTY] = SettingsDefaults.REPETITION_PENALTY_DEFAULT
-            preferences[PreferencesKeys.MAX_CONTEXT_LENGTH] = SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT
-            preferences[PreferencesKeys.PIPELINE_MAX_STEPS] = SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT
-            preferences[PreferencesKeys.PIPELINE_MAX_NESTING_DEPTH] =
-                SettingsDefaults.PIPELINE_MAX_NESTING_DEPTH_DEFAULT
-            preferences[PreferencesKeys.STRUCTURED_OUTPUT_MAX_REPAIRS] =
-                SettingsDefaults.STRUCTURED_OUTPUT_MAX_REPAIRS_DEFAULT
-            preferences[PreferencesKeys.CLOUD_RETRY_MAX_ATTEMPTS] =
-                SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_DEFAULT
-            preferences[PreferencesKeys.CLOUD_RETRY_BASE_DELAY_MS] =
-                SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_DEFAULT
+            // Sampling / generation + pipeline / structured output / cloud retry.
+            preferences.applySamplingDefaults()
+            // Tool / workspace / http limits.
+            preferences[PreferencesKeys.TOOL_CALL_TIMEOUT_MS] = SettingsDefaults.TOOL_CALL_TIMEOUT_MS_DEFAULT
+            preferences[PreferencesKeys.WORKSPACE_MAX_FILE_SIZE_BYTES] =
+                SettingsDefaults.WORKSPACE_MAX_FILE_SIZE_BYTES_DEFAULT
+            preferences[PreferencesKeys.WORKSPACE_MAX_TOTAL_BYTES] =
+                SettingsDefaults.WORKSPACE_MAX_TOTAL_BYTES_DEFAULT
+            preferences[PreferencesKeys.WORKSPACE_READ_TOKEN_BUDGET] =
+                SettingsDefaults.WORKSPACE_READ_TOKEN_BUDGET_DEFAULT
+            preferences[PreferencesKeys.HTTP_TOOL_MAX_RESPONSE_BYTES] =
+                SettingsDefaults.HTTP_TOOL_MAX_RESPONSE_BYTES_DEFAULT
+            // Run lifecycle windows / retention.
+            preferences[PreferencesKeys.RESUME_MAX_AGE_HOURS] = SettingsDefaults.RESUME_MAX_AGE_HOURS_DEFAULT
+            preferences[PreferencesKeys.BACKGROUND_APPROVAL_WINDOW_HOURS] =
+                SettingsDefaults.BACKGROUND_APPROVAL_WINDOW_HOURS_DEFAULT
+            preferences[PreferencesKeys.TRACE_RETENTION_RUNS_PER_SESSION] =
+                SettingsDefaults.TRACE_RETENTION_RUNS_PER_SESSION_DEFAULT
+            preferences[PreferencesKeys.TRACE_RETENTION_MAX_AGE_DAYS] =
+                SettingsDefaults.TRACE_RETENTION_MAX_AGE_DAYS_DEFAULT
+            // Audio.
+            preferences[PreferencesKeys.AUDIO_MAX_DURATION_SEC] = SettingsDefaults.AUDIO_MAX_DURATION_SEC_DEFAULT
+            // Memory tuning.
+            preferences[PreferencesKeys.MEMORY_SUMMARY_DEFAULT_LIMIT] =
+                SettingsDefaults.MEMORY_SUMMARY_DEFAULT_LIMIT_DEFAULT
+            preferences[PreferencesKeys.MEMORY_SEARCH_TOP_K] = SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT
+            preferences[PreferencesKeys.MEMORY_SEARCH_THRESHOLD] = SettingsDefaults.MEMORY_SEARCH_THRESHOLD_DEFAULT
+            preferences[PreferencesKeys.MEMORY_RECENCY_HALF_LIFE_DAYS] =
+                SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_DEFAULT
+            preferences[PreferencesKeys.MEMORY_COMPACTION_ENABLED] =
+                SettingsDefaults.MEMORY_COMPACTION_ENABLED_DEFAULT
+            preferences[PreferencesKeys.MEMORY_COMPACTION_AGE_DAYS] =
+                SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT
+            preferences[PreferencesKeys.MAX_MEMORY_CHUNKS] = SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT
+            preferences[PreferencesKeys.AUTO_EXTRACT_ENABLED] = SettingsDefaults.AUTO_EXTRACT_ENABLED_DEFAULT
+            preferences[PreferencesKeys.AUTO_SUMMARIZE_THRESHOLD] =
+                SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_DEFAULT
+            preferences[PreferencesKeys.VERBOSE_MEMORY_LOGGING_ENABLED] =
+                SettingsDefaults.VERBOSE_MEMORY_LOGGING_ENABLED_DEFAULT
+            // Chat-history compression.
+            preferences[PreferencesKeys.CHAT_HISTORY_COMPRESSION_ENABLED] =
+                SettingsDefaults.CHAT_HISTORY_COMPRESSION_ENABLED_DEFAULT
+            preferences[PreferencesKeys.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS] =
+                SettingsDefaults.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_DEFAULT
+            preferences[PreferencesKeys.CHAT_HISTORY_LIVE_WINDOW_SIZE] =
+                SettingsDefaults.CHAT_HISTORY_LIVE_WINDOW_DEFAULT
+            // Security toggles. Both legacy boolean and typed policy go to their
+            // documented defaults so a reset matches a fresh install exactly (the
+            // typed key is what the migration reads; the boolean is superseded).
+            preferences[PreferencesKeys.TOOL_APPROVAL_POLICY] = ToolApprovalPolicy.DEFAULT.key
+            preferences[PreferencesKeys.REQUIRES_USER_CONFIRMATION] =
+                SettingsDefaults.REQUIRES_USER_CONFIRMATION_DEFAULT
+            preferences[PreferencesKeys.BLOCK_DESTRUCTIVE_TOOLS] =
+                SettingsDefaults.BLOCK_DESTRUCTIVE_TOOLS_DEFAULT
+            preferences[PreferencesKeys.BLOCK_NETWORK_FROM_LOCAL_MODEL] =
+                SettingsDefaults.BLOCK_NETWORK_FROM_LOCAL_MODEL_DEFAULT
+            // Notifications + privacy.
+            preferences[PreferencesKeys.LONG_RUNNING_TASKS_NOTIFICATIONS] =
+                SettingsDefaults.LONG_RUNNING_TASK_NOTIFICATIONS_ENABLED_DEFAULT
+            preferences[PreferencesKeys.SCHEDULED_TASK_NOTIFICATIONS] =
+                SettingsDefaults.SCHEDULED_TASK_NOTIFICATIONS_ENABLED_DEFAULT
+            preferences[PreferencesKeys.CRASH_REPORTING_ENABLED] =
+                SettingsDefaults.CRASH_REPORTING_ENABLED_DEFAULT
         }
     }
+
+    /**
+     * Reflectively enumerates the wire names of every preference declared in
+     * [PreferencesKeys]. Exposed only so the test-suite can assert that every
+     * persistable key is either restored by [resetToRecommendedDefaults] or
+     * listed among the deliberately-excluded user-data keys — catching the case
+     * where a future setting is added but silently escapes the reset.
+     */
+    @VisibleForTesting
+    internal fun knownPreferenceKeyNames(): Set<String> =
+        PreferencesKeys::class.java.declaredFields.mapNotNull { field ->
+            field.isAccessible = true
+            (field.get(PreferencesKeys) as? Preferences.Key<*>)?.name
+        }.toSet()
 
     private fun encodeTestProbeResult(result: TestProbeResult): String = JSONObject().apply {
         put("tokens", result.tokensGenerated)
@@ -1663,14 +1926,6 @@ class SettingsManager @Inject constructor(
     }
 
     private companion object {
-        /** Name of the [KeystoreBackedPrefsStore] preferences file holding settings secrets. */
-        const val SECRETS_PREFS_NAME = "secure_settings_secrets"
-
-        /** Android Keystore alias of the AEAD key dedicated to the settings-secrets store. */
-        const val SECRETS_KEY_ALIAS = "knotwork.settings_secrets"
-
-        const val DEFAULT_MEMORY_SUMMARY_LIMIT = 5
-
         /**
          * Default value for [PreferencesKeys.CONSOLE_PREFERRED_TAB] on a
          * fresh install. Mirrors the enum name of

@@ -171,7 +171,7 @@ class GraphExecutionEngineTest {
         }
 
         val inputNodeExecutor = InputNodeExecutor()
-        val outputNodeExecutor = OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository)
+        val outputNodeExecutor = OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository, mockk(relaxed = true))
         val ifConditionNodeExecutor = IfConditionNodeExecutor(evaluateIfConditionUseCase)
         val queueProcessorNodeExecutor = QueueProcessorNodeExecutor()
 
@@ -600,6 +600,99 @@ class GraphExecutionEngineTest {
 
         // Output text is preserved as input text across nodes if not modified
         assertEquals("Test prompt", (statesTrue.last() as AgentOrchestratorState.Completed).finalResponse)
+    }
+
+    @Test
+    fun `IF_CONDITION false verdict with only a True edge terminates without OUTPUT`() = runTest {
+        val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
+        val ifNode = NodeModel("if_1", NodeType.IF_CONDITION, 0f, 0f)
+        val outputTrue = NodeModel("out_true", NodeType.OUTPUT, 0f, 0f)
+
+        // Only the True branch is wired; the False port is left unconnected.
+        val graph = PipelineGraph(
+            id = "g1",
+            name = "Half-wired IF",
+            nodes = listOf(inputNode, ifNode, outputTrue),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "if_1"),
+                ConnectionModel("c2", "if_1", "out_true", label = "True"),
+            ),
+        )
+
+        coEvery { evaluateIfConditionUseCase(ifNode, "Test prompt", any()) } returns
+            EvaluateIfConditionUseCase.Outcome(value = false)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("Test prompt")
+
+        val states = engine(sessionId, "Test prompt", graph).toList()
+
+        // A false verdict must NOT silently fall through to the only wired (True)
+        // edge — the run terminates without reaching OUTPUT instead.
+        val last = states.last()
+        assertTrue("Expected Error, got: $last", last is AgentOrchestratorState.Error)
+        assertTrue((last as AgentOrchestratorState.Error).message.contains("without reaching OUTPUT"))
+    }
+
+    @Test
+    fun `INTENT_ROUTER fuzzy fallback matches a whole word not an incidental substring`() = runTest {
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val routerNode = NodeModel("router", NodeType.INTENT_ROUTER, 0f, 0f)
+        // "can" branch is a dead end (LITE_RT with no outgoing edge); "Cancel"
+        // branch reaches OUTPUT. A correct whole-word match routes to OUTPUT;
+        // the old unanchored `contains` would route "…Cancel" to the "can" port.
+        val deadNode = NodeModel("dead", NodeType.LITE_RT, 0f, 0f)
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g1",
+            name = "Router word-boundary",
+            nodes = listOf(inputNode, routerNode, deadNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "router"),
+                ConnectionModel("c2", "router", "dead", label = "can"),
+                ConnectionModel("c3", "router", "output", label = "Cancel"),
+            ),
+        )
+
+        // Router routing key is not an exact port label but contains "Cancel" as
+        // a whole word; it must match the "Cancel" port, not "can".
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("Please Cancel")
+
+        val states = engine(sessionId, "query", graph).toList()
+
+        assertTrue(
+            "Expected Completed via the Cancel branch, got: ${states.last()}",
+            states.last() is AgentOrchestratorState.Completed,
+        )
+    }
+
+    @Test
+    fun `INTENT_ROUTER fuzzy fallback matches a label that ends with a non-word character`() = runTest {
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val routerNode = NodeModel("router", NodeType.INTENT_ROUTER, 0f, 0f)
+        // Label "C#" ends in a non-word char: a `\b`-anchored regex would fail to
+        // match it, falling through to the first edge. The lookaround form matches.
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+        val deadNode = NodeModel("dead", NodeType.LITE_RT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g1",
+            name = "Router non-word label",
+            nodes = listOf(inputNode, routerNode, deadNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "router"),
+                ConnectionModel("c2", "router", "dead", label = "Java"),
+                ConnectionModel("c3", "router", "output", label = "C#"),
+            ),
+        )
+
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("Use C# here")
+
+        val states = engine(sessionId, "query", graph).toList()
+
+        assertTrue(
+            "Expected Completed via the C# branch, got: ${states.last()}",
+            states.last() is AgentOrchestratorState.Completed,
+        )
     }
 
     @Test
@@ -1154,7 +1247,7 @@ class GraphExecutionEngineTest {
         // and there is no risk of state from setUp() leaking in.
         val realFactory = NodeExecutorFactory(
             InputNodeExecutor(),
-            OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+            OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository, mockk(relaxed = true)),
             IfConditionNodeExecutor(evaluateIfConditionUseCase),
             ToolNodeExecutor(
                 llmEngine,
@@ -1373,7 +1466,7 @@ class GraphExecutionEngineTest {
 
             val realFactory = NodeExecutorFactory(
                 InputNodeExecutor(),
-                OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository),
+                OutputNodeExecutor(llmEngine, loadModelUseCase, chatRepository, mockk(relaxed = true)),
                 IfConditionNodeExecutor(evaluateIfConditionUseCase),
                 ToolNodeExecutor(
                     llmEngine,

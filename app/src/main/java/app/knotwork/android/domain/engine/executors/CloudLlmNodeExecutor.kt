@@ -165,6 +165,17 @@ class CloudLlmNodeExecutor @Inject constructor(
 
         val fullResponseText = accumulatedResponse.toString().trim()
 
+        // Record the cloud provider as the answering "model" so the root OUTPUT
+        // attributes the message to the cloud source rather than to whatever local
+        // model happens to be active. selectedProvider is non-null on this success
+        // path (a null provider returns early above).
+        selectedProvider?.let { provider ->
+            scope.generatingModel?.let { gm ->
+                gm.cloudLabel = provider.id
+                gm.localModelPath = null
+            }
+        }
+
         kotlinx.coroutines.delay(PipelineExecutionDefaults.NODE_RESULT_EMIT_DELAY_MS)
 
         emit(NodeOutput.Result(NodeExecutionResult(outputText = fullResponseText, tokenCount = approximateTokenCount)))

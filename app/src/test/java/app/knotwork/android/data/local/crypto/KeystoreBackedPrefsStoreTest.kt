@@ -39,7 +39,7 @@ class KeystoreBackedPrefsStoreTest {
 
     @Test
     fun `given stored value when getString then round-trips`() {
-        store.putString("entry", "plain value")
+        store.putString("entry", "plain value", synchronous = false)
 
         assertEquals("plain value", store.getString("entry"))
     }
@@ -51,7 +51,7 @@ class KeystoreBackedPrefsStoreTest {
 
     @Test
     fun `given stored value when raw prefs inspected then value is not plaintext`() {
-        store.putString("entry", "plain value")
+        store.putString("entry", "plain value", synchronous = false)
 
         val raw = prefs.values["entry"] as String
         assertTrue(raw.isNotEmpty())
@@ -60,7 +60,7 @@ class KeystoreBackedPrefsStoreTest {
 
     @Test
     fun `given blob copied between entries when getString then fails authentication`() {
-        store.putString("source", "secret")
+        store.putString("source", "secret", synchronous = false)
         prefs.values["target"] = prefs.values["source"]
 
         // Same store, same key — but the associated data binds the blob to
@@ -73,7 +73,7 @@ class KeystoreBackedPrefsStoreTest {
 
     @Test
     fun `given undecryptable value when getString then throws SecureValueUnreadableException`() {
-        store.putString("entry", "value")
+        store.putString("entry", "value", synchronous = false)
         cipher.failDecrypt = true
 
         assertThrows(SecureValueUnreadableException::class.java) {
@@ -92,7 +92,7 @@ class KeystoreBackedPrefsStoreTest {
 
     @Test
     fun `given stored value when removed then getString returns null`() {
-        store.putString("entry", "value")
+        store.putString("entry", "value", synchronous = false)
         store.remove("entry")
 
         assertNull(store.getString("entry"))
@@ -100,7 +100,7 @@ class KeystoreBackedPrefsStoreTest {
 
     @Test
     fun `given destroy then entries cleared file deleted and key deleted`() {
-        store.putString("entry", "value")
+        store.putString("entry", "value", synchronous = false)
 
         store.destroy()
 
@@ -111,9 +111,9 @@ class KeystoreBackedPrefsStoreTest {
 
     @Test
     fun `given destroy then next write opens a fresh prefs instance`() {
-        store.putString("entry", "value")
+        store.putString("entry", "value", synchronous = false)
         store.destroy()
-        store.putString("entry", "fresh")
+        store.putString("entry", "fresh", synchronous = false)
 
         // deleteSharedPreferences declares results undefined while a live
         // instance is retained — the store must re-resolve after destroy.

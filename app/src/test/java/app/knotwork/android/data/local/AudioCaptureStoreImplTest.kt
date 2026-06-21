@@ -71,6 +71,25 @@ class AudioCaptureStoreImplTest {
     }
 
     @Test
+    fun `importFromUri deletes the partial clip when the copy fails midway`() = runTest {
+        val uri = "content://media/audio/broken"
+        // A stream that opens fine but throws once the copy starts reading, so a
+        // target file is created and then the copy fails — the half-written clip
+        // must not be left behind.
+        val throwing = object : java.io.InputStream() {
+            override fun read(): Int = throw java.io.IOException("boom")
+            override fun read(b: ByteArray, off: Int, len: Int): Int = throw java.io.IOException("boom")
+        }
+        shadowOf(context.contentResolver).registerInputStream(uri.toUri(), throwing)
+
+        val result = store.importFromUri(uri)
+
+        assertTrue("a failed copy must surface as failure", result.isFailure)
+        val leftovers = audioDir().listFiles()?.toList().orEmpty()
+        assertTrue("no partial clip must remain, found: $leftovers", leftovers.isEmpty())
+    }
+
+    @Test
     fun `delete removes an existing clip`() = runTest {
         val path = store.newRecordingFile()
         File(path).writeBytes(byteArrayOf(9, 9, 9))

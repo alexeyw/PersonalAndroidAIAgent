@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import app.knotwork.android.domain.models.McpConnectionStatus
 import app.knotwork.android.domain.models.McpServerConfig
 import app.knotwork.android.domain.models.McpTool
-import app.knotwork.android.domain.models.ToolSource
 import app.knotwork.android.domain.repositories.McpServerRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
@@ -49,12 +48,13 @@ class ToolsViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            // Discovered on-device AppFunctions are hidden from the Tools screen —
-            // they are uninformative placeholders today (no human-readable metadata)
-            // and clutter the built-in list. They remain callable by the agent via
-            // ToolRepository.getAvailableTools; only this display path filters them.
+            // Discovered on-device AppFunctions are shown alongside built-in tools
+            // so the user can disable them. Visibility and agent-availability are
+            // kept consistent: a tool hidden/disabled here is removed from the
+            // agent catalogue and refused by the executor through the same
+            // `disabledAppFunctions` set that the toggle writes to — a tool the
+            // user cannot see and control is never silently callable in pipelines.
             val tools = toolRepository.getAllLocalTools()
-                .filter { it.source != ToolSource.APP_FUNCTION }
             _uiState.update { it.copy(localTools = tools) }
         }
 

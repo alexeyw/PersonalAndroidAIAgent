@@ -42,8 +42,10 @@ class AgentPowerManager(
         }
     }
 
-    private fun enforcePowerSavingMode() {
-        // Unload the LLM engine from memory to save battery
+    private suspend fun enforcePowerSavingMode() {
+        // Unload the LLM engine from memory to save battery. [unload] serialises
+        // on the engine's native-session mutex, so an in-flight generation is
+        // allowed to finish before the model is freed.
         if (engine.isInitialized) {
             Timber.i("Unloading LlmInferenceEngine due to low battery.")
             engine.unload()

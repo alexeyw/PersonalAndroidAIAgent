@@ -120,8 +120,14 @@ class TaskQueueManagerImpl @Inject constructor(
     private fun updateActiveSessionsState() {
         // Per-session flow is a SharedFlow now; the latest value lives in
         // the replay cache (size 1) rather than under `.value`.
-        val currentState = sessionStates.mapValues { entry ->
-            entry.value.replayCache.lastOrNull() ?: AgentOrchestratorState.Idle
+        // `sessionStates` is a plain LinkedHashMap mutated under its own monitor
+        // by getOrCreateStateFlow / evictOldestTerminalSession on the worker
+        // thread; iterate it under the same monitor so this read (driven from the
+        // enqueue path) cannot hit a ConcurrentModificationException.
+        val currentState = synchronized(sessionStates) {
+            sessionStates.mapValues { entry ->
+                entry.value.replayCache.lastOrNull() ?: AgentOrchestratorState.Idle
+            }
         }
         _activeSessionsState.value = currentState
     }
