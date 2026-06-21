@@ -91,7 +91,7 @@ class ToolsViewModelTest {
     }
 
     @Test
-    fun `local tools list hides discovered AppFunctions but keeps built-ins`() = runTest {
+    fun `local tools list shows discovered AppFunctions alongside built-ins so they can be disabled`() = runTest {
         coEvery { toolRepository.getAllLocalTools() } returns listOf(
             AgentTool(name = "get_system_time", description = "", parameters = "{}", source = ToolSource.BUILT_IN),
             AgentTool(name = "com.x/echo", description = "", parameters = "{}", source = ToolSource.APP_FUNCTION),
@@ -103,8 +103,10 @@ class ToolsViewModelTest {
         )
         advanceUntilIdle()
 
+        // Both are surfaced: hiding AppFunctions would leave them callable yet
+        // uncontrollable. They now appear with the same disable toggle.
         val names = viewModel.uiState.value.localTools.map { it.name }
-        assertEquals(listOf("get_system_time"), names)
+        assertEquals(listOf("get_system_time", "com.x/echo"), names)
     }
 
     @Test
