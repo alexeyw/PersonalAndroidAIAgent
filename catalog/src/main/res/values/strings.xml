@@ -446,6 +446,7 @@
     <string name="knotwork_settings_verbose_memory_logging_label">Verbose memory logging</string>
     <string name="knotwork_settings_verbose_memory_logging_hint">Show memory retrieval hits and scores in the console, and log compaction details.</string>
     <string name="knotwork_settings_reset_button">Reset all settings</string>
+    <string name="knotwork_settings_reset_hint">Defaults are sensible starting points, refined through real-world use. Resets settings only — your chats, memory, pipelines, presets and connections are left untouched.</string>
     <string name="knotwork_settings_restart_action">Restart</string>
 
     <string name="knotwork_settings_destructive_confirm">Confirm</string>

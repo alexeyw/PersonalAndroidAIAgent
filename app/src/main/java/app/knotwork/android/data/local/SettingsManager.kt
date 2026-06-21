@@ -1,7 +1,9 @@
 package app.knotwork.android.data.local
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -374,7 +376,8 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.REQUIRES_USER_CONFIRMATION] ?: true
+            preferences[PreferencesKeys.REQUIRES_USER_CONFIRMATION]
+                ?: SettingsDefaults.REQUIRES_USER_CONFIRMATION_DEFAULT
         }
 
     override suspend fun setRequiresUserConfirmation(required: Boolean) {
@@ -1414,7 +1417,8 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.CRASH_REPORTING_ENABLED] ?: false
+            preferences[PreferencesKeys.CRASH_REPORTING_ENABLED]
+                ?: SettingsDefaults.CRASH_REPORTING_ENABLED_DEFAULT
         }
 
     override suspend fun setCrashReportingEnabled(enabled: Boolean) {
@@ -1433,7 +1437,8 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.MEMORY_SUMMARY_DEFAULT_LIMIT] ?: DEFAULT_MEMORY_SUMMARY_LIMIT
+            preferences[PreferencesKeys.MEMORY_SUMMARY_DEFAULT_LIMIT]
+                ?: SettingsDefaults.MEMORY_SUMMARY_DEFAULT_LIMIT_DEFAULT
         }
 
     override suspend fun setMemorySummaryDefaultLimit(limit: Int) {
@@ -1487,7 +1492,8 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.BLOCK_DESTRUCTIVE_TOOLS] ?: false
+            preferences[PreferencesKeys.BLOCK_DESTRUCTIVE_TOOLS]
+                ?: SettingsDefaults.BLOCK_DESTRUCTIVE_TOOLS_DEFAULT
         }
 
     override suspend fun setBlockDestructiveTools(blocked: Boolean) {
@@ -1506,7 +1512,8 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.BLOCK_NETWORK_FROM_LOCAL_MODEL] ?: false
+            preferences[PreferencesKeys.BLOCK_NETWORK_FROM_LOCAL_MODEL]
+                ?: SettingsDefaults.BLOCK_NETWORK_FROM_LOCAL_MODEL_DEFAULT
         }
 
     override suspend fun setBlockNetworkFromLocalModel(blocked: Boolean) {
@@ -1553,7 +1560,10 @@ class SettingsManager @Inject constructor(
 
     override suspend fun setAutoSummarizeThreshold(threshold: Float) {
         dataStore.edit { preferences ->
-            preferences[PreferencesKeys.AUTO_SUMMARIZE_THRESHOLD] = threshold.coerceIn(0f, 1f)
+            preferences[PreferencesKeys.AUTO_SUMMARIZE_THRESHOLD] = threshold.coerceIn(
+                SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_MIN,
+                SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_MAX,
+            )
         }
     }
 
@@ -1567,7 +1577,8 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.LONG_RUNNING_TASKS_NOTIFICATIONS] ?: true
+            preferences[PreferencesKeys.LONG_RUNNING_TASKS_NOTIFICATIONS]
+                ?: SettingsDefaults.LONG_RUNNING_TASK_NOTIFICATIONS_ENABLED_DEFAULT
         }
 
     override suspend fun setLongRunningTaskNotificationsEnabled(enabled: Boolean) {
@@ -1586,7 +1597,8 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            preferences[PreferencesKeys.SCHEDULED_TASK_NOTIFICATIONS] ?: true
+            preferences[PreferencesKeys.SCHEDULED_TASK_NOTIFICATIONS]
+                ?: SettingsDefaults.SCHEDULED_TASK_NOTIFICATIONS_ENABLED_DEFAULT
         }
 
     override suspend fun setScheduledTaskNotificationsEnabled(enabled: Boolean) {
@@ -1618,24 +1630,111 @@ class SettingsManager @Inject constructor(
         }
     }
 
+    /**
+     * Writes the local-generation sampling + pipeline/structured-output/cloud-retry
+     * defaults into [preferences]. Shared by [resetSamplingDefaults] (the
+     * per-card "Reset to defaults") and [resetToRecommendedDefaults] (the global
+     * reset) so the two paths cannot drift on these ten keys.
+     */
+    private fun MutablePreferences.applySamplingDefaults() {
+        this[PreferencesKeys.TEMPERATURE] = SettingsDefaults.TEMPERATURE_DEFAULT
+        this[PreferencesKeys.TOP_K] = SettingsDefaults.TOP_K_DEFAULT
+        this[PreferencesKeys.TOP_P] = SettingsDefaults.TOP_P_DEFAULT
+        this[PreferencesKeys.REPETITION_PENALTY] = SettingsDefaults.REPETITION_PENALTY_DEFAULT
+        this[PreferencesKeys.MAX_CONTEXT_LENGTH] = SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT
+        this[PreferencesKeys.PIPELINE_MAX_STEPS] = SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT
+        this[PreferencesKeys.PIPELINE_MAX_NESTING_DEPTH] = SettingsDefaults.PIPELINE_MAX_NESTING_DEPTH_DEFAULT
+        this[PreferencesKeys.STRUCTURED_OUTPUT_MAX_REPAIRS] = SettingsDefaults.STRUCTURED_OUTPUT_MAX_REPAIRS_DEFAULT
+        this[PreferencesKeys.CLOUD_RETRY_MAX_ATTEMPTS] = SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_DEFAULT
+        this[PreferencesKeys.CLOUD_RETRY_BASE_DELAY_MS] = SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_DEFAULT
+    }
+
     override suspend fun resetSamplingDefaults() {
+        dataStore.edit { preferences -> preferences.applySamplingDefaults() }
+    }
+
+    @Suppress("LongMethod") // Flat list of independent key→default writes; splitting it would only obscure it.
+    override suspend fun resetToRecommendedDefaults() {
         dataStore.edit { preferences ->
-            preferences[PreferencesKeys.TEMPERATURE] = SettingsDefaults.TEMPERATURE_DEFAULT
-            preferences[PreferencesKeys.TOP_K] = SettingsDefaults.TOP_K_DEFAULT
-            preferences[PreferencesKeys.TOP_P] = SettingsDefaults.TOP_P_DEFAULT
-            preferences[PreferencesKeys.REPETITION_PENALTY] = SettingsDefaults.REPETITION_PENALTY_DEFAULT
-            preferences[PreferencesKeys.MAX_CONTEXT_LENGTH] = SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT
-            preferences[PreferencesKeys.PIPELINE_MAX_STEPS] = SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT
-            preferences[PreferencesKeys.PIPELINE_MAX_NESTING_DEPTH] =
-                SettingsDefaults.PIPELINE_MAX_NESTING_DEPTH_DEFAULT
-            preferences[PreferencesKeys.STRUCTURED_OUTPUT_MAX_REPAIRS] =
-                SettingsDefaults.STRUCTURED_OUTPUT_MAX_REPAIRS_DEFAULT
-            preferences[PreferencesKeys.CLOUD_RETRY_MAX_ATTEMPTS] =
-                SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_DEFAULT
-            preferences[PreferencesKeys.CLOUD_RETRY_BASE_DELAY_MS] =
-                SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_DEFAULT
+            // Sampling / generation + pipeline / structured output / cloud retry.
+            preferences.applySamplingDefaults()
+            // Tool / workspace / http limits.
+            preferences[PreferencesKeys.TOOL_CALL_TIMEOUT_MS] = SettingsDefaults.TOOL_CALL_TIMEOUT_MS_DEFAULT
+            preferences[PreferencesKeys.WORKSPACE_MAX_FILE_SIZE_BYTES] =
+                SettingsDefaults.WORKSPACE_MAX_FILE_SIZE_BYTES_DEFAULT
+            preferences[PreferencesKeys.WORKSPACE_MAX_TOTAL_BYTES] =
+                SettingsDefaults.WORKSPACE_MAX_TOTAL_BYTES_DEFAULT
+            preferences[PreferencesKeys.WORKSPACE_READ_TOKEN_BUDGET] =
+                SettingsDefaults.WORKSPACE_READ_TOKEN_BUDGET_DEFAULT
+            preferences[PreferencesKeys.HTTP_TOOL_MAX_RESPONSE_BYTES] =
+                SettingsDefaults.HTTP_TOOL_MAX_RESPONSE_BYTES_DEFAULT
+            // Run lifecycle windows / retention.
+            preferences[PreferencesKeys.RESUME_MAX_AGE_HOURS] = SettingsDefaults.RESUME_MAX_AGE_HOURS_DEFAULT
+            preferences[PreferencesKeys.BACKGROUND_APPROVAL_WINDOW_HOURS] =
+                SettingsDefaults.BACKGROUND_APPROVAL_WINDOW_HOURS_DEFAULT
+            preferences[PreferencesKeys.TRACE_RETENTION_RUNS_PER_SESSION] =
+                SettingsDefaults.TRACE_RETENTION_RUNS_PER_SESSION_DEFAULT
+            preferences[PreferencesKeys.TRACE_RETENTION_MAX_AGE_DAYS] =
+                SettingsDefaults.TRACE_RETENTION_MAX_AGE_DAYS_DEFAULT
+            // Audio.
+            preferences[PreferencesKeys.AUDIO_MAX_DURATION_SEC] = SettingsDefaults.AUDIO_MAX_DURATION_SEC_DEFAULT
+            // Memory tuning.
+            preferences[PreferencesKeys.MEMORY_SUMMARY_DEFAULT_LIMIT] =
+                SettingsDefaults.MEMORY_SUMMARY_DEFAULT_LIMIT_DEFAULT
+            preferences[PreferencesKeys.MEMORY_SEARCH_TOP_K] = SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT
+            preferences[PreferencesKeys.MEMORY_SEARCH_THRESHOLD] = SettingsDefaults.MEMORY_SEARCH_THRESHOLD_DEFAULT
+            preferences[PreferencesKeys.MEMORY_RECENCY_HALF_LIFE_DAYS] =
+                SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_DEFAULT
+            preferences[PreferencesKeys.MEMORY_COMPACTION_ENABLED] =
+                SettingsDefaults.MEMORY_COMPACTION_ENABLED_DEFAULT
+            preferences[PreferencesKeys.MEMORY_COMPACTION_AGE_DAYS] =
+                SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT
+            preferences[PreferencesKeys.MAX_MEMORY_CHUNKS] = SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT
+            preferences[PreferencesKeys.AUTO_EXTRACT_ENABLED] = SettingsDefaults.AUTO_EXTRACT_ENABLED_DEFAULT
+            preferences[PreferencesKeys.AUTO_SUMMARIZE_THRESHOLD] =
+                SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_DEFAULT
+            preferences[PreferencesKeys.VERBOSE_MEMORY_LOGGING_ENABLED] =
+                SettingsDefaults.VERBOSE_MEMORY_LOGGING_ENABLED_DEFAULT
+            // Chat-history compression.
+            preferences[PreferencesKeys.CHAT_HISTORY_COMPRESSION_ENABLED] =
+                SettingsDefaults.CHAT_HISTORY_COMPRESSION_ENABLED_DEFAULT
+            preferences[PreferencesKeys.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS] =
+                SettingsDefaults.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_DEFAULT
+            preferences[PreferencesKeys.CHAT_HISTORY_LIVE_WINDOW_SIZE] =
+                SettingsDefaults.CHAT_HISTORY_LIVE_WINDOW_DEFAULT
+            // Security toggles. Both legacy boolean and typed policy go to their
+            // documented defaults so a reset matches a fresh install exactly (the
+            // typed key is what the migration reads; the boolean is superseded).
+            preferences[PreferencesKeys.TOOL_APPROVAL_POLICY] = ToolApprovalPolicy.DEFAULT.key
+            preferences[PreferencesKeys.REQUIRES_USER_CONFIRMATION] =
+                SettingsDefaults.REQUIRES_USER_CONFIRMATION_DEFAULT
+            preferences[PreferencesKeys.BLOCK_DESTRUCTIVE_TOOLS] =
+                SettingsDefaults.BLOCK_DESTRUCTIVE_TOOLS_DEFAULT
+            preferences[PreferencesKeys.BLOCK_NETWORK_FROM_LOCAL_MODEL] =
+                SettingsDefaults.BLOCK_NETWORK_FROM_LOCAL_MODEL_DEFAULT
+            // Notifications + privacy.
+            preferences[PreferencesKeys.LONG_RUNNING_TASKS_NOTIFICATIONS] =
+                SettingsDefaults.LONG_RUNNING_TASK_NOTIFICATIONS_ENABLED_DEFAULT
+            preferences[PreferencesKeys.SCHEDULED_TASK_NOTIFICATIONS] =
+                SettingsDefaults.SCHEDULED_TASK_NOTIFICATIONS_ENABLED_DEFAULT
+            preferences[PreferencesKeys.CRASH_REPORTING_ENABLED] =
+                SettingsDefaults.CRASH_REPORTING_ENABLED_DEFAULT
         }
     }
+
+    /**
+     * Reflectively enumerates the wire names of every preference declared in
+     * [PreferencesKeys]. Exposed only so the test-suite can assert that every
+     * persistable key is either restored by [resetToRecommendedDefaults] or
+     * listed among the deliberately-excluded user-data keys — catching the case
+     * where a future setting is added but silently escapes the reset.
+     */
+    @VisibleForTesting
+    internal fun knownPreferenceKeyNames(): Set<String> =
+        PreferencesKeys::class.java.declaredFields.mapNotNull { field ->
+            field.isAccessible = true
+            (field.get(PreferencesKeys) as? Preferences.Key<*>)?.name
+        }.toSet()
 
     private fun encodeTestProbeResult(result: TestProbeResult): String = JSONObject().apply {
         put("tokens", result.tokensGenerated)
@@ -1668,8 +1767,6 @@ class SettingsManager @Inject constructor(
 
         /** Android Keystore alias of the AEAD key dedicated to the settings-secrets store. */
         const val SECRETS_KEY_ALIAS = "knotwork.settings_secrets"
-
-        const val DEFAULT_MEMORY_SUMMARY_LIMIT = 5
 
         /**
          * Default value for [PreferencesKeys.CONSOLE_PREFERRED_TAB] on a
