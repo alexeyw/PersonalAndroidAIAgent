@@ -1,6 +1,5 @@
 package app.knotwork.android.data.local
 
-import android.content.Context
 import androidx.annotation.VisibleForTesting
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.MutablePreferences
@@ -11,8 +10,7 @@ import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
-import app.knotwork.android.data.local.crypto.AeadCipher
-import app.knotwork.android.data.local.crypto.KeystoreBackedPrefsStore
+import app.knotwork.android.data.local.crypto.SecretStore
 import app.knotwork.android.data.local.crypto.SecureValueUnreadableException
 import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.constants.SettingsDefaults
@@ -25,7 +23,6 @@ import app.knotwork.android.domain.models.ToolApprovalPolicy
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.models.UpdateMcpServerResult
 import app.knotwork.android.domain.repositories.SettingsRepository
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,29 +43,21 @@ import javax.inject.Inject
 /**
  * Concrete implementation of [SettingsRepository] utilizing Androidx DataStore Preferences.
  *
- * Secret payloads are **not** kept in DataStore: the HuggingFace access token lives in a
- * [KeystoreBackedPrefsStore] (AES-GCM under a dedicated Android Keystore key), with the same
- * re-enterable-secret recovery policy as [ApiKeyManager] — an undecryptable value is dropped
- * and reported as unset. A token persisted by earlier releases in plain DataStore is migrated
- * into the encrypted store on the first read and removed from DataStore.
+ * Secret payloads are **not** kept in DataStore: the HuggingFace access token and per-server
+ * MCP credentials live in the injected [SecretStore] (AES-GCM under a dedicated Android Keystore
+ * key in production), with the same re-enterable-secret recovery policy as [ApiKeyManager] — an
+ * undecryptable value is dropped and reported as unset. Secrets persisted by earlier releases in
+ * plain DataStore (the HuggingFace token, inline MCP auth) are migrated into the secret store on
+ * the first read and removed from DataStore.
  *
  * @property dataStore The underlying DataStore instance for persistence.
- * @property context The application context backing the encrypted secrets store.
- * @param cipher The AEAD boundary used to protect stored secrets.
+ * @property secretsStore The encrypted store backing every secret payload.
  */
 @Suppress("LargeClass") // 31-field DataStore facade by design; per-section split planned post-v0.1.
 class SettingsManager @Inject constructor(
     private val dataStore: DataStore<Preferences>,
-    @ApplicationContext private val context: Context,
-    cipher: AeadCipher,
+    private val secretsStore: SecretStore,
 ) : SettingsRepository {
-
-    private val secretsStore = KeystoreBackedPrefsStore(
-        context = context,
-        prefsName = SECRETS_PREFS_NAME,
-        keyAlias = SECRETS_KEY_ALIAS,
-        cipher = cipher,
-    )
 
     private object PreferencesKeys {
         val IS_FIRST_LAUNCH = booleanPreferencesKey("is_first_launch")
@@ -173,6 +162,21 @@ class SettingsManager @Inject constructor(
      */
     private object SecretKeys {
         const val HUGGING_FACE_TOKEN = "hugging_face_token"
+
+        /**
+         * Encrypted-store key for a single MCP server's auth payload, namespaced
+         * by a hash of the server URL. The URL is hashed (not used verbatim) so
+         * the entry name does not leak the endpoint and stays a stable, valid
+         * preference key regardless of the URL's characters.
+         *
+         * @param url The MCP server URL the auth belongs to.
+         * @return The per-server secret-store entry name.
+         */
+        fun mcpAuthKey(url: String): String = "mcp_auth_" + sha256Hex(url)
+
+        private fun sha256Hex(value: String): String = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
     }
 
     override val isFirstLaunch: Flow<Boolean> = dataStore.data
@@ -424,35 +428,43 @@ class SettingsManager @Inject constructor(
         }
     }
 
-    override val mcpServers: Flow<List<McpServerConfig>> = dataStore.data
-        .catch { exception ->
-            if (exception is IOException) {
-                Timber.e(exception, "Error reading preferences")
-                emit(emptyPreferences())
-            } else {
-                throw exception
-            }
-        }
-        .map { preferences ->
-            val json = preferences[PreferencesKeys.MCP_SERVERS_JSON]
-            if (!json.isNullOrBlank()) {
-                decodeMcpServers(json)
-            } else {
-                // Legacy fallback: read the old URL-only key. The first write through
-                // [addMcpServer]/[updateMcpServer]/[removeMcpServer] persists the new
-                // JSON form and the next read short-circuits above.
-                (preferences[PreferencesKeys.MCP_SERVER_URLS] ?: emptySet())
-                    .map { url -> McpServerConfig(url = url) }
-            }
-        }
+    override val mcpServers: Flow<List<McpServerConfig>> = flow {
+        // Move any inline auth left in plain DataStore by earlier releases into
+        // the encrypted store before exposing the list (one-time, idempotent).
+        migrateLegacyMcpAuth()
+        emitAll(
+            dataStore.data
+                .catch { exception ->
+                    if (exception is IOException) {
+                        Timber.e(exception, "Error reading preferences")
+                        emit(emptyPreferences())
+                    } else {
+                        throw exception
+                    }
+                }
+                .map { preferences ->
+                    val json = preferences[PreferencesKeys.MCP_SERVERS_JSON]
+                    if (!json.isNullOrBlank()) {
+                        decodeMcpServers(json)
+                    } else {
+                        // Legacy fallback: read the old URL-only key. The first write through
+                        // [addMcpServer]/[updateMcpServer]/[removeMcpServer] persists the new
+                        // JSON form and the next read short-circuits above.
+                        (preferences[PreferencesKeys.MCP_SERVER_URLS] ?: emptySet())
+                            .map { url -> McpServerConfig(url = url) }
+                    }
+                },
+        )
+    }
 
     override suspend fun addMcpServer(config: McpServerConfig) {
+        val previous = mcpServers.first()
+        val next = previous.filterNot { it.url == config.url } + config
         dataStore.edit { preferences ->
-            val current = currentMcpServers(preferences)
-            val without = current.filterNot { it.url == config.url }
-            preferences[PreferencesKeys.MCP_SERVERS_JSON] = encodeMcpServers(without + config)
+            preferences[PreferencesKeys.MCP_SERVERS_JSON] = encodeMcpServers(next)
             preferences.remove(PreferencesKeys.MCP_SERVER_URLS)
         }
+        reconcileMcpSecrets(previous, next)
     }
 
     override suspend fun updateMcpServer(originalUrl: String, updated: McpServerConfig): UpdateMcpServerResult {
@@ -467,34 +479,139 @@ class SettingsManager @Inject constructor(
         McpServerCollisionCheck
             .detectCollision(currentList = snapshot, originalUrl = originalUrl, newUrl = updated.url)
             ?.let { return it }
+        val index = snapshot.indexOfFirst { it.url == originalUrl }
+        val next = if (index >= 0) {
+            snapshot.toMutableList().also { it[index] = updated }
+        } else {
+            snapshot + updated
+        }
         dataStore.edit { preferences ->
-            val current = currentMcpServers(preferences)
-            val index = current.indexOfFirst { it.url == originalUrl }
-            val next = if (index >= 0) {
-                current.toMutableList().also { it[index] = updated }
-            } else {
-                current + updated
-            }
             preferences[PreferencesKeys.MCP_SERVERS_JSON] = encodeMcpServers(next)
             preferences.remove(PreferencesKeys.MCP_SERVER_URLS)
         }
+        // Reconciling against the prior snapshot drops the old URL's secret on a
+        // URL change and writes the (possibly updated) credentials under the new.
+        reconcileMcpSecrets(snapshot, next)
         return UpdateMcpServerResult.Success
     }
 
     override suspend fun removeMcpServer(url: String) {
+        val previous = mcpServers.first()
+        val next = previous.filterNot { it.url == url }
         dataStore.edit { preferences ->
-            val current = currentMcpServers(preferences)
-            preferences[PreferencesKeys.MCP_SERVERS_JSON] = encodeMcpServers(current.filterNot { it.url == url })
+            preferences[PreferencesKeys.MCP_SERVERS_JSON] = encodeMcpServers(next)
             preferences.remove(PreferencesKeys.MCP_SERVER_URLS)
+        }
+        reconcileMcpSecrets(previous, next)
+    }
+
+    /**
+     * Reconciles the per-server MCP auth secrets against a settings change:
+     * removes the encrypted entry of every server dropped (or whose URL changed)
+     * and (re)writes the auth of every server in [next].
+     */
+    private fun reconcileMcpSecrets(previous: List<McpServerConfig>, next: List<McpServerConfig>) {
+        val nextUrls = next.mapTo(mutableSetOf()) { it.url }
+        previous.forEach { config ->
+            if (config.url !in nextUrls) secretsStore.remove(SecretKeys.mcpAuthKey(config.url))
+        }
+        next.forEach { writeMcpAuth(it.url, it.auth) }
+    }
+
+    /** Persists (or clears, for [McpAuth.None]) a single server's auth in the encrypted store. */
+    private fun writeMcpAuth(url: String, auth: McpAuth) {
+        val key = SecretKeys.mcpAuthKey(url)
+        val encoded = encodeAuth(auth)
+        if (encoded == null) {
+            secretsStore.remove(key)
+        } else {
+            secretsStore.putString(key, encoded.toString(), synchronous = true)
         }
     }
 
-    /** Reads the current persisted list, falling back to the legacy URL-only key. */
-    private fun currentMcpServers(preferences: Preferences): List<McpServerConfig> {
-        val json = preferences[PreferencesKeys.MCP_SERVERS_JSON]
-        if (!json.isNullOrBlank()) return decodeMcpServers(json)
-        return (preferences[PreferencesKeys.MCP_SERVER_URLS] ?: emptySet())
-            .map { url -> McpServerConfig(url = url) }
+    /**
+     * Reads a server's auth from the encrypted store, applying the
+     * re-enterable-secret recovery policy: an undecryptable or corrupt entry is
+     * dropped and reported as [McpAuth.None] rather than propagated as an error.
+     */
+    private fun readMcpAuth(url: String): McpAuth {
+        val key = SecretKeys.mcpAuthKey(url)
+        val raw = try {
+            secretsStore.getString(key)
+        } catch (e: SecureValueUnreadableException) {
+            Timber.e(e, "Stored MCP auth for a server is unreadable; treating it as no-auth.")
+            secretsStore.remove(key)
+            return McpAuth.None
+        } ?: return McpAuth.None
+        return try {
+            decodeAuth(JSONObject(raw))
+        } catch (e: JSONException) {
+            Timber.e(e, "Stored MCP auth JSON is corrupt; treating it as no-auth.")
+            McpAuth.None
+        }
+    }
+
+    /** Serializes the legacy-DataStore MCP-auth migration so concurrent collectors run it once. */
+    private val mcpAuthMigrationMutex = Mutex()
+    private var mcpAuthMigrationDone = false
+
+    /**
+     * One-time move of MCP auth that earlier releases embedded inline in the plain
+     * `mcp_servers_json` DataStore entry into the encrypted store. The encrypted
+     * copy is written **before** the inline copy is stripped, so a crash in
+     * between leaves both rather than neither; an entry already present in the
+     * encrypted store is not overwritten. An [IOException] reading DataStore
+     * defers the migration to the next collection.
+     */
+    private suspend fun migrateLegacyMcpAuth() {
+        if (mcpAuthMigrationDone) return
+        mcpAuthMigrationMutex.withLock {
+            if (mcpAuthMigrationDone) return
+            val json = try {
+                dataStore.data.first()[PreferencesKeys.MCP_SERVERS_JSON]
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: IOException) {
+                Timber.e(e, "Cannot read preferences for the MCP-auth migration; retrying later.")
+                return
+            }
+            val rewritten = if (json.isNullOrBlank()) null else extractInlineMcpAuthToSecrets(json)
+            if (rewritten != null) {
+                dataStore.edit { it[PreferencesKeys.MCP_SERVERS_JSON] = rewritten }
+            }
+            mcpAuthMigrationDone = true
+        }
+    }
+
+    /**
+     * Pure (non-suspend) half of [migrateLegacyMcpAuth]: moves every server's
+     * inline `auth` object into the encrypted store (unless one is already there)
+     * and returns the JSON rewritten with the inline auth stripped, or `null`
+     * when nothing changed or the JSON is malformed.
+     */
+    private fun extractInlineMcpAuthToSecrets(json: String): String? = try {
+        val array = JSONArray(json)
+        var changed = false
+        for (i in 0 until array.length()) {
+            val obj = array.getJSONObject(i)
+            val url = obj.optString("url").takeIf { it.isNotBlank() } ?: continue
+            val inlineAuth = obj.optJSONObject("auth") ?: continue
+            val key = SecretKeys.mcpAuthKey(url)
+            val existing = try {
+                secretsStore.getString(key)
+            } catch (e: SecureValueUnreadableException) {
+                null
+            }
+            if (existing == null) {
+                secretsStore.putString(key, inlineAuth.toString(), synchronous = true)
+            }
+            obj.remove("auth")
+            changed = true
+        }
+        if (changed) array.toString() else null
+    } catch (e: JSONException) {
+        Timber.e(e, "MCP servers JSON is malformed; skipping the auth migration.")
+        null
     }
 
     private fun encodeMcpServers(servers: List<McpServerConfig>): String {
@@ -504,7 +621,8 @@ class SettingsManager @Inject constructor(
                 .put("url", config.url)
                 .put("transport", config.transport.wireId)
             if (!config.name.isNullOrBlank()) obj.put("name", config.name)
-            encodeAuth(config.auth)?.let { obj.put("auth", it) }
+            // Auth is NOT written here: credentials live in the encrypted store
+            // (see [writeMcpAuth] / [reconcileMcpSecrets]), keyed by server URL.
             if (config.headers.isNotEmpty()) {
                 val headers = JSONObject()
                 config.headers.forEach { (k, v) -> headers.put(k, v) }
@@ -552,7 +670,13 @@ class SettingsManager @Inject constructor(
                 val url = obj.optString("url").takeIf { it.isNotBlank() } ?: continue
                 val name = obj.optString("name").takeIf { it.isNotBlank() }
                 val transport = McpTransport.fromWireId(obj.optString("transport").takeIf { it.isNotBlank() })
-                val auth = decodeAuth(obj.optJSONObject("auth"))
+                // Auth normally comes from the encrypted store; a still-inline
+                // `auth` object is honoured too, covering the window before the
+                // one-time migration ([migrateLegacyMcpAuth]) has rewritten the
+                // JSON. Post-migration the JSON carries no auth and this reads
+                // the encrypted store.
+                val inlineAuth = obj.optJSONObject("auth")
+                val auth = if (inlineAuth != null) decodeAuth(inlineAuth) else readMcpAuth(url)
                 val headers = obj.optJSONObject("headers")?.let { headerObj ->
                     buildMap<String, String> {
                         val keys = headerObj.keys()
@@ -1762,12 +1886,6 @@ class SettingsManager @Inject constructor(
     }
 
     private companion object {
-        /** Name of the [KeystoreBackedPrefsStore] preferences file holding settings secrets. */
-        const val SECRETS_PREFS_NAME = "secure_settings_secrets"
-
-        /** Android Keystore alias of the AEAD key dedicated to the settings-secrets store. */
-        const val SECRETS_KEY_ALIAS = "knotwork.settings_secrets"
-
         /**
          * Default value for [PreferencesKeys.CONSOLE_PREFERRED_TAB] on a
          * fresh install. Mirrors the enum name of

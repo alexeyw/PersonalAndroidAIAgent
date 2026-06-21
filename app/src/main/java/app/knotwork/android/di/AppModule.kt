@@ -11,6 +11,9 @@ import app.knotwork.android.data.local.AppDatabase
 import app.knotwork.android.data.local.Converters
 import app.knotwork.android.data.local.DeferredPassphraseOpenHelperFactory
 import app.knotwork.android.data.local.EncryptedDbPassphraseProvider
+import app.knotwork.android.data.local.crypto.AeadCipher
+import app.knotwork.android.data.local.crypto.KeystoreBackedPrefsStore
+import app.knotwork.android.data.local.crypto.SecretStore
 import app.knotwork.android.data.local.dao.ChatDao
 import app.knotwork.android.data.local.dao.ChatHistorySummaryDao
 import app.knotwork.android.data.local.dao.LocalModelDao
@@ -65,6 +68,17 @@ object AppModule {
 
     /** Connect/read/write timeout for the shared OkHttp client, in seconds. */
     private const val HTTP_TIMEOUT_SECONDS = 60L
+
+    /**
+     * Backing file name of the settings-secrets store. Must stay byte-identical
+     * to the value previously baked into `SettingsManager`, or existing users'
+     * encrypted entries (API keys, Hugging Face token, MCP credentials) would be
+     * orphaned under a new file.
+     */
+    private const val SETTINGS_SECRETS_PREFS_NAME = "secure_settings_secrets"
+
+    /** Android Keystore alias of the AEAD key dedicated to the settings-secrets store. */
+    private const val SETTINGS_SECRETS_KEY_ALIAS = "knotwork.settings_secrets"
 
     /**
      * Provides the singleton instance of the DataStore preferences.
@@ -276,6 +290,21 @@ object AppModule {
     @Provides
     @Singleton
     fun provideConverters(): Converters = Converters()
+
+    /**
+     * Provides the Keystore-backed secret store consumed by `SettingsManager`
+     * (API keys, the Hugging Face token, per-server MCP credentials). Exposed via
+     * the [SecretStore] seam so unit tests substitute an in-memory fake.
+     */
+    @Provides
+    @Singleton
+    fun provideSettingsSecretStore(@ApplicationContext context: Context, cipher: AeadCipher): SecretStore =
+        KeystoreBackedPrefsStore(
+            context = context,
+            prefsName = SETTINGS_SECRETS_PREFS_NAME,
+            keyAlias = SETTINGS_SECRETS_KEY_ALIAS,
+            cipher = cipher,
+        )
 
     /**
      * Provides the singleton instance of OkHttpClient.
