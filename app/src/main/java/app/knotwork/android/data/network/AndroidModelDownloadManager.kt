@@ -56,7 +56,10 @@ class AndroidModelDownloadManager @Inject constructor(
                 return@flow
             }
 
-            val targetFile = File(context.getExternalFilesDir(null), fileName)
+            val targetFile = resolveSafeTarget(fileName) ?: run {
+                emit(DownloadState.Error(DownloadError("Invalid model file name: $fileName")))
+                return@flow
+            }
             val contentLength = body.contentLength()
 
             body.source().use { source ->
@@ -104,6 +107,27 @@ class AndroidModelDownloadManager @Inject constructor(
      *   401/403) without parsing it back out of [message].
      */
     data class DownloadError(val message: String, val code: Int? = null) : AppError.Network
+
+    /**
+     * Resolves [fileName] to a download target strictly inside the models
+     * directory, or `null` when the name is unsafe. The Discover/install flow
+     * passes the Hugging Face `rfilename` verbatim (only filtered by extension),
+     * so a hostile listing could contain `../` segments aimed at the SQLCipher
+     * DB or other app files. This collapses the name to its last path segment,
+     * rejects `.`/`..`/blank, and double-checks containment via the canonical
+     * path so nothing can be written outside the directory.
+     *
+     * @param fileName The requested file name (possibly attacker-influenced).
+     * @return The safe target [File], or `null` if [fileName] is rejected.
+     */
+    private fun resolveSafeTarget(fileName: String): File? {
+        val safeName = File(fileName).name
+        if (safeName.isBlank() || safeName == "." || safeName == "..") return null
+        val dir = context.getExternalFilesDir(null) ?: return null
+        val target = File(dir, safeName)
+        val dirPrefix = dir.canonicalPath + File.separator
+        return target.takeIf { it.canonicalPath.startsWith(dirPrefix) }
+    }
 
     private companion object {
         /** Size, in bytes, of the chunk read from the network and flushed to disk on each loop. */

@@ -87,6 +87,64 @@ class AndroidModelDownloadManagerTest {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     @Test
+    fun `downloadModel rejects a traversal-only file name`() = runTest {
+        val url = "http://example.com/model.bin"
+        val mockCall = mockk<Call>()
+        val mockResponse = Response.Builder()
+            .request(Request.Builder().url(url).build())
+            .protocol(Protocol.HTTP_1_1)
+            .code(200)
+            .message("OK")
+            .body("data".toResponseBody())
+            .build()
+        every { okHttpClient.newCall(any()) } returns mockCall
+        every { mockCall.execute() } returns mockResponse
+
+        val emissions = mutableListOf<DownloadState>()
+        val job = launch(UnconfinedTestDispatcher()) {
+            // "name" collapses to "..", which would escape the models dir.
+            sut.downloadModel(url, "..").toList(emissions)
+        }
+        job.join()
+
+        assertTrue(emissions.last() is DownloadState.Error)
+        val errorMsg = ((emissions.last() as DownloadState.Error).error as AndroidModelDownloadManager.DownloadError).message
+        assertTrue("Expected invalid-name error, got: $errorMsg", errorMsg.contains("Invalid model file name"))
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `downloadModel strips path segments so a traversal name writes inside the models dir`() = runTest {
+        val url = "http://example.com/model.bin"
+        val content = "payload"
+        val mockCall = mockk<Call>()
+        val mockResponse = Response.Builder()
+            .request(Request.Builder().url(url).build())
+            .protocol(Protocol.HTTP_1_1)
+            .code(200)
+            .message("OK")
+            .body(content.toResponseBody())
+            .build()
+        every { okHttpClient.newCall(any()) } returns mockCall
+        every { mockCall.execute() } returns mockResponse
+
+        val emissions = mutableListOf<DownloadState>()
+        val job = launch(UnconfinedTestDispatcher()) {
+            sut.downloadModel(url, "../../evil.bin").toList(emissions)
+        }
+        job.join()
+
+        val success = emissions.last() as DownloadState.Success
+        // The "../../" prefix is stripped; the file lands inside tempDir as evil.bin.
+        val expectedFile = File(tempDir, "evil.bin")
+        assertEquals(expectedFile.absolutePath, success.fileUri)
+        assertTrue("file must be written inside the models dir", expectedFile.exists())
+        assertEquals(content, expectedFile.readText())
+        expectedFile.delete()
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
     fun `downloadModel emits Pending and Error when network request fails`() = runTest {
         val url = "http://example.com/model.bin"
         val fileName = "model.bin"

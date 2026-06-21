@@ -45,6 +45,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
 import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 import javax.inject.Singleton
 
 /**
@@ -61,6 +62,9 @@ import javax.inject.Singleton
 object AppModule {
 
     private const val USER_PREFERENCES_NAME = "agent_preferences"
+
+    /** Connect/read/write timeout for the shared OkHttp client, in seconds. */
+    private const val HTTP_TIMEOUT_SECONDS = 60L
 
     /**
      * Provides the singleton instance of the DataStore preferences.
@@ -275,10 +279,21 @@ object AppModule {
 
     /**
      * Provides the singleton instance of OkHttpClient.
+     *
+     * Connect/read/write timeouts are set (60s, per the project API conventions)
+     * so model downloads and Hugging Face discovery cannot pin a coroutine
+     * indefinitely on a stalled connection. No overall `callTimeout` is set on
+     * purpose: a multi-GB model download legitimately runs far longer than any
+     * single read, and the per-read timeout already trips a genuinely stalled
+     * transfer.
      */
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder().build()
+    fun provideOkHttpClient(): OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(HTTP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .readTimeout(HTTP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .writeTimeout(HTTP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .build()
 
     /**
      * Provides the singleton instance of LocalAppFunctionManager.
