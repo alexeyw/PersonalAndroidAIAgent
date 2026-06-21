@@ -395,4 +395,33 @@ class AppDatabaseMigrationTest {
             index.contains("INDEX_MODEL_PERFORMANCE_SAMPLES_MODELPATH_ID"),
         )
     }
+
+    @Test
+    fun `MIGRATION_42_43 targets versions 42 to 43`() {
+        val migration = AppDatabase.MIGRATION_42_43
+
+        assertEquals(42, migration.startVersion)
+        assertEquals(43, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_42_43 indexes chat_messages sessionId with Room's generated name`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val sqlSlot = slot<String>()
+
+        AppDatabase.MIGRATION_42_43.migrate(db)
+
+        verify(exactly = 1) { db.execSQL(capture(sqlSlot)) }
+        val sql = sqlSlot.captured.uppercase()
+        assertTrue(
+            "Expected CREATE INDEX on chat_messages, got: ${sqlSlot.captured}",
+            sql.contains("CREATE INDEX") && sql.contains("CHAT_MESSAGES") && sql.contains("SESSIONID"),
+        )
+        // Name must match Room's generated index_<table>_<column> or schema
+        // validation on the next open would reject the migrated DB.
+        assertTrue(
+            "Index name must match Room's generated name: ${sqlSlot.captured}",
+            sql.contains("INDEX_CHAT_MESSAGES_SESSIONID"),
+        )
+    }
 }

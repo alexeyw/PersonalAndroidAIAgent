@@ -174,9 +174,15 @@ interface ChatDao {
     suspend fun getSessionById(id: String): ChatSessionEntity?
 
     /**
-     * Deletes a chat session by its ID.
+     * Deletes **only** the `chat_sessions` row (its FK cascade reaches
+     * `trace_steps`, but `chat_messages` has no FK onto sessions and is NOT
+     * cascaded). This is a building block of [deleteSessionCompletely] and the
+     * DAO cascade tests — **do not call it directly to discard a conversation**:
+     * doing so orphans every message row of the session (no orphan sweep exists
+     * for messages). Route all user-facing deletes through
+     * [deleteSessionCompletely].
      *
-     * @param id The ID of the session to delete.
+     * @param id The ID of the session row to delete.
      */
     @Query("DELETE FROM chat_sessions WHERE id = :id")
     suspend fun deleteSession(id: String)
