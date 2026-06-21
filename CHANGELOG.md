@@ -234,6 +234,16 @@ details.
 
 ### Fixed
 
+- **Recurring scheduled tasks no longer collapse across chats or stack
+  duplicates.** A recurring task's de-duplication key now includes the bound
+  chat session and trims the prompt, instead of keying on the verbatim prompt
+  and interval alone. Previously, scheduling the same recurring prompt from a
+  second chat was silently dropped (its results kept landing in the first
+  chat), while a prompt differing only by a stray trailing space slipped past
+  the de-dup and stacked a duplicate schedule. Schedules bound to different
+  sessions now stay independent, and cosmetic whitespace differences collapse
+  correctly; the agent still runs the verbatim prompt.
+
 - **Scheduled-task confirmation message showed a literal placeholder.** The
   reply confirming a scheduled task ("Task successfully scheduled to run every
   …") rendered the raw `$intervalHours` / `$delayMinutes` text instead of the
