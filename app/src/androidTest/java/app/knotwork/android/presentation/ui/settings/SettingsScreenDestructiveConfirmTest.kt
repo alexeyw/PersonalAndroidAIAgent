@@ -47,7 +47,7 @@ class SettingsScreenDestructiveConfirmTest {
         )
 
         composeTestRule.setContent {
-            MaterialTheme { SettingsScreen(viewModel = vm) }
+            MaterialTheme { MemorySettingsScreen(viewModel = vm, nav = settingsNavStub()) }
         }
 
         composeTestRule.onNodeWithTag(testTag = DESTRUCTIVE_TYPED_FIELD_TEST_TAG).assertIsDisplayed()
@@ -67,7 +67,7 @@ class SettingsScreenDestructiveConfirmTest {
         )
 
         composeTestRule.setContent {
-            MaterialTheme { SettingsScreen(viewModel = vm) }
+            MaterialTheme { MemorySettingsScreen(viewModel = vm, nav = settingsNavStub()) }
         }
 
         composeTestRule.onNodeWithTag(testTag = DESTRUCTIVE_CONFIRM_BUTTON_TEST_TAG).assertIsEnabled()
@@ -87,7 +87,7 @@ class SettingsScreenDestructiveConfirmTest {
         )
 
         composeTestRule.setContent {
-            MaterialTheme { SettingsScreen(viewModel = vm) }
+            MaterialTheme { AboutSettingsScreen(viewModel = vm, nav = settingsNavStub()) }
         }
 
         // The plain reset dialog has no typed-keyword gate: its confirm is

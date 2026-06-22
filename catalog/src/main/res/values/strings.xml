@@ -408,20 +408,38 @@
     <string name="knotwork_settings_back">Back</string>
 
     <string name="knotwork_settings_section_system_instructions">System instructions</string>
-    <string name="knotwork_settings_section_restrictions">Restrictions · Human-in-the-loop</string>
-    <string name="knotwork_settings_section_llm">LLM parameters</string>
-    <string name="knotwork_settings_section_local_model">Local model</string>
     <string name="knotwork_settings_section_providers">External providers</string>
-    <string name="knotwork_settings_section_memory">Memory</string>
-    <string name="knotwork_settings_section_notifications">Notifications</string>
-    <string name="knotwork_settings_section_privacy">Privacy</string>
+
+    <!-- Hub + category navigation -->
+    <string name="knotwork_settings_hub_basic">Basic</string>
+    <string name="knotwork_settings_hub_categories">Categories</string>
+    <string name="knotwork_settings_hub_system_instructions_empty">Tap to edit the system prompt.</string>
+    <string name="knotwork_settings_count" tools:ignore="PluralsCandidate">%1$d settings</string>
+    <string name="knotwork_settings_advanced_title">Advanced</string>
+    <string name="knotwork_settings_advanced_subtitle">change deliberately</string>
+
+    <string name="knotwork_settings_cat_generation_title">Generation</string>
+    <string name="knotwork_settings_cat_generation_summary">System prompt · sampling · voice</string>
+    <string name="knotwork_settings_cat_models_title">Models</string>
+    <string name="knotwork_settings_cat_models_summary">Local backend · providers</string>
+    <string name="knotwork_settings_cat_memory_title">Memory</string>
+    <string name="knotwork_settings_cat_memory_summary">Extraction · compaction · vectors</string>
+    <string name="knotwork_settings_cat_pipelines_title">Pipelines &amp; structured output</string>
+    <string name="knotwork_settings_cat_pipelines_summary">Step caps · structured output</string>
+    <string name="knotwork_settings_cat_tools_title">Tools &amp; workspace</string>
+    <string name="knotwork_settings_cat_tools_summary">Approvals · limits · MCP</string>
+    <string name="knotwork_settings_cat_background_title">Background &amp; triggers</string>
+    <string name="knotwork_settings_cat_background_summary">Notifications · resume window</string>
+    <string name="knotwork_settings_cat_privacy_title">Privacy</string>
+    <string name="knotwork_settings_cat_privacy_summary">Crash reports · trace retention</string>
+    <string name="knotwork_settings_cat_about_title">About</string>
+    <string name="knotwork_settings_cat_about_summary">Version · identity · reset</string>
 
     <string name="knotwork_settings_system_instructions_counter" tools:ignore="PluralsCandidate">%1$d / %2$d chars · ≈ %3$d tok</string>
 
     <string name="knotwork_settings_restrictions_approve">Approve tool calls</string>
     <string name="knotwork_settings_restrictions_block_destructive">Block destructive tools</string>
     <string name="knotwork_settings_restrictions_block_network">Block network from local model</string>
-    <string name="knotwork_settings_restrictions_cap_steps">Cap autonomous steps</string>
 
     <string name="knotwork_settings_llm_reset">Reset to defaults</string>
 
@@ -431,6 +449,7 @@
     <string name="knotwork_settings_local_model_backend_title">Inference backend</string>
     <string name="knotwork_settings_local_model_test_title">Test backend</string>
     <string name="knotwork_settings_local_model_test_run">Run</string>
+    <string name="knotwork_settings_models_manage_subtitle">Discover and install on-device models.</string>
 
     <string name="knotwork_settings_providers_add">Add provider</string>
     <string name="knotwork_settings_providers_lan">LAN</string>
@@ -451,6 +470,15 @@
 
     <string name="knotwork_settings_destructive_confirm">Confirm</string>
     <string name="knotwork_settings_destructive_cancel">Cancel</string>
+
+    <string name="knotwork_settings_memory_reembed_progress" tools:ignore="PluralsCandidate">Re-embedding · %1$d %%</string>
+
+    <string name="knotwork_settings_tools_manage_title">Manage tools / MCP servers</string>
+    <string name="knotwork_settings_tools_manage_subtitle">Enable tools, set risk overrides, add MCP servers.</string>
+    <string name="knotwork_settings_tools_domains_title">Allowed HTTP domains</string>
+    <string name="knotwork_settings_tools_domains_subtitle">Hosts the HTTP tool is allowed to reach.</string>
+
+    <string name="knotwork_settings_about_version_title">App version &amp; licenses</string>
 
     <!-- ============ Memory screen ============ -->
 

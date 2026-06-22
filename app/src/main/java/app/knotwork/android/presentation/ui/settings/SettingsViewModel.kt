@@ -134,12 +134,14 @@ class SettingsViewModel @Inject constructor(
     // ─── Generation ────────────────────────────────────────────────────────
 
     fun updateSystemInstructions(value: String) = generation.updateSystemInstructions(value)
+    fun updateToolUsageInstruction(value: String) = generation.updateToolUsageInstruction(value)
     fun insertVariable(placeholder: String) = generation.insertVariable(placeholder)
     fun setTemperature(value: Float) = generation.setTemperature(value)
     fun setTopK(value: Int) = generation.setTopK(value)
     fun setTopP(value: Float) = generation.setTopP(value)
     fun setRepetitionPenalty(value: Float) = generation.setRepetitionPenalty(value)
     fun setMaxContextLength(value: Int) = generation.setMaxContextLength(value)
+    fun setAudioMaxDurationSec(seconds: Int) = generation.setAudioMaxDurationSec(seconds)
     fun resetSamplingDefaults() = generation.resetSamplingDefaults()
 
     // ─── Tools & workspace ───────────────────────────────────────────────────
@@ -151,6 +153,8 @@ class SettingsViewModel @Inject constructor(
     // ─── Pipelines & structured output ───────────────────────────────────────
 
     fun setCapAutonomousSteps(steps: Int) = pipelines.setCapAutonomousSteps(steps)
+    fun setPipelineMaxNestingDepth(depth: Int) = pipelines.setPipelineMaxNestingDepth(depth)
+    fun setStructuredOutputMaxRepairs(count: Int) = pipelines.setStructuredOutputMaxRepairs(count)
 
     // ─── Background & triggers ───────────────────────────────────────────────
 
@@ -191,6 +195,7 @@ class SettingsViewModel @Inject constructor(
     fun setChatHistoryCompressionThresholdTokens(tokens: Int) = memory.setChatHistoryCompressionThresholdTokens(tokens)
     fun setChatHistoryLiveWindowSize(size: Int) = memory.setChatHistoryLiveWindowSize(size)
     fun setActiveEmbeddingProviderId(id: String) = memory.setActiveEmbeddingProviderId(id)
+    fun setMemorySummaryDefaultLimit(limit: Int) = memory.setMemorySummaryDefaultLimit(limit)
     fun clearMemoryValidationError() = memory.clearMemoryValidationError()
     fun exportMemoryBase(target: OutputStream) = memory.exportMemoryBase(target)
     fun importMemory(source: InputStream) = memory.importMemory(source)

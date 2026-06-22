@@ -37,7 +37,7 @@ class HeroSnapshotTest {
                 LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true),
             ) {
                 KnotworkTheme(darkTheme = false) {
-                    SettingsContent(state = SettingsPreview.default())
+                    SettingsHubContent(state = SettingsPreview.hubDefault())
                 }
             }
         }
@@ -53,7 +53,7 @@ class HeroSnapshotTest {
                 LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true),
             ) {
                 KnotworkTheme(darkTheme = true) {
-                    SettingsContent(state = SettingsPreview.default())
+                    SettingsHubContent(state = SettingsPreview.hubDefault())
                 }
             }
         }

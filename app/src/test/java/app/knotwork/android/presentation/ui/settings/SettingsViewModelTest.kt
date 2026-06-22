@@ -205,6 +205,46 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `updateToolUsageInstruction routes through repository`() = runTest {
+        advanceUntilIdle()
+        viewModel.updateToolUsageInstruction("Prefer file tools.")
+        advanceUntilIdle()
+        coVerify { settings.setToolUsageInstruction("Prefer file tools.") }
+    }
+
+    @Test
+    fun `setAudioMaxDurationSec routes through repository`() = runTest {
+        advanceUntilIdle()
+        viewModel.setAudioMaxDurationSec(45)
+        advanceUntilIdle()
+        coVerify { settings.setAudioMaxDurationSec(45) }
+    }
+
+    @Test
+    fun `setPipelineMaxNestingDepth routes through repository`() = runTest {
+        advanceUntilIdle()
+        viewModel.setPipelineMaxNestingDepth(4)
+        advanceUntilIdle()
+        coVerify { settings.setPipelineMaxNestingDepth(4) }
+    }
+
+    @Test
+    fun `setStructuredOutputMaxRepairs routes through repository`() = runTest {
+        advanceUntilIdle()
+        viewModel.setStructuredOutputMaxRepairs(3)
+        advanceUntilIdle()
+        coVerify { settings.setStructuredOutputMaxRepairs(3) }
+    }
+
+    @Test
+    fun `setMemorySummaryDefaultLimit routes through repository`() = runTest {
+        advanceUntilIdle()
+        viewModel.setMemorySummaryDefaultLimit(12)
+        advanceUntilIdle()
+        coVerify { settings.setMemorySummaryDefaultLimit(12) }
+    }
+
+    @Test
     fun `setAutoSummarizeThreshold converts percent to fraction`() = runTest {
         advanceUntilIdle()
         viewModel.setAutoSummarizeThreshold(75)
