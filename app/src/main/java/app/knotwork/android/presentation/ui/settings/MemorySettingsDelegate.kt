@@ -149,11 +149,20 @@ class MemorySettingsDelegate(
         settingsRepository.lastReembedProviderId.onEach { value ->
             state.update { it.copy(lastReembedProviderId = value) }
         }.launchIn(scope)
+
+        settingsRepository.verboseMemoryLoggingEnabled.onEach { value ->
+            state.update { it.copy(verboseMemoryLoggingEnabled = value) }
+        }.launchIn(scope)
     }
 
     /** Persists the "Auto-extract from conversations" toggle. */
     fun setAutoExtractEnabled(enabled: Boolean) {
         scope.launch { settingsRepository.setAutoExtractEnabled(enabled) }
+    }
+
+    /** Persists the verbose memory-logging toggle (logs every memory retrieval to the console). */
+    fun setVerboseMemoryLoggingEnabled(enabled: Boolean) {
+        scope.launch { settingsRepository.setVerboseMemoryLoggingEnabled(enabled) }
     }
 
     /** Persists the auto-summarize threshold; the [percent] is coerced into 0..100 and stored as a fraction. */

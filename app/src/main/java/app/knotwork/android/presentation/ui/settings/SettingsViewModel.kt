@@ -166,7 +166,6 @@ class SettingsViewModel @Inject constructor(
     fun setTraceRetentionRunsPerSession(runs: Int) = privacy.setTraceRetentionRunsPerSession(runs)
     fun setTraceRetentionMaxAgeDays(days: Int) = privacy.setTraceRetentionMaxAgeDays(days)
     fun setCrashReportingEnabled(enabled: Boolean) = privacy.setCrashReportingEnabled(enabled)
-    fun setVerboseMemoryLoggingEnabled(enabled: Boolean) = privacy.setVerboseMemoryLoggingEnabled(enabled)
 
     // ─── Local model + providers ─────────────────────────────────────────────
 
@@ -180,6 +179,7 @@ class SettingsViewModel @Inject constructor(
     // ─── Memory ──────────────────────────────────────────────────────────────
 
     fun setAutoExtractEnabled(enabled: Boolean) = memory.setAutoExtractEnabled(enabled)
+    fun setVerboseMemoryLoggingEnabled(enabled: Boolean) = memory.setVerboseMemoryLoggingEnabled(enabled)
     fun setAutoSummarizeThreshold(percent: Int) = memory.setAutoSummarizeThreshold(percent)
     fun setMemorySearchTopK(value: Int) = memory.setMemorySearchTopK(value)
     fun setMemorySearchThreshold(value: Float) = memory.setMemorySearchThreshold(value)

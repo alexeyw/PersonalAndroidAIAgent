@@ -12,9 +12,9 @@ import kotlinx.coroutines.launch
 /**
  * Privacy category delegate of [SettingsViewModel].
  *
- * Owns crash-reporting consent, verbose memory logging, and the two trace
- * retention windows. Observes their persisted flows into the shared [state] and
- * routes edits back through [settingsRepository]. The crash-reporting setter
+ * Owns crash-reporting consent and the two trace retention windows. Observes
+ * their persisted flows into the shared [state] and routes edits back through
+ * [settingsRepository]. The crash-reporting setter
  * additionally drives [crashReportingRepository] so the live Crashlytics
  * collector starts/stops — the persisted flag alone does not flip it. Shares the
  * ViewModel's [scope] and single [SettingsUiState] reducer.
@@ -36,10 +36,6 @@ class PrivacySettingsDelegate(
             state.update { it.copy(crashReportingEnabled = value) }
         }.launchIn(scope)
 
-        settingsRepository.verboseMemoryLoggingEnabled.onEach { value ->
-            state.update { it.copy(verboseMemoryLoggingEnabled = value) }
-        }.launchIn(scope)
-
         settingsRepository.traceRetentionRunsPerSession.onEach { value ->
             state.update { it.copy(traceRetentionRunsPerSession = value) }
         }.launchIn(scope)
@@ -58,11 +54,6 @@ class PrivacySettingsDelegate(
             settingsRepository.setCrashReportingEnabled(enabled)
             crashReportingRepository.setEnabled(enabled)
         }
-    }
-
-    /** Persists the verbose memory-logging toggle. */
-    fun setVerboseMemoryLoggingEnabled(enabled: Boolean) {
-        scope.launch { settingsRepository.setVerboseMemoryLoggingEnabled(enabled) }
     }
 
     /**

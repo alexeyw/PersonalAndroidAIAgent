@@ -589,11 +589,11 @@ This file maps the contents of the main application package.
       - `SettingsViewModel.kt` - Thin coordinator over the eight per-category delegates (shared `viewModelScope` + single `SettingsUiState` reducer). Keeps the cross-cutting destructive typed-confirm gate (Clear memory → Memory, Reset settings → About) + one-shot snackbar; public mutators are thin forwarders so the screen/tests bind to the same observable surface.
       - `GenerationSettingsDelegate.kt` - Generation category: system instructions (+ `$VARIABLE` chip catalog) and the five sampling parameters; resetSamplingDefaults.
       - `ModelsSettingsDelegate.kt` - Models category: local-model backend + test probe, active-model card, collapsed external-provider rows, and the restart-required derived flag (backend / Ollama base-URL baselines captured before observers start).
-      - `MemorySettingsDelegate.kt` - Memory category: live stats, every memory-tuning parameter with range validation, embedding-provider selection, and the export / import / re-embed / clear data actions.
+      - `MemorySettingsDelegate.kt` - Memory category: live stats, every memory-tuning parameter with range validation, embedding-provider selection, verbose memory logging, and the export / import / re-embed / clear data actions.
       - `PipelinesSettingsDelegate.kt` - Pipelines & structured output category: the autonomous-step safety cap.
       - `ToolsSettingsDelegate.kt` - Tools & workspace category: tool approval policy + the block-destructive / block-network guardrails.
       - `BackgroundSettingsDelegate.kt` - Background & triggers category: notification toggles + resume / background-approval windows.
-      - `PrivacySettingsDelegate.kt` - Privacy category: crash-reporting consent (mirrored into the live collector), verbose memory logging, trace-retention windows.
+      - `PrivacySettingsDelegate.kt` - Privacy category: crash-reporting consent (mirrored into the live collector) and the trace-retention windows.
       - `AboutSettingsDelegate.kt` - About category: read-only identity card load + the Reset-all-settings action.
       - `provider/` - Standalone provider editor reached from the External providers nav-rows.
         - `ProviderDetailScreen.kt` - Hosts `KnotworkProviderRow` for the selected provider. Routes through `ProviderDetailViewModel` to `ApiKeyRepository`.
