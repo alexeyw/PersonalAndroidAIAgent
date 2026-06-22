@@ -153,11 +153,24 @@ class MemorySettingsDelegate(
         settingsRepository.verboseMemoryLoggingEnabled.onEach { value ->
             state.update { it.copy(verboseMemoryLoggingEnabled = value) }
         }.launchIn(scope)
+
+        settingsRepository.memorySummaryDefaultLimit.onEach { value ->
+            state.update { it.copy(memorySummaryDefaultLimit = value) }
+        }.launchIn(scope)
     }
 
     /** Persists the "Auto-extract from conversations" toggle. */
     fun setAutoExtractEnabled(enabled: Boolean) {
         scope.launch { settingsRepository.setAutoExtractEnabled(enabled) }
+    }
+
+    /**
+     * Persists the default `$MEMORY_SUMMARY` chunk limit. The slider constrains
+     * the value to `MEMORY_SUMMARY_LIMIT_MIN..MEMORY_SUMMARY_LIMIT_MAX`, so the
+     * write needs no separate range rejection.
+     */
+    fun setMemorySummaryDefaultLimit(limit: Int) {
+        scope.launch { settingsRepository.setMemorySummaryDefaultLimit(limit) }
     }
 
     /** Persists the verbose memory-logging toggle (logs every memory retrieval to the console). */

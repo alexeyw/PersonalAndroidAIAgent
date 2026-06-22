@@ -12,7 +12,8 @@ import kotlinx.coroutines.launch
  * Pipelines-&-structured-output category delegate of [SettingsViewModel].
  *
  * Owns the autonomous-step safety cap (`pipelineMaxSteps`, surfaced as
- * [SettingsUiState.capAutonomousSteps]). Shares the ViewModel's [scope] and
+ * [SettingsUiState.capAutonomousSteps]), the PIPELINE-node nesting-depth cap and
+ * the structured-output repair budget. Shares the ViewModel's [scope] and
  * single [SettingsUiState] reducer.
  *
  * @property scope The ViewModel's `viewModelScope`.
@@ -29,6 +30,12 @@ class PipelinesSettingsDelegate(
         settingsRepository.pipelineMaxSteps.onEach { value ->
             state.update { it.copy(capAutonomousSteps = value) }
         }.launchIn(scope)
+        settingsRepository.pipelineMaxNestingDepth.onEach { value ->
+            state.update { it.copy(pipelineMaxNestingDepth = value) }
+        }.launchIn(scope)
+        settingsRepository.structuredOutputMaxRepairs.onEach { value ->
+            state.update { it.copy(structuredOutputMaxRepairs = value) }
+        }.launchIn(scope)
     }
 
     /**
@@ -37,5 +44,21 @@ class PipelinesSettingsDelegate(
      */
     fun setCapAutonomousSteps(steps: Int) {
         scope.launch { settingsRepository.setPipelineMaxSteps(steps) }
+    }
+
+    /**
+     * Persists the maximum PIPELINE-node nesting depth. The repository coerces
+     * the value into the sanctioned range.
+     */
+    fun setPipelineMaxNestingDepth(depth: Int) {
+        scope.launch { settingsRepository.setPipelineMaxNestingDepth(depth) }
+    }
+
+    /**
+     * Persists the structured-output repair budget. The repository coerces the
+     * value into the sanctioned range.
+     */
+    fun setStructuredOutputMaxRepairs(count: Int) {
+        scope.launch { settingsRepository.setStructuredOutputMaxRepairs(count) }
     }
 }

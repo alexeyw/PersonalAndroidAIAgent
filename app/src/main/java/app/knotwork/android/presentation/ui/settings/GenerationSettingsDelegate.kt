@@ -15,9 +15,10 @@ import kotlinx.coroutines.launch
 /**
  * Generation category delegate of [SettingsViewModel].
  *
- * Owns the system-instructions textarea (plus its `$VARIABLE` catalog chips) and
- * the five sampling parameters (temperature / top-K / top-P / repetition penalty
- * / max context length). Observes the persisted flows into the shared [state]
+ * Owns the system-instructions textarea (plus its `$VARIABLE` catalog chips), the
+ * tool-usage instruction guidance, the five sampling parameters (temperature /
+ * top-K / top-P / repetition penalty / max context length) and the voice-input
+ * capture length. Observes the persisted flows into the shared [state]
  * and routes edits back through [settingsRepository]. Shares the ViewModel's
  * [scope] and single [SettingsUiState] reducer.
  *
@@ -43,6 +44,9 @@ class GenerationSettingsDelegate(
         settingsRepository.systemPromptPrefix.onEach { value ->
             state.update { it.copy(systemInstructions = value) }
         }.launchIn(scope)
+        settingsRepository.toolUsageInstruction.onEach { value ->
+            state.update { it.copy(toolUsageInstruction = value) }
+        }.launchIn(scope)
 
         settingsRepository.temperature.onEach { value ->
             state.update { it.copy(temperature = value) }
@@ -59,6 +63,9 @@ class GenerationSettingsDelegate(
         settingsRepository.maxContextLength.onEach { value ->
             state.update { it.copy(maxContextLength = value) }
         }.launchIn(scope)
+        settingsRepository.audioMaxDurationSec.onEach { value ->
+            state.update { it.copy(audioMaxDurationSec = value) }
+        }.launchIn(scope)
     }
 
     private fun loadVariableCatalog() {
@@ -72,6 +79,11 @@ class GenerationSettingsDelegate(
     /** Persists the user's system-instructions prefix. */
     fun updateSystemInstructions(value: String) {
         scope.launch { settingsRepository.setSystemPromptPrefix(value) }
+    }
+
+    /** Persists the tool-usage instruction guidance. */
+    fun updateToolUsageInstruction(value: String) {
+        scope.launch { settingsRepository.setToolUsageInstruction(value) }
     }
 
     /** Appends [placeholder] to the current instructions (space-separated) and persists. */
@@ -108,6 +120,11 @@ class GenerationSettingsDelegate(
     /** Persists the maximum context length (tokens). */
     fun setMaxContextLength(value: Int) {
         scope.launch { settingsRepository.setMaxContextLength(value) }
+    }
+
+    /** Persists the maximum voice-input capture length (seconds). */
+    fun setAudioMaxDurationSec(seconds: Int) {
+        scope.launch { settingsRepository.setAudioMaxDurationSec(seconds) }
     }
 
     /** Restores every sampling parameter to its recommended default and surfaces a snackbar. */

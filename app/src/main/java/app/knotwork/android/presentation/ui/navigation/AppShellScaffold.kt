@@ -248,11 +248,28 @@ internal fun String.belongsToTab(tab: TabDestination): Boolean = when (tab.route
             this == NavRoutes.MODELS ||
             this == NavRoutes.MONITORING ||
             this == NavRoutes.TASK_MONITOR ||
-            this == NavRoutes.SETTINGS ||
+            this.belongsToSettingsGraph() ||
             this == NavRoutes.PROMPTS ||
             this == NavRoutes.ABOUT
     else -> false
 }
+
+/**
+ * Whether [this] route is the settings hub or one of the eight category
+ * sub-screens. Settings is now a nested navigation graph, so the displayed route
+ * is always a child (`settings/hub`, `settings/generation`, …) — never the bare
+ * graph route — and the owning-tab table must enumerate the children to keep the
+ * More tab highlighted throughout the settings subtree.
+ */
+private fun String.belongsToSettingsGraph(): Boolean = this == NavRoutes.SETTINGS_HUB ||
+    this == NavRoutes.SETTINGS_GENERATION ||
+    this == NavRoutes.SETTINGS_MODELS ||
+    this == NavRoutes.SETTINGS_MEMORY ||
+    this == NavRoutes.SETTINGS_PIPELINES ||
+    this == NavRoutes.SETTINGS_TOOLS ||
+    this == NavRoutes.SETTINGS_BACKGROUND ||
+    this == NavRoutes.SETTINGS_PRIVACY ||
+    this == NavRoutes.SETTINGS_ABOUT
 
 /**
  * Anchor route used as the [popUpTo] target during tab switches.

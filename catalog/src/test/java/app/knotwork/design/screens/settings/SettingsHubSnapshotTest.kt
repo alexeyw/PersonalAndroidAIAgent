@@ -1,0 +1,70 @@
+package app.knotwork.design.screens.settings
+
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.unit.Density
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.knotwork.design.a11y.FixedKnotworkA11y
+import app.knotwork.design.a11y.LocalKnotworkA11y
+import app.knotwork.design.theme.KnotworkTheme
+import com.github.takahirom.roborazzi.captureRoboImage
+import org.junit.Rule
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
+
+/**
+ * Roborazzi baseline for the redesigned settings **hub** (category list + inline
+ * Basic controls): Default / Loading / RestartRequired × Light/Dark, plus a
+ * font-scale 200% variant.
+ */
+@RunWith(AndroidJUnit4::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
+@Config(sdk = [36], qualifiers = "w360dp-h760dp-xhdpi")
+class SettingsHubSnapshotTest {
+    @get:Rule
+    val composeTestRule = createComposeRule()
+
+    @Test
+    fun hub_default_light() = snapshot("default", dark = false) {
+        SettingsHubContent(state = SettingsPreview.hubDefault())
+    }
+
+    @Test
+    fun hub_default_dark() = snapshot("default", dark = true) {
+        SettingsHubContent(state = SettingsPreview.hubDefault())
+    }
+
+    @Test
+    fun hub_loading_light() = snapshot("loading", dark = false) {
+        SettingsHubContent(state = SettingsPreview.hubLoading())
+    }
+
+    @Test
+    fun hub_restart_required_light() = snapshot("restart_required", dark = false) {
+        SettingsHubContent(state = SettingsPreview.hubRestart())
+    }
+
+    @Test
+    fun hub_default_font_scale_2x_light() = snapshot("default_font_scale_2x", dark = false, fontScale = 2f) {
+        SettingsHubContent(state = SettingsPreview.hubDefault())
+    }
+
+    private fun snapshot(name: String, dark: Boolean, fontScale: Float = 1f, content: @Composable () -> Unit) {
+        composeTestRule.setContent {
+            val baseDensity = LocalDensity.current
+            CompositionLocalProvider(
+                LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true, fontScale = fontScale),
+                LocalDensity provides Density(density = baseDensity.density, fontScale = fontScale),
+            ) {
+                KnotworkTheme(darkTheme = dark) { content() }
+            }
+        }
+        val themeTag = if (dark) "dark" else "light"
+        composeTestRule.onRoot().captureRoboImage(filePath = "src/test/snapshots/settings_hub_${name}_$themeTag.png")
+    }
+}

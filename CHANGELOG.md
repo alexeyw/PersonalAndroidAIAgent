@@ -15,6 +15,12 @@ details.
 
 ### Added
 
+- **More settings exposed in the redesigned Settings UI.** The tool-usage
+  instruction and voice-input length (Generation), the PIPELINE-node max nesting
+  depth and the structured-output repair budget (Pipelines), and the
+  `$MEMORY_SUMMARY` default chunk limit (Memory) now have controls in Settings —
+  previously persisted but not adjustable from the settings surface.
+
 - **Discover models from Hugging Face.** A new **Discover** screen (top-bar
   action on the Models screen) browses and searches the curated
   `litert-community` organisation on the Hugging Face Hub. Each result card shows
@@ -335,6 +341,19 @@ details.
   user-facing setting's category, Basic/Advanced tier and search synonyms as the
   single source of truth for the upcoming settings hub, category sub-screens and
   settings search. No user-visible change yet.
+
+- **Settings redesigned as a category hub with focused sub-screens.** The single
+  long settings scroll is replaced by a **hub** — a short *Basic* block of the
+  six most-touched controls (system instructions, approve tool calls, block
+  destructive tools, local-model backend, long-running task alerts, crash
+  reporting) over eight category rows (Generation, Models, Memory, Pipelines &
+  structured output, Tools & workspace, Background & triggers, Privacy, About) —
+  that opens a sub-screen per category. Each sub-screen shows its Basic settings
+  immediately and tucks the rest behind an in-category **"Advanced — change
+  deliberately"** disclosure. Re-organisation only: every setting keeps its
+  meaning, range, default, persistence, validation, restart-gating and
+  destructive-confirm gate; only location and Basic/Advanced prominence change.
+  All existing entry points (drawer / More) still open settings.
 
 - **"Reset all settings" now restores every tunable preference, behind a plain
   confirm dialog.** Settings → Privacy → *Reset all settings* previously reset
