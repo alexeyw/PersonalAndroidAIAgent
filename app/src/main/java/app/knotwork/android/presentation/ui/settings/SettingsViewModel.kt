@@ -16,6 +16,12 @@ import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.EmbeddingProvider
 import app.knotwork.android.domain.services.MemorySearchStatsTracker
+import app.knotwork.android.domain.settings.SettingEntry
+import app.knotwork.android.domain.settings.SettingTier
+import app.knotwork.android.domain.settings.SettingsCategoryId
+import app.knotwork.android.domain.settings.SettingsRegistry
+import app.knotwork.android.domain.settings.SettingsSearchEngine
+import app.knotwork.android.domain.settings.anchorKey
 import app.knotwork.android.domain.usecases.ClearAllMemoryUseCase
 import app.knotwork.android.domain.usecases.ExportMemoryBaseUseCase
 import app.knotwork.android.domain.usecases.GetSystemPromptVariableCatalogUseCase
@@ -246,6 +252,35 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(snackbarMessage = null) }
     }
 
+    // ─── Settings search ─────────────────────────────────────────────────────
+
+    /**
+     * Localized settings-search index, built once from the registry. Lazy so the
+     * (~50 string-resource) resolution happens on first query, not at VM init.
+     */
+    private val searchIndex by lazy { SettingsSearchCatalog.buildIndex(appContext) }
+
+    /** Registry rows keyed by their deep-link anchor for O(1) highlight resolution. */
+    private val entriesByAnchor: Map<String, SettingEntry> =
+        SettingsRegistry.allEntries().associateBy { it.anchorKey() }
+
+    /**
+     * Filters the settings index by [query] and publishes the ranked hits. Runs
+     * the pure-domain [SettingsSearchEngine] over the in-memory index — cheap
+     * enough to run synchronously per keystroke for the ~50-row catalogue.
+     *
+     * @param query Raw search query; blank clears the result list.
+     */
+    fun onSearchQueryChange(query: String) {
+        val results = SettingsSearchEngine.search(query, searchIndex).map { it.toHubRow() }
+        _uiState.update { it.copy(searchQuery = query, searchResults = results) }
+    }
+
+    /** Clears the active search query and its results. */
+    fun clearSearch() {
+        _uiState.update { it.copy(searchQuery = "", searchResults = emptyList()) }
+    }
+
     // ─── Settings-search deep-link highlight ─────────────────────────────────
 
     /**
@@ -264,6 +299,26 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(pendingHighlightAnchor = null) }
     }
 
+    /**
+     * Resolves the pending highlight for [category]: whether [anchor] belongs to
+     * it and, if so, whether the target row sits behind the Advanced disclosure.
+     * Keeps the registry lookup out of the composition (the screen only reads
+     * this result and schedules the flash).
+     *
+     * @param anchor Current [SettingsUiState.pendingHighlightAnchor].
+     * @param category The category sub-screen asking.
+     * @return The resolved highlight; [SettingsHighlight.key] is `null` when the
+     *   pending anchor does not target this category.
+     */
+    fun resolveHighlight(anchor: String?, category: SettingsCategoryId): SettingsHighlight {
+        val entry = anchor?.let { entriesByAnchor[it] }
+        val belongs = entry != null && entry.categoryId == category
+        return SettingsHighlight(
+            key = anchor.takeIf { belongs },
+            advancedExpanded = belongs && entry?.tier == SettingTier.ADVANCED,
+        )
+    }
+
     companion object {
         /**
          * Re-exposed for tests: maps a [CloudProvider] back to its [ProviderId].
@@ -272,3 +327,13 @@ class SettingsViewModel @Inject constructor(
             ProviderId.entries.first { it.cloudProvider == provider }
     }
 }
+
+/**
+ * Resolved settings-search deep-link highlight for one category sub-screen.
+ *
+ * @property key Anchor of the row to highlight, or `null` when the pending
+ *   highlight does not target this category.
+ * @property advancedExpanded `true` when the target row lives behind the
+ *   in-category Advanced disclosure, so the screen seeds it open.
+ */
+data class SettingsHighlight(val key: String?, val advancedExpanded: Boolean)

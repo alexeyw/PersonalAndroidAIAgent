@@ -34,7 +34,7 @@ fun GenerationSettingsContent(
         onBack = callbacks.onBack,
         modifier = modifier,
     ) {
-        SettingsAnchor(anchorKey = "SYSTEM_PROMPT_PREFIX") {
+        SettingsAnchor(anchorKey = SettingsRowAnchors.SYSTEM_PROMPT_PREFIX) {
             SystemInstructionsField(
                 state = state.systemInstructions,
                 onValueChange = callbacks.onSystemInstructionsChange,
@@ -46,7 +46,7 @@ fun GenerationSettingsContent(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
             ) {
-                SettingsAnchor(anchorKey = "TOOL_USAGE_INSTRUCTION") {
+                SettingsAnchor(anchorKey = SettingsRowAnchors.TOOL_USAGE_INSTRUCTION) {
                     ToolUsageField(
                         value = state.toolUsageValue,
                         helper = state.toolUsageHelper,

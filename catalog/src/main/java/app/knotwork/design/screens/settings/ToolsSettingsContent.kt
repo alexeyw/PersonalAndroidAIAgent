@@ -39,7 +39,7 @@ fun ToolsSettingsContent(
         onBack = callbacks.onBack,
         modifier = modifier,
     ) {
-        SettingsAnchor(anchorKey = "TOOL_APPROVAL_POLICY") {
+        SettingsAnchor(anchorKey = SettingsRowAnchors.TOOL_APPROVAL_POLICY) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
@@ -60,7 +60,7 @@ fun ToolsSettingsContent(
                 )
             }
         }
-        SettingsAnchor(anchorKey = "BLOCK_DESTRUCTIVE_TOOLS") {
+        SettingsAnchor(anchorKey = SettingsRowAnchors.BLOCK_DESTRUCTIVE_TOOLS) {
             IconToggleRow(
                 icon = AppIcons.Shield,
                 title = stringResource(R.string.knotwork_settings_restrictions_block_destructive),
@@ -69,7 +69,7 @@ fun ToolsSettingsContent(
                 onCheckedChange = callbacks.onBlockDestructiveChange,
             )
         }
-        SettingsAnchor(anchorKey = "BLOCK_NETWORK_FROM_LOCAL_MODEL") {
+        SettingsAnchor(anchorKey = SettingsRowAnchors.BLOCK_NETWORK_FROM_LOCAL_MODEL) {
             IconToggleRow(
                 icon = AppIcons.Block,
                 title = stringResource(R.string.knotwork_settings_restrictions_block_network),
@@ -78,7 +78,7 @@ fun ToolsSettingsContent(
                 onCheckedChange = callbacks.onBlockNetworkChange,
             )
         }
-        SettingsAnchor(anchorKey = "LINK_TOOLS_SCREEN") {
+        SettingsAnchor(anchorKey = SettingsRowAnchors.LINK_TOOLS_SCREEN) {
             NavLinkRow(
                 icon = AppIcons.Tool,
                 title = stringResource(R.string.knotwork_settings_tools_manage_title),
@@ -91,7 +91,7 @@ fun ToolsSettingsContent(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
             ) {
-                SettingsAnchor(anchorKey = "LINK_FILES_DOMAINS") {
+                SettingsAnchor(anchorKey = SettingsRowAnchors.LINK_FILES_DOMAINS) {
                     NavLinkRow(
                         icon = AppIcons.Block,
                         title = stringResource(R.string.knotwork_settings_tools_domains_title),

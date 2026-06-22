@@ -53,7 +53,7 @@ fun ModelsSettingsContent(
         },
     ) {
         ActiveModelCard(state.localModel)
-        SettingsAnchor(anchorKey = "LOCAL_MODEL_BACKEND") {
+        SettingsAnchor(anchorKey = SettingsRowAnchors.LOCAL_MODEL_BACKEND) {
             BackendDropdownRow(
                 title = stringResource(R.string.knotwork_settings_local_model_backend_title),
                 backendLabel = state.localModel.backendLabel,
@@ -69,7 +69,7 @@ fun ModelsSettingsContent(
             subtitle = stringResource(R.string.knotwork_settings_models_manage_subtitle),
             onClick = callbacks.onManageModelsClick,
         )
-        SettingsAnchor(anchorKey = "LINK_PROVIDER_LIST") {
+        SettingsAnchor(anchorKey = SettingsRowAnchors.LINK_PROVIDER_LIST) {
             SettingsSectionLabel(
                 text = stringResource(R.string.knotwork_settings_section_providers),
                 trailing = {

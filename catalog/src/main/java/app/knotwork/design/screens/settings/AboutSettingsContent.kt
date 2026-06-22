@@ -54,10 +54,10 @@ fun AboutSettingsContent(
             }
         },
     ) {
-        SettingsAnchor(anchorKey = "IDENTITY") {
+        SettingsAnchor(anchorKey = SettingsRowAnchors.IDENTITY) {
             IdentityCard(state.identity)
         }
-        SettingsAnchor(anchorKey = "LINK_LICENSES") {
+        SettingsAnchor(anchorKey = SettingsRowAnchors.LINK_LICENSES) {
             NavLinkRow(
                 icon = AppIcons.Info,
                 title = stringResource(R.string.knotwork_settings_about_version_title),
@@ -66,7 +66,7 @@ fun AboutSettingsContent(
             )
         }
         AdvancedDisclosure(initiallyExpanded = advancedExpanded) {
-            SettingsAnchor(anchorKey = "RESET") {
+            SettingsAnchor(anchorKey = SettingsRowAnchors.RESET) {
                 ResetRow(onResetClick = callbacks.onResetSettingsClick)
             }
         }

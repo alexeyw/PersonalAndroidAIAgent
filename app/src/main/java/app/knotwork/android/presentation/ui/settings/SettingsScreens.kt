@@ -21,10 +21,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -33,10 +30,6 @@ import app.knotwork.android.R
 import app.knotwork.android.domain.models.MemoryImportStrategy
 import app.knotwork.android.domain.models.ProviderId
 import app.knotwork.android.domain.models.ToolApprovalPolicy
-import app.knotwork.android.domain.settings.SettingTier
-import app.knotwork.android.domain.settings.SettingsRegistry
-import app.knotwork.android.domain.settings.SettingsSearchEngine
-import app.knotwork.android.domain.settings.anchorKey
 import app.knotwork.design.screens.settings.AboutSettingsContent
 import app.knotwork.design.screens.settings.ApproveToolCallsOption
 import app.knotwork.design.screens.settings.BackgroundSettingsContent
@@ -106,52 +99,41 @@ data class SettingsNavActions(
 @Composable
 fun SettingsHubScreen(viewModel: SettingsViewModel, nav: SettingsNavActions) {
     val uiState by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
-    var query by rememberSaveable { mutableStateOf("") }
-    val index = remember(context) { SettingsSearchCatalog.buildIndex(context) }
-    val results = remember(query, index) { SettingsSearchEngine.search(query, index).map { it.toHubRow() } }
     val callbacks = rememberSettingsCallbacks(
         viewModel = viewModel,
         nav = nav,
-        onSearchQueryChange = { query = it },
-        onClearSearch = { query = "" },
+        onSearchQueryChange = viewModel::onSearchQueryChange,
+        onClearSearch = viewModel::clearSearch,
         onSearchResultClick = { row ->
             viewModel.requestHighlight(row.anchorKey)
             nav.onOpenCategory(row.categoryId)
         },
     )
     SettingsSurface(viewModel) {
-        SettingsHubContent(state = buildHubViewState(uiState, query, results), callbacks = callbacks)
+        SettingsHubContent(state = buildHubViewState(uiState), callbacks = callbacks)
     }
 }
 
-/** Resolved deep-link highlight for one category sub-screen. */
-private data class CategoryHighlight(val key: String?, val advancedExpanded: Boolean)
-
 /**
- * Resolves whether a pending search deep-link targets [category]; when it does,
- * exposes the anchor to highlight (and whether its row lives behind the Advanced
- * disclosure) and schedules the highlight to clear after a short dwell so it
- * fires once on arrival.
+ * Reads the ViewModel-resolved highlight for [category] and, when one targets
+ * this screen, schedules it to clear after a short dwell so the flash fires once
+ * on arrival. The registry lookup itself lives in the ViewModel
+ * ([SettingsViewModel.resolveHighlight]); this only owns the consume effect.
  */
 @Composable
-private fun categoryHighlight(
+private fun rememberCategoryHighlight(
     viewModel: SettingsViewModel,
     anchor: String?,
     category: DomainCategoryId,
-): CategoryHighlight {
-    val entry = remember(anchor) {
-        anchor?.let { a -> SettingsRegistry.allEntries().firstOrNull { it.anchorKey() == a } }
-    }
-    val belongs = entry != null && entry.categoryId == category
-    val key = anchor.takeIf { belongs }
-    LaunchedEffect(key) {
-        if (key != null) {
+): SettingsHighlight {
+    val highlight = viewModel.resolveHighlight(anchor, category)
+    LaunchedEffect(highlight.key) {
+        if (highlight.key != null) {
             delay(HIGHLIGHT_CONSUME_MS)
             viewModel.highlightConsumed()
         }
     }
-    return CategoryHighlight(key = key, advancedExpanded = belongs && entry?.tier == SettingTier.ADVANCED)
+    return highlight
 }
 
 /** Generation category sub-screen. */
@@ -160,7 +142,7 @@ fun GenerationSettingsScreen(viewModel: SettingsViewModel, nav: SettingsNavActio
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val callbacks = rememberSettingsCallbacks(viewModel, nav)
-    val highlight = categoryHighlight(viewModel, uiState.pendingHighlightAnchor, DomainCategoryId.GENERATION)
+    val highlight = rememberCategoryHighlight(viewModel, uiState.pendingHighlightAnchor, DomainCategoryId.GENERATION)
     SettingsSurface(viewModel) {
         CompositionLocalProvider(LocalSettingsHighlightKey provides highlight.key) {
             GenerationSettingsContent(
@@ -178,7 +160,7 @@ fun ModelsSettingsScreen(viewModel: SettingsViewModel, nav: SettingsNavActions) 
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val callbacks = rememberSettingsCallbacks(viewModel, nav)
-    val highlight = categoryHighlight(viewModel, uiState.pendingHighlightAnchor, DomainCategoryId.MODELS)
+    val highlight = rememberCategoryHighlight(viewModel, uiState.pendingHighlightAnchor, DomainCategoryId.MODELS)
     SettingsSurface(viewModel) {
         CompositionLocalProvider(LocalSettingsHighlightKey provides highlight.key) {
             ModelsSettingsContent(state = buildModelsViewState(uiState, context), callbacks = callbacks)
@@ -192,7 +174,7 @@ fun MemorySettingsScreen(viewModel: SettingsViewModel, nav: SettingsNavActions) 
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val callbacks = rememberSettingsCallbacks(viewModel, nav)
-    val highlight = categoryHighlight(viewModel, uiState.pendingHighlightAnchor, DomainCategoryId.MEMORY)
+    val highlight = rememberCategoryHighlight(viewModel, uiState.pendingHighlightAnchor, DomainCategoryId.MEMORY)
     SettingsSurface(viewModel) {
         CompositionLocalProvider(LocalSettingsHighlightKey provides highlight.key) {
             MemorySettingsContent(
@@ -217,7 +199,7 @@ fun MemorySettingsScreen(viewModel: SettingsViewModel, nav: SettingsNavActions) 
 fun PipelinesSettingsScreen(viewModel: SettingsViewModel, nav: SettingsNavActions) {
     val uiState by viewModel.uiState.collectAsState()
     val callbacks = rememberSettingsCallbacks(viewModel, nav)
-    val highlight = categoryHighlight(viewModel, uiState.pendingHighlightAnchor, DomainCategoryId.PIPELINES)
+    val highlight = rememberCategoryHighlight(viewModel, uiState.pendingHighlightAnchor, DomainCategoryId.PIPELINES)
     SettingsSurface(viewModel) {
         CompositionLocalProvider(LocalSettingsHighlightKey provides highlight.key) {
             PipelinesSettingsContent(
@@ -234,7 +216,7 @@ fun PipelinesSettingsScreen(viewModel: SettingsViewModel, nav: SettingsNavAction
 fun ToolsSettingsScreen(viewModel: SettingsViewModel, nav: SettingsNavActions) {
     val uiState by viewModel.uiState.collectAsState()
     val callbacks = rememberSettingsCallbacks(viewModel, nav)
-    val highlight = categoryHighlight(viewModel, uiState.pendingHighlightAnchor, DomainCategoryId.TOOLS)
+    val highlight = rememberCategoryHighlight(viewModel, uiState.pendingHighlightAnchor, DomainCategoryId.TOOLS)
     SettingsSurface(viewModel) {
         CompositionLocalProvider(LocalSettingsHighlightKey provides highlight.key) {
             ToolsSettingsContent(
@@ -251,7 +233,7 @@ fun ToolsSettingsScreen(viewModel: SettingsViewModel, nav: SettingsNavActions) {
 fun BackgroundSettingsScreen(viewModel: SettingsViewModel, nav: SettingsNavActions) {
     val uiState by viewModel.uiState.collectAsState()
     val callbacks = rememberSettingsCallbacks(viewModel, nav)
-    val highlight = categoryHighlight(viewModel, uiState.pendingHighlightAnchor, DomainCategoryId.BACKGROUND)
+    val highlight = rememberCategoryHighlight(viewModel, uiState.pendingHighlightAnchor, DomainCategoryId.BACKGROUND)
     SettingsSurface(viewModel) {
         CompositionLocalProvider(LocalSettingsHighlightKey provides highlight.key) {
             BackgroundSettingsContent(
@@ -268,7 +250,7 @@ fun BackgroundSettingsScreen(viewModel: SettingsViewModel, nav: SettingsNavActio
 fun PrivacySettingsScreen(viewModel: SettingsViewModel, nav: SettingsNavActions) {
     val uiState by viewModel.uiState.collectAsState()
     val callbacks = rememberSettingsCallbacks(viewModel, nav)
-    val highlight = categoryHighlight(viewModel, uiState.pendingHighlightAnchor, DomainCategoryId.PRIVACY)
+    val highlight = rememberCategoryHighlight(viewModel, uiState.pendingHighlightAnchor, DomainCategoryId.PRIVACY)
     SettingsSurface(viewModel) {
         CompositionLocalProvider(LocalSettingsHighlightKey provides highlight.key) {
             PrivacySettingsContent(
@@ -286,7 +268,7 @@ fun AboutSettingsScreen(viewModel: SettingsViewModel, nav: SettingsNavActions) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val callbacks = rememberSettingsCallbacks(viewModel, nav)
-    val highlight = categoryHighlight(viewModel, uiState.pendingHighlightAnchor, DomainCategoryId.ABOUT)
+    val highlight = rememberCategoryHighlight(viewModel, uiState.pendingHighlightAnchor, DomainCategoryId.ABOUT)
     SettingsSurface(viewModel) {
         CompositionLocalProvider(LocalSettingsHighlightKey provides highlight.key) {
             AboutSettingsContent(

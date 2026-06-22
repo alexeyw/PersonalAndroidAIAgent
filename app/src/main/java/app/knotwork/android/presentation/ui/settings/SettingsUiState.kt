@@ -9,6 +9,7 @@ import app.knotwork.android.domain.models.MemoryStats
 import app.knotwork.android.domain.models.ProviderSummary
 import app.knotwork.android.domain.models.TestProbeResult
 import app.knotwork.android.domain.models.ToolApprovalPolicy
+import app.knotwork.design.screens.settings.HubSearchResultRow
 
 /**
  * Top-level Settings screen UI state. Aggregates every slice the
@@ -108,6 +109,10 @@ import app.knotwork.android.domain.models.ToolApprovalPolicy
  *   deep-link asked to highlight; the owning category sub-screen flashes the row
  *   and clears it via [SettingsViewModel.highlightConsumed]. `null` when no
  *   highlight is pending.
+ * @property searchQuery Live settings-search query owned by the ViewModel; blank
+ *   renders the normal hub body, non-blank swaps it for [searchResults].
+ * @property searchResults Ranked search hits for [searchQuery] (empty while the
+ *   query is blank or nothing matches).
  */
 data class SettingsUiState(
     val identity: Identity? = null,
@@ -165,6 +170,8 @@ data class SettingsUiState(
     val pendingImport: PendingMemoryImport? = null,
     val snackbarMessage: String? = null,
     val pendingHighlightAnchor: String? = null,
+    val searchQuery: String = "",
+    val searchResults: List<HubSearchResultRow> = emptyList(),
 )
 
 /**

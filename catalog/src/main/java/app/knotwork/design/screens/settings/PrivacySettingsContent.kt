@@ -31,7 +31,7 @@ fun PrivacySettingsContent(
         onBack = callbacks.onBack,
         modifier = modifier,
     ) {
-        SettingsAnchor(anchorKey = "CRASH_REPORTING_ENABLED") {
+        SettingsAnchor(anchorKey = SettingsRowAnchors.CRASH_REPORTING_ENABLED) {
             IconToggleRow(
                 icon = AppIcons.Shield,
                 title = stringResource(R.string.knotwork_settings_crash_reporting_label),

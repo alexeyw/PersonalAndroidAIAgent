@@ -32,7 +32,7 @@ fun BackgroundSettingsContent(
         onBack = callbacks.onBack,
         modifier = modifier,
     ) {
-        SettingsAnchor(anchorKey = "LONG_RUNNING_TASKS_NOTIFICATIONS") {
+        SettingsAnchor(anchorKey = SettingsRowAnchors.LONG_RUNNING_TASKS_NOTIFICATIONS) {
             IconToggleRow(
                 icon = AppIcons.Bolt,
                 title = stringResource(R.string.knotwork_settings_notifications_long_running),
@@ -41,7 +41,7 @@ fun BackgroundSettingsContent(
                 onCheckedChange = callbacks.onLongRunningToggle,
             )
         }
-        SettingsAnchor(anchorKey = "SCHEDULED_TASK_NOTIFICATIONS") {
+        SettingsAnchor(anchorKey = SettingsRowAnchors.SCHEDULED_TASK_NOTIFICATIONS) {
             IconToggleRow(
                 icon = AppIcons.History,
                 title = stringResource(R.string.knotwork_settings_notifications_scheduled_results),

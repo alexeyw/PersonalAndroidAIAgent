@@ -18,7 +18,6 @@ import app.knotwork.design.screens.settings.DestructiveActionKind
 import app.knotwork.design.screens.settings.DestructiveActionState
 import app.knotwork.design.screens.settings.EmbeddingOptionRow
 import app.knotwork.design.screens.settings.GenerationSettingsViewState
-import app.knotwork.design.screens.settings.HubSearchResultRow
 import app.knotwork.design.screens.settings.IdentityCardState
 import app.knotwork.design.screens.settings.LocalModelCardState
 import app.knotwork.design.screens.settings.MemorySettingsViewState
@@ -59,11 +58,7 @@ import kotlin.math.roundToInt
 
 /** Builds the settings hub state (subtitle, the six inline Basic controls, restart, search). */
 @Composable
-internal fun buildHubViewState(
-    uiState: SettingsUiState,
-    searchQuery: String,
-    searchResults: List<HubSearchResultRow>,
-): SettingsHubViewState = SettingsHubViewState(
+internal fun buildHubViewState(uiState: SettingsUiState): SettingsHubViewState = SettingsHubViewState(
     loading = uiState.identity == null,
     subtitleVersion = BuildConfig.VERSION_NAME,
     subtitleChannel = BuildConfig.BUILD_TYPE,
@@ -81,8 +76,8 @@ internal fun buildHubViewState(
     crashReportingEnabled = uiState.crashReportingEnabled,
     restartRequiredMessage = stringResource(R.string.settings_restart_required_message)
         .takeIf { uiState.restartRequired },
-    searchQuery = searchQuery,
-    searchResults = searchResults,
+    searchQuery = uiState.searchQuery,
+    searchResults = uiState.searchResults,
 )
 
 /** Builds the Generation category state (system instructions + advanced sampling). */
@@ -474,7 +469,7 @@ private fun intSlider(id: String, title: String, valueLabel: String, value: Int,
  * tunes, so a search deep-link can flash the right row. Inverse of the
  * `route*Slider` dispatch in `SettingsScreens`; both must list the same sliders.
  */
-private val SLIDER_TO_ANCHOR: Map<String, String> = mapOf(
+internal val SLIDER_TO_ANCHOR: Map<String, String> = mapOf(
     SLIDER_TEMPERATURE to "TEMPERATURE",
     SLIDER_TOP_K to "TOP_K",
     SLIDER_TOP_P to "TOP_P",

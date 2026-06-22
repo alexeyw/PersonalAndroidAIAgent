@@ -51,7 +51,7 @@ fun MemorySettingsContent(
         },
     ) {
         MemoryStatsCard(state.stats)
-        SettingsAnchor(anchorKey = "AUTO_EXTRACT_ENABLED") {
+        SettingsAnchor(anchorKey = SettingsRowAnchors.AUTO_EXTRACT_ENABLED) {
             IconToggleRow(
                 icon = AppIcons.Bolt,
                 title = state.autoExtractLabel,
@@ -60,7 +60,7 @@ fun MemorySettingsContent(
                 onCheckedChange = callbacks.onAutoExtractToggle,
             )
         }
-        SettingsAnchor(anchorKey = "MEMORY_COMPACTION_ENABLED") {
+        SettingsAnchor(anchorKey = SettingsRowAnchors.MEMORY_COMPACTION_ENABLED) {
             IconToggleRow(
                 icon = AppIcons.Refresh,
                 title = state.compactionLabel,
@@ -69,7 +69,7 @@ fun MemorySettingsContent(
                 onCheckedChange = callbacks.onMemoryCompactionToggle,
             )
         }
-        SettingsAnchor(anchorKey = "CHAT_HISTORY_COMPRESSION_ENABLED") {
+        SettingsAnchor(anchorKey = SettingsRowAnchors.CHAT_HISTORY_COMPRESSION_ENABLED) {
             IconToggleRow(
                 icon = AppIcons.History,
                 title = state.chatHistoryCompressionLabel,
@@ -88,7 +88,7 @@ fun MemorySettingsContent(
                     tagPrefix = MEMORY_PARAM_ROW_TAG_PREFIX,
                     onChange = callbacks.onMemorySliderChange,
                 )
-                SettingsAnchor(anchorKey = "ACTIVE_EMBEDDING_PROVIDER_ID") {
+                SettingsAnchor(anchorKey = SettingsRowAnchors.ACTIVE_EMBEDDING_PROVIDER_ID) {
                     EmbeddingProviderDropdownRow(
                         title = state.embeddingTitle,
                         selectedLabel = state.selectedEmbeddingLabel,
@@ -96,7 +96,7 @@ fun MemorySettingsContent(
                         onSelected = callbacks.onEmbeddingProviderSelected,
                     )
                 }
-                SettingsAnchor(anchorKey = "VERBOSE_MEMORY_LOGGING_ENABLED") {
+                SettingsAnchor(anchorKey = SettingsRowAnchors.VERBOSE_MEMORY_LOGGING_ENABLED) {
                     IconToggleRow(
                         icon = AppIcons.Ram,
                         title = stringResource(R.string.knotwork_settings_verbose_memory_logging_label),
@@ -122,7 +122,7 @@ fun MemorySettingsContent(
                             .testTag(MEMORY_VALIDATION_ERROR_TAG),
                     )
                 }
-                SettingsAnchor(anchorKey = "MEMORY_ACTIONS") {
+                SettingsAnchor(anchorKey = SettingsRowAnchors.MEMORY_ACTIONS) {
                     MemoryActionButtons(state, callbacks)
                 }
                 if (state.reembedProgressPercent != null) {
