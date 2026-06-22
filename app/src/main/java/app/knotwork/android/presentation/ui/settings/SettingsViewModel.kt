@@ -4,13 +4,9 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.knotwork.android.R
-import app.knotwork.android.domain.constants.SettingsDefaults
 import app.knotwork.android.domain.models.CloudProvider
-import app.knotwork.android.domain.models.MemoryExportDocument
-import app.knotwork.android.domain.models.MemoryImportOutcome
 import app.knotwork.android.domain.models.MemoryImportStrategy
 import app.knotwork.android.domain.models.ProviderId
-import app.knotwork.android.domain.models.ProviderSummary
 import app.knotwork.android.domain.models.ToolApprovalPolicy
 import app.knotwork.android.domain.repositories.ApiKeyRepository
 import app.knotwork.android.domain.repositories.CrashReportingRepository
@@ -23,7 +19,6 @@ import app.knotwork.android.domain.services.MemorySearchStatsTracker
 import app.knotwork.android.domain.usecases.ClearAllMemoryUseCase
 import app.knotwork.android.domain.usecases.ExportMemoryBaseUseCase
 import app.knotwork.android.domain.usecases.GetSystemPromptVariableCatalogUseCase
-import app.knotwork.android.domain.usecases.MemoryImportResult
 import app.knotwork.android.domain.usecases.MemoryImportUseCase
 import app.knotwork.android.domain.usecases.ReembedAllMemoriesUseCase
 import app.knotwork.android.domain.usecases.ResetSamplingDefaultsUseCase
@@ -32,865 +27,188 @@ import app.knotwork.android.domain.usecases.TestBackendUseCase
 import app.knotwork.design.components.dialogs.typedConfirmMatches
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import timber.log.Timber
 import java.io.InputStream
 import java.io.OutputStream
 import javax.inject.Inject
 
 /**
- * ViewModel backing the redesigned Settings screen.
+ * ViewModel backing the Settings screen.
  *
- * Aggregates every persisted preference + repository projection into a
- * single [SettingsUiState] and exposes typed mutator methods grouped by
- * card (System instructions / Restrictions / LLM params / Local model /
- * External providers / Memory / Notifications / Privacy / About).
+ * A thin coordinator over eight per-category delegates — Generation, Models,
+ * Memory, Pipelines, Tools, Background, Privacy, About — each sharing this
+ * ViewModel's [viewModelScope] and the single [SettingsUiState] reducer
+ * ([_uiState]). The delegates own their category's observers, mutators and
+ * validation (the Phase-34 `ChatHome*Delegate` pattern); this class keeps the
+ * cross-cutting concerns that span categories: the typed-confirm destructive
+ * gate (Clear memory → Memory, Reset settings → About) and the one-shot
+ * snackbar surface. Public mutator methods are kept as thin forwarders so the
+ * existing screen and tests bind to the same observable surface.
  *
- * Restart-required logic — the VM snapshots the initial values of
- * `localModelBackend` and `ollamaBaseUrl` (the two preferences known to
- * require a process restart) on first load, then flips
- * [SettingsUiState.restartRequired] when the live values diverge.
- *
- * Destructive actions stage a [PendingDestructiveAction] which the
- * screen surfaces as a typed-confirm dialog before calling the
- * corresponding `confirm…` method.
+ * Restart-required is owned by [ModelsSettingsDelegate] (backend / Ollama
+ * base-URL baselines); see its KDoc for the baseline-capture ordering.
  */
 @HiltViewModel
-@Suppress("LongParameterList", "TooManyFunctions", "LargeClass")
+@Suppress("LongParameterList", "TooManyFunctions")
 class SettingsViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
-    private val settingsRepository: SettingsRepository,
-    private val apiKeyRepository: ApiKeyRepository,
-    private val localModelRepository: LocalModelRepository,
-    private val memoryRepository: MemoryRepository,
-    private val identityRepository: IdentityRepository,
-    private val crashReportingRepository: CrashReportingRepository,
-    private val testBackendUseCase: TestBackendUseCase,
-    private val resetSamplingDefaultsUseCase: ResetSamplingDefaultsUseCase,
-    private val resetToRecommendedDefaultsUseCase: ResetToRecommendedDefaultsUseCase,
-    private val clearAllMemoryUseCase: ClearAllMemoryUseCase,
-    private val exportMemoryBaseUseCase: ExportMemoryBaseUseCase,
-    private val memoryImportUseCase: MemoryImportUseCase,
-    private val reembedAllMemoriesUseCase: ReembedAllMemoriesUseCase,
-    private val getSystemPromptVariableCatalogUseCase: GetSystemPromptVariableCatalogUseCase,
-    private val embeddingProviders: Map<String, @JvmSuppressWildcards EmbeddingProvider>,
-    private val memorySearchStatsTracker: MemorySearchStatsTracker,
+    settingsRepository: SettingsRepository,
+    apiKeyRepository: ApiKeyRepository,
+    localModelRepository: LocalModelRepository,
+    memoryRepository: MemoryRepository,
+    identityRepository: IdentityRepository,
+    crashReportingRepository: CrashReportingRepository,
+    testBackendUseCase: TestBackendUseCase,
+    resetSamplingDefaultsUseCase: ResetSamplingDefaultsUseCase,
+    resetToRecommendedDefaultsUseCase: ResetToRecommendedDefaultsUseCase,
+    clearAllMemoryUseCase: ClearAllMemoryUseCase,
+    exportMemoryBaseUseCase: ExportMemoryBaseUseCase,
+    memoryImportUseCase: MemoryImportUseCase,
+    reembedAllMemoriesUseCase: ReembedAllMemoriesUseCase,
+    getSystemPromptVariableCatalogUseCase: GetSystemPromptVariableCatalogUseCase,
+    embeddingProviders: Map<String, @JvmSuppressWildcards EmbeddingProvider>,
+    memorySearchStatsTracker: MemorySearchStatsTracker,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
-    /**
-     * Initial `localModelBackend` value; baseline for restart-required detection.
-     * `null` is a legitimate baseline value (when no model has been picked yet),
-     * so the dedicated [hasCapturedBackendBaseline] flag — not the field's
-     * nullability — decides whether the baseline has been seen.
-     */
-    private var appliedBackend: String? = null
-    private var hasCapturedBackendBaseline: Boolean = false
-
-    /**
-     * Initial `ollamaBaseUrl` value; baseline for restart-required detection.
-     * Captured on the very first emission of the providers flow (even when the
-     * URL is `null`) so the `null → some URL` and `some URL → null` transitions
-     * are both detected. Until the providers flow has emitted at least once we
-     * cannot derive Ollama-side restart-required, hence the explicit flag.
-     */
-    private var appliedOllamaBaseUrl: String? = null
-    private var hasCapturedOllamaBaseline: Boolean = false
-
-    init {
-        loadIdentity()
-        loadVariableCatalog()
-        loadEmbeddingProviders()
-        // Restart-required baselines MUST be locked in before live observers
-        // start emitting. Reactive DataStore / EncryptedPrefs flows can deliver
-        // a transient seed value (null / default) before the persisted one
-        // settles; capturing the baseline from the first such emission would
-        // race the steady-state value and mis-flag the very next emission as
-        // a "change", surfacing a spurious restart banner on every open. By
-        // gating `observePreferences()` on the completion of the baseline
-        // `.first()` reads we guarantee that — on a fresh VM — baseline ==
-        // persisted == first observed value, so restart-required stays false
-        // until the user actually changes something.
-        viewModelScope.launch {
-            appliedBackend = settingsRepository.localModelBackend.first()
-            hasCapturedBackendBaseline = true
-            appliedOllamaBaseUrl = apiKeyRepository.getOllamaBaseUrl().firstOrNull()
-            hasCapturedOllamaBaseline = true
-            observePreferences()
-        }
-    }
-
-    // ─── Initial loads ──────────────────────────────────────────────────────
-
-    private fun loadIdentity() {
-        viewModelScope.launch {
-            val anonymous = appContext.getString(R.string.settings_identity_display_name)
-            val identity = identityRepository.getIdentity(anonymous)
-            _uiState.update { it.copy(identity = identity) }
-        }
-    }
-
-    private fun loadVariableCatalog() {
-        viewModelScope.launch {
-            val entries = getSystemPromptVariableCatalogUseCase()
-                .map { VariableCatalogChip(it.placeholder, it.sample) }
-            _uiState.update { it.copy(variableCatalog = entries) }
-        }
-    }
-
-    /**
-     * Materialises the Hilt-registered embedding-provider map into the
-     * dropdown options consumed by the Memory section. The on-device default
-     * ([EmbeddingProvider.ID_USE]) is hoisted to the top; the rest follow in a
-     * stable display-name order so the list never re-shuffles between reads.
-     */
-    private fun loadEmbeddingProviders() {
-        val options = embeddingProviders.values
-            .map { EmbeddingProviderOption(id = it.id, displayName = it.displayName) }
-            .sortedWith(
-                compareByDescending<EmbeddingProviderOption> { it.id == EmbeddingProvider.ID_USE }
-                    .thenBy { it.displayName },
-            )
-        _uiState.update { it.copy(embeddingProviderOptions = options) }
-    }
-
-    @Suppress("LongMethod")
-    private fun observePreferences() {
-        settingsRepository.systemPromptPrefix.onEach { value ->
-            _uiState.update { it.copy(systemInstructions = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.toolApprovalPolicy.onEach { value ->
-            _uiState.update { it.copy(toolApprovalPolicy = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.blockDestructiveTools.onEach { value ->
-            _uiState.update { it.copy(blockDestructiveTools = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.blockNetworkFromLocalModel.onEach { value ->
-            _uiState.update { it.copy(blockNetworkFromLocalModel = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.pipelineMaxSteps.onEach { value ->
-            _uiState.update { it.copy(capAutonomousSteps = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.resumeMaxAgeHours.onEach { value ->
-            _uiState.update { it.copy(resumeMaxAgeHours = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.backgroundApprovalWindowHours.onEach { value ->
-            _uiState.update { it.copy(backgroundApprovalWindowHours = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.traceRetentionRunsPerSession.onEach { value ->
-            _uiState.update { it.copy(traceRetentionRunsPerSession = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.traceRetentionMaxAgeDays.onEach { value ->
-            _uiState.update { it.copy(traceRetentionMaxAgeDays = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.temperature.onEach { value ->
-            _uiState.update { it.copy(temperature = value) }
-        }.launchIn(viewModelScope)
-        settingsRepository.topK.onEach { value ->
-            _uiState.update { it.copy(topK = value) }
-        }.launchIn(viewModelScope)
-        settingsRepository.topP.onEach { value ->
-            _uiState.update { it.copy(topP = value) }
-        }.launchIn(viewModelScope)
-        settingsRepository.repetitionPenalty.onEach { value ->
-            _uiState.update { it.copy(repetitionPenalty = value) }
-        }.launchIn(viewModelScope)
-        settingsRepository.maxContextLength.onEach { value ->
-            _uiState.update { it.copy(maxContextLength = value) }
-        }.launchIn(viewModelScope)
-
-        localModelRepository.observeActiveModelMeta().onEach { meta ->
-            _uiState.update { it.copy(activeModelMeta = meta) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.localModelBackend.onEach { value ->
-            _uiState.update {
-                it.copy(
-                    localModelBackend = value,
-                    restartRequired = restartRequired(backend = value, ollamaUrl = it.providers.ollamaBaseUrl()),
-                )
-            }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.lastTestProbeResult.onEach { value ->
-            _uiState.update { it.copy(lastTestProbeResult = value) }
-        }.launchIn(viewModelScope)
-
-        observeProviders()
-
-        memoryRepository.observeStats().onEach { stats ->
-            _uiState.update { it.copy(memoryStats = stats) }
-        }.launchIn(viewModelScope)
-
-        memorySearchStatsTracker.averageScore.onEach { value ->
-            _uiState.update { it.copy(averageSimilarityScore = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.autoExtractEnabled.onEach { value ->
-            _uiState.update { it.copy(autoExtractEnabled = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.autoSummarizeThreshold.onEach { value ->
-            _uiState.update { it.copy(autoSummarizeThreshold = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.memorySearchTopK.onEach { value ->
-            _uiState.update { it.copy(memorySearchTopK = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.memorySearchThreshold.onEach { value ->
-            _uiState.update { it.copy(memorySearchThreshold = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.memoryRecencyHalfLifeDays.onEach { value ->
-            _uiState.update { it.copy(memoryRecencyHalfLifeDays = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.memoryCompactionEnabled.onEach { value ->
-            _uiState.update { it.copy(memoryCompactionEnabled = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.memoryCompactionAgeDays.onEach { value ->
-            _uiState.update { it.copy(memoryCompactionAgeDays = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.maxMemoryChunks.onEach { value ->
-            _uiState.update { it.copy(maxMemoryChunks = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.chatHistoryCompressionEnabled.onEach { value ->
-            _uiState.update { it.copy(chatHistoryCompressionEnabled = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.chatHistoryCompressionThresholdTokens.onEach { value ->
-            _uiState.update { it.copy(chatHistoryCompressionThresholdTokens = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.chatHistoryLiveWindowSize.onEach { value ->
-            _uiState.update { it.copy(chatHistoryLiveWindowSize = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.activeEmbeddingProviderId.onEach { value ->
-            _uiState.update { it.copy(activeEmbeddingProviderId = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.lastReembedProviderId.onEach { value ->
-            _uiState.update { it.copy(lastReembedProviderId = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.longRunningTaskNotificationsEnabled.onEach { value ->
-            _uiState.update { it.copy(longRunningTaskNotificationsEnabled = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.scheduledTaskNotificationsEnabled.onEach { value ->
-            _uiState.update { it.copy(scheduledTaskNotificationsEnabled = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.crashReportingEnabled.onEach { value ->
-            _uiState.update { it.copy(crashReportingEnabled = value) }
-        }.launchIn(viewModelScope)
-
-        settingsRepository.verboseMemoryLoggingEnabled.onEach { value ->
-            _uiState.update { it.copy(verboseMemoryLoggingEnabled = value) }
-        }.launchIn(viewModelScope)
-    }
-
-    private fun observeProviders() {
-        // Provider summaries are derived from ApiKeyRepository flows; we
-        // collapse the 11 individual key/model flows into a single
-        // `providers` list with masked fingerprints so the UI receives a
-        // single payload it can map straight to ProviderRowState.
-        viewModelScope.launch {
-            combineProviderFlows().collect { summaries ->
-                val ollamaUrl = summaries.ollamaBaseUrl()
-                _uiState.update {
-                    it.copy(
-                        providers = summaries,
-                        restartRequired = restartRequired(
-                            backend = it.localModelBackend,
-                            ollamaUrl = ollamaUrl,
-                        ),
-                    )
-                }
-            }
-        }
-    }
-
-    private fun combineProviderFlows() = kotlinx.coroutines.flow.combine(
-        kotlinx.coroutines.flow.combine(
-            apiKeyRepository.getOpenAIKey(),
-            apiKeyRepository.getOpenAIModel(),
-            ::Pair,
-        ),
-        kotlinx.coroutines.flow.combine(
-            apiKeyRepository.getAnthropicKey(),
-            apiKeyRepository.getAnthropicModel(),
-            ::Pair,
-        ),
-        kotlinx.coroutines.flow.combine(
-            apiKeyRepository.getGoogleKey(),
-            apiKeyRepository.getGoogleModel(),
-            ::Pair,
-        ),
-        kotlinx.coroutines.flow.combine(
-            apiKeyRepository.getDeepSeekKey(),
-            apiKeyRepository.getDeepSeekModel(),
-            ::Pair,
-        ),
-        kotlinx.coroutines.flow.combine(
-            apiKeyRepository.getOllamaBaseUrl(),
-            apiKeyRepository.getOllamaModelName(),
-            ::Pair,
-        ),
-    ) { openAi, anthropic, google, deepSeek, ollama ->
-        listOf(
-            providerSummary(ProviderId.OpenAi, "OpenAI", openAi.first, openAi.second),
-            providerSummary(ProviderId.Anthropic, "Anthropic", anthropic.first, anthropic.second),
-            providerSummary(ProviderId.Google, "Google", google.first, google.second),
-            providerSummary(ProviderId.DeepSeek, "DeepSeek", deepSeek.first, deepSeek.second),
-            providerSummary(
-                id = ProviderId.Ollama,
-                displayName = "Ollama",
-                key = ollama.first?.takeIf { it.isNotBlank() },
-                model = ollama.second,
-                endpointHint = ollama.first?.takeIf { it.isNotBlank() },
-                isLan = true,
-            ),
-        )
-    }
-
-    private fun providerSummary(
-        id: ProviderId,
-        displayName: String,
-        key: String?,
-        model: String?,
-        endpointHint: String? = null,
-        isLan: Boolean = false,
-    ): ProviderSummary = ProviderSummary(
-        id = id,
-        displayName = displayName,
-        keyFingerprint = key?.takeIf { it.isNotBlank() }?.let { maskKey(it) },
-        model = model?.takeIf { it.isNotBlank() },
-        isLanLocal = isLan,
-        endpointHint = endpointHint,
+    private val generation = GenerationSettingsDelegate(
+        scope = viewModelScope,
+        state = _uiState,
+        appContext = appContext,
+        settingsRepository = settingsRepository,
+        getSystemPromptVariableCatalogUseCase = getSystemPromptVariableCatalogUseCase,
+        resetSamplingDefaultsUseCase = resetSamplingDefaultsUseCase,
     )
 
-    private fun maskKey(key: String): String {
-        val tail = key.takeLast(MASK_TAIL_LENGTH)
-        val prefix = key.takeWhile { it != '-' || key.indexOf('-') == 0 }
-            .takeIf { it.isNotBlank() && key.length > MASK_PREFIX_THRESHOLD }
-            ?.take(MASK_PREFIX_LENGTH)
-            .orEmpty()
-        return if (prefix.isBlank()) "…$tail" else "$prefix-…$tail"
-    }
+    private val models = ModelsSettingsDelegate(
+        scope = viewModelScope,
+        state = _uiState,
+        appContext = appContext,
+        settingsRepository = settingsRepository,
+        apiKeyRepository = apiKeyRepository,
+        localModelRepository = localModelRepository,
+        testBackendUseCase = testBackendUseCase,
+    )
 
-    /**
-     * Restart-required is derived state — comparison-only. The baselines
-     * are captured by the two source flows the first time they emit (so
-     * `null → some URL` and `some URL → null` transitions for Ollama are
-     * both detected). This function never mutates the baseline so the
-     * call ordering between the backend and providers flows cannot race
-     * the comparison.
-     */
-    private fun restartRequired(backend: String, ollamaUrl: String?): Boolean {
-        val backendChanged = hasCapturedBackendBaseline && appliedBackend != backend
-        val ollamaChanged = hasCapturedOllamaBaseline && appliedOllamaBaseUrl != ollamaUrl
-        return backendChanged || ollamaChanged
-    }
+    private val memory = MemorySettingsDelegate(
+        scope = viewModelScope,
+        state = _uiState,
+        appContext = appContext,
+        settingsRepository = settingsRepository,
+        memoryRepository = memoryRepository,
+        memorySearchStatsTracker = memorySearchStatsTracker,
+        embeddingProviders = embeddingProviders,
+        clearAllMemoryUseCase = clearAllMemoryUseCase,
+        exportMemoryBaseUseCase = exportMemoryBaseUseCase,
+        memoryImportUseCase = memoryImportUseCase,
+        reembedAllMemoriesUseCase = reembedAllMemoriesUseCase,
+    )
 
-    // ─── System instructions ───────────────────────────────────────────────
+    private val pipelines = PipelinesSettingsDelegate(viewModelScope, _uiState, settingsRepository)
 
-    fun updateSystemInstructions(value: String) {
-        viewModelScope.launch {
-            settingsRepository.setSystemPromptPrefix(value)
-        }
-    }
+    private val tools = ToolsSettingsDelegate(viewModelScope, _uiState, settingsRepository)
 
-    fun insertVariable(placeholder: String) {
-        val current = _uiState.value.systemInstructions
-        val updated = if (current.endsWith(' ') || current.isEmpty()) {
-            "$current$placeholder"
-        } else {
-            "$current $placeholder"
-        }
-        updateSystemInstructions(updated)
-    }
+    private val background = BackgroundSettingsDelegate(viewModelScope, _uiState, settingsRepository)
 
-    // ─── Restrictions ──────────────────────────────────────────────────────
+    private val privacy = PrivacySettingsDelegate(
+        scope = viewModelScope,
+        state = _uiState,
+        settingsRepository = settingsRepository,
+        crashReportingRepository = crashReportingRepository,
+    )
 
-    fun setToolApprovalPolicy(policy: ToolApprovalPolicy) {
-        viewModelScope.launch { settingsRepository.setToolApprovalPolicy(policy) }
-    }
+    private val about = AboutSettingsDelegate(
+        scope = viewModelScope,
+        state = _uiState,
+        appContext = appContext,
+        identityRepository = identityRepository,
+        resetToRecommendedDefaultsUseCase = resetToRecommendedDefaultsUseCase,
+        crashReportingRepository = crashReportingRepository,
+    )
 
-    fun setBlockDestructiveTools(blocked: Boolean) {
-        viewModelScope.launch { settingsRepository.setBlockDestructiveTools(blocked) }
-    }
+    // ─── Generation ────────────────────────────────────────────────────────
 
-    fun setBlockNetworkFromLocalModel(blocked: Boolean) {
-        viewModelScope.launch { settingsRepository.setBlockNetworkFromLocalModel(blocked) }
-    }
+    fun updateSystemInstructions(value: String) = generation.updateSystemInstructions(value)
+    fun insertVariable(placeholder: String) = generation.insertVariable(placeholder)
+    fun setTemperature(value: Float) = generation.setTemperature(value)
+    fun setTopK(value: Int) = generation.setTopK(value)
+    fun setTopP(value: Float) = generation.setTopP(value)
+    fun setRepetitionPenalty(value: Float) = generation.setRepetitionPenalty(value)
+    fun setMaxContextLength(value: Int) = generation.setMaxContextLength(value)
+    fun resetSamplingDefaults() = generation.resetSamplingDefaults()
 
-    fun setCapAutonomousSteps(steps: Int) {
-        viewModelScope.launch { settingsRepository.setPipelineMaxSteps(steps) }
-    }
+    // ─── Tools & workspace ───────────────────────────────────────────────────
 
-    /**
-     * Persists the checkpoint-resume window (hours). The repository coerces
-     * the value into the sanctioned 1–168 range.
-     *
-     * @param hours The new window picked on the slider.
-     */
-    fun setResumeMaxAgeHours(hours: Int) {
-        viewModelScope.launch { settingsRepository.setResumeMaxAgeHours(hours) }
-    }
+    fun setToolApprovalPolicy(policy: ToolApprovalPolicy) = tools.setToolApprovalPolicy(policy)
+    fun setBlockDestructiveTools(blocked: Boolean) = tools.setBlockDestructiveTools(blocked)
+    fun setBlockNetworkFromLocalModel(blocked: Boolean) = tools.setBlockNetworkFromLocalModel(blocked)
 
-    /**
-     * Persists the background-approval window (hours) during which a run
-     * parked on an unanswered HITL request waits for the user's response.
-     * The repository coerces the value into the sanctioned 1–168 range.
-     *
-     * @param hours The new window picked on the slider.
-     */
-    fun setBackgroundApprovalWindowHours(hours: Int) {
-        viewModelScope.launch { settingsRepository.setBackgroundApprovalWindowHours(hours) }
-    }
+    // ─── Pipelines & structured output ───────────────────────────────────────
 
-    /**
-     * Persists how many most-recent pipeline runs the retention pass keeps
-     * per chat session. The repository coerces the value into the sanctioned
-     * 5–100 range.
-     *
-     * @param runs The new per-session count picked on the slider.
-     */
-    fun setTraceRetentionRunsPerSession(runs: Int) {
-        viewModelScope.launch { settingsRepository.setTraceRetentionRunsPerSession(runs) }
-    }
+    fun setCapAutonomousSteps(steps: Int) = pipelines.setCapAutonomousSteps(steps)
 
-    /**
-     * Persists the maximum age (days) a terminal pipeline run is kept before
-     * the retention pass deletes it. The repository coerces the value into
-     * the sanctioned 7–180 range.
-     *
-     * @param days The new age limit picked on the slider.
-     */
-    fun setTraceRetentionMaxAgeDays(days: Int) {
-        viewModelScope.launch { settingsRepository.setTraceRetentionMaxAgeDays(days) }
-    }
+    // ─── Background & triggers ───────────────────────────────────────────────
 
-    // ─── LLM parameters ────────────────────────────────────────────────────
+    fun setResumeMaxAgeHours(hours: Int) = background.setResumeMaxAgeHours(hours)
+    fun setBackgroundApprovalWindowHours(hours: Int) = background.setBackgroundApprovalWindowHours(hours)
+    fun setLongRunningTaskNotificationsEnabled(enabled: Boolean) =
+        background.setLongRunningTaskNotificationsEnabled(enabled)
+    fun setScheduledTaskNotificationsEnabled(enabled: Boolean) =
+        background.setScheduledTaskNotificationsEnabled(enabled)
 
-    fun setTemperature(value: Float) {
-        viewModelScope.launch { settingsRepository.setTemperature(value) }
-    }
+    // ─── Privacy ─────────────────────────────────────────────────────────────
 
-    fun setTopK(value: Int) {
-        viewModelScope.launch { settingsRepository.setTopK(value) }
-    }
+    fun setTraceRetentionRunsPerSession(runs: Int) = privacy.setTraceRetentionRunsPerSession(runs)
+    fun setTraceRetentionMaxAgeDays(days: Int) = privacy.setTraceRetentionMaxAgeDays(days)
+    fun setCrashReportingEnabled(enabled: Boolean) = privacy.setCrashReportingEnabled(enabled)
+    fun setVerboseMemoryLoggingEnabled(enabled: Boolean) = privacy.setVerboseMemoryLoggingEnabled(enabled)
 
-    fun setTopP(value: Float) {
-        viewModelScope.launch { settingsRepository.setTopP(value) }
-    }
+    // ─── Local model + providers ─────────────────────────────────────────────
 
-    fun setRepetitionPenalty(value: Float) {
-        viewModelScope.launch { settingsRepository.setRepetitionPenalty(value) }
-    }
+    fun setLocalModelBackend(backend: String) = models.setLocalModelBackend(backend)
+    fun runBackendProbe() = models.runBackendProbe()
+    fun providerForId(id: String): ProviderId? = models.providerForId(id)
 
-    fun setMaxContextLength(value: Int) {
-        viewModelScope.launch { settingsRepository.setMaxContextLength(value) }
-    }
+    /** Called by the screen after a restart action; resets the baseline so the banner stays gone. */
+    fun acknowledgeRestart() = models.acknowledgeRestart()
 
-    fun resetSamplingDefaults() {
-        viewModelScope.launch {
-            resetSamplingDefaultsUseCase()
-            emitSnackbar(appContext.getString(R.string.settings_llm_reset_defaults))
-        }
-    }
+    // ─── Memory ──────────────────────────────────────────────────────────────
 
-    // ─── Local model ──────────────────────────────────────────────────────
+    fun setAutoExtractEnabled(enabled: Boolean) = memory.setAutoExtractEnabled(enabled)
+    fun setAutoSummarizeThreshold(percent: Int) = memory.setAutoSummarizeThreshold(percent)
+    fun setMemorySearchTopK(value: Int) = memory.setMemorySearchTopK(value)
+    fun setMemorySearchThreshold(value: Float) = memory.setMemorySearchThreshold(value)
+    fun setMemoryRecencyHalfLifeDays(days: Int) = memory.setMemoryRecencyHalfLifeDays(days)
+    fun setMemoryCompactionEnabled(enabled: Boolean) = memory.setMemoryCompactionEnabled(enabled)
+    fun setMemoryCompactionAgeDays(days: Int) = memory.setMemoryCompactionAgeDays(days)
+    fun setMaxMemoryChunks(limit: Int) = memory.setMaxMemoryChunks(limit)
+    fun setChatHistoryCompressionEnabled(enabled: Boolean) = memory.setChatHistoryCompressionEnabled(enabled)
+    fun setChatHistoryCompressionThresholdTokens(tokens: Int) = memory.setChatHistoryCompressionThresholdTokens(tokens)
+    fun setChatHistoryLiveWindowSize(size: Int) = memory.setChatHistoryLiveWindowSize(size)
+    fun setActiveEmbeddingProviderId(id: String) = memory.setActiveEmbeddingProviderId(id)
+    fun clearMemoryValidationError() = memory.clearMemoryValidationError()
+    fun exportMemoryBase(target: OutputStream) = memory.exportMemoryBase(target)
+    fun importMemory(source: InputStream) = memory.importMemory(source)
+    fun confirmImport(strategy: MemoryImportStrategy) = memory.confirmImport(strategy)
+    fun cancelImport() = memory.cancelImport()
+    fun runReembed() = memory.runReembed()
 
-    fun setLocalModelBackend(backend: String) {
-        viewModelScope.launch { settingsRepository.setLocalModelBackend(backend) }
-    }
-
-    fun runBackendProbe() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(testProbeInFlight = true) }
-            val result = testBackendUseCase()
-            _uiState.update { it.copy(testProbeInFlight = false) }
-            val message = if (result.success) {
-                appContext.getString(
-                    R.string.settings_row_test_backend_success,
-                    result.tokensGenerated,
-                    String.format(java.util.Locale.getDefault(), "%.2fs", result.durationMs / MS_PER_SECOND_F),
-                    String.format(java.util.Locale.getDefault(), "%.1f", result.tokensPerSecond),
-                )
-            } else {
-                appContext.getString(R.string.settings_row_test_backend_failed, result.errorMessage.orEmpty())
-            }
-            emitSnackbar(message)
-        }
-    }
-
-    // ─── External providers ───────────────────────────────────────────────
-
-    fun providerForId(id: String): ProviderId? = ProviderId.entries.firstOrNull { it.cloudProvider.id == id }
-
-    // ─── Memory ───────────────────────────────────────────────────────────
-
-    /**
-     * Persists the "Auto-extract from conversations" toggle. When enabled the
-     * agent distils durable facts into long-term memory after each pipeline run.
-     *
-     * @param enabled `true` to enable automatic extraction.
-     */
-    fun setAutoExtractEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setAutoExtractEnabled(enabled)
-        }
-    }
-
-    fun setAutoSummarizeThreshold(percent: Int) {
-        viewModelScope.launch {
-            settingsRepository.setAutoSummarizeThreshold(percent.coerceIn(0, MAX_PERCENT).toFloat() / MAX_PERCENT)
-        }
-    }
-
-    /**
-     * Persists the memory-retrieval top-K. Out-of-range values are rejected at
-     * this layer (the value stays unpersisted and [MemoryValidationError.SearchTopK]
-     * is surfaced) so a malformed caller can never write a degenerate bound.
-     *
-     * @param value Desired top-K; must lie in
-     *   `[MEMORY_SEARCH_TOP_K_MIN, MEMORY_SEARCH_TOP_K_MAX]`.
-     */
-    fun setMemorySearchTopK(value: Int) {
-        if (value < SettingsDefaults.MEMORY_SEARCH_TOP_K_MIN || value > SettingsDefaults.MEMORY_SEARCH_TOP_K_MAX) {
-            rejectMemoryEdit(MemoryValidationError.SearchTopK)
-            return
-        }
-        clearMemoryValidationError()
-        viewModelScope.launch { settingsRepository.setMemorySearchTopK(value) }
-    }
-
-    /**
-     * Persists the memory-retrieval similarity threshold. Out-of-range values
-     * are rejected with [MemoryValidationError.SearchThreshold].
-     *
-     * @param value Desired threshold; must lie in
-     *   `[MEMORY_SEARCH_THRESHOLD_MIN, MEMORY_SEARCH_THRESHOLD_MAX]`.
-     */
-    fun setMemorySearchThreshold(value: Float) {
-        if (value < SettingsDefaults.MEMORY_SEARCH_THRESHOLD_MIN ||
-            value > SettingsDefaults.MEMORY_SEARCH_THRESHOLD_MAX
-        ) {
-            rejectMemoryEdit(MemoryValidationError.SearchThreshold)
-            return
-        }
-        clearMemoryValidationError()
-        viewModelScope.launch { settingsRepository.setMemorySearchThreshold(value) }
-    }
-
-    /**
-     * Persists the recency half-life used by the memory re-ranker. Out-of-range
-     * values are rejected with [MemoryValidationError.RecencyHalfLife].
-     *
-     * @param days Desired half-life; must lie in
-     *   `[MEMORY_RECENCY_HALF_LIFE_DAYS_MIN, MEMORY_RECENCY_HALF_LIFE_DAYS_MAX]`.
-     */
-    fun setMemoryRecencyHalfLifeDays(days: Int) {
-        if (days < SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_MIN ||
-            days > SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_MAX
-        ) {
-            rejectMemoryEdit(MemoryValidationError.RecencyHalfLife)
-            return
-        }
-        clearMemoryValidationError()
-        viewModelScope.launch { settingsRepository.setMemoryRecencyHalfLifeDays(days) }
-    }
-
-    /**
-     * Persists the background-compaction toggle. Booleans cannot be
-     * out-of-range, so this never raises a validation error.
-     *
-     * @param enabled `true` to enable the daily compaction pass.
-     */
-    fun setMemoryCompactionEnabled(enabled: Boolean) {
-        clearMemoryValidationError()
-        viewModelScope.launch { settingsRepository.setMemoryCompactionEnabled(enabled) }
-    }
-
-    /**
-     * Persists the compaction age window. Out-of-range values are rejected with
-     * [MemoryValidationError.CompactionAge].
-     *
-     * @param days Desired age window; must lie in
-     *   `[MEMORY_COMPACTION_AGE_DAYS_MIN, MEMORY_COMPACTION_AGE_DAYS_MAX]`.
-     */
-    fun setMemoryCompactionAgeDays(days: Int) {
-        if (days < SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_MIN ||
-            days > SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_MAX
-        ) {
-            rejectMemoryEdit(MemoryValidationError.CompactionAge)
-            return
-        }
-        clearMemoryValidationError()
-        viewModelScope.launch { settingsRepository.setMemoryCompactionAgeDays(days) }
-    }
-
-    /**
-     * Persists the hard ceiling on stored chunks. Out-of-range values are
-     * rejected with [MemoryValidationError.MaxChunks].
-     *
-     * @param limit Desired ceiling; must lie in
-     *   `[MAX_MEMORY_CHUNKS_MIN, MAX_MEMORY_CHUNKS_MAX]`.
-     */
-    fun setMaxMemoryChunks(limit: Int) {
-        if (limit < SettingsDefaults.MAX_MEMORY_CHUNKS_MIN || limit > SettingsDefaults.MAX_MEMORY_CHUNKS_MAX) {
-            rejectMemoryEdit(MemoryValidationError.MaxChunks)
-            return
-        }
-        clearMemoryValidationError()
-        viewModelScope.launch { settingsRepository.setMaxMemoryChunks(limit) }
-    }
-
-    /**
-     * Toggles long-session chat-history compression.
-     *
-     * @param enabled `true` to compress long sessions, `false` to always feed
-     *   the full verbatim history.
-     */
-    fun setChatHistoryCompressionEnabled(enabled: Boolean) {
-        clearMemoryValidationError()
-        viewModelScope.launch { settingsRepository.setChatHistoryCompressionEnabled(enabled) }
-    }
-
-    /**
-     * Persists the chat-history compression token threshold. Out-of-range values
-     * are rejected with [MemoryValidationError.CompressionThreshold].
-     *
-     * @param tokens Desired threshold; must lie in
-     *   `[CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_MIN, CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_MAX]`.
-     */
-    fun setChatHistoryCompressionThresholdTokens(tokens: Int) {
-        if (tokens < SettingsDefaults.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_MIN ||
-            tokens > SettingsDefaults.CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS_MAX
-        ) {
-            rejectMemoryEdit(MemoryValidationError.CompressionThreshold)
-            return
-        }
-        clearMemoryValidationError()
-        viewModelScope.launch { settingsRepository.setChatHistoryCompressionThresholdTokens(tokens) }
-    }
-
-    /**
-     * Persists the chat-history live-window size. Out-of-range values are
-     * rejected with [MemoryValidationError.LiveWindow].
-     *
-     * @param size Desired window; must lie in
-     *   `[CHAT_HISTORY_LIVE_WINDOW_MIN, CHAT_HISTORY_LIVE_WINDOW_MAX]`.
-     */
-    fun setChatHistoryLiveWindowSize(size: Int) {
-        if (size < SettingsDefaults.CHAT_HISTORY_LIVE_WINDOW_MIN ||
-            size > SettingsDefaults.CHAT_HISTORY_LIVE_WINDOW_MAX
-        ) {
-            rejectMemoryEdit(MemoryValidationError.LiveWindow)
-            return
-        }
-        clearMemoryValidationError()
-        viewModelScope.launch { settingsRepository.setChatHistoryLiveWindowSize(size) }
-    }
-
-    /**
-     * Persists the active embedding provider. The id is validated against the
-     * set of registered providers; an unknown id is rejected with
-     * [MemoryValidationError.UnknownEmbeddingProvider] and nothing is written.
-     *
-     * @param id Wire id of a provider present in the Hilt provider map.
-     */
-    fun setActiveEmbeddingProviderId(id: String) {
-        if (!embeddingProviders.containsKey(id)) {
-            rejectMemoryEdit(MemoryValidationError.UnknownEmbeddingProvider)
-            return
-        }
-        clearMemoryValidationError()
-        viewModelScope.launch { settingsRepository.setActiveEmbeddingProviderId(id) }
-    }
-
-    /** Clears the transient memory-tuning validation error (e.g. after the screen showed it). */
-    fun clearMemoryValidationError() {
-        if (_uiState.value.memoryValidationError != null) {
-            _uiState.update { it.copy(memoryValidationError = null) }
-        }
-    }
-
-    private fun rejectMemoryEdit(error: MemoryValidationError) {
-        _uiState.update { it.copy(memoryValidationError = error) }
-    }
-
-    /**
-     * Exports the entire memory base into the supplied [OutputStream].
-     * Called by the screen after the SAF launcher returns a writable URI.
-     */
-    fun exportMemoryBase(target: OutputStream) {
-        viewModelScope.launch {
-            try {
-                val count = exportMemoryBaseUseCase(target)
-                emitSnackbar(appContext.getString(R.string.settings_memory_export_success, count))
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                Timber.w(e, "Memory export failed")
-                emitSnackbar(appContext.getString(R.string.settings_memory_export_failed, e.message.orEmpty()))
-            }
-        }
-    }
-
-    /**
-     * Parses a memory export file from the supplied [InputStream] and, on a
-     * usable parse, stages the import dialog (strategy choice + any
-     * provider/schema warnings). A failed parse surfaces an error snackbar and
-     * stages nothing.
-     *
-     * Called by the screen after the SAF open-document launcher returns a
-     * readable URI. The stream is fully read and closed here; persistence is
-     * deferred to [confirmImport] once the user picks a strategy.
-     *
-     * @param source Readable stream over the user-selected JSON file.
-     */
-    fun importMemory(source: InputStream) {
-        viewModelScope.launch {
-            val jsonText = try {
-                withContext(Dispatchers.IO) { source.bufferedReader().use { it.readText() } }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                Timber.w(e, "Memory import: failed to read file")
-                emitSnackbar(appContext.getString(R.string.settings_memory_import_failed, e.message.orEmpty()))
-                return@launch
-            }
-
-            when (val outcome = memoryImportUseCase.parse(jsonText)) {
-                is MemoryImportOutcome.Failure -> {
-                    emitSnackbar(appContext.getString(R.string.settings_memory_import_failed, outcome.message))
-                }
-                is MemoryImportOutcome.Success -> stagePendingImport(outcome.document, schemaMismatch = false)
-                is MemoryImportOutcome.SchemaMismatch ->
-                    stagePendingImport(outcome.document, schemaMismatch = true)
-            }
-        }
-    }
-
-    /**
-     * Stages [document] for the import dialog, computing whether the file's
-     * embedding provider differs from the one active on this device.
-     */
-    private suspend fun stagePendingImport(document: MemoryExportDocument, schemaMismatch: Boolean) {
-        _uiState.update {
-            it.copy(
-                pendingImport = PendingMemoryImport(
-                    document = document,
-                    // Compare against the provider retrieval actually resolves to
-                    // (on-device fallback included), not the raw persisted setting.
-                    providerMismatch = memoryImportUseCase.isProviderMismatched(document),
-                    schemaMismatch = schemaMismatch,
-                ),
-            )
-        }
-    }
-
-    /**
-     * Imports the staged document under [strategy], clears the dialog, and
-     * surfaces a result snackbar. No-op when nothing is staged.
-     *
-     * @param strategy Merge (skip duplicate ids) or Replace (wipe then load).
-     */
-    fun confirmImport(strategy: MemoryImportStrategy) {
-        val pending = _uiState.value.pendingImport ?: return
-        _uiState.update { it.copy(pendingImport = null) }
-        viewModelScope.launch {
-            try {
-                val result = memoryImportUseCase.import(pending.document, strategy)
-                emitSnackbar(importResultMessage(result))
-            } catch (e: CancellationException) {
-                throw e
-            } catch (error: Throwable) {
-                Timber.w(error, "Memory import failed")
-                emitSnackbar(appContext.getString(R.string.settings_memory_import_failed, error.message.orEmpty()))
-            }
-        }
-    }
-
-    /** Dismisses the import dialog without importing anything. */
-    fun cancelImport() {
-        _uiState.update { it.copy(pendingImport = null) }
-    }
-
-    /**
-     * Composes the post-import snackbar, appending the re-embedding note when
-     * the imported chunks were flagged for lazy re-computation.
-     */
-    private fun importResultMessage(result: MemoryImportResult): String {
-        val base = appContext.getString(
-            R.string.settings_memory_import_success,
-            result.imported,
-            result.skipped,
-        )
-        return if (result.needsReembedding) {
-            base + " " + appContext.getString(R.string.settings_memory_import_reembed_note)
-        } else {
-            base
-        }
-    }
-
-    fun runReembed() {
-        viewModelScope.launch {
-            reembedAllMemoriesUseCase().collect { progress ->
-                _uiState.update { it.copy(reembedProgress = progress.takeIf { fraction -> fraction < 1f }) }
-            }
-            // The store is now consistent with the active provider — record it
-            // so the "re-embed recommended" banner disappears.
-            settingsRepository.setLastReembedProviderId(_uiState.value.activeEmbeddingProviderId)
-            emitSnackbar(appContext.getString(R.string.settings_memory_reembed_done))
-        }
-    }
+    // ─── Destructive actions (cross-cutting coordination) ─────────────────────
 
     fun stageClearMemory() {
         _uiState.update {
-            it.copy(
-                pendingDestructive = PendingDestructiveAction.ClearMemory,
-                destructiveTypedInput = "",
-            )
+            it.copy(pendingDestructive = PendingDestructiveAction.ClearMemory, destructiveTypedInput = "")
         }
     }
 
     fun stageResetSettings() {
         _uiState.update {
-            it.copy(
-                pendingDestructive = PendingDestructiveAction.ResetSettings,
-                destructiveTypedInput = "",
-            )
+            it.copy(pendingDestructive = PendingDestructiveAction.ResetSettings, destructiveTypedInput = "")
         }
     }
 
@@ -909,97 +227,25 @@ class SettingsViewModel @Inject constructor(
             PendingDestructiveAction.ClearMemory -> {
                 val keyword = appContext.getString(R.string.destructive_typed_keyword)
                 if (!typedConfirmMatches(input = _uiState.value.destructiveTypedInput, keyword = keyword)) return
-                performClearMemory()
+                memory.performClearMemory()
             }
             // Resetting settings touches no user data — a plain confirm is enough.
-            PendingDestructiveAction.ResetSettings -> performResetSettings()
+            PendingDestructiveAction.ResetSettings -> about.performResetSettings()
         }
         _uiState.update { it.copy(pendingDestructive = null, destructiveTypedInput = "") }
     }
 
-    private fun performClearMemory() {
-        viewModelScope.launch {
-            clearAllMemoryUseCase()
-            // An empty store has no stale vectors — mark it consistent with
-            // the active provider so the re-embed banner does not survive a
-            // full wipe.
-            settingsRepository.setLastReembedProviderId(_uiState.value.activeEmbeddingProviderId)
-            emitSnackbar(appContext.getString(R.string.settings_memory_cleared_snackbar))
-        }
-    }
-
-    /**
-     * Restores every tunable preference to its recommended default via
-     * [ResetToRecommendedDefaultsUseCase] (a single atomic write), then mirrors
-     * the reset crash-reporting consent into [CrashReportingRepository] so
-     * Crashlytics collection actually stops — the persisted flag alone does not
-     * flip the live collector. User data (memory, chats, pipelines, prompts,
-     * connections, secrets) is deliberately left untouched; the scope contract
-     * lives on [SettingsRepository.resetToRecommendedDefaults].
-     */
-    private fun performResetSettings() {
-        viewModelScope.launch {
-            resetToRecommendedDefaultsUseCase()
-            crashReportingRepository.setEnabled(SettingsDefaults.CRASH_REPORTING_ENABLED_DEFAULT)
-            emitSnackbar(appContext.getString(R.string.settings_reset_button))
-        }
-    }
-
-    // ─── Notifications + privacy ─────────────────────────────────────────
-
-    fun setLongRunningTaskNotificationsEnabled(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.setLongRunningTaskNotificationsEnabled(enabled) }
-    }
-
-    fun setScheduledTaskNotificationsEnabled(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.setScheduledTaskNotificationsEnabled(enabled) }
-    }
-
-    fun setCrashReportingEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setCrashReportingEnabled(enabled)
-            crashReportingRepository.setEnabled(enabled)
-        }
-    }
-
-    fun setVerboseMemoryLoggingEnabled(enabled: Boolean) {
-        viewModelScope.launch { settingsRepository.setVerboseMemoryLoggingEnabled(enabled) }
-    }
-
     // ─── Surface ───────────────────────────────────────────────────────────
-
-    /** Called by the screen after a restart action; resets the baseline so the banner stays gone. */
-    fun acknowledgeRestart() {
-        val current = _uiState.value
-        appliedBackend = current.localModelBackend
-        appliedOllamaBaseUrl = current.providers.ollamaBaseUrl()
-        hasCapturedBackendBaseline = true
-        hasCapturedOllamaBaseline = true
-        _uiState.update { it.copy(restartRequired = false) }
-    }
 
     fun snackbarShown() {
         _uiState.update { it.copy(snackbarMessage = null) }
     }
 
-    private fun emitSnackbar(message: String) {
-        _uiState.update { it.copy(snackbarMessage = message) }
-    }
-
     companion object {
-        private const val MASK_TAIL_LENGTH = 4
-        private const val MASK_PREFIX_LENGTH = 2
-        private const val MASK_PREFIX_THRESHOLD = 6
-        private const val MAX_PERCENT = 100
-        private const val MS_PER_SECOND_F = 1_000f
-
         /**
-         * Re-exposed for tests: maps a [CloudProvider] back to its
-         * [ProviderId].
+         * Re-exposed for tests: maps a [CloudProvider] back to its [ProviderId].
          */
         fun providerIdOf(provider: CloudProvider): ProviderId =
             ProviderId.entries.first { it.cloudProvider == provider }
     }
 }
-
-private fun List<ProviderSummary>.ollamaBaseUrl(): String? = firstOrNull { it.id == ProviderId.Ollama }?.endpointHint
