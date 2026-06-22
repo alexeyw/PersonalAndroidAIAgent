@@ -246,6 +246,24 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(snackbarMessage = null) }
     }
 
+    // ─── Settings-search deep-link highlight ─────────────────────────────────
+
+    /**
+     * Records the anchor of a settings row a search result asked to deep-link to.
+     * The owning category sub-screen reads it on arrival, scrolls the row into
+     * view and flashes it.
+     *
+     * @param anchor Stable anchor key of the target row.
+     */
+    fun requestHighlight(anchor: String) {
+        _uiState.update { it.copy(pendingHighlightAnchor = anchor) }
+    }
+
+    /** Clears the pending highlight once the destination screen has flashed it. */
+    fun highlightConsumed() {
+        _uiState.update { it.copy(pendingHighlightAnchor = null) }
+    }
+
     companion object {
         /**
          * Re-exposed for tests: maps a [CloudProvider] back to its [ProviderId].

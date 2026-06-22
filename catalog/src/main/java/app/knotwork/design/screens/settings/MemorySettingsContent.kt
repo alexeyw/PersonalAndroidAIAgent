@@ -51,27 +51,33 @@ fun MemorySettingsContent(
         },
     ) {
         MemoryStatsCard(state.stats)
-        IconToggleRow(
-            icon = AppIcons.Bolt,
-            title = state.autoExtractLabel,
-            subtitle = state.autoExtractSubtitle,
-            checked = state.autoExtractEnabled,
-            onCheckedChange = callbacks.onAutoExtractToggle,
-        )
-        IconToggleRow(
-            icon = AppIcons.Refresh,
-            title = state.compactionLabel,
-            subtitle = state.compactionSubtitle,
-            checked = state.compactionEnabled,
-            onCheckedChange = callbacks.onMemoryCompactionToggle,
-        )
-        IconToggleRow(
-            icon = AppIcons.History,
-            title = state.chatHistoryCompressionLabel,
-            subtitle = state.chatHistoryCompressionSubtitle,
-            checked = state.chatHistoryCompressionEnabled,
-            onCheckedChange = callbacks.onChatHistoryCompressionToggle,
-        )
+        SettingsAnchor(anchorKey = "AUTO_EXTRACT_ENABLED") {
+            IconToggleRow(
+                icon = AppIcons.Bolt,
+                title = state.autoExtractLabel,
+                subtitle = state.autoExtractSubtitle,
+                checked = state.autoExtractEnabled,
+                onCheckedChange = callbacks.onAutoExtractToggle,
+            )
+        }
+        SettingsAnchor(anchorKey = "MEMORY_COMPACTION_ENABLED") {
+            IconToggleRow(
+                icon = AppIcons.Refresh,
+                title = state.compactionLabel,
+                subtitle = state.compactionSubtitle,
+                checked = state.compactionEnabled,
+                onCheckedChange = callbacks.onMemoryCompactionToggle,
+            )
+        }
+        SettingsAnchor(anchorKey = "CHAT_HISTORY_COMPRESSION_ENABLED") {
+            IconToggleRow(
+                icon = AppIcons.History,
+                title = state.chatHistoryCompressionLabel,
+                subtitle = state.chatHistoryCompressionSubtitle,
+                checked = state.chatHistoryCompressionEnabled,
+                onCheckedChange = callbacks.onChatHistoryCompressionToggle,
+            )
+        }
         AdvancedDisclosure(initiallyExpanded = advancedExpanded) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -82,19 +88,23 @@ fun MemorySettingsContent(
                     tagPrefix = MEMORY_PARAM_ROW_TAG_PREFIX,
                     onChange = callbacks.onMemorySliderChange,
                 )
-                EmbeddingProviderDropdownRow(
-                    title = state.embeddingTitle,
-                    selectedLabel = state.selectedEmbeddingLabel,
-                    options = state.embeddingOptions,
-                    onSelected = callbacks.onEmbeddingProviderSelected,
-                )
-                IconToggleRow(
-                    icon = AppIcons.Ram,
-                    title = stringResource(R.string.knotwork_settings_verbose_memory_logging_label),
-                    subtitle = stringResource(R.string.knotwork_settings_verbose_memory_logging_hint),
-                    checked = state.verboseLoggingEnabled,
-                    onCheckedChange = callbacks.onVerboseMemoryLoggingToggle,
-                )
+                SettingsAnchor(anchorKey = "ACTIVE_EMBEDDING_PROVIDER_ID") {
+                    EmbeddingProviderDropdownRow(
+                        title = state.embeddingTitle,
+                        selectedLabel = state.selectedEmbeddingLabel,
+                        options = state.embeddingOptions,
+                        onSelected = callbacks.onEmbeddingProviderSelected,
+                    )
+                }
+                SettingsAnchor(anchorKey = "VERBOSE_MEMORY_LOGGING_ENABLED") {
+                    IconToggleRow(
+                        icon = AppIcons.Ram,
+                        title = stringResource(R.string.knotwork_settings_verbose_memory_logging_label),
+                        subtitle = stringResource(R.string.knotwork_settings_verbose_memory_logging_hint),
+                        checked = state.verboseLoggingEnabled,
+                        onCheckedChange = callbacks.onVerboseMemoryLoggingToggle,
+                    )
+                }
                 if (state.reembedBanner != null) {
                     ReembedBanner(
                         text = state.reembedBanner,
@@ -112,7 +122,9 @@ fun MemorySettingsContent(
                             .testTag(MEMORY_VALIDATION_ERROR_TAG),
                     )
                 }
-                MemoryActionButtons(state, callbacks)
+                SettingsAnchor(anchorKey = "MEMORY_ACTIONS") {
+                    MemoryActionButtons(state, callbacks)
+                }
                 if (state.reembedProgressPercent != null) {
                     ReembedProgress(progressPercent = state.reembedProgressPercent)
                 }

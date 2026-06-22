@@ -31,13 +31,15 @@ fun PrivacySettingsContent(
         onBack = callbacks.onBack,
         modifier = modifier,
     ) {
-        IconToggleRow(
-            icon = AppIcons.Shield,
-            title = stringResource(R.string.knotwork_settings_crash_reporting_label),
-            subtitle = stringResource(R.string.knotwork_settings_crash_reporting_hint),
-            checked = state.crashReportingEnabled,
-            onCheckedChange = callbacks.onCrashReportingToggle,
-        )
+        SettingsAnchor(anchorKey = "CRASH_REPORTING_ENABLED") {
+            IconToggleRow(
+                icon = AppIcons.Shield,
+                title = stringResource(R.string.knotwork_settings_crash_reporting_label),
+                subtitle = stringResource(R.string.knotwork_settings_crash_reporting_hint),
+                checked = state.crashReportingEnabled,
+                onCheckedChange = callbacks.onCrashReportingToggle,
+            )
+        }
         AdvancedDisclosure(initiallyExpanded = advancedExpanded) {
             Column(
                 modifier = Modifier.fillMaxWidth(),

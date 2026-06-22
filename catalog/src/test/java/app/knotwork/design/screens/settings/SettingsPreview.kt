@@ -33,6 +33,37 @@ internal object SettingsPreview {
     fun hubRestart(): SettingsHubViewState =
         hubDefault().copy(restartRequiredMessage = "Backend change requires restart.")
 
+    /** Hub with an active "max" query — results across categories incl. a synonym hit. */
+    fun hubSearchResults(): SettingsHubViewState = hubDefault().copy(
+        searchQuery = "max",
+        searchResults = listOf(
+            searchRow("MAX_CONTEXT_LENGTH", SettingsCategoryId.Generation, "Max context length", 0, 3),
+            searchRow(
+                "PIPELINE_MAX_STEPS",
+                SettingsCategoryId.Pipelines,
+                "Cap autonomous steps",
+                basic = true,
+                synonym = "max",
+            ),
+            searchRow("MAX_MEMORY_CHUNKS", SettingsCategoryId.Memory, "Max memory chunks", 0, 3),
+            searchRow("WORKSPACE_MAX_FILE_SIZE_BYTES", SettingsCategoryId.Tools, "Workspace max file size", 10, 3),
+            searchRow("RESUME_MAX_AGE_HOURS", SettingsCategoryId.Background, "Resume max age", 7, 3),
+        ),
+    )
+
+    /** Hub with a query that matches nothing — the calm empty state. */
+    fun hubSearchEmpty(): SettingsHubViewState = hubDefault().copy(searchQuery = "lidar", searchResults = emptyList())
+
+    private fun searchRow(
+        anchor: String,
+        category: SettingsCategoryId,
+        name: String,
+        nameStart: Int = -1,
+        len: Int = 0,
+        basic: Boolean = false,
+        synonym: String? = null,
+    ): HubSearchResultRow = HubSearchResultRow(anchor, category, name, nameStart, len, basic, synonym)
+
     // ─── Generation ──────────────────────────────────────────────────────────
 
     fun generation(): GenerationSettingsViewState = GenerationSettingsViewState(

@@ -53,13 +53,15 @@ fun ModelsSettingsContent(
         },
     ) {
         ActiveModelCard(state.localModel)
-        BackendDropdownRow(
-            title = stringResource(R.string.knotwork_settings_local_model_backend_title),
-            backendLabel = state.localModel.backendLabel,
-            selectedBackend = state.localModel.selectedBackend,
-            options = state.localModel.backendOptions,
-            onSelected = callbacks.onBackendSelected,
-        )
+        SettingsAnchor(anchorKey = "LOCAL_MODEL_BACKEND") {
+            BackendDropdownRow(
+                title = stringResource(R.string.knotwork_settings_local_model_backend_title),
+                backendLabel = state.localModel.backendLabel,
+                selectedBackend = state.localModel.selectedBackend,
+                options = state.localModel.backendOptions,
+                onSelected = callbacks.onBackendSelected,
+            )
+        }
         TestProbeRow(state.localModel, callbacks.onTestBackendClick)
         NavLinkRow(
             icon = AppIcons.Download,
@@ -67,16 +69,18 @@ fun ModelsSettingsContent(
             subtitle = stringResource(R.string.knotwork_settings_models_manage_subtitle),
             onClick = callbacks.onManageModelsClick,
         )
-        SettingsSectionLabel(
-            text = stringResource(R.string.knotwork_settings_section_providers),
-            trailing = {
-                app.knotwork.design.components.misc.KnotworkSectionAction(
-                    label = stringResource(R.string.knotwork_settings_providers_add),
-                    icon = AppIcons.Add,
-                    onClick = callbacks.onAddProviderClick,
-                )
-            },
-        )
+        SettingsAnchor(anchorKey = "LINK_PROVIDER_LIST") {
+            SettingsSectionLabel(
+                text = stringResource(R.string.knotwork_settings_section_providers),
+                trailing = {
+                    app.knotwork.design.components.misc.KnotworkSectionAction(
+                        label = stringResource(R.string.knotwork_settings_providers_add),
+                        icon = AppIcons.Add,
+                        onClick = callbacks.onAddProviderClick,
+                    )
+                },
+            )
+        }
         state.providers.forEach { row ->
             ProviderNavRow(row = row, onClick = { callbacks.onProviderRowClick(row.id) })
         }

@@ -34,6 +34,35 @@ enum class SettingsCategoryId {
 }
 
 /**
+ * One settings-search hit rendered on the hub when a query is active.
+ *
+ * The match scoring lives in the domain search engine; this model carries only
+ * what the result row draws: the localized name with the matched substring
+ * range (for bold highlighting), the owning category (resolved to an icon and
+ * breadcrumb title on the hub), the tier badge and an optional synonym chip.
+ *
+ * @property anchorKey Stable row anchor, passed back on tap to deep-link and
+ *   highlight the destination row on its category sub-screen.
+ * @property categoryId Owning category (drives the breadcrumb icon + title).
+ * @property name Localized setting name.
+ * @property nameMatchStart Start index of the matched substring in [name], or
+ *   `-1` when the hit was by synonym / category / description (no name match).
+ * @property nameMatchLength Length of the matched substring; `0` when none.
+ * @property isBasic `true` for a Basic-tier row (drives the Basic/Advanced tag).
+ * @property synonymHit The synonym that surfaced the row (shows the `≈ "…"`
+ *   chip), or `null` when the name itself matched.
+ */
+data class HubSearchResultRow(
+    val anchorKey: String,
+    val categoryId: SettingsCategoryId,
+    val name: String,
+    val nameMatchStart: Int,
+    val nameMatchLength: Int,
+    val isBasic: Boolean,
+    val synonymHit: String?,
+)
+
+/**
  * Approve-tool-calls segmented control state — mirrors
  * `app.knotwork.android.domain.models.ToolApprovalPolicy` but stays free of
  * domain imports so the catalog module keeps its zero-app dependency.
@@ -62,6 +91,8 @@ enum class ApproveToolCallsOption {
  * @property steps Discrete steps; `0` for continuous sliders.
  * @property errorText Optional inline validation error rendered beneath the
  *   slider when the last edit to this row was rejected; `null` otherwise.
+ * @property anchorKey Stable settings-search anchor (the registry key) used to
+ *   deep-link and flash this row; `null` when the row is not search-indexed.
  */
 data class SettingSliderRow(
     val id: String,
@@ -71,6 +102,7 @@ data class SettingSliderRow(
     val valueRange: ClosedFloatingPointRange<Float>,
     val steps: Int = 0,
     val errorText: String? = null,
+    val anchorKey: String? = null,
 )
 
 /**

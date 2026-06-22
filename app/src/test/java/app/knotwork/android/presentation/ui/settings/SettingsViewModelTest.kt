@@ -677,6 +677,15 @@ class SettingsViewModelTest {
         assertNotNull(viewModel.uiState.value.snackbarMessage)
     }
 
+    @Test
+    fun `requestHighlight stores the anchor and highlightConsumed clears it`() = runTest {
+        advanceUntilIdle()
+        viewModel.requestHighlight("TEMPERATURE")
+        assertEquals("TEMPERATURE", viewModel.uiState.value.pendingHighlightAnchor)
+        viewModel.highlightConsumed()
+        assertNull(viewModel.uiState.value.pendingHighlightAnchor)
+    }
+
     private fun newViewModel(): SettingsViewModel = SettingsViewModel(
         appContext = context,
         settingsRepository = settings,

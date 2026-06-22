@@ -104,6 +104,10 @@ import app.knotwork.android.domain.models.ToolApprovalPolicy
  * @property destructiveTypedInput Live text in the typed-confirm field.
  * @property snackbarMessage One-shot message surfaced via the screen-level
  *   SnackbarHost; consumed by [SettingsViewModel.snackbarShown].
+ * @property pendingHighlightAnchor Anchor key of a settings row a search
+ *   deep-link asked to highlight; the owning category sub-screen flashes the row
+ *   and clears it via [SettingsViewModel.highlightConsumed]. `null` when no
+ *   highlight is pending.
  */
 data class SettingsUiState(
     val identity: Identity? = null,
@@ -160,6 +164,7 @@ data class SettingsUiState(
     val destructiveTypedInput: String = "",
     val pendingImport: PendingMemoryImport? = null,
     val snackbarMessage: String? = null,
+    val pendingHighlightAnchor: String? = null,
 )
 
 /**

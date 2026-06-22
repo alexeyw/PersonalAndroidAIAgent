@@ -34,21 +34,25 @@ fun GenerationSettingsContent(
         onBack = callbacks.onBack,
         modifier = modifier,
     ) {
-        SystemInstructionsField(
-            state = state.systemInstructions,
-            onValueChange = callbacks.onSystemInstructionsChange,
-            onChipInsert = callbacks.onChipInsert,
-        )
+        SettingsAnchor(anchorKey = "SYSTEM_PROMPT_PREFIX") {
+            SystemInstructionsField(
+                state = state.systemInstructions,
+                onValueChange = callbacks.onSystemInstructionsChange,
+                onChipInsert = callbacks.onChipInsert,
+            )
+        }
         AdvancedDisclosure(initiallyExpanded = advancedExpanded) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
             ) {
-                ToolUsageField(
-                    value = state.toolUsageValue,
-                    helper = state.toolUsageHelper,
-                    onValueChange = callbacks.onToolUsageInstructionChange,
-                )
+                SettingsAnchor(anchorKey = "TOOL_USAGE_INSTRUCTION") {
+                    ToolUsageField(
+                        value = state.toolUsageValue,
+                        helper = state.toolUsageHelper,
+                        onValueChange = callbacks.onToolUsageInstructionChange,
+                    )
+                }
                 SettingSliderList(
                     sliders = state.advancedSliders,
                     tagPrefix = GENERATION_SLIDER_TAG_PREFIX,

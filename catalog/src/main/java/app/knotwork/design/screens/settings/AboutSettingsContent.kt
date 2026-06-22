@@ -54,15 +54,21 @@ fun AboutSettingsContent(
             }
         },
     ) {
-        IdentityCard(state.identity)
-        NavLinkRow(
-            icon = AppIcons.Info,
-            title = stringResource(R.string.knotwork_settings_about_version_title),
-            subtitle = state.versionLine,
-            onClick = callbacks.onOpenLicenses,
-        )
+        SettingsAnchor(anchorKey = "IDENTITY") {
+            IdentityCard(state.identity)
+        }
+        SettingsAnchor(anchorKey = "LINK_LICENSES") {
+            NavLinkRow(
+                icon = AppIcons.Info,
+                title = stringResource(R.string.knotwork_settings_about_version_title),
+                subtitle = state.versionLine,
+                onClick = callbacks.onOpenLicenses,
+            )
+        }
         AdvancedDisclosure(initiallyExpanded = advancedExpanded) {
-            ResetRow(onResetClick = callbacks.onResetSettingsClick)
+            SettingsAnchor(anchorKey = "RESET") {
+                ResetRow(onResetClick = callbacks.onResetSettingsClick)
+            }
         }
     }
 }
