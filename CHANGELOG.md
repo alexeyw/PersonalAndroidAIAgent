@@ -326,6 +326,16 @@ details.
 
 ### Changed
 
+- **Settings internals reorganised ahead of the categorised settings redesign
+  (no behaviour change).** `SettingsViewModel` is now a thin coordinator over
+  eight per-category delegates (Generation, Models, Memory, Pipelines, Tools,
+  Background, Privacy, About) that share its scope and state reducer; every
+  setting keeps its current meaning, range, default, persistence, validation and
+  restart/destructive gates. A new pure-domain `SettingsRegistry` records each
+  user-facing setting's category, Basic/Advanced tier and search synonyms as the
+  single source of truth for the upcoming settings hub, category sub-screens and
+  settings search. No user-visible change yet.
+
 - **"Reset all settings" now restores every tunable preference, behind a plain
   confirm dialog.** Settings → Privacy → *Reset all settings* previously reset
   only a subset of preferences (and used a typed-keyword gate). It now restores
