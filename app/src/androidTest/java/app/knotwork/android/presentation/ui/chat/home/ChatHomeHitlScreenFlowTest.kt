@@ -31,7 +31,7 @@ class ChatHomeHitlScreenFlowTest {
 
     @Test
     fun sensitive_allowOnce_invokesApproveTool() {
-        val (viewModel, _) = mockChatHomeViewModel(
+        val (viewModel, handles) = mockChatHomeViewModel(
             initialState = ChatHomeUiState.HitlConfirm(risk = Risk.Sensitive),
             initialPendingTool = HitlPending(
                 toolName = "calendar.create_event",
@@ -49,12 +49,12 @@ class ChatHomeHitlScreenFlowTest {
         composeTestRule.onNodeWithText(allowLabel).performClick()
         composeTestRule.waitForIdle()
 
-        verify(exactly = 1) { viewModel.hitl.approveTool() }
+        verify(exactly = 1) { handles.hitl.approveTool() }
     }
 
     @Test
     fun sensitive_reject_invokesRejectTool() {
-        val (viewModel, _) = mockChatHomeViewModel(
+        val (viewModel, handles) = mockChatHomeViewModel(
             initialState = ChatHomeUiState.HitlConfirm(risk = Risk.Sensitive),
             initialPendingTool = HitlPending(
                 toolName = "calendar.create_event",
@@ -72,7 +72,7 @@ class ChatHomeHitlScreenFlowTest {
         composeTestRule.onNodeWithText(rejectLabel).performClick()
         composeTestRule.waitForIdle()
 
-        verify(exactly = 1) { viewModel.hitl.rejectTool() }
+        verify(exactly = 1) { handles.hitl.rejectTool() }
     }
 
     @Test
@@ -106,7 +106,7 @@ class ChatHomeHitlScreenFlowTest {
 
     @Test
     fun destructive_allowAfterTypedConfirm_invokesApproveTool() {
-        val (viewModel, _) = mockChatHomeViewModel(
+        val (viewModel, handles) = mockChatHomeViewModel(
             initialState = ChatHomeUiState.HitlConfirm(risk = Risk.Destructive),
             initialPendingTool = HitlPending(
                 toolName = "fs.delete_file",
@@ -125,7 +125,7 @@ class ChatHomeHitlScreenFlowTest {
         composeTestRule.onAllNodesWithText(allowLabel)[0].performClick()
         composeTestRule.waitForIdle()
 
-        verify(exactly = 1) { viewModel.hitl.approveTool() }
+        verify(exactly = 1) { handles.hitl.approveTool() }
     }
 
     @Test
