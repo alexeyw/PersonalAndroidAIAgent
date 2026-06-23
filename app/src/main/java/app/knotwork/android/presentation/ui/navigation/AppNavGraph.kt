@@ -6,6 +6,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -31,7 +32,17 @@ import app.knotwork.android.presentation.ui.orchestrator.PipelineLibraryScreen
 import app.knotwork.android.presentation.ui.orchestrator.presets.PipelinePresetsManagerScreen
 import app.knotwork.android.presentation.ui.pipeline.editor.PipelineEditorScreen
 import app.knotwork.android.presentation.ui.prompts.PromptLibraryScreen
-import app.knotwork.android.presentation.ui.settings.SettingsScreen
+import app.knotwork.android.presentation.ui.settings.AboutSettingsScreen
+import app.knotwork.android.presentation.ui.settings.BackgroundSettingsScreen
+import app.knotwork.android.presentation.ui.settings.GenerationSettingsScreen
+import app.knotwork.android.presentation.ui.settings.MemorySettingsScreen
+import app.knotwork.android.presentation.ui.settings.ModelsSettingsScreen
+import app.knotwork.android.presentation.ui.settings.PipelinesSettingsScreen
+import app.knotwork.android.presentation.ui.settings.PrivacySettingsScreen
+import app.knotwork.android.presentation.ui.settings.SettingsHubScreen
+import app.knotwork.android.presentation.ui.settings.SettingsNavActions
+import app.knotwork.android.presentation.ui.settings.SettingsViewModel
+import app.knotwork.android.presentation.ui.settings.ToolsSettingsScreen
 import app.knotwork.android.presentation.ui.settings.provider.ProviderDetailScreen
 import app.knotwork.android.presentation.ui.settings.provider.ProviderPickerScreen
 import app.knotwork.android.presentation.ui.skills.SkillLibraryScreen
@@ -42,6 +53,7 @@ import app.knotwork.android.presentation.ui.tools.AllowedDomainsScreen
 import app.knotwork.android.presentation.ui.tools.McpServerConfigScreen
 import app.knotwork.android.presentation.ui.tools.ToolDetailScreen
 import app.knotwork.android.presentation.ui.tools.ToolsScreen
+import app.knotwork.design.screens.settings.SettingsCategoryId
 import timber.log.Timber
 
 /**
@@ -341,22 +353,35 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                 onBack = { navController.popBackStack() },
             )
         }
-        composable(NavRoutes.SETTINGS) {
-            SettingsScreen(
-                modifier = Modifier.fillMaxSize(),
-                onBack = { navController.popBackStack() },
-                onOpenModels = { navController.navigate(NavRoutes.MODELS) },
-                onOpenProvider = { providerId ->
-                    val wireId = providerId.cloudProvider.id
-                    navController.navigate(
-                        NavRoutes.PROVIDER_DETAIL.replace(
-                            oldValue = "{${NavRoutes.PROVIDER_DETAIL_ID_ARG}}",
-                            newValue = wireId,
-                        ),
-                    )
-                },
-                onOpenAddProvider = { navController.navigate(NavRoutes.ADD_PROVIDER) },
-            )
+        navigation(startDestination = NavRoutes.SETTINGS_HUB, route = NavRoutes.SETTINGS) {
+            val nav = settingsNavActions(navController)
+            composable(NavRoutes.SETTINGS_HUB) { entry ->
+                SettingsHubScreen(viewModel = settingsGraphViewModel(navController, entry), nav = nav)
+            }
+            composable(NavRoutes.SETTINGS_GENERATION) { entry ->
+                GenerationSettingsScreen(viewModel = settingsGraphViewModel(navController, entry), nav = nav)
+            }
+            composable(NavRoutes.SETTINGS_MODELS) { entry ->
+                ModelsSettingsScreen(viewModel = settingsGraphViewModel(navController, entry), nav = nav)
+            }
+            composable(NavRoutes.SETTINGS_MEMORY) { entry ->
+                MemorySettingsScreen(viewModel = settingsGraphViewModel(navController, entry), nav = nav)
+            }
+            composable(NavRoutes.SETTINGS_PIPELINES) { entry ->
+                PipelinesSettingsScreen(viewModel = settingsGraphViewModel(navController, entry), nav = nav)
+            }
+            composable(NavRoutes.SETTINGS_TOOLS) { entry ->
+                ToolsSettingsScreen(viewModel = settingsGraphViewModel(navController, entry), nav = nav)
+            }
+            composable(NavRoutes.SETTINGS_BACKGROUND) { entry ->
+                BackgroundSettingsScreen(viewModel = settingsGraphViewModel(navController, entry), nav = nav)
+            }
+            composable(NavRoutes.SETTINGS_PRIVACY) { entry ->
+                PrivacySettingsScreen(viewModel = settingsGraphViewModel(navController, entry), nav = nav)
+            }
+            composable(NavRoutes.SETTINGS_ABOUT) { entry ->
+                AboutSettingsScreen(viewModel = settingsGraphViewModel(navController, entry), nav = nav)
+            }
         }
         composable(
             route = NavRoutes.PROVIDER_DETAIL,
@@ -419,4 +444,46 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
             KnotworkModalRoute(onDismiss = { navController.popBackStack() }) { _ -> }
         }
     }
+}
+
+/**
+ * Resolves the shared [SettingsViewModel] scoped to the settings navigation
+ * graph so the hub and every category sub-screen observe the same instance (the
+ * Pipelines-graph pattern).
+ */
+@Composable
+private fun settingsGraphViewModel(navController: NavHostController, entry: NavBackStackEntry): SettingsViewModel {
+    val parentEntry = remember(entry) { navController.getBackStackEntry(NavRoutes.SETTINGS) }
+    return hiltViewModel(parentEntry)
+}
+
+/** Builds the settings navigation actions over [navController]. */
+private fun settingsNavActions(navController: NavHostController): SettingsNavActions = SettingsNavActions(
+    onBack = { navController.popBackStack() },
+    onOpenCategory = { category -> navController.navigate(settingsCategoryRoute(category)) },
+    onOpenModels = { navController.navigate(NavRoutes.MODELS) },
+    onOpenProvider = { providerId ->
+        navController.navigate(
+            NavRoutes.PROVIDER_DETAIL.replace(
+                oldValue = "{${NavRoutes.PROVIDER_DETAIL_ID_ARG}}",
+                newValue = providerId.cloudProvider.id,
+            ),
+        )
+    },
+    onOpenAddProvider = { navController.navigate(NavRoutes.ADD_PROVIDER) },
+    onOpenManageTools = { navController.navigate(NavRoutes.TOOLS) },
+    onOpenAllowedDomains = { navController.navigate(NavRoutes.ALLOWED_DOMAINS) },
+    onOpenLicenses = { navController.navigate(NavRoutes.ABOUT) },
+)
+
+/** Maps a settings category id to its sub-screen route. */
+private fun settingsCategoryRoute(category: SettingsCategoryId): String = when (category) {
+    SettingsCategoryId.Generation -> NavRoutes.SETTINGS_GENERATION
+    SettingsCategoryId.Models -> NavRoutes.SETTINGS_MODELS
+    SettingsCategoryId.Memory -> NavRoutes.SETTINGS_MEMORY
+    SettingsCategoryId.Pipelines -> NavRoutes.SETTINGS_PIPELINES
+    SettingsCategoryId.Tools -> NavRoutes.SETTINGS_TOOLS
+    SettingsCategoryId.Background -> NavRoutes.SETTINGS_BACKGROUND
+    SettingsCategoryId.Privacy -> NavRoutes.SETTINGS_PRIVACY
+    SettingsCategoryId.About -> NavRoutes.SETTINGS_ABOUT
 }

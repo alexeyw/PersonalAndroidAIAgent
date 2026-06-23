@@ -122,8 +122,39 @@ object NavRoutes {
     /** Background-task monitor (under More). */
     const val TASK_MONITOR: String = "taskmonitor"
 
-    /** App settings (under More). */
+    /**
+     * App settings (under More). This is the route of the nested settings
+     * navigation graph; navigating to it lands on the settings hub
+     * ([SETTINGS_HUB], the graph start destination).
+     */
     const val SETTINGS: String = "settings"
+
+    /** Settings hub (category list + inline Basic controls); graph start destination. */
+    const val SETTINGS_HUB: String = "settings/hub"
+
+    /** Generation category sub-screen. */
+    const val SETTINGS_GENERATION: String = "settings/generation"
+
+    /** Models category sub-screen. */
+    const val SETTINGS_MODELS: String = "settings/models"
+
+    /** Memory category sub-screen. */
+    const val SETTINGS_MEMORY: String = "settings/memory"
+
+    /** Pipelines-&-structured-output category sub-screen. */
+    const val SETTINGS_PIPELINES: String = "settings/pipelines"
+
+    /** Tools-&-workspace category sub-screen. */
+    const val SETTINGS_TOOLS: String = "settings/tools"
+
+    /** Background-&-triggers category sub-screen. */
+    const val SETTINGS_BACKGROUND: String = "settings/background"
+
+    /** Privacy category sub-screen. */
+    const val SETTINGS_PRIVACY: String = "settings/privacy"
+
+    /** About category sub-screen. */
+    const val SETTINGS_ABOUT: String = "settings/about"
 
     /** Prompt-template library (under More). */
     const val PROMPTS: String = "prompts"

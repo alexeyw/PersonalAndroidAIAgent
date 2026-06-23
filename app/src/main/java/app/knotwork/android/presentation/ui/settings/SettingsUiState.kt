@@ -9,6 +9,7 @@ import app.knotwork.android.domain.models.MemoryStats
 import app.knotwork.android.domain.models.ProviderSummary
 import app.knotwork.android.domain.models.TestProbeResult
 import app.knotwork.android.domain.models.ToolApprovalPolicy
+import app.knotwork.design.screens.settings.HubSearchResultRow
 
 /**
  * Top-level Settings screen UI state. Aggregates every slice the
@@ -19,6 +20,9 @@ import app.knotwork.android.domain.models.ToolApprovalPolicy
  * @property identity Current identity snapshot; `null` while the first
  *   read is in flight.
  * @property systemInstructions Live textarea content (user-editable).
+ * @property toolUsageInstruction Extra guidance, prepended to tool-enabled
+ *   prompts, on when and how the agent should call tools (Generation →
+ *   Advanced).
  * @property variableCatalog Catalog of `$VARIABLE` placeholders surfaced
  *   in the chip row beneath the textarea.
  * @property toolApprovalPolicy Currently selected HITL policy.
@@ -33,6 +37,16 @@ import app.knotwork.android.domain.models.ToolApprovalPolicy
  *   response before failing.
  * @property temperature / [topK] / [topP] / [repetitionPenalty] /
  *   [maxContextLength] Sampling parameters mirrored from DataStore.
+ * @property audioMaxDurationSec Maximum voice-input capture length (seconds)
+ *   before recording auto-stops (Generation → Advanced).
+ * @property pipelineMaxNestingDepth Maximum nesting depth allowed for
+ *   PIPELINE-node sub-pipeline expansion (Pipelines → Advanced).
+ * @property structuredOutputMaxRepairs Maximum structured-output repair
+ *   attempts before a node falls back to its failure policy (Pipelines →
+ *   Advanced).
+ * @property memorySummaryDefaultLimit Default number of recent long-term
+ *   memory chunks rendered into the `$MEMORY_SUMMARY` prompt variable
+ *   (Memory → Advanced).
  * @property activeModelMeta Live snapshot of the active model card.
  * @property localModelBackend Wire key of the selected backend
  *   ([LocalBackend.key]).
@@ -91,10 +105,19 @@ import app.knotwork.android.domain.models.ToolApprovalPolicy
  * @property destructiveTypedInput Live text in the typed-confirm field.
  * @property snackbarMessage One-shot message surfaced via the screen-level
  *   SnackbarHost; consumed by [SettingsViewModel.snackbarShown].
+ * @property pendingHighlightAnchor Anchor key of a settings row a search
+ *   deep-link asked to highlight; the owning category sub-screen flashes the row
+ *   and clears it via [SettingsViewModel.highlightConsumed]. `null` when no
+ *   highlight is pending.
+ * @property searchQuery Live settings-search query owned by the ViewModel; blank
+ *   renders the normal hub body, non-blank swaps it for [searchResults].
+ * @property searchResults Ranked search hits for [searchQuery] (empty while the
+ *   query is blank or nothing matches).
  */
 data class SettingsUiState(
     val identity: Identity? = null,
     val systemInstructions: String = "",
+    val toolUsageInstruction: String = "",
     val variableCatalog: List<VariableCatalogChip> = emptyList(),
     val toolApprovalPolicy: ToolApprovalPolicy = ToolApprovalPolicy.DEFAULT,
     val blockDestructiveTools: Boolean = false,
@@ -107,6 +130,10 @@ data class SettingsUiState(
     val topP: Float = SettingsDefaults.TOP_P_DEFAULT,
     val repetitionPenalty: Float = SettingsDefaults.REPETITION_PENALTY_DEFAULT,
     val maxContextLength: Int = SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT,
+    val audioMaxDurationSec: Int = SettingsDefaults.AUDIO_MAX_DURATION_SEC_DEFAULT,
+    val pipelineMaxNestingDepth: Int = SettingsDefaults.PIPELINE_MAX_NESTING_DEPTH_DEFAULT,
+    val structuredOutputMaxRepairs: Int = SettingsDefaults.STRUCTURED_OUTPUT_MAX_REPAIRS_DEFAULT,
+    val memorySummaryDefaultLimit: Int = SettingsDefaults.MEMORY_SUMMARY_DEFAULT_LIMIT_DEFAULT,
     val activeModelMeta: ActiveModelMeta? = null,
     val localModelBackend: String = LocalBackend.CPU.key,
     val lastTestProbeResult: TestProbeResult? = null,
@@ -142,6 +169,9 @@ data class SettingsUiState(
     val destructiveTypedInput: String = "",
     val pendingImport: PendingMemoryImport? = null,
     val snackbarMessage: String? = null,
+    val pendingHighlightAnchor: String? = null,
+    val searchQuery: String = "",
+    val searchResults: List<HubSearchResultRow> = emptyList(),
 )
 
 /**

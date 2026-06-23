@@ -39,3 +39,15 @@ internal fun mockSettingsViewModel(
     val handles = SettingsMockHandles(uiStateFlow = uiStateFlow)
     return vm to handles
 }
+
+/** No-op [SettingsNavActions] for screen tests that don't assert navigation. */
+internal fun settingsNavStub(): SettingsNavActions = SettingsNavActions(
+    onBack = {},
+    onOpenCategory = {},
+    onOpenModels = {},
+    onOpenProvider = {},
+    onOpenAddProvider = {},
+    onOpenManageTools = {},
+    onOpenAllowedDomains = {},
+    onOpenLicenses = {},
+)

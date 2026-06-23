@@ -20,7 +20,6 @@
     <string name="settings_restrictions_approve_never">Never</string>
     <string name="settings_restrictions_block_destructive_subtitle">schedule_task · delegate_task · file write — agent refuses these.</string>
     <string name="settings_restrictions_block_network_subtitle">LiteRT runs offline · cloud providers gated server-side.</string>
-    <string name="settings_restrictions_cap_steps_subtitle">Pause and ask for guidance after N planner cycles.</string>
 
     <!-- LLM parameters card -->
     <string name="settings_row_temperature_title">Temperature</string>
@@ -28,9 +27,14 @@
     <string name="settings_row_top_p_title">Top-P</string>
     <string name="settings_row_repetition_penalty_title">Repetition penalty</string>
     <string name="settings_row_max_context_title">Max context</string>
-    <string name="settings_row_max_steps_title">Max steps</string>
     <string name="settings_row_resume_window_title">Resume window</string>
     <string name="settings_row_approval_window_title">Approval window</string>
+    <string name="settings_row_voice_length_title">Voice input length</string>
+    <string name="settings_tool_usage_helper">Extra guidance, prepended to tool-enabled prompts, on when and how to call tools.</string>
+    <string name="settings_pipeline_cap_steps_title">Cap autonomous steps</string>
+    <string name="settings_pipeline_nesting_depth_title">Max nesting depth</string>
+    <string name="settings_pipeline_structured_repairs_title">Structured-output repairs</string>
+    <string name="settings_memory_summary_limit_title">Memory summary size</string>
     <string name="settings_llm_reset_defaults">Sampling parameters reset to defaults.</string>
 
     <!-- Local model card -->

@@ -13,7 +13,7 @@ import app.knotwork.design.screens.memory.MemoryContent
 import app.knotwork.design.screens.memory.MemoryPreview
 import app.knotwork.design.screens.pipelines.PipelineLibraryContent
 import app.knotwork.design.screens.pipelines.PipelineLibraryPreview
-import app.knotwork.design.screens.settings.SettingsContent
+import app.knotwork.design.screens.settings.SettingsHubContent
 import app.knotwork.design.screens.settings.SettingsPreview
 import app.knotwork.design.screens.tools.ToolsContent
 import app.knotwork.design.screens.tools.ToolsPreview
@@ -86,7 +86,7 @@ class TalkBackHappyPathsTest {
      */
     @Test
     fun happyPath4_settings_default_exposes_focusable_semantics() = assertReachable {
-        SettingsContent(state = SettingsPreview.default())
+        SettingsHubContent(state = SettingsPreview.hubDefault())
     }
 
     /**

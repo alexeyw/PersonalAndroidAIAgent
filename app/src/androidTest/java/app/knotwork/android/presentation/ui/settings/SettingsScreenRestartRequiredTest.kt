@@ -36,7 +36,7 @@ class SettingsScreenRestartRequiredTest {
         )
 
         composeTestRule.setContent {
-            MaterialTheme { SettingsScreen(viewModel = vm) }
+            MaterialTheme { ModelsSettingsScreen(viewModel = vm, nav = settingsNavStub()) }
         }
 
         composeTestRule.onNodeWithTag(testTag = RESTART_BANNER_TEST_TAG).assertIsDisplayed()
@@ -52,7 +52,7 @@ class SettingsScreenRestartRequiredTest {
         )
 
         composeTestRule.setContent {
-            MaterialTheme { SettingsScreen(viewModel = vm) }
+            MaterialTheme { ModelsSettingsScreen(viewModel = vm, nav = settingsNavStub()) }
         }
 
         composeTestRule.onNodeWithTag(testTag = RESTART_BANNER_TEST_TAG).assertDoesNotExist()

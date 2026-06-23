@@ -367,7 +367,7 @@ The pane has three tabs:
   retrievals: each one is logged as
   `Memory: query='…' → N hits (score, …)`, echoing the query, how many
   chunks were surfaced, and their similarity scores. Turn on
-  **Settings → Privacy → Verbose memory logging** to expand each line
+  **Settings → Memory → (Advanced) Verbose memory logging** to expand each line
   with a per-hit text snippet and score.
 - **Pipeline trace** — a structured view of the pipeline run as a tree
   of node spans (name, duration, status). Useful for understanding
@@ -506,8 +506,8 @@ Destructive tools never execute from a notification — it offers
 **Deny** and a **Review in chat** link to the regular typed-confirm
 card. Clarifying questions park the same way under an **Agent needs
 your input** notification that deep-links back to the chat. Parked
-requests expire after the **Settings → Approval window** period
-(default 24 hours); an expired run fails with *Approval window
+requests expire after the **Settings → Background & triggers → Approval window**
+period (default 24 hours); an expired run fails with *Approval window
 expired*.
 
 ---
@@ -549,7 +549,7 @@ Approval and clarification requests survive process death: the staged
 request is stored persistently, and acting on the notification resumes
 the run from its checkpoint even if the app was killed in between. An
 unanswered request waits for the **Approval window** setting (default
-24 hours, Settings → LLM parameters) and then fails the run with
+24 hours, Settings → Background & triggers → Advanced) and then fails the run with
 *Approval window expired*.
 
 ### Run history and retention
@@ -998,7 +998,7 @@ conversation named after the task, e.g. *Scheduled: check the news*.
 When a scheduled run finishes, the app posts a **Task completed**
 notification with the first line of the answer — or **Task failed**
 with the reason — and tapping it opens the conversation. The
-announcement can be turned off with **Settings → Notifications →
+announcement can be turned off with **Settings → Background & triggers →
 Scheduled task results** (on by default).
 
 ### Risk levels and human-in-the-loop
@@ -1019,9 +1019,9 @@ When approval is required, the mini-console shows inline
 before continuing the pipeline; deny cleanly stops the call without
 killing the run.
 
-The **Human-in-the-loop** toggle in **Settings → Restrictions** lets
-you require approval for **every** tool call, regardless of its risk
-level. Turn it on if you want to confirm even read-only lookups.
+The **Approve tool calls** control in **Settings → Tools & workspace** lets
+you require approval for **every** tool call (`All`), regardless of its risk
+level. Choose it if you want to confirm even read-only lookups.
 
 ### Adding an MCP server
 
@@ -1065,8 +1065,8 @@ The header shows a **quota indicator** — how much of the workspace
 budget is used out of its limit, with a fill bar. As the workspace fills
 it ramps from neutral to amber (near the limit) to red. If it is full,
 a banner explains that the agent's writes are being refused until space
-is freed; delete files or raise the limit (Settings → Tools → workspace
-size) to recover.
+is freed; delete files or raise the limit (Settings → Tools & workspace →
+Advanced → Workspace max total size) to recover.
 
 Pull down to refresh the listing.
 
@@ -1247,211 +1247,233 @@ chat history or memory.
 
 ## Settings
 
-The **Settings** screen groups every user-tunable knob into nine
-cards. The top bar carries the app version, channel and build date
-plus a magnifying-glass action for in-settings search.
+Settings open on a **hub**: a search field, a short **Basic** block of the
+handful of knobs most people touch, and a list of eight categories. Tapping a
+category opens a focused sub-screen that shows its Basic settings immediately
+and tucks the rest behind an in-category **"Advanced — change deliberately"**
+disclosure. The redesign changed only *where* each setting lives, not *what* it
+does — every existing control survives, just grouped by topic instead of one
+long scroll. The top bar carries the app version, channel and build date.
 
-### Identity
+For a marketing-style preview of the hub see
+[`docs/images/hero-settings.png`](images/hero-settings.png)
+(dark variant: [`hero-settings-dark.png`](images/hero-settings-dark.png)).
 
-An avatar + label confirm the device identity is anonymous and
-local. The meta line shows the truncated device id and whether your
-API keys live in the Android Keystore (hardware-backed) or — on
-constrained devices — in encrypted preferences.
+### Basic vs Advanced
 
-### System Instructions
+Every category leads with its **Basic** settings — the ones that change everyday
+behaviour and are safe to adjust. The **Advanced** disclosure holds tuning
+parameters (sampling internals, retrieval thresholds, workspace and HTTP limits,
+retention windows) that have sensible defaults and rarely need changing; the
+"change deliberately" label is a reminder, not a lock. Six cross-category Basic
+controls are also surfaced inline on the hub so you never have to open a
+sub-screen for them: **System instructions**, **Inference backend**, **Approve
+tool calls**, **Block destructive tools**, **Long-running tasks** notifications
+and **Send anonymous crash reports**.
 
-A monospaced multi-line field whose content is prepended to every
-system prompt the agent sends. Tap a chip to insert one of the
-built-in variables (`$DATE`, `$TIME`, `$LANG`, `$LOCATION`,
-`$USER`, `$DEVICE`) — they expand fresh on every prompt render.
-The counter shows live character usage against the 4 000-character
-limit.
+### Search the settings
 
-### Restrictions · Human-in-the-loop
+The magnifying-glass field at the top of the hub searches every setting by name,
+description, owning category and a set of synonyms — so typing `max` surfaces
+*Cap autonomous steps* (via the synonym *max steps*), *Max context length*,
+*Max memory chunks* and more. The matched text is highlighted in each result, and
+a result row shows its category **breadcrumb** and **Basic/Advanced** tier (plus
+a `≈ "synonym"` chip when a synonym is what matched). Tapping a result opens the
+owning category, expands its Advanced section when the target lives there, and
+scrolls to and briefly flashes the row (a static accent under reduced motion). A
+calm *"no settings match"* state offers a one-tap **Clear**. The index is built
+from the settings registry, so any setting added to the app becomes searchable
+automatically.
 
-- **Approve tool calls** — segmented control switching between
-  `All` (prompt for every call), `Sensitive +` (only sensitive or
-  destructive tools — recommended default), and `Never` (no
-  prompts at all; reserved for known-safe pipelines).
-- **Block destructive tools** — when on, destructive tools are
-  refused outright rather than going through the HITL prompt.
-  Useful when the agent runs unattended.
-- **Block network from local model** — when on, every cloud
-  provider returns `null` to the inference pipeline and only the
-  on-device LiteRT engine plus LAN-local Ollama remain reachable.
-- **Cap autonomous steps** — upper bound on planner iterations
-  per user message; the agent pauses for guidance when the cap is
-  hit.
+See [`docs/images/settings-search.png`](images/settings-search.png)
+(dark variant: [`settings-search-dark.png`](images/settings-search-dark.png))
+for the search results in action.
 
-### LLM Parameters
+### Generation
 
-The "Reset to defaults" action restores every slider in this card.
+System-prompt and sampling controls.
 
-- **Temperature** (0.0 – 2.0) — higher values produce more varied
-  output.
+- **System instructions** *(Basic)* — a monospaced multi-line field whose content
+  is prepended to every system prompt the agent sends. Tap a chip to insert one
+  of the built-in variables (`$DATE`, `$TIME`, `$LANG`, `$LOCATION`, `$USER`,
+  `$DEVICE`) — they expand fresh on every prompt render. The counter shows live
+  character usage against the 4 000-character limit.
+- **Tool-usage instruction** *(Advanced)* — extra free-text guidance on when and
+  how the agent should call tools, appended to the tool-calling prompt.
+- **Temperature** (0.0 – 2.0) — higher values produce more varied output.
 - **Top-K** (1 – 100) — keeps only the K most likely tokens.
 - **Top-P** (0.0 – 1.0) — nucleus sampling threshold.
-- **Repetition penalty** (1.0 – 2.0) — `1.0` is neutral; higher
-  values discourage the model from repeating recent tokens.
-- **Max context** (512 – 8 192) — working window in tokens.
-- **Max steps** (5 – 100) — pipeline-iteration cap (same value
-  as Restrictions → Cap autonomous steps; the two surfaces share
-  the underlying preference).
-- **Resume window** (1 – 168 hours, default 48) — how long an
-  interrupted run stays resumable from its checkpoint. Older
-  interrupted runs only offer **Discard** — their recorded context
-  grows stale with time.
-- **Approval window** (1 – 168 hours, default 24) — how long a run
-  parked on an unanswered tool approval or clarifying question waits
-  for your response before failing with *Approval window expired*.
+- **Repetition penalty** (1.0 – 2.0) — `1.0` is neutral; higher values discourage
+  the model from repeating recent tokens.
+- **Max context length** (512 – 8 192) — working window in tokens.
+- **Voice-input length** (seconds, default 30) — the auto-stop limit for voice
+  capture before transcription.
 
-### Local Model
+### Models
 
-- Active-model card showing name, file size, context window,
-  quantization and download date. Tap **Change** to pick a
-  different model; **Manage** opens the full Models browser.
-- **Inference backend** — drop-down picking the engine (NPU
-  preferred, falls back to GPU then CPU).
-- **Test backend** — runs a fixed prompt-probe and persists the
-  measurement (`Last probe · N tok in T s · K tok/s`) so the row
-  keeps the metric across navigation. Changing the backend
-  surfaces a restart banner — tap **Restart** to apply the
-  change immediately.
+The active on-device model, its backend, and external cloud providers.
 
-### External Providers
+- **Active-model card** — name, file size, context window, quantization and
+  download date, with an **Active** badge.
+- **Inference backend** *(Basic)* — drop-down picking the engine (NPU preferred,
+  falling back to GPU then CPU). Changing it surfaces a restart banner — tap
+  **Restart** to apply immediately.
+- **Test backend** — runs a fixed prompt-probe and persists the measurement
+  (`Last probe · N tok in T s · K tok/s`) so the row keeps the metric across
+  navigation.
+- **Manage** — opens the full Models browser to discover and install on-device
+  models.
+- **External providers** *(Basic link)* — each provider (**OpenAI**,
+  **Anthropic**, **Google**, **DeepSeek**, **Ollama**) collapses to a row showing
+  the masked key fingerprint and selected model; tap to open the provider editor.
+  The Ollama row carries a **LAN** pill and base URL. **+ Add provider** surfaces
+  an unconfigured provider without scrolling. Leaving every cloud row blank keeps
+  the agent fully offline.
+- **Default pipeline** *(Advanced link)* — picks which pipeline new chats use by
+  default.
 
-Each provider — **OpenAI**, **Anthropic**, **Google**,
-**DeepSeek**, **Ollama** — collapses to a single row showing the
-masked key fingerprint and selected model. Tap the row to open
-the standalone provider editor. The Ollama row additionally
-carries a **LAN** pill plus the base URL. Use **+ Add provider**
-to surface an unconfigured provider's editor without scrolling.
-Leaving every cloud row blank keeps the agent fully offline.
-
-The provider editor also carries a **Retry policy** that applies to every
-cloud provider (chat and cloud embeddings alike). Transient failures —
-rate-limits (HTTP 429), server errors (5xx) and connection or read timeouts
-— are retried with exponential backoff; authentication errors are not
-retried, and stopping a run cancels cleanly. Two sliders tune it:
-
-- **Max attempts** (1–5, default 3) — the total number of tries per call.
-  Set it to **1** to disable retries entirely.
-- **Base delay** (100–10 000 ms, default 1 000) — the initial backoff before
-  the first retry; later retries back off further.
-
-Each retry shows up on the agent console as a muted line such as
-`Cloud retry 1/2 for openai`.
+The provider editor's **Retry policy** applies to every cloud provider (chat and
+cloud embeddings alike). Transient failures — rate-limits (HTTP 429), server
+errors (5xx) and connection/read timeouts — are retried with exponential
+backoff; authentication errors are not retried, and stopping a run cancels
+cleanly. **Max attempts** (1–5, default 3; set to **1** to disable retries) and
+**Base delay** (100–10 000 ms, default 1 000) tune it. Each retry shows on the
+agent console as a muted line such as `Cloud retry 1/2 for openai`.
 
 ### Memory
 
-Four-cell stat grid — **Chunks / Size / Threads / Avg score** — an
-**Auto-extract from conversations** toggle (default on; distils
-durable facts from finished chats into memory — see
-[Auto-extract from conversations](#auto-extract-from-conversations)),
-and an **Auto-summarize threshold** slider (`%` of the memory context
-budget).
+Long-term memory extraction, chat-history compression, retrieval tuning and data
+actions (behaviour unchanged — see [Long-term memory](#long-term-memory) for the
+full feature).
 
-**Tuning sliders.** Five sliders expose the retrieval and housekeeping
-parameters that otherwise only have code defaults:
+Basic:
 
-- **Search results (top-K)** (1–20, default 5) — how many ranked chunks
-  a single retrieval injects into a node's context block.
-- **Similarity threshold** (0.30–0.90, default 0.55) — the minimum
-  cosine-similarity score a chunk must reach to surface; raise it for
-  stricter matches, lower it if obvious facts are not being found.
-- **Recency half-life** (7–180 days, default 30) — how fast a non-pinned
-  chunk's score decays with age; lower values bias retrieval toward
-  fresh facts.
-- **Compaction age** (7–90 days, default 30) — how old a non-pinned chunk
-  must be before background compaction may cluster and summarise it.
-- **Max stored chunks** (1 000–20 000, default 5 000) — the hard ceiling;
-  crossing it triggers an out-of-schedule compaction pass.
+- **Auto-extract from conversations** (default on) — distils durable facts from
+  finished chats into memory.
+- **Background compaction** (default on) — the daily charging-and-idle worker
+  consolidates stale clusters.
+- **Compress long chat history** (default on) — older turns of a long session are
+  summarised by the local model in the background and shown to the agent as an
+  *"Earlier conversation (summarized)"* block ahead of the recent, verbatim
+  turns.
 
-Each slider only offers in-range values; if a value is somehow rejected
-(for example by a future automated edit), an inline message appears and
-the change is discarded rather than saved.
+Advanced:
 
-**Chat-history compression.** Three controls keep a long conversation from
-overflowing the context window or crowding out memory and tool results:
+- **Auto-summarize threshold** — `%` of the memory context budget.
+- **Search results (top-K)** (1–20, default 5), **Similarity threshold**
+  (0.30–0.90, default 0.55), **Recency half-life** (7–180 days, default 30),
+  **Compaction age** (7–90 days, default 30) and **Max stored chunks**
+  (1 000–20 000, default 5 000) — the retrieval and housekeeping parameters.
+- **Compression threshold** (500–32 000 tokens, default 3 500) and **Live
+  window** (2–50 messages, default 10) — tune chat-history compression. Keep the
+  threshold comfortably below **Max context** so the summary plus the live window
+  still fit.
+- **Memory summary default limit** (1–50) — how many recent chunks the
+  `$MEMORY_SUMMARY` prompt variable injects.
+- **Embedding model** — on-device Universal Sentence Encoder, OpenAI or Ollama.
+  Switching applies on the next embed/retrieval; a persistent
+  *"re-embed recommended"* banner appears (with an inline **Re-embed** button)
+  until a full re-embed or wipe re-aligns the store, or you switch back.
+- **Verbose memory logging** (off by default) — expands every memory-retrieval
+  console line with a per-hit snippet and similarity score, and logs which chunks
+  background compaction merged. A local diagnostic only — nothing leaves the
+  device.
+- **Data actions** — **Export base** (SAF picker → JSON blob), **Re-embed**
+  (re-runs the embedder over every chunk, with a progress bar), and **Clear** (a
+  typed-confirm dialog that wipes every chunk, pinned included).
 
-- **Compress long chat history** (toggle, default on) — when on, once a
-  session's history grows past the threshold below, the older turns are
-  summarised by the local model in the background and shown to the agent as
-  an *"Earlier conversation (summarized)"* block ahead of the recent,
-  verbatim turns. Turn it off to always feed the full verbatim history.
-- **Compression threshold** (500–32 000 tokens, default 3 500) — the
-  approximate history size above which compression kicks in. Keep it
-  comfortably below your **Max context** so the summary plus the recent
-  window still fit.
-- **Live window** (2–50 messages, default 10) — how many of the most recent
-  messages are always kept verbatim, never folded into the summary.
+Each slider only offers in-range values; a rejected value shows an inline message
+and is discarded rather than saved.
 
-Summarisation runs off the active-run path (the same charging/idle-friendly,
-agent-not-busy gating as memory work), so if a summary is not ready when a
-run needs it, the history is simply trimmed to the live window for that run
-and the agent console notes it. Verbose diagnostics ride the same
-**Verbose memory logging** flag.
+### Pipelines & structured output
 
-A **Background compaction** toggle (default on) controls whether the
-daily charging-and-idle worker consolidates stale clusters, and an
-**Embedding model** dropdown selects the active provider (on-device
-Universal Sentence Encoder, OpenAI, or Ollama). Switching the provider
-applies on the next embed/retrieval; existing chunks keep their old
-vectors until you run **Re-embed** (or import flags them for a
-background re-embed). After a switch, a persistent warning banner
-appears under the dropdown — *"Embeddings were created with a different
-provider — re-embed recommended"* — with an inline button that runs the
-same **Re-embed** action. The banner disappears once a full re-embed
-(or a memory wipe) re-aligns the store, or if you switch back to the
-original provider.
+- **Cap autonomous steps** *(Basic)* (5 – 100) — upper bound on planner
+  iterations per user message; the agent pauses for guidance when the cap is hit.
+- **Max nesting depth** *(Advanced)* — how deep `PIPELINE` nodes may recurse.
+- **Structured-output repairs** *(Advanced)* — how many times the
+  structured-output gate re-asks the model to fix malformed JSON before falling
+  back to the per-node failure policy.
+- **Retry policy** *(Advanced link)* — opens the provider detail screen (the same
+  retry sliders described under Models).
 
-The action trio:
+### Tools & workspace
 
-- **Export base** — opens a SAF picker; saves the entire memory
-  table as a JSON blob.
-- **Re-embed** — re-runs the embedder over every chunk; an inline
-  progress bar tracks completion.
-- **Clear** — opens a typed-confirm dialog ("type `yes` to
-  confirm"); on confirm wipes every chunk, pinned included.
+Tool approval, safety guardrails, and the agent workspace / HTTP limits.
 
-### Notifications
+Basic:
 
-- **Long-running tasks** — when on, a low-importance system
-  notification fires when a backgrounded pipeline run exceeds the
-  long-running threshold.
-- **Scheduled task results** — when on, finishing a scheduled
-  background task posts a **Task completed** notification with the
-  first line of the answer (or **Task failed** with the reason);
-  tapping it opens the conversation the result landed in. On by
-  default.
+- **Approve tool calls** — segmented control: `All` (prompt for every call),
+  `Sensitive +` (only sensitive/destructive — recommended), `Never` (no prompts;
+  reserved for known-safe pipelines).
+- **Block destructive tools** — when on, destructive tools are refused outright
+  rather than going through the HITL prompt. Useful when the agent runs
+  unattended.
+- **Block network from local model** — when on, every cloud provider returns
+  `null` to the inference pipeline and only the on-device LiteRT engine plus
+  LAN-local Ollama remain reachable.
+- **Manage tools / MCP servers** *(link)* — enable tools, set per-tool risk
+  overrides, add MCP servers.
+
+Advanced:
+
+- **Tool-call timeout**, **Workspace max file size**, **Workspace max total
+  size**, **Workspace read token budget** and **HTTP response cap** — the
+  workspace and `http_request` limits.
+- **Files / allowed domains** *(link)* — the `http_request` domain allowlist and
+  the workspace file browser.
+
+### Background & triggers
+
+Notifications and the windows that govern parked / resumable runs.
+
+Basic:
+
+- **Long-running tasks** — when on, a low-importance system notification fires
+  when a backgrounded pipeline run exceeds the long-running threshold.
+- **Scheduled task results** — when on, finishing a scheduled background task
+  posts a **Task completed** notification with the first line of the answer (or
+  **Task failed** with the reason); tapping it opens the conversation the result
+  landed in. On by default.
+
+Advanced:
+
+- **Resume window** (1 – 168 hours, default 48) — how long an interrupted run
+  stays resumable from its checkpoint. Older interrupted runs only offer
+  **Discard** — their recorded context grows stale with time.
+- **Approval window** (1 – 168 hours, default 24) — how long a run parked on an
+  unanswered tool approval or clarifying question waits before failing with
+  *Approval window expired*.
 
 ### Privacy
 
-- **Send anonymous crash reports** — forwards stack traces +
-  device meta + active pipeline / model identifiers to Firebase
-  Crashlytics. Off by default; debug builds never report. Full
-  policy in [SECURITY.md](../SECURITY.md).
-- **Verbose memory logging** — off by default. When on, the agent
-  console expands every memory-retrieval line with a per-hit text
-  snippet and similarity score (see [Console](#console)), and the
-  background compaction pass logs which chunks it merged. A local
-  diagnostic only — nothing leaves the device.
-- **Keep run history per chat** — slider (5–100, default 20): how many
-  most-recent pipeline runs each conversation keeps. Older finished
-  runs and their traces are deleted by the daily maintenance pass (see
+- **Send anonymous crash reports** *(Basic)* — forwards stack traces + device
+  meta + active pipeline / model identifiers to Firebase Crashlytics. Off by
+  default; debug builds never report. Full policy in
+  [SECURITY.md](../SECURITY.md).
+- **Keep run history per chat** *(Advanced)* (5–100, default 20) — how many
+  most-recent pipeline runs each conversation keeps. Older finished runs and
+  their traces are deleted by the daily maintenance pass (see
   [Background tasks](#background-tasks)).
-- **Run history max age** — slider (7–180 days, default 30): finished
-  runs older than this are deleted regardless of the per-chat count.
-  Runs still waiting on an approval or clarification are never removed
-  by retention.
-- **Reset all settings** — a confirm dialog that restores every
-  tunable setting to its recommended default in one step. It touches
-  *settings only*: your chats, long-term memory, pipelines, presets,
-  skills, MCP/cloud connections, the `http_request` allowlist, custom
-  prompts, the active embedding provider, and API keys are all left
-  untouched. The defaults are sensible starting points rather than
-  tuned optimums — they are refined as the app sees real-world use, so
-  resetting is a safe way to get back to a known-good baseline.
+- **Run history max age** *(Advanced)* (7–180 days, default 30) — finished runs
+  older than this are deleted regardless of the per-chat count. Runs still
+  waiting on an approval or clarification are never removed by retention.
+
+### About
+
+- **Identity card** — an avatar + label confirm the device identity is anonymous
+  and local. The meta line shows the truncated device id and whether your API
+  keys live in the Android Keystore (hardware-backed) or — on constrained
+  devices — in encrypted preferences.
+- **App version & licenses** *(link)* — build info and the open-source license
+  list.
+- **Reset all settings** *(Advanced)* — a confirm dialog that restores every
+  tunable setting to its recommended default in one step. It touches *settings
+  only*: your chats, long-term memory, pipelines, presets, skills, MCP/cloud
+  connections, the `http_request` allowlist, custom prompts, the active embedding
+  provider, and API keys are all left untouched. The defaults are sensible
+  starting points rather than tuned optimums — they are refined as the app sees
+  real-world use, so resetting is a safe way to get back to a known-good
+  baseline.
 
 ---
 
@@ -1651,13 +1673,13 @@ model fails:
 Without an NPU or a usable GPU, the local model runs on CPU only,
 which is noticeably slower (especially for the first few tokens):
 
-- Open **Settings → Local model** and tap **Test backend** to confirm
+- Open **Settings → Models** and tap **Test backend** to confirm
   which backend the model is actually using.
 - Try a smaller model from the **Models** screen — even a 1B-2B
   parameter model can be substantially faster than a 7B+ one on
   CPU.
-- Lower **Max context** in **Settings → LLM parameters**. Shorter
-  contexts mean less work per token.
+- Lower **Max context length** in **Settings → Generation → Advanced**.
+  Shorter contexts mean less work per token.
 
 ### A tool says it is unavailable
 
@@ -1665,7 +1687,7 @@ Two common causes:
 
 - A built-in tool that delegates to a cloud provider (for example,
   **delegate_task**) requires at least one cloud API key in
-  **Settings → External Providers**. Without a key it is hidden
+  **Settings → Models → External providers**. Without a key it is hidden
   from the agent.
 - An MCP-server tool requires the server itself to be reachable.
   Open the **Tools** screen and confirm the server is still listed
@@ -1684,10 +1706,11 @@ default**, or rebind the chat by creating a new one.
 
 ### The agent stopped mid-run
 
-Long pipelines can hit the **Max Steps** ceiling. The console will
+Long pipelines can hit the **Cap autonomous steps** ceiling. The console will
 show a stop event with the step count. If you legitimately need
-more iterations, raise the ceiling in **Settings → LLM Parameters →
-Max Steps**. If the run is looping unproductively, lower it instead.
+more iterations, raise the ceiling in **Settings → Pipelines & structured
+output → Cap autonomous steps**. If the run is looping unproductively, lower it
+instead.
 
 ### Memory search isn't finding an obvious entry
 
