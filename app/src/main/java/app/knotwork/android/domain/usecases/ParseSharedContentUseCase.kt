@@ -28,7 +28,9 @@ class ParseSharedContentUseCase @Inject constructor() {
      */
     operator fun invoke(mimeType: String?, text: String?, streamUri: String?): SharedPayload {
         val normalisedText = text?.trim()?.takeIf { it.isNotEmpty() }
-        val isImage = mimeType?.startsWith(IMAGE_MIME_PREFIX) == true
+        // MIME types are case-insensitive (RFC 2045), and the intent-filter
+        // matches them case-insensitively, so normalise before the prefix test.
+        val isImage = mimeType?.lowercase()?.startsWith(IMAGE_MIME_PREFIX) == true
         val imageUri = streamUri?.takeIf { it.isNotBlank() && isImage }
         return SharedPayload(text = normalisedText, imageUri = imageUri)
     }

@@ -113,6 +113,12 @@ import app.knotwork.design.screens.settings.HubSearchResultRow
  *   renders the normal hub body, non-blank swaps it for [searchResults].
  * @property searchResults Ranked search hits for [searchQuery] (empty while the
  *   query is blank or nothing matches).
+ * @property shareTargetPipelineId Id of the pipeline bound to the share target,
+ *   or `null` when the surface is unbound (inert).
+ * @property quickSettingsTilePipelineId Id of the pipeline bound to the Quick
+ *   Settings tile, or `null` when the surface is unbound (inert).
+ * @property bindablePipelines Pipelines offered in the Background binding
+ *   pickers (id + display name), in library order.
  */
 data class SettingsUiState(
     val identity: Identity? = null,

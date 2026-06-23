@@ -39,6 +39,13 @@ class ParseSharedContentUseCaseTest {
     }
 
     @Test
+    fun `given uppercase image mime when invoked then keeps the image`() {
+        val result = useCase(mimeType = "IMAGE/JPEG", text = null, streamUri = "content://media/9")
+
+        assertEquals("content://media/9", result.imageUri)
+    }
+
+    @Test
     fun `given non-image mime with a stream when invoked then drops the stream`() {
         val result = useCase(mimeType = "application/pdf", text = "doc", streamUri = "content://docs/1")
 
