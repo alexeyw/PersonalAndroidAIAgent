@@ -4,21 +4,17 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.app.TaskStackBuilder
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import androidx.core.net.toUri
 import app.knotwork.android.R
 import app.knotwork.android.domain.constants.NotificationChannels
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.ScheduledTaskNotifier
-import app.knotwork.android.presentation.ui.MainActivity
-import app.knotwork.android.presentation.ui.navigation.NavRoutes
+import app.knotwork.android.presentation.ui.navigation.ChatDeepLink
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.firstOrNull
 import javax.inject.Inject
@@ -28,8 +24,8 @@ import javax.inject.Singleton
  * Default [ScheduledTaskNotifier] backed by [NotificationManagerCompat].
  *
  * Lives in the presentation layer (next to [ApprovalNotificationManager])
- * because the tap action deep-links into [MainActivity] via the existing
- * `knotwork://chat/{threadId}` navigation pattern — a dependency the data
+ * because the tap action deep-links into the app via the shared [ChatDeepLink]
+ * (`knotwork://chat/{threadId}`) navigation pattern — a dependency the data
  * layer must not carry. Background components consume the domain-level
  * [ScheduledTaskNotifier] interface and stay presentation-agnostic.
  *
@@ -91,28 +87,17 @@ class ScheduledTaskNotifierImpl @Inject constructor(
     }
 
     /**
-     * Builds the tap action: an activity [PendingIntent] whose `ACTION_VIEW`
-     * uri matches the `knotwork://chat/{threadId}` pattern registered on the
-     * chat destination, so Navigation routes straight into the session.
-     * [TaskStackBuilder] synthesises the back stack — pressing Back from the
-     * deep-linked chat lands on the app's start destination instead of the
-     * launcher.
+     * Builds the tap action: an activity [PendingIntent] deep-linking into the
+     * session via the shared [ChatDeepLink] back-stack builder (the
+     * `knotwork://chat/{threadId}` pattern registered on the chat destination),
+     * so Back from the deep-linked chat lands on the app's start destination
+     * instead of the launcher.
      */
-    private fun chatDeepLinkIntent(sessionId: String): PendingIntent? {
-        val intent = Intent(
-            Intent.ACTION_VIEW,
-            "${NavRoutes.DEEP_LINK_SCHEME}://${NavRoutes.chatRoute(sessionId)}".toUri(),
-            context,
-            MainActivity::class.java,
+    private fun chatDeepLinkIntent(sessionId: String): PendingIntent? =
+        ChatDeepLink.backStack(context, sessionId).getPendingIntent(
+            notificationId(sessionId),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        return TaskStackBuilder.create(context).run {
-            addNextIntentWithParentStack(intent)
-            getPendingIntent(
-                notificationId(sessionId),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-        }
-    }
 
     private fun hasPostNotificationsPermission(): Boolean = ContextCompat.checkSelfPermission(
         context,

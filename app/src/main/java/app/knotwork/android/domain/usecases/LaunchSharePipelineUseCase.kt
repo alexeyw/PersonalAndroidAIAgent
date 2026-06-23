@@ -1,6 +1,5 @@
 package app.knotwork.android.domain.usecases
 
-import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.EntrySurface
 import app.knotwork.android.domain.models.MessageAttachment
@@ -42,11 +41,20 @@ class LaunchSharePipelineUseCase @Inject constructor(
      * creates a bound session and enqueues a run over the shared content.
      *
      * @param payload The normalised shared content (text and/or image URI).
+     * @param imageSessionName Localised name for an image-only share's session
+     *   (the caller resolves it from a string resource — the domain layer keeps
+     *   no user-visible literals).
+     * @param contentSessionName Localised name fallback when no readable text or
+     *   image is present.
      * @return [ShareLaunchResult.Launched] with the new session id,
      *   [ShareLaunchResult.NotConfigured] when nothing is bound, or
      *   [ShareLaunchResult.NothingShared] when the payload had no content.
      */
-    suspend operator fun invoke(payload: SharedPayload): ShareLaunchResult {
+    suspend operator fun invoke(
+        payload: SharedPayload,
+        imageSessionName: String,
+        contentSessionName: String,
+    ): ShareLaunchResult {
         if (payload.isEmpty) return ShareLaunchResult.NothingShared
         val pipelineId = resolveSurfacePipeline(EntrySurface.SHARE) ?: return ShareLaunchResult.NotConfigured
 
@@ -59,24 +67,21 @@ class LaunchSharePipelineUseCase @Inject constructor(
         chatRepository.saveSession(
             ChatSession(
                 id = sessionId,
-                name = sessionName(payload.text, attachment != null),
+                name = sessionName(payload.text, attachment != null, imageSessionName, contentSessionName),
                 updatedAt = System.currentTimeMillis(),
                 pipelineId = pipelineId,
             ),
         )
 
-        // Image-only message: the bubble shows just the thumbnail (empty display
-        // content) while the internal default instruction travels the graph.
-        val prompt = payload.text?.trim()?.takeIf { it.isNotEmpty() }
-            ?: DefaultPrompts.IMAGE_ONLY_DEFAULT_INSTRUCTION
-        val displayContent = if (hasText) null else ""
+        // Prompt / display content follow the shared image-only contract.
+        val content = AttachmentMessageContent.resolve(payload.text?.trim().orEmpty())
 
         agentOrchestrator(
             sessionId = sessionId,
-            userPrompt = prompt,
+            userPrompt = content.prompt,
             pipelineId = pipelineId,
             attachment = attachment,
-            displayContent = displayContent,
+            displayContent = content.displayContent,
             origin = RunOrigin.SHARE,
         )
         return ShareLaunchResult.Launched(sessionId)
@@ -89,25 +94,24 @@ class LaunchSharePipelineUseCase @Inject constructor(
             null
         }
 
-    /** Derives a session name from the shared text, falling back to an image label. */
-    private fun sessionName(text: String?, hasImage: Boolean): String {
+    /** Derives a session name from the shared text, falling back to a caller-localised label. */
+    private fun sessionName(
+        text: String?,
+        hasImage: Boolean,
+        imageSessionName: String,
+        contentSessionName: String,
+    ): String {
         val firstLine = text?.lineSequence()?.firstOrNull { it.isNotBlank() }?.trim()
         return when {
             !firstLine.isNullOrEmpty() -> firstLine.take(SESSION_NAME_MAX_LENGTH)
-            hasImage -> SHARED_IMAGE_SESSION_NAME
-            else -> SHARED_SESSION_NAME
+            hasImage -> imageSessionName
+            else -> contentSessionName
         }
     }
 
     private companion object {
         /** Max characters of shared text used for the auto-generated session name. */
         const val SESSION_NAME_MAX_LENGTH = 40
-
-        /** Session name for an image-only share. */
-        const val SHARED_IMAGE_SESSION_NAME = "Shared image"
-
-        /** Session name fallback when no readable text or image is present. */
-        const val SHARED_SESSION_NAME = "Shared content"
     }
 }
 

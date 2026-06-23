@@ -30,10 +30,12 @@ import app.knotwork.android.domain.usecases.ImportPipelineUseCase
 import app.knotwork.android.domain.usecases.LoadPipelineFromPresetUseCase
 import app.knotwork.android.domain.usecases.LoadPipelineUseCase
 import app.knotwork.android.domain.usecases.RenamePipelineUseCase
+import app.knotwork.android.domain.usecases.ResolveSurfacePipelineUseCase
 import app.knotwork.android.domain.usecases.SavePipelineAsPresetUseCase
 import app.knotwork.android.domain.usecases.SavePipelineUseCase
 import app.knotwork.android.domain.usecases.SavePromptAsPresetUseCase
 import app.knotwork.android.domain.usecases.SavePromptTemplateUseCase
+import app.knotwork.android.domain.usecases.SetSurfacePipelineUseCase
 import app.knotwork.android.presentation.ui.common.UiText
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -160,6 +162,8 @@ class OrchestratorViewModelTest {
         duplicatePipelineUseCase,
         deletePipelineUseCase,
         createPipelineUseCase,
+        mockk<ResolveSurfacePipelineUseCase>(relaxed = true),
+        mockk<SetSurfacePipelineUseCase>(relaxed = true),
         getPromptTemplatesUseCase,
         savePromptTemplateUseCase,
         savePipelineAsPresetUseCase,

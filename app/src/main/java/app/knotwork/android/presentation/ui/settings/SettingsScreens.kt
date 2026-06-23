@@ -277,14 +277,9 @@ fun BackgroundSettingsScreen(viewModel: SettingsViewModel, nav: SettingsNavActio
             options = uiState.bindablePipelines,
             selectedId = selectedId,
             onSelect = { pipelineId ->
-                when (surface) {
-                    EntrySurface.SHARE -> viewModel.setShareTargetPipelineId(pipelineId)
-                    EntrySurface.QUICK_TILE -> {
-                        viewModel.setQuickSettingsTilePipelineId(pipelineId)
-                        // Offer to pin the tile in context, once the user has bound it.
-                        if (pipelineId != null) requestAddDutyTile(context)
-                    }
-                }
+                viewModel.setSurfacePipeline(surface, pipelineId)
+                // Offer to pin the tile in context, once the user has bound it.
+                if (surface == EntrySurface.QUICK_TILE && pipelineId != null) requestAddDutyTile(context)
                 pickerSurface = null
             },
             onDismiss = { pickerSurface = null },

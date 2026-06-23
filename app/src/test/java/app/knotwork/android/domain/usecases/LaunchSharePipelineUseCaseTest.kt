@@ -29,9 +29,12 @@ class LaunchSharePipelineUseCaseTest {
     private val useCase =
         LaunchSharePipelineUseCase(resolveSurfacePipeline, chatRepository, attachmentStore, orchestrator)
 
+    private suspend fun launch(payload: SharedPayload): ShareLaunchResult =
+        useCase(payload, imageSessionName = "Shared image", contentSessionName = "Shared content")
+
     @Test
     fun `given empty payload when invoked then reports NothingShared`() = runTest {
-        val result = useCase(SharedPayload(text = null, imageUri = null))
+        val result = launch(SharedPayload(text = null, imageUri = null))
 
         assertEquals(ShareLaunchResult.NothingShared, result)
     }
@@ -40,7 +43,7 @@ class LaunchSharePipelineUseCaseTest {
     fun `given no bound share pipeline when invoked then reports NotConfigured`() = runTest {
         coEvery { resolveSurfacePipeline(any()) } returns null
 
-        val result = useCase(SharedPayload(text = "hi", imageUri = null))
+        val result = launch(SharedPayload(text = "hi", imageUri = null))
 
         assertEquals(ShareLaunchResult.NotConfigured, result)
     }
@@ -51,7 +54,7 @@ class LaunchSharePipelineUseCaseTest {
         val sessionSlot = slot<ChatSession>()
         coEvery { chatRepository.saveSession(capture(sessionSlot)) } returns Unit
 
-        val result = useCase(SharedPayload(text = "summarise this", imageUri = null))
+        val result = launch(SharedPayload(text = "summarise this", imageUri = null))
 
         val sessionId = (result as ShareLaunchResult.Launched).sessionId
         assertEquals(sessionId, sessionSlot.captured.id)
@@ -74,7 +77,7 @@ class LaunchSharePipelineUseCaseTest {
         val attachment = MessageAttachment(path = "img.jpg", mimeType = "image/jpeg", width = 100, height = 80)
         coEvery { attachmentStore.ingestUri("content://media/1") } returns Result.success(attachment)
 
-        val result = useCase(SharedPayload(text = null, imageUri = "content://media/1"))
+        val result = launch(SharedPayload(text = null, imageUri = "content://media/1"))
 
         val sessionId = (result as ShareLaunchResult.Launched).sessionId
         coVerify {
@@ -94,7 +97,7 @@ class LaunchSharePipelineUseCaseTest {
         coEvery { resolveSurfacePipeline(any()) } returns "share-pipe"
         coEvery { attachmentStore.ingestUri(any()) } returns Result.failure(IllegalStateException("bad"))
 
-        val result = useCase(SharedPayload(text = null, imageUri = "content://media/1"))
+        val result = launch(SharedPayload(text = null, imageUri = "content://media/1"))
 
         assertTrue(result is ShareLaunchResult.NothingShared)
     }

@@ -1,20 +1,18 @@
 package app.knotwork.android.presentation.share
 
-import android.app.TaskStackBuilder
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.core.content.IntentCompat
-import androidx.core.net.toUri
 import androidx.lifecycle.lifecycleScope
 import app.knotwork.android.R
 import app.knotwork.android.domain.usecases.LaunchSharePipelineUseCase
 import app.knotwork.android.domain.usecases.ParseSharedContentUseCase
 import app.knotwork.android.domain.usecases.ShareLaunchResult
 import app.knotwork.android.presentation.ui.MainActivity
-import app.knotwork.android.presentation.ui.navigation.NavRoutes
+import app.knotwork.android.presentation.ui.navigation.ChatDeepLink
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -59,7 +57,11 @@ class ShareReceiverActivity : ComponentActivity() {
 
         lifecycleScope.launch {
             val result = try {
-                launchSharePipeline(payload)
+                launchSharePipeline(
+                    payload = payload,
+                    imageSessionName = getString(R.string.share_session_image_name),
+                    contentSessionName = getString(R.string.share_session_content_name),
+                )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -86,16 +88,7 @@ class ShareReceiverActivity : ComponentActivity() {
 
     /** Deep-links into the run's session via [MainActivity] with a synthesised back stack. */
     private fun openChatSession(sessionId: String) {
-        val intent = Intent(
-            Intent.ACTION_VIEW,
-            "${NavRoutes.DEEP_LINK_SCHEME}://${NavRoutes.chatRoute(sessionId)}".toUri(),
-            this,
-            MainActivity::class.java,
-        )
-        TaskStackBuilder.create(this).run {
-            addNextIntentWithParentStack(intent)
-            startActivities()
-        }
+        ChatDeepLink.backStack(this, sessionId).startActivities()
     }
 
     /** Opens the app's home (chat) so the user can configure the surface. */

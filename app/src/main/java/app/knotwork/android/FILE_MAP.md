@@ -395,7 +395,9 @@ This file maps the contents of the main application package.
       - `ExportWorkspaceFileUseCase.kt` - Streams a workspace file to a caller-provided `OutputStream` (save-as destination / share staging).
     - `AgentOrchestratorUseCase.kt` - Use case for agent orchestration. `invoke(...)` (interactive, carries an `origin`) and `enqueueScheduled(...)` (background, accepts an explicit `pipelineId` + `origin`) so entry surfaces attribute and bind their runs.
     - `ParseSharedContentUseCase.kt` - Pure mapper from raw `ACTION_SEND` intent fields (mime / text / stream uri) to a `SharedPayload`; keeps Intent parsing out of the activity so it is JVM-testable.
-    - `ResolveSurfacePipelineUseCase.kt` - Reads the pipeline bound to an `EntrySurface` (or `null` = inert) from `SettingsRepository`.
+    - `ResolveSurfacePipelineUseCase.kt` - Reads the pipeline bound to an `EntrySurface` (or `null` = inert) from `SettingsRepository`; exhaustive-`when` read dispatch.
+    - `SetSurfacePipelineUseCase.kt` - Symmetric write dispatch for an `EntrySurface` binding (exhaustive `when`); single point used by the library menu, the Background picker and the delete-cleanup loop.
+    - `AttachmentMessageContent.kt` - Shared image-only message contract (caption → prompt + displayContent) used by both the composer (`ChatHomeViewModel`) and the share target so the two cannot drift.
     - `BuildDynamicShortcutsUseCase.kt` - Pure selection of recent sessions → `DynamicShortcutSpec`s (recency order, count cap, label clamping, blank-name skip).
     - `LaunchTilePipelineUseCase.kt` - Resolves the Quick Settings tile binding and enqueues a one-shot background run (`RunOrigin.QUICK_TILE`) via `TaskScheduler`; `TileLaunchResult` = Launched / NotConfigured.
     - `LaunchSharePipelineUseCase.kt` - Resolves the share binding, ingests a shared image via `AttachmentStore`, creates a bound session and enqueues an interactive `RunOrigin.SHARE` run; `ShareLaunchResult` = Launched / NotConfigured / NothingShared.
@@ -486,6 +488,7 @@ This file maps the contents of the main application package.
       - `TextFieldValueExt.kt` - `insertAtCursor` extension for splicing chip-selected tokens at the caret.
     - `navigation/` - App shell, bottom-nav scaffold, and the single nav-graph for the app.
       - `NavRoutes.kt` - Canonical `const val` registry of every Jetpack Navigation Compose route string, including the chat deep-link template and modal-sheet placeholders.
+      - `ChatDeepLink.kt` - Shared builder for a `knotwork://chat/{threadId}` deep-link `Intent` + back-stack `TaskStackBuilder`, reused by the share target and the scheduled-task notifier so the scheme/back-stack never drift.
       - `TabDestination.kt` - `TabDestination` data class + `TAB_DESTINATIONS` for the four bottom-nav tabs (Chat / Pipelines / Tools / More).
       - `BottomNavVisibility.kt` - Pure `shouldShowBottomNav(route)` function; unit-tested decision table for which routes hide the nav bar (splash, onboarding, editor, modal sheets).
       - `KnotworkModalRoute.kt` - Generic `ModalBottomSheet` + `PredictiveBackHandler` wrapper reused by every modal-sheet route (`NodeConfigSheet`, `ConsolePane`, `AddMcpServerScreen` — bodies arrive in Tasks 6/7/10).

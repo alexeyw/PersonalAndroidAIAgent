@@ -31,6 +31,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.knotwork.android.R
+import app.knotwork.android.domain.models.EntrySurface
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.presentation.ui.common.asString
 import app.knotwork.android.presentation.ui.orchestrator.presets.GraphFlowPreview
@@ -196,8 +197,8 @@ fun PipelineLibraryScreen(
             onOpenEditor()
         },
         onSetAsDefault = { id -> viewModel.setDefaultPipeline(pipelineId = id) },
-        onUseForSharing = { id -> viewModel.setShareTargetPipeline(pipelineId = id) },
-        onUseForTile = { id -> viewModel.setQuickSettingsTilePipeline(pipelineId = id) },
+        onUseForSharing = { id -> viewModel.bindPipelineToSurface(EntrySurface.SHARE, pipelineId = id) },
+        onUseForTile = { id -> viewModel.bindPipelineToSurface(EntrySurface.QUICK_TILE, pipelineId = id) },
         onRename = { id ->
             uiState.savedPipelines.firstOrNull { it.id == id }?.let { renameTarget = it }
         },

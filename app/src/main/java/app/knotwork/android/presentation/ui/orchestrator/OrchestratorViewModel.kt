@@ -6,6 +6,7 @@ import app.knotwork.android.R
 import app.knotwork.android.domain.engine.DefaultPipelineFactory
 import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.ConnectionModel
+import app.knotwork.android.domain.models.EntrySurface
 import app.knotwork.android.domain.models.NodeContextConfig
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
@@ -37,10 +38,12 @@ import app.knotwork.android.domain.usecases.ImportPipelineUseCase
 import app.knotwork.android.domain.usecases.LoadPipelineFromPresetUseCase
 import app.knotwork.android.domain.usecases.LoadPipelineUseCase
 import app.knotwork.android.domain.usecases.RenamePipelineUseCase
+import app.knotwork.android.domain.usecases.ResolveSurfacePipelineUseCase
 import app.knotwork.android.domain.usecases.SavePipelineAsPresetUseCase
 import app.knotwork.android.domain.usecases.SavePipelineUseCase
 import app.knotwork.android.domain.usecases.SavePromptAsPresetUseCase
 import app.knotwork.android.domain.usecases.SavePromptTemplateUseCase
+import app.knotwork.android.domain.usecases.SetSurfacePipelineUseCase
 import app.knotwork.android.presentation.ui.common.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -85,6 +88,8 @@ class OrchestratorViewModel @Inject constructor(
     private val duplicatePipelineUseCase: DuplicatePipelineUseCase,
     private val deletePipelineUseCase: DeletePipelineUseCase,
     private val createPipelineUseCase: CreatePipelineUseCase,
+    private val resolveSurfacePipelineUseCase: ResolveSurfacePipelineUseCase,
+    private val setSurfacePipelineUseCase: SetSurfacePipelineUseCase,
     private val getPromptTemplatesUseCase: GetPromptTemplatesUseCase,
     private val savePromptTemplateUseCase: SavePromptTemplateUseCase,
     private val savePipelineAsPresetUseCase: SavePipelineAsPresetUseCase,
@@ -186,30 +191,23 @@ class OrchestratorViewModel @Inject constructor(
     }
 
     /**
-     * Binds [pipelineId] to the share-target entry surface (library row menu
-     * "Use for sharing"). Mirrors [setDefaultPipeline]; the binding is observed
-     * by the Background settings screen.
+     * Binds [pipelineId] to an entry [surface] (library row menu "Use for
+     * sharing" / "Use for Quick Settings tile"). Mirrors [setDefaultPipeline];
+     * the binding is observed by the Background settings screen. The write goes
+     * through [SetSurfacePipelineUseCase] so every surface shares one dispatch
+     * point with [ResolveSurfacePipelineUseCase].
      */
-    fun setShareTargetPipeline(pipelineId: String) {
+    fun bindPipelineToSurface(surface: EntrySurface, pipelineId: String) {
         viewModelScope.launch {
-            settingsRepository.setShareTargetPipelineId(pipelineId)
-            _uiState.update {
-                it.copy(feedbackMessage = UiText(R.string.orchestrator_feedback_share_pipeline_bound))
-            }
+            setSurfacePipelineUseCase(surface, pipelineId)
+            _uiState.update { it.copy(feedbackMessage = UiText(surfaceBoundFeedback(surface))) }
         }
     }
 
-    /**
-     * Binds [pipelineId] to the Quick Settings tile (library row menu "Use for
-     * Quick Settings tile"). Mirrors [setDefaultPipeline].
-     */
-    fun setQuickSettingsTilePipeline(pipelineId: String) {
-        viewModelScope.launch {
-            settingsRepository.setQuickSettingsTilePipelineId(pipelineId)
-            _uiState.update {
-                it.copy(feedbackMessage = UiText(R.string.orchestrator_feedback_tile_pipeline_bound))
-            }
-        }
+    /** Snackbar feedback shown after binding a pipeline to [surface]. */
+    private fun surfaceBoundFeedback(surface: EntrySurface): Int = when (surface) {
+        EntrySurface.SHARE -> R.string.orchestrator_feedback_share_pipeline_bound
+        EntrySurface.QUICK_TILE -> R.string.orchestrator_feedback_tile_pipeline_bound
     }
 
     private fun observePromptTemplates() {
@@ -1010,15 +1008,16 @@ class OrchestratorViewModel @Inject constructor(
             if (result.isSuccess && _uiState.value.defaultPipelineId == pipelineId) {
                 settingsRepository.setDefaultPipelineId(null)
             }
-            // Clear per-surface entry-point bindings dangling on the deleted
-            // pipeline so the share target / tile fall back to their inert
-            // privacy-first default rather than a non-existent id.
+            // Clear any per-surface entry-point binding dangling on the deleted
+            // pipeline so the surface falls back to its inert privacy-first
+            // default rather than a non-existent id. Looping EntrySurface.entries
+            // through the shared resolve/set use cases means a future surface is
+            // covered automatically (no per-surface copy-paste).
             if (result.isSuccess) {
-                if (settingsRepository.shareTargetPipelineId.first() == pipelineId) {
-                    settingsRepository.setShareTargetPipelineId(null)
-                }
-                if (settingsRepository.quickSettingsTilePipelineId.first() == pipelineId) {
-                    settingsRepository.setQuickSettingsTilePipelineId(null)
+                EntrySurface.entries.forEach { surface ->
+                    if (resolveSurfacePipelineUseCase(surface) == pipelineId) {
+                        setSurfacePipelineUseCase(surface, null)
+                    }
                 }
             }
             _uiState.update { state ->

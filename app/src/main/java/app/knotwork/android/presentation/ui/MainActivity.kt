@@ -115,8 +115,10 @@ class MainActivity : ComponentActivity() {
             // re-arms too).
             memoryReembedScheduler.rearmIfPending()
             // Refresh the dynamic launcher shortcuts (recent sessions) off the
-            // main thread, as ShortcutManagerCompat requires.
-            appShortcutPublisher.refresh()
+            // main thread, as ShortcutManagerCompat requires. Only on a fresh
+            // start (not a config-change recreation, which keeps savedInstanceState)
+            // so rotation/theme changes don't re-query + re-publish needlessly.
+            if (savedInstanceState == null) appShortcutPublisher.refresh()
         }
 
         // Pin transparent status- and navigation-bar

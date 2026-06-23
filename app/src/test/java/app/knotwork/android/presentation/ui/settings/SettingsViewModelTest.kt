@@ -734,5 +734,6 @@ class SettingsViewModelTest {
         pipelineRepository = io.mockk.mockk(relaxed = true) {
             io.mockk.every { getAllPipelines() } returns kotlinx.coroutines.flow.flowOf(emptyList())
         },
+        setSurfacePipelineUseCase = io.mockk.mockk(relaxed = true),
     )
 }

@@ -1,7 +1,9 @@
 package app.knotwork.android.presentation.ui.settings
 
+import app.knotwork.android.domain.models.EntrySurface
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.usecases.SetSurfacePipelineUseCase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.launchIn
@@ -23,12 +25,14 @@ import kotlinx.coroutines.launch
  * @property state The ViewModel's single source-of-truth state flow.
  * @property settingsRepository Persistence for the notification + window + binding settings.
  * @property pipelineRepository Source of the bindable-pipeline list for the pickers.
+ * @property setSurfacePipelineUseCase Single dispatch point for writing a surface binding.
  */
 class BackgroundSettingsDelegate(
     private val scope: CoroutineScope,
     private val state: MutableStateFlow<SettingsUiState>,
     private val settingsRepository: SettingsRepository,
     private val pipelineRepository: PipelineRepository,
+    private val setSurfacePipelineUseCase: SetSurfacePipelineUseCase,
 ) {
 
     init {
@@ -63,14 +67,12 @@ class BackgroundSettingsDelegate(
         }.launchIn(scope)
     }
 
-    /** Persists (or clears, with `null`) the pipeline bound to the share target. */
-    fun setShareTargetPipelineId(pipelineId: String?) {
-        scope.launch { settingsRepository.setShareTargetPipelineId(pipelineId) }
-    }
-
-    /** Persists (or clears, with `null`) the pipeline bound to the Quick Settings tile. */
-    fun setQuickSettingsTilePipelineId(pipelineId: String?) {
-        scope.launch { settingsRepository.setQuickSettingsTilePipelineId(pipelineId) }
+    /**
+     * Persists (or clears, with `null`) the pipeline bound to [surface] through
+     * the shared [SetSurfacePipelineUseCase] dispatch point.
+     */
+    fun setSurfacePipeline(surface: EntrySurface, pipelineId: String?) {
+        scope.launch { setSurfacePipelineUseCase(surface, pipelineId) }
     }
 
     /** Persists the "ping me when a pipeline runs long in the background" toggle. */

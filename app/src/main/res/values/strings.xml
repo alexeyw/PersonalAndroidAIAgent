@@ -25,6 +25,8 @@
     <string name="shortcut_pipelines_long">Open pipeline library</string>
     <string name="share_not_configured">Pick a pipeline for sharing in Settings → Background.</string>
     <string name="share_nothing_to_share">Nothing to share.</string>
+    <string name="share_session_image_name">Shared image</string>
+    <string name="share_session_content_name">Shared content</string>
     <string name="tile_label">Run pipeline</string>
     <string name="tile_duty_prompt">Run my duty pipeline.</string>
     <string name="tile_running">Running pipeline in the background…</string>
