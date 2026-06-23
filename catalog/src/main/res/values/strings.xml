@@ -413,6 +413,16 @@
     <!-- Hub + category navigation -->
     <string name="knotwork_settings_hub_basic">Basic</string>
     <string name="knotwork_settings_hub_categories">Categories</string>
+
+    <!-- Settings search -->
+    <string name="knotwork_settings_search_hint">Search settings</string>
+    <string name="knotwork_settings_search_clear">Clear search</string>
+    <string name="knotwork_settings_search_count" tools:ignore="PluralsCandidate">%1$d settings match</string>
+    <string name="knotwork_settings_search_empty_title">No settings match “%1$s”</string>
+    <string name="knotwork_settings_search_empty_subtitle">Try a setting name, a category, or what it does — search looks at names and synonyms.</string>
+    <string name="knotwork_settings_search_tier_basic">Basic</string>
+    <string name="knotwork_settings_search_tier_advanced">Advanced</string>
+    <string name="knotwork_settings_search_synonym">≈ “%1$s”</string>
     <string name="knotwork_settings_hub_system_instructions_empty">Tap to edit the system prompt.</string>
     <string name="knotwork_settings_count" tools:ignore="PluralsCandidate">%1$d settings</string>
     <string name="knotwork_settings_advanced_title">Advanced</string>

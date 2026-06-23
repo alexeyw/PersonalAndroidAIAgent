@@ -56,7 +56,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.math.roundToInt
 
-/** Builds the settings hub state (subtitle, the six inline Basic controls, restart). */
+/** Builds the settings hub state (subtitle, the six inline Basic controls, restart, search). */
 @Composable
 internal fun buildHubViewState(uiState: SettingsUiState): SettingsHubViewState = SettingsHubViewState(
     loading = uiState.identity == null,
@@ -76,6 +76,8 @@ internal fun buildHubViewState(uiState: SettingsUiState): SettingsHubViewState =
     crashReportingEnabled = uiState.crashReportingEnabled,
     restartRequiredMessage = stringResource(R.string.settings_restart_required_message)
         .takeIf { uiState.restartRequired },
+    searchQuery = uiState.searchQuery,
+    searchResults = uiState.searchResults,
 )
 
 /** Builds the Generation category state (system instructions + advanced sampling). */
@@ -132,7 +134,7 @@ internal fun buildGenerationViewState(uiState: SettingsUiState, context: Context
                 valueRange = SettingsDefaults.AUDIO_MAX_DURATION_SEC_MIN.toFloat()
                     .rangeTo(SettingsDefaults.AUDIO_MAX_DURATION_SEC_MAX.toFloat()),
             ),
-        ),
+        ).withAnchors(),
     )
 }
 
@@ -227,7 +229,7 @@ internal fun buildPipelinesViewState(uiState: SettingsUiState): PipelinesSetting
         value = uiState.capAutonomousSteps.toFloat(),
         valueRange = SettingsDefaults.PIPELINE_MAX_STEPS_MIN.toFloat()
             .rangeTo(SettingsDefaults.PIPELINE_MAX_STEPS_MAX.toFloat()),
-    ),
+    ).withAnchor(),
     advancedSliders = listOf(
         SettingSliderRow(
             id = SLIDER_PIPELINE_NESTING_DEPTH,
@@ -247,7 +249,7 @@ internal fun buildPipelinesViewState(uiState: SettingsUiState): PipelinesSetting
                 .rangeTo(SettingsDefaults.STRUCTURED_OUTPUT_MAX_REPAIRS_MAX.toFloat()),
             steps = repairsSteps(),
         ),
-    ),
+    ).withAnchors(),
 )
 
 /** Builds the Tools category state (approval policy + guardrail toggles). */
@@ -284,7 +286,7 @@ internal fun buildBackgroundViewState(uiState: SettingsUiState): BackgroundSetti
                 value = uiState.backgroundApprovalWindowHours.toFloat(),
                 valueRange = HOURS_MIN..HOURS_MAX,
             ),
-        ),
+        ).withAnchors(),
     )
 
 /** Builds the Privacy category state (crash reporting + retention sliders). */
@@ -308,7 +310,7 @@ internal fun buildPrivacyViewState(uiState: SettingsUiState): PrivacySettingsVie
             valueRange = SettingsDefaults.TRACE_RETENTION_MAX_AGE_DAYS_MIN.toFloat()
                 .rangeTo(SettingsDefaults.TRACE_RETENTION_MAX_AGE_DAYS_MAX.toFloat()),
         ),
-    ),
+    ).withAnchors(),
 )
 
 /** Builds the About category state (identity + version line + reset confirm). */
@@ -445,7 +447,7 @@ private fun memoryAdvancedSliders(uiState: SettingsUiState, locale: Locale): Lis
         SettingsDefaults.MEMORY_SUMMARY_LIMIT_MIN,
         SettingsDefaults.MEMORY_SUMMARY_LIMIT_MAX,
     ),
-)
+).withAnchors()
 
 /**
  * Builds an integer-valued slider kept continuous (`steps = 0`); the callback
@@ -461,6 +463,42 @@ private fun intSlider(id: String, title: String, valueLabel: String, value: Int,
         valueRange = min.toFloat()..max.toFloat(),
         steps = 0,
     )
+
+/**
+ * Maps each slider's stable catalog id to the settings-registry anchor key it
+ * tunes, so a search deep-link can flash the right row. Inverse of the
+ * `route*Slider` dispatch in `SettingsScreens`; both must list the same sliders.
+ */
+internal val SLIDER_TO_ANCHOR: Map<String, String> = mapOf(
+    SLIDER_TEMPERATURE to "TEMPERATURE",
+    SLIDER_TOP_K to "TOP_K",
+    SLIDER_TOP_P to "TOP_P",
+    SLIDER_REPETITION_PENALTY to "REPETITION_PENALTY",
+    SLIDER_MAX_CONTEXT to "MAX_CONTEXT_LENGTH",
+    SLIDER_AUDIO_MAX_DURATION to "AUDIO_MAX_DURATION_SEC",
+    SLIDER_PIPELINE_CAP_STEPS to "PIPELINE_MAX_STEPS",
+    SLIDER_PIPELINE_NESTING_DEPTH to "PIPELINE_MAX_NESTING_DEPTH",
+    SLIDER_PIPELINE_STRUCTURED_REPAIRS to "STRUCTURED_OUTPUT_MAX_REPAIRS",
+    SLIDER_MEMORY_AUTO_SUMMARIZE to "AUTO_SUMMARIZE_THRESHOLD",
+    SLIDER_MEMORY_SEARCH_TOP_K to "MEMORY_SEARCH_TOP_K",
+    SLIDER_MEMORY_SEARCH_THRESHOLD to "MEMORY_SEARCH_THRESHOLD",
+    SLIDER_MEMORY_RECENCY_HALF_LIFE to "MEMORY_RECENCY_HALF_LIFE_DAYS",
+    SLIDER_MEMORY_COMPACTION_AGE to "MEMORY_COMPACTION_AGE_DAYS",
+    SLIDER_MEMORY_MAX_CHUNKS to "MAX_MEMORY_CHUNKS",
+    SLIDER_MEMORY_COMPRESSION_THRESHOLD to "CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS",
+    SLIDER_MEMORY_LIVE_WINDOW to "CHAT_HISTORY_LIVE_WINDOW_SIZE",
+    SLIDER_MEMORY_SUMMARY_LIMIT to "MEMORY_SUMMARY_DEFAULT_LIMIT",
+    SLIDER_BACKGROUND_RESUME_MAX_AGE to "RESUME_MAX_AGE_HOURS",
+    SLIDER_BACKGROUND_APPROVAL_WINDOW to "BACKGROUND_APPROVAL_WINDOW_HOURS",
+    SLIDER_PRIVACY_RETENTION_RUNS to "TRACE_RETENTION_RUNS_PER_SESSION",
+    SLIDER_PRIVACY_RETENTION_AGE to "TRACE_RETENTION_MAX_AGE_DAYS",
+)
+
+/** Stamps the registry anchor onto a slider row so search can deep-link to it. */
+private fun SettingSliderRow.withAnchor(): SettingSliderRow = copy(anchorKey = SLIDER_TO_ANCHOR[id])
+
+/** Stamps registry anchors onto every slider in the list. */
+private fun List<SettingSliderRow>.withAnchors(): List<SettingSliderRow> = map { it.withAnchor() }
 
 private fun ToolApprovalPolicy.toApproveOption(): ApproveToolCallsOption = when (this) {
     ToolApprovalPolicy.AllCalls -> ApproveToolCallsOption.AllCalls

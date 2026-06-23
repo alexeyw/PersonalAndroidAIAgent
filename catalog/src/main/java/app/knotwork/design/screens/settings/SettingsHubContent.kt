@@ -8,7 +8,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -33,10 +36,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
+import app.knotwork.design.components.buttons.KnotworkButtonSize
+import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.controls.KnotworkSegmentedControl
+import app.knotwork.design.components.controls.KnotworkTextField
 import app.knotwork.design.components.misc.StripedPlaceholder
 import app.knotwork.design.components.topbar.KnotworkTopAppBarShell
 import app.knotwork.design.icons.AppIcons
@@ -137,23 +147,216 @@ fun SettingsHubContent(
             contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0),
             modifier = Modifier.fillMaxSize(),
         ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3)
-                    .testTag(SETTINGS_HUB_BODY_TEST_TAG),
-                verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp4),
-            ) {
-                HubBasicBlock(state = state, callbacks = callbacks)
-                HorizontalDivider(color = KnotworkTheme.extended.divider)
-                HubCategoriesBlock(loading = state.loading, onOpenCategory = callbacks.onOpenCategory)
+            Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+                HubSearchField(
+                    query = state.searchQuery,
+                    callbacks = callbacks,
+                    modifier = Modifier.padding(
+                        horizontal = KnotworkTheme.spacing.sp4,
+                        vertical = KnotworkTheme.spacing.sp3,
+                    ),
+                )
+                when {
+                    state.searchQuery.isBlank() -> HubDefaultBody(state = state, callbacks = callbacks)
+                    state.searchResults.isEmpty() -> HubSearchEmpty(query = state.searchQuery, callbacks = callbacks)
+                    else -> HubSearchResults(
+                        results = state.searchResults,
+                        onResultClick = callbacks.onSearchResultClick,
+                    )
+                }
             }
         }
         if (state.restartRequiredMessage != null) {
             RestartBanner(message = state.restartRequiredMessage, onRestart = callbacks.onRestartClick)
         }
+    }
+}
+
+/** The default (non-search) hub body: the inline Basic block and category rows. */
+@Composable
+private fun HubDefaultBody(state: SettingsHubViewState, callbacks: SettingsCallbacks) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = KnotworkTheme.spacing.sp4)
+            .padding(bottom = KnotworkTheme.spacing.sp3)
+            .testTag(SETTINGS_HUB_BODY_TEST_TAG),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp4),
+    ) {
+        HubBasicBlock(state = state, callbacks = callbacks)
+        HorizontalDivider(color = KnotworkTheme.extended.divider)
+        HubCategoriesBlock(loading = state.loading, onOpenCategory = callbacks.onOpenCategory)
+    }
+}
+
+/** Pinned settings-search field with a leading glyph and a clear affordance. */
+@Composable
+private fun HubSearchField(query: String, callbacks: SettingsCallbacks, modifier: Modifier = Modifier) {
+    KnotworkTextField(
+        value = query,
+        onValueChange = callbacks.onSearchQueryChange,
+        modifier = modifier.testTag(SETTINGS_SEARCH_FIELD_TAG),
+        placeholder = stringResource(R.string.knotwork_settings_search_hint),
+        leadingIcon = AppIcons.Search,
+        trailingIcon = if (query.isNotEmpty()) AppIcons.X else null,
+        onTrailingClick = callbacks.onClearSearch.takeIf { query.isNotEmpty() },
+        search = true,
+        contentDescription = stringResource(R.string.knotwork_settings_search_hint),
+    )
+}
+
+/** Scrollable list of search hits: name (matched span bold) + breadcrumb + tier. */
+@Composable
+private fun HubSearchResults(results: List<HubSearchResultRow>, onResultClick: (HubSearchResultRow) -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .testTag(SETTINGS_SEARCH_RESULTS_TAG),
+    ) {
+        Text(
+            text = stringResource(R.string.knotwork_settings_search_count, results.size),
+            style = KnotworkTextStyles.MonoSm,
+            color = KnotworkTheme.extended.onSurfaceMuted,
+            modifier = Modifier.padding(
+                horizontal = KnotworkTheme.spacing.sp4,
+                vertical = KnotworkTheme.spacing.sp2,
+            ),
+        )
+        results.forEach { row -> HubSearchResultRowView(row = row, onClick = { onResultClick(row) }) }
+        Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp4))
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun HubSearchResultRowView(row: HubSearchResultRow, onClick: () -> Unit) {
+    val meta = HUB_CATEGORIES.first { it.id == row.categoryId }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3)
+            .testTag(SETTINGS_SEARCH_RESULT_TAG_PREFIX + row.anchorKey),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(HUB_CATEGORY_TILE_SIZE)
+                .clip(KnotworkTheme.shapes.md)
+                .background(color = KnotworkTheme.extended.surface2),
+        ) {
+            Icon(imageVector = meta.icon, contentDescription = null, tint = KnotworkTheme.extended.onSurfaceMuted)
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = highlightedName(row),
+                style = KnotworkTextStyles.BodyBase,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+                verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+                modifier = Modifier.padding(top = KnotworkTheme.spacing.sp1),
+            ) {
+                Text(
+                    text = stringResource(meta.titleRes),
+                    style = KnotworkTextStyles.MonoSm,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
+                )
+                Icon(
+                    imageVector = AppIcons.ArrowR,
+                    contentDescription = null,
+                    tint = KnotworkTheme.extended.onSurfaceMuted,
+                    modifier = Modifier
+                        .align(Alignment.CenterVertically)
+                        .size(SEARCH_BREADCRUMB_GLYPH),
+                )
+                Text(
+                    text = stringResource(
+                        if (row.isBasic) {
+                            R.string.knotwork_settings_search_tier_basic
+                        } else {
+                            R.string.knotwork_settings_search_tier_advanced
+                        },
+                    ),
+                    style = KnotworkTextStyles.MonoSm,
+                    color = if (row.isBasic) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        KnotworkTheme.extended.onSurfaceMuted
+                    },
+                )
+                if (row.synonymHit != null) {
+                    Text(
+                        text = stringResource(R.string.knotwork_settings_search_synonym, row.synonymHit),
+                        style = KnotworkTextStyles.MonoSm,
+                        color = KnotworkTheme.extended.onSurfaceMuted,
+                    )
+                }
+            }
+        }
+        Icon(imageVector = AppIcons.ArrowR, contentDescription = null, tint = KnotworkTheme.extended.onSurfaceMuted)
+    }
+}
+
+/** Calm centred empty state shown when a non-blank query matches nothing. */
+@Composable
+private fun HubSearchEmpty(query: String, callbacks: SettingsCallbacks) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3, Alignment.CenterVertically),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = KnotworkTheme.spacing.sp6)
+            .testTag(SETTINGS_SEARCH_EMPTY_TAG),
+    ) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(SEARCH_EMPTY_TILE)
+                .clip(KnotworkTheme.shapes.lg)
+                .background(color = KnotworkTheme.extended.surface2),
+        ) {
+            Icon(imageVector = AppIcons.Search, contentDescription = null, tint = KnotworkTheme.extended.onSurfaceMuted)
+        }
+        Text(
+            text = stringResource(R.string.knotwork_settings_search_empty_title, query),
+            style = KnotworkTextStyles.TitleMd,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = stringResource(R.string.knotwork_settings_search_empty_subtitle),
+            style = KnotworkTextStyles.BodySm,
+            color = KnotworkTheme.extended.onSurfaceMuted,
+        )
+        KnotworkSecondaryButton(
+            text = stringResource(R.string.knotwork_settings_search_clear),
+            onClick = callbacks.onClearSearch,
+            size = KnotworkButtonSize.Md,
+            leadingIcon = AppIcons.X,
+        )
+    }
+}
+
+/** Builds the result name with the matched substring bolded in the primary tint. */
+@Composable
+private fun highlightedName(row: HubSearchResultRow): AnnotatedString {
+    val accent = MaterialTheme.colorScheme.primary
+    return buildAnnotatedString {
+        if (row.nameMatchStart < 0 || row.nameMatchLength <= 0) {
+            append(row.name)
+            return@buildAnnotatedString
+        }
+        val end = (row.nameMatchStart + row.nameMatchLength).coerceAtMost(row.name.length)
+        append(row.name.substring(0, row.nameMatchStart))
+        withStyle(SpanStyle(color = accent, fontWeight = FontWeight.Bold)) {
+            append(row.name.substring(row.nameMatchStart, end))
+        }
+        append(row.name.substring(end))
     }
 }
 
@@ -334,7 +537,21 @@ internal fun approveOptionFromIndex(index: Int): ApproveToolCallsOption = when (
 /** Test tag for the scrollable hub body. */
 const val SETTINGS_HUB_BODY_TEST_TAG: String = "settings_hub_body"
 
+/** Test tag for the hub search field. */
+const val SETTINGS_SEARCH_FIELD_TAG: String = "settings_search_field"
+
+/** Test tag for the scrollable search-results list. */
+const val SETTINGS_SEARCH_RESULTS_TAG: String = "settings_search_results"
+
+/** Test tag for the no-match empty state. */
+const val SETTINGS_SEARCH_EMPTY_TAG: String = "settings_search_empty"
+
+/** Prefix for a single search-result row's test tag (suffixed with the anchor). */
+const val SETTINGS_SEARCH_RESULT_TAG_PREFIX: String = "settings_search_result_"
+
 private val HUB_CATEGORY_TILE_SIZE = 40.dp
+private val SEARCH_BREADCRUMB_GLYPH = 12.dp
+private val SEARCH_EMPTY_TILE = 56.dp
 private val LOADING_SUMMARY_HEIGHT = 9.dp
 private const val LOADING_SUMMARY_FRACTION = 0.68f
 private const val LOADING_TILE_ALPHA = 0.5f

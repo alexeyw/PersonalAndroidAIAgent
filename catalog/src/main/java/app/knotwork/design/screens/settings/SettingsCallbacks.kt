@@ -12,6 +12,14 @@ class SettingsCallbacks(
     val onBack: () -> Unit = {},
     /** Open a category sub-screen from the hub. */
     val onOpenCategory: (SettingsCategoryId) -> Unit = {},
+
+    // ─── Search (hub) ─────────────────────────────────────────────────────────
+    /** Live edit of the hub search query. */
+    val onSearchQueryChange: (String) -> Unit = {},
+    /** Tap a search result — deep-links to its category sub-screen + highlight. */
+    val onSearchResultClick: (HubSearchResultRow) -> Unit = {},
+    /** Clear the hub search query (empty-state action + field trailing icon). */
+    val onClearSearch: () -> Unit = {},
     /** Open the Generation sub-screen from the hub's system-instructions row. */
     val onOpenSystemInstructions: () -> Unit = {},
     /** Open the Models management surface (Discover / model catalogue). */

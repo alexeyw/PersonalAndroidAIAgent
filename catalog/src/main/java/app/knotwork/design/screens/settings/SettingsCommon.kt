@@ -7,9 +7,13 @@
 package app.knotwork.design.screens.settings
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +27,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -43,6 +49,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -818,7 +825,11 @@ internal fun DestructiveDialogHost(payload: DestructiveActionState, callbacks: S
 
 // ─── Shared slider list ──────────────────────────────────────────────────────
 
-/** Renders a list of [SettingSliderRow]s through `KnotworkParamSlider`. */
+/**
+ * Renders a list of [SettingSliderRow]s through `KnotworkParamSlider`. Each row
+ * is wrapped in a [SettingsAnchor] keyed by its [SettingSliderRow.anchorKey] so
+ * a deep-link from settings search can scroll it into view and flash it.
+ */
 @Composable
 internal fun SettingSliderList(
     sliders: List<SettingSliderRow>,
@@ -826,16 +837,75 @@ internal fun SettingSliderList(
     onChange: (id: String, value: Float) -> Unit,
 ) {
     sliders.forEach { slider ->
-        KnotworkParamSlider(
-            label = slider.title,
-            valueLabel = slider.valueLabel,
-            value = slider.value,
-            onValueChange = { newValue -> onChange(slider.id, newValue) },
-            valueRange = slider.valueRange,
-            steps = slider.steps,
-            errorText = slider.errorText,
-            modifier = Modifier.testTag(tagPrefix + slider.id),
-        )
+        SettingsAnchor(anchorKey = slider.anchorKey) {
+            KnotworkParamSlider(
+                label = slider.title,
+                valueLabel = slider.valueLabel,
+                value = slider.value,
+                onValueChange = { newValue -> onChange(slider.id, newValue) },
+                valueRange = slider.valueRange,
+                steps = slider.steps,
+                errorText = slider.errorText,
+                modifier = Modifier.testTag(tagPrefix + slider.id),
+            )
+        }
+    }
+}
+
+// ─── Search deep-link highlight ──────────────────────────────────────────────
+
+/**
+ * The anchor key of the settings row a search deep-link asked to highlight, or
+ * `null` when no highlight is pending. A category sub-screen provides this around
+ * its body; every [SettingsAnchor] reads it to decide whether to flash.
+ */
+val LocalSettingsHighlightKey = androidx.compose.runtime.compositionLocalOf<String?> { null }
+
+/**
+ * Wraps a settings row so a search deep-link can scroll it into view and briefly
+ * accent it. The row flashes when [anchorKey] matches [LocalSettingsHighlightKey]:
+ * a 1 dp primary outline plus a faint tonal fill that fades over
+ * [SETTINGS_ANCHOR_FLASH_MS]. Under reduced motion the accent is static (no
+ * fade), per the design's reduced-motion contract.
+ *
+ * @param anchorKey Stable anchor of the wrapped row; `null` (or unmatched) leaves
+ *   the row untouched.
+ * @param modifier Layout modifier applied to the wrapper.
+ * @param content The row to render.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+internal fun SettingsAnchor(anchorKey: String?, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    val active = anchorKey != null && LocalSettingsHighlightKey.current == anchorKey
+    // A Column (not Box) preserves the vertical stacking + spacing of rows that
+    // emit several siblings (e.g. the system-instructions field + chip row), which
+    // would otherwise overlap when wrapped. Single-child rows are unaffected.
+    if (!active) {
+        Column(
+            modifier = modifier,
+            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        ) { content() }
+        return
+    }
+    val reducedMotion = KnotworkTheme.a11y.reducedMotion()
+    val requester = remember { BringIntoViewRequester() }
+    val flash = remember { Animatable(1f) }
+    LaunchedEffect(anchorKey) {
+        requester.bringIntoView()
+        if (reducedMotion) flash.snapTo(1f) else flash.animateTo(0f, tween(SETTINGS_ANCHOR_FLASH_MS))
+    }
+    val intensity = if (reducedMotion) 1f else flash.value
+    val accent = MaterialTheme.colorScheme.primary
+    Column(
+        modifier = modifier
+            .bringIntoViewRequester(requester)
+            .clip(KnotworkTheme.shapes.md)
+            .background(accent.copy(alpha = intensity * SETTINGS_ANCHOR_FILL_ALPHA))
+            .border(SETTINGS_ANCHOR_BORDER, accent.copy(alpha = intensity), KnotworkTheme.shapes.md)
+            .padding(SETTINGS_ANCHOR_PADDING),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+    ) {
+        content()
     }
 }
 
@@ -907,6 +977,18 @@ internal const val ACTIVE_PILL_ALPHA = 0.18f
 private const val REEMBED_BANNER_TINT_ALPHA = 0.12f
 private const val PERCENT_DENOMINATOR = 100f
 private const val CHEVRON_EXPANDED_ROTATION = 180f
+
+/** Duration of the search deep-link flash before it fades out. */
+private const val SETTINGS_ANCHOR_FLASH_MS = 1200
+
+/** Width of the deep-link highlight outline. */
+private val SETTINGS_ANCHOR_BORDER = 1.dp
+
+/** Inset between the highlight outline and the wrapped row content. */
+private val SETTINGS_ANCHOR_PADDING = 2.dp
+
+/** Peak alpha of the faint tonal fill behind a flashed row. */
+private const val SETTINGS_ANCHOR_FILL_ALPHA = 0.07f
 
 /**
  * Relative weight of the trailing segmented control inside the "Approve tool

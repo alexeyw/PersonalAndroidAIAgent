@@ -94,6 +94,10 @@ const val SLIDER_PRIVACY_RETENTION_AGE: String = "privacy_retention_age"
  * @property longRunningEnabled "Long-running task alerts" toggle value.
  * @property crashReportingEnabled "Crash reporting" toggle value.
  * @property restartRequiredMessage Banner copy; `null` hides the restart banner.
+ * @property searchQuery Live settings-search query; blank renders the normal hub
+ *   body, non-blank swaps it for the search-result list (or the empty state).
+ * @property searchResults Ranked search hits for [searchQuery], built from the
+ *   settings registry; empty while [searchQuery] is blank or nothing matches.
  */
 data class SettingsHubViewState(
     val loading: Boolean,
@@ -112,6 +116,8 @@ data class SettingsHubViewState(
     val longRunningEnabled: Boolean,
     val crashReportingEnabled: Boolean,
     val restartRequiredMessage: String? = null,
+    val searchQuery: String = "",
+    val searchResults: List<HubSearchResultRow> = emptyList(),
 )
 
 // ─── Generation ──────────────────────────────────────────────────────────────

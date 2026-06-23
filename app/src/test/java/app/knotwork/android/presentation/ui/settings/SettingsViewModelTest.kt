@@ -44,6 +44,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import app.knotwork.android.domain.settings.SettingsCategoryId as DomainSettingsCategoryId
 
 /**
  * Unit tests for the redesigned [SettingsViewModel].
@@ -675,6 +676,41 @@ class SettingsViewModelTest {
         advanceUntilIdle()
         coVerify { testBackend() }
         assertNotNull(viewModel.uiState.value.snackbarMessage)
+    }
+
+    @Test
+    fun `requestHighlight stores the anchor and highlightConsumed clears it`() = runTest {
+        advanceUntilIdle()
+        viewModel.requestHighlight("TEMPERATURE")
+        assertEquals("TEMPERATURE", viewModel.uiState.value.pendingHighlightAnchor)
+        viewModel.highlightConsumed()
+        assertNull(viewModel.uiState.value.pendingHighlightAnchor)
+    }
+
+    @Test
+    fun `resolveHighlight targets the owning category and seeds Advanced for advanced rows`() = runTest {
+        advanceUntilIdle()
+        // TEMPERATURE is an Advanced Generation row.
+        val onGeneration = viewModel.resolveHighlight("TEMPERATURE", DomainSettingsCategoryId.GENERATION)
+        assertEquals("TEMPERATURE", onGeneration.key)
+        assertEquals(true, onGeneration.advancedExpanded)
+        // The same anchor does not target a different category.
+        val onMemory = viewModel.resolveHighlight("TEMPERATURE", DomainSettingsCategoryId.MEMORY)
+        assertNull(onMemory.key)
+        // An unknown anchor resolves to nothing.
+        assertNull(viewModel.resolveHighlight("NOT_A_KEY", DomainSettingsCategoryId.GENERATION).key)
+    }
+
+    @Test
+    fun `onSearchQueryChange publishes synonym hits and clearSearch empties them`() = runTest {
+        advanceUntilIdle()
+        // "npu" matches LOCAL_MODEL_BACKEND via its registry synonym.
+        viewModel.onSearchQueryChange("npu")
+        assertEquals("npu", viewModel.uiState.value.searchQuery)
+        assertTrue(viewModel.uiState.value.searchResults.any { it.anchorKey == "LOCAL_MODEL_BACKEND" })
+        viewModel.clearSearch()
+        assertEquals("", viewModel.uiState.value.searchQuery)
+        assertTrue(viewModel.uiState.value.searchResults.isEmpty())
     }
 
     private fun newViewModel(): SettingsViewModel = SettingsViewModel(

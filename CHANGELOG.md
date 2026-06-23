@@ -15,6 +15,16 @@ details.
 
 ### Added
 
+- **Search the settings.** The settings hub now has a search field. Typing
+  filters every setting by name, description, owning category and synonyms (so
+  `max` surfaces *Cap autonomous steps* via the synonym *max steps*), with the
+  matched substring highlighted in each result. A result shows its category
+  breadcrumb and Basic/Advanced tier; tapping it opens that category sub-screen,
+  expands the Advanced section when needed, and scrolls to and briefly flashes
+  the target row (a static accent under reduced motion). A calm "no settings
+  match" empty state offers a one-tap clear. The index is built from the settings
+  registry, so a setting added to the registry is searchable automatically.
+
 - **More settings exposed in the redesigned Settings UI.** The tool-usage
   instruction and voice-input length (Generation), the PIPELINE-node max nesting
   depth and the structured-output repair budget (Pipelines), and the

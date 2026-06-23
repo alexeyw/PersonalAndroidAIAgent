@@ -32,20 +32,24 @@ fun BackgroundSettingsContent(
         onBack = callbacks.onBack,
         modifier = modifier,
     ) {
-        IconToggleRow(
-            icon = AppIcons.Bolt,
-            title = stringResource(R.string.knotwork_settings_notifications_long_running),
-            subtitle = stringResource(R.string.knotwork_settings_notifications_long_running_subtitle),
-            checked = state.longRunningEnabled,
-            onCheckedChange = callbacks.onLongRunningToggle,
-        )
-        IconToggleRow(
-            icon = AppIcons.History,
-            title = stringResource(R.string.knotwork_settings_notifications_scheduled_results),
-            subtitle = stringResource(R.string.knotwork_settings_notifications_scheduled_results_subtitle),
-            checked = state.scheduledResultsEnabled,
-            onCheckedChange = callbacks.onScheduledResultsToggle,
-        )
+        SettingsAnchor(anchorKey = SettingsRowAnchors.LONG_RUNNING_TASKS_NOTIFICATIONS) {
+            IconToggleRow(
+                icon = AppIcons.Bolt,
+                title = stringResource(R.string.knotwork_settings_notifications_long_running),
+                subtitle = stringResource(R.string.knotwork_settings_notifications_long_running_subtitle),
+                checked = state.longRunningEnabled,
+                onCheckedChange = callbacks.onLongRunningToggle,
+            )
+        }
+        SettingsAnchor(anchorKey = SettingsRowAnchors.SCHEDULED_TASK_NOTIFICATIONS) {
+            IconToggleRow(
+                icon = AppIcons.History,
+                title = stringResource(R.string.knotwork_settings_notifications_scheduled_results),
+                subtitle = stringResource(R.string.knotwork_settings_notifications_scheduled_results_subtitle),
+                checked = state.scheduledResultsEnabled,
+                onCheckedChange = callbacks.onScheduledResultsToggle,
+            )
+        }
         AdvancedDisclosure(initiallyExpanded = advancedExpanded) {
             Column(
                 modifier = Modifier.fillMaxWidth(),

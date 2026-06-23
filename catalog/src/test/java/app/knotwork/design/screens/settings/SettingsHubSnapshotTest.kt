@@ -54,6 +54,21 @@ class SettingsHubSnapshotTest {
         SettingsHubContent(state = SettingsPreview.hubDefault())
     }
 
+    @Test
+    fun hub_search_results_light() = snapshot("search_results", dark = false) {
+        SettingsHubContent(state = SettingsPreview.hubSearchResults())
+    }
+
+    @Test
+    fun hub_search_results_dark() = snapshot("search_results", dark = true) {
+        SettingsHubContent(state = SettingsPreview.hubSearchResults())
+    }
+
+    @Test
+    fun hub_search_empty_light() = snapshot("search_empty", dark = false) {
+        SettingsHubContent(state = SettingsPreview.hubSearchEmpty())
+    }
+
     private fun snapshot(name: String, dark: Boolean, fontScale: Float = 1f, content: @Composable () -> Unit) {
         composeTestRule.setContent {
             val baseDensity = LocalDensity.current
