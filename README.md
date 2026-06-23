@@ -108,11 +108,13 @@ configured it.
   with the **Audio support** toggle on the Models screen. A text-only model, a
   denied mic permission, or a busy engine each surface a calm, non-blocking
   notice. The clip is deleted after a successful transcription.
-- Redesigned **Settings** screen with identity card, structured
-  HITL restrictions, sampling/repetition controls, memory dashboard
-  (Chunks · Size · Threads · Avg score + Export / Import / Re-embed / Clear),
-  test-backend probe metrics, and a long-running-task notification
-  channel.
+- **Settings as a searchable category hub** — a hub with a short *Basic*
+  block and a search field over eight focused category sub-screens
+  (Generation, Models, Memory, Pipelines & structured output, Tools &
+  workspace, Background & triggers, Privacy, About). Each sub-screen leads
+  with its everyday controls and tucks tuning parameters behind an in-category
+  *Advanced* disclosure. Search matches name, description, category and
+  synonyms, then deep-links to and flashes the matched row.
 - **Local model manager** with an inline Active card, HuggingFace
   token + custom URL download fields, and preset rows showing live
   download progress / on-disk status.
@@ -244,9 +246,9 @@ variant via your browser's `prefers-color-scheme`.
     <td align="center">
       <picture>
         <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-settings-dark.png">
-        <img alt="Settings — identity, system instructions, restrictions, LLM parameters" src="docs/images/hero-settings.png" width="270">
+        <img alt="Settings — searchable hub with Basic controls and eight categories" src="docs/images/hero-settings.png" width="270">
       </picture>
-      <br><sub><b>Settings</b> — identity card, system instructions with <code>$VARIABLE</code> chips, restrictions, LLM params</sub>
+      <br><sub><b>Settings</b> — searchable hub with inline <i>Basic</i> controls over eight category sub-screens</sub>
     </td>
   </tr>
 </table>
