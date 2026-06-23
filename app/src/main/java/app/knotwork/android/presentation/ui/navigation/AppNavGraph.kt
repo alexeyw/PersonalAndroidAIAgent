@@ -132,7 +132,12 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
         }
 
         // ─── Chat tab ──────────────────────────────────────────────────────
-        composable(NavRoutes.CHAT_TAB) {
+        composable(
+            route = NavRoutes.CHAT_TAB,
+            deepLinks = listOf(
+                navDeepLink { uriPattern = NavRoutes.CHAT_TAB_DEEP_LINK_PATTERN },
+            ),
+        ) {
             val chatHomeViewModel: ChatHomeViewModel = hiltViewModel()
             ChatHomeScreen(
                 viewModel = chatHomeViewModel,
@@ -171,7 +176,12 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
             startDestination = NavRoutes.PIPELINE_LIBRARY,
             route = NavRoutes.PIPELINES_GRAPH,
         ) {
-            composable(NavRoutes.PIPELINE_LIBRARY) { entry ->
+            composable(
+                route = NavRoutes.PIPELINE_LIBRARY,
+                deepLinks = listOf(
+                    navDeepLink { uriPattern = NavRoutes.PIPELINES_DEEP_LINK_PATTERN },
+                ),
+            ) { entry ->
                 val parentEntry = remember(entry) {
                     navController.getBackStackEntry(NavRoutes.PIPELINES_GRAPH)
                 }

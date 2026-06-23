@@ -25,6 +25,7 @@ import app.knotwork.android.data.services.PendingInteractionMaintenanceScheduler
 import app.knotwork.android.data.services.RunRetentionScheduler
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.MemoryReembedScheduler
+import app.knotwork.android.presentation.shortcuts.AppShortcutPublisher
 import app.knotwork.android.presentation.state.TransientMessageRelay
 import app.knotwork.android.presentation.theme.AndroidAIAgentTheme
 import app.knotwork.android.presentation.ui.navigation.AppNavGraph
@@ -55,6 +56,8 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var runRetentionScheduler: RunRetentionScheduler
 
     @Inject lateinit var attachmentOrphanCleanupScheduler: AttachmentOrphanCleanupScheduler
+
+    @Inject lateinit var appShortcutPublisher: AppShortcutPublisher
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -111,6 +114,9 @@ class MainActivity : ComponentActivity() {
             // recovery isn't tied to this one entry point (the foreground service
             // re-arms too).
             memoryReembedScheduler.rearmIfPending()
+            // Refresh the dynamic launcher shortcuts (recent sessions) off the
+            // main thread, as ShortcutManagerCompat requires.
+            appShortcutPublisher.refresh()
         }
 
         // Pin transparent status- and navigation-bar

@@ -171,4 +171,10 @@
     <string name="settings_cloud_retry_subtitle">Applies to all cloud providers and cloud embeddings. Transient failures (rate limits, 5xx, timeouts) are retried with exponential backoff; authentication errors are not.</string>
     <string name="settings_cloud_retry_attempts_label">Max attempts: %1$d (1 disables retries)</string>
     <string name="settings_cloud_retry_delay_label">Base delay: %1$d ms</string>
+
+    <!-- Entry-surface pipeline bindings (Background category) -->
+    <string name="settings_pipeline_not_set">Not set</string>
+    <string name="settings_pipeline_picker_share_title">Pipeline for sharing</string>
+    <string name="settings_pipeline_picker_tile_title">Quick Settings pipeline</string>
+    <string name="settings_pipeline_picker_none">None</string>
 </resources>

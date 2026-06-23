@@ -1,5 +1,6 @@
 package app.knotwork.android.presentation.ui.settings
 
+import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,19 +12,23 @@ import kotlinx.coroutines.launch
 /**
  * Background-&-triggers category delegate of [SettingsViewModel].
  *
- * Owns the two notification toggles plus the checkpoint-resume and
- * background-approval windows. Observes their persisted flows into the shared
- * [state] and routes edits back through [settingsRepository]. Shares the
- * ViewModel's [scope] and single [SettingsUiState] reducer.
+ * Owns the two notification toggles, the checkpoint-resume and
+ * background-approval windows, and the per-surface entry-point pipeline bindings
+ * (share target, Quick Settings tile) plus the bindable-pipeline list backing
+ * their pickers. Observes the persisted flows into the shared [state] and routes
+ * edits back through [settingsRepository]. Shares the ViewModel's [scope] and
+ * single [SettingsUiState] reducer.
  *
  * @property scope The ViewModel's `viewModelScope`.
  * @property state The ViewModel's single source-of-truth state flow.
- * @property settingsRepository Persistence for the notification + window settings.
+ * @property settingsRepository Persistence for the notification + window + binding settings.
+ * @property pipelineRepository Source of the bindable-pipeline list for the pickers.
  */
 class BackgroundSettingsDelegate(
     private val scope: CoroutineScope,
     private val state: MutableStateFlow<SettingsUiState>,
     private val settingsRepository: SettingsRepository,
+    private val pipelineRepository: PipelineRepository,
 ) {
 
     init {
@@ -42,6 +47,30 @@ class BackgroundSettingsDelegate(
         settingsRepository.backgroundApprovalWindowHours.onEach { value ->
             state.update { it.copy(backgroundApprovalWindowHours = value) }
         }.launchIn(scope)
+
+        settingsRepository.shareTargetPipelineId.onEach { value ->
+            state.update { it.copy(shareTargetPipelineId = value) }
+        }.launchIn(scope)
+
+        settingsRepository.quickSettingsTilePipelineId.onEach { value ->
+            state.update { it.copy(quickSettingsTilePipelineId = value) }
+        }.launchIn(scope)
+
+        pipelineRepository.getAllPipelines().onEach { pipelines ->
+            state.update { current ->
+                current.copy(bindablePipelines = pipelines.map { PipelineBindingOption(it.id, it.name) })
+            }
+        }.launchIn(scope)
+    }
+
+    /** Persists (or clears, with `null`) the pipeline bound to the share target. */
+    fun setShareTargetPipelineId(pipelineId: String?) {
+        scope.launch { settingsRepository.setShareTargetPipelineId(pipelineId) }
+    }
+
+    /** Persists (or clears, with `null`) the pipeline bound to the Quick Settings tile. */
+    fun setQuickSettingsTilePipelineId(pipelineId: String?) {
+        scope.launch { settingsRepository.setQuickSettingsTilePipelineId(pipelineId) }
     }
 
     /** Persists the "ping me when a pipeline runs long in the background" toggle. */

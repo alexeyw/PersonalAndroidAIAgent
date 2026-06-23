@@ -40,6 +40,19 @@ object NavRoutes {
     /** Deep-link uri pattern matching [CHAT_WITH_THREAD]. */
     const val CHAT_DEEP_LINK_PATTERN: String = "$DEEP_LINK_SCHEME://chat/{$CHAT_THREAD_ARG}"
 
+    /**
+     * Deep-link uri for the chat tab without a specific thread, used by the
+     * static "New chat" launcher shortcut. Distinct from [CHAT_DEEP_LINK_PATTERN]
+     * (which carries a `{threadId}` path segment).
+     */
+    const val CHAT_TAB_DEEP_LINK_PATTERN: String = "$DEEP_LINK_SCHEME://chat"
+
+    /**
+     * Deep-link uri for the pipeline library, used by the static "Pipelines"
+     * launcher shortcut.
+     */
+    const val PIPELINES_DEEP_LINK_PATTERN: String = "$DEEP_LINK_SCHEME://pipelines"
+
     /** Builds a concrete `chat/<id>` route for `navController.navigate`. */
     fun chatRoute(threadId: String): String = "chat/$threadId"
 

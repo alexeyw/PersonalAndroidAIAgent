@@ -126,6 +126,11 @@ class SettingsManager @Inject constructor(
         val TRACE_RETENTION_MAX_AGE_DAYS = intPreferencesKey("trace_retention_max_age_days")
         val MEMORY_SUMMARY_DEFAULT_LIMIT = intPreferencesKey("memory_summary_default_limit")
         val DEFAULT_PIPELINE_ID = stringPreferencesKey("default_pipeline_id")
+
+        // Per-surface entry-point pipeline bindings. User bindings (like
+        // DEFAULT_PIPELINE_ID), so excluded from resetToRecommendedDefaults.
+        val SHARE_TARGET_PIPELINE_ID = stringPreferencesKey("share_target_pipeline_id")
+        val QUICK_SETTINGS_TILE_PIPELINE_ID = stringPreferencesKey("quick_settings_tile_pipeline_id")
         val CRASH_REPORTING_ENABLED = booleanPreferencesKey("crash_reporting_enabled")
         val CONSOLE_PREFERRED_TAB = stringPreferencesKey("console_preferred_tab")
 
@@ -1052,6 +1057,52 @@ class SettingsManager @Inject constructor(
                 preferences.remove(PreferencesKeys.DEFAULT_PIPELINE_ID)
             } else {
                 preferences[PreferencesKeys.DEFAULT_PIPELINE_ID] = pipelineId
+            }
+        }
+    }
+
+    override val shareTargetPipelineId: Flow<String?> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.SHARE_TARGET_PIPELINE_ID]
+        }
+
+    override suspend fun setShareTargetPipelineId(pipelineId: String?) {
+        dataStore.edit { preferences ->
+            if (pipelineId == null) {
+                preferences.remove(PreferencesKeys.SHARE_TARGET_PIPELINE_ID)
+            } else {
+                preferences[PreferencesKeys.SHARE_TARGET_PIPELINE_ID] = pipelineId
+            }
+        }
+    }
+
+    override val quickSettingsTilePipelineId: Flow<String?> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.QUICK_SETTINGS_TILE_PIPELINE_ID]
+        }
+
+    override suspend fun setQuickSettingsTilePipelineId(pipelineId: String?) {
+        dataStore.edit { preferences ->
+            if (pipelineId == null) {
+                preferences.remove(PreferencesKeys.QUICK_SETTINGS_TILE_PIPELINE_ID)
+            } else {
+                preferences[PreferencesKeys.QUICK_SETTINGS_TILE_PIPELINE_ID] = pipelineId
             }
         }
     }

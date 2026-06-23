@@ -117,6 +117,8 @@ class OrchestratorViewModelTest {
         localModelRepository = mockk()
         settingsRepository = mockk(relaxed = true) {
             every { defaultPipelineId } returns flowOf(null)
+            every { shareTargetPipelineId } returns flowOf(null)
+            every { quickSettingsTilePipelineId } returns flowOf(null)
             every { allowedHttpDomains } returns allowedDomainsFlow
         }
 

@@ -170,6 +170,8 @@ internal object SettingsPreview {
     fun background(): BackgroundSettingsViewState = BackgroundSettingsViewState(
         longRunningEnabled = true,
         scheduledResultsEnabled = true,
+        shareTargetPipelineLabel = "Default System Pipeline",
+        quickTilePipelineLabel = "Not set",
         advancedSliders = listOf(
             SettingSliderRow(SLIDER_BACKGROUND_RESUME_MAX_AGE, "Resume window", "48 h", 48f, 1f..168f),
             SettingSliderRow(SLIDER_BACKGROUND_APPROVAL_WINDOW, "Approval window", "24 h", 24f, 1f..168f),

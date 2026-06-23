@@ -17,4 +17,18 @@
     <string name="clarification_channel_name">Agent Questions</string>
     <string name="clarification_channel_description">Questions the agent needs answered to continue a paused task.</string>
     <string name="clarification_notification_title">Agent needs your input</string>
+
+    <!-- Entry surfaces: launcher shortcuts, share target, Quick Settings tile -->
+    <string name="shortcut_new_chat_short">New chat</string>
+    <string name="shortcut_new_chat_long">Start a new chat</string>
+    <string name="shortcut_pipelines_short">Pipelines</string>
+    <string name="shortcut_pipelines_long">Open pipeline library</string>
+    <string name="share_not_configured">Pick a pipeline for sharing in Settings → Background.</string>
+    <string name="share_nothing_to_share">Nothing to share.</string>
+    <string name="tile_label">Run pipeline</string>
+    <string name="tile_duty_prompt">Run my duty pipeline.</string>
+    <string name="tile_running">Running pipeline in the background…</string>
+    <string name="tile_not_configured">Pick a Quick Settings pipeline in Settings → Background.</string>
+    <string name="tile_subtitle_ready">Ready</string>
+    <string name="tile_subtitle_unconfigured">Not set up</string>
 </resources>

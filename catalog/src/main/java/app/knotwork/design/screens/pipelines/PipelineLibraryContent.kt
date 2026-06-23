@@ -546,6 +546,32 @@ private fun RowOverflowMenu(row: PipelineLibraryRow, expanded: Boolean, callback
         DropdownMenuItem(
             leadingIcon = {
                 Icon(
+                    imageVector = AppIcons.Share,
+                    contentDescription = null,
+                )
+            },
+            text = { Text(stringResource(R.string.knotwork_library_menu_use_for_share)) },
+            onClick = {
+                callbacks.onOverflowDismiss()
+                callbacks.onUseForSharing(row.id)
+            },
+        )
+        DropdownMenuItem(
+            leadingIcon = {
+                Icon(
+                    imageVector = AppIcons.Bolt,
+                    contentDescription = null,
+                )
+            },
+            text = { Text(stringResource(R.string.knotwork_library_menu_use_for_tile)) },
+            onClick = {
+                callbacks.onOverflowDismiss()
+                callbacks.onUseForTile(row.id)
+            },
+        )
+        DropdownMenuItem(
+            leadingIcon = {
+                Icon(
                     imageVector = AppIcons.Edit,
                     contentDescription = null,
                 )

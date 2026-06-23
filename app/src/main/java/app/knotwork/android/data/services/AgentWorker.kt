@@ -18,6 +18,7 @@ import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Role
+import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.services.ScheduledTaskNotifier
@@ -76,6 +77,20 @@ class AgentWorker @AssistedInject constructor(
          */
         const val KEY_SESSION_ID = "agent_session_id"
 
+        /**
+         * Input-data key carrying the explicit pipeline binding the run must
+         * execute against. Optional: when absent the run resolves the
+         * application default (the `schedule_task` tool path). Entry surfaces
+         * (the Quick Settings tile) set it to the user's bound pipeline.
+         */
+        const val KEY_PIPELINE_ID = "agent_pipeline_id"
+
+        /**
+         * Input-data key carrying the [RunOrigin] name attributed to the run.
+         * Optional: defaults to [RunOrigin.SCHEDULER] when absent or unparsable.
+         */
+        const val KEY_ORIGIN = "agent_origin"
+
         /** Progress key exposing the node currently executing (or the run status). */
         const val KEY_CURRENT_STAGE = "current_stage"
 
@@ -102,8 +117,13 @@ class AgentWorker @AssistedInject constructor(
         val runId: String
         try {
             sessionId = resolveSession(inputData.getString(KEY_SESSION_ID), prompt)
-            runId = agentOrchestratorUseCase.enqueueScheduled(sessionId, prompt)
-            Timber.d("AgentWorker enqueued scheduled run %s into session %s", runId, sessionId)
+            runId = agentOrchestratorUseCase.enqueueScheduled(
+                sessionId = sessionId,
+                userPrompt = prompt,
+                pipelineId = inputData.getString(KEY_PIPELINE_ID),
+                origin = parseOrigin(inputData.getString(KEY_ORIGIN)),
+            )
+            Timber.d("AgentWorker enqueued background run %s into session %s", runId, sessionId)
         } catch (e: CancellationException) {
             // WorkManager cancels the worker by cancelling this coroutine —
             // mapping the cancellation to `retry()` would resurrect a job the
@@ -188,6 +208,14 @@ class AgentWorker @AssistedInject constructor(
             .build()
         NotificationManagerCompat.from(applicationContext).createNotificationChannel(channel)
     }
+
+    /**
+     * Maps the persisted origin name back to a [RunOrigin], falling back to
+     * [RunOrigin.SCHEDULER] for an absent or unrecognised value (legacy work
+     * enqueued before the key existed).
+     */
+    private fun parseOrigin(raw: String?): RunOrigin =
+        RunOrigin.entries.firstOrNull { it.name == raw } ?: RunOrigin.SCHEDULER
 
     /**
      * Resolves the chat session the run lands in. The requested session is

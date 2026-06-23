@@ -25,13 +25,14 @@ before the next release ships.
 2. [Chats](#chats)
 3. [Console](#console)
 4. [Background tasks](#background-tasks)
-5. [Pipelines](#pipelines)
-6. [Browser pipeline editor](#browser-pipeline-editor)
-7. [Tools and MCP](#tools-and-mcp)
-8. [Files](#files)
-9. [Memory](#memory)
-10. [Settings](#settings)
-11. [Troubleshooting](#troubleshooting)
+5. [Entry surfaces](#entry-surfaces)
+6. [Pipelines](#pipelines)
+7. [Browser pipeline editor](#browser-pipeline-editor)
+8. [Tools and MCP](#tools-and-mcp)
+9. [Files](#files)
+10. [Memory](#memory)
+11. [Settings](#settings)
+12. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -570,6 +571,56 @@ Runs still waiting on an approval or clarification are never removed by
 retention — they stay until you respond or their approval window
 expires. Deleting a conversation removes its runs and traces
 immediately.
+
+---
+
+## Entry surfaces
+
+Beyond opening the app, three OS surfaces let you reach the agent from
+elsewhere on the device. Every surface is **off by default**: it does
+nothing until you point it at a pipeline, so the agent never acts on
+shared content or a tap until you have opted in.
+
+### Sharing into the agent
+
+The app appears in the Android share sheet for **text and images**.
+Share something and pick the app: it runs your chosen *share pipeline*
+over the shared content and opens the new chat so you can watch the run.
+A shared image is attached exactly like a composer attachment (the local
+model reads it; it never leaves the device). If you have not bound a
+share pipeline yet, the app opens with a reminder instead of running
+anything.
+
+### Launcher shortcuts
+
+Long-press the app icon for quick actions:
+
+- **New chat** — opens a fresh conversation.
+- **Pipelines** — opens the pipeline library.
+- **Recent chats** — the app also keeps a couple of dynamic shortcuts to
+  your most recently used conversations, so you can jump straight back in.
+
+### Quick Settings tile
+
+Add the **Run pipeline** tile to your Quick Settings (notification
+shade). One tap runs your chosen *tile pipeline* in the background — even
+when the app is closed — and posts a notification when it finishes, with
+a tap-through into the resulting chat. While no pipeline is bound the tile
+is inactive and a tap opens the app so you can set one up. Right after you
+bind a tile pipeline in Settings, Android offers to add the tile for you.
+
+### Choosing a pipeline per surface
+
+Bind a pipeline to a surface in either place:
+
+- **Settings → Background & triggers** — the *Pipeline for sharing* and
+  *Quick Settings pipeline* rows open a picker (choose a pipeline, or
+  **None** to switch the surface back off).
+- **Pipeline library** — a pipeline's row menu (⋮) has **Use for sharing**
+  and **Use for Quick Settings tile**.
+
+If you delete a pipeline that a surface was using, that surface simply
+turns off again until you bind another.
 
 ---
 

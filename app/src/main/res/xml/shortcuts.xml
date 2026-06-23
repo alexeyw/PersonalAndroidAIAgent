@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Static launcher shortcuts. These open existing screens via the app's
+    `knotwork://` deep-link routes and never run a pipeline by themselves.
+    Dynamic shortcuts (recent sessions) are published at runtime by
+    AppShortcutPublisher.
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="new_chat"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_new_chat"
+        android:shortcutShortLabel="@string/shortcut_new_chat_short"
+        android:shortcutLongLabel="@string/shortcut_new_chat_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="knotwork://chat"
+            android:targetClass="app.knotwork.android.presentation.ui.MainActivity"
+            android:targetPackage="app.knotwork.android" />
+    </shortcut>
+
+    <shortcut
+        android:shortcutId="pipeline_library"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_pipelines"
+        android:shortcutShortLabel="@string/shortcut_pipelines_short"
+        android:shortcutLongLabel="@string/shortcut_pipelines_long">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="knotwork://pipelines"
+            android:targetClass="app.knotwork.android.presentation.ui.MainActivity"
+            android:targetPackage="app.knotwork.android" />
+    </shortcut>
+</shortcuts>

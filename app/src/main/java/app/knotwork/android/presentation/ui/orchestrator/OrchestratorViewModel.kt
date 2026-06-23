@@ -185,6 +185,33 @@ class OrchestratorViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Binds [pipelineId] to the share-target entry surface (library row menu
+     * "Use for sharing"). Mirrors [setDefaultPipeline]; the binding is observed
+     * by the Background settings screen.
+     */
+    fun setShareTargetPipeline(pipelineId: String) {
+        viewModelScope.launch {
+            settingsRepository.setShareTargetPipelineId(pipelineId)
+            _uiState.update {
+                it.copy(feedbackMessage = UiText(R.string.orchestrator_feedback_share_pipeline_bound))
+            }
+        }
+    }
+
+    /**
+     * Binds [pipelineId] to the Quick Settings tile (library row menu "Use for
+     * Quick Settings tile"). Mirrors [setDefaultPipeline].
+     */
+    fun setQuickSettingsTilePipeline(pipelineId: String) {
+        viewModelScope.launch {
+            settingsRepository.setQuickSettingsTilePipelineId(pipelineId)
+            _uiState.update {
+                it.copy(feedbackMessage = UiText(R.string.orchestrator_feedback_tile_pipeline_bound))
+            }
+        }
+    }
+
     private fun observePromptTemplates() {
         viewModelScope.launch {
             getPromptTemplatesUseCase()
@@ -982,6 +1009,17 @@ class OrchestratorViewModel @Inject constructor(
             // immediately fall back to the new "first in library" default.
             if (result.isSuccess && _uiState.value.defaultPipelineId == pipelineId) {
                 settingsRepository.setDefaultPipelineId(null)
+            }
+            // Clear per-surface entry-point bindings dangling on the deleted
+            // pipeline so the share target / tile fall back to their inert
+            // privacy-first default rather than a non-existent id.
+            if (result.isSuccess) {
+                if (settingsRepository.shareTargetPipelineId.first() == pipelineId) {
+                    settingsRepository.setShareTargetPipelineId(null)
+                }
+                if (settingsRepository.quickSettingsTilePipelineId.first() == pipelineId) {
+                    settingsRepository.setQuickSettingsTilePipelineId(null)
+                }
             }
             _uiState.update { state ->
                 state.copy(

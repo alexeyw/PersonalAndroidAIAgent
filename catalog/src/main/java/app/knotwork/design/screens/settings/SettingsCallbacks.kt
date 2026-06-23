@@ -96,6 +96,10 @@ class SettingsCallbacks(
     val onScheduledResultsToggle: (Boolean) -> Unit = {},
     /** Background slider change (resume / approval window), keyed by id. */
     val onBackgroundSliderChange: (id: String, value: Float) -> Unit = { _, _ -> },
+    /** Open the picker binding a pipeline to the share target. */
+    val onShareTargetPipelineClick: () -> Unit = {},
+    /** Open the picker binding a pipeline to the Quick Settings tile. */
+    val onQuickTilePipelineClick: () -> Unit = {},
 
     // ─── Privacy ─────────────────────────────────────────────────────────────
     /** "Crash reporting" toggle. */

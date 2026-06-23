@@ -269,6 +269,8 @@
     <string name="knotwork_library_menu_load">Load in editor</string>
     <string name="knotwork_library_menu_set_default">Set as default</string>
     <string name="knotwork_library_menu_set_default_active">Default</string>
+    <string name="knotwork_library_menu_use_for_share">Use for sharing</string>
+    <string name="knotwork_library_menu_use_for_tile">Use for Quick Settings tile</string>
     <string name="knotwork_library_menu_rename">Rename</string>
     <string name="knotwork_library_menu_duplicate">Duplicate</string>
     <string name="knotwork_library_menu_export">Export JSON</string>
@@ -469,6 +471,8 @@
     <string name="knotwork_settings_notifications_long_running_subtitle">Ping when a pipeline runs &gt; 8 s in background.</string>
     <string name="knotwork_settings_notifications_scheduled_results">Scheduled task results</string>
     <string name="knotwork_settings_notifications_scheduled_results_subtitle">Notify when a scheduled task completes or fails.</string>
+    <string name="knotwork_settings_share_pipeline_title">Pipeline for sharing</string>
+    <string name="knotwork_settings_tile_pipeline_title">Quick Settings pipeline</string>
 
     <string name="knotwork_settings_crash_reporting_label">Send anonymous crash reports</string>
     <string name="knotwork_settings_crash_reporting_hint">Help improve stability by sharing anonymous crash data.</string>

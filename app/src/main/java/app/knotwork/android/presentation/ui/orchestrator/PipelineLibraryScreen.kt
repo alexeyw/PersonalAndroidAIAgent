@@ -196,6 +196,8 @@ fun PipelineLibraryScreen(
             onOpenEditor()
         },
         onSetAsDefault = { id -> viewModel.setDefaultPipeline(pipelineId = id) },
+        onUseForSharing = { id -> viewModel.setShareTargetPipeline(pipelineId = id) },
+        onUseForTile = { id -> viewModel.setQuickSettingsTilePipeline(pipelineId = id) },
         onRename = { id ->
             uiState.savedPipelines.firstOrNull { it.id == id }?.let { renameTarget = it }
         },

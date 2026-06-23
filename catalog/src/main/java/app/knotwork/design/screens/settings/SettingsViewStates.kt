@@ -251,11 +251,17 @@ data class ToolsSettingsViewState(
  *
  * @property longRunningEnabled "Long-running task alerts" toggle (Basic).
  * @property scheduledResultsEnabled "Scheduled task alerts" toggle (Basic).
+ * @property shareTargetPipelineLabel Bound-pipeline label for the share target
+ *   (the pipeline name, or a localised "Not set" placeholder) (Basic).
+ * @property quickTilePipelineLabel Bound-pipeline label for the Quick Settings
+ *   tile (the pipeline name, or a localised "Not set" placeholder) (Basic).
  * @property advancedSliders Resume-window + approval-window sliders (Advanced).
  */
 data class BackgroundSettingsViewState(
     val longRunningEnabled: Boolean,
     val scheduledResultsEnabled: Boolean,
+    val shareTargetPipelineLabel: String,
+    val quickTilePipelineLabel: String,
     val advancedSliders: List<SettingSliderRow>,
 )
 

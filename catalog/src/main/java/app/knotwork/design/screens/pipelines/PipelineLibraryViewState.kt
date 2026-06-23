@@ -164,6 +164,10 @@ class PipelineLibraryCallbacks(
     val onDelete: (String) -> Unit = {},
     val onLoadInEditor: (String) -> Unit = {},
     val onSetAsDefault: (String) -> Unit = {},
+    /** Bind this pipeline to the share target. */
+    val onUseForSharing: (String) -> Unit = {},
+    /** Bind this pipeline to the Quick Settings tile. */
+    val onUseForTile: (String) -> Unit = {},
     val onRename: (String) -> Unit = {},
     val onExportJson: (String) -> Unit = {},
     val onSaveAsPreset: (String) -> Unit = {},

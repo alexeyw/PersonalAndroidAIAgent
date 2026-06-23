@@ -15,6 +15,16 @@ details.
 
 ### Added
 
+- **Entry surfaces.** The agent now reaches outside its own screen. A **share
+  target** accepts text or an image shared from any app and runs your chosen
+  pipeline over it, landing the result in a new chat you are taken straight to.
+  **Launcher shortcuts** (long-press the app icon) offer "New chat" and
+  "Pipelines", plus dynamic shortcuts to your most recent chats. A **Quick
+  Settings tile** runs a "duty" pipeline in the background with one tap from the
+  shade and notifies you when it finishes. Each surface is **off until you point
+  it at a pipeline** (privacy-first default): bind one per surface in *Settings →
+  Background & triggers*, or from a pipeline's row menu in the library ("Use for
+  sharing" / "Use for Quick Settings tile").
 - **Search the settings.** The settings hub now has a search field. Typing
   filters every setting by name, description, owning category and synonyms (so
   `max` surfaces *Cap autonomous steps* via the synonym *max steps*), with the

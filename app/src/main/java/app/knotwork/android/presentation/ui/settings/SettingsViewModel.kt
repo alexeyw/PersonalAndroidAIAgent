@@ -13,6 +13,7 @@ import app.knotwork.android.domain.repositories.CrashReportingRepository
 import app.knotwork.android.domain.repositories.IdentityRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.MemoryRepository
+import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.EmbeddingProvider
 import app.knotwork.android.domain.services.MemorySearchStatsTracker
@@ -77,6 +78,7 @@ class SettingsViewModel @Inject constructor(
     getSystemPromptVariableCatalogUseCase: GetSystemPromptVariableCatalogUseCase,
     embeddingProviders: Map<String, @JvmSuppressWildcards EmbeddingProvider>,
     memorySearchStatsTracker: MemorySearchStatsTracker,
+    pipelineRepository: PipelineRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -119,7 +121,8 @@ class SettingsViewModel @Inject constructor(
 
     private val tools = ToolsSettingsDelegate(viewModelScope, _uiState, settingsRepository)
 
-    private val background = BackgroundSettingsDelegate(viewModelScope, _uiState, settingsRepository)
+    private val background =
+        BackgroundSettingsDelegate(viewModelScope, _uiState, settingsRepository, pipelineRepository)
 
     private val privacy = PrivacySettingsDelegate(
         scope = viewModelScope,
@@ -170,6 +173,12 @@ class SettingsViewModel @Inject constructor(
         background.setLongRunningTaskNotificationsEnabled(enabled)
     fun setScheduledTaskNotificationsEnabled(enabled: Boolean) =
         background.setScheduledTaskNotificationsEnabled(enabled)
+
+    /** Binds (or clears, with `null`) the pipeline run when content is shared into the app. */
+    fun setShareTargetPipelineId(pipelineId: String?) = background.setShareTargetPipelineId(pipelineId)
+
+    /** Binds (or clears, with `null`) the pipeline run by the Quick Settings tile. */
+    fun setQuickSettingsTilePipelineId(pipelineId: String?) = background.setQuickSettingsTilePipelineId(pipelineId)
 
     // ─── Privacy ─────────────────────────────────────────────────────────────
 
