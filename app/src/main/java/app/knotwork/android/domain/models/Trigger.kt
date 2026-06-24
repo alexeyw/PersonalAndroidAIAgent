@@ -32,6 +32,14 @@ package app.knotwork.android.domain.models
  * @property createdAt Epoch-millis the trigger was created.
  * @property lastFiredAt Epoch-millis of the most recent fire, or `null` if it
  *   has never fired. Used for the interval-schedule debounce and for display.
+ * @property sessionId Id of the chat session this trigger's runs land in, or
+ *   `null` until the trigger has fired at least once. A trigger lazily owns a
+ *   single bound session (named after the trigger) so the results of recurring
+ *   fires accumulate in one conversation instead of spawning a fresh session
+ *   each time. Reset behaviour: preserved across edits (renaming or
+ *   reconfiguring a trigger keeps its result log); recreated on the next fire
+ *   if the user has deleted the bound session. Like [armed] / [lastFiredAt]
+ *   this is runtime-derived lifecycle state, never set by the editor UI.
  */
 data class Trigger(
     val id: String,
@@ -43,6 +51,7 @@ data class Trigger(
     val armed: Boolean = true,
     val createdAt: Long,
     val lastFiredAt: Long? = null,
+    val sessionId: String? = null,
 ) {
     /**
      * Whether the trigger is eligible to be registered with the background

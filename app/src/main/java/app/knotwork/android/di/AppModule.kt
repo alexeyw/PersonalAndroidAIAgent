@@ -195,6 +195,7 @@ object AppModule {
                 AppDatabase.MIGRATION_42_43,
                 AppDatabase.MIGRATION_43_44,
                 AppDatabase.MIGRATION_44_45,
+                AppDatabase.MIGRATION_45_46,
             )
             // No destructive fallback on upgrade: every version bump must supply an explicit
             // migration above so user data survives. Destructive recreation is kept only for the

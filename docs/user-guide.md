@@ -670,6 +670,28 @@ without a pipeline. Saving, enabling, disabling or deleting a trigger
 takes effect immediately, without waiting for the next app launch. If you
 delete the bound pipeline, the trigger is disabled automatically.
 
+### Results and notifications
+
+Each trigger owns its **own chat session**, named after the trigger. The
+first time it fires it creates that chat, and every later run lands in the
+**same** conversation, so a recurring trigger keeps one running log instead
+of scattering a new chat each time. (If you delete that chat, the next fire
+quietly starts a fresh one.) The run streams its work and final answer into
+the session exactly as if you had typed the prompt yourself.
+
+While a run happens in the background you get up to three notifications,
+all on the **"Scheduled task results"** channel and gated by the same
+**Settings → Background & triggers** notifications toggle:
+
+- **Trigger fired** — when an automation starts a background run.
+- **Task completed** — with a preview of the final answer.
+- **Task failed** — with the reason.
+
+Tapping any of them deep-links straight into the trigger's chat. If a run
+pauses for approval of a sensitive or destructive tool, you get the usual
+**approval notification** with **Approve / Deny** actions, so you can let a
+background trigger run proceed (or stop it) without opening the app.
+
 This first wave covers only **low-sensitivity** conditions (time,
 charging, network) that need no dangerous permission; notification,
 location and SMS triggers are intentionally deferred.

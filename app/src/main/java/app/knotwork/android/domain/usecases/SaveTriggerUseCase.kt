@@ -49,6 +49,11 @@ data class TriggerDraftIntent(
  *   rename or pipeline re-bind.
  * - **Edit, condition changed**: preserve `createdAt`, but **re-arm** and clear
  *   the fire time so the new condition starts fresh.
+ *
+ * The bound [Trigger.sessionId] is runtime-derived (set lazily on the first
+ * fire) and is **preserved across every edit**, including a condition change:
+ * reconfiguring a trigger keeps its accumulated result conversation rather than
+ * orphaning it.
  */
 @Singleton
 class SaveTriggerUseCase @Inject constructor(private val triggerRepository: TriggerRepository) {
@@ -73,6 +78,7 @@ class SaveTriggerUseCase @Inject constructor(private val triggerRepository: Trig
                 armed = true,
                 createdAt = existing?.createdAt ?: nowMillis,
                 lastFiredAt = null,
+                sessionId = existing?.sessionId,
             )
         } else {
             // Edit that left the condition untouched: preserve the in-flight latch
@@ -82,6 +88,7 @@ class SaveTriggerUseCase @Inject constructor(private val triggerRepository: Trig
                 armed = existing.armed,
                 createdAt = existing.createdAt,
                 lastFiredAt = existing.lastFiredAt,
+                sessionId = existing.sessionId,
             )
         }
         triggerRepository.saveTrigger(trigger)
@@ -94,6 +101,7 @@ class SaveTriggerUseCase @Inject constructor(private val triggerRepository: Trig
         armed: Boolean,
         createdAt: Long,
         lastFiredAt: Long?,
+        sessionId: String?,
     ): Trigger = Trigger(
         id = id,
         name = name,
@@ -104,5 +112,6 @@ class SaveTriggerUseCase @Inject constructor(private val triggerRepository: Trig
         armed = armed,
         createdAt = createdAt,
         lastFiredAt = lastFiredAt,
+        sessionId = sessionId,
     )
 }

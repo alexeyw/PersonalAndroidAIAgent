@@ -51,6 +51,15 @@ class ScheduledTaskNotifierImpl @Inject constructor(
         NotificationManagerCompat.from(context).createNotificationChannel(channel)
     }
 
+    override suspend fun notifyTriggerFired(sessionId: String, triggerName: String) {
+        post(
+            sessionId = sessionId,
+            title = context.getString(R.string.notifications_trigger_fired_title),
+            body = triggerName,
+            icon = android.R.drawable.ic_popup_sync,
+        )
+    }
+
     override suspend fun notifyCompleted(sessionId: String, resultPreview: String) {
         post(
             sessionId = sessionId,

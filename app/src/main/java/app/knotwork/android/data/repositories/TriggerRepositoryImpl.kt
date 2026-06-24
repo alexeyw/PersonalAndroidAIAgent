@@ -41,6 +41,8 @@ class TriggerRepositoryImpl @Inject constructor(private val dao: TriggerDao) : T
 
     override suspend fun markFired(id: String, firedAt: Long) = dao.markFired(id, firedAt)
 
+    override suspend fun setSessionId(id: String, sessionId: String) = dao.setSessionId(id, sessionId)
+
     /** Maps a domain [Trigger] to its persisted row, encoding the condition. */
     private fun Trigger.toEntity(): TriggerEntity = TriggerEntity(
         id = id,
@@ -52,6 +54,7 @@ class TriggerRepositoryImpl @Inject constructor(private val dao: TriggerDao) : T
         armed = armed,
         createdAt = createdAt,
         lastFiredAt = lastFiredAt,
+        sessionId = sessionId,
     )
 
     /**
@@ -74,6 +77,7 @@ class TriggerRepositoryImpl @Inject constructor(private val dao: TriggerDao) : T
             armed = armed,
             createdAt = createdAt,
             lastFiredAt = lastFiredAt,
+            sessionId = sessionId,
         )
     }
 }

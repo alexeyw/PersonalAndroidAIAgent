@@ -5,7 +5,7 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 /**
- * Room row for a user-defined automation trigger (`triggers` table, v45).
+ * Room row for a user-defined automation trigger (`triggers` table, v46).
  *
  * The activation condition is stored as a compact JSON string in
  * [conditionJson] (produced by
@@ -26,6 +26,10 @@ import androidx.room.PrimaryKey
  *   `true` means ready to fire on the next transition into the satisfied state.
  * @property createdAt Epoch-millis the trigger was created.
  * @property lastFiredAt Epoch-millis of the last fire, or `null` if never fired.
+ * @property sessionId Id of the chat session the trigger's background runs land
+ *   in (added v46), or `null` until the first fire. No foreign key: a deleted
+ *   session is detected at fire time and a fresh one is bound, so the column may
+ *   reference a row that no longer exists.
  */
 @Entity(tableName = "triggers")
 data class TriggerEntity(
@@ -38,4 +42,5 @@ data class TriggerEntity(
     val armed: Boolean,
     val createdAt: Long,
     val lastFiredAt: Long?,
+    val sessionId: String? = null,
 )
