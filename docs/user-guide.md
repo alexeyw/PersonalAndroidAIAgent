@@ -26,13 +26,14 @@ before the next release ships.
 3. [Console](#console)
 4. [Background tasks](#background-tasks)
 5. [Entry surfaces](#entry-surfaces)
-6. [Pipelines](#pipelines)
-7. [Browser pipeline editor](#browser-pipeline-editor)
-8. [Tools and MCP](#tools-and-mcp)
-9. [Files](#files)
-10. [Memory](#memory)
-11. [Settings](#settings)
-12. [Troubleshooting](#troubleshooting)
+6. [Triggers](#triggers)
+7. [Pipelines](#pipelines)
+8. [Browser pipeline editor](#browser-pipeline-editor)
+9. [Tools and MCP](#tools-and-mcp)
+10. [Files](#files)
+11. [Memory](#memory)
+12. [Settings](#settings)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -624,6 +625,54 @@ Bind a pipeline to a surface in either place:
 
 If you delete a pipeline that a surface was using, that surface simply
 turns off again until you bind another.
+
+---
+
+## Triggers
+
+A **trigger** runs a pipeline on its own when a condition is met — a time
+of day, a repeating interval, the device starting to charge, or a network
+connection — and drops the result into a chat in the background. Open
+**More → Triggers** to manage them.
+
+The list shows each trigger with a plain-language condition line ("Every
+day at 08:00", "When charging connected", "When Wi-Fi connects"), its
+bound pipeline, and a switch to enable or disable it on the spot. The
+first time you open the screen, an empty state explains the model —
+*trigger → background run → result in chat* — with a button to create your
+first one.
+
+### Creating or editing a trigger
+
+Tap **New trigger** (or a row to edit one). The editor has:
+
+- **Name** — a label for the list.
+- **When** — the condition type:
+  - **Interval** — repeat every 15 min, 30 min, 1 h, 6 h or 24 h, or a
+    **Custom** value in minutes or hours. The minimum is 15 minutes:
+    background runs are batched, so the system may defer a run by a few
+    minutes.
+  - **Daily** — a time of day (24-hour).
+  - **Charging** — fires once each time the device starts charging, and
+    re-arms when you unplug.
+  - **Network** — fires on connecting; flip **Wi-Fi only** to ignore
+    mobile data.
+- **Run this pipeline** — bind the pipeline to run. Choosing **None**
+  leaves the trigger inert (saved but it fires nothing).
+- **Input prompt** — the message handed to the pipeline each time it
+  fires.
+- **Enabled** — on/off. Off means saved but it won't fire; you can also
+  toggle this from the list.
+
+An **unbound** trigger (no pipeline) is always inert and shows "No
+pipeline — tap to bind" with a disabled switch — a trigger fires nothing
+without a pipeline. Saving, enabling, disabling or deleting a trigger
+takes effect immediately, without waiting for the next app launch. If you
+delete the bound pipeline, the trigger is disabled automatically.
+
+This first wave covers only **low-sensitivity** conditions (time,
+charging, network) that need no dangerous permission; notification,
+location and SMS triggers are intentionally deferred.
 
 ---
 
