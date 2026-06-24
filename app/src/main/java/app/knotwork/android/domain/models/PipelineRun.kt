@@ -84,6 +84,14 @@ enum class RunOrigin {
      * path as [SCHEDULER] but is attributed to the tile surface.
      */
     QUICK_TILE,
+
+    /**
+     * The run was started by a user-defined automation trigger (a schedule, a
+     * charging event, or a network/Wi-Fi connection). Executes in the
+     * background through the same WorkManager path as [SCHEDULER] / [QUICK_TILE]
+     * but is attributed to the trigger surface for observability.
+     */
+    TRIGGER,
 }
 
 /**

@@ -26,6 +26,7 @@ import app.knotwork.android.data.services.PendingInteractionMaintenanceScheduler
 import app.knotwork.android.data.services.RunRetentionScheduler
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.MemoryReembedScheduler
+import app.knotwork.android.domain.usecases.SyncTriggersUseCase
 import app.knotwork.android.presentation.shortcuts.AppShortcutPublisher
 import app.knotwork.android.presentation.state.ChatEntryRequestRelay
 import app.knotwork.android.presentation.state.TransientMessageRelay
@@ -63,6 +64,8 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var attachmentOrphanCleanupScheduler: AttachmentOrphanCleanupScheduler
 
     @Inject lateinit var appShortcutPublisher: AppShortcutPublisher
+
+    @Inject lateinit var syncTriggersUseCase: SyncTriggersUseCase
 
     @Inject lateinit var chatEntryRequestRelay: ChatEntryRequestRelay
 
@@ -143,6 +146,12 @@ class MainActivity : ComponentActivity() {
             // recovery isn't tied to this one entry point (the foreground service
             // re-arms too).
             memoryReembedScheduler.rearmIfPending()
+            // Register the background watches for every enabled, pipeline-bound
+            // automation trigger. Idempotent (replace/cancel keyed by trigger
+            // id), so re-running on activity recreation is harmless; WorkManager
+            // persists the watches across reboot, so this cold-start sync is the
+            // only re-registration entry point needed.
+            syncTriggersUseCase()
             // Refresh the dynamic launcher shortcuts (recent sessions) off the
             // main thread, as ShortcutManagerCompat requires. Only on a fresh
             // start (not a config-change recreation, which keeps savedInstanceState)

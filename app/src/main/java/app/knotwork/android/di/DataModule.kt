@@ -42,8 +42,10 @@ import app.knotwork.android.data.repositories.PromptRepositoryImpl
 import app.knotwork.android.data.repositories.RunTraceRepositoryImpl
 import app.knotwork.android.data.repositories.SkillRepositoryImpl
 import app.knotwork.android.data.repositories.ToolRepositoryImpl
+import app.knotwork.android.data.repositories.TriggerRepositoryImpl
 import app.knotwork.android.data.services.LongRunningTaskNotifierImpl
 import app.knotwork.android.data.services.WorkManagerMemoryReembedScheduler
+import app.knotwork.android.data.services.WorkManagerTriggerScheduler
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.engine.TaskQueueManager
 import app.knotwork.android.domain.engine.TextEmbeddingEngine
@@ -72,6 +74,7 @@ import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.SkillRepository
 import app.knotwork.android.domain.repositories.ToolRepository
+import app.knotwork.android.domain.repositories.TriggerRepository
 import app.knotwork.android.domain.services.AgentWorkspace
 import app.knotwork.android.domain.services.AttachmentStore
 import app.knotwork.android.domain.services.AudioCaptureStore
@@ -80,6 +83,7 @@ import app.knotwork.android.domain.services.DatabaseResetService
 import app.knotwork.android.domain.services.LongRunningTaskNotifier
 import app.knotwork.android.domain.services.MemoryReembedScheduler
 import app.knotwork.android.domain.services.NativeMemorySampler
+import app.knotwork.android.domain.services.TriggerScheduler
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -330,6 +334,23 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindBundledSkillSource(source: AssetBundledSkillSource): BundledSkillSource
+
+    /**
+     * Binds [TriggerRepositoryImpl] to [TriggerRepository] — the `triggers`
+     * table holding user-defined automation triggers.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindTriggerRepository(repository: TriggerRepositoryImpl): TriggerRepository
+
+    /**
+     * Binds the `WorkManager`-backed [WorkManagerTriggerScheduler] to the
+     * domain-level [TriggerScheduler] port that registers each active trigger's
+     * constraint-gated background watch.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindTriggerScheduler(scheduler: WorkManagerTriggerScheduler): TriggerScheduler
 
     /**
      * Binds the [PromptRepositoryImpl] implementation to the [PromptRepository] interface.

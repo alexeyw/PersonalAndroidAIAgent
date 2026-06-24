@@ -449,4 +449,49 @@ class AppDatabaseMigrationTest {
         // Additive + nullable so legacy rows keep NULL (no recorded model).
         assertTrue("modelName must be nullable (no NOT NULL): ${sqlSlot.captured}", !sql.contains("NOT NULL"))
     }
+
+    @Test
+    fun `MIGRATION_44_45 targets versions 44 to 45`() {
+        val migration = AppDatabase.MIGRATION_44_45
+
+        assertEquals(44, migration.startVersion)
+        assertEquals(45, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_44_45 creates triggers table with enabled index and no pipeline FK`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val statements = mutableListOf<String>()
+
+        AppDatabase.MIGRATION_44_45.migrate(db)
+
+        // CREATE TABLE + CREATE INDEX.
+        verify(exactly = 2) { db.execSQL(capture(statements)) }
+
+        val createTable = statements.first().uppercase()
+        assertTrue(
+            "Expected CREATE TABLE triggers, got: ${statements.first()}",
+            createTable.contains("CREATE TABLE") && createTable.contains("TRIGGERS"),
+        )
+        listOf("ID", "NAME", "PIPELINEID", "PROMPT", "CONDITIONJSON", "ENABLED", "CREATEDAT", "LASTFIREDAT")
+            .forEach { column ->
+                assertTrue("Missing column $column in: ${statements.first()}", createTable.contains(column))
+            }
+        assertTrue(
+            "Primary key must be the trigger id: ${statements.first()}",
+            createTable.contains("PRIMARY KEY(`ID`)"),
+        )
+        // A trigger may outlive its bound pipeline (the fire path auto-disables
+        // it), so the column carries no foreign key.
+        assertTrue(
+            "triggers must not carry a pipeline foreign key: ${statements.first()}",
+            !createTable.contains("FOREIGN KEY"),
+        )
+
+        val index = statements[1].uppercase()
+        assertTrue(
+            "Index name must match Room's generated name for the active-trigger query: ${statements[1]}",
+            index.contains("INDEX_TRIGGERS_ENABLED"),
+        )
+    }
 }
