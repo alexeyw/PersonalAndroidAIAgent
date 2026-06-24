@@ -12,6 +12,7 @@ import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.Trigger
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.TriggerRepository
+import app.knotwork.android.domain.usecases.SaveTriggerUseCase
 import app.knotwork.android.domain.usecases.SyncTriggersUseCase
 import app.knotwork.design.theme.KnotworkTheme
 import io.mockk.coEvery
@@ -51,7 +52,8 @@ class TriggersScreenTest {
             every { getAllPipelines() } returns flowOf(listOf(PipelineGraph(id = "p1", name = "Daily briefing")))
         }
         val syncTriggers = mockk<SyncTriggersUseCase>(relaxed = true)
-        val viewModel = TriggersViewModel(triggerRepository, pipelineRepository, syncTriggers)
+        val saveTrigger = SaveTriggerUseCase(triggerRepository)
+        val viewModel = TriggersViewModel(triggerRepository, pipelineRepository, saveTrigger, syncTriggers)
 
         composeTestRule.setContent {
             KnotworkTheme { TriggersScreen(viewModel = viewModel) }

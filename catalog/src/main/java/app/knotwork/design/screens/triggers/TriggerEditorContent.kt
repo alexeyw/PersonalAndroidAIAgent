@@ -52,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.buttons.KnotworkTextButton
+import app.knotwork.design.components.controls.KnotworkSegmentedControl
 import app.knotwork.design.components.controls.LabeledSwitchRow
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
@@ -365,10 +366,10 @@ private fun IntervalParams(state: TriggerEditorUi, strings: TriggerEditorStrings
                     numeric = true,
                 )
             }
-            UnitToggle(
-                hours = state.intervalCustomUnitHours,
-                strings = strings,
-                onChange = callbacks.onIntervalUnitChange,
+            KnotworkSegmentedControl(
+                options = listOf(strings.unitMinutes, strings.unitHours),
+                selectedIndex = if (state.intervalCustomUnitHours) 1 else 0,
+                onSelect = { callbacks.onIntervalUnitChange(it == 1) },
                 modifier = Modifier.weight(1f),
             )
         }
@@ -421,54 +422,6 @@ private fun IntervalChip(label: String, selected: Boolean, onClick: () -> Unit, 
             text = label,
             style = KnotworkTextStyles.MonoSm.copy(fontWeight = FontWeight.SemiBold),
             color = content,
-        )
-    }
-}
-
-@Composable
-private fun UnitToggle(
-    hours: Boolean,
-    strings: TriggerEditorStrings,
-    onChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier
-            .clip(KnotworkTheme.shapes.full)
-            .background(KnotworkTheme.extended.surface2)
-            .border(1.dp, MaterialTheme.colorScheme.outline, KnotworkTheme.shapes.full)
-            .padding(3.dp),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
-    ) {
-        UnitSegment(
-            label = strings.unitMinutes,
-            selected = !hours,
-            onClick = { onChange(false) },
-            modifier = Modifier.weight(1f),
-        )
-        UnitSegment(
-            label = strings.unitHours,
-            selected = hours,
-            onClick = { onChange(true) },
-            modifier = Modifier.weight(1f),
-        )
-    }
-}
-
-@Composable
-private fun UnitSegment(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .clip(KnotworkTheme.shapes.full)
-            .background(if (selected) MaterialTheme.colorScheme.primary else Color.Transparent)
-            .clickable(onClick = onClick)
-            .padding(vertical = KnotworkTheme.spacing.sp2),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = label,
-            style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
-            color = if (selected) MaterialTheme.colorScheme.onPrimary else KnotworkTheme.extended.onSurface2,
         )
     }
 }

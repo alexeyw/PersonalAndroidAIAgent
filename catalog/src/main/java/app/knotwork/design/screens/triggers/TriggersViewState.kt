@@ -96,7 +96,6 @@ data class TriggerPipelineOptionUi(val id: String, val name: String)
  * @property dailyMinute selected minute `0..59` for the Daily condition.
  * @property wifiOnly `true` restricts the Network condition to Wi-Fi.
  * @property pipelines the pipelines offered in the binding picker.
- * @property pipelineId the bound pipeline id, or `null` (unbound).
  * @property pipelineName the resolved bound pipeline name, or `null` (unbound).
  * @property prompt the input message handed to the pipeline on fire.
  * @property enabled the on/off value edited inside the editor.
@@ -118,7 +117,6 @@ data class TriggerEditorUi(
     val dailyMinute: Int,
     val wifiOnly: Boolean,
     val pipelines: List<TriggerPipelineOptionUi>,
-    val pipelineId: String?,
     val pipelineName: String?,
     val prompt: String,
     val enabled: Boolean,

@@ -1,8 +1,14 @@
 package app.knotwork.android.presentation.ui.triggers
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -47,34 +53,51 @@ fun TriggersScreen(
     onBack: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val editor = uiState.editor
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    if (editor != null) {
-        TriggerEditorContent(
-            state = uiState.toEditorUi(editor),
-            modifier = modifier,
-            strings = triggerEditorStrings(),
-            callbacks = TriggerEditorCallbacks(
-                onClose = viewModel::closeEditor,
-                onSave = viewModel::saveEditor,
-                onNameChange = viewModel::onNameChange,
-                onTypeChange = viewModel::onTypeChange,
-                onIntervalPreset = viewModel::onIntervalPreset,
-                onIntervalCustomToggle = viewModel::onIntervalCustomToggle,
-                onIntervalCustomAmountChange = viewModel::onIntervalCustomAmountChange,
-                onIntervalUnitChange = viewModel::onIntervalUnitChange,
-                onDailyTimeChange = viewModel::onDailyTimeChange,
-                onWifiOnlyToggle = viewModel::onWifiOnlyToggle,
-                onPipelineSelect = viewModel::onPipelineSelect,
-                onPromptChange = viewModel::onPromptChange,
-                onEnabledToggle = viewModel::onEnabledToggle,
-                onDelete = { editor.id?.let(viewModel::requestDelete) },
-            ),
-        )
-        return
+    // Surface a one-shot mutation error (save / toggle / delete) as a snackbar
+    // over whichever surface is showing, then clear it.
+    val transientMessage = uiState.transientError?.asString()
+    LaunchedEffect(uiState.transientError) {
+        val message = transientMessage ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        viewModel.clearTransientError()
     }
 
-    val resolvedError = uiState.errorMessage?.asString()
+    Box(modifier = modifier.fillMaxSize()) {
+        val editor = uiState.editor
+        if (editor != null) {
+            TriggerEditorContent(
+                state = uiState.toEditorUi(editor),
+                strings = triggerEditorStrings(),
+                callbacks = TriggerEditorCallbacks(
+                    onClose = viewModel::closeEditor,
+                    onSave = viewModel::saveEditor,
+                    onNameChange = viewModel::onNameChange,
+                    onTypeChange = viewModel::onTypeChange,
+                    onIntervalPreset = viewModel::onIntervalPreset,
+                    onIntervalCustomToggle = viewModel::onIntervalCustomToggle,
+                    onIntervalCustomAmountChange = viewModel::onIntervalCustomAmountChange,
+                    onIntervalUnitChange = viewModel::onIntervalUnitChange,
+                    onDailyTimeChange = viewModel::onDailyTimeChange,
+                    onWifiOnlyToggle = viewModel::onWifiOnlyToggle,
+                    onPipelineSelect = viewModel::onPipelineSelect,
+                    onPromptChange = viewModel::onPromptChange,
+                    onEnabledToggle = viewModel::onEnabledToggle,
+                    onDelete = { editor.id?.let(viewModel::requestDelete) },
+                ),
+            )
+        } else {
+            TriggersList(uiState = uiState, viewModel = viewModel, onBack = onBack)
+        }
+        SnackbarHost(hostState = snackbarHostState)
+    }
+}
+
+/** The list surface + its delete dialog, shown when the editor is closed. */
+@Composable
+private fun TriggersList(uiState: TriggersUiState, viewModel: TriggersViewModel, onBack: () -> Unit) {
+    val resolvedError = uiState.loadError?.asString()
     val fallbackError = stringResource(R.string.triggers_error_body)
     TriggersContent(
         state = uiState.toListViewState(
@@ -88,7 +111,6 @@ fun TriggersScreen(
             resolvedError = resolvedError,
             fallbackError = fallbackError,
         ),
-        modifier = modifier,
         strings = triggersStrings(),
         callbacks = TriggersCallbacks(
             onBack = onBack,
@@ -116,10 +138,18 @@ fun TriggersScreen(
     }
 }
 
-/** Pre-resolved human-readable condition lines keyed by trigger id. */
+/**
+ * Pre-resolved human-readable condition lines keyed by trigger id. The pure
+ * structured-label computation is memoised on the trigger list so only string
+ * resolution (cheap resource lookups) runs on an unrelated recomposition.
+ */
 @Composable
-private fun TriggersUiState.conditionLabels(): Map<String, String> =
-    triggers.associate { it.id to conditionText(TriggerConditionFormatter.toLabel(it.condition)) }
+private fun TriggersUiState.conditionLabels(): Map<String, String> {
+    val structured = remember(triggers) {
+        triggers.map { it.id to TriggerConditionFormatter.toLabel(it.condition) }
+    }
+    return structured.associate { (id, label) -> id to conditionText(label) }
+}
 
 /** Resolves a structured [TriggerConditionLabel] to its localized display string. */
 @Composable
@@ -154,7 +184,7 @@ private fun TriggersUiState.toListViewState(
         )
     }
     val visualState = when {
-        errorMessage != null && triggers.isEmpty() -> TriggersVisualState.Error
+        loadError != null && triggers.isEmpty() -> TriggersVisualState.Error
         isLoading -> TriggersVisualState.Loading
         triggers.isEmpty() -> TriggersVisualState.Empty
         else -> TriggersVisualState.Default
@@ -173,8 +203,14 @@ private fun TriggersUiState.toListViewState(
     )
 }
 
-/** Maps the editor draft onto the catalog editor view state. */
+/**
+ * Maps the editor draft onto the catalog editor view state. The pipeline option
+ * list is memoised on [TriggersUiState.pipelines] so editing the draft (each
+ * keystroke) does not reallocate it.
+ */
+@Composable
 private fun TriggersUiState.toEditorUi(draft: TriggerEditorDraft): TriggerEditorUi {
+    val options = remember(pipelines) { pipelines.map { TriggerPipelineOptionUi(id = it.id, name = it.name) } }
     val pipelineName = draft.pipelineId?.let { id -> pipelines.firstOrNull { it.id == id }?.name }
     return TriggerEditorUi(
         id = draft.id,
@@ -188,12 +224,13 @@ private fun TriggersUiState.toEditorUi(draft: TriggerEditorDraft): TriggerEditor
         dailyHour = draft.dailyHour,
         dailyMinute = draft.dailyMinute,
         wifiOnly = draft.wifiOnly,
-        pipelines = pipelines.map { TriggerPipelineOptionUi(id = it.id, name = it.name) },
-        pipelineId = draft.pipelineId,
+        pipelines = options,
         pipelineName = pipelineName,
         prompt = draft.prompt,
         enabled = draft.enabled,
-        nameError = false,
+        // Show the field-level error only when editing an existing trigger whose
+        // name the user has cleared — a fresh draft starts blank and shouldn't nag.
+        nameError = draft.id != null && draft.name.isBlank(),
         canSave = draft.canSave,
     )
 }

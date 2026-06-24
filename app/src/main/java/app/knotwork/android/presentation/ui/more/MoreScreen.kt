@@ -19,8 +19,9 @@ import app.knotwork.design.screens.more.MoreViewState
 
 /**
  * Landing screen of the "More" bottom-nav tab. Renders the Knotwork
- * [MoreContent] surface with seven navigation rows, live counters, and a
- * footer status pill summarising recent outbound network activity.
+ * [MoreContent] surface with the secondary-destination navigation rows, live
+ * counters, and a footer status pill summarising recent outbound network
+ * activity.
  */
 @Composable
 fun MoreScreen(

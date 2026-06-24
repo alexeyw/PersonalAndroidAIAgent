@@ -418,36 +418,21 @@ private fun TriggerMenuItem(label: String, icon: ImageVector, destructive: Boole
 @Composable
 private fun TriggerTile(type: TriggerConditionType, inert: Boolean) {
     val accent = MaterialTheme.colorScheme.primary
-    if (inert) {
-        Box(
-            modifier = Modifier
-                .size(TriggerRowTile)
-                .clip(KnotworkTheme.shapes.md)
-                .background(KnotworkTheme.extended.surface2)
-                .border(1.dp, KnotworkTheme.extended.outlineStrong, KnotworkTheme.shapes.md),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = type.glyph(),
-                contentDescription = null,
-                tint = KnotworkTheme.extended.onSurfaceDim,
-                modifier = Modifier.size(TriggerRowGlyph),
-            )
-        }
-        return
-    }
+    val background = if (inert) KnotworkTheme.extended.surface2 else accent.copy(alpha = 0.12f)
+    val borderColor = if (inert) KnotworkTheme.extended.outlineStrong else accent.copy(alpha = 0.24f)
+    val tint = if (inert) KnotworkTheme.extended.onSurfaceDim else accent
     Box(
         modifier = Modifier
             .size(TriggerRowTile)
             .clip(KnotworkTheme.shapes.md)
-            .background(accent.copy(alpha = 0.12f))
-            .border(1.dp, accent.copy(alpha = 0.24f), KnotworkTheme.shapes.md),
+            .background(background)
+            .border(1.dp, borderColor, KnotworkTheme.shapes.md),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = type.glyph(),
             contentDescription = null,
-            tint = accent,
+            tint = tint,
             modifier = Modifier.size(TriggerRowGlyph),
         )
     }

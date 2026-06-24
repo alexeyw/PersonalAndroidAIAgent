@@ -5,24 +5,23 @@ import app.knotwork.android.domain.models.Trigger
 import app.knotwork.android.domain.models.TriggerCondition
 import app.knotwork.android.presentation.ui.common.UiText
 import app.knotwork.android.presentation.ui.triggers.TriggerConditionFormatter.MIN_INTERVAL_MINUTES
+import app.knotwork.design.screens.triggers.TRIGGER_INTERVAL_PRESETS
 import app.knotwork.design.screens.triggers.TriggerConditionType
 
 /** Minutes per hour — the divisor when interpreting a custom interval in hours. */
 private const val MINUTES_PER_HOUR = 60L
 
-/** Seed value for a fresh Custom interval reveal (a non-preset minute count). */
-private const val CUSTOM_INTERVAL_SEED_MINUTES = 45L
-
 /**
  * In-progress editor draft. Holds the editable trigger fields plus the
  * per-condition parameters; the ViewModel projects this to the catalog
- * `TriggerEditorUi` and, on save, back into a domain [Trigger].
+ * `TriggerEditorUi` and, on save, into a [TriggerDraftIntent] for
+ * `SaveTriggerUseCase` (which derives the runtime lifecycle fields).
+ *
+ * Note this draft carries only **user-edited** fields — the `armed`,
+ * `lastFiredAt` and `createdAt` lifecycle values are owned by the domain save
+ * use case, not by the editor.
  *
  * @property id `null` for a new draft, non-null when editing an existing trigger.
- * @property createdAt original creation timestamp, preserved across an edit
- *   (0 for a new draft — stamped on first save).
- * @property armed the edge latch carried through an edit (reset on a fresh draft).
- * @property lastFiredAt the last-fired timestamp carried through an edit.
  * @property name current Name value.
  * @property type the selected condition type.
  * @property intervalCustom `true` when the Custom interval panel is shown.
@@ -38,9 +37,6 @@ private const val CUSTOM_INTERVAL_SEED_MINUTES = 45L
  */
 data class TriggerEditorDraft(
     val id: String?,
-    val createdAt: Long,
-    val armed: Boolean,
-    val lastFiredAt: Long?,
     val name: String,
     val type: TriggerConditionType,
     val intervalCustom: Boolean,
@@ -79,15 +75,19 @@ data class TriggerEditorDraft(
     }
 
     companion object {
-        /** The interval preset minute values mirrored from the catalog chips. */
-        private val INTERVAL_PRESETS = setOf(15L, 30L, 60L, 360L, 1440L)
+        /**
+         * The interval preset minute values, derived from the catalog chips
+         * ([TRIGGER_INTERVAL_PRESETS]) so the preset-vs-custom decision can never
+         * drift from what the editor renders.
+         */
+        private val INTERVAL_PRESETS = TRIGGER_INTERVAL_PRESETS.toSet()
+
+        /** The minute count seeded into the Custom amount field when it opens. */
+        const val CUSTOM_SEED: Long = 45L
 
         /** Builds a fresh, unbound draft with sensible defaults (daily 08:00). */
         fun newDraft(): TriggerEditorDraft = TriggerEditorDraft(
             id = null,
-            createdAt = 0L,
-            armed = true,
-            lastFiredAt = null,
             name = "",
             type = TriggerConditionType.Daily,
             intervalCustom = false,
@@ -102,16 +102,10 @@ data class TriggerEditorDraft(
             enabled = true,
         )
 
-        /** The minute count seeded into the Custom amount field when it opens. */
-        const val CUSTOM_SEED: Long = CUSTOM_INTERVAL_SEED_MINUTES
-
         /** Builds an editor draft from an existing [Trigger]. */
         fun fromTrigger(trigger: Trigger): TriggerEditorDraft {
             val base = newDraft().copy(
                 id = trigger.id,
-                createdAt = trigger.createdAt,
-                armed = trigger.armed,
-                lastFiredAt = trigger.lastFiredAt,
                 name = trigger.name,
                 pipelineId = trigger.pipelineId,
                 prompt = trigger.prompt,
@@ -176,7 +170,10 @@ data class TriggerDeleteTarget(val id: String, val name: String)
  * @property openMenuTriggerId id of the row whose overflow menu is open.
  * @property editor non-null when the full-screen editor is open.
  * @property deleteTarget non-null when the delete dialog is open.
- * @property errorMessage transient error banner / fatal load error.
+ * @property loadError a fatal load error (drives the Error screen when there is
+ *   nothing to show); cleared on a successful load.
+ * @property transientError a one-shot error from a mutation (save / toggle /
+ *   delete) surfaced as a snackbar; cleared once shown.
  */
 data class TriggersUiState(
     val isLoading: Boolean = true,
@@ -185,7 +182,8 @@ data class TriggersUiState(
     val openMenuTriggerId: String? = null,
     val editor: TriggerEditorDraft? = null,
     val deleteTarget: TriggerDeleteTarget? = null,
-    val errorMessage: UiText? = null,
+    val loadError: UiText? = null,
+    val transientError: UiText? = null,
 ) {
     /** Number of triggers eligible to fire (enabled and bound). */
     val activeCount: Int get() = triggers.count { it.isActive }

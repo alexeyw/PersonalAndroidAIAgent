@@ -5,6 +5,7 @@ import app.knotwork.android.domain.models.Trigger
 import app.knotwork.android.domain.models.TriggerCondition
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.TriggerRepository
+import app.knotwork.android.domain.usecases.SaveTriggerUseCase
 import app.knotwork.android.domain.usecases.SyncTriggersUseCase
 import app.knotwork.design.screens.triggers.TriggerConditionType
 import io.mockk.coEvery
@@ -36,6 +37,7 @@ class TriggersViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private lateinit var triggerRepository: TriggerRepository
     private lateinit var pipelineRepository: PipelineRepository
+    private lateinit var saveTrigger: SaveTriggerUseCase
     private lateinit var syncTriggers: SyncTriggersUseCase
 
     private val daily = trigger(
@@ -72,6 +74,9 @@ class TriggersViewModelTest {
         pipelineRepository = mockk(relaxed = true) {
             every { getAllPipelines() } returns flowOf(listOf(PipelineGraph(id = "p1", name = "Daily briefing")))
         }
+        // Use a real SaveTriggerUseCase over the mocked repo so the lifecycle
+        // derivation (armed / createdAt) is exercised end-to-end.
+        saveTrigger = SaveTriggerUseCase(triggerRepository)
         syncTriggers = mockk(relaxed = true)
     }
 
@@ -80,7 +85,7 @@ class TriggersViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel() = TriggersViewModel(triggerRepository, pipelineRepository, syncTriggers)
+    private fun viewModel() = TriggersViewModel(triggerRepository, pipelineRepository, saveTrigger, syncTriggers)
 
     @Test
     fun `given repositories when initialised then loads triggers and pipelines`() = runTest(testDispatcher) {
@@ -100,7 +105,7 @@ class TriggersViewModelTest {
         val vm = viewModel()
         advanceUntilIdle()
 
-        assertNotNull(vm.uiState.value.errorMessage)
+        assertNotNull(vm.uiState.value.loadError)
         assertFalse(vm.uiState.value.isLoading)
     }
 

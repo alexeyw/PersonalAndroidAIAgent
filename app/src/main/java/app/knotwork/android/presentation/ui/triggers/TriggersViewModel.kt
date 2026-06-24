@@ -3,14 +3,16 @@ package app.knotwork.android.presentation.ui.triggers
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.knotwork.android.R
-import app.knotwork.android.domain.models.Trigger
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.TriggerRepository
+import app.knotwork.android.domain.usecases.SaveTriggerUseCase
 import app.knotwork.android.domain.usecases.SyncTriggersUseCase
+import app.knotwork.android.domain.usecases.TriggerDraftIntent
 import app.knotwork.android.presentation.ui.common.UiText
 import app.knotwork.design.screens.triggers.TriggerConditionType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,7 +20,6 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.util.UUID
 import javax.inject.Inject
 
 /**
@@ -34,37 +35,45 @@ import javax.inject.Inject
 class TriggersViewModel @Inject constructor(
     private val triggerRepository: TriggerRepository,
     private val pipelineRepository: PipelineRepository,
+    private val saveTrigger: SaveTriggerUseCase,
     private val syncTriggers: SyncTriggersUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TriggersUiState())
     val uiState: StateFlow<TriggersUiState> = _uiState.asStateFlow()
 
+    /** The single live collector of the trigger + pipeline flows; replaced on retry. */
+    private var observeJob: Job? = null
+
     init {
         observe()
     }
 
     private fun observe() {
-        viewModelScope.launch {
+        observeJob?.cancel()
+        observeJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
             combine(
                 triggerRepository.observeTriggers(),
                 pipelineRepository.getAllPipelines(),
             ) { triggers, pipelines -> triggers to pipelines }
-                .catch { e -> _uiState.update { it.copy(isLoading = false, errorMessage = e.toUiText()) } }
+                .catch { e -> _uiState.update { it.copy(isLoading = false, loadError = e.toUiText()) } }
                 .collect { (triggers, pipelines) ->
                     _uiState.update {
-                        it.copy(isLoading = false, triggers = triggers, pipelines = pipelines, errorMessage = null)
+                        it.copy(isLoading = false, triggers = triggers, pipelines = pipelines, loadError = null)
                     }
                 }
         }
     }
 
-    /** Re-runs the load and clears the previous error. */
+    /** Re-runs the load and clears the previous load error. */
     fun retry() {
-        _uiState.update { it.copy(errorMessage = null) }
+        _uiState.update { it.copy(loadError = null) }
         observe()
     }
+
+    /** Clears the transient error after it has been surfaced (e.g. by a snackbar). */
+    fun clearTransientError() = _uiState.update { it.copy(transientError = null) }
 
     /** Opens the overflow menu for the row with [id]. */
     fun openRowMenu(id: String) = _uiState.update { it.copy(openMenuTriggerId = id) }
@@ -82,7 +91,7 @@ class TriggersViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.update { it.copy(errorMessage = e.toUiText()) }
+                _uiState.update { it.copy(transientError = e.toUiText()) }
             }
         }
     }
@@ -146,30 +155,31 @@ class TriggersViewModel @Inject constructor(
     /** Toggles the editor draft's enabled flag. */
     fun onEnabledToggle() = updateDraft { it.copy(enabled = !it.enabled) }
 
-    /** Persists the editor draft as a trigger, re-syncs the runtime, and closes the editor. */
+    /**
+     * Persists the editor draft as a trigger and re-syncs the runtime. The
+     * trigger's lifecycle fields (armed / lastFiredAt / createdAt) are derived by
+     * [SaveTriggerUseCase], not by this layer.
+     */
     fun saveEditor() {
         val draft = _uiState.value.editor ?: return
         if (!draft.canSave) return
-        val trigger = Trigger(
-            id = draft.id ?: UUID.randomUUID().toString(),
+        val intent = TriggerDraftIntent(
+            id = draft.id,
             name = draft.name.trim(),
             condition = draft.resolveCondition(),
             pipelineId = draft.pipelineId,
             prompt = draft.prompt.trim(),
             enabled = draft.enabled,
-            armed = draft.armed,
-            createdAt = draft.createdAt,
-            lastFiredAt = draft.lastFiredAt,
         )
         viewModelScope.launch {
             try {
-                triggerRepository.saveTrigger(trigger)
+                saveTrigger(intent)
                 syncTriggers()
                 _uiState.update { it.copy(editor = null) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.update { it.copy(errorMessage = e.toUiText()) }
+                _uiState.update { it.copy(transientError = e.toUiText()) }
             }
         }
     }
@@ -195,7 +205,7 @@ class TriggersViewModel @Inject constructor(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _uiState.update { it.copy(errorMessage = e.toUiText()) }
+                _uiState.update { it.copy(transientError = e.toUiText()) }
             }
         }
     }
