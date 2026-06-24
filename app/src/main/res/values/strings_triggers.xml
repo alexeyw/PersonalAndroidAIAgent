@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Triggers management surface — list, full-screen editor, delete dialog.
+
+    A trigger binds a condition (a schedule or a device event) to a pipeline so
+    the agent runs in the background and the result lands in a chat. Keys follow
+    the `triggers_<surface>_<purpose>` convention.
+-->
+<resources>
+    <!-- List screen chrome -->
+    <string name="triggers_screen_title">Triggers</string>
+    <string name="triggers_back_cd">Back</string>
+    <string name="triggers_more_cd">More actions</string>
+    <string name="triggers_fab">New trigger</string>
+    <plurals name="triggers_subtitle">
+        <item quantity="one">%1$d trigger · %2$d active</item>
+        <item quantity="other">%1$d triggers · %2$d active</item>
+    </plurals>
+    <string name="triggers_unbound_hint">No pipeline — tap to bind</string>
+    <string name="triggers_menu_edit">Edit</string>
+    <string name="triggers_menu_delete">Delete</string>
+
+    <!-- Teaching empty state -->
+    <string name="triggers_empty_title">Run the agent on its own</string>
+    <string name="triggers_empty_body">A trigger watches for a moment — a time of day or a device event — then runs a pipeline in the background and drops the result into a chat. No need to be there.</string>
+    <string name="triggers_empty_cta">Create your first trigger</string>
+    <string name="triggers_empty_step_trigger">Trigger</string>
+    <string name="triggers_empty_step_run">Runs</string>
+    <string name="triggers_empty_step_result">Result</string>
+
+    <!-- Error state -->
+    <string name="triggers_error_title">Couldn\'t load triggers</string>
+    <string name="triggers_error_body">The on-device trigger store didn\'t respond. Your triggers and their schedules are safe — this is just a read.</string>
+
+    <!-- Human-readable condition lines -->
+    <string name="triggers_condition_daily">Every day at %1$s</string>
+    <string name="triggers_condition_charging">When charging connected</string>
+    <string name="triggers_condition_network_any">When connected to any network</string>
+    <string name="triggers_condition_network_wifi">When Wi-Fi connects</string>
+    <plurals name="triggers_interval_minutes">
+        <item quantity="one">Every %1$d minute</item>
+        <item quantity="other">Every %1$d minutes</item>
+    </plurals>
+    <plurals name="triggers_interval_hours">
+        <item quantity="one">Every %1$d hour</item>
+        <item quantity="other">Every %1$d hours</item>
+    </plurals>
+
+    <!-- Editor chrome -->
+    <string name="triggers_editor_title_new">New trigger</string>
+    <string name="triggers_editor_title_edit">Edit trigger</string>
+    <string name="triggers_editor_subtitle_new">draft</string>
+    <string name="triggers_editor_subtitle_edit">saved</string>
+    <string name="triggers_editor_close_cd">Close</string>
+    <string name="triggers_editor_required">required</string>
+    <string name="triggers_editor_kicker">TRIGGER</string>
+    <string name="triggers_editor_kicker_body">A condition runs a pipeline in the background — the result lands in chat.</string>
+    <string name="triggers_editor_name_label">NAME</string>
+    <string name="triggers_editor_name_placeholder">e.g. Overnight summary</string>
+    <string name="triggers_editor_name_error">Name is required</string>
+    <string name="triggers_editor_condition_label">WHEN</string>
+    <string name="triggers_editor_delete">Delete trigger</string>
+
+    <!-- Condition type selector -->
+    <string name="triggers_type_interval">Interval</string>
+    <string name="triggers_type_interval_sub">Every N min / h</string>
+    <string name="triggers_type_daily">Daily</string>
+    <string name="triggers_type_daily_sub">Time of day</string>
+    <string name="triggers_type_charging">Charging</string>
+    <string name="triggers_type_charging_sub">Charger connects</string>
+    <string name="triggers_type_network">Network</string>
+    <string name="triggers_type_network_sub">On connect</string>
+
+    <!-- Interval params -->
+    <string name="triggers_interval_custom">Custom</string>
+    <string name="triggers_interval_error">Interval must be at least 15 minutes</string>
+    <string name="triggers_interval_floor_note">Background runs are batched; the OS may defer by a few minutes. Minimum 15 min.</string>
+    <string name="triggers_unit_minutes">minutes</string>
+    <string name="triggers_unit_hours">hours</string>
+
+    <!-- Daily params -->
+    <string name="triggers_daily_field_label">TIME OF DAY · 24H</string>
+
+    <!-- Charging params -->
+    <string name="triggers_charging_title">When the charger connects</string>
+    <string name="triggers_charging_body">Fires once each time the device starts charging; re-arms when you unplug.</string>
+
+    <!-- Network params -->
+    <string name="triggers_wifi_only_label">Wi-Fi only</string>
+    <string name="triggers_wifi_only_desc">On = only Wi-Fi connections fire it. Off = any network.</string>
+
+    <!-- Pipeline binding -->
+    <string name="triggers_pipeline_label">RUN THIS PIPELINE</string>
+    <string name="triggers_pipeline_none">None — leave unbound</string>
+    <string name="triggers_pipeline_none_sub">The trigger stays inert</string>
+
+    <!-- Input prompt -->
+    <string name="triggers_prompt_label">INPUT PROMPT</string>
+    <string name="triggers_prompt_placeholder">What should the agent do when this fires? e.g. Summarize today\'s unread mail and post the digest.</string>
+
+    <!-- Enabled toggle -->
+    <string name="triggers_enabled_label">Enabled</string>
+    <string name="triggers_enabled_desc">Off = saved but won\'t fire. Also toggleable from the list.</string>
+
+    <!-- Delete dialog -->
+    <string name="triggers_delete_title">Delete this trigger?</string>
+    <string name="triggers_delete_body_format">\"%1$s\" and its background schedule will be removed. The bound pipeline isn\'t affected. This can\'t be undone.</string>
+    <string name="triggers_delete_confirm">Delete</string>
+</resources>

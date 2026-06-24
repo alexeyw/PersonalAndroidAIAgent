@@ -55,6 +55,7 @@ import app.knotwork.android.presentation.ui.tools.AllowedDomainsScreen
 import app.knotwork.android.presentation.ui.tools.McpServerConfigScreen
 import app.knotwork.android.presentation.ui.tools.ToolDetailScreen
 import app.knotwork.android.presentation.ui.tools.ToolsScreen
+import app.knotwork.android.presentation.ui.triggers.TriggersScreen
 import app.knotwork.design.screens.settings.SettingsCategoryId
 import timber.log.Timber
 
@@ -312,6 +313,7 @@ fun AppNavGraph(
                 onNavigateToSettings = { navController.navigate(NavRoutes.SETTINGS) },
                 onNavigateToPrompts = { navController.navigate(NavRoutes.PROMPTS) },
                 onNavigateToSkills = { navController.navigate(NavRoutes.SKILLS) },
+                onNavigateToTriggers = { navController.navigate(NavRoutes.TRIGGERS) },
                 onNavigateToAbout = { navController.navigate(NavRoutes.ABOUT) },
                 onNavigateToLibrary = { navController.navigate(NavRoutes.PIPELINE_PRESETS) },
                 onNavigateToFiles = { navController.navigate(NavRoutes.FILES) },
@@ -451,6 +453,12 @@ fun AppNavGraph(
         }
         composable(NavRoutes.SKILLS) {
             SkillLibraryScreen(
+                modifier = Modifier.fillMaxSize(),
+                onBack = { navController.popBackStack() },
+            )
+        }
+        composable(NavRoutes.TRIGGERS) {
+            TriggersScreen(
                 modifier = Modifier.fillMaxSize(),
                 onBack = { navController.popBackStack() },
             )

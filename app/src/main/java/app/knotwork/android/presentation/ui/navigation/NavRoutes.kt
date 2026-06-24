@@ -183,6 +183,9 @@ object NavRoutes {
     /** Skill library (under More). */
     const val SKILLS: String = "skills"
 
+    /** Triggers management (under More). */
+    const val TRIGGERS: String = "triggers"
+
     /** Pipeline-preset manager (under More → Library). */
     const val PIPELINE_PRESETS: String = "pipeline-presets"
 

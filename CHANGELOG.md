@@ -33,6 +33,17 @@ details.
   background path as a scheduled task. The first wave is deliberately limited to
   low-sensitivity conditions (no notification-listener / location / SMS access).
   The management UI lands in a following change.
+- **Manage automation triggers.** A new **Triggers** screen (under *More*) lists
+  your triggers, each showing a plain-language condition ("Every day at 08:00",
+  "When charging connected", "When Wi-Fi connects") and its bound pipeline, with
+  an inline switch to enable or disable it. A full-screen editor creates and edits
+  triggers: pick the condition type (interval presets `15m / 30m / 1h / 6h / 24h`
+  or a custom value, a daily time, charging, or network with a Wi-Fi-only
+  option), bind a pipeline, write the input prompt, and toggle enabled. An unbound
+  trigger reads as inert ("No pipeline — tap to bind"), and a first-run empty
+  state explains the "trigger → background run → result in chat" model. Changes
+  take effect immediately — creating, editing, enabling or deleting a trigger
+  re-syncs the background runtime without waiting for the next launch.
 - **Search the settings.** The settings hub now has a search field. Typing
   filters every setting by name, description, owning category and synonyms (so
   `max` surfaces *Cap autonomous steps* via the synonym *max steps*), with the

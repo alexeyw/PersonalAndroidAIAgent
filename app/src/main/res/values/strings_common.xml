@@ -15,6 +15,7 @@
     <string name="common_close">Close</string>
     <string name="common_back">Back</string>
     <string name="common_retry">Retry</string>
+    <string name="common_ok">OK</string>
 
     <!-- Keyword the user must type to arm a destructive typed-confirm dialog.
          Shared by every destructive confirmation surface (Settings, splash data
@@ -37,6 +38,8 @@
     <string name="more_row_about">About</string>
     <string name="more_row_library">Pipeline preset library</string>
     <string name="more_row_files">Files</string>
+    <string name="more_row_triggers">Triggers</string>
+    <string name="more_triggers_subtitle">Run pipelines on a schedule or device event</string>
     <string name="more_subtitle">Everything else</string>
     <string name="more_search_cd">Search</string>
 
