@@ -30,6 +30,7 @@ import app.knotwork.android.presentation.state.TransientMessageRelay
 import app.knotwork.android.presentation.theme.AndroidAIAgentTheme
 import app.knotwork.android.presentation.ui.navigation.AppNavGraph
 import app.knotwork.android.presentation.ui.navigation.AppShellScaffold
+import app.knotwork.android.presentation.ui.navigation.NavRoutes
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -129,6 +130,16 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
         )
+
+        // Whether this launch carried a `knotwork://` deep link (launcher
+        // shortcut, share target, or notification tap). Navigation Compose
+        // auto-handles such an intent at graph creation and places the target
+        // on the back stack; the splash handler keys off this so it does not
+        // stack the default chat tab on top of that target. Default launch mode
+        // is `standard`, so every deep-link delivery is a fresh `onCreate` with
+        // the right `intent` — no `onNewIntent` reconciliation needed.
+        val launchedFromDeepLink = intent?.data?.scheme == NavRoutes.DEEP_LINK_SCHEME
+
         setContent {
             AndroidAIAgentTheme {
                 val navController = rememberNavController()
@@ -157,6 +168,7 @@ class MainActivity : ComponentActivity() {
                     AppNavGraph(
                         navController = navController,
                         showOnboarding = !hasCompletedOnboarding,
+                        launchedFromDeepLink = launchedFromDeepLink,
                         modifier = Modifier.padding(innerPadding),
                     )
                 }

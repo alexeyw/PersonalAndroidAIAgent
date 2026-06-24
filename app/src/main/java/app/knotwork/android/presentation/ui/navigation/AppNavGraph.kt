@@ -83,10 +83,22 @@ import timber.log.Timber
  *        (inverted) — a flag that survives `InitializeAppUseCase` and so
  *        is the right gate for the UI surface, unlike `isFirstLaunch`
  *        which is cleared during cold-start init.
+ * @param launchedFromDeepLink `true` when the host activity was started by a
+ *        `knotwork://` deep link (launcher shortcut, share target, or a
+ *        notification tap). Navigation Compose has already placed the deep-link
+ *        destination on the back stack, so the splash handler must only **drop
+ *        the splash entry** rather than navigate to [NavRoutes.CHAT_TAB] — the
+ *        latter buries the deep-link target under the last-active chat, so Back
+ *        reveals the target instead of closing the app.
  * @param modifier Inset-padding passthrough from [AppShellScaffold].
  */
 @Composable
-fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modifier: Modifier = Modifier) {
+fun AppNavGraph(
+    navController: NavHostController,
+    showOnboarding: Boolean,
+    launchedFromDeepLink: Boolean,
+    modifier: Modifier = Modifier,
+) {
     NavHost(
         navController = navController,
         startDestination = NavRoutes.SPLASH,
@@ -95,10 +107,23 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
         composable(NavRoutes.SPLASH) {
             SplashScreen(
                 onInitialized = {
-                    val next = if (showOnboarding) NavRoutes.ONBOARDING else NavRoutes.CHAT_TAB
-                    navController.navigate(next) {
-                        popUpTo(NavRoutes.SPLASH) { inclusive = true }
-                        launchSingleTop = true
+                    // `previousBackStackEntry` is non-null only when a deep link
+                    // (shortcut / share / notification) already placed its target
+                    // below the splash during graph creation. In that case just
+                    // drop the splash entry — navigating to CHAT_TAB here would
+                    // stack the last-active chat ON TOP of the deep-link target,
+                    // so Back would surface the target instead of closing the app.
+                    // The `previousBackStackEntry` guard also keeps the NavHost
+                    // non-empty if a `knotwork://` intent ever fails to match a
+                    // destination (splash alone → fall through to normal routing).
+                    if (launchedFromDeepLink && navController.previousBackStackEntry != null) {
+                        navController.popBackStack(NavRoutes.SPLASH, inclusive = true)
+                    } else {
+                        val next = if (showOnboarding) NavRoutes.ONBOARDING else NavRoutes.CHAT_TAB
+                        navController.navigate(next) {
+                            popUpTo(NavRoutes.SPLASH) { inclusive = true }
+                            launchSingleTop = true
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
