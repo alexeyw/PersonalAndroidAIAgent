@@ -578,7 +578,17 @@ class ChatHomeViewModel @Inject constructor(
      */
     private fun initializeSession() {
         viewModelScope.launch {
+            // A deep-link entry request (open-thread / new-chat, drained by the
+            // CHAT_TAB composable into selectThread / createNewSessionWithPipeline)
+            // may set the session before or during this default restore. Never let
+            // the persisted default override an explicit selection — otherwise a
+            // launcher shortcut to a specific chat would flash the last-active one
+            // instead. The selection can land synchronously before this body runs
+            // OR during the `currentChatSessionId.first()` suspend below, so the
+            // guard is re-checked after every suspension point.
+            if (_state.value.thread.currentSessionId.isNotBlank()) return@launch
             val savedSessionId = settingsRepository.currentChatSessionId.first()
+            if (_state.value.thread.currentSessionId.isNotBlank()) return@launch
             val sessionId = if (savedSessionId.isNullOrBlank()) {
                 val newId = UUID.randomUUID().toString()
                 settingsRepository.setCurrentChatSessionId(newId)
@@ -593,6 +603,7 @@ class ChatHomeViewModel @Inject constructor(
             } else {
                 savedSessionId
             }
+            if (_state.value.thread.currentSessionId.isNotBlank()) return@launch
             _state.update {
                 threads.sessionMetadataRefreshed(it.copy(thread = it.thread.copy(currentSessionId = sessionId)))
             }
