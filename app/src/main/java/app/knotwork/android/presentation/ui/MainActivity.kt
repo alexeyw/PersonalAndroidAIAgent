@@ -156,14 +156,14 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
         )
 
-        // Whether this launch carried a `knotwork://` deep link (launcher
-        // shortcut, share target, or notification tap). Navigation Compose
-        // auto-handles such an intent at graph creation and places the target
-        // on the back stack; the splash handler keys off this so it does not
-        // stack the default chat tab on top of that target. Default launch mode
-        // is `standard`, so every deep-link delivery is a fresh `onCreate` with
-        // the right `intent` — no `onNewIntent` reconciliation needed.
-        val launchedFromDeepLink = intent?.data?.scheme == NavRoutes.DEEP_LINK_SCHEME
+        // The `knotwork://` deep link this cold launch carried (launcher
+        // shortcut / share / notification), or null for a normal launch. The
+        // NavHost no longer auto-handles it; the splash handler applies it
+        // explicitly after landing on the chat home so the back stack is a
+        // deterministic [CHAT_TAB, target]. Warm deep links (the activity is
+        // `singleTask`) arrive via onNewIntent and are routed by the collector
+        // below instead.
+        val pendingDeepLink = intent?.takeIf { it.data?.scheme == NavRoutes.DEEP_LINK_SCHEME }
 
         setContent {
             AndroidAIAgentTheme {
@@ -203,7 +203,7 @@ class MainActivity : ComponentActivity() {
                     AppNavGraph(
                         navController = navController,
                         showOnboarding = !hasCompletedOnboarding,
-                        launchedFromDeepLink = launchedFromDeepLink,
+                        pendingDeepLink = pendingDeepLink,
                         modifier = Modifier.padding(innerPadding),
                     )
                 }

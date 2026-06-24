@@ -1,5 +1,6 @@
 package app.knotwork.android.presentation.ui.navigation
 
+import android.content.Intent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -13,7 +14,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.navArgument
-import androidx.navigation.navDeepLink
 import app.knotwork.android.domain.models.ProviderId
 import app.knotwork.android.presentation.ui.about.AboutScreen
 import app.knotwork.android.presentation.ui.chat.home.ChatHomeScreen
@@ -83,20 +83,21 @@ import timber.log.Timber
  *        (inverted) — a flag that survives `InitializeAppUseCase` and so
  *        is the right gate for the UI surface, unlike `isFirstLaunch`
  *        which is cleared during cold-start init.
- * @param launchedFromDeepLink `true` when the host activity was started by a
- *        `knotwork://` deep link (launcher shortcut, share target, or a
- *        notification tap). Navigation Compose has already placed the deep-link
- *        destination on the back stack, so the splash handler must only **drop
- *        the splash entry** rather than navigate to [NavRoutes.CHAT_TAB] — the
- *        latter buries the deep-link target under the last-active chat, so Back
- *        reveals the target instead of closing the app.
+ * @param pendingDeepLink the `knotwork://` deep-link [Intent] the host activity
+ *        was launched with (launcher shortcut, share target, notification tap),
+ *        or `null` for a normal launch. The deep link is **not** auto-handled by
+ *        the NavHost (the `navDeepLink` registrations were removed) — instead the
+ *        splash handler builds the back stack deterministically: splash →
+ *        [NavRoutes.CHAT_TAB] (home) → the deep-link target on top. This avoids
+ *        the implicit-deep-link race that buried the target under the home chat
+ *        (or produced a half-loaded second chat surface).
  * @param modifier Inset-padding passthrough from [AppShellScaffold].
  */
 @Composable
 fun AppNavGraph(
     navController: NavHostController,
     showOnboarding: Boolean,
-    launchedFromDeepLink: Boolean,
+    pendingDeepLink: Intent?,
     modifier: Modifier = Modifier,
 ) {
     NavHost(
@@ -107,23 +108,18 @@ fun AppNavGraph(
         composable(NavRoutes.SPLASH) {
             SplashScreen(
                 onInitialized = {
-                    // `previousBackStackEntry` is non-null only when a deep link
-                    // (shortcut / share / notification) already placed its target
-                    // below the splash during graph creation. In that case just
-                    // drop the splash entry — navigating to CHAT_TAB here would
-                    // stack the last-active chat ON TOP of the deep-link target,
-                    // so Back would surface the target instead of closing the app.
-                    // The `previousBackStackEntry` guard also keeps the NavHost
-                    // non-empty if a `knotwork://` intent ever fails to match a
-                    // destination (splash alone → fall through to normal routing).
-                    if (launchedFromDeepLink && navController.previousBackStackEntry != null) {
-                        navController.popBackStack(NavRoutes.SPLASH, inclusive = true)
-                    } else {
-                        val next = if (showOnboarding) NavRoutes.ONBOARDING else NavRoutes.CHAT_TAB
-                        navController.navigate(next) {
-                            popUpTo(NavRoutes.SPLASH) { inclusive = true }
-                            launchSingleTop = true
-                        }
+                    val next = if (showOnboarding) NavRoutes.ONBOARDING else NavRoutes.CHAT_TAB
+                    navController.navigate(next) {
+                        popUpTo(NavRoutes.SPLASH) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                    // A launch deep link is applied AFTER landing on the chat home,
+                    // so the back stack is deterministically [CHAT_TAB, target] —
+                    // the target on top (Back returns home), never a half-loaded
+                    // chat buried under the home surface. Skipped during onboarding;
+                    // a first-run user has no sessions to deep-link into yet.
+                    if (!showOnboarding) {
+                        pendingDeepLink?.let { navController.navigateToDeepLink(it) }
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
@@ -157,12 +153,11 @@ fun AppNavGraph(
         }
 
         // ─── Chat tab ──────────────────────────────────────────────────────
-        composable(
-            route = NavRoutes.CHAT_TAB,
-            deepLinks = listOf(
-                navDeepLink { uriPattern = NavRoutes.CHAT_TAB_DEEP_LINK_PATTERN },
-            ),
-        ) {
+        // Deep links (knotwork://chat, knotwork://chat/{id}, knotwork://pipelines)
+        // are NOT registered as `navDeepLink`s — auto-handling raced the splash
+        // and produced a doubled / blank chat. MainActivity routes them
+        // explicitly via DeepLinkRouter (see AppNavGraph KDoc / navigateToDeepLink).
+        composable(route = NavRoutes.CHAT_TAB) {
             val chatHomeViewModel: ChatHomeViewModel = hiltViewModel()
             ChatHomeScreen(
                 viewModel = chatHomeViewModel,
@@ -177,9 +172,6 @@ fun AppNavGraph(
                     type = NavType.StringType
                     nullable = false
                 },
-            ),
-            deepLinks = listOf(
-                navDeepLink { uriPattern = NavRoutes.CHAT_DEEP_LINK_PATTERN },
             ),
         ) { entry ->
             val threadId = entry.arguments?.getString(NavRoutes.CHAT_THREAD_ARG)
@@ -201,12 +193,7 @@ fun AppNavGraph(
             startDestination = NavRoutes.PIPELINE_LIBRARY,
             route = NavRoutes.PIPELINES_GRAPH,
         ) {
-            composable(
-                route = NavRoutes.PIPELINE_LIBRARY,
-                deepLinks = listOf(
-                    navDeepLink { uriPattern = NavRoutes.PIPELINES_DEEP_LINK_PATTERN },
-                ),
-            ) { entry ->
+            composable(route = NavRoutes.PIPELINE_LIBRARY) { entry ->
                 val parentEntry = remember(entry) {
                     navController.getBackStackEntry(NavRoutes.PIPELINES_GRAPH)
                 }
