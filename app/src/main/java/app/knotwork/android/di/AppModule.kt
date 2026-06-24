@@ -27,6 +27,7 @@ import app.knotwork.android.data.local.dao.PromptPresetDao
 import app.knotwork.android.data.local.dao.PromptTemplateDao
 import app.knotwork.android.data.local.dao.SkillDao
 import app.knotwork.android.data.local.dao.TraceStepDao
+import app.knotwork.android.data.local.dao.TriggerDao
 import app.knotwork.android.data.services.WorkManagerTaskScheduler
 import app.knotwork.android.data.tools.local.AppFunctionDataCodec
 import app.knotwork.android.data.tools.local.LocalAppFunctionManager
@@ -193,6 +194,7 @@ object AppModule {
                 AppDatabase.MIGRATION_41_42,
                 AppDatabase.MIGRATION_42_43,
                 AppDatabase.MIGRATION_43_44,
+                AppDatabase.MIGRATION_44_45,
             )
             // No destructive fallback on upgrade: every version bump must supply an explicit
             // migration above so user data survives. Destructive recreation is kept only for the
@@ -284,6 +286,12 @@ object AppModule {
      */
     @Provides
     fun provideModelPerformanceDao(database: AppDatabase): ModelPerformanceDao = database.modelPerformanceDao()
+
+    /**
+     * Provides the [TriggerDao] backing user-defined automation triggers.
+     */
+    @Provides
+    fun provideTriggerDao(database: AppDatabase): TriggerDao = database.triggerDao()
 
     /**
      * Provides the singleton instance of Converters for Room mapping.

@@ -18,6 +18,7 @@ import app.knotwork.android.data.local.dao.PromptPresetDao
 import app.knotwork.android.data.local.dao.PromptTemplateDao
 import app.knotwork.android.data.local.dao.SkillDao
 import app.knotwork.android.data.local.dao.TraceStepDao
+import app.knotwork.android.data.local.dao.TriggerDao
 import app.knotwork.android.data.local.models.ChatHistorySummaryEntity
 import app.knotwork.android.data.local.models.ChatMessageEntity
 import app.knotwork.android.data.local.models.ChatSessionEntity
@@ -34,6 +35,7 @@ import app.knotwork.android.data.local.models.PromptPresetEntity
 import app.knotwork.android.data.local.models.PromptTemplateEntity
 import app.knotwork.android.data.local.models.SkillEntity
 import app.knotwork.android.data.local.models.TraceStepEntity
+import app.knotwork.android.data.local.models.TriggerEntity
 
 /**
  * Main Room Database for the Android AI Agent.
@@ -65,8 +67,9 @@ import app.knotwork.android.data.local.models.TraceStepEntity
         SkillEntity::class,
         ChatHistorySummaryEntity::class,
         ModelPerformanceSampleEntity::class,
+        TriggerEntity::class,
     ],
-    version = 44,
+    version = 45,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -169,6 +172,14 @@ abstract class AppDatabase : RoomDatabase() {
      * @return The [ModelPerformanceDao] instance.
      */
     abstract fun modelPerformanceDao(): ModelPerformanceDao
+
+    /**
+     * Provides access to the [TriggerDao] backing user-defined automation
+     * triggers (the `triggers` table).
+     *
+     * @return The [TriggerDao] instance.
+     */
+    abstract fun triggerDao(): TriggerDao
 
     companion object {
         /**
@@ -1004,6 +1015,42 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_43_44 = object : Migration(43, 44) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `chat_messages` ADD COLUMN `modelName` TEXT")
+            }
+        }
+
+        /**
+         * Adds the `triggers` table backing user-defined automation triggers
+         * (a persisted `condition → bound pipeline` rule). Additive — no
+         * existing rows are touched.
+         *
+         * The activation condition is stored as a JSON string in `conditionJson`
+         * (see [app.knotwork.android.domain.triggerio.TriggerConditionCodec]) so
+         * the schema stays narrow across condition shapes. `pipelineId` carries
+         * no foreign key: a trigger may outlive its bound pipeline, and the fire
+         * path auto-disables a trigger whose pipeline has been deleted. The
+         * `enabled` index backs the active-trigger query the scheduler sync runs.
+         */
+        val MIGRATION_44_45 = object : Migration(44, 45) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `triggers` (
+                        `id` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `pipelineId` TEXT,
+                        `prompt` TEXT NOT NULL,
+                        `conditionJson` TEXT NOT NULL,
+                        `enabled` INTEGER NOT NULL,
+                        `armed` INTEGER NOT NULL DEFAULT 1,
+                        `createdAt` INTEGER NOT NULL,
+                        `lastFiredAt` INTEGER,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_triggers_enabled` ON `triggers` (`enabled`)",
+                )
             }
         }
     }

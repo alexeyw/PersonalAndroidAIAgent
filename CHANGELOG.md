@@ -25,6 +25,14 @@ details.
   it at a pipeline** (privacy-first default): bind one per surface in *Settings →
   Background & triggers*, or from a pipeline's row menu in the library ("Use for
   sharing" / "Use for Quick Settings tile").
+- **Automation triggers — foundation.** Groundwork for running a bound pipeline
+  in the background when a condition is met: a time schedule (every N, or daily
+  at a set time), the device starting to charge, or gaining network / Wi-Fi
+  connectivity. A trigger is inert until you bind a pipeline and is auto-disabled
+  if that pipeline is later deleted; a fired trigger runs through the same
+  background path as a scheduled task. The first wave is deliberately limited to
+  low-sensitivity conditions (no notification-listener / location / SMS access).
+  The management UI lands in a following change.
 - **Search the settings.** The settings hub now has a search field. Typing
   filters every setting by name, description, owning category and synonyms (so
   `max` surfaces *Cap autonomous steps* via the synonym *max steps*), with the
