@@ -472,6 +472,7 @@ This file maps the contents of the main application package.
   - `state/` - State management components.
     - `ActiveSessionTracker.kt` - Tracker for active chat session.
     - `TransientMessageRelay.kt` - `@Singleton` one-shot snackbar bus consumed by the activity-level `SnackbarHost` in `AppShellScaffold`. Used by `OnboardingViewModel.skipOnboarding` to surface the "install a model from Settings → Models" hint *after* navigation pops onboarding off the back-stack.
+    - `ChatEntryRequestRelay.kt` - `@Singleton` one-shot bus carrying a `ChatEntryRequest` (`OpenThread{id}` / `NewChat`) from a `knotwork://chat…` / `new-chat` shortcut/share/notification to the single chat home, drained by the `CHAT_TAB` composable into `selectThread` / `createNewSessionWithPipeline`. `Channel.CONFLATED` so a cold-launch request buffers until the collector mounts and is consumed exactly once.
   - `theme/` - Compose theme definitions.
     - `Theme.kt` - App theme definition. Reads the static fallback palette from `res/values/colors.xml` via `colorResource(...)`; dynamic color (Android 12+) takes precedence on supported devices.
     - `Type.kt` - Typography settings.
@@ -489,6 +490,7 @@ This file maps the contents of the main application package.
     - `navigation/` - App shell, bottom-nav scaffold, and the single nav-graph for the app.
       - `NavRoutes.kt` - Canonical `const val` registry of every Jetpack Navigation Compose route string, including the chat deep-link template and modal-sheet placeholders.
       - `ChatDeepLink.kt` - Shared builder for a `knotwork://chat/{threadId}` deep-link `Intent` + back-stack `TaskStackBuilder`, reused by the share target and the scheduled-task notifier so the scheme/back-stack never drift.
+      - `DeepLinkRouter.kt` - `NavHostController.navigateToDeepLink(intent, ChatEntryRequestRelay)` — maps `knotwork://chat/{id}` | `chat` | `new-chat` | `pipelines` to an explicit in-app navigation. Chat links all land on the single chat home (`CHAT_TAB`) and post the session change to the relay (no second chat destination); `pipelines` opens the library. Used by `MainActivity` for both the cold-launch intent (after splash) and warm `onNewIntent` taps, instead of fragile implicit `navDeepLink` auto-handling.
       - `TabDestination.kt` - `TabDestination` data class + `TAB_DESTINATIONS` for the four bottom-nav tabs (Chat / Pipelines / Tools / More).
       - `BottomNavVisibility.kt` - Pure `shouldShowBottomNav(route)` function; unit-tested decision table for which routes hide the nav bar (splash, onboarding, editor, modal sheets).
       - `KnotworkModalRoute.kt` - Generic `ModalBottomSheet` + `PredictiveBackHandler` wrapper reused by every modal-sheet route (`NodeConfigSheet`, `ConsolePane`, `AddMcpServerScreen` — bodies arrive in Tasks 6/7/10).
