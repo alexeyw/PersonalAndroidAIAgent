@@ -23,10 +23,15 @@ package app.knotwork.android.domain.models
  *   prompt on every fire.
  * @property enabled Whether the trigger is active. A disabled trigger is not
  *   registered with the background runtime and never fires.
+ * @property armed Edge-detection latch for [event][TriggerCondition.isEventTriggered]
+ *   conditions (charging / network): `true` means the trigger is ready to fire
+ *   the next time its condition becomes satisfied. It is cleared on fire and set
+ *   again once the condition drops, so a sustained state (e.g. an overnight
+ *   charge) fires exactly once, not once per poll. Unused by time-scheduled
+ *   conditions (which fire on the clock).
  * @property createdAt Epoch-millis the trigger was created.
  * @property lastFiredAt Epoch-millis of the most recent fire, or `null` if it
- *   has never fired. Backs the re-arm debounce that turns the level-triggered
- *   background constraints into edge-like "on change" semantics.
+ *   has never fired. Used for the interval-schedule debounce and for display.
  */
 data class Trigger(
     val id: String,
@@ -35,12 +40,10 @@ data class Trigger(
     val pipelineId: String?,
     val prompt: String,
     val enabled: Boolean,
+    val armed: Boolean = true,
     val createdAt: Long,
     val lastFiredAt: Long? = null,
 ) {
-    /** Coarse [TriggerType] of this trigger, derived from its [condition]. */
-    val type: TriggerType get() = condition.type
-
     /**
      * Whether the trigger is eligible to be registered with the background
      * runtime: it must be [enabled] **and** bound to a pipeline. An unbound or

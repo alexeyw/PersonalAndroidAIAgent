@@ -10,9 +10,9 @@ import java.time.Instant
 import java.time.ZoneId
 
 /**
- * Unit tests for [EvaluateTriggerFiringUseCase] — the pure fire/skip decision
- * core. Time is pinned to a fixed UTC instant so the daily-schedule and debounce
- * branches are deterministic.
+ * Unit tests for [EvaluateTriggerFiringUseCase] — the pure fire/skip/re-arm
+ * decision core. Time is pinned to a fixed UTC instant so the daily-schedule and
+ * interval-debounce branches are deterministic.
  */
 class EvaluateTriggerFiringUseCaseTest {
 
@@ -26,6 +26,7 @@ class EvaluateTriggerFiringUseCaseTest {
         condition: TriggerCondition,
         enabled: Boolean = true,
         pipelineId: String? = "pipe-1",
+        armed: Boolean = true,
         lastFiredAt: Long? = null,
         prompt: String = "do it",
     ): Trigger = Trigger(
@@ -35,6 +36,7 @@ class EvaluateTriggerFiringUseCaseTest {
         pipelineId = pipelineId,
         prompt = prompt,
         enabled = enabled,
+        armed = armed,
         createdAt = 0L,
         lastFiredAt = lastFiredAt,
     )
@@ -66,7 +68,7 @@ class EvaluateTriggerFiringUseCaseTest {
         assertEquals(TriggerFiringDecision.Fire("pipe-1", "summarize inbox"), decision)
     }
 
-    // --- Interval schedule ---
+    // --- Interval schedule (debounce = half the interval) ---
 
     @Test
     fun `given interval never fired when evaluated then fires`() {
@@ -76,61 +78,78 @@ class EvaluateTriggerFiringUseCaseTest {
     }
 
     @Test
-    fun `given interval fired within window when evaluated then debounced`() {
+    fun `given interval fired within half the interval when evaluated then already-fired skip`() {
+        // interval 30min => debounce 15min; fired 10min ago => within window.
         val decision = eval(trigger(TriggerCondition.IntervalSchedule(30), lastFiredAt = now - 10 * minuteMs))
 
-        assertEquals(TriggerFiringDecision.Skip(TriggerSkipReason.DEBOUNCED), decision)
+        assertEquals(TriggerFiringDecision.Skip(TriggerSkipReason.ALREADY_FIRED), decision)
     }
 
     @Test
-    fun `given interval fired beyond window when evaluated then fires`() {
-        val decision = eval(trigger(TriggerCondition.IntervalSchedule(30), lastFiredAt = now - 31 * minuteMs))
+    fun `given interval fired beyond half the interval when evaluated then fires`() {
+        // interval 30min => debounce 15min; fired 16min ago => past window, so an
+        // early/jittered wake still fires (no halving of the effective rate).
+        val decision = eval(trigger(TriggerCondition.IntervalSchedule(30), lastFiredAt = now - 16 * minuteMs))
 
         assertEquals(TriggerFiringDecision.Fire("pipe-1", "do it"), decision)
     }
 
-    // --- Charging ---
+    @Test
+    fun `given zero interval when fired seconds ago then floor prevents firing every poll`() {
+        // intervalMinutes=0 is clamped to a 1-minute floor => debounce 30s.
+        // A fire 1s ago must still be debounced (without the floor the window
+        // would collapse to 0 and fire on every poll).
+        val decision = eval(trigger(TriggerCondition.IntervalSchedule(0), lastFiredAt = now - 1_000L))
+
+        assertEquals(TriggerFiringDecision.Skip(TriggerSkipReason.ALREADY_FIRED), decision)
+    }
+
+    // --- Charging (edge-triggered via armed) ---
 
     @Test
-    fun `given charging condition when not charging then condition not met`() {
-        val decision = eval(trigger(TriggerCondition.Charging), power = PowerState(isCharging = false))
+    fun `given charging armed and charging when evaluated then fires`() {
+        val decision = eval(trigger(TriggerCondition.Charging, armed = true), power = PowerState(isCharging = true))
+
+        assertEquals(TriggerFiringDecision.Fire("pipe-1", "do it"), decision)
+    }
+
+    @Test
+    fun `given charging armed but not charging then condition not met`() {
+        val decision = eval(trigger(TriggerCondition.Charging, armed = true), power = PowerState(isCharging = false))
 
         assertEquals(TriggerFiringDecision.Skip(TriggerSkipReason.CONDITION_NOT_MET), decision)
     }
 
     @Test
-    fun `given charging and never fired when charging then fires`() {
-        val decision = eval(trigger(TriggerCondition.Charging), power = PowerState(isCharging = true))
+    fun `given charging disarmed and still charging then already fired (no repeat)`() {
+        val decision = eval(trigger(TriggerCondition.Charging, armed = false), power = PowerState(isCharging = true))
+
+        assertEquals(TriggerFiringDecision.Skip(TriggerSkipReason.ALREADY_FIRED), decision)
+    }
+
+    @Test
+    fun `given charging disarmed and charging stopped then re-arm`() {
+        val decision = eval(trigger(TriggerCondition.Charging, armed = false), power = PowerState(isCharging = false))
+
+        assertEquals(TriggerFiringDecision.ReArm, decision)
+    }
+
+    // --- Network (edge-triggered via armed) ---
+
+    @Test
+    fun `given any-network armed and connected then fires`() {
+        val decision = eval(
+            trigger(TriggerCondition.NetworkConnected(wifiOnly = false), armed = true),
+            network = NetworkState(isConnected = true, isWifiConnected = false),
+        )
 
         assertEquals(TriggerFiringDecision.Fire("pipe-1", "do it"), decision)
     }
 
     @Test
-    fun `given charging fired within event window then debounced`() {
+    fun `given any-network armed but disconnected then condition not met`() {
         val decision = eval(
-            trigger(TriggerCondition.Charging, lastFiredAt = now - 10 * minuteMs),
-            power = PowerState(isCharging = true),
-        )
-
-        assertEquals(TriggerFiringDecision.Skip(TriggerSkipReason.DEBOUNCED), decision)
-    }
-
-    @Test
-    fun `given charging fired beyond event window then fires`() {
-        val decision = eval(
-            trigger(TriggerCondition.Charging, lastFiredAt = now - 16 * minuteMs),
-            power = PowerState(isCharging = true),
-        )
-
-        assertEquals(TriggerFiringDecision.Fire("pipe-1", "do it"), decision)
-    }
-
-    // --- Network ---
-
-    @Test
-    fun `given any-network condition when disconnected then condition not met`() {
-        val decision = eval(
-            trigger(TriggerCondition.NetworkConnected(wifiOnly = false)),
+            trigger(TriggerCondition.NetworkConnected(wifiOnly = false), armed = true),
             network = NetworkState(isConnected = false),
         )
 
@@ -138,19 +157,21 @@ class EvaluateTriggerFiringUseCaseTest {
     }
 
     @Test
-    fun `given any-network condition when connected then fires`() {
+    fun `given wifi-only armed and on wifi then fires`() {
         val decision = eval(
-            trigger(TriggerCondition.NetworkConnected(wifiOnly = false)),
-            network = NetworkState(isConnected = true, isWifiConnected = false),
+            trigger(TriggerCondition.NetworkConnected(wifiOnly = true), armed = true),
+            network = NetworkState(isConnected = true, isWifiConnected = true),
         )
 
         assertEquals(TriggerFiringDecision.Fire("pipe-1", "do it"), decision)
     }
 
     @Test
-    fun `given wifi-only condition when on cellular then condition not met`() {
+    fun `given wifi-only armed but on cellular then condition not met`() {
+        // Cellular (connected, not wifi) must NOT satisfy a wifi-only trigger —
+        // gate and live-check use the same isWifiConnected predicate.
         val decision = eval(
-            trigger(TriggerCondition.NetworkConnected(wifiOnly = true)),
+            trigger(TriggerCondition.NetworkConnected(wifiOnly = true), armed = true),
             network = NetworkState(isConnected = true, isWifiConnected = false),
         )
 
@@ -158,13 +179,13 @@ class EvaluateTriggerFiringUseCaseTest {
     }
 
     @Test
-    fun `given wifi-only condition when on wifi then fires`() {
+    fun `given network disarmed and disconnected then re-arm`() {
         val decision = eval(
-            trigger(TriggerCondition.NetworkConnected(wifiOnly = true)),
-            network = NetworkState(isConnected = true, isWifiConnected = true),
+            trigger(TriggerCondition.NetworkConnected(wifiOnly = false), armed = false),
+            network = NetworkState(isConnected = false),
         )
 
-        assertEquals(TriggerFiringDecision.Fire("pipe-1", "do it"), decision)
+        assertEquals(TriggerFiringDecision.ReArm, decision)
     }
 
     // --- Daily schedule ---
@@ -186,12 +207,11 @@ class EvaluateTriggerFiringUseCaseTest {
     }
 
     @Test
-    fun `given daily schedule already fired today then debounced`() {
-        // Fired at 08:30 today (after today's 08:00 instant).
+    fun `given daily schedule already fired today then already fired skip`() {
         val firedToday = Instant.parse("2026-06-23T08:30:00Z").toEpochMilli()
         val decision = eval(trigger(TriggerCondition.DailySchedule(hour = 8, minute = 0), lastFiredAt = firedToday))
 
-        assertEquals(TriggerFiringDecision.Skip(TriggerSkipReason.DEBOUNCED), decision)
+        assertEquals(TriggerFiringDecision.Skip(TriggerSkipReason.ALREADY_FIRED), decision)
     }
 
     @Test
@@ -204,7 +224,7 @@ class EvaluateTriggerFiringUseCaseTest {
 
     @Test
     fun `given out-of-range daily time when evaluated then coerced without throwing`() {
-        // hour 25 / minute 70 coerce to 23:59, which is after now (10:00) → not met, no exception.
+        // hour 25 / minute 70 coerce to 23:59, which is after now (10:00) => not met, no exception.
         val decision = eval(trigger(TriggerCondition.DailySchedule(hour = 25, minute = 70)))
 
         assertEquals(TriggerFiringDecision.Skip(TriggerSkipReason.CONDITION_NOT_MET), decision)

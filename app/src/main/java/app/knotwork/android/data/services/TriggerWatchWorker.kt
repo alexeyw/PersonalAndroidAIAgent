@@ -3,6 +3,7 @@ package app.knotwork.android.data.services
 import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
+import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import app.knotwork.android.domain.usecases.FireTriggerUseCase
 import dagger.assisted.Assisted
@@ -12,31 +13,40 @@ import timber.log.Timber
 
 /**
  * Thin background worker woken by [WorkManagerTriggerScheduler] when a trigger's
- * coarse constraint (charging / network / interval / daily-time) is satisfied.
+ * schedule fires (time conditions) or on its 15-minute poll (event conditions).
  *
  * It does **no** inference itself: it reads the [KEY_TRIGGER_ID] and hands the
  * fire/skip decision to [FireTriggerUseCase], which re-checks the live
- * condition, applies the re-arm debounce, verifies the bound pipeline still
+ * condition, applies the edge/debounce logic, verifies the bound pipeline still
  * exists, and — when warranted — enqueues a normal background run through the
  * existing scheduler → `AgentWorker` path. Keeping the worker thin is what lets
  * the whole firing decision live in pure, unit-tested domain code.
  *
+ * **Self-reclaiming.** When the outcome shows the trigger no longer warrants a
+ * watch ([TriggerFireOutcome.watchStillWarranted] `== false` — deleted,
+ * disabled, unbound, or auto-disabled), the worker cancels its own unique work.
+ * This reclaims a watch orphaned while the process was dead (the cold-start
+ * [WorkManagerTriggerScheduler.syncAll] can only re-register active triggers, it
+ * cannot enumerate stale ones) on the first wake, with no in-memory bookkeeping.
+ *
  * @property fireTriggerUseCase The fire/skip decision + enqueue.
+ * @property workManager Used to cancel this trigger's own watch when reclaimed.
  */
 @HiltWorker
 class TriggerWatchWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted workerParams: WorkerParameters,
     private val fireTriggerUseCase: FireTriggerUseCase,
+    private val workManager: WorkManager,
 ) : CoroutineWorker(context, workerParams) {
 
     /**
      * Handles one trigger wakeup.
      *
-     * @return [Result.success] once the decision is handled (including a skip);
-     *   [Result.failure] when no trigger id was supplied (a malformed request
-     *   that a retry cannot fix); [Result.retry] on an unexpected error so
-     *   WorkManager re-attempts under the same constraints.
+     * @return [Result.success] once the decision is handled (including a skip or
+     *   a self-cancel); [Result.failure] when no trigger id was supplied (a
+     *   malformed request that a retry cannot fix); [Result.retry] on an
+     *   unexpected error so WorkManager re-attempts under the same constraints.
      */
     override suspend fun doWork(): Result {
         val triggerId = inputData.getString(KEY_TRIGGER_ID)
@@ -47,6 +57,10 @@ class TriggerWatchWorker @AssistedInject constructor(
         return try {
             val outcome = fireTriggerUseCase(triggerId)
             Timber.tag(TAG).d("Trigger %s handled: %s", triggerId, outcome)
+            if (!outcome.watchStillWarranted) {
+                workManager.cancelUniqueWork(UNIQUE_NAME_PREFIX + triggerId)
+                Timber.tag(TAG).d("Trigger %s watch reclaimed (no longer warranted).", triggerId)
+            }
             Result.success()
         } catch (e: CancellationException) {
             throw e

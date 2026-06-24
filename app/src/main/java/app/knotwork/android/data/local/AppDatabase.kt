@@ -1041,6 +1041,7 @@ abstract class AppDatabase : RoomDatabase() {
                         `prompt` TEXT NOT NULL,
                         `conditionJson` TEXT NOT NULL,
                         `enabled` INTEGER NOT NULL,
+                        `armed` INTEGER NOT NULL DEFAULT 1,
                         `createdAt` INTEGER NOT NULL,
                         `lastFiredAt` INTEGER,
                         PRIMARY KEY(`id`)

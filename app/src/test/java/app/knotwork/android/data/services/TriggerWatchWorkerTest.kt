@@ -2,15 +2,18 @@ package app.knotwork.android.data.services
 
 import android.content.Context
 import androidx.work.ListenableWorker
+import androidx.work.WorkManager
 import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.workDataOf
 import app.knotwork.android.domain.usecases.FireTriggerUseCase
 import app.knotwork.android.domain.usecases.TriggerFireOutcome
+import app.knotwork.android.domain.usecases.TriggerSkipReason
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Before
@@ -20,22 +23,21 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 
 /**
- * Robolectric coverage for the `@HiltWorker`-annotated [TriggerWatchWorker].
- *
- * Hilt assisted-inject only fires inside a real runtime, so the test supplies
- * the mocked [FireTriggerUseCase] through a manual [WorkerFactory] and drives
- * `doWork()` via [TestListenableWorkerBuilder].
+ * Robolectric coverage for the `@HiltWorker`-annotated [TriggerWatchWorker],
+ * including the self-cancel reclaim path.
  */
 @RunWith(RobolectricTestRunner::class)
 class TriggerWatchWorkerTest {
 
     private lateinit var context: Context
     private lateinit var fireTriggerUseCase: FireTriggerUseCase
+    private lateinit var workManager: WorkManager
 
     @Before
     fun setup() {
         context = RuntimeEnvironment.getApplication()
         fireTriggerUseCase = mockk()
+        workManager = mockk(relaxed = true)
     }
 
     private fun workerFactory(): WorkerFactory = object : WorkerFactory() {
@@ -43,7 +45,7 @@ class TriggerWatchWorkerTest {
             appContext: Context,
             workerClassName: String,
             workerParameters: WorkerParameters,
-        ): ListenableWorker = TriggerWatchWorker(appContext, workerParameters, fireTriggerUseCase)
+        ): ListenableWorker = TriggerWatchWorker(appContext, workerParameters, fireTriggerUseCase, workManager)
     }
 
     private fun buildWorker(triggerId: String?): TriggerWatchWorker {
@@ -55,22 +57,45 @@ class TriggerWatchWorkerTest {
     }
 
     @Test
-    fun `given a trigger id when doWork runs then fires it and returns success`() = runTest {
+    fun `given a fired outcome when doWork runs then succeeds and keeps the watch`() = runTest {
         coEvery { fireTriggerUseCase("t1", any()) } returns TriggerFireOutcome.Fired("pipe-1")
 
         val result = buildWorker("t1").doWork()
 
         assertEquals(ListenableWorker.Result.success(), result)
         coVerify(exactly = 1) { fireTriggerUseCase("t1", any()) }
+        verify(exactly = 0) { workManager.cancelUniqueWork(any()) }
     }
 
     @Test
-    fun `given a skip outcome when doWork runs then still returns success`() = runTest {
+    fun `given a still-valid skip when doWork runs then keeps the watch`() = runTest {
+        coEvery { fireTriggerUseCase("t1", any()) } returns
+            TriggerFireOutcome.Skipped(TriggerSkipReason.CONDITION_NOT_MET)
+
+        val result = buildWorker("t1").doWork()
+
+        assertEquals(ListenableWorker.Result.success(), result)
+        verify(exactly = 0) { workManager.cancelUniqueWork(any()) }
+    }
+
+    @Test
+    fun `given a NotFound outcome when doWork runs then cancels its own watch`() = runTest {
         coEvery { fireTriggerUseCase("t1", any()) } returns TriggerFireOutcome.NotFound
 
         val result = buildWorker("t1").doWork()
 
         assertEquals(ListenableWorker.Result.success(), result)
+        verify(exactly = 1) { workManager.cancelUniqueWork(TriggerWatchWorker.UNIQUE_NAME_PREFIX + "t1") }
+    }
+
+    @Test
+    fun `given an auto-disabled outcome when doWork runs then cancels its own watch`() = runTest {
+        coEvery { fireTriggerUseCase("t1", any()) } returns TriggerFireOutcome.Disabled("pipe-1")
+
+        val result = buildWorker("t1").doWork()
+
+        assertEquals(ListenableWorker.Result.success(), result)
+        verify(exactly = 1) { workManager.cancelUniqueWork(TriggerWatchWorker.UNIQUE_NAME_PREFIX + "t1") }
     }
 
     @Test

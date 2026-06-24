@@ -63,6 +63,15 @@ interface TriggerRepository {
     suspend fun setEnabled(id: String, enabled: Boolean)
 
     /**
+     * Sets a trigger's [armed][Trigger.armed] edge latch (event conditions).
+     *
+     * @param id The trigger id.
+     * @param armed The new armed state (`false` after a fire, `true` once the
+     *   condition drops).
+     */
+    suspend fun setArmed(id: String, armed: Boolean)
+
+    /**
      * Records the most recent fire time, backing the re-arm debounce.
      *
      * @param id The trigger id.

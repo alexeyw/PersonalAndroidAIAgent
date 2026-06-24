@@ -67,6 +67,15 @@ interface TriggerDao {
     suspend fun setEnabled(id: String, enabled: Boolean)
 
     /**
+     * Updates a trigger's armed edge latch.
+     *
+     * @param id The trigger id.
+     * @param armed The new armed state.
+     */
+    @Query("UPDATE triggers SET armed = :armed WHERE id = :id")
+    suspend fun setArmed(id: String, armed: Boolean)
+
+    /**
      * Records the most recent fire time.
      *
      * @param id The trigger id.

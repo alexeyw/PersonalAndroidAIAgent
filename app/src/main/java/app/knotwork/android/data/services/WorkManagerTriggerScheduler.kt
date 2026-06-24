@@ -3,17 +3,14 @@ package app.knotwork.android.data.services
 import androidx.work.Constraints
 import androidx.work.Data
 import androidx.work.ExistingPeriodicWorkPolicy
-import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequest
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import app.knotwork.android.domain.models.Trigger
 import app.knotwork.android.domain.models.TriggerCondition
 import app.knotwork.android.domain.services.TriggerScheduler
-import java.time.Duration
-import java.time.Instant
+import app.knotwork.android.domain.usecases.DailyTriggerTime
 import java.time.ZoneId
-import java.util.Collections
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -22,40 +19,35 @@ import javax.inject.Singleton
  * [TriggerScheduler] implementation backed by Jetpack `WorkManager`.
  *
  * Each active trigger becomes a unique **periodic** work request that wakes
- * [TriggerWatchWorker] when the trigger's coarse constraint holds:
- * - charging → `setRequiresCharging(true)`;
- * - network / Wi-Fi → `setRequiredNetworkType(CONNECTED | UNMETERED)`;
- * - interval schedule → the trigger's own interval (clamped to the platform
- *   15-minute periodic floor);
- * - daily schedule → a 24-hour period with an initial delay to the next
- *   `hh:mm`.
+ * [TriggerWatchWorker]:
+ * - **interval schedule** → the trigger's own interval (clamped to the platform
+ *   15-minute floor) with an explicit flex of half the interval, so consecutive
+ *   wakes are spaced ~one interval apart and the evaluator's half-interval
+ *   debounce never drops a cycle;
+ * - **daily schedule** → a 24-hour period with an initial delay to the next
+ *   `hh:mm` (computed by the shared [DailyTriggerTime]);
+ * - **event** (charging / network) → an **unconstrained** 15-minute poll. The
+ *   wakeup is deliberately *not* gated on a charging/network constraint: the
+ *   worker must observe both the satisfied and unsatisfied states to detect the
+ *   edge (and re-arm), and the evaluator — not a WorkManager constraint — gates
+ *   the actual fire. This also keeps the "Wi-Fi only" predicate single-sourced
+ *   in the evaluator instead of split across a constraint that means "unmetered".
  *
- * The constraints are *level-triggered*, so the worker re-checks the live
- * condition and applies a re-arm debounce
- * ([app.knotwork.android.domain.usecases.EvaluateTriggerFiringUseCase]); a
- * still-satisfied constraint therefore cannot enqueue duplicate runs. Periodic
- * work is persisted by WorkManager across reboot, so no boot receiver is
- * required — an idempotent [syncAll] on cold start is enough.
- *
- * A stale watch (its trigger disabled/deleted while the process was dead) is
- * self-neutralising: the worker re-loads the trigger and the evaluator returns a
- * skip. Explicit [cancel] from the mutation path removes the wakeup entirely.
+ * Periodic work is persisted by WorkManager across reboot, so no boot receiver
+ * is required — an idempotent [syncAll] on cold start re-registers the active
+ * set. A watch whose trigger was deleted/disabled while the process was dead is
+ * reclaimed by [TriggerWatchWorker], which cancels its own work on the first
+ * wake that finds the trigger gone or inactive; [cancel] removes it immediately
+ * on the live mutation path.
  */
 @Singleton
 class WorkManagerTriggerScheduler @Inject constructor(private val workManager: WorkManager) : TriggerScheduler {
 
-    /**
-     * Trigger ids registered in this process, so [syncAll] can cancel a watch
-     * that has dropped out of the active set since the last sync. Reset on
-     * process death (WorkManager keeps the actual work), which the
-     * self-neutralising-wake property tolerates.
-     */
-    private val registered: MutableSet<String> = Collections.synchronizedSet(mutableSetOf())
-
     override fun syncAll(activeTriggers: List<Trigger>) {
-        val activeIds = activeTriggers.map { it.id }.toSet()
-        val stale = synchronized(registered) { registered.toSet() } - activeIds
-        stale.forEach { cancel(it) }
+        // Register (or refresh) every active trigger. Triggers that dropped out
+        // of the active set are reclaimed by the self-cancelling worker (across
+        // process death) or by an explicit cancel() on the live mutation path —
+        // there is no in-memory mirror to drift.
         activeTriggers.forEach { register(it) }
     }
 
@@ -64,62 +56,51 @@ class WorkManagerTriggerScheduler @Inject constructor(private val workManager: W
             cancel(trigger.id)
             return
         }
-        val request = buildRequest(trigger)
-        workManager.enqueueUniquePeriodicWork(uniqueName(trigger.id), ExistingPeriodicWorkPolicy.UPDATE, request)
-        registered.add(trigger.id)
+        workManager.enqueueUniquePeriodicWork(
+            uniqueName(trigger.id),
+            ExistingPeriodicWorkPolicy.UPDATE,
+            buildRequest(trigger),
+        )
     }
 
     override fun cancel(triggerId: String) {
         workManager.cancelUniqueWork(uniqueName(triggerId))
-        registered.remove(triggerId)
     }
 
     /** Builds the periodic watch request for [trigger]'s condition. */
     private fun buildRequest(trigger: Trigger): PeriodicWorkRequest {
-        val intervalMinutes = periodMinutesFor(trigger.condition)
-        val builder = PeriodicWorkRequestBuilder<TriggerWatchWorker>(intervalMinutes, TimeUnit.MINUTES)
-            .setInputData(Data.Builder().putString(TriggerWatchWorker.KEY_TRIGGER_ID, trigger.id).build())
-            .setConstraints(constraintsFor(trigger.condition))
+        val inputData = Data.Builder().putString(TriggerWatchWorker.KEY_TRIGGER_ID, trigger.id).build()
+        val constraints = Constraints.Builder().setRequiresBatteryNotLow(true).build()
 
-        (trigger.condition as? TriggerCondition.DailySchedule)?.let { daily ->
-            builder.setInitialDelay(initialDelayToDailyMillis(daily.hour, daily.minute), TimeUnit.MILLISECONDS)
+        val builder = when (val condition = trigger.condition) {
+            is TriggerCondition.IntervalSchedule -> {
+                val periodMinutes = condition.intervalMinutes.coerceAtLeast(MIN_PERIOD_MINUTES)
+                val flexMinutes = (periodMinutes / FLEX_DIVISOR).coerceIn(MIN_FLEX_MINUTES, periodMinutes)
+                PeriodicWorkRequestBuilder<TriggerWatchWorker>(
+                    periodMinutes,
+                    TimeUnit.MINUTES,
+                    flexMinutes,
+                    TimeUnit.MINUTES,
+                )
+            }
+
+            is TriggerCondition.DailySchedule ->
+                PeriodicWorkRequestBuilder<TriggerWatchWorker>(DAY_MINUTES, TimeUnit.MINUTES)
+                    .setInitialDelay(initialDelayToDailyMillis(condition), TimeUnit.MILLISECONDS)
+
+            TriggerCondition.Charging, is TriggerCondition.NetworkConnected ->
+                PeriodicWorkRequestBuilder<TriggerWatchWorker>(POLL_PERIOD_MINUTES, TimeUnit.MINUTES)
         }
-        return builder.build()
+
+        return builder.setInputData(inputData).setConstraints(constraints).build()
     }
 
-    /** The periodic interval (minutes) for a condition, never below the platform floor. */
-    private fun periodMinutesFor(condition: TriggerCondition): Long = when (condition) {
-        is TriggerCondition.IntervalSchedule -> condition.intervalMinutes.coerceAtLeast(MIN_PERIOD_MINUTES)
-        is TriggerCondition.DailySchedule -> DAY_MINUTES
-        TriggerCondition.Charging, is TriggerCondition.NetworkConnected -> POLL_PERIOD_MINUTES
-    }
-
-    /** WorkManager constraints gating a condition's wakeups. */
-    private fun constraintsFor(condition: TriggerCondition): Constraints {
-        val builder = Constraints.Builder().setRequiresBatteryNotLow(true)
-        when (condition) {
-            TriggerCondition.Charging -> builder.setRequiresCharging(true)
-            is TriggerCondition.NetworkConnected ->
-                builder.setRequiredNetworkType(if (condition.wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
-            is TriggerCondition.IntervalSchedule, is TriggerCondition.DailySchedule -> Unit
-        }
-        return builder.build()
-    }
-
-    /** Milliseconds from now until the next device-local `hour:minute`. */
+    /** Milliseconds from now until the next device-local occurrence of the daily time. */
     private fun initialDelayToDailyMillis(
-        hour: Int,
-        minute: Int,
+        condition: TriggerCondition.DailySchedule,
         nowMillis: Long = System.currentTimeMillis(),
         zone: ZoneId = ZoneId.systemDefault(),
-    ): Long {
-        val now = Instant.ofEpochMilli(nowMillis).atZone(zone)
-        var next = now.toLocalDate()
-            .atTime(hour.coerceIn(MIN_HOUR, MAX_HOUR), minute.coerceIn(MIN_MINUTE, MAX_MINUTE))
-            .atZone(zone)
-        if (!next.isAfter(now)) next = next.plusDays(1)
-        return Duration.between(now, next).toMillis()
-    }
+    ): Long = DailyTriggerTime.millisUntilNext(condition.hour, condition.minute, nowMillis, zone)
 
     /** Per-trigger unique work name; the id suffix keeps each watch independent. */
     private fun uniqueName(triggerId: String): String = TriggerWatchWorker.UNIQUE_NAME_PREFIX + triggerId
@@ -134,9 +115,10 @@ class WorkManagerTriggerScheduler @Inject constructor(private val workManager: W
         /** One day in minutes — the period of a daily schedule. */
         const val DAY_MINUTES = 24L * 60L
 
-        const val MIN_HOUR = 0
-        const val MAX_HOUR = 23
-        const val MIN_MINUTE = 0
-        const val MAX_MINUTE = 59
+        /** Interval is divided by this to derive the flex window (half the interval). */
+        const val FLEX_DIVISOR = 2L
+
+        /** Platform minimum flex window (minutes). */
+        const val MIN_FLEX_MINUTES = 5L
     }
 }

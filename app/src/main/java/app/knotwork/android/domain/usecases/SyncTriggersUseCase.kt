@@ -12,10 +12,17 @@ import javax.inject.Singleton
  *
  * Reads the current [TriggerRepository.observeActiveTriggers] snapshot (enabled
  * and bound triggers) and hands it to [TriggerScheduler.syncAll], which
- * registers each and cancels any stale watch. Idempotent by construction (the
- * scheduler uses replace/cancel semantics keyed by trigger id), so it is safe to
- * call on every cold start — the established pattern for this app's background
- * schedulers — and again after any trigger create / edit / enable / delete.
+ * (re)registers each active trigger's watch. Idempotent by construction (the
+ * scheduler uses the replace policy keyed by trigger id), so it is safe to call
+ * on every cold start — the established pattern for this app's background
+ * schedulers, and currently the only entry point.
+ *
+ * **Scope note.** This task ships the cold-start re-registration only. Reacting
+ * to a trigger created/edited/enabled/deleted *while the app is running* (an
+ * immediate [TriggerScheduler.register] / [TriggerScheduler.cancel] from the
+ * mutation path) lands with the trigger-management UI; until then a runtime
+ * mutation takes effect on the next cold start, and a removed trigger's watch is
+ * reclaimed by the self-cancelling worker on its next wake.
  */
 @Singleton
 class SyncTriggersUseCase @Inject constructor(

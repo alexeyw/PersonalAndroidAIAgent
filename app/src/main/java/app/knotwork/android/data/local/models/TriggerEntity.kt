@@ -22,6 +22,8 @@ import androidx.room.PrimaryKey
  * @property prompt Input message fed to the bound pipeline on each fire.
  * @property conditionJson The serialised [app.knotwork.android.domain.models.TriggerCondition].
  * @property enabled Whether the trigger is active (indexed).
+ * @property armed Edge-detection latch for event conditions (charging/network):
+ *   `true` means ready to fire on the next transition into the satisfied state.
  * @property createdAt Epoch-millis the trigger was created.
  * @property lastFiredAt Epoch-millis of the last fire, or `null` if never fired.
  */
@@ -33,6 +35,7 @@ data class TriggerEntity(
     val prompt: String,
     val conditionJson: String,
     @ColumnInfo(index = true) val enabled: Boolean,
+    val armed: Boolean,
     val createdAt: Long,
     val lastFiredAt: Long?,
 )

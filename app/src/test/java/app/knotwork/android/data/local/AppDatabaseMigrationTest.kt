@@ -473,10 +473,15 @@ class AppDatabaseMigrationTest {
             "Expected CREATE TABLE triggers, got: ${statements.first()}",
             createTable.contains("CREATE TABLE") && createTable.contains("TRIGGERS"),
         )
-        listOf("ID", "NAME", "PIPELINEID", "PROMPT", "CONDITIONJSON", "ENABLED", "CREATEDAT", "LASTFIREDAT")
+        listOf("ID", "NAME", "PIPELINEID", "PROMPT", "CONDITIONJSON", "ENABLED", "ARMED", "CREATEDAT", "LASTFIREDAT")
             .forEach { column ->
                 assertTrue("Missing column $column in: ${statements.first()}", createTable.contains(column))
             }
+        // armed defaults to 1 (a fresh trigger is ready to fire on the first edge).
+        assertTrue(
+            "armed must default to 1: ${statements.first()}",
+            createTable.contains("`ARMED` INTEGER NOT NULL DEFAULT 1"),
+        )
         assertTrue(
             "Primary key must be the trigger id: ${statements.first()}",
             createTable.contains("PRIMARY KEY(`ID`)"),

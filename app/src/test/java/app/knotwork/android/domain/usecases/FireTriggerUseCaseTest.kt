@@ -25,10 +25,9 @@ import org.junit.Test
 
 /**
  * Unit tests for [FireTriggerUseCase] — the worker-side orchestration that loads
- * a trigger, defers the fire/skip call to [EvaluateTriggerFiringUseCase], and
- * acts (enqueue via the scheduler, mark fired, or auto-disable on a deleted
- * pipeline). The evaluator is mocked so each act-branch is exercised in
- * isolation.
+ * a trigger, defers the decision to [EvaluateTriggerFiringUseCase], and acts
+ * (enqueue, mark fired, disarm event triggers, re-arm, or auto-disable). The
+ * evaluator is mocked so each act-branch is exercised in isolation.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class FireTriggerUseCaseTest {
@@ -43,7 +42,8 @@ class FireTriggerUseCaseTest {
 
     private val triggerId = "t1"
     private val now = 1_000L
-    private val trigger = Trigger(
+
+    private val chargingTrigger = Trigger(
         id = triggerId,
         name = "T",
         condition = TriggerCondition.Charging,
@@ -52,6 +52,7 @@ class FireTriggerUseCaseTest {
         enabled = true,
         createdAt = 0L,
     )
+    private val intervalTrigger = chargingTrigger.copy(condition = TriggerCondition.IntervalSchedule(30))
 
     @Before
     fun setUp() {
@@ -83,26 +84,41 @@ class FireTriggerUseCaseTest {
 
     @Test
     fun `given skip decision when invoked then Skipped and nothing scheduled`() = runTest {
-        coEvery { triggerRepository.getTriggerById(triggerId) } returns trigger
+        coEvery { triggerRepository.getTriggerById(triggerId) } returns chargingTrigger
         every { evaluate(any(), any(), any(), any(), any()) } returns
-            TriggerFiringDecision.Skip(TriggerSkipReason.DEBOUNCED)
+            TriggerFiringDecision.Skip(TriggerSkipReason.ALREADY_FIRED)
 
         val outcome = useCase(triggerId, now)
 
-        assertEquals(TriggerFireOutcome.Skipped(TriggerSkipReason.DEBOUNCED), outcome)
+        assertEquals(TriggerFireOutcome.Skipped(TriggerSkipReason.ALREADY_FIRED), outcome)
         verify(exactly = 0) { taskScheduler.scheduleOneTime(any(), any(), any(), any(), any(), any()) }
         coVerify(exactly = 0) { triggerRepository.markFired(any(), any()) }
     }
 
     @Test
-    fun `given fire decision and existing pipeline when invoked then enqueues trigger run and marks fired`() = runTest {
-        coEvery { triggerRepository.getTriggerById(triggerId) } returns trigger
+    fun `given re-arm decision when invoked then re-arms and does not schedule`() = runTest {
+        coEvery { triggerRepository.getTriggerById(triggerId) } returns chargingTrigger
+        every { evaluate(any(), any(), any(), any(), any()) } returns TriggerFiringDecision.ReArm
+
+        val outcome = useCase(triggerId, now)
+
+        assertEquals(TriggerFireOutcome.ReArmed, outcome)
+        coVerify(exactly = 1) { triggerRepository.setArmed(triggerId, true) }
+        verify(exactly = 0) { taskScheduler.scheduleOneTime(any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { triggerRepository.markFired(any(), any()) }
+    }
+
+    @Test
+    fun `given fire on an event trigger then marks fired, disarms, and enqueues a trigger run`() = runTest {
+        coEvery { triggerRepository.getTriggerById(triggerId) } returns chargingTrigger
         every { evaluate(any(), any(), any(), any(), any()) } returns TriggerFiringDecision.Fire("pipe-1", "do it")
         coEvery { pipelineRepository.getPipelineById("pipe-1") } returns mockk<PipelineGraph>()
 
         val outcome = useCase(triggerId, now)
 
         assertEquals(TriggerFireOutcome.Fired("pipe-1"), outcome)
+        coVerify(exactly = 1) { triggerRepository.markFired(triggerId, now) }
+        coVerify(exactly = 1) { triggerRepository.setArmed(triggerId, false) }
         verify(exactly = 1) {
             taskScheduler.scheduleOneTime(
                 prompt = "do it",
@@ -113,12 +129,24 @@ class FireTriggerUseCaseTest {
                 origin = RunOrigin.TRIGGER,
             )
         }
-        coVerify(exactly = 1) { triggerRepository.markFired(triggerId, now) }
     }
 
     @Test
-    fun `given fire decision but deleted pipeline when invoked then auto-disables and does not schedule`() = runTest {
-        coEvery { triggerRepository.getTriggerById(triggerId) } returns trigger
+    fun `given fire on a time trigger then marks fired and enqueues but does not touch the armed latch`() = runTest {
+        coEvery { triggerRepository.getTriggerById(triggerId) } returns intervalTrigger
+        every { evaluate(any(), any(), any(), any(), any()) } returns TriggerFiringDecision.Fire("pipe-1", "do it")
+        coEvery { pipelineRepository.getPipelineById("pipe-1") } returns mockk<PipelineGraph>()
+
+        val outcome = useCase(triggerId, now)
+
+        assertEquals(TriggerFireOutcome.Fired("pipe-1"), outcome)
+        coVerify(exactly = 1) { triggerRepository.markFired(triggerId, now) }
+        coVerify(exactly = 0) { triggerRepository.setArmed(any(), any()) }
+    }
+
+    @Test
+    fun `given fire but deleted pipeline when invoked then auto-disables and does not schedule`() = runTest {
+        coEvery { triggerRepository.getTriggerById(triggerId) } returns chargingTrigger
         every { evaluate(any(), any(), any(), any(), any()) } returns TriggerFiringDecision.Fire("pipe-1", "do it")
         coEvery { pipelineRepository.getPipelineById("pipe-1") } returns null
 

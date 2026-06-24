@@ -1,7 +1,6 @@
 package app.knotwork.android.domain.triggerio
 
 import app.knotwork.android.domain.models.TriggerCondition
-import app.knotwork.android.domain.models.TriggerType
 import org.json.JSONException
 import org.json.JSONObject
 
@@ -13,14 +12,27 @@ import org.json.JSONObject
  * is produced or parsed, so the on-disk shape can never drift between the write
  * and read paths.
  *
- * The discriminator lives under [KEY_TYPE] and carries the [TriggerType]
- * [name][Enum.name]; variant payload is added alongside it. The wire keys here
- * are persisted forever — renaming one would orphan every existing trigger row.
+ * The discriminator lives under [KEY_TYPE] and carries one of the `TYPE_*`
+ * constants; variant payload is added alongside it. The discriminator strings
+ * are owned here (not derived from an enum name) so the wire format is immune to
+ * a model rename — they are persisted forever and must never be changed.
  */
 object TriggerConditionCodec {
 
-    /** Discriminator key carrying the [TriggerType] name. */
+    /** Discriminator key. */
     const val KEY_TYPE: String = "type"
+
+    /** Discriminator value for [TriggerCondition.IntervalSchedule]. */
+    const val TYPE_INTERVAL: String = "SCHEDULE_INTERVAL"
+
+    /** Discriminator value for [TriggerCondition.DailySchedule]. */
+    const val TYPE_DAILY: String = "SCHEDULE_DAILY"
+
+    /** Discriminator value for [TriggerCondition.Charging]. */
+    const val TYPE_CHARGING: String = "CHARGING"
+
+    /** Discriminator value for [TriggerCondition.NetworkConnected]. */
+    const val TYPE_NETWORK: String = "NETWORK"
 
     /** Payload key for [TriggerCondition.IntervalSchedule.intervalMinutes]. */
     const val KEY_INTERVAL_MINUTES: String = "intervalMinutes"
@@ -41,15 +53,21 @@ object TriggerConditionCodec {
      * @return A compact JSON string ready for column storage.
      */
     fun encode(condition: TriggerCondition): String = JSONObject().apply {
-        put(KEY_TYPE, condition.type.name)
         when (condition) {
-            is TriggerCondition.IntervalSchedule -> put(KEY_INTERVAL_MINUTES, condition.intervalMinutes)
+            is TriggerCondition.IntervalSchedule -> {
+                put(KEY_TYPE, TYPE_INTERVAL)
+                put(KEY_INTERVAL_MINUTES, condition.intervalMinutes)
+            }
             is TriggerCondition.DailySchedule -> {
+                put(KEY_TYPE, TYPE_DAILY)
                 put(KEY_HOUR, condition.hour)
                 put(KEY_MINUTE, condition.minute)
             }
-            TriggerCondition.Charging -> Unit
-            is TriggerCondition.NetworkConnected -> put(KEY_WIFI_ONLY, condition.wifiOnly)
+            TriggerCondition.Charging -> put(KEY_TYPE, TYPE_CHARGING)
+            is TriggerCondition.NetworkConnected -> {
+                put(KEY_TYPE, TYPE_NETWORK)
+                put(KEY_WIFI_ONLY, condition.wifiOnly)
+            }
         }
     }.toString()
 
@@ -70,20 +88,20 @@ object TriggerConditionCodec {
         return try {
             val obj = JSONObject(json)
             when (obj.optString(KEY_TYPE)) {
-                TriggerType.SCHEDULE_INTERVAL.name ->
+                TYPE_INTERVAL ->
                     if (obj.has(KEY_INTERVAL_MINUTES)) {
                         TriggerCondition.IntervalSchedule(obj.getLong(KEY_INTERVAL_MINUTES))
                     } else {
                         null
                     }
-                TriggerType.SCHEDULE_DAILY.name ->
+                TYPE_DAILY ->
                     if (obj.has(KEY_HOUR) && obj.has(KEY_MINUTE)) {
                         TriggerCondition.DailySchedule(obj.getInt(KEY_HOUR), obj.getInt(KEY_MINUTE))
                     } else {
                         null
                     }
-                TriggerType.CHARGING.name -> TriggerCondition.Charging
-                TriggerType.NETWORK.name -> TriggerCondition.NetworkConnected(obj.optBoolean(KEY_WIFI_ONLY, false))
+                TYPE_CHARGING -> TriggerCondition.Charging
+                TYPE_NETWORK -> TriggerCondition.NetworkConnected(obj.optBoolean(KEY_WIFI_ONLY, false))
                 else -> null
             }
         } catch (_: JSONException) {

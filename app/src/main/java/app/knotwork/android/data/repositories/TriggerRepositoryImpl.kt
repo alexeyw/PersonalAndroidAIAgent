@@ -37,6 +37,8 @@ class TriggerRepositoryImpl @Inject constructor(private val dao: TriggerDao) : T
 
     override suspend fun setEnabled(id: String, enabled: Boolean) = dao.setEnabled(id, enabled)
 
+    override suspend fun setArmed(id: String, armed: Boolean) = dao.setArmed(id, armed)
+
     override suspend fun markFired(id: String, firedAt: Long) = dao.markFired(id, firedAt)
 
     /** Maps a domain [Trigger] to its persisted row, encoding the condition. */
@@ -47,6 +49,7 @@ class TriggerRepositoryImpl @Inject constructor(private val dao: TriggerDao) : T
         prompt = prompt,
         conditionJson = TriggerConditionCodec.encode(condition),
         enabled = enabled,
+        armed = armed,
         createdAt = createdAt,
         lastFiredAt = lastFiredAt,
     )
@@ -68,6 +71,7 @@ class TriggerRepositoryImpl @Inject constructor(private val dao: TriggerDao) : T
             pipelineId = pipelineId,
             prompt = prompt,
             enabled = enabled,
+            armed = armed,
             createdAt = createdAt,
             lastFiredAt = lastFiredAt,
         )

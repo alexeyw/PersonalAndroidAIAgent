@@ -36,6 +36,7 @@ class TriggerRepositoryImplTest {
         prompt = "brief me",
         conditionJson = TriggerConditionCodec.encode(TriggerCondition.DailySchedule(hour = 8, minute = 0)),
         enabled = true,
+        armed = false,
         createdAt = 100L,
         lastFiredAt = 200L,
     )
@@ -61,6 +62,7 @@ class TriggerRepositoryImplTest {
         assertEquals("brief me", trigger.prompt)
         assertEquals(TriggerCondition.DailySchedule(hour = 8, minute = 0), trigger.condition)
         assertEquals(true, trigger.enabled)
+        assertEquals(false, trigger.armed)
         assertEquals(100L, trigger.createdAt)
         assertEquals(200L, trigger.lastFiredAt)
     }
@@ -101,6 +103,7 @@ class TriggerRepositoryImplTest {
             pipelineId = "pipe-9",
             prompt = "run",
             enabled = false,
+            armed = false,
             createdAt = 5L,
             lastFiredAt = null,
         )
@@ -111,6 +114,7 @@ class TriggerRepositoryImplTest {
         assertEquals("t3", captured.id)
         assertEquals("pipe-9", captured.pipelineId)
         assertEquals(false, captured.enabled)
+        assertEquals(false, captured.armed)
         assertEquals(TriggerCondition.Charging, TriggerConditionCodec.decode(captured.conditionJson))
     }
 
@@ -118,10 +122,12 @@ class TriggerRepositoryImplTest {
     fun `given mutations then they delegate to the dao`() = runTest {
         repository.deleteTrigger("t1")
         repository.setEnabled("t1", false)
+        repository.setArmed("t1", true)
         repository.markFired("t1", 999L)
 
         coVerify(exactly = 1) { dao.deleteById("t1") }
         coVerify(exactly = 1) { dao.setEnabled("t1", false) }
+        coVerify(exactly = 1) { dao.setArmed("t1", true) }
         coVerify(exactly = 1) { dao.markFired("t1", 999L) }
     }
 }

@@ -1,6 +1,7 @@
 package app.knotwork.android.domain.usecases
 
 import app.knotwork.android.domain.models.RunOrigin
+import app.knotwork.android.domain.models.Trigger
 import app.knotwork.android.domain.repositories.NetworkStateRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PowerStateRepository
@@ -12,23 +13,42 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Outcome of a single trigger-fire attempt, returned for logging and testing.
+ * Outcome of a single trigger-fire attempt, returned for logging and so the
+ * worker can decide whether its watch should keep running.
  */
 sealed interface TriggerFireOutcome {
+
+    /**
+     * Whether the background watch that produced this outcome should keep
+     * running. `false` means the trigger no longer warrants a watch (gone,
+     * disabled, unbound, or auto-disabled), so the worker cancels its own work.
+     */
+    val watchStillWarranted: Boolean
 
     /**
      * A background run of [pipelineId] was enqueued.
      *
      * @property pipelineId The pipeline that was scheduled.
      */
-    data class Fired(val pipelineId: String) : TriggerFireOutcome
+    data class Fired(val pipelineId: String) : TriggerFireOutcome {
+        override val watchStillWarranted: Boolean get() = true
+    }
+
+    /** An event trigger's condition dropped, so the trigger was re-armed. */
+    data object ReArmed : TriggerFireOutcome {
+        override val watchStillWarranted: Boolean get() = true
+    }
 
     /**
-     * The trigger did not fire this time.
+     * The trigger did not fire this time but its watch is still valid (condition
+     * not yet met, or already fired this cycle).
      *
-     * @property reason Why it was skipped.
+     * @property reason Why the evaluation skipped the trigger.
      */
-    data class Skipped(val reason: TriggerSkipReason) : TriggerFireOutcome
+    data class Skipped(val reason: TriggerSkipReason) : TriggerFireOutcome {
+        override val watchStillWarranted: Boolean
+            get() = reason == TriggerSkipReason.CONDITION_NOT_MET || reason == TriggerSkipReason.ALREADY_FIRED
+    }
 
     /**
      * The trigger's bound pipeline no longer exists, so the trigger was
@@ -36,10 +56,14 @@ sealed interface TriggerFireOutcome {
      *
      * @property pipelineId The id of the now-missing pipeline.
      */
-    data class Disabled(val pipelineId: String) : TriggerFireOutcome
+    data class Disabled(val pipelineId: String) : TriggerFireOutcome {
+        override val watchStillWarranted: Boolean get() = false
+    }
 
     /** No trigger row matched the id (deleted between wakeup and handling). */
-    data object NotFound : TriggerFireOutcome
+    data object NotFound : TriggerFireOutcome {
+        override val watchStillWarranted: Boolean get() = false
+    }
 }
 
 /**
@@ -50,15 +74,18 @@ sealed interface TriggerFireOutcome {
  * delegates to the existing [TaskScheduler.scheduleOneTime] path so the run goes
  * through `AgentWorker` exactly like a scheduled task (session resolution,
  * foreground promotion, completion notification and engine unload all reused),
- * attributed to [RunOrigin.TRIGGER]. Result delivery / notification refinement
- * is a later task; this task only enqueues the run.
+ * attributed to [RunOrigin.TRIGGER].
  *
- * Two safety behaviours are enforced here:
- * - **Deleted bound pipeline.** If the resolved pipeline id no longer maps to a
- *   pipeline, the trigger is auto-disabled rather than firing into nothing.
- * - **Idempotency.** The fire-time stamp is written via
- *   [TriggerRepository.markFired], feeding the evaluator's re-arm debounce so a
- *   still-satisfied constraint cannot enqueue duplicate runs.
+ * Safety behaviours enforced here:
+ * - **Idempotency.** The fire-state writes ([TriggerRepository.markFired] and,
+ *   for event triggers, the disarm) happen **before** the irreversible enqueue,
+ *   so a process death or DB error on the worker retry path re-evaluates against
+ *   the recorded state and cannot enqueue a duplicate run (the cost of the rare
+ *   failure is a *missed* run, not a doubled one).
+ * - **Edge firing.** Event conditions (charging / network) fire once per
+ *   transition into the satisfied state; the disarm here plus the
+ *   [TriggerFiringDecision.ReArm] path implement that latch.
+ * - **Deleted bound pipeline.** Auto-disabled rather than firing into nothing.
  */
 @Singleton
 class FireTriggerUseCase @Inject constructor(
@@ -97,23 +124,38 @@ class FireTriggerUseCase @Inject constructor(
                 TriggerFireOutcome.Skipped(decision.reason)
             }
 
-            is TriggerFiringDecision.Fire -> fire(triggerId, decision, nowMillis)
+            TriggerFiringDecision.ReArm -> {
+                triggerRepository.setArmed(triggerId, true)
+                Timber.tag(TAG).d("Trigger %s re-armed.", triggerId)
+                TriggerFireOutcome.ReArmed
+            }
+
+            is TriggerFiringDecision.Fire -> fire(trigger, decision, nowMillis)
         }
     }
 
     /**
-     * Enqueues the bound pipeline run after a final existence check, or disables
-     * the trigger when the bound pipeline has been deleted.
+     * Enqueues the bound pipeline run after a final existence check, recording
+     * the fire/disarm state **before** the enqueue, or disables the trigger when
+     * the bound pipeline has been deleted.
      */
     private suspend fun fire(
-        triggerId: String,
+        trigger: Trigger,
         decision: TriggerFiringDecision.Fire,
         nowMillis: Long,
     ): TriggerFireOutcome {
         if (pipelineRepository.getPipelineById(decision.pipelineId) == null) {
-            triggerRepository.setEnabled(triggerId, false)
-            Timber.tag(TAG).w("Trigger %s bound pipeline %s missing; auto-disabled.", triggerId, decision.pipelineId)
+            triggerRepository.setEnabled(trigger.id, false)
+            Timber.tag(TAG).w("Trigger %s bound pipeline %s missing; auto-disabled.", trigger.id, decision.pipelineId)
             return TriggerFireOutcome.Disabled(decision.pipelineId)
+        }
+
+        // Record the suppression state first: if the enqueue or process dies
+        // after this point, the next wake re-evaluates against the recorded
+        // state and will not double-fire.
+        triggerRepository.markFired(trigger.id, nowMillis)
+        if (trigger.condition.isEventTriggered) {
+            triggerRepository.setArmed(trigger.id, false)
         }
 
         taskScheduler.scheduleOneTime(
@@ -124,8 +166,7 @@ class FireTriggerUseCase @Inject constructor(
             pipelineId = decision.pipelineId,
             origin = RunOrigin.TRIGGER,
         )
-        triggerRepository.markFired(triggerId, nowMillis)
-        Timber.tag(TAG).d("Trigger %s fired pipeline %s.", triggerId, decision.pipelineId)
+        Timber.tag(TAG).d("Trigger %s fired pipeline %s.", trigger.id, decision.pipelineId)
         return TriggerFireOutcome.Fired(decision.pipelineId)
     }
 

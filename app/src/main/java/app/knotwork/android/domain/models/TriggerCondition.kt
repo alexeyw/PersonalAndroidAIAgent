@@ -1,28 +1,6 @@
 package app.knotwork.android.domain.models
 
 /**
- * Coarse classification of a [TriggerCondition], used for persistence
- * discrimination, list grouping and icon selection.
- *
- * Derived from the condition (see [TriggerCondition.type]) rather than stored
- * independently, so the discriminator can never drift from the concrete
- * condition payload.
- */
-enum class TriggerType {
-    /** A repeating interval schedule ([TriggerCondition.IntervalSchedule]). */
-    SCHEDULE_INTERVAL,
-
-    /** A once-per-day time-of-day schedule ([TriggerCondition.DailySchedule]). */
-    SCHEDULE_DAILY,
-
-    /** A charging-state trigger ([TriggerCondition.Charging]). */
-    CHARGING,
-
-    /** A network-connectivity trigger ([TriggerCondition.NetworkConnected]). */
-    NETWORK,
-}
-
-/**
  * The activation condition of a [Trigger] — the "when" half of a
  * `condition → bound pipeline` automation rule.
  *
@@ -37,15 +15,25 @@ enum class TriggerType {
  * Conditions are persisted through
  * [app.knotwork.android.domain.triggerio.TriggerConditionCodec] as a compact
  * JSON string, so the wire keys there are durable and must never be renamed.
+ *
+ * Conditions split into two firing models:
+ * - **Time-scheduled** ([IntervalSchedule], [DailySchedule]) fire on a clock —
+ *   the background runtime wakes at a cadence and the evaluator decides from the
+ *   clock alone.
+ * - **Event** ([Charging], [NetworkConnected], [isEventTriggered] `== true`)
+ *   fire on a device-state *edge* (false → true). The runtime polls the live
+ *   state and the evaluator fires once per transition, tracked by
+ *   [Trigger.armed], not by a time window.
  */
 sealed interface TriggerCondition {
 
     /**
-     * The coarse [TriggerType] of this condition, used for persistence and UI
-     * classification. Computed from the concrete variant so it stays in lock-step
-     * with the payload.
+     * Whether this condition fires on a device-state edge (charging started,
+     * network connected) rather than on a clock. Event conditions are evaluated
+     * against the live [PowerState] / [NetworkState] and use [Trigger.armed] to
+     * fire exactly once per transition into the satisfied state.
      */
-    val type: TriggerType
+    val isEventTriggered: Boolean
 
     /**
      * Fires repeatedly every [intervalMinutes] minutes (e.g. "every 6 hours").
@@ -55,10 +43,12 @@ sealed interface TriggerCondition {
      * (15 minutes); a smaller value is accepted at the domain layer but will run
      * no more often than the floor allows.
      *
-     * @property intervalMinutes The repeat interval in minutes. Must be positive.
+     * @property intervalMinutes The repeat interval in minutes. Must be positive;
+     *   a non-positive stored value is clamped to a 1-minute floor by the
+     *   evaluator so it can never collapse the debounce window.
      */
     data class IntervalSchedule(val intervalMinutes: Long) : TriggerCondition {
-        override val type: TriggerType get() = TriggerType.SCHEDULE_INTERVAL
+        override val isEventTriggered: Boolean get() = false
     }
 
     /**
@@ -69,31 +59,33 @@ sealed interface TriggerCondition {
      * @property minute Minute of the hour, `0..59`.
      */
     data class DailySchedule(val hour: Int, val minute: Int) : TriggerCondition {
-        override val type: TriggerType get() = TriggerType.SCHEDULE_DAILY
+        override val isEventTriggered: Boolean get() = false
     }
 
     /**
-     * Fires when the device starts charging.
+     * Fires when the device transitions into the charging state.
      *
-     * The background runtime only wakes the trigger while the charging
-     * constraint is satisfied; the evaluation core re-checks the live charging
-     * state and applies a re-arm debounce so a single charge session enqueues at
-     * most one run within the debounce window.
+     * The runtime polls the live charging state (it does **not** gate the wakeup
+     * on a charging constraint, so it can also observe the un-plug that re-arms
+     * the trigger); the evaluator fires once on the false → true edge and re-arms
+     * when charging stops.
      */
     data object Charging : TriggerCondition {
-        override val type: TriggerType get() = TriggerType.CHARGING
+        override val isEventTriggered: Boolean get() = true
     }
 
     /**
-     * Fires when the device gains network connectivity.
+     * Fires when the device transitions into a connected-network state.
      *
      * @property wifiOnly When `true`, the condition is satisfied only by a Wi-Fi
-     *   (unmetered) connection; when `false`, any connected network satisfies it.
-     *   Matching a specific Wi-Fi SSID is intentionally **not** modelled in the
-     *   first wave — reading the SSID requires a location permission, which is
-     *   deferred (see `project_docs/decisions.md`).
+     *   connection ([NetworkState.isWifiConnected]); when `false`, any connected
+     *   network ([NetworkState.isConnected]) satisfies it. The gate and the live
+     *   re-check use this same predicate, so they cannot disagree. Matching a
+     *   specific Wi-Fi SSID is intentionally **not** modelled in the first wave —
+     *   reading the SSID requires a location permission, which is deferred (see
+     *   `project_docs/decisions.md`).
      */
     data class NetworkConnected(val wifiOnly: Boolean) : TriggerCondition {
-        override val type: TriggerType get() = TriggerType.NETWORK
+        override val isEventTriggered: Boolean get() = true
     }
 }
