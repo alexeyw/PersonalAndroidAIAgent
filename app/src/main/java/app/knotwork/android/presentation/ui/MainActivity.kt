@@ -27,6 +27,7 @@ import app.knotwork.android.data.services.RunRetentionScheduler
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.MemoryReembedScheduler
 import app.knotwork.android.presentation.shortcuts.AppShortcutPublisher
+import app.knotwork.android.presentation.state.NewChatRequestRelay
 import app.knotwork.android.presentation.state.TransientMessageRelay
 import app.knotwork.android.presentation.theme.AndroidAIAgentTheme
 import app.knotwork.android.presentation.ui.navigation.AppNavGraph
@@ -62,6 +63,8 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var attachmentOrphanCleanupScheduler: AttachmentOrphanCleanupScheduler
 
     @Inject lateinit var appShortcutPublisher: AppShortcutPublisher
+
+    @Inject lateinit var newChatRequestRelay: NewChatRequestRelay
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
@@ -175,7 +178,10 @@ class MainActivity : ComponentActivity() {
                 // fires for warm shortcut / share / notification taps.
                 LaunchedEffect(navController) {
                     deepLinkIntents.collect { newIntent ->
-                        navController.navigateToDeepLink(newIntent)
+                        navController.navigateToDeepLink(
+                            intent = newIntent,
+                            onNewChat = { newChatRequestRelay.request() },
+                        )
                     }
                 }
                 // Onboarding gate: invert `hasCompletedOnboarding` instead
@@ -204,6 +210,7 @@ class MainActivity : ComponentActivity() {
                         navController = navController,
                         showOnboarding = !hasCompletedOnboarding,
                         pendingDeepLink = pendingDeepLink,
+                        newChatRequestRelay = newChatRequestRelay,
                         modifier = Modifier.padding(innerPadding),
                     )
                 }

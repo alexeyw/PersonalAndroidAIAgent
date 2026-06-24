@@ -53,6 +53,14 @@ object NavRoutes {
      */
     const val PIPELINES_DEEP_LINK_PATTERN: String = "$DEEP_LINK_SCHEME://pipelines"
 
+    /**
+     * Deep-link uri for the static "New chat" launcher shortcut. Distinct from
+     * [CHAT_TAB_DEEP_LINK_PATTERN] (`knotwork://chat`, which opens the chat home
+     * on the *current* session): this one creates a fresh empty session first.
+     * Handled explicitly by the deep-link router, not as a `navDeepLink`.
+     */
+    const val NEW_CHAT_DEEP_LINK_PATTERN: String = "$DEEP_LINK_SCHEME://new-chat"
+
     /** Builds a concrete `chat/<id>` route for `navController.navigate`. */
     fun chatRoute(threadId: String): String = "chat/$threadId"
 

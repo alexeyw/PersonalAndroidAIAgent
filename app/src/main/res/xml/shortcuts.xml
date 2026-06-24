@@ -2,8 +2,9 @@
 <!--
     Static launcher shortcuts. These open existing screens via the app's
     `knotwork://` deep-link routes and never run a pipeline by themselves.
-    Dynamic shortcuts (recent sessions) are published at runtime by
-    AppShortcutPublisher.
+    "New chat" creates a fresh empty session (knotwork://new-chat) rather than
+    reopening the current one. Dynamic shortcuts (recent sessions) are published
+    at runtime by AppShortcutPublisher.
 -->
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
     <shortcut
@@ -14,7 +15,7 @@
         android:shortcutLongLabel="@string/shortcut_new_chat_long">
         <intent
             android:action="android.intent.action.VIEW"
-            android:data="knotwork://chat"
+            android:data="knotwork://new-chat"
             android:targetClass="app.knotwork.android.presentation.ui.MainActivity"
             android:targetPackage="app.knotwork.android" />
     </shortcut>

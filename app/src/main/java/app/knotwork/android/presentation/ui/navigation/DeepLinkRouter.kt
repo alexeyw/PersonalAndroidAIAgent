@@ -14,26 +14,33 @@ import androidx.navigation.NavHostController
  * `navigate` so the target lands on top of the chat home (Back returns home),
  * with no second activity and no splash flash.
  *
- * Supported hosts mirror the registered `navDeepLink` patterns in
- * [AppNavGraph]:
+ * Supported hosts (the app's `knotwork://` entry-surface URIs):
  *  - `knotwork://chat/{threadId}` → that thread's chat ([NavRoutes.chatRoute]);
- *  - `knotwork://chat`            → the chat home ([NavRoutes.CHAT_TAB]);
+ *  - `knotwork://chat`            → the chat home on the current session;
+ *  - `knotwork://new-chat`        → the chat home, then [onNewChat] fires to
+ *    create a fresh empty session (the "New chat" launcher shortcut);
  *  - `knotwork://pipelines`       → the pipeline library ([NavRoutes.PIPELINE_LIBRARY]).
  *
- * @param intent the new intent delivered to `MainActivity.onNewIntent`.
+ * @param intent the deep-link intent (the launch intent or one from `onNewIntent`).
+ * @param onNewChat invoked after navigating home for `knotwork://new-chat`, so
+ *   the host can signal the chat surface to start a fresh session (the navigation
+ *   only lands on the home; the new-session creation is a separate side effect).
  * @return `true` when the intent carried a recognised `knotwork://` deep link
  *   and a navigation was dispatched; `false` otherwise (caller leaves the
  *   current destination untouched).
  */
-internal fun NavHostController.navigateToDeepLink(intent: Intent): Boolean {
+internal fun NavHostController.navigateToDeepLink(intent: Intent, onNewChat: () -> Unit = {}): Boolean {
     val uri = intent.data ?: return false
     if (uri.scheme != NavRoutes.DEEP_LINK_SCHEME) return false
+    val newChat = uri.host == "new-chat"
     val route = when (uri.host) {
         // `knotwork://chat` (no segment) and `knotwork://chat/<threadId>`.
         "chat" -> uri.pathSegments.firstOrNull()
             ?.takeIf { it.isNotBlank() }
             ?.let { NavRoutes.chatRoute(it) }
             ?: NavRoutes.CHAT_TAB
+        // `knotwork://new-chat` lands on the chat home; [onNewChat] makes it fresh.
+        "new-chat" -> NavRoutes.CHAT_TAB
         // `knotwork://pipelines`.
         "pipelines" -> NavRoutes.PIPELINE_LIBRARY
         else -> return false
@@ -45,5 +52,6 @@ internal fun NavHostController.navigateToDeepLink(intent: Intent): Boolean {
         popUpTo(NavRoutes.CHAT_TAB) { inclusive = false }
         launchSingleTop = true
     }
+    if (newChat) onNewChat()
     return true
 }

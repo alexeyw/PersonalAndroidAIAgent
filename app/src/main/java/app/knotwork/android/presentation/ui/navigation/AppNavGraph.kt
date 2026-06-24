@@ -15,6 +15,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.navArgument
 import app.knotwork.android.domain.models.ProviderId
+import app.knotwork.android.presentation.state.NewChatRequestRelay
 import app.knotwork.android.presentation.ui.about.AboutScreen
 import app.knotwork.android.presentation.ui.chat.home.ChatHomeScreen
 import app.knotwork.android.presentation.ui.chat.home.ChatHomeViewModel
@@ -91,6 +92,10 @@ import timber.log.Timber
  *        [NavRoutes.CHAT_TAB] (home) → the deep-link target on top. This avoids
  *        the implicit-deep-link race that buried the target under the home chat
  *        (or produced a half-loaded second chat surface).
+ * @param newChatRequestRelay bus connecting the `knotwork://new-chat` shortcut to
+ *        the chat home: the splash/deep-link handler [NewChatRequestRelay.request]s
+ *        a fresh session and the `CHAT_TAB` composable drains it into
+ *        `ChatHomeThreadsDelegate.createNewSessionWithPipeline`.
  * @param modifier Inset-padding passthrough from [AppShellScaffold].
  */
 @Composable
@@ -98,6 +103,7 @@ fun AppNavGraph(
     navController: NavHostController,
     showOnboarding: Boolean,
     pendingDeepLink: Intent?,
+    newChatRequestRelay: NewChatRequestRelay,
     modifier: Modifier = Modifier,
 ) {
     NavHost(
@@ -119,7 +125,9 @@ fun AppNavGraph(
                     // chat buried under the home surface. Skipped during onboarding;
                     // a first-run user has no sessions to deep-link into yet.
                     if (!showOnboarding) {
-                        pendingDeepLink?.let { navController.navigateToDeepLink(it) }
+                        pendingDeepLink?.let {
+                            navController.navigateToDeepLink(it, onNewChat = { newChatRequestRelay.request() })
+                        }
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
@@ -159,6 +167,14 @@ fun AppNavGraph(
         // explicitly via DeepLinkRouter (see AppNavGraph KDoc / navigateToDeepLink).
         composable(route = NavRoutes.CHAT_TAB) {
             val chatHomeViewModel: ChatHomeViewModel = hiltViewModel()
+            // Drain `knotwork://new-chat` shortcut requests into a fresh session.
+            // The request may be buffered (CONFLATED) from before this collector
+            // mounted on a cold launch, so it is delivered as soon as we land here.
+            LaunchedEffect(chatHomeViewModel) {
+                newChatRequestRelay.requests.collect {
+                    chatHomeViewModel.threads.createNewSessionWithPipeline(pipelineId = null)
+                }
+            }
             ChatHomeScreen(
                 viewModel = chatHomeViewModel,
                 onOpenSettings = { navController.navigate(NavRoutes.SETTINGS) },
