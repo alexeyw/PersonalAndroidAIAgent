@@ -253,6 +253,9 @@ This file maps the contents of the main application package.
     - `ModelPerformanceSample.kt` - One persisted inference measurement (TTFT / decode tok-s / total / peak native heap / `isBenchmark`), keyed by model path; `fromTimings(...)` derives the figures from raw timings (shared by executor + benchmark). Also hosts `ModelPerformanceSummary` (rolling-average fold; excludes degenerate 0-ttft / 0-decode samples from the means, keeps the window count, or `null` when empty).
     - `AgentOrchestratorState.kt` - Orchestrator state model.
     - `AgentTask.kt` - Agent task model.
+    - `EntrySurface.kt` - OS entry surfaces that can launch a pipeline (`SHARE`, `QUICK_TILE`); each optionally binds to a user-chosen pipeline (inert until bound).
+    - `SharedPayload.kt` - Normalised `ACTION_SEND` content (text and/or image URI) produced by `ParseSharedContentUseCase`; `isEmpty` drops a no-op share.
+    - `DynamicShortcutSpec.kt` - Framework-free description of one dynamic launcher shortcut (id / sessionId / clamped labels / rank), built by `BuildDynamicShortcutsUseCase`.
     - `MessageAttachment.kt` - Image attached to a user `ChatMessage`: store-relative `path`, `mimeType` (always `image/jpeg` this phase), and downscaled pixel `width`/`height`. Pure-Kotlin value class carried on `ChatMessage` and `AgentTask`.
     - `EngineImageInput.kt` - A run's single image resolved for the engine: absolute JPEG path (for LiteRT-LM `Content.ImageFile`) plus pixel `width`/`height` and on-disk `sizeBytes` (for the `Image input: W×H, N KB` console line). Built by `TaskQueueManagerImpl` from the saved `MessageAttachment` and threaded into `GraphExecutionEngine`.
     - `RunImageDelivery.kt` - Tree-shared mutable holder (mirroring `RunStepBudget`) carrying the run's `EngineImageInput` + a `consumed` flag. Threaded through every `PIPELINE` node's sub-pipeline invocation (via `ExecutionScope.imageDelivery`) so the image reaches the first vision sink (`LITE_RT` with `originalTask`) anywhere in the run tree — including nested sub-pipelines — and exactly once.
@@ -390,7 +393,14 @@ This file maps the contents of the main application package.
       - `DeleteWorkspaceFilesUseCase.kt` - Deletes one or many files independently, partitioning the result into a `WorkspaceDeleteSummary` (deleted / failed-with-cause).
       - `ImportFileToWorkspaceUseCase.kt` - Imports a picked document with a collision policy (`ImportMode` CreateOrFail / Overwrite / KeepBoth); pure `sanitize` (basename) + `freeName` (`name (N).ext`) helpers shared with the UI's collision preview.
       - `ExportWorkspaceFileUseCase.kt` - Streams a workspace file to a caller-provided `OutputStream` (save-as destination / share staging).
-    - `AgentOrchestratorUseCase.kt` - Use case for agent orchestration.
+    - `AgentOrchestratorUseCase.kt` - Use case for agent orchestration. `invoke(...)` (interactive, carries an `origin`) and `enqueueScheduled(...)` (background, accepts an explicit `pipelineId` + `origin`) so entry surfaces attribute and bind their runs.
+    - `ParseSharedContentUseCase.kt` - Pure mapper from raw `ACTION_SEND` intent fields (mime / text / stream uri) to a `SharedPayload`; keeps Intent parsing out of the activity so it is JVM-testable.
+    - `ResolveSurfacePipelineUseCase.kt` - Reads the pipeline bound to an `EntrySurface` (or `null` = inert) from `SettingsRepository`; exhaustive-`when` read dispatch.
+    - `SetSurfacePipelineUseCase.kt` - Symmetric write dispatch for an `EntrySurface` binding (exhaustive `when`); single point used by the library menu, the Background picker and the delete-cleanup loop.
+    - `AttachmentMessageContent.kt` - Shared image-only message contract (caption → prompt + displayContent) used by both the composer (`ChatHomeViewModel`) and the share target so the two cannot drift.
+    - `BuildDynamicShortcutsUseCase.kt` - Pure selection of recent sessions → `DynamicShortcutSpec`s (recency order, count cap, label clamping, blank-name skip).
+    - `LaunchTilePipelineUseCase.kt` - Resolves the Quick Settings tile binding and enqueues a one-shot background run (`RunOrigin.QUICK_TILE`) via `TaskScheduler`; `TileLaunchResult` = Launched / NotConfigured.
+    - `LaunchSharePipelineUseCase.kt` - Resolves the share binding, ingests a shared image via `AttachmentStore`, creates a bound session and enqueues an interactive `RunOrigin.SHARE` run; `ShareLaunchResult` = Launched / NotConfigured / NothingShared.
     - `AppInitializationUseCase.kt` - Cold-start orchestrator: streams `InitProgress` snapshots while running first-launch defaults, loading the LiteRT model, and prefetching pipelines / chat sessions / memory summaries. Classifies fatal failures (`InitFailureKind`) by walking the cause chain for `DbPassphraseUnavailableException`. Drives the splash screen.
     - `ResetLockedDatabaseUseCase.kt` - Wraps `DatabaseResetService` for the splash recovery screen's typed-confirm "erase all data" action.
     - `EvaluateIfConditionUseCase.kt` - Use case for evaluating IF condition nodes.
@@ -449,6 +459,13 @@ This file maps the contents of the main application package.
     - `ApprovalNotificationManager.kt` - Manager for approval notifications: transient live-phase prompts plus the persistent parked-run variant (ongoing, `REPOST` delete-intent, chat deep-link; DESTRUCTIVE offers Deny + "Review in chat" instead of a direct Approve).
     - `ClarificationNotificationManager.kt` - `ClarificationNotifier` impl posting the ongoing "Agent needs your input" notification for parked clarifications (chat deep-link, `REPOST` delete-intent, own `AgentClarificationChannel`).
     - `ScheduledTaskNotifierImpl.kt` - `ScheduledTaskNotifier` impl posting "Task completed" / "Task failed" on the `TaskResultsChannel` with a `knotwork://chat/{threadId}` deep-link tap action; double-gated on the settings toggle and POST_NOTIFICATIONS.
+  - `share/` - OS share-target entry point.
+    - `ShareReceiverActivity.kt` - Invisible `ACTION_SEND` (text/image) receiver; parses the intent via `ParseSharedContentUseCase`, delegates to `LaunchSharePipelineUseCase`, and deep-links into the resulting session (or toasts when unbound / empty).
+  - `tile/` - Quick Settings tile entry point.
+    - `DutyPipelineTileService.kt` - `TileService` running the bound duty pipeline in the background (`LaunchTilePipelineUseCase`); reflects bound/unbound on the tile and opens the app when unbound.
+    - `TileAddRequest.kt` - `requestAddDutyTile(context)` — Android 13+ `StatusBarManager.requestAddTileService` prompt, called in-context after the user binds a tile pipeline.
+  - `shortcuts/` - Launcher shortcuts.
+    - `AppShortcutPublisher.kt` - `@Singleton` that converts `BuildDynamicShortcutsUseCase` specs into `ShortcutInfoCompat`s and publishes them (`@WorkerThread`); refreshed from `MainActivity.onCreate`. Static shortcuts live in `res/xml/shortcuts.xml`.
   - `receivers/` - Broadcast receivers.
     - `AgentApprovalReceiver.kt` - Receiver for approval / clarification notification actions; dispatches via the typed `ApprovalAction` enum, bridges suspending work through `goAsync`, routes decisions through `SubmitApprovalDecisionUseCase` (works across process death) and re-posts persistent notifications on `REPOST`.
     - `ApprovalAction.kt` - Typed enum pairing the Approve/Deny/Repost notification intents with their wire `Intent.action` strings; owns `fromAction` parsing.
@@ -471,6 +488,7 @@ This file maps the contents of the main application package.
       - `TextFieldValueExt.kt` - `insertAtCursor` extension for splicing chip-selected tokens at the caret.
     - `navigation/` - App shell, bottom-nav scaffold, and the single nav-graph for the app.
       - `NavRoutes.kt` - Canonical `const val` registry of every Jetpack Navigation Compose route string, including the chat deep-link template and modal-sheet placeholders.
+      - `ChatDeepLink.kt` - Shared builder for a `knotwork://chat/{threadId}` deep-link `Intent` + back-stack `TaskStackBuilder`, reused by the share target and the scheduled-task notifier so the scheme/back-stack never drift.
       - `TabDestination.kt` - `TabDestination` data class + `TAB_DESTINATIONS` for the four bottom-nav tabs (Chat / Pipelines / Tools / More).
       - `BottomNavVisibility.kt` - Pure `shouldShowBottomNav(route)` function; unit-tested decision table for which routes hide the nav bar (splash, onboarding, editor, modal sheets).
       - `KnotworkModalRoute.kt` - Generic `ModalBottomSheet` + `PredictiveBackHandler` wrapper reused by every modal-sheet route (`NodeConfigSheet`, `ConsolePane`, `AddMcpServerScreen` — bodies arrive in Tasks 6/7/10).

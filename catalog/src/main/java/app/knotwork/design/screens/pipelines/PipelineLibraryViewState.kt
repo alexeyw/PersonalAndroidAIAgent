@@ -79,6 +79,10 @@ enum class PipelineLibraryFilter {
  * the editor. Renders the full-row warm-cream tint.
  * @property isDefault `true` when this pipeline is the user's default;
  * renders a brown `DEFAULT` pill next to the title.
+ * @property isShareTarget `true` when this pipeline is bound to the OS Share
+ * target; renders an outlined `SHARE` pill next to the title.
+ * @property isQuickTile `true` when this pipeline is bound to the Quick
+ * Settings tile; renders an outlined `TILE` pill next to the title.
  * @property selected `true` when this row is part of the active multi-select
  * selection (renders the 4 dp accent on the leading edge).
  * @property revealed `true` when this row is currently in its swipe-revealed
@@ -96,6 +100,8 @@ data class PipelineLibraryRow(
     val secondaryLineKind: PipelineSecondaryLineKind = PipelineSecondaryLineKind.Default,
     val isActive: Boolean = false,
     val isDefault: Boolean = false,
+    val isShareTarget: Boolean = false,
+    val isQuickTile: Boolean = false,
     val selected: Boolean = false,
     val revealed: Boolean = false,
 )
@@ -164,6 +170,10 @@ class PipelineLibraryCallbacks(
     val onDelete: (String) -> Unit = {},
     val onLoadInEditor: (String) -> Unit = {},
     val onSetAsDefault: (String) -> Unit = {},
+    /** Bind this pipeline to the share target. */
+    val onUseForSharing: (String) -> Unit = {},
+    /** Bind this pipeline to the Quick Settings tile. */
+    val onUseForTile: (String) -> Unit = {},
     val onRename: (String) -> Unit = {},
     val onExportJson: (String) -> Unit = {},
     val onSaveAsPreset: (String) -> Unit = {},

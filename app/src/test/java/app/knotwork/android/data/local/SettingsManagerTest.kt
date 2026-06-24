@@ -1372,6 +1372,8 @@ class SettingsManagerTest {
             manager.addMcpServer(McpServerConfig(url = "http://mcp", name = "My MCP"))
             manager.setActiveEmbeddingProviderId("ollama")
             manager.setDefaultPipelineId("pipeline-123")
+            manager.setShareTargetPipelineId("share-pipe")
+            manager.setQuickSettingsTilePipelineId("tile-pipe")
             manager.setLocalModelBackend("gpu")
 
             manager.resetToRecommendedDefaults()
@@ -1382,7 +1384,30 @@ class SettingsManagerTest {
             assertEquals(listOf("http://mcp"), manager.mcpServers.first().map { it.url })
             assertEquals("ollama", manager.activeEmbeddingProviderId.first())
             assertEquals("pipeline-123", manager.defaultPipelineId.first())
+            assertEquals("share-pipe", manager.shareTargetPipelineId.first())
+            assertEquals("tile-pipe", manager.quickSettingsTilePipelineId.first())
             assertEquals("gpu", manager.localModelBackend.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `given surface pipeline bindings when set and cleared then round-trip correctly`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            assertEquals(null, manager.shareTargetPipelineId.first())
+            assertEquals(null, manager.quickSettingsTilePipelineId.first())
+
+            manager.setShareTargetPipelineId("share-pipe")
+            manager.setQuickSettingsTilePipelineId("tile-pipe")
+            assertEquals("share-pipe", manager.shareTargetPipelineId.first())
+            assertEquals("tile-pipe", manager.quickSettingsTilePipelineId.first())
+
+            manager.setShareTargetPipelineId(null)
+            manager.setQuickSettingsTilePipelineId(null)
+            assertEquals(null, manager.shareTargetPipelineId.first())
+            assertEquals(null, manager.quickSettingsTilePipelineId.first())
         } finally {
             scope.cancel()
         }
@@ -1434,6 +1459,7 @@ class SettingsManagerTest {
                 "default_pipeline_id", "console_preferred_tab", "last_test_probe_result",
                 "active_embedding_provider_id", "last_reembed_provider_id",
                 "allowed_http_domains",
+                "share_target_pipeline_id", "quick_settings_tile_pipeline_id",
             )
 
             val uncovered = allKeys - written - excluded

@@ -100,17 +100,70 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+        <!--
+            `singleTask`: the app is single-Activity, so a deep link (launcher
+            shortcut, share, notification) must reuse the one MainActivity and
+            navigate inside its NavHost via onNewIntent — never spin up a second
+            instance. With the default `standard` mode a warm shortcut tap
+            created a second MainActivity, so the user saw two stacked chats
+            (and the older, recreated one was sometimes a blank frame).
+        -->
         <activity
             android:name=".presentation.ui.MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.App.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Static launcher shortcuts (New chat / Pipelines). Dynamic
+                 shortcuts (recent sessions) are pushed at runtime by
+                 AppShortcutPublisher. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
+
+        <!--
+            Share target: receives ACTION_SEND text / single image from other
+            apps and routes it through the user's bound share pipeline. The
+            activity is invisible (translucent theme) — it only resolves the
+            share and deep-links into the resulting chat session.
+        -->
+        <activity
+            android:name=".presentation.share.ShareReceiverActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+
+                <data android:mimeType="text/plain" />
+                <data android:mimeType="image/*" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            Quick Settings tile: one-tap launch of the user's bound "duty"
+            pipeline from the system shade. Must be exported and guarded by
+            BIND_QUICK_SETTINGS_TILE so only the system can bind it.
+        -->
+        <service
+            android:name=".presentation.tile.DutyPipelineTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_tile_duty"
+            android:label="@string/tile_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
 
         <!--
             Callee-side AppFunctions surface is served by the auto-merged

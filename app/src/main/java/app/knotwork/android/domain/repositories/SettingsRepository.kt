@@ -701,6 +701,44 @@ interface SettingsRepository {
     suspend fun setDefaultPipelineId(pipelineId: String?)
 
     /**
+     * A [Flow] of the pipeline id bound to the **share target** entry surface.
+     * `null` means the surface is unbound: sharing text/an image into the app
+     * does nothing until the user picks a pipeline (privacy-first default).
+     *
+     * Like [defaultPipelineId] this is a user binding, not a tunable preference,
+     * so it is **never** touched by `resetToRecommendedDefaults`. It is cleared
+     * automatically when the bound pipeline is deleted.
+     */
+    val shareTargetPipelineId: Flow<String?>
+
+    /**
+     * Updates the pipeline bound to the share target. Pass `null` to unbind
+     * (sharing then becomes inert again).
+     *
+     * @param pipelineId Pipeline id to bind, or `null` to clear the binding.
+     */
+    suspend fun setShareTargetPipelineId(pipelineId: String?)
+
+    /**
+     * A [Flow] of the pipeline id bound to the **Quick Settings tile** ("duty"
+     * pipeline). `null` means the tile is unbound: tapping it opens the app's
+     * Background settings instead of running anything (privacy-first default).
+     *
+     * Like [defaultPipelineId] this is a user binding, not a tunable preference,
+     * so it is **never** touched by `resetToRecommendedDefaults`. It is cleared
+     * automatically when the bound pipeline is deleted.
+     */
+    val quickSettingsTilePipelineId: Flow<String?>
+
+    /**
+     * Updates the pipeline bound to the Quick Settings tile. Pass `null` to
+     * unbind (the tile then routes to settings instead of running).
+     *
+     * @param pipelineId Pipeline id to bind, or `null` to clear the binding.
+     */
+    suspend fun setQuickSettingsTilePipelineId(pipelineId: String?)
+
+    /**
      * A [Flow] indicating whether the user has opted in to anonymous crash
      * reporting via Firebase Crashlytics. Defaults to `false` — the project's
      * on-device privacy positioning forbids any automatic data egress.
@@ -1022,8 +1060,9 @@ interface SettingsRepository {
      * MCP servers, the `http_request` domain allowlist, per-tool enable/disable
      * and risk overrides, the user-authored system-instructions prefix and
      * tool-usage instruction, the active embedding provider (and its re-embed
-     * marker), the default-pipeline binding, the selected local backend, and
-     * onboarding / transient state. Everything it resets has a documented
+     * marker), the default-pipeline binding, the per-surface entry-point
+     * pipeline bindings (share target, Quick Settings tile), the selected local
+     * backend, and onboarding / transient state. Everything it resets has a documented
      * recommended default; everything it leaves alone is the user's own data.
      */
     suspend fun resetToRecommendedDefaults()

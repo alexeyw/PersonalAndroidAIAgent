@@ -7,11 +7,18 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -21,15 +28,20 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.knotwork.android.R
+import app.knotwork.android.domain.models.EntrySurface
 import app.knotwork.android.domain.models.MemoryImportStrategy
 import app.knotwork.android.domain.models.ProviderId
 import app.knotwork.android.domain.models.ToolApprovalPolicy
+import app.knotwork.android.presentation.tile.requestAddDutyTile
 import app.knotwork.design.screens.settings.AboutSettingsContent
 import app.knotwork.design.screens.settings.ApproveToolCallsOption
 import app.knotwork.design.screens.settings.BackgroundSettingsContent
@@ -232,7 +244,14 @@ fun ToolsSettingsScreen(viewModel: SettingsViewModel, nav: SettingsNavActions) {
 @Composable
 fun BackgroundSettingsScreen(viewModel: SettingsViewModel, nav: SettingsNavActions) {
     val uiState by viewModel.uiState.collectAsState()
-    val callbacks = rememberSettingsCallbacks(viewModel, nav)
+    val context = LocalContext.current
+    var pickerSurface by remember { mutableStateOf<EntrySurface?>(null) }
+    val callbacks = rememberSettingsCallbacks(
+        viewModel = viewModel,
+        nav = nav,
+        onShareTargetPipelineClick = { pickerSurface = EntrySurface.SHARE },
+        onQuickTilePipelineClick = { pickerSurface = EntrySurface.QUICK_TILE },
+    )
     val highlight = rememberCategoryHighlight(viewModel, uiState.pendingHighlightAnchor, DomainCategoryId.BACKGROUND)
     SettingsSurface(viewModel) {
         CompositionLocalProvider(LocalSettingsHighlightKey provides highlight.key) {
@@ -242,6 +261,84 @@ fun BackgroundSettingsScreen(viewModel: SettingsViewModel, nav: SettingsNavActio
                 advancedExpanded = highlight.advancedExpanded,
             )
         }
+    }
+    pickerSurface?.let { surface ->
+        val selectedId = when (surface) {
+            EntrySurface.SHARE -> uiState.shareTargetPipelineId
+            EntrySurface.QUICK_TILE -> uiState.quickSettingsTilePipelineId
+        }
+        SurfacePipelinePickerDialog(
+            title = stringResource(
+                when (surface) {
+                    EntrySurface.SHARE -> R.string.settings_pipeline_picker_share_title
+                    EntrySurface.QUICK_TILE -> R.string.settings_pipeline_picker_tile_title
+                },
+            ),
+            options = uiState.bindablePipelines,
+            selectedId = selectedId,
+            onSelect = { pipelineId ->
+                viewModel.setSurfacePipeline(surface, pipelineId)
+                // Offer to pin the tile in context, once the user has bound it.
+                if (surface == EntrySurface.QUICK_TILE && pipelineId != null) requestAddDutyTile(context)
+                pickerSurface = null
+            },
+            onDismiss = { pickerSurface = null },
+        )
+    }
+}
+
+/**
+ * Single-choice picker binding a pipeline to an entry surface. Reuses a plain
+ * Material 3 [AlertDialog] with a radio list (the "Reset settings" dialog idiom)
+ * rather than introducing a new design-system component; "None" clears the
+ * binding so the surface returns to its inert privacy-first default.
+ */
+@Composable
+private fun SurfacePipelinePickerDialog(
+    title: String,
+    options: List<PipelineBindingOption>,
+    selectedId: String?,
+    onSelect: (String?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                PipelinePickerRow(
+                    label = stringResource(R.string.settings_pipeline_picker_none),
+                    selected = selectedId == null,
+                    onClick = { onSelect(null) },
+                )
+                options.forEach { option ->
+                    PipelinePickerRow(
+                        label = option.name,
+                        selected = option.id == selectedId,
+                        onClick = { onSelect(option.id) },
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
+        },
+    )
+}
+
+/** One selectable radio row inside [SurfacePipelinePickerDialog]. */
+@Composable
+private fun PipelinePickerRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .selectable(selected = selected, onClick = onClick)
+            .padding(vertical = 8.dp),
+    ) {
+        RadioButton(selected = selected, onClick = onClick)
+        Text(text = label, modifier = Modifier.padding(start = 8.dp))
     }
 }
 
@@ -313,6 +410,8 @@ private fun rememberSettingsCallbacks(
     onSearchQueryChange: (String) -> Unit = {},
     onSearchResultClick: (HubSearchResultRow) -> Unit = {},
     onClearSearch: () -> Unit = {},
+    onShareTargetPipelineClick: () -> Unit = {},
+    onQuickTilePipelineClick: () -> Unit = {},
 ): SettingsCallbacks {
     val context = LocalContext.current
     val exportFilename = stringResource(R.string.settings_memory_export_filename)
@@ -373,6 +472,8 @@ private fun rememberSettingsCallbacks(
         onLongRunningToggle = viewModel::setLongRunningTaskNotificationsEnabled,
         onScheduledResultsToggle = viewModel::setScheduledTaskNotificationsEnabled,
         onBackgroundSliderChange = { id, value -> routeBackgroundSlider(viewModel, id, value) },
+        onShareTargetPipelineClick = onShareTargetPipelineClick,
+        onQuickTilePipelineClick = onQuickTilePipelineClick,
         onCrashReportingToggle = viewModel::setCrashReportingEnabled,
         onPrivacySliderChange = { id, value -> routePrivacySlider(viewModel, id, value) },
         onResetSettingsClick = viewModel::stageResetSettings,

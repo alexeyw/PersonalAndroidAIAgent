@@ -108,6 +108,13 @@ configured it.
   with the **Audio support** toggle on the Models screen. A text-only model, a
   denied mic permission, or a busy engine each surface a calm, non-blocking
   notice. The clip is deleted after a successful transcription.
+- **Entry surfaces** — reach the agent from outside the app. A **share
+  target** runs your chosen pipeline over text or an image shared from any app
+  and opens the resulting chat; **launcher shortcuts** (long-press the icon)
+  offer New chat / Pipelines plus your recent chats; a **Quick Settings tile**
+  runs a duty pipeline in the background with one tap. Each surface stays inert
+  until you bind a pipeline to it (in *Settings → Background & triggers* or a
+  pipeline's library row menu) — a privacy-first default.
 - **Settings as a searchable category hub** — a hub with a short *Basic*
   block and a search field over eight focused category sub-screens
   (Generation, Models, Memory, Pipelines & structured output, Tools &

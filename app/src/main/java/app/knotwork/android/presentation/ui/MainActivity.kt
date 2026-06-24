@@ -11,6 +11,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -25,12 +26,17 @@ import app.knotwork.android.data.services.PendingInteractionMaintenanceScheduler
 import app.knotwork.android.data.services.RunRetentionScheduler
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.MemoryReembedScheduler
+import app.knotwork.android.presentation.shortcuts.AppShortcutPublisher
+import app.knotwork.android.presentation.state.ChatEntryRequestRelay
 import app.knotwork.android.presentation.state.TransientMessageRelay
 import app.knotwork.android.presentation.theme.AndroidAIAgentTheme
 import app.knotwork.android.presentation.ui.navigation.AppNavGraph
 import app.knotwork.android.presentation.ui.navigation.AppShellScaffold
+import app.knotwork.android.presentation.ui.navigation.NavRoutes
+import app.knotwork.android.presentation.ui.navigation.navigateToDeepLink
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -56,10 +62,36 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var attachmentOrphanCleanupScheduler: AttachmentOrphanCleanupScheduler
 
+    @Inject lateinit var appShortcutPublisher: AppShortcutPublisher
+
+    @Inject lateinit var chatEntryRequestRelay: ChatEntryRequestRelay
+
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { _: Boolean ->
         // Permission outcome is observed lazily by features that need it.
+    }
+
+    /**
+     * Bridges [onNewIntent] (a non-Compose Activity callback) into the Compose
+     * NavController. Because [MainActivity] is `singleTask`, a deep link that
+     * arrives while the app is already running reuses this instance and lands
+     * here instead of a fresh `onCreate`; the collector in `setContent` routes
+     * it. Buffered (capacity 1) so an emit that races composition is not lost.
+     */
+    private val deepLinkIntents = MutableSharedFlow<Intent>(extraBufferCapacity = 1)
+
+    /**
+     * Forwards a deep link delivered to the already-running single-task instance
+     * (launcher shortcut / share / notification) to the live NavController. The
+     * `onCreate` intent is auto-handled by the NavHost; this covers every
+     * *subsequent* intent so a warm tap navigates in place instead of stacking a
+     * second chat.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        deepLinkIntents.tryEmit(intent)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -111,6 +143,11 @@ class MainActivity : ComponentActivity() {
             // recovery isn't tied to this one entry point (the foreground service
             // re-arms too).
             memoryReembedScheduler.rearmIfPending()
+            // Refresh the dynamic launcher shortcuts (recent sessions) off the
+            // main thread, as ShortcutManagerCompat requires. Only on a fresh
+            // start (not a config-change recreation, which keeps savedInstanceState)
+            // so rotation/theme changes don't re-query + re-publish needlessly.
+            if (savedInstanceState == null) appShortcutPublisher.refresh()
         }
 
         // Pin transparent status- and navigation-bar
@@ -121,9 +158,29 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
         )
+
+        // The `knotwork://` deep link this cold launch carried (launcher
+        // shortcut / share / notification), or null for a normal launch. The
+        // NavHost no longer auto-handles it; the splash handler applies it
+        // explicitly after landing on the chat home so the back stack is a
+        // deterministic [CHAT_TAB, target]. Warm deep links (the activity is
+        // `singleTask`) arrive via onNewIntent and are routed by the collector
+        // below instead.
+        val pendingDeepLink = intent?.takeIf { it.data?.scheme == NavRoutes.DEEP_LINK_SCHEME }
+
         setContent {
             AndroidAIAgentTheme {
                 val navController = rememberNavController()
+
+                // Route deep links that arrive on the already-running single-task
+                // instance (onNewIntent) into the live NavController. The launch
+                // intent itself is auto-handled by the NavHost, so this only
+                // fires for warm shortcut / share / notification taps.
+                LaunchedEffect(navController) {
+                    deepLinkIntents.collect { newIntent ->
+                        navController.navigateToDeepLink(newIntent, chatEntryRequestRelay)
+                    }
+                }
                 // Onboarding gate: invert `hasCompletedOnboarding` instead
                 // of reusing `isFirstLaunch` — the latter is cleared by
                 // `InitializeAppUseCase` during cold-start init (which
@@ -149,6 +206,8 @@ class MainActivity : ComponentActivity() {
                     AppNavGraph(
                         navController = navController,
                         showOnboarding = !hasCompletedOnboarding,
+                        pendingDeepLink = pendingDeepLink,
+                        chatEntryRequestRelay = chatEntryRequestRelay,
                         modifier = Modifier.padding(innerPadding),
                     )
                 }

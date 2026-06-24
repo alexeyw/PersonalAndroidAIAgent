@@ -206,6 +206,14 @@ object SettingsSearchCatalog {
             R.string.settings_search_name_scheduled_task_notifications,
             R.string.settings_search_desc_scheduled_task_notifications,
         ),
+        "SHARE_TARGET_PIPELINE_ID" to strings(
+            R.string.settings_search_name_share_target_pipeline_id,
+            R.string.settings_search_desc_share_target_pipeline_id,
+        ),
+        "QUICK_SETTINGS_TILE_PIPELINE_ID" to strings(
+            R.string.settings_search_name_quick_settings_tile_pipeline_id,
+            R.string.settings_search_desc_quick_settings_tile_pipeline_id,
+        ),
         "RESUME_MAX_AGE_HOURS" to strings(
             R.string.settings_search_name_resume_max_age_hours,
             R.string.settings_search_desc_resume_max_age_hours,

@@ -78,6 +78,9 @@ class AgentOrchestratorUseCase @Inject constructor(private val taskQueueManager:
      *   must differ from [userPrompt] (image-only message: empty display, while
      *   [userPrompt] carries the internal default instruction). `null` saves
      *   [userPrompt] verbatim.
+     * @param origin What triggered the run. Defaults to [RunOrigin.CHAT] for an
+     *   interactive message; the share target passes [RunOrigin.SHARE] so the
+     *   persistent record attributes the foreground run to the share surface.
      * @return A [Flow] of [AgentOrchestratorState] emitting the progress of the agent.
      */
     operator fun invoke(
@@ -86,6 +89,7 @@ class AgentOrchestratorUseCase @Inject constructor(private val taskQueueManager:
         pipelineId: String? = null,
         attachment: MessageAttachment? = null,
         displayContent: String? = null,
+        origin: RunOrigin = RunOrigin.CHAT,
     ): Flow<AgentOrchestratorState> {
         val task = AgentTask(
             sessionId = sessionId,
@@ -94,6 +98,7 @@ class AgentOrchestratorUseCase @Inject constructor(private val taskQueueManager:
             pipelineId = pipelineId,
             attachment = attachment,
             displayContent = displayContent,
+            origin = origin,
         )
         taskQueueManager.enqueueTask(task)
         return taskQueueManager.observeTaskState(sessionId)
@@ -118,15 +123,26 @@ class AgentOrchestratorUseCase @Inject constructor(private val taskQueueManager:
      *
      * @param sessionId Chat session the run lands its messages in.
      * @param userPrompt The stored prompt of the scheduled task.
+     * @param pipelineId Explicit pipeline binding for the run. `null` defers to
+     *   the application default (the `schedule_task` tool path); the Quick
+     *   Settings tile passes the user's bound duty pipeline.
+     * @param origin What triggered the run. Defaults to [RunOrigin.SCHEDULER];
+     *   the tile passes [RunOrigin.QUICK_TILE].
      * @return Id of the enqueued task, equal to the id of its persistent
      *   `PipelineRun` record.
      */
-    fun enqueueScheduled(sessionId: String, userPrompt: String): String {
+    fun enqueueScheduled(
+        sessionId: String,
+        userPrompt: String,
+        pipelineId: String? = null,
+        origin: RunOrigin = RunOrigin.SCHEDULER,
+    ): String {
         val task = AgentTask(
             sessionId = sessionId,
             prompt = userPrompt,
             priority = TaskPriority.NORMAL,
-            origin = RunOrigin.SCHEDULER,
+            pipelineId = pipelineId,
+            origin = origin,
         )
         taskQueueManager.enqueueTask(task)
         return task.id

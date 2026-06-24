@@ -80,7 +80,7 @@ class ChatHomeDrawerTest {
 
     @Test
     fun drawerThreadRow_tap_invokesSelectThreadAndCloseDrawer() {
-        val (viewModel, _) = mockChatHomeViewModel(
+        val (viewModel, handles) = mockChatHomeViewModel(
             initialState = ChatHomeUiState.DrawerOpen,
             initialThreadRows = listOf(
                 ChatHomeThreadRow(
@@ -99,7 +99,7 @@ class ChatHomeDrawerTest {
         composeTestRule.waitForIdle()
 
         verify(exactly = 1) { viewModel.selectThread("thread-other") }
-        verify(atLeast = 1) { viewModel.threads.closeDrawer() }
+        verify(atLeast = 1) { handles.threads.closeDrawer() }
     }
 
     @Test
@@ -129,7 +129,7 @@ class ChatHomeDrawerTest {
 
     @Test
     fun pipelinePickerCreate_withPicked_invokesCreateNewSessionWithPipelineId() {
-        val (viewModel, _) = mockChatHomeViewModel(
+        val (viewModel, handles) = mockChatHomeViewModel(
             initialState = ChatHomeUiState.DrawerOpen,
             initialAvailablePipelines = listOf(
                 PipelineSummary(id = "pipe-deep", name = "Deep research"),
@@ -152,7 +152,7 @@ class ChatHomeDrawerTest {
         composeTestRule.onNodeWithText(createLabel).performClick()
         composeTestRule.waitForIdle()
 
-        verify(exactly = 1) { viewModel.threads.createNewSessionWithPipeline("pipe-deep") }
+        verify(exactly = 1) { handles.threads.createNewSessionWithPipeline("pipe-deep") }
     }
 
     @Test

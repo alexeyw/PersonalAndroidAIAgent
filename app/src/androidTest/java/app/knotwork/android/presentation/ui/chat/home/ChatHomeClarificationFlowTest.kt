@@ -54,7 +54,7 @@ class ChatHomeClarificationFlowTest {
 
     @Test
     fun quickReplyTap_dispatchesSubmitClarificationReplyWithLabel() {
-        val (viewModel, _) = mockChatHomeViewModel(
+        val (viewModel, handles) = mockChatHomeViewModel(
             initialState = ChatHomeUiState.Clarification,
             initialPendingClarification = ClarificationRequest(
                 id = "clar-2",
@@ -72,7 +72,7 @@ class ChatHomeClarificationFlowTest {
         composeTestRule.onNodeWithText("Blue").performClick()
         composeTestRule.waitForIdle()
 
-        verify(exactly = 1) { viewModel.hitl.submitClarificationReply("Blue") }
+        verify(exactly = 1) { handles.hitl.submitClarificationReply("Blue") }
     }
 
     @Test

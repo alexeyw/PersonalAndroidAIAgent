@@ -28,6 +28,8 @@
 
     <!-- Snackbars / feedback -->
     <string name="orchestrator_feedback_default_pipeline_updated">Default pipeline updated</string>
+    <string name="orchestrator_feedback_share_pipeline_bound">Pipeline set for sharing</string>
+    <string name="orchestrator_feedback_tile_pipeline_bound">Pipeline set for the Quick Settings tile</string>
     <string name="orchestrator_feedback_pipeline_renamed">Pipeline renamed</string>
     <string name="orchestrator_feedback_pipeline_duplicated">Pipeline duplicated</string>
     <string name="orchestrator_feedback_pipeline_deleted">Pipeline deleted</string>
