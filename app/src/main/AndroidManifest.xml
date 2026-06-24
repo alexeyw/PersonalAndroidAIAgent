@@ -100,10 +100,19 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
+        <!--
+            `singleTask`: the app is single-Activity, so a deep link (launcher
+            shortcut, share, notification) must reuse the one MainActivity and
+            navigate inside its NavHost via onNewIntent — never spin up a second
+            instance. With the default `standard` mode a warm shortcut tap
+            created a second MainActivity, so the user saw two stacked chats
+            (and the older, recreated one was sometimes a blank frame).
+        -->
         <activity
             android:name=".presentation.ui.MainActivity"
             android:exported="true"
             android:label="@string/app_name"
+            android:launchMode="singleTask"
             android:theme="@style/Theme.App.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
