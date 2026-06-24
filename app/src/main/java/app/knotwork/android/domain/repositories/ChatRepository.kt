@@ -153,6 +153,16 @@ interface ChatRepository {
     suspend fun getSessionById(id: String): ChatSession?
 
     /**
+     * Cheap existence check for a session id, avoiding materialising the row
+     * when the caller only needs to know whether it still exists (the
+     * reuse-or-recreate decision on the background-run paths).
+     *
+     * @param id The id of the session.
+     * @return `true` when a session with [id] exists.
+     */
+    suspend fun sessionExists(id: String): Boolean
+
+    /**
      * Returns the cached compressed-history summary for a session, or `null`
      * when none has been computed yet. Read by the engine when a node renders
      * chat history and compression is active.

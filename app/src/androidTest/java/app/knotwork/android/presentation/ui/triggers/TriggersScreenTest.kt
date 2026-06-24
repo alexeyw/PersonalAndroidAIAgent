@@ -52,7 +52,7 @@ class TriggersScreenTest {
             every { getAllPipelines() } returns flowOf(listOf(PipelineGraph(id = "p1", name = "Daily briefing")))
         }
         val syncTriggers = mockk<SyncTriggersUseCase>(relaxed = true)
-        val saveTrigger = SaveTriggerUseCase(triggerRepository)
+        val saveTrigger = SaveTriggerUseCase(triggerRepository, mockk(relaxed = true))
         val viewModel = TriggersViewModel(triggerRepository, pipelineRepository, saveTrigger, syncTriggers)
 
         composeTestRule.setContent {

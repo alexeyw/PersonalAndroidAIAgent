@@ -24,6 +24,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -147,12 +150,18 @@ class FireTriggerUseCaseTest {
         coEvery { triggerRepository.getTriggerById(triggerId) } returns intervalTrigger
         every { evaluate(any(), any(), any(), any(), any()) } returns TriggerFiringDecision.Fire("pipe-1", "do it")
         coEvery { pipelineRepository.getPipelineById("pipe-1") } returns mockk<PipelineGraph>()
+        val scheduledSessionId = slot<String?>()
+        every {
+            taskScheduler.scheduleOneTime(any(), any(), captureNullable(scheduledSessionId), any(), any(), any())
+        } returns Unit
 
         val outcome = useCase(triggerId, now)
 
         assertEquals(TriggerFireOutcome.Fired("pipe-1"), outcome)
         coVerify(exactly = 1) { triggerRepository.markFired(triggerId, now) }
         coVerify(exactly = 0) { triggerRepository.setArmed(any(), any()) }
+        // The interval branch must also thread a valid (non-blank) bound session.
+        assertTrue(scheduledSessionId.captured?.isNotBlank() == true)
     }
 
     @Test
@@ -193,9 +202,10 @@ class FireTriggerUseCaseTest {
         assertEquals(sessionId, boundSessionId.captured)
         assertEquals(sessionId, scheduledSessionId.captured)
         assertEquals(sessionId, notifiedSessionId.captured)
-        // The new session is named after the trigger and themed to its pipeline.
+        // The new session is named after the trigger and carries NO pipeline
+        // theming (it is a result log; manual follow-ups use the app default).
         assertEquals("T", savedSession.captured.name)
-        assertEquals("pipe-1", savedSession.captured.pipelineId)
+        assertNull(savedSession.captured.pipelineId)
     }
 
     @Test
@@ -203,8 +213,7 @@ class FireTriggerUseCaseTest {
         coEvery { triggerRepository.getTriggerById(triggerId) } returns chargingTrigger.copy(sessionId = "sess-1")
         every { evaluate(any(), any(), any(), any(), any()) } returns TriggerFiringDecision.Fire("pipe-1", "do it")
         coEvery { pipelineRepository.getPipelineById("pipe-1") } returns mockk<PipelineGraph>()
-        coEvery { chatRepository.getSessionById("sess-1") } returns
-            ChatSession(id = "sess-1", name = "T", updatedAt = 0L)
+        coEvery { chatRepository.sessionExists("sess-1") } returns true
 
         useCase(triggerId, now)
 
@@ -221,7 +230,7 @@ class FireTriggerUseCaseTest {
         coEvery { triggerRepository.getTriggerById(triggerId) } returns chargingTrigger.copy(sessionId = "gone")
         every { evaluate(any(), any(), any(), any(), any()) } returns TriggerFiringDecision.Fire("pipe-1", "do it")
         coEvery { pipelineRepository.getPipelineById("pipe-1") } returns mockk<PipelineGraph>()
-        coEvery { chatRepository.getSessionById("gone") } returns null
+        coEvery { chatRepository.sessionExists("gone") } returns false
         val rebound = slot<String>()
         coEvery { triggerRepository.setSessionId(triggerId, capture(rebound)) } returns Unit
 
@@ -232,4 +241,40 @@ class FireTriggerUseCaseTest {
         // The replacement is a fresh id, not the deleted one.
         assert(rebound.captured != "gone")
     }
+
+    @Test
+    fun `given the enqueue fails on a fresh session then the session is rolled back and not bound`() = runTest {
+        coEvery { triggerRepository.getTriggerById(triggerId) } returns chargingTrigger
+        every { evaluate(any(), any(), any(), any(), any()) } returns TriggerFiringDecision.Fire("pipe-1", "do it")
+        coEvery { pipelineRepository.getPipelineById("pipe-1") } returns mockk<PipelineGraph>()
+        val savedSession = slot<ChatSession>()
+        coEvery { chatRepository.saveSession(capture(savedSession)) } returns Unit
+        every { taskScheduler.scheduleOneTime(any(), any(), any(), any(), any(), any()) } throws
+            RuntimeException("enqueue failed")
+
+        assertThrows(RuntimeException::class.java) { runBlockingFire() }
+
+        // The freshly-minted session is deleted and the binding is never
+        // persisted, so a failed fire leaves no empty orphan chat behind.
+        coVerify(exactly = 1) { chatRepository.deleteSession(savedSession.captured.id) }
+        coVerify(exactly = 0) { triggerRepository.setSessionId(any(), any()) }
+    }
+
+    @Test
+    fun `given the trigger-fired notification throws then the fire still succeeds`() = runTest {
+        coEvery { triggerRepository.getTriggerById(triggerId) } returns chargingTrigger
+        every { evaluate(any(), any(), any(), any(), any()) } returns TriggerFiringDecision.Fire("pipe-1", "do it")
+        coEvery { pipelineRepository.getPipelineById("pipe-1") } returns mockk<PipelineGraph>()
+        coEvery { scheduledTaskNotifier.notifyTriggerFired(any(), any()) } throws RuntimeException("notify failed")
+
+        // A best-effort notification failure must not propagate (a worker retry
+        // past the completed enqueue would double-schedule the run).
+        val outcome = useCase(triggerId, now)
+
+        assertEquals(TriggerFireOutcome.Fired("pipe-1"), outcome)
+        coVerify(exactly = 1) { triggerRepository.setSessionId(triggerId, any()) }
+    }
+
+    /** Helper invoking the suspend use case from a non-suspend assertThrows lambda. */
+    private fun runBlockingFire() = kotlinx.coroutines.runBlocking { useCase(triggerId, now) }
 }

@@ -1,5 +1,7 @@
 package app.knotwork.android.domain.models
 
+import java.util.UUID
+
 /**
  * Domain model representing a chat session.
  *
@@ -22,4 +24,31 @@ data class ChatSession(
     val updatedAt: Long,
     val pipelineId: String? = null,
     val isStarred: Boolean = false,
-)
+) {
+    /** Factory helpers for constructing fresh [ChatSession] rows. */
+    companion object {
+        /**
+         * Builds a brand-new session row, centralising the id/timestamp defaults
+         * that every background entry point (the scheduler worker, the share
+         * target, automation triggers) would otherwise re-derive inline. Keeping
+         * the construction in one place means a future change to how a fresh
+         * session is shaped (a new required field, a "source" marker) lands once.
+         *
+         * @param name Display name for the new session.
+         * @param pipelineId Pipeline bound to the session, or `null` to use the
+         *   application-wide default.
+         * @param id Session id; defaults to a fresh UUID. Callers recreating a
+         *   specific (e.g. deleted) session pass its id to keep deep-links and
+         *   bindings stable.
+         * @param now Creation timestamp (epoch-millis); defaults to the wall
+         *   clock and is overridable for tests.
+         * @return The constructed (not yet persisted) [ChatSession].
+         */
+        fun create(
+            name: String,
+            pipelineId: String? = null,
+            id: String = UUID.randomUUID().toString(),
+            now: Long = System.currentTimeMillis(),
+        ): ChatSession = ChatSession(id = id, name = name, updatedAt = now, pipelineId = pipelineId)
+    }
+}

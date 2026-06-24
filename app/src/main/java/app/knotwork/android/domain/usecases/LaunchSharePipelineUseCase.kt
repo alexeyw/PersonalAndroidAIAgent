@@ -8,7 +8,6 @@ import app.knotwork.android.domain.models.SharedPayload
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.services.AttachmentStore
 import timber.log.Timber
-import java.util.UUID
 import javax.inject.Inject
 
 /**
@@ -63,15 +62,12 @@ class LaunchSharePipelineUseCase @Inject constructor(
         // Image-only share with a failed ingest leaves us nothing to run.
         if (!hasText && attachment == null) return ShareLaunchResult.NothingShared
 
-        val sessionId = UUID.randomUUID().toString()
-        chatRepository.saveSession(
-            ChatSession(
-                id = sessionId,
-                name = sessionName(payload.text, attachment != null, imageSessionName, contentSessionName),
-                updatedAt = System.currentTimeMillis(),
-                pipelineId = pipelineId,
-            ),
+        val session = ChatSession.create(
+            name = sessionName(payload.text, attachment != null, imageSessionName, contentSessionName),
+            pipelineId = pipelineId,
         )
+        val sessionId = session.id
+        chatRepository.saveSession(session)
 
         // Prompt / display content follow the shared image-only contract.
         val content = AttachmentMessageContent.resolve(payload.text?.trim().orEmpty())

@@ -2,6 +2,7 @@ package app.knotwork.android.domain.usecases
 
 import app.knotwork.android.domain.models.Trigger
 import app.knotwork.android.domain.models.TriggerCondition
+import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.TriggerRepository
 import java.util.UUID
 import javax.inject.Inject
@@ -56,7 +57,10 @@ data class TriggerDraftIntent(
  * orphaning it.
  */
 @Singleton
-class SaveTriggerUseCase @Inject constructor(private val triggerRepository: TriggerRepository) {
+class SaveTriggerUseCase @Inject constructor(
+    private val triggerRepository: TriggerRepository,
+    private val chatRepository: ChatRepository,
+) {
 
     /**
      * Derives the lifecycle fields for [intent], persists the resulting trigger,
@@ -92,6 +96,14 @@ class SaveTriggerUseCase @Inject constructor(private val triggerRepository: Trig
             )
         }
         triggerRepository.saveTrigger(trigger)
+        // Keep the bound chat title in sync with the trigger name. The session is
+        // created named after the trigger on its first fire, so a later rename
+        // would otherwise leave the accumulated result conversation showing the
+        // stale title. No-op when unbound (no session yet) or the name is
+        // unchanged; renameSession itself is a no-op if the session was deleted.
+        if (existing?.sessionId != null && existing.name != trigger.name) {
+            chatRepository.renameSession(existing.sessionId, trigger.name)
+        }
         return trigger
     }
 

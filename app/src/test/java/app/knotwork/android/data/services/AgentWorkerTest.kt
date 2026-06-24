@@ -120,8 +120,7 @@ class AgentWorkerTest {
 
     /** Wires the standard happy-path collaborators around the given terminal [terminalRun]. */
     private fun stubRunLifecycle(terminalRun: PipelineRun, finalAnswer: String? = "Final answer.") {
-        coEvery { chatRepository.getSessionById(SESSION_ID) } returns
-            ChatSession(id = SESSION_ID, name = "Chat", updatedAt = 0L)
+        coEvery { chatRepository.sessionExists(SESSION_ID) } returns true
         every { useCase.enqueueScheduled(any(), any()) } returns RUN_ID
         every { pipelineRunRepository.observeRunsForSession(terminalRun.sessionId) } returns
             flowOf(listOf(terminalRun))
@@ -173,25 +172,29 @@ class AgentWorkerTest {
     }
 
     @Test
-    fun `given session was deleted when doWork runs then creates auto-named session and rebinds the run`() = runTest {
-        coEvery { chatRepository.getSessionById(SESSION_ID) } returns null
-        val savedSession = slot<ChatSession>()
-        coEvery { chatRepository.saveSession(capture(savedSession)) } just Runs
-        val enqueuedSession = slot<String>()
-        every { useCase.enqueueScheduled(capture(enqueuedSession), any()) } returns RUN_ID
-        every { pipelineRunRepository.observeRunsForSession(any()) } answers {
-            flowOf(listOf(run(PipelineRunStatus.COMPLETED, sessionId = enqueuedSession.captured)))
+    fun `given session was deleted when doWork runs then recreates it under the requested id and rebinds the run`() =
+        runTest {
+            coEvery { chatRepository.sessionExists(SESSION_ID) } returns false
+            val savedSession = slot<ChatSession>()
+            coEvery { chatRepository.saveSession(capture(savedSession)) } just Runs
+            val enqueuedSession = slot<String>()
+            every { useCase.enqueueScheduled(capture(enqueuedSession), any()) } returns RUN_ID
+            every { pipelineRunRepository.observeRunsForSession(any()) } answers {
+                flowOf(listOf(run(PipelineRunStatus.COMPLETED, sessionId = enqueuedSession.captured)))
+            }
+            every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
+            val worker = buildWorker(inputData(prompt = "summarize my mail every morning"))
+
+            val result = worker.doWork()
+
+            assertEquals(ListenableWorker.Result.success(), result)
+            // The replacement keeps the requested id so an already-posted deep-link
+            // or trigger binding that points at it stays valid.
+            assertEquals(SESSION_ID, savedSession.captured.id)
+            assertEquals(savedSession.captured.id, enqueuedSession.captured)
+            assertTrue(savedSession.captured.name.startsWith("Scheduled: "))
+            assertTrue(savedSession.captured.name.contains("summarize my mail every morning".take(40)))
         }
-        every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
-        val worker = buildWorker(inputData(prompt = "summarize my mail every morning"))
-
-        val result = worker.doWork()
-
-        assertEquals(ListenableWorker.Result.success(), result)
-        assertEquals(savedSession.captured.id, enqueuedSession.captured)
-        assertTrue(savedSession.captured.name.startsWith("Scheduled: "))
-        assertTrue(savedSession.captured.name.contains("summarize my mail every morning".take(40)))
-    }
 
     @Test
     fun `given legacy work without session key when doWork runs then creates a fresh session`() = runTest {
@@ -208,6 +211,29 @@ class AgentWorkerTest {
 
         assertEquals(ListenableWorker.Result.success(), result)
         coVerify(exactly = 1) { useCase.enqueueScheduled(savedSession.captured.id, "hello") }
+    }
+
+    @Test
+    fun `given a later run already answered in the shared session then the preview is scoped to this run`() = runTest {
+        // A trigger's recurring fires share one bound session, so a newer run's
+        // final answer can already sit in the session when this run's completion
+        // notification is built. The preview must pick THIS run's answer (by the
+        // run's finishedAt = 2L), not the later one.
+        coEvery { chatRepository.sessionExists(SESSION_ID) } returns true
+        every { useCase.enqueueScheduled(any(), any()) } returns RUN_ID
+        every { pipelineRunRepository.observeRunsForSession(SESSION_ID) } returns
+            flowOf(listOf(run(PipelineRunStatus.COMPLETED)))
+        every { chatRepository.getMessagesForSession(SESSION_ID) } returns flowOf(
+            listOf(
+                ChatMessage(sessionId = SESSION_ID, role = Role.AGENT, content = "this run", timestamp = 2L),
+                ChatMessage(sessionId = SESSION_ID, role = Role.AGENT, content = "a later run", timestamp = 5L),
+            ),
+        )
+        val worker = buildWorker(inputData())
+
+        worker.doWork()
+
+        coVerify(exactly = 1) { scheduledTaskNotifier.notifyCompleted(SESSION_ID, "this run") }
     }
 
     @Test
@@ -247,8 +273,7 @@ class AgentWorkerTest {
 
     @Test
     fun `given enqueue throws when doWork runs then returns retry`() = runTest {
-        coEvery { chatRepository.getSessionById(SESSION_ID) } returns
-            ChatSession(id = SESSION_ID, name = "Chat", updatedAt = 0L)
+        coEvery { chatRepository.sessionExists(SESSION_ID) } returns true
         every { useCase.enqueueScheduled(any(), any()) } throws RuntimeException("boom")
         val worker = buildWorker(inputData())
 
@@ -262,8 +287,7 @@ class AgentWorkerTest {
         // Post-enqueue failures must never map to retry(): the run is already
         // executing in the singleton queue and the user message is persisted —
         // a worker retry would duplicate both.
-        coEvery { chatRepository.getSessionById(SESSION_ID) } returns
-            ChatSession(id = SESSION_ID, name = "Chat", updatedAt = 0L)
+        coEvery { chatRepository.sessionExists(SESSION_ID) } returns true
         every { useCase.enqueueScheduled(any(), any()) } returns RUN_ID
         every { pipelineRunRepository.observeRunsForSession(any()) } throws IllegalStateException("db gone")
         val worker = buildWorker(inputData())

@@ -76,7 +76,7 @@ class TriggersViewModelTest {
         }
         // Use a real SaveTriggerUseCase over the mocked repo so the lifecycle
         // derivation (armed / createdAt) is exercised end-to-end.
-        saveTrigger = SaveTriggerUseCase(triggerRepository)
+        saveTrigger = SaveTriggerUseCase(triggerRepository, mockk(relaxed = true))
         syncTriggers = mockk(relaxed = true)
     }
 
