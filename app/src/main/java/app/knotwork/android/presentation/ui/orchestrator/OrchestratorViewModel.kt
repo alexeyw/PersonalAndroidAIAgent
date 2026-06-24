@@ -141,6 +141,7 @@ class OrchestratorViewModel @Inject constructor(
         observeLocalModels()
         observePromptTemplates()
         observeDefaultPipelineId()
+        observeSurfaceBindingIds()
     }
 
     /**
@@ -171,6 +172,27 @@ class OrchestratorViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.defaultPipelineId.collect { id ->
                 _uiState.update { it.copy(defaultPipelineId = id) }
+            }
+        }
+    }
+
+    /**
+     * Mirrors the two OS-entry-surface bindings
+     * (`SettingsRepository.shareTargetPipelineId` /
+     * `quickSettingsTilePipelineId`) into [OrchestratorUiState] so the library
+     * renders the outlined "SHARE" / "TILE" pills on the bound rows and they
+     * update live the moment the user (re)binds a surface — from this screen's
+     * row menu ([bindPipelineToSurface]) or from Settings → Background.
+     */
+    private fun observeSurfaceBindingIds() {
+        viewModelScope.launch {
+            settingsRepository.shareTargetPipelineId.collect { id ->
+                _uiState.update { it.copy(shareTargetPipelineId = id) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.quickSettingsTilePipelineId.collect { id ->
+                _uiState.update { it.copy(quickSettingsTilePipelineId = id) }
             }
         }
     }

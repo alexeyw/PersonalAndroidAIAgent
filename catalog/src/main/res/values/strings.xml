@@ -259,6 +259,14 @@
     <string name="knotwork_library_section_library">LIBRARY</string>
     <!-- "DEFAULT" pill on the row that's marked as the user's default pipeline. -->
     <string name="knotwork_library_badge_default">DEFAULT</string>
+    <!-- Outlined "SHARE" pill on the row bound to the OS Share target. -->
+    <string name="knotwork_library_badge_share">SHARE</string>
+    <!-- Accessibility reading for the SHARE pill. -->
+    <string name="knotwork_library_badge_share_cd">Bound to the share target</string>
+    <!-- Outlined "TILE" pill on the row bound to the Quick Settings tile. -->
+    <string name="knotwork_library_badge_tile">TILE</string>
+    <!-- Accessibility reading for the TILE pill. -->
+    <string name="knotwork_library_badge_tile_cd">Bound to the Quick Settings tile</string>
     <!-- Footer label introducing the Import JSON affordance. -->
     <string name="knotwork_library_footer_header">FROM BROWSER EDITOR</string>
     <!-- Import-JSON button label. -->

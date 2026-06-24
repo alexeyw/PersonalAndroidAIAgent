@@ -141,12 +141,20 @@ fun PipelineLibraryScreen(
         }
     }
 
-    val rows by remember(uiState.savedPipelines, uiState.activePipelineId, uiState.defaultPipelineId) {
+    val rows by remember(
+        uiState.savedPipelines,
+        uiState.activePipelineId,
+        uiState.defaultPipelineId,
+        uiState.shareTargetPipelineId,
+        uiState.quickSettingsTilePipelineId,
+    ) {
         derivedStateOf {
             uiState.savedPipelines.map { pipeline ->
                 pipeline.toLibraryRow(
                     isActive = pipeline.id == uiState.activePipelineId,
                     isDefault = pipeline.id == uiState.defaultPipelineId,
+                    isShareTarget = pipeline.id == uiState.shareTargetPipelineId,
+                    isQuickTile = pipeline.id == uiState.quickSettingsTilePipelineId,
                 )
             }
         }
@@ -464,9 +472,15 @@ private fun PipelineNameDialog(
  * Projects a domain [PipelineGraph] onto a catalog [PipelineLibraryRow].
  * Builds the "N nodes · {flavour}" subtitle from the first few node types
  * and derives the secondary status line ("Active default" / "Idle" /
- * "unbound").
+ * "unbound"), plus the entry-surface binding flags that drive the
+ * "DEFAULT" / "SHARE" / "TILE" pills.
  */
-private fun PipelineGraph.toLibraryRow(isActive: Boolean, isDefault: Boolean): PipelineLibraryRow {
+private fun PipelineGraph.toLibraryRow(
+    isActive: Boolean,
+    isDefault: Boolean,
+    isShareTarget: Boolean,
+    isQuickTile: Boolean,
+): PipelineLibraryRow {
     // Walk the graph from INPUT following connections (GraphFlowPreview) rather
     // than iterating `nodes` in insertion order — otherwise the subtitle reads
     // e.g. "INPUT→OUTPUT→LITE_RT" (storage order) while the editor renders the
@@ -495,6 +509,8 @@ private fun PipelineGraph.toLibraryRow(isActive: Boolean, isDefault: Boolean): P
         leadingIcon = AppIcons.Branch,
         isActive = isActive,
         isDefault = isDefault,
+        isShareTarget = isShareTarget,
+        isQuickTile = isQuickTile,
     )
 }
 

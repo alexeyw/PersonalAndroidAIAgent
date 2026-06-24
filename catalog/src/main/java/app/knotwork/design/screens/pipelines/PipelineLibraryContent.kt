@@ -3,6 +3,7 @@
 package app.knotwork.design.screens.pipelines
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
@@ -434,6 +436,18 @@ private fun PipelineLibraryListRow(
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 if (row.isDefault) DefaultBadge()
+                if (row.isShareTarget) {
+                    SurfaceMarkBadge(
+                        label = stringResource(R.string.knotwork_library_badge_share),
+                        contentDescription = stringResource(R.string.knotwork_library_badge_share_cd),
+                    )
+                }
+                if (row.isQuickTile) {
+                    SurfaceMarkBadge(
+                        label = stringResource(R.string.knotwork_library_badge_tile),
+                        contentDescription = stringResource(R.string.knotwork_library_badge_tile_cd),
+                    )
+                }
             }
             Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp1))
             Text(
@@ -491,6 +505,42 @@ private fun DefaultBadge() {
                 fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
             ),
             color = MaterialTheme.colorScheme.onPrimary,
+        )
+    }
+}
+
+/**
+ * Outlined pill marking a pipeline bound to an OS entry surface — the Share
+ * target (`SHARE`) or the Quick Settings tile (`TILE`). Outlined rather than
+ * filled so it reads as secondary to the filled [DefaultBadge]; the [label]
+ * disambiguates which surface, and [contentDescription] gives screen readers a
+ * full-sentence reading instead of the terse glyph text.
+ *
+ * @param label short visible text rendered inside the pill (e.g. "SHARE").
+ * @param contentDescription accessibility label replacing the terse [label] for
+ * TalkBack (e.g. "Bound to the share target").
+ */
+@Composable
+private fun SurfaceMarkBadge(label: String, contentDescription: String) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .height(DefaultBadgeHeight)
+            .clip(KnotworkTheme.shapes.sm)
+            .border(
+                width = 1.dp,
+                color = KnotworkTheme.extended.outlineStrong,
+                shape = KnotworkTheme.shapes.sm,
+            )
+            .padding(horizontal = KnotworkTheme.spacing.sp2)
+            .semantics(mergeDescendants = true) { this.contentDescription = contentDescription },
+    ) {
+        Text(
+            text = label,
+            style = KnotworkTextStyles.LabelSm.copy(
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+            ),
+            color = KnotworkTheme.extended.onSurface2,
         )
     }
 }

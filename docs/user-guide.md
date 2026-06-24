@@ -617,7 +617,10 @@ Bind a pipeline to a surface in either place:
   *Quick Settings pipeline* rows open a picker (choose a pipeline, or
   **None** to switch the surface back off).
 - **Pipeline library** — a pipeline's row menu (⋮) has **Use for sharing**
-  and **Use for Quick Settings tile**.
+  and **Use for Quick Settings tile**. The bound pipelines are easy to spot
+  at a glance: the library row carries an outlined **SHARE** pill when it is
+  the share-target pipeline and an outlined **TILE** pill when it is the
+  Quick Settings tile pipeline (next to the filled **DEFAULT** pill).
 
 If you delete a pipeline that a surface was using, that surface simply
 turns off again until you bind another.
