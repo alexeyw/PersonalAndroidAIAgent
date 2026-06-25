@@ -46,6 +46,7 @@ import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
+import app.knotwork.android.domain.repositories.UsageTelemetryRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.services.NativeMemorySampler
@@ -308,7 +309,9 @@ class BackgroundAutonomyCycleIntegrationTest {
      * production DI, and a real task queue on the shared test dispatcher.
      */
     private fun buildProcess(llmEngine: LlmInferenceEngine): ProcessHarness {
-        val runRepository = PipelineRunRepositoryImpl(database.pipelineRunDao())
+        val usageTelemetry = mockk<UsageTelemetryRepository>(relaxed = true)
+        coEvery { usageTelemetry.isEnabled() } returns false
+        val runRepository = PipelineRunRepositoryImpl(database.pipelineRunDao(), usageTelemetry)
         val traceRepository = RunTraceRepositoryImpl(database.traceStepDao())
             .apply { dispatcher = testDispatcher }
         val pendingRepository = PendingInteractionRepositoryImpl(database.pendingInteractionDao())

@@ -46,6 +46,12 @@ fun PrivacySettingsContent(
                 )
             }
         }
+        NavLinkRow(
+            icon = AppIcons.Gauge,
+            title = stringResource(R.string.knotwork_settings_privacy_usage_title),
+            subtitle = stringResource(R.string.knotwork_settings_privacy_usage_subtitle),
+            onClick = callbacks.onOpenUsageStatistics,
+        )
         AdvancedDisclosure(initiallyExpanded = advancedExpanded) {
             Column(
                 modifier = Modifier.fillMaxWidth(),

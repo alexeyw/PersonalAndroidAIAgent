@@ -6,6 +6,7 @@ import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.repositories.PipelineRunRepository
+import app.knotwork.android.domain.repositories.UsageTelemetryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -40,8 +41,10 @@ import javax.inject.Singleton
  * never be mistaken for an orphan of a dead process.
  */
 @Singleton
-class PipelineRunRepositoryImpl @Inject constructor(private val pipelineRunDao: PipelineRunDao) :
-    PipelineRunRepository {
+class PipelineRunRepositoryImpl @Inject constructor(
+    private val pipelineRunDao: PipelineRunDao,
+    private val usageTelemetry: UsageTelemetryRepository,
+) : PipelineRunRepository {
 
     /**
      * Ids of runs created by the current process. Membership means the run's
@@ -103,7 +106,7 @@ class PipelineRunRepositoryImpl @Inject constructor(private val pipelineRunDao: 
     override suspend fun finishRun(runId: String, status: PipelineRunStatus, errorMessage: String?) {
         // Caller contract violation, not a storage failure — never absorbed.
         require(status.isTerminal) { "finishRun requires a terminal status, got $status" }
-        absorbing("finishRun") {
+        val rowsTransitioned = absorbing("finishRun") {
             withContext(Dispatchers.IO) {
                 pipelineRunDao.finishRun(
                     runId = runId,
@@ -113,7 +116,39 @@ class PipelineRunRepositoryImpl @Inject constructor(private val pipelineRunDao: 
                     terminalStatuses = TERMINAL_STATUS_NAMES,
                 )
             }
-        }
+        } ?: 0
+        // Only a genuine terminal transition feeds telemetry: a duplicate /
+        // racing finishRun on an already-terminal run is a DB no-op (0 rows) and
+        // must not double-count the run in the usage statistics.
+        if (rowsTransitioned > 0) recordRunTelemetry(runId, status)
+    }
+
+    /**
+     * Records the terminal outcome of a **root**, pipeline-bound run into the
+     * privacy-preserving local usage statistics, best-effort.
+     *
+     * Filters applied so the statistics reflect genuine pipeline usage:
+     * - **Opt-in gate first.** Checked before the run read-back, so an opted-out
+     *   user pays nothing here (no `getRun`). The telemetry repository re-checks
+     *   the flag, but that inner gate is for the trigger path; this outer check
+     *   is purely the cost optimisation, not a redundant guard.
+     * - **Root runs only** (`parentRunId == null`): a nested sub-pipeline run is
+     *   an implementation detail of one user-initiated run and must not inflate
+     *   the tally.
+     * - **Pipeline-bound only** (`pipelineId != null`): a run that never resolved
+     *   a pipeline never executed any pipeline work — e.g. a queued run reaped as
+     *   `INTERRUPTED` by the startup orphan sweep, or cancelled before it started.
+     *   Counting these would pollute the outcome shares with process-death noise.
+     *
+     * The telemetry repository absorbs its own storage failures, so this can
+     * never disturb the run it describes.
+     */
+    private suspend fun recordRunTelemetry(runId: String, status: PipelineRunStatus) {
+        if (!usageTelemetry.isEnabled()) return
+        val run = getRun(runId) ?: return
+        if (run.parentRunId != null) return
+        val pipelineId = run.pipelineId ?: return
+        usageTelemetry.recordPipelineRunOutcome(pipelineId, status, System.currentTimeMillis())
     }
 
     override suspend fun getRun(runId: String): PipelineRun? = absorbing("getRun") {

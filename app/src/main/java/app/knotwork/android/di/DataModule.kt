@@ -42,6 +42,7 @@ import app.knotwork.android.data.repositories.RunTraceRepositoryImpl
 import app.knotwork.android.data.repositories.SkillRepositoryImpl
 import app.knotwork.android.data.repositories.ToolRepositoryImpl
 import app.knotwork.android.data.repositories.TriggerRepositoryImpl
+import app.knotwork.android.data.repositories.UsageTelemetryRepositoryImpl
 import app.knotwork.android.data.services.LongRunningTaskNotifierImpl
 import app.knotwork.android.data.services.WorkManagerMemoryReembedScheduler
 import app.knotwork.android.data.services.WorkManagerTriggerScheduler
@@ -73,6 +74,7 @@ import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.SkillRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.repositories.TriggerRepository
+import app.knotwork.android.domain.repositories.UsageTelemetryRepository
 import app.knotwork.android.domain.services.AgentWorkspace
 import app.knotwork.android.domain.services.AttachmentStore
 import app.knotwork.android.domain.services.AudioCaptureStore
@@ -245,6 +247,15 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindMetricsRepository(repository: MetricsRepositoryImpl): MetricsRepository
+
+    /**
+     * Binds the [UsageTelemetryRepositoryImpl] implementation to the
+     * [UsageTelemetryRepository] interface backing the privacy-preserving
+     * on-device usage statistics.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindUsageTelemetryRepository(repository: UsageTelemetryRepositoryImpl): UsageTelemetryRepository
 
     /**
      * Binds the [ModelPerformanceRepositoryImpl] implementation to the

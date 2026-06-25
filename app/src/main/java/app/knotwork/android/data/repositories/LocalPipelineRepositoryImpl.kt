@@ -24,6 +24,9 @@ class LocalPipelineRepositoryImpl @Inject constructor(private val pipelineDao: P
         entities.map { it.toDomainModel() }
     }
 
+    override fun observePipelineNames(): Flow<Map<String, String>> =
+        pipelineDao.observePipelineNames().map { rows -> rows.associate { it.id to it.name } }
+
     override suspend fun getPipelineById(pipelineId: String): PipelineGraph? =
         pipelineDao.getPipelineById(pipelineId)?.toDomainModel()
 

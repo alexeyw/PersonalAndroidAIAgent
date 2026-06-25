@@ -195,6 +195,46 @@ internal object SettingsPreview {
      */
     fun privacyFossHidden(): PrivacySettingsViewState = privacy().copy(crashReportingAvailable = false)
 
+    // ─── Usage statistics ────────────────────────────────────────────────────
+
+    fun usageTelemetry(): UsageTelemetryViewState = UsageTelemetryViewState(
+        recordingEnabled = true,
+        isEmpty = false,
+        runsHeadline = "12 total",
+        outcomes = listOf(
+            UsageStatRow("Completed", "9 (75%)"),
+            UsageStatRow("Failed", "2 (16%)"),
+            UsageStatRow("Cancelled", "1 (8%)"),
+            UsageStatRow("Interrupted", "0 (0%)"),
+        ),
+        pipelines = listOf(
+            UsageStatRow("Daily digest", "7"),
+            UsageStatRow("Research assistant", "5"),
+        ),
+        triggersHeadline = "4 total",
+        triggers = listOf(
+            UsageStatRow("Charging", "3"),
+            UsageStatRow("Daily schedule", "1"),
+        ),
+        activeDays = listOf(
+            UsageStatRow("Days", "5"),
+            UsageStatRow("First", "2026-06-20"),
+            UsageStatRow("Last", "2026-06-25"),
+        ),
+    )
+
+    /** Empty Usage statistics state (recording on, nothing recorded yet). */
+    fun usageTelemetryEmpty(): UsageTelemetryViewState = UsageTelemetryViewState(
+        recordingEnabled = true,
+        isEmpty = true,
+        runsHeadline = "0 total",
+        outcomes = emptyList(),
+        pipelines = emptyList(),
+        triggersHeadline = "0 total",
+        triggers = emptyList(),
+        activeDays = emptyList(),
+    )
+
     // ─── About ───────────────────────────────────────────────────────────────
 
     fun about(): AboutSettingsViewState = AboutSettingsViewState(

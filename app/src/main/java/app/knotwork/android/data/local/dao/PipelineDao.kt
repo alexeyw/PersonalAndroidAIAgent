@@ -27,6 +27,17 @@ interface PipelineDao {
     fun getAllPipelines(): Flow<List<PipelineWithNodesAndConnections>>
 
     /**
+     * Lightweight projection of every pipeline's id + display name, with no
+     * nodes/connections join. Backs name-resolution callers (e.g. the usage
+     * statistics screen) that need only `id → name` and would otherwise pay the
+     * full graph load of [getAllPipelines].
+     *
+     * @return A [Flow] emitting the id/name rows of all saved pipelines.
+     */
+    @Query("SELECT id, name FROM pipelines ORDER BY updatedAt DESC")
+    fun observePipelineNames(): Flow<List<PipelineNameRow>>
+
+    /**
      * Retrieves a specific pipeline by ID.
      *
      * @param pipelineId The ID of the pipeline to retrieve.
@@ -104,3 +115,11 @@ interface PipelineDao {
     @Query("DELETE FROM pipelines WHERE id = :pipelineId")
     suspend fun deletePipelineById(pipelineId: String)
 }
+
+/**
+ * Lightweight `id → name` projection of a pipeline row (no nodes/connections).
+ *
+ * @property id The pipeline id.
+ * @property name The pipeline display name.
+ */
+data class PipelineNameRow(val id: String, val name: String)

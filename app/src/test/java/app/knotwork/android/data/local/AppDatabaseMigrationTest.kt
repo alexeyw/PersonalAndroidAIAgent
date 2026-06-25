@@ -525,4 +525,46 @@ class AppDatabaseMigrationTest {
         // a session on their next fire.
         assertTrue("sessionId must be nullable (no NOT NULL): ${sqlSlot.captured}", !sql.contains("NOT NULL"))
     }
+
+    @Test
+    fun `MIGRATION_46_47 targets versions 46 to 47`() {
+        val migration = AppDatabase.MIGRATION_46_47
+
+        assertEquals(46, migration.startVersion)
+        assertEquals(47, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_46_47 creates the local usage-telemetry tables`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val statements = mutableListOf<String>()
+
+        AppDatabase.MIGRATION_46_47.migrate(db)
+
+        // CREATE TABLE usage_counter + CREATE TABLE usage_active_day.
+        verify(exactly = 2) { db.execSQL(capture(statements)) }
+
+        val counterTable = statements.first().uppercase()
+        assertTrue(
+            "Expected CREATE TABLE usage_counter, got: ${statements.first()}",
+            counterTable.contains("CREATE TABLE") && counterTable.contains("USAGE_COUNTER"),
+        )
+        listOf("CATEGORY", "COUNTERKEY", "COUNT").forEach { column ->
+            assertTrue("Missing column $column in: ${statements.first()}", counterTable.contains(column))
+        }
+        assertTrue(
+            "usage_counter must be keyed on (category, counterKey): ${statements.first()}",
+            counterTable.contains("PRIMARY KEY(`CATEGORY`, `COUNTERKEY`)"),
+        )
+
+        val dayTable = statements[1].uppercase()
+        assertTrue(
+            "Expected CREATE TABLE usage_active_day, got: ${statements[1]}",
+            dayTable.contains("CREATE TABLE") && dayTable.contains("USAGE_ACTIVE_DAY"),
+        )
+        assertTrue(
+            "usage_active_day must be keyed on the day string: ${statements[1]}",
+            dayTable.contains("PRIMARY KEY(`DAY`)"),
+        )
+    }
 }

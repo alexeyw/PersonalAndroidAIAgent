@@ -455,6 +455,24 @@
     <string name="knotwork_settings_cat_about_title">About</string>
     <string name="knotwork_settings_cat_about_summary">Version · identity · reset</string>
 
+    <!-- Usage statistics (Privacy → on-device local telemetry) -->
+    <string name="knotwork_settings_privacy_usage_title">Usage statistics</string>
+    <string name="knotwork_settings_privacy_usage_subtitle">On-device counts · nothing leaves the device</string>
+    <string name="knotwork_usage_title">Usage statistics</string>
+    <string name="knotwork_usage_subtitle">On this device only</string>
+    <string name="knotwork_usage_record_label">Record usage on this device</string>
+    <string name="knotwork_usage_record_hint">Count runs and trigger firings locally, for your own analysis.</string>
+    <string name="knotwork_usage_local_only">Everything here is stored only on this device and is never sent anywhere.</string>
+    <string name="knotwork_usage_empty">No usage recorded yet. As you run pipelines and triggers fire, local counts appear here.</string>
+    <string name="knotwork_usage_section_runs">Runs</string>
+    <string name="knotwork_usage_section_pipelines">Runs by pipeline</string>
+    <string name="knotwork_usage_section_triggers">Trigger firings</string>
+    <string name="knotwork_usage_section_active_days">Active days</string>
+    <string name="knotwork_usage_none">None</string>
+    <string name="knotwork_usage_action_share">Share as text</string>
+    <string name="knotwork_usage_action_export">Export JSON</string>
+    <string name="knotwork_usage_action_reset">Reset statistics</string>
+
     <string name="knotwork_settings_system_instructions_counter" tools:ignore="PluralsCandidate">%1$d / %2$d chars · ≈ %3$d tok</string>
 
     <string name="knotwork_settings_restrictions_approve">Approve tool calls</string>

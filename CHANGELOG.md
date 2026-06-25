@@ -68,6 +68,16 @@ details.
   destructive tools inside a trigger run surface the usual background
   **Approve / Deny** approval notification, so an unattended run can be settled
   from the shade without opening the app.
+- **Local usage statistics (privacy-preserving).** A new **Usage statistics**
+  screen (*Settings → Privacy*) shows fully on-device counts of how the app is
+  used — runs per pipeline, run outcomes (completed / failed / cancelled /
+  interrupted), trigger firings by kind, and active days. **Nothing on this path
+  ever leaves the device** (enforced by a build-time guard that forbids any
+  network import on the telemetry surface); the figures live in the existing
+  encrypted database. Recording is on by default, clearly framed as local-only,
+  and can be turned off or cleared at any time. A voluntary **Share as text** /
+  **Export JSON** lets you take a snapshot for your own analysis — to a file or
+  share sheet you choose, never automatically.
 - **Search the settings.** The settings hub now has a search field. Typing
   filters every setting by name, description, owning category and synonyms (so
   `max` surfaces *Cap autonomous steps* via the synonym *max steps*), with the

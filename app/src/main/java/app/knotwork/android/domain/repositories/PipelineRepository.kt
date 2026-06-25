@@ -15,6 +15,15 @@ interface PipelineRepository {
     fun getAllPipelines(): Flow<List<PipelineGraph>>
 
     /**
+     * Retrieves a flow of every pipeline's `id → display name` only, without
+     * loading the (potentially large) node/connection graphs. For callers that
+     * just need to label pipeline ids (e.g. the usage-statistics screen).
+     *
+     * @return A [Flow] emitting the `pipelineId → name` map of all pipelines.
+     */
+    fun observePipelineNames(): Flow<Map<String, String>>
+
+    /**
      * Retrieves a specific pipeline by its ID.
      *
      * @param pipelineId The unique identifier of the pipeline.

@@ -50,6 +50,7 @@ class SettingsDefaultsTest {
     fun `given centralised toggle and limit defaults when read then match documented values`() {
         assertEquals(false, SettingsDefaults.REQUIRES_USER_CONFIRMATION_DEFAULT)
         assertEquals(false, SettingsDefaults.CRASH_REPORTING_ENABLED_DEFAULT)
+        assertEquals(true, SettingsDefaults.USAGE_TELEMETRY_ENABLED_DEFAULT)
         assertEquals(true, SettingsDefaults.LONG_RUNNING_TASK_NOTIFICATIONS_ENABLED_DEFAULT)
         assertEquals(true, SettingsDefaults.SCHEDULED_TASK_NOTIFICATIONS_ENABLED_DEFAULT)
         assertEquals(false, SettingsDefaults.BLOCK_DESTRUCTIVE_TOOLS_DEFAULT)

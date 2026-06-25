@@ -12,6 +12,7 @@ import app.knotwork.android.domain.repositories.NetworkStateRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PowerStateRepository
 import app.knotwork.android.domain.repositories.TriggerRepository
+import app.knotwork.android.domain.repositories.UsageTelemetryRepository
 import app.knotwork.android.domain.services.ScheduledTaskNotifier
 import app.knotwork.android.domain.services.TaskScheduler
 import app.knotwork.android.domain.services.TriggerScheduler
@@ -50,6 +51,7 @@ class FireTriggerUseCaseTest {
     private lateinit var chatRepository: ChatRepository
     private lateinit var scheduledTaskNotifier: ScheduledTaskNotifier
     private lateinit var triggerScheduler: TriggerScheduler
+    private lateinit var usageTelemetry: UsageTelemetryRepository
     private lateinit var useCase: FireTriggerUseCase
 
     private val triggerId = "t1"
@@ -77,6 +79,7 @@ class FireTriggerUseCaseTest {
         chatRepository = mockk(relaxed = true)
         scheduledTaskNotifier = mockk(relaxed = true)
         triggerScheduler = mockk(relaxed = true)
+        usageTelemetry = mockk(relaxed = true)
         useCase = FireTriggerUseCase(
             triggerRepository = triggerRepository,
             pipelineRepository = pipelineRepository,
@@ -87,6 +90,7 @@ class FireTriggerUseCaseTest {
             chatRepository = chatRepository,
             scheduledTaskNotifier = scheduledTaskNotifier,
             triggerScheduler = triggerScheduler,
+            usageTelemetry = usageTelemetry,
         )
     }
 
@@ -149,6 +153,19 @@ class FireTriggerUseCaseTest {
                 origin = RunOrigin.TRIGGER,
             )
         }
+        // The firing is tallied into the privacy-preserving local statistics by kind.
+        coVerify(exactly = 1) { usageTelemetry.recordTriggerFired("CHARGING", now) }
+    }
+
+    @Test
+    fun `given a skipped trigger then no firing is recorded into usage statistics`() = runTest {
+        coEvery { triggerRepository.getTriggerById(triggerId) } returns chargingTrigger
+        every { evaluate(any(), any(), any(), any(), any()) } returns
+            TriggerFiringDecision.Skip(TriggerSkipReason.CONDITION_NOT_MET)
+
+        useCase(triggerId, now)
+
+        coVerify(exactly = 0) { usageTelemetry.recordTriggerFired(any(), any()) }
     }
 
     @Test

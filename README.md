@@ -115,6 +115,14 @@ configured it.
   runs a duty pipeline in the background with one tap. Each surface stays inert
   until you bind a pipeline to it (in *Settings → Background & triggers* or a
   pipeline's library row menu) — a privacy-first default.
+- **Local usage statistics (privacy-preserving)** — a *Settings → Privacy →
+  Usage statistics* screen shows fully on-device counts of how you use the app:
+  runs per pipeline, run outcomes, trigger firings by kind, and active days.
+  **Nothing on this path ever leaves the device** (a build-time guard forbids
+  any network import on the telemetry surface); the figures live in the existing
+  encrypted database. Recording is on by default, framed as local-only, and can
+  be turned off or reset at any time, with a voluntary **Share as text** /
+  **Export JSON** for your own analysis.
 - **Settings as a searchable category hub** — a hub with a short *Basic*
   block and a search field over eight focused category sub-screens
   (Generation, Models, Memory, Pipelines & structured output, Tools &
