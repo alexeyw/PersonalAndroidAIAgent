@@ -28,6 +28,7 @@ import app.knotwork.android.data.local.dao.PromptTemplateDao
 import app.knotwork.android.data.local.dao.SkillDao
 import app.knotwork.android.data.local.dao.TraceStepDao
 import app.knotwork.android.data.local.dao.TriggerDao
+import app.knotwork.android.data.local.dao.UsageTelemetryDao
 import app.knotwork.android.data.services.WorkManagerTaskScheduler
 import app.knotwork.android.data.tools.local.AppFunctionDataCodec
 import app.knotwork.android.data.tools.local.LocalAppFunctionManager
@@ -193,6 +194,7 @@ object AppModule {
                 AppDatabase.MIGRATION_43_44,
                 AppDatabase.MIGRATION_44_45,
                 AppDatabase.MIGRATION_45_46,
+                AppDatabase.MIGRATION_46_47,
             )
             // No destructive fallback on upgrade: every version bump must supply an explicit
             // migration above so user data survives. Destructive recreation is kept only for the
@@ -290,6 +292,13 @@ object AppModule {
      */
     @Provides
     fun provideTriggerDao(database: AppDatabase): TriggerDao = database.triggerDao()
+
+    /**
+     * Provides the [UsageTelemetryDao] backing the privacy-preserving local
+     * usage statistics (the `usage_counter` / `usage_active_day` tables).
+     */
+    @Provides
+    fun provideUsageTelemetryDao(database: AppDatabase): UsageTelemetryDao = database.usageTelemetryDao()
 
     /**
      * Provides the singleton instance of Converters for Room mapping.

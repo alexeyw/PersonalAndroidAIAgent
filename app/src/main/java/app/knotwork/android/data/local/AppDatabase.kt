@@ -19,6 +19,7 @@ import app.knotwork.android.data.local.dao.PromptTemplateDao
 import app.knotwork.android.data.local.dao.SkillDao
 import app.knotwork.android.data.local.dao.TraceStepDao
 import app.knotwork.android.data.local.dao.TriggerDao
+import app.knotwork.android.data.local.dao.UsageTelemetryDao
 import app.knotwork.android.data.local.models.ChatHistorySummaryEntity
 import app.knotwork.android.data.local.models.ChatMessageEntity
 import app.knotwork.android.data.local.models.ChatSessionEntity
@@ -36,6 +37,8 @@ import app.knotwork.android.data.local.models.PromptTemplateEntity
 import app.knotwork.android.data.local.models.SkillEntity
 import app.knotwork.android.data.local.models.TraceStepEntity
 import app.knotwork.android.data.local.models.TriggerEntity
+import app.knotwork.android.data.local.models.UsageActiveDayEntity
+import app.knotwork.android.data.local.models.UsageCounterEntity
 
 /**
  * Main Room Database for the Android AI Agent.
@@ -68,8 +71,10 @@ import app.knotwork.android.data.local.models.TriggerEntity
         ChatHistorySummaryEntity::class,
         ModelPerformanceSampleEntity::class,
         TriggerEntity::class,
+        UsageCounterEntity::class,
+        UsageActiveDayEntity::class,
     ],
-    version = 46,
+    version = 47,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -180,6 +185,15 @@ abstract class AppDatabase : RoomDatabase() {
      * @return The [TriggerDao] instance.
      */
     abstract fun triggerDao(): TriggerDao
+
+    /**
+     * Provides access to the [UsageTelemetryDao] backing the privacy-preserving
+     * local usage statistics (the `usage_counter` and `usage_active_day`
+     * tables). Every figure stays on-device.
+     *
+     * @return The [UsageTelemetryDao] instance.
+     */
+    abstract fun usageTelemetryDao(): UsageTelemetryDao
 
     companion object {
         /**
@@ -1067,6 +1081,43 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_45_46 = object : Migration(45, 46) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `triggers` ADD COLUMN `sessionId` TEXT")
+            }
+        }
+
+        /**
+         * Adds the local usage-telemetry tables backing the privacy-preserving
+         * Usage statistics screen. Additive — no existing rows are touched.
+         *
+         * - `usage_counter` — a generic `(category, counterKey) → count` tally
+         *   (terminal root runs per pipeline and per outcome, trigger firings per
+         *   kind). The composite primary key matches the entity so atomic UPSERT
+         *   increments target a single row.
+         * - `usage_active_day` — the set of distinct device-local active days
+         *   (one row per ISO `yyyy-MM-dd` day), backing the daily-active count.
+         *
+         * Both tables live in the SQLCipher-encrypted database and nothing they
+         * hold ever leaves the device.
+         */
+        val MIGRATION_46_47 = object : Migration(46, 47) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `usage_counter` (
+                        `category` TEXT NOT NULL,
+                        `counterKey` TEXT NOT NULL,
+                        `count` INTEGER NOT NULL,
+                        PRIMARY KEY(`category`, `counterKey`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `usage_active_day` (
+                        `day` TEXT NOT NULL,
+                        PRIMARY KEY(`day`)
+                    )
+                    """.trimIndent(),
+                )
             }
         }
     }

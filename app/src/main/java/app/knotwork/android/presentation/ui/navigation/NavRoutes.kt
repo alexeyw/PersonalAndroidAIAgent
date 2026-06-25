@@ -174,6 +174,9 @@ object NavRoutes {
     /** Privacy category sub-screen. */
     const val SETTINGS_PRIVACY: String = "settings/privacy"
 
+    /** On-device usage-statistics screen, reached from Privacy. */
+    const val SETTINGS_PRIVACY_USAGE: String = "settings/privacy/usage"
+
     /** About category sub-screen. */
     const val SETTINGS_ABOUT: String = "settings/about"
 

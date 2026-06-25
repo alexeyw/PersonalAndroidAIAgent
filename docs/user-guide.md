@@ -1594,6 +1594,35 @@ Advanced:
 - **Run history max age** *(Advanced)* (7–180 days, default 30) — finished runs
   older than this are deleted regardless of the per-chat count. Runs still
   waiting on an approval or clarification are never removed by retention.
+- **Usage statistics** *(link)* — opens a fully on-device usage dashboard (see
+  below).
+
+#### Usage statistics
+
+A privacy-preserving picture of how you use the app, computed entirely on the
+device. **Nothing on this screen is ever transmitted** — the counts live in the
+same encrypted database as the rest of your data, and there is no network call
+anywhere on this path (a build-time guard enforces that). The screen shows:
+
+- **Runs** — total finished runs and the share that **completed**, **failed**,
+  were **cancelled**, or were **interrupted** (a run cut short by the app being
+  killed). Nested sub-pipeline runs are not double-counted.
+- **Runs by pipeline** — how many runs each pipeline accounted for.
+- **Trigger firings** — how many times each kind of automation trigger
+  (schedule / daily / charging / network) fired.
+- **Active days** — the number of distinct days with any activity, plus the
+  first and last.
+
+Controls:
+
+- **Record usage on this device** — the opt-in toggle. On by default and
+  local-only; turn it off to stop the counters advancing (already-recorded
+  figures are untouched).
+- **Share as text** / **Export JSON** — take a voluntary snapshot for your own
+  analysis. The text goes through the system share sheet; the JSON is written to
+  a file you pick. Neither happens automatically.
+- **Reset statistics** — permanently clears every recorded count (it does not
+  change the recording toggle).
 
 ### About
 

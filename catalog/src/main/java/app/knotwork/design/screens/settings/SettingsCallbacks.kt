@@ -106,6 +106,8 @@ class SettingsCallbacks(
     val onCrashReportingToggle: (Boolean) -> Unit = {},
     /** Trace-retention slider change, keyed by `SLIDER_PRIVACY_*` id. */
     val onPrivacySliderChange: (id: String, value: Float) -> Unit = { _, _ -> },
+    /** Open the on-device Usage statistics sub-screen. */
+    val onOpenUsageStatistics: () -> Unit = {},
 
     // ─── About ───────────────────────────────────────────────────────────────
     /** Stage the reset-all-settings destructive action. */

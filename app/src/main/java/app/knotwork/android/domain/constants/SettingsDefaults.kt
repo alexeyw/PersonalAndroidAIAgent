@@ -432,6 +432,16 @@ object SettingsDefaults {
     const val CRASH_REPORTING_ENABLED_DEFAULT: Boolean = false
 
     /**
+     * Default for the on-device usage-statistics opt-in. `true` so the
+     * dogfooding window gathers usage signal out of the box — but the data is
+     * **local-only**: no figure ever leaves the device regardless of this flag,
+     * which merely controls whether the local counters are recorded at all. The
+     * user can turn recording off and clear the statistics from
+     * Settings → Privacy → Usage statistics at any time.
+     */
+    const val USAGE_TELEMETRY_ENABLED_DEFAULT: Boolean = true
+
+    /**
      * Default for the "Long-running tasks" notification toggle. `true` so a
      * pipeline run that outlives the foreground surface can still surface a
      * progress notification out of the box.

@@ -3,11 +3,13 @@ package app.knotwork.android.domain.usecases
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.Trigger
+import app.knotwork.android.domain.models.telemetryKind
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.NetworkStateRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PowerStateRepository
 import app.knotwork.android.domain.repositories.TriggerRepository
+import app.knotwork.android.domain.repositories.UsageTelemetryRepository
 import app.knotwork.android.domain.services.ScheduledTaskConstraints
 import app.knotwork.android.domain.services.ScheduledTaskNotifier
 import app.knotwork.android.domain.services.TaskScheduler
@@ -119,6 +121,7 @@ class FireTriggerUseCase @Inject constructor(
     private val chatRepository: ChatRepository,
     private val scheduledTaskNotifier: ScheduledTaskNotifier,
     private val triggerScheduler: TriggerScheduler,
+    private val usageTelemetry: UsageTelemetryRepository,
 ) {
 
     /**
@@ -215,6 +218,9 @@ class FireTriggerUseCase @Inject constructor(
         if (session.isNewlyCreated) triggerRepository.setSessionId(trigger.id, session.id)
 
         notifyTriggerFired(session.id, trigger.name)
+        // Tally the firing into the privacy-preserving local usage statistics
+        // (best-effort, opt-in gated and self-absorbing inside the repository).
+        usageTelemetry.recordTriggerFired(trigger.condition.telemetryKind, nowMillis)
         Timber.tag(TAG).d("Trigger %s fired pipeline %s into session %s.", trigger.id, decision.pipelineId, session.id)
         return TriggerFireOutcome.Fired(decision.pipelineId)
     }

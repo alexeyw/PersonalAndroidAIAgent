@@ -759,6 +759,27 @@ interface SettingsRepository {
     suspend fun setCrashReportingEnabled(enabled: Boolean)
 
     /**
+     * A [Flow] indicating whether fully on-device usage statistics are recorded.
+     *
+     * Gates the privacy-preserving local telemetry feature: when `true`, terminal
+     * run outcomes and background trigger firings advance local counters
+     * ([app.knotwork.android.domain.repositories.UsageTelemetryRepository]); when
+     * `false`, no counter advances. **Nothing on this path ever leaves the
+     * device regardless of the flag** — the toggle only controls whether the
+     * local figures are gathered at all. Defaults to `true`.
+     */
+    val usageTelemetryEnabled: Flow<Boolean>
+
+    /**
+     * Updates the opt-in for on-device usage statistics recording.
+     *
+     * @param enabled `true` to record local usage counters, `false` to stop
+     *   recording (already-stored statistics are untouched — use the Usage
+     *   statistics screen's reset action to clear them).
+     */
+    suspend fun setUsageTelemetryEnabled(enabled: Boolean)
+
+    /**
      * A [Flow] representing the default number of recent memory chunks rendered
      * by the `$MEMORY_SUMMARY` prompt variable. Defaults to 5.
      */

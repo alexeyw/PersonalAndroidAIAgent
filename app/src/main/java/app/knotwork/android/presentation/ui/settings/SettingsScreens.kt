@@ -95,6 +95,7 @@ import app.knotwork.android.domain.settings.SettingsCategoryId as DomainCategory
  * @property onOpenManageTools Open the Tools / MCP screen.
  * @property onOpenAllowedDomains Open the allowed-HTTP-domains screen.
  * @property onOpenLicenses Open the About / licenses screen.
+ * @property onOpenUsageStatistics Open the on-device Usage statistics screen.
  */
 data class SettingsNavActions(
     val onBack: () -> Unit,
@@ -105,6 +106,7 @@ data class SettingsNavActions(
     val onOpenManageTools: () -> Unit,
     val onOpenAllowedDomains: () -> Unit,
     val onOpenLicenses: () -> Unit,
+    val onOpenUsageStatistics: () -> Unit,
 )
 
 /** Settings hub: search field, the six inline Basic controls and the category list. */
@@ -476,6 +478,7 @@ private fun rememberSettingsCallbacks(
         onQuickTilePipelineClick = onQuickTilePipelineClick,
         onCrashReportingToggle = viewModel::setCrashReportingEnabled,
         onPrivacySliderChange = { id, value -> routePrivacySlider(viewModel, id, value) },
+        onOpenUsageStatistics = nav.onOpenUsageStatistics,
         onResetSettingsClick = viewModel::stageResetSettings,
         onDestructiveTypedConfirmChange = viewModel::updateDestructiveTypedInput,
         onDestructiveConfirm = viewModel::confirmDestructive,

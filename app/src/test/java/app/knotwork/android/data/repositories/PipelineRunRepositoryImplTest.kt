@@ -5,6 +5,7 @@ import app.knotwork.android.data.local.models.PipelineRunEntity
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.RunOrigin
+import app.knotwork.android.domain.repositories.UsageTelemetryRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -30,6 +31,7 @@ import org.junit.Test
 class PipelineRunRepositoryImplTest {
 
     private lateinit var pipelineRunDao: PipelineRunDao
+    private lateinit var usageTelemetry: UsageTelemetryRepository
     private lateinit var repository: PipelineRunRepositoryImpl
 
     private val terminalNames = listOf("COMPLETED", "FAILED", "CANCELLED", "INTERRUPTED")
@@ -64,7 +66,11 @@ class PipelineRunRepositoryImplTest {
     @Before
     fun setup() {
         pipelineRunDao = mockk(relaxed = true)
-        repository = PipelineRunRepositoryImpl(pipelineRunDao)
+        // Telemetry disabled by default so the existing assertions are unaffected;
+        // the dedicated recordRunTelemetry tests flip it on explicitly.
+        usageTelemetry = mockk(relaxed = true)
+        coEvery { usageTelemetry.isEnabled() } returns false
+        repository = PipelineRunRepositoryImpl(pipelineRunDao, usageTelemetry)
     }
 
     @Test
@@ -521,5 +527,38 @@ class PipelineRunRepositoryImplTest {
             terminal,
         )
         assertTrue(PipelineRunStatus.entries.filterNot { it.isTerminal }.none { it.isTerminal })
+    }
+
+    @Test
+    fun `given telemetry enabled when a root run finishes then its outcome is recorded`() = runTest {
+        coEvery { usageTelemetry.isEnabled() } returns true
+        coEvery { pipelineRunDao.getRun("run-1") } returns
+            sampleEntity.copy(id = "run-1", pipelineId = "pipe-1", parentRunId = null)
+
+        repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
+
+        coVerify(exactly = 1) {
+            usageTelemetry.recordPipelineRunOutcome("pipe-1", PipelineRunStatus.COMPLETED, any())
+        }
+    }
+
+    @Test
+    fun `given a nested sub-pipeline run finishes then it is not recorded`() = runTest {
+        coEvery { usageTelemetry.isEnabled() } returns true
+        coEvery { pipelineRunDao.getRun("child-1") } returns
+            sampleEntity.copy(id = "child-1", pipelineId = "pipe-1", parentRunId = "root-1")
+
+        repository.finishRun("child-1", PipelineRunStatus.COMPLETED)
+
+        coVerify(exactly = 0) { usageTelemetry.recordPipelineRunOutcome(any(), any(), any()) }
+    }
+
+    @Test
+    fun `given telemetry disabled when a run finishes then the run is not read back for telemetry`() = runTest {
+        // isEnabled() is stubbed false in setup; the run should never be re-read.
+        repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
+
+        coVerify(exactly = 0) { pipelineRunDao.getRun(any()) }
+        coVerify(exactly = 0) { usageTelemetry.recordPipelineRunOutcome(any(), any(), any()) }
     }
 }

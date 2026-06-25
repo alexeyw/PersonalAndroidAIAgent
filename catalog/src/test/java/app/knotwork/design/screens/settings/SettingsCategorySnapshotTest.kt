@@ -119,6 +119,21 @@ class SettingsCategorySnapshotTest {
         AboutSettingsContent(state = SettingsPreview.about(), advancedExpanded = true)
     }
 
+    @Test
+    fun usage_populated_light() = snapshot("usage_populated", dark = false) {
+        UsageTelemetryContent(state = SettingsPreview.usageTelemetry())
+    }
+
+    @Test
+    fun usage_populated_dark() = snapshot("usage_populated", dark = true) {
+        UsageTelemetryContent(state = SettingsPreview.usageTelemetry())
+    }
+
+    @Test
+    fun usage_empty_light() = snapshot("usage_empty", dark = false) {
+        UsageTelemetryContent(state = SettingsPreview.usageTelemetryEmpty())
+    }
+
     private fun snapshot(name: String, dark: Boolean, fontScale: Float = 1f, content: @Composable () -> Unit) {
         composeTestRule.setContent {
             val baseDensity = LocalDensity.current

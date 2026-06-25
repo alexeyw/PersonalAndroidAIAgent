@@ -47,6 +47,7 @@ import app.knotwork.android.presentation.ui.settings.SettingsViewModel
 import app.knotwork.android.presentation.ui.settings.ToolsSettingsScreen
 import app.knotwork.android.presentation.ui.settings.provider.ProviderDetailScreen
 import app.knotwork.android.presentation.ui.settings.provider.ProviderPickerScreen
+import app.knotwork.android.presentation.ui.settings.usage.UsageTelemetryScreen
 import app.knotwork.android.presentation.ui.skills.SkillLibraryScreen
 import app.knotwork.android.presentation.ui.splash.SplashScreen
 import app.knotwork.android.presentation.ui.taskmonitor.TaskMonitorScreen
@@ -404,6 +405,9 @@ fun AppNavGraph(
             composable(NavRoutes.SETTINGS_PRIVACY) { entry ->
                 PrivacySettingsScreen(viewModel = settingsGraphViewModel(navController, entry), nav = nav)
             }
+            composable(NavRoutes.SETTINGS_PRIVACY_USAGE) {
+                UsageTelemetryScreen(onBack = { navController.popBackStack() })
+            }
             composable(NavRoutes.SETTINGS_ABOUT) { entry ->
                 AboutSettingsScreen(viewModel = settingsGraphViewModel(navController, entry), nav = nav)
             }
@@ -505,6 +509,7 @@ private fun settingsNavActions(navController: NavHostController): SettingsNavAct
     onOpenManageTools = { navController.navigate(NavRoutes.TOOLS) },
     onOpenAllowedDomains = { navController.navigate(NavRoutes.ALLOWED_DOMAINS) },
     onOpenLicenses = { navController.navigate(NavRoutes.ABOUT) },
+    onOpenUsageStatistics = { navController.navigate(NavRoutes.SETTINGS_PRIVACY_USAGE) },
 )
 
 /** Maps a settings category id to its sub-screen route. */

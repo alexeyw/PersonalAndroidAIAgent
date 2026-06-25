@@ -6,6 +6,7 @@ import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.repositories.PipelineRunRepository
+import app.knotwork.android.domain.repositories.UsageTelemetryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -40,8 +41,10 @@ import javax.inject.Singleton
  * never be mistaken for an orphan of a dead process.
  */
 @Singleton
-class PipelineRunRepositoryImpl @Inject constructor(private val pipelineRunDao: PipelineRunDao) :
-    PipelineRunRepository {
+class PipelineRunRepositoryImpl @Inject constructor(
+    private val pipelineRunDao: PipelineRunDao,
+    private val usageTelemetry: UsageTelemetryRepository,
+) : PipelineRunRepository {
 
     /**
      * Ids of runs created by the current process. Membership means the run's
@@ -114,6 +117,25 @@ class PipelineRunRepositoryImpl @Inject constructor(private val pipelineRunDao: 
                 )
             }
         }
+        recordRunTelemetry(runId, status)
+    }
+
+    /**
+     * Records the terminal outcome of a **root** run into the privacy-preserving
+     * local usage statistics, best-effort.
+     *
+     * Gated on the opt-in flag before reading the run back, so a disabled
+     * statistics feature costs nothing here. Only top-level runs are counted
+     * (`parentRunId == null`): a nested sub-pipeline run is an implementation
+     * detail of one user-initiated run and must not inflate the tally. The
+     * telemetry repository absorbs its own storage failures, so this can never
+     * disturb the run it describes.
+     */
+    private suspend fun recordRunTelemetry(runId: String, status: PipelineRunStatus) {
+        if (!usageTelemetry.isEnabled()) return
+        val run = getRun(runId) ?: return
+        if (run.parentRunId != null) return
+        usageTelemetry.recordPipelineRunOutcome(run.pipelineId, status, System.currentTimeMillis())
     }
 
     override suspend fun getRun(runId: String): PipelineRun? = absorbing("getRun") {
