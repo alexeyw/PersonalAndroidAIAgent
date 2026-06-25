@@ -653,8 +653,9 @@ Tap **New trigger** (or a row to edit one). The editor has:
     background runs are batched, so the system may defer a run by a few
     minutes.
   - **Daily** — a time of day (24-hour).
-  - **Charging** — fires once each time the device starts charging, and
-    re-arms when you unplug.
+  - **Charging** — fires once **the moment you plug in** (and re-arms when
+    you unplug). This one is event-driven, so it runs right away rather
+    than waiting for a poll.
   - **Network** — fires on connecting; flip **Wi-Fi only** to ignore
     mobile data.
 - **Run this pipeline** — bind the pipeline to run. Choosing **None**
@@ -669,6 +670,17 @@ pipeline — tap to bind" with a disabled switch — a trigger fires nothing
 without a pipeline. Saving, enabling, disabling or deleting a trigger
 takes effect immediately, without waiting for the next app launch. If you
 delete the bound pipeline, the trigger is disabled automatically.
+
+### How soon a trigger fires
+
+**Charging** triggers are event-driven — plugging in fires the run within
+seconds, even if the app is closed. **Interval**, **Daily** and **Network**
+triggers are checked on a background poll the system runs roughly every
+**15 minutes** (the platform minimum), so they fire at the next check after
+their condition is met, not the instant it changes. When the device is idle
+or under aggressive battery optimisation the system may defer that poll
+further; keeping the app excluded from battery optimisation makes background
+runs more punctual.
 
 ### Results and notifications
 

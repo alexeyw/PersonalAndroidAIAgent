@@ -44,6 +44,11 @@ details.
   state explains the "trigger → background run → result in chat" model. Changes
   take effect immediately — creating, editing, enabling or deleting a trigger
   re-syncs the background runtime without waiting for the next launch.
+- **Charging triggers fire instantly.** A charging trigger now runs within
+  seconds of plugging in (and re-arms on unplug) via a manifest power-connection
+  receiver, instead of waiting for the next ~15-minute background poll. The poll
+  remains as a backstop, and interval/daily/network triggers stay poll-driven
+  (their broadcasts aren't manifest-deliverable).
 - **Trigger results and notifications.** A fired trigger now lands its run in a
   dedicated chat session named after the trigger; recurring fires accumulate in
   that same conversation instead of spawning a new chat each time, and a deleted
