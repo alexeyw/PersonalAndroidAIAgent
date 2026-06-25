@@ -30,7 +30,15 @@ jobs:
   check:
     name: ./gradlew check
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The `distribution` flavour dimension makes `check` compile and test two
+    # variants (`full` + `foss`) in one invocation. On a PR the Gradle cache is
+    # read-only and seeded from `main`, so the first run after a cache-key change
+    # (e.g. when the FOSS flavour first reaches `main`) builds the whole `foss`
+    # variant cold on the 2-core runner — which overran the previous 30-minute
+    # cap. The push-to-`main` job (same cap) must also finish cold to *write* the
+    # warm cache that makes subsequent PRs fast again, so the budget has to cover
+    # one cold doubled-flavour build, not the warm steady state.
+    timeout-minutes: 60
     steps:
       - name: Checkout
         uses: actions/checkout@v6
