@@ -15,6 +15,14 @@ details.
 
 ### Added
 
+- **FOSS / F-Droid build.** A new `foss` product flavour ships with **no
+  Firebase/Google dependency** anywhere in its graph, unblocking the F-Droid
+  channel. Crash reporting is now behind a flavour-agnostic `CrashReporter`
+  abstraction: the `full` flavour keeps Firebase Crashlytics, while `foss` binds
+  a no-op implementation and hides the crash-reporting consent toggle entirely.
+  The proprietary `google-services` / `firebase-crashlytics` Gradle plugins are
+  applied only for `full` builds, so `./gradlew assembleFossRelease` never loads
+  them. See [docs/release.md](docs/release.md) § *FOSS / F-Droid build*.
 - **Entry surfaces.** The agent now reaches outside its own screen. A **share
   target** accepts text or an image shared from any app and runs your chosen
   pipeline over it, landing the result in a new chat you are taken straight to.

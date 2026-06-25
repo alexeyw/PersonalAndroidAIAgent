@@ -28,19 +28,24 @@ Test coverage is measured by
 Room `*_Impl` DAOs, Compose previews and synthetic singletons, DI modules,
 `BuildConfig`) is excluded by the filter in `app/build.gradle.kts`.
 
+> The app has a `distribution` product-flavour dimension (`full` / `foss`), so
+> per-variant Gradle tasks carry the flavour segment (e.g. `koverVerifyFullDebug`,
+> `lintFullDebug`). Coverage is measured on the representative `full` variant;
+> both flavours share every measured source.
+
 Run locally:
 
 ```bash
-./gradlew :app:koverHtmlReportDebug   # HTML report — drill-down per package/file
-./gradlew :app:koverXmlReportDebug    # XML report — for CI parsers
-./gradlew :app:koverLog               # console one-liner: line coverage %
+./gradlew :app:koverHtmlReportFullDebug   # HTML report — drill-down per package/file
+./gradlew :app:koverXmlReportFullDebug    # XML report — for CI parsers
+./gradlew :app:koverLogFullDebug          # console one-liner: line coverage %
 ```
 
 Report locations:
 
-- `app/build/reports/kover/htmlDebug/index.html` — primary visual entry
+- `app/build/reports/kover/htmlFullDebug/index.html` — primary visual entry
   point.
-- `app/build/reports/kover/reportDebug.xml` — JaCoCo-compatible XML.
+- `app/build/reports/kover/reportFullDebug.xml` — JaCoCo-compatible XML.
 
 The current baseline numbers and the rationale behind every exclusion are in
 [`coverage-baseline.md`](coverage-baseline.md).
@@ -140,9 +145,10 @@ All tests, static analysis and coverage must pass via:
 ```
 
 This is the same task that CI runs on every pull request. It executes
-detekt (including the coroutine-cancellation gate, `detektDebug`), ktlint,
-Android lint, the unit-test suite, and `koverVerifyDebug`.
-Lint must pass with no new warnings.
+detekt (including the coroutine-cancellation gate, `detektFullDebug` +
+`detektFossDebug`), ktlint, Android lint, the unit-test suite for both
+flavours (`testFullDebugUnitTest` + `testFossDebugUnitTest`), and
+`koverVerifyFullDebug`. Lint must pass with no new warnings.
 
 ## What the automated gate does NOT cover
 
@@ -167,8 +173,8 @@ The areas below are **not** exercised by CI, and why:
   the AppFunctions end-to-end test) is neither run **nor even compiled**
   by `./gradlew check`. A change can break the instrumented-test build and
   CI stays green — compile them locally with
-  `./gradlew :app:compileDebugAndroidTestKotlin` and run them with
-  `./gradlew connectedDebugAndroidTest` on a connected device.
+  `./gradlew :app:compileFullDebugAndroidTestKotlin` and run them with
+  `./gradlew connectedFullDebugAndroidTest` on a connected device.
 - **Real TalkBack navigation.** `TalkBackHappyPathsTest` (in the
   `:catalog` test source set) only asserts a structural pre-condition:
   every surface on the ratified happy paths publishes focusable

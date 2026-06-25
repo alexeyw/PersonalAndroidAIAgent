@@ -305,6 +305,10 @@ private fun pipelineBindingLabel(uiState: SettingsUiState, pipelineId: String?):
 @Composable
 internal fun buildPrivacyViewState(uiState: SettingsUiState): PrivacySettingsViewState = PrivacySettingsViewState(
     crashReportingEnabled = uiState.crashReportingEnabled,
+    // Hidden in the FOSS / F-Droid build, which ships no crash collector. The
+    // flavour-specific `BuildConfig.CRASH_REPORTING_AVAILABLE` is `true` for the
+    // full distribution and `false` for `foss`.
+    crashReportingAvailable = BuildConfig.CRASH_REPORTING_AVAILABLE,
     advancedSliders = listOf(
         SettingSliderRow(
             id = SLIDER_PRIVACY_RETENTION_RUNS,

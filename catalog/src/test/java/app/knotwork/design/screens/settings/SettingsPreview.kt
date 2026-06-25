@@ -188,6 +188,13 @@ internal object SettingsPreview {
         ),
     )
 
+    /**
+     * Privacy state for the FOSS distribution: the crash-reporting consent row is
+     * hidden (`crashReportingAvailable = false`), leaving only the Advanced
+     * retention sliders and a Basic row count of zero.
+     */
+    fun privacyFossHidden(): PrivacySettingsViewState = privacy().copy(crashReportingAvailable = false)
+
     // ─── About ───────────────────────────────────────────────────────────────
 
     fun about(): AboutSettingsViewState = AboutSettingsViewState(

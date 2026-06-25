@@ -968,6 +968,33 @@ A refused tool call (path escape, quota exceeded, non-allowlisted host,
 stored-key leak) never crashes the run: it maps to a `ToolResult.Error` that
 lands in the observation log, and the pipeline keeps executing.
 
+### 4.6. Crash reporting and distribution flavours
+
+Crash reporting sits behind the domain port `CrashReportingRepository`
+(`setEnabled` / `recordException` / `setCustomKey`), so the rest of the app —
+`App`, `GraphExecutionEngine`, the Settings privacy delegate, the
+`CrashlyticsTimberTree` log sink — depends only on the flavour-agnostic
+interface and never imports the Firebase SDK.
+
+The app declares a `distribution` product-flavour dimension with two flavours,
+and the crash-reporting implementation is the **only** behavioural difference
+between them:
+
+| Flavour | `CrashReportingRepository` impl | Firebase on classpath | Channel  |
+|---------|---------------------------------|-----------------------|----------|
+| `full`  | `FirebaseCrashReportingRepositoryImpl` (`src/full`) | yes (`fullImplementation`) | Play / direct APK |
+| `foss`  | `NoOpCrashReportingRepository` (`src/foss`) — records nothing | **none** | F-Droid |
+
+Each flavour source set ships its own `di/CrashReportingModule` (same FQN,
+exactly one compiled per build) that binds the interface to the flavour's impl;
+the `full` module also provides the `FirebaseCrashlytics` / `FirebaseAnalytics`
+singletons. The shared `main` graph contains no Firebase binding at all — a
+Konsist guard (`FirebaseIsolationKonsistTest`) fails the build if any `main`
+source imports `com.google.firebase.*`. The `foss` build additionally hides the
+in-app crash-reporting consent toggle via `BuildConfig.CRASH_REPORTING_AVAILABLE`.
+Build-time mechanics (conditional Google plugins, F-Droid build) live in
+[`release.md`](release.md) § *FOSS / F-Droid build*.
+
 ---
 
 ## 5. Persistence

@@ -110,6 +110,11 @@ class SettingsCategorySnapshotTest {
     }
 
     @Test
+    fun privacy_foss_hidden_light() = snapshot("privacy_foss_hidden", dark = false) {
+        PrivacySettingsContent(state = SettingsPreview.privacyFossHidden(), advancedExpanded = true)
+    }
+
+    @Test
     fun about_advanced_light() = snapshot("about_advanced", dark = false) {
         AboutSettingsContent(state = SettingsPreview.about(), advancedExpanded = true)
     }

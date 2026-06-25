@@ -272,8 +272,16 @@ data class BackgroundSettingsViewState(
  *
  * @property crashReportingEnabled Crash-reporting toggle (Basic).
  * @property advancedSliders Trace-retention sliders (runs, age) (Advanced).
+ * @property crashReportingAvailable Whether the build has a live crash collector
+ *   behind the consent toggle. `false` for the FOSS / F-Droid distribution,
+ *   which ships no Firebase and hides the toggle entirely. Defaults to `true`
+ *   so existing previews and the full distribution render the row unchanged.
  */
-data class PrivacySettingsViewState(val crashReportingEnabled: Boolean, val advancedSliders: List<SettingSliderRow>)
+data class PrivacySettingsViewState(
+    val crashReportingEnabled: Boolean,
+    val advancedSliders: List<SettingSliderRow>,
+    val crashReportingAvailable: Boolean = true,
+)
 
 // ─── About ───────────────────────────────────────────────────────────────────
 

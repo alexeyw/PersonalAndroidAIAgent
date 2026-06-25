@@ -394,10 +394,15 @@ The threat model does not attempt to defend against:
 
 ## What Is Collected (Crash Reporting)
 
-Crash reporting is **opt-in and disabled by default**. The following controls
-apply:
+Crash reporting is **opt-in and disabled by default** — and entirely absent
+from the FOSS build:
 
-- The `AndroidManifest.xml` sets both
+- **The `foss` (F-Droid) build has no crash reporting at all.** It ships no
+  Firebase/Google dependency, binds a no-op crash reporter that records and
+  transmits nothing, and hides the consent toggle. The controls below apply to
+  the `full` distribution only. See [docs/release.md](docs/release.md) §
+  *FOSS / F-Droid build*.
+- The `full` flavour's `AndroidManifest.xml` overlay sets both
   `firebase_crashlytics_collection_enabled` and
   `firebase_analytics_collection_enabled` to `false`, which disables Firebase
   auto-collection at process start.
