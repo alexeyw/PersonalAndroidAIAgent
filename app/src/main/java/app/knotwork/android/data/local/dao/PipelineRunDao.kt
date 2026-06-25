@@ -87,6 +87,9 @@ interface PipelineRunDao {
      * @param finishedAt Epoch millis of the terminal transition.
      * @param errorMessage Failure / interruption reason, or `null`.
      * @param terminalStatuses Status names that must not be overwritten.
+     * @return The number of rows actually transitioned — `1` on a real
+     *   terminal transition, `0` when the run was already terminal (the
+     *   idempotent no-op case). Lets callers act only on a genuine transition.
      */
     @Query(
         "UPDATE pipeline_runs SET status = :status, finishedAt = :finishedAt, " +
@@ -99,7 +102,7 @@ interface PipelineRunDao {
         finishedAt: Long,
         errorMessage: String?,
         terminalStatuses: List<String>,
-    )
+    ): Int
 
     /**
      * Returns the run with [runId], or `null` when no such row exists. Backs

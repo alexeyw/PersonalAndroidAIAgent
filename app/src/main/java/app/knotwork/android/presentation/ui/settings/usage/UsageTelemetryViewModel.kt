@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -57,7 +58,14 @@ class UsageTelemetryViewModel @Inject constructor(
             summary = summary,
             pipelineNames = pipelines.associate { it.id to it.name },
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS), UsageTelemetryUiState.LOADING)
+    }
+        // A repository read error must not strand the screen on the LOADING
+        // spinner: surface a settled, empty state instead.
+        .catch { e ->
+            Timber.e(e, "Usage-statistics state read failed; showing empty state")
+            emit(UsageTelemetryUiState.LOADING.copy(loading = false))
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(SUBSCRIPTION_TIMEOUT_MS), UsageTelemetryUiState.LOADING)
 
     private val _events = MutableSharedFlow<UsageTelemetryEvent>(extraBufferCapacity = 1)
 

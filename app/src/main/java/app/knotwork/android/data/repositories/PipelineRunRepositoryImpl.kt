@@ -106,7 +106,7 @@ class PipelineRunRepositoryImpl @Inject constructor(
     override suspend fun finishRun(runId: String, status: PipelineRunStatus, errorMessage: String?) {
         // Caller contract violation, not a storage failure — never absorbed.
         require(status.isTerminal) { "finishRun requires a terminal status, got $status" }
-        absorbing("finishRun") {
+        val rowsTransitioned = absorbing("finishRun") {
             withContext(Dispatchers.IO) {
                 pipelineRunDao.finishRun(
                     runId = runId,
@@ -116,8 +116,11 @@ class PipelineRunRepositoryImpl @Inject constructor(
                     terminalStatuses = TERMINAL_STATUS_NAMES,
                 )
             }
-        }
-        recordRunTelemetry(runId, status)
+        } ?: 0
+        // Only a genuine terminal transition feeds telemetry: a duplicate /
+        // racing finishRun on an already-terminal run is a DB no-op (0 rows) and
+        // must not double-count the run in the usage statistics.
+        if (rowsTransitioned > 0) recordRunTelemetry(runId, status)
     }
 
     /**

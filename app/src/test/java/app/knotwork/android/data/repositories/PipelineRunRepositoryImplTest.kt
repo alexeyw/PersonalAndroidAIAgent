@@ -532,6 +532,7 @@ class PipelineRunRepositoryImplTest {
     @Test
     fun `given telemetry enabled when a root run finishes then its outcome is recorded`() = runTest {
         coEvery { usageTelemetry.isEnabled() } returns true
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
         coEvery { pipelineRunDao.getRun("run-1") } returns
             sampleEntity.copy(id = "run-1", pipelineId = "pipe-1", parentRunId = null)
 
@@ -545,6 +546,7 @@ class PipelineRunRepositoryImplTest {
     @Test
     fun `given a nested sub-pipeline run finishes then it is not recorded`() = runTest {
         coEvery { usageTelemetry.isEnabled() } returns true
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
         coEvery { pipelineRunDao.getRun("child-1") } returns
             sampleEntity.copy(id = "child-1", pipelineId = "pipe-1", parentRunId = "root-1")
 
@@ -554,8 +556,21 @@ class PipelineRunRepositoryImplTest {
     }
 
     @Test
+    fun `given a duplicate finishRun that transitions no row then telemetry is not recorded`() = runTest {
+        coEvery { usageTelemetry.isEnabled() } returns true
+        // The run is already terminal: the guarded UPDATE matches no row.
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 0
+
+        repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
+
+        coVerify(exactly = 0) { pipelineRunDao.getRun(any()) }
+        coVerify(exactly = 0) { usageTelemetry.recordPipelineRunOutcome(any(), any(), any()) }
+    }
+
+    @Test
     fun `given telemetry disabled when a run finishes then the run is not read back for telemetry`() = runTest {
         // isEnabled() is stubbed false in setup; the run should never be re-read.
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
         repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
 
         coVerify(exactly = 0) { pipelineRunDao.getRun(any()) }

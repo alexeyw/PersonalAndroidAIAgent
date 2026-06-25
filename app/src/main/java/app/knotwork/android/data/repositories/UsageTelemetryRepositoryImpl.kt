@@ -10,10 +10,10 @@ import app.knotwork.android.domain.models.PipelineRunTally
 import app.knotwork.android.domain.models.UsageTelemetrySummary
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.UsageTelemetryRepository
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
@@ -36,9 +36,10 @@ import javax.inject.Singleton
  * built around (enforced structurally by `UsageTelemetryNoNetworkKonsistTest`).
  *
  * **Best-effort contract.** Recording absorbs storage failures (logged, no-op)
- * so it can never take down the run or trigger it observes; `CancellationException`
- * is always re-thrown. Reads degrade to [UsageTelemetrySummary.EMPTY] only via
- * the DAO's own empty results — a malformed counter row is skipped, not fatal.
+ * via the shared [absorbingStoreFailure] wrapper, so it can never take down the
+ * run or trigger it observes; `CancellationException` is always re-thrown. Reads
+ * degrade to [UsageTelemetrySummary.EMPTY] on any failure — a malformed row, a
+ * DAO/SQLCipher error — rather than surfacing the exception to the screen.
  *
  * @property dao The telemetry DAO.
  * @property settingsRepository Source of the [SettingsRepository.usageTelemetryEnabled]
@@ -75,35 +76,38 @@ class UsageTelemetryRepositoryImpl internal constructor(
         get() = combine(
             dao.observeCounters(),
             dao.observeActiveDayStats(),
-        ) { counters, dayStats -> aggregate(counters, dayStats) }.flowOn(dispatcher)
+        ) { counters, dayStats -> aggregate(counters, dayStats) }
+            // Degrade to EMPTY on a DAO/SQLCipher read error rather than letting
+            // the exception cancel the screen's collector (best-effort read).
+            .catch { e ->
+                Timber.tag(TAG).w(e, "Usage-telemetry read failed; emitting empty summary.")
+                emit(UsageTelemetrySummary.EMPTY)
+            }
+            .flowOn(dispatcher)
 
-    override suspend fun isEnabled(): Boolean = try {
-        settingsRepository.usageTelemetryEnabled.first()
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        Timber.tag(TAG).w(e, "Failed to read the usage-telemetry opt-in flag; treating as disabled.")
-        false
-    }
+    override suspend fun isEnabled(): Boolean =
+        absorbingStoreFailure({ "Failed to read the usage-telemetry opt-in flag; treating as disabled" }) {
+            settingsRepository.usageTelemetryEnabled.first()
+        } ?: false
 
     override suspend fun recordPipelineRunOutcome(pipelineId: String?, status: PipelineRunStatus, atMillis: Long) {
         if (!status.isTerminal) return
         if (!isEnabled()) return
         val pipelineKey = pipelineId ?: UsageTelemetryCategories.NULL_PIPELINE_KEY
-        absorbing("recordPipelineRunOutcome") {
+        absorbingStoreFailure({ "Usage-telemetry recordPipelineRunOutcome failed; ignored" }) {
             withContext(dispatcher) { dao.recordRun(pipelineKey, status.name, localDay(atMillis)) }
         }
     }
 
     override suspend fun recordTriggerFired(kind: String, atMillis: Long) {
         if (!isEnabled()) return
-        absorbing("recordTriggerFired") {
+        absorbingStoreFailure({ "Usage-telemetry recordTriggerFired failed; ignored" }) {
             withContext(dispatcher) { dao.recordTriggerFire(kind, localDay(atMillis)) }
         }
     }
 
     override suspend fun reset() {
-        absorbing("reset") {
+        absorbingStoreFailure({ "Usage-telemetry reset failed; ignored" }) {
             withContext(dispatcher) { dao.clearAll() }
         }
     }
@@ -144,20 +148,6 @@ class UsageTelemetryRepositoryImpl internal constructor(
     private fun localDay(atMillis: Long): String {
         val zone = clockProvider().zone
         return Instant.ofEpochMilli(atMillis).atZone(zone).toLocalDate().format(DateTimeFormatter.ISO_LOCAL_DATE)
-    }
-
-    /**
-     * Runs [block], absorbing any non-cancellation failure (logged, no-op) so a
-     * telemetry write can never disturb the run/trigger it observes.
-     */
-    private suspend inline fun absorbing(operation: String, block: suspend () -> Unit) {
-        try {
-            block()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            Timber.tag(TAG).w(e, "Usage-telemetry %s failed; ignored.", operation)
-        }
     }
 
     private companion object {
