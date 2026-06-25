@@ -1586,7 +1586,11 @@ Advanced:
 - **Send anonymous crash reports** *(Basic)* — forwards stack traces + device
   meta + active pipeline / model identifiers to Firebase Crashlytics. Off by
   default; debug builds never report. Full policy in
-  [SECURITY.md](../SECURITY.md).
+  [SECURITY.md](../SECURITY.md). **This toggle exists only on the standard
+  build.** The **F-Droid / FOSS build** ships with no crash-reporting
+  dependency at all — it collects and transmits nothing, and the toggle is
+  absent — so which build you installed decides whether this control is even
+  present. The rest of the app is identical between builds.
 - **Keep run history per chat** *(Advanced)* (5–100, default 20) — how many
   most-recent pipeline runs each conversation keeps. Older finished runs and
   their traces are deleted by the daily maintenance pass (see

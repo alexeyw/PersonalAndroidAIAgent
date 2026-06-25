@@ -500,6 +500,23 @@ details.
   events read in the console. No behaviour change — documentation catching up
   to the shipped reliability contour.
 
+- **Automation & background-execution surfaces documented and tested
+  end-to-end.** [`SECURITY.md`](SECURITY.md) gains an *Automation triggers and
+  entry surfaces* section (low-sensitivity conditions only; NotificationListener
+  / location / SMS deliberately deferred; inert-until-bound, auto-disable on
+  pipeline delete, and the unchanged human-in-the-loop gate as the mitigations
+  for unattended background execution) and a *Local usage statistics* note (the
+  on-device-only guarantee and its build-time network guard).
+  [`docs/architecture.md`](docs/architecture.md) gains a *Triggers and entry
+  surfaces → background runs* section with a flow diagram, and the background-work
+  component table now lists the trigger watch / charging-sweep workers and the
+  trigger scheduler. [`docs/user-guide.md`](docs/user-guide.md) notes that crash
+  reporting is absent from the F-Droid / FOSS build. A new Robolectric
+  integration test drives a charging trigger through firing → background run →
+  notification → result in the bound chat, including the background
+  HITL-approve-from-notification path. No behaviour change — documentation and
+  test coverage catching up to the shipped automation surface.
+
 - **Bump `dev.detekt` `2.0.0-alpha.4` → `2.0.0-alpha.5`** to clear the
   `NewerVersionAvailable` lint gate. Build tooling only (not shipped in the
   APK); no rule-set changes affecting the codebase.
