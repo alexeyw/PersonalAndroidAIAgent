@@ -85,9 +85,9 @@ plugins {
     // The `google-services` and `firebase-crashlytics` Gradle plugins are NOT
     // applied here unconditionally. They are proprietary and pull Google's
     // build-time tooling into the graph, which the F-Droid channel rejects.
-    // Instead they are applied further down only when a `full`-flavour task is
-    // requested (see the `fullVariantRequested` guard after the `android {}`
-    // block), so an `assembleFossRelease` build never loads them.
+    // Instead they are applied further down for every build EXCEPT a foss-only
+    // one (see the `fossOnlyBuild` guard after the `android {}` block), so an
+    // `assembleFossRelease` build never loads them.
 }
 
 // The androidx.appfunctions KSP processor generates the per-class
@@ -296,28 +296,31 @@ android {
     }
 }
 
-// Apply the proprietary Google build plugins for every build EXCEPT an
-// exclusively-`foss` one. `google-services` (and the `firebase-crashlytics`
-// plugin it backs) is what makes the Firebase SDK initialise cleanly — it
-// generates the `google_app_id` resource from `google-services.json`. The
-// `foss` flavour ships no Firebase SDK, so it needs none of this; the F-Droid
-// build (`./gradlew assembleFossRelease`, every requested task `Foss`-scoped)
-// skips the plugins entirely and produces an APK with zero Google build-time
-// tooling in its graph.
+// Apply the proprietary Google build plugins for every build EXCEPT one that
+// builds the `foss` flavour and no `full` flavour. `google-services` (and the
+// `firebase-crashlytics` plugin it backs) is what makes the Firebase SDK
+// initialise cleanly — it generates the `google_app_id` resource from
+// `google-services.json`. The `foss` flavour ships no Firebase SDK, so an
+// F-Droid build (`./gradlew clean assembleFossRelease`) skips the plugins
+// entirely and produces an APK with zero Google build-time tooling in its graph.
 //
-// The plugins MUST stay applied for mixed invocations such as `./gradlew check`
-// (which builds and Robolectric-tests the `full` variant): without the
-// generated `google_app_id`, Firebase's startup provider throws
-// `IllegalStateException: Default FirebaseApp is not initialized` under
-// Robolectric and the full-variant unit tests fail. Hence the guard skips the
-// plugins only when *every* requested task targets `foss`.
+// The condition deliberately keys on the presence of a `Foss` task AND the
+// absence of any `Full` task, NOT "every requested task is foss". The naive
+// "all foss" form fails OPEN on the canonical F-Droid recipe
+// `clean assembleFossRelease`: `clean` is not a `Foss` task, so "all foss" is
+// false and the proprietary plugins would be (wrongly) applied to the foss
+// build. With `any-foss && no-full`, neutral tasks like `clean` no longer flip
+// the decision, while any invocation that also builds `full` (e.g. `check`,
+// `assemble`, `assembleFullRelease`) keeps the plugins so Firebase's startup
+// provider finds `google_app_id` and does not throw under Robolectric.
 //
 // The `foss` flavour's freedom from the `com.google.firebase` runtime classpath
 // is guaranteed independently by the flavour-scoped `fullImplementation(...)`
-// dependencies, not by this guard.
+// dependencies, not by this guard — this guard only keeps the proprietary
+// *build-time* plugins out of a pure F-Droid build.
 val requestedTaskNames = gradle.startParameter.taskNames
-val fossOnlyBuild = requestedTaskNames.isNotEmpty() &&
-    requestedTaskNames.all { taskName -> taskName.contains("Foss", ignoreCase = true) }
+val fossOnlyBuild = requestedTaskNames.any { it.contains("Foss", ignoreCase = true) } &&
+    requestedTaskNames.none { it.contains("Full", ignoreCase = true) }
 if (!fossOnlyBuild) {
     apply(plugin = libs.plugins.google.services.get().pluginId)
     apply(plugin = libs.plugins.firebase.crashlytics.get().pluginId)
@@ -595,6 +598,13 @@ kover {
 // target because both flavours share every measured source — they differ only
 // in the crash-reporting impl, and the `foss` no-op carries no logic to cover.
 tasks.named("check") { dependsOn("koverVerifyFullDebug") }
+
+// AGP wires only the *default* variant's lint (`lintFullDebug`) into `check`.
+// With the `distribution` flavour dimension that leaves the `foss`-only sources
+// (the no-op crash reporter + its DI module + the absence of the Firebase
+// manifest overlay) un-linted. Add `lintFossDebug` so `check` lints BOTH
+// flavours — matching the CI artifact upload and the "both flavours gated" claim.
+tasks.named("check") { dependsOn("lintFossDebug") }
 
 // Enforces the "no internal FQN" rule for the
 // `app.knotwork.android.*` package. References like
@@ -894,9 +904,17 @@ dependencies {
 //     CLI run never installs the probe and the e2e test times out with an empty
 //     discovery list.
 // The `distribution` flavour dimension adds the flavour segment to the
-// androidTest task names; the e2e instrumented suite runs against the default
-// `full` flavour, so hook the probe install onto the `full`-variant tasks.
+// androidTest task names. Both flavours share all `main` sources, so the e2e
+// instrumented suite is meaningful on either; hook the probe install onto the
+// install/connected androidTest tasks of BOTH flavours so
+// `connectedFossDebugAndroidTest` (used when validating the F-Droid build) also
+// installs the probe instead of timing out on an empty discovery list.
 val toolsProbeInstall = ":tools-probe:installDebug"
-tasks.matching {
-    it.name == "installFullDebugAndroidTest" || it.name == "connectedFullDebugAndroidTest"
-}.configureEach { dependsOn(toolsProbeInstall) }
+val probeInstallHostTasks = setOf(
+    "installFullDebugAndroidTest",
+    "connectedFullDebugAndroidTest",
+    "installFossDebugAndroidTest",
+    "connectedFossDebugAndroidTest",
+)
+tasks.matching { it.name in probeInstallHostTasks }
+    .configureEach { dependsOn(toolsProbeInstall) }

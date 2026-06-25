@@ -105,7 +105,13 @@ class App :
         scheduledTaskNotifier.registerChannel()
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
-        } else {
+        } else if (BuildConfig.CRASH_REPORTING_AVAILABLE) {
+            // Only the `full` distribution has a live crash collector behind the
+            // opt-in. The `foss` build binds a no-op `CrashReportingRepository`,
+            // so wiring the observer there would needlessly plant a Timber tree
+            // that dispatches every WARN/ERROR log into a no-op for the whole
+            // process lifetime — skip it entirely (a release build plants no
+            // tree until the user opts in anyway).
             observeCrashReportingOptIn()
         }
     }
