@@ -218,22 +218,27 @@ class AgentWorker @AssistedInject constructor(
         RunOrigin.entries.firstOrNull { it.name == raw } ?: RunOrigin.SCHEDULER
 
     /**
-     * Resolves the chat session the run lands in. The requested session is
-     * used when it still exists; otherwise (deleted before the task fired, or
-     * legacy work without the key) a fresh session is created, auto-named from
-     * the truncated task prompt with an explicit scheduled-source mark.
+     * Resolves the chat session the run lands in. The requested session is used
+     * when it still exists; otherwise a session is created, auto-named from the
+     * truncated task prompt with an explicit scheduled-source mark.
+     *
+     * When a session id was explicitly requested but its row is gone (deleted
+     * between scheduling and the constraint-deferred run firing), the
+     * replacement is created **under that same id** rather than a random one, so
+     * any binding or already-posted deep-link that points at the requested id
+     * stays valid and future runs keep accumulating in one conversation. A
+     * legacy task with no requested id falls back to a fresh UUID.
      */
     private suspend fun resolveSession(requestedSessionId: String?, prompt: String): String {
-        if (requestedSessionId != null && chatRepository.getSessionById(requestedSessionId) != null) {
+        if (requestedSessionId != null && chatRepository.sessionExists(requestedSessionId)) {
             return requestedSessionId
         }
-        val session = ChatSession(
-            id = UUID.randomUUID().toString(),
+        val session = ChatSession.create(
             name = applicationContext.getString(
                 R.string.scheduled_session_name,
                 prompt.take(SESSION_NAME_PROMPT_LENGTH),
             ),
-            updatedAt = System.currentTimeMillis(),
+            id = requestedSessionId ?: UUID.randomUUID().toString(),
         )
         chatRepository.saveSession(session)
         Timber.d("AgentWorker created session %s for orphaned scheduled task.", session.id)
@@ -260,7 +265,7 @@ class AgentWorker @AssistedInject constructor(
     private suspend fun announceOutcome(run: PipelineRun) {
         when (run.status) {
             PipelineRunStatus.COMPLETED ->
-                scheduledTaskNotifier.notifyCompleted(run.sessionId, finalAnswerPreview(run.sessionId))
+                scheduledTaskNotifier.notifyCompleted(run.sessionId, finalAnswerPreview(run))
             PipelineRunStatus.FAILED ->
                 scheduledTaskNotifier.notifyFailed(
                     run.sessionId,
@@ -271,12 +276,22 @@ class AgentWorker @AssistedInject constructor(
     }
 
     /**
-     * Returns the first non-blank line of the final agent answer, used as the
-     * completion-notification body.
+     * Returns the first non-blank line of [run]'s final agent answer, used as
+     * the completion-notification body.
+     *
+     * Scoped to messages no later than the run's [PipelineRun.finishedAt]: a
+     * trigger's recurring fires now share one bound session, so a *later* run
+     * may already have appended its own final answer by the time this preview is
+     * built. Bounding by the finish time picks this run's answer rather than a
+     * subsequent run's. Falls back to the latest final answer when the finish
+     * time is unknown.
      */
-    private suspend fun finalAnswerPreview(sessionId: String): String {
-        val finalMessage = chatRepository.getMessagesForSession(sessionId).first()
-            .lastOrNull { it.role == Role.AGENT && it.isFinal }
+    private suspend fun finalAnswerPreview(run: PipelineRun): String {
+        val upperBound = run.finishedAt
+        val finalMessage = chatRepository.getMessagesForSession(run.sessionId).first()
+            .lastOrNull {
+                it.role == Role.AGENT && it.isFinal && (upperBound == null || it.timestamp <= upperBound)
+            }
         return finalMessage?.content
             ?.lineSequence()
             ?.firstOrNull { it.isNotBlank() }

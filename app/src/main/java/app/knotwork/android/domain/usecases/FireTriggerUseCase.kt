@@ -1,13 +1,18 @@
 package app.knotwork.android.domain.usecases
 
+import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.Trigger
+import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.NetworkStateRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PowerStateRepository
 import app.knotwork.android.domain.repositories.TriggerRepository
 import app.knotwork.android.domain.services.ScheduledTaskConstraints
+import app.knotwork.android.domain.services.ScheduledTaskNotifier
 import app.knotwork.android.domain.services.TaskScheduler
+import app.knotwork.android.domain.services.TriggerScheduler
+import kotlinx.coroutines.CancellationException
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -72,16 +77,32 @@ sealed interface TriggerFireOutcome {
  *
  * On [TriggerFiringDecision.Fire] it does **not** run inference itself — it
  * delegates to the existing [TaskScheduler.scheduleOneTime] path so the run goes
- * through `AgentWorker` exactly like a scheduled task (session resolution,
- * foreground promotion, completion notification and engine unload all reused),
- * attributed to [RunOrigin.TRIGGER].
+ * through `AgentWorker` exactly like a scheduled task (foreground promotion,
+ * completion notification and engine unload all reused), attributed to
+ * [RunOrigin.TRIGGER].
+ *
+ * **Bound session.** Unlike a scheduled task — which inherits the chat session
+ * it was scheduled from — a trigger has no originating conversation, so it
+ * lazily owns one. On the first fire (or after the user deletes the previously
+ * bound session) it mints a chat session named after the trigger and threads it
+ * to the scheduler, so the results of recurring fires accumulate in one
+ * conversation instead of spawning a fresh session each time. The binding
+ * ([TriggerRepository.setSessionId]) is persisted only **after** the enqueue
+ * succeeds, so a failed fire never strands the trigger on an empty session. A
+ * "Trigger fired" notification (best-effort) deep-links the user straight into
+ * that session.
  *
  * Safety behaviours enforced here:
  * - **Idempotency.** The fire-state writes ([TriggerRepository.markFired] and,
  *   for event triggers, the disarm) happen **before** the irreversible enqueue,
  *   so a process death or DB error on the worker retry path re-evaluates against
  *   the recorded state and cannot enqueue a duplicate run (the cost of the rare
- *   failure is a *missed* run, not a doubled one).
+ *   failure is a *missed* run, not a doubled one). Session resolution happens
+ *   **before** those writes, so a failure to create the session re-evaluates and
+ *   fires fresh rather than burning the cycle; a freshly-minted session is rolled
+ *   back if the enqueue itself then fails. The "Trigger fired" notification is
+ *   posted best-effort so a notification failure cannot trigger a worker retry
+ *   (which, past the completed enqueue, would double-schedule the run).
  * - **Edge firing.** Event conditions (charging / network) fire once per
  *   transition into the satisfied state; the disarm here plus the
  *   [TriggerFiringDecision.ReArm] path implement that latch.
@@ -95,6 +116,9 @@ class FireTriggerUseCase @Inject constructor(
     private val networkStateRepository: NetworkStateRepository,
     private val evaluateTriggerFiring: EvaluateTriggerFiringUseCase,
     private val taskScheduler: TaskScheduler,
+    private val chatRepository: ChatRepository,
+    private val scheduledTaskNotifier: ScheduledTaskNotifier,
+    private val triggerScheduler: TriggerScheduler,
 ) {
 
     /**
@@ -126,6 +150,10 @@ class FireTriggerUseCase @Inject constructor(
 
             TriggerFiringDecision.ReArm -> {
                 triggerRepository.setArmed(triggerId, true)
+                // Re-arming means the event condition just dropped (e.g. unplugged).
+                // Re-register so the consumed charging one-shot watch is recreated,
+                // ready to fire instantly on the next charge edge.
+                triggerScheduler.register(trigger)
                 Timber.tag(TAG).d("Trigger %s re-armed.", triggerId)
                 TriggerFireOutcome.ReArmed
             }
@@ -150,6 +178,10 @@ class FireTriggerUseCase @Inject constructor(
             return TriggerFireOutcome.Disabled(decision.pipelineId)
         }
 
+        // Resolve the bound session before any suppression write: a failure to
+        // create it must re-evaluate and fire fresh, not burn the cycle.
+        val session = resolveBoundSession(trigger, nowMillis)
+
         // Record the suppression state first: if the enqueue or process dies
         // after this point, the next wake re-evaluates against the recorded
         // state and will not double-fire.
@@ -158,19 +190,97 @@ class FireTriggerUseCase @Inject constructor(
             triggerRepository.setArmed(trigger.id, false)
         }
 
-        taskScheduler.scheduleOneTime(
-            prompt = decision.prompt,
-            delayMinutes = 0,
-            sessionId = null,
-            constraints = ScheduledTaskConstraints(requiresBatteryNotLow = true),
-            pipelineId = decision.pipelineId,
-            origin = RunOrigin.TRIGGER,
-        )
-        Timber.tag(TAG).d("Trigger %s fired pipeline %s.", trigger.id, decision.pipelineId)
+        try {
+            taskScheduler.scheduleOneTime(
+                prompt = decision.prompt,
+                delayMinutes = 0,
+                sessionId = session.id,
+                constraints = ScheduledTaskConstraints(requiresBatteryNotLow = true),
+                pipelineId = decision.pipelineId,
+                origin = RunOrigin.TRIGGER,
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // The enqueue failed. Drop a freshly-minted session so a failed fire
+            // never leaves an empty orphan chat behind; the binding has not been
+            // persisted yet, so nothing dangles. Re-throw so the worker retries.
+            if (session.isNewlyCreated) chatRepository.deleteSession(session.id)
+            throw e
+        }
+
+        // Persist the binding only once the run is really enqueued, so a
+        // scheduling failure cannot strand a trigger pointing at a session that
+        // never received a run.
+        if (session.isNewlyCreated) triggerRepository.setSessionId(trigger.id, session.id)
+
+        notifyTriggerFired(session.id, trigger.name)
+        Timber.tag(TAG).d("Trigger %s fired pipeline %s into session %s.", trigger.id, decision.pipelineId, session.id)
         return TriggerFireOutcome.Fired(decision.pipelineId)
     }
 
+    /**
+     * Returns the chat session the trigger's run should land in: the persisted
+     * binding when its session still exists, otherwise a freshly-minted session
+     * named after the trigger. The caller persists the binding only after a
+     * successful enqueue (so a failed fire leaves nothing dangling) and re-mints
+     * here on the next fire if the user has deleted the bound session.
+     *
+     * The session carries no pipeline binding (`pipelineId = null`): it is a
+     * result log, so a manual follow-up the user types into it uses the
+     * application-default pipeline rather than a stale copy of whatever pipeline
+     * the trigger happened to run when the session was first created.
+     */
+    private suspend fun resolveBoundSession(trigger: Trigger, nowMillis: Long): ResolvedSession {
+        val bound = trigger.sessionId
+        if (bound != null && chatRepository.sessionExists(bound)) {
+            return ResolvedSession(id = bound, isNewlyCreated = false)
+        }
+        val session = ChatSession.create(name = sessionName(trigger), now = nowMillis)
+        chatRepository.saveSession(session)
+        Timber.tag(TAG).d("Trigger %s bound to new session %s.", trigger.id, session.id)
+        return ResolvedSession(id = session.id, isNewlyCreated = true)
+    }
+
+    /**
+     * Derives a non-blank session title from the trigger. The editor enforces a
+     * name, so the prompt / constant fallbacks are purely defensive against a
+     * raw persisted row read off the background path.
+     */
+    private fun sessionName(trigger: Trigger): String =
+        trigger.name.ifBlank { trigger.prompt.take(SESSION_NAME_FALLBACK_LENGTH) }.ifBlank { DEFAULT_SESSION_NAME }
+
+    /**
+     * Posts the "Trigger fired" notification best-effort: a notification failure
+     * must never propagate to the worker's blanket `catch -> Result.retry()`,
+     * which (past the already-completed enqueue) could re-fire and double-schedule
+     * the run. Mirrors the best-effort contract `AgentWorker` applies to its own
+     * outcome notifications.
+     */
+    private suspend fun notifyTriggerFired(sessionId: String, triggerName: String) {
+        try {
+            scheduledTaskNotifier.notifyTriggerFired(sessionId, triggerName)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.tag(TAG).w(e, "Failed to post the trigger-fired notification for session %s.", sessionId)
+        }
+    }
+
+    /**
+     * A resolved bound session plus whether this call created it (so the caller
+     * can persist the binding only on success and roll the session back on a
+     * scheduling failure).
+     */
+    private data class ResolvedSession(val id: String, val isNewlyCreated: Boolean)
+
     private companion object {
         const val TAG = "Trigger"
+
+        /** Max prompt characters used as a defensive session-name fallback. */
+        const val SESSION_NAME_FALLBACK_LENGTH = 40
+
+        /** Last-resort session title when both the trigger name and prompt are blank. */
+        const val DEFAULT_SESSION_NAME = "Trigger"
     }
 }

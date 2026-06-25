@@ -39,6 +39,7 @@ class TriggerRepositoryImplTest {
         armed = false,
         createdAt = 100L,
         lastFiredAt = 200L,
+        sessionId = "sess-1",
     )
     private val badEntity = goodEntity.copy(id = "t2", conditionJson = "garbage")
 
@@ -65,6 +66,7 @@ class TriggerRepositoryImplTest {
         assertEquals(false, trigger.armed)
         assertEquals(100L, trigger.createdAt)
         assertEquals(200L, trigger.lastFiredAt)
+        assertEquals("sess-1", trigger.sessionId)
     }
 
     @Test
@@ -106,6 +108,7 @@ class TriggerRepositoryImplTest {
             armed = false,
             createdAt = 5L,
             lastFiredAt = null,
+            sessionId = "sess-9",
         )
 
         repository.saveTrigger(trigger)
@@ -115,6 +118,7 @@ class TriggerRepositoryImplTest {
         assertEquals("pipe-9", captured.pipelineId)
         assertEquals(false, captured.enabled)
         assertEquals(false, captured.armed)
+        assertEquals("sess-9", captured.sessionId)
         assertEquals(TriggerCondition.Charging, TriggerConditionCodec.decode(captured.conditionJson))
     }
 
@@ -124,10 +128,12 @@ class TriggerRepositoryImplTest {
         repository.setEnabled("t1", false)
         repository.setArmed("t1", true)
         repository.markFired("t1", 999L)
+        repository.setSessionId("t1", "sess-2")
 
         coVerify(exactly = 1) { dao.deleteById("t1") }
         coVerify(exactly = 1) { dao.setEnabled("t1", false) }
         coVerify(exactly = 1) { dao.setArmed("t1", true) }
         coVerify(exactly = 1) { dao.markFired("t1", 999L) }
+        coVerify(exactly = 1) { dao.setSessionId("t1", "sess-2") }
     }
 }

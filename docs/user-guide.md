@@ -653,8 +653,9 @@ Tap **New trigger** (or a row to edit one). The editor has:
     background runs are batched, so the system may defer a run by a few
     minutes.
   - **Daily** — a time of day (24-hour).
-  - **Charging** — fires once each time the device starts charging, and
-    re-arms when you unplug.
+  - **Charging** — fires once **the moment you plug in** (and re-arms when
+    you unplug). This one is event-driven, so it runs right away rather
+    than waiting for a poll.
   - **Network** — fires on connecting; flip **Wi-Fi only** to ignore
     mobile data.
 - **Run this pipeline** — bind the pipeline to run. Choosing **None**
@@ -669,6 +670,39 @@ pipeline — tap to bind" with a disabled switch — a trigger fires nothing
 without a pipeline. Saving, enabling, disabling or deleting a trigger
 takes effect immediately, without waiting for the next app launch. If you
 delete the bound pipeline, the trigger is disabled automatically.
+
+### How soon a trigger fires
+
+**Charging** triggers are event-driven — plugging in fires the run within
+seconds, even if the app is closed. **Interval**, **Daily** and **Network**
+triggers are checked on a background poll the system runs roughly every
+**15 minutes** (the platform minimum), so they fire at the next check after
+their condition is met, not the instant it changes. When the device is idle
+or under aggressive battery optimisation the system may defer that poll
+further; keeping the app excluded from battery optimisation makes background
+runs more punctual.
+
+### Results and notifications
+
+Each trigger owns its **own chat session**, named after the trigger. The
+first time it fires it creates that chat, and every later run lands in the
+**same** conversation, so a recurring trigger keeps one running log instead
+of scattering a new chat each time. (If you delete that chat, the next fire
+quietly starts a fresh one.) The run streams its work and final answer into
+the session exactly as if you had typed the prompt yourself.
+
+While a run happens in the background you get up to three notifications,
+all on the **"Scheduled task results"** channel and gated by the same
+**Settings → Background & triggers** notifications toggle:
+
+- **Trigger fired** — when an automation starts a background run.
+- **Task completed** — with a preview of the final answer.
+- **Task failed** — with the reason.
+
+Tapping any of them deep-links straight into the trigger's chat. If a run
+pauses for approval of a sensitive or destructive tool, you get the usual
+**approval notification** with **Approve / Deny** actions, so you can let a
+background trigger run proceed (or stop it) without opening the app.
 
 This first wave covers only **low-sensitivity** conditions (time,
 charging, network) that need no dangerous permission; notification,

@@ -78,4 +78,14 @@ interface TriggerRepository {
      * @param firedAt Epoch-millis of the fire.
      */
     suspend fun markFired(id: String, firedAt: Long)
+
+    /**
+     * Binds the trigger to the chat session its background runs land in. Written
+     * lazily on the first fire (and again if the previously bound session was
+     * deleted), so recurring fires accumulate their results in one conversation.
+     *
+     * @param id The trigger id.
+     * @param sessionId The chat session id to bind.
+     */
+    suspend fun setSessionId(id: String, sessionId: String)
 }

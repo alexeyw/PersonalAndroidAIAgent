@@ -149,6 +149,7 @@
     <string name="notifications_scheduled_running_body">Agent is working in the background…</string>
     <string name="notifications_task_results_channel_name">Scheduled task results</string>
     <string name="notifications_task_results_channel_description">Outcome of scheduled background tasks.</string>
+    <string name="notifications_trigger_fired_title">Trigger fired</string>
     <string name="notifications_task_completed_title">Task completed</string>
     <string name="notifications_task_failed_title">Task failed</string>
     <string name="scheduled_session_name">Scheduled: %1$s</string>

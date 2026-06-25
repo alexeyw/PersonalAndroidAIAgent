@@ -69,7 +69,7 @@ import app.knotwork.android.data.local.models.TriggerEntity
         ModelPerformanceSampleEntity::class,
         TriggerEntity::class,
     ],
-    version = 45,
+    version = 46,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -1051,6 +1051,22 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS `index_triggers_enabled` ON `triggers` (`enabled`)",
                 )
+            }
+        }
+
+        /**
+         * Adds the `sessionId` column to the `triggers` table backing the bound
+         * chat session a trigger's background runs land in. Additive — the column
+         * is nullable with no default, so existing trigger rows keep `NULL` and
+         * lazily bind a session on their next fire.
+         *
+         * No foreign key: a trigger may outlive (or be reconfigured past) the
+         * bound session, which is detected at fire time and replaced rather than
+         * cascaded here.
+         */
+        val MIGRATION_45_46 = object : Migration(45, 46) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `triggers` ADD COLUMN `sessionId` TEXT")
             }
         }
     }

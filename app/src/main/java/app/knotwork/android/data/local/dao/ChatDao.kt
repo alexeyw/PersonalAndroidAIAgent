@@ -174,6 +174,17 @@ interface ChatDao {
     suspend fun getSessionById(id: String): ChatSessionEntity?
 
     /**
+     * Cheap existence probe for a session id that avoids materialising the row
+     * when callers only need a yes/no (e.g. the reuse-or-recreate decision on
+     * the background-run paths).
+     *
+     * @param id The ID of the session.
+     * @return `true` when a `chat_sessions` row with [id] exists.
+     */
+    @Query("SELECT EXISTS(SELECT 1 FROM chat_sessions WHERE id = :id)")
+    suspend fun sessionExists(id: String): Boolean
+
+    /**
      * Deletes **only** the `chat_sessions` row (its FK cascade reaches
      * `trace_steps`, but `chat_messages` has no FK onto sessions and is NOT
      * cascaded). This is a building block of [deleteSessionCompletely] and the

@@ -44,6 +44,22 @@ details.
   state explains the "trigger → background run → result in chat" model. Changes
   take effect immediately — creating, editing, enabling or deleting a trigger
   re-syncs the background runtime without waiting for the next launch.
+- **Charging triggers fire instantly.** A charging trigger now runs within
+  seconds of plugging in — even when the app is closed — via a
+  charging-constrained WorkManager job (`setRequiresCharging`), which the OS
+  wakes through JobScheduler, instead of waiting for the next ~15-minute
+  background poll. The poll remains as a backstop and re-arms the fast path on
+  unplug; interval/daily/network triggers stay poll-driven.
+- **Trigger results and notifications.** A fired trigger now lands its run in a
+  dedicated chat session named after the trigger; recurring fires accumulate in
+  that same conversation instead of spawning a new chat each time, and a deleted
+  session is re-created on the next fire. A **"Trigger fired"** notification
+  announces the start of a background run, alongside the existing **"Task
+  completed" / "Task failed"** outcome notifications (same channel and toggle, no
+  new surfaces) — each deep-links into the trigger's chat. Sensitive or
+  destructive tools inside a trigger run surface the usual background
+  **Approve / Deny** approval notification, so an unattended run can be settled
+  from the shade without opening the app.
 - **Search the settings.** The settings hub now has a search field. Typing
   filters every setting by name, description, owning category and synonyms (so
   `max` surfaces *Cap autonomous steps* via the synonym *max steps*), with the

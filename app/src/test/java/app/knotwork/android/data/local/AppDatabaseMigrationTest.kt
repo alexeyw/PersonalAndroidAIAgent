@@ -499,4 +499,30 @@ class AppDatabaseMigrationTest {
             index.contains("INDEX_TRIGGERS_ENABLED"),
         )
     }
+
+    @Test
+    fun `MIGRATION_45_46 targets versions 45 to 46`() {
+        val migration = AppDatabase.MIGRATION_45_46
+
+        assertEquals(45, migration.startVersion)
+        assertEquals(46, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_45_46 adds a nullable sessionId column to triggers`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val sqlSlot = slot<String>()
+
+        AppDatabase.MIGRATION_45_46.migrate(db)
+
+        verify(exactly = 1) { db.execSQL(capture(sqlSlot)) }
+        val sql = sqlSlot.captured.uppercase()
+        assertTrue(
+            "Expected ALTER triggers ADD sessionId, got: ${sqlSlot.captured}",
+            sql.contains("ALTER TABLE `TRIGGERS` ADD COLUMN `SESSIONID`"),
+        )
+        // Additive + nullable so existing trigger rows keep NULL and lazily bind
+        // a session on their next fire.
+        assertTrue("sessionId must be nullable (no NOT NULL): ${sqlSlot.captured}", !sql.contains("NOT NULL"))
+    }
 }

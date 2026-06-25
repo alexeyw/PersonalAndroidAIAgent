@@ -1,13 +1,14 @@
 package app.knotwork.android.domain.services
 
 /**
- * Posts user-facing notifications announcing the outcome of a scheduled
- * background run ("Task completed" / "Task failed"). Powers the runtime side
- * of the Settings → Notifications → "Scheduled task results" toggle.
+ * Posts user-facing notifications announcing background-run lifecycle events:
+ * a trigger firing ("Trigger fired"), and the run outcome ("Task completed" /
+ * "Task failed"). Powers the runtime side of the Settings → Notifications →
+ * "Scheduled task results" toggle.
  *
- * Without these notifications a scheduler-origin run that finishes while the
- * app is closed would succeed silently: the result lands in the bound chat
- * session, but nothing tells the user to look there. Each notification
+ * Without these notifications a scheduler- or trigger-origin run that finishes
+ * while the app is closed would succeed silently: the result lands in the bound
+ * chat session, but nothing tells the user to look there. Each notification
  * deep-links into the session so a tap opens the conversation with the
  * freshly landed messages.
  *
@@ -25,6 +26,19 @@ interface ScheduledTaskNotifier {
      * `App.onCreate`.
      */
     fun registerChannel()
+
+    /**
+     * Announces that an automation trigger has just fired and enqueued a
+     * background run, so the user knows an unattended run has started (it may be
+     * constraint-deferred or take a while). Posted on the same channel and with
+     * the same per-session notification id as the outcome notifications, so the
+     * later [notifyCompleted] / [notifyFailed] supersedes it rather than stacking.
+     *
+     * @param sessionId Chat session the trigger's run will land its result in;
+     *   the notification's tap action deep-links into this session.
+     * @param triggerName Human-readable trigger label, shown as the body.
+     */
+    suspend fun notifyTriggerFired(sessionId: String, triggerName: String)
 
     /**
      * Announces a successfully completed scheduled run.

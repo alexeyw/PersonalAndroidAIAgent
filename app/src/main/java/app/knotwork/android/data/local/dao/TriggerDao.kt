@@ -8,7 +8,7 @@ import app.knotwork.android.data.local.models.TriggerEntity
 import kotlinx.coroutines.flow.Flow
 
 /**
- * DAO for the `triggers` table (v45) backing user-defined automation triggers.
+ * DAO for the `triggers` table (v46) backing user-defined automation triggers.
  */
 @Dao
 interface TriggerDao {
@@ -83,4 +83,13 @@ interface TriggerDao {
      */
     @Query("UPDATE triggers SET lastFiredAt = :firedAt WHERE id = :id")
     suspend fun markFired(id: String, firedAt: Long)
+
+    /**
+     * Binds the trigger to the chat session its background runs land in.
+     *
+     * @param id The trigger id.
+     * @param sessionId The chat session id to bind.
+     */
+    @Query("UPDATE triggers SET sessionId = :sessionId WHERE id = :id")
+    suspend fun setSessionId(id: String, sessionId: String)
 }

@@ -166,6 +166,8 @@ class ChatRepositoryImpl @Inject constructor(
 
     override suspend fun getSessionById(id: String): ChatSession? = chatDao.getSessionById(id)?.toDomain()
 
+    override suspend fun sessionExists(id: String): Boolean = chatDao.sessionExists(id)
+
     override suspend fun getHistorySummary(sessionId: String): ChatHistorySummary? =
         chatHistorySummaryDao.getForSession(sessionId)?.let { entity ->
             ChatHistorySummary(
