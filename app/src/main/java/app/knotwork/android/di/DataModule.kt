@@ -22,7 +22,6 @@ import app.knotwork.android.data.repositories.AssetBundledSkillSource
 import app.knotwork.android.data.repositories.BundledSkillSource
 import app.knotwork.android.data.repositories.ChatRepositoryImpl
 import app.knotwork.android.data.repositories.ClarificationRepositoryImpl
-import app.knotwork.android.data.repositories.FirebaseCrashReportingRepositoryImpl
 import app.knotwork.android.data.repositories.IdentityRepositoryImpl
 import app.knotwork.android.data.repositories.LocalModelRepositoryImpl
 import app.knotwork.android.data.repositories.LocalPipelinePresetRepositoryImpl
@@ -52,7 +51,6 @@ import app.knotwork.android.domain.engine.TextEmbeddingEngine
 import app.knotwork.android.domain.repositories.ApiKeyRepository
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.ClarificationRepository
-import app.knotwork.android.domain.repositories.CrashReportingRepository
 import app.knotwork.android.domain.repositories.IdentityRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.McpServerRepository
@@ -365,17 +363,6 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindClarificationRepository(repository: ClarificationRepositoryImpl): ClarificationRepository
-
-    /**
-     * Binds [FirebaseCrashReportingRepositoryImpl] to [CrashReportingRepository]. The implementation
-     * gates every method on [SettingsRepository.crashReportingEnabled], so the binding is safe to
-     * provide unconditionally — no data leaves the device until the user opts in.
-     */
-    @Binds
-    @Singleton
-    abstract fun bindCrashReportingRepository(
-        repository: FirebaseCrashReportingRepositoryImpl,
-    ): CrashReportingRepository
 
     /**
      * Binds [IdentityRepositoryImpl] to [IdentityRepository]. Surfaces the

@@ -23,13 +23,13 @@ This invokes (transitively):
 | Sub-task                                      | Purpose                                                                 |
 |-----------------------------------------------|-------------------------------------------------------------------------|
 | `:app:detekt`                                 | Kotlin static analysis. Fails on any unsuppressed finding.              |
-| `:app:detektDebug`                            | Coroutine-cancellation gate (type-resolution run, single rule). See below. |
+| `:app:detektFullDebug` + `:app:detektFossDebug` | Coroutine-cancellation gate (type-resolution, single rule, one per flavour). See below. |
 | `:app:ktlintCheck`                            | Kotlin formatting & idiomatic style rules. Run `ktlintFormat` to fix.  |
-| `:app:lintDebug`                              | Android Lint over the debug variant + library dependencies.             |
-| `:app:testDebugUnitTest`                      | JVM unit tests for the debug variant.                                   |
-| `:app:koverVerifyDebug`                       | Test-coverage threshold enforcement.                                    |
+| `:app:lintFullDebug`                              | Android Lint over the debug variant + library dependencies.             |
+| `:app:testFullDebugUnitTest`                      | JVM unit tests for the debug variant.                                   |
+| `:app:koverVerifyFullDebug`                       | Test-coverage threshold enforcement.                                    |
 | `:app:checkNoInternalFqn`                     | Custom rule: forbid `app.knotwork.android.*` FQN references in code body.   |
-| `:app:testDebugUnitTest` (Konsist suite)      | Architecture guard: Clean-Architecture layer boundaries (see below).        |
+| `:app:testFullDebugUnitTest` (Konsist suite)      | Architecture guard: Clean-Architecture layer boundaries (see below).        |
 
 Pre-flight tip: run `./gradlew :app:ktlintFormat` first to auto-fix the
 safely-correctable subset before invoking `check`.
@@ -90,7 +90,7 @@ Bare `@Suppress("X")` without a reason comment is rejected in code review.
 - `app/build/reports/detekt/detekt.html` — visual checklist.
 - `app/build/reports/detekt/detekt.xml` — checkstyle-compatible for CI parsers.
 
-### Coroutine-cancellation gate (`detektDebug`)
+### Coroutine-cancellation gate (`detektFullDebug` + `detektFossDebug`)
 
 A second, deliberately narrow detekt run enforces the project's
 coroutine-cancellation contract (see
@@ -102,8 +102,8 @@ coroutine-cancellation contract (see
   `Exception` / `Throwable` / `IllegalStateException`) without immediately
   re-throwing it.
 - **Why a separate run**: the rule requires type resolution, which the plain
-  `:app:detekt` task cannot provide. The plugin-generated `:app:detektDebug`
-  task (type resolution over the debug variant) is rewired in
+  `:app:detekt` task cannot provide. The plugin-generated `:app:detektFullDebug` & `:app:detektFossDebug`
+  tasks (type resolution over each flavour's debug variant) are rewired in
   `app/build.gradle.kts` to
   [`config/detekt/detekt-cancellation.yml`](../config/detekt/detekt-cancellation.yml)
   — a config that activates **only** this rule — and added to `check`.
@@ -178,7 +178,7 @@ static analyzer whose checks are written as ordinary JUnit tests. The project
 uses it for **one purpose only**: mechanically enforcing the Clean
 Architecture layer boundaries that were previously guarded by item 1 of the
 manual review checklist. Because the suite lives in the `test` source set, it
-runs as part of `:app:testDebugUnitTest` — no extra `check` wiring is needed.
+runs as part of `:app:testFullDebugUnitTest` — no extra `check` wiring is needed.
 
 The suite lives in
 [`app/src/test/java/app/knotwork/android/architecture/`](../app/src/test/java/app/knotwork/android/architecture)
@@ -248,20 +248,20 @@ refactors.
 Verification is wired into the `check` lifecycle:
 
 ```kotlin
-tasks.named("check") { dependsOn("koverVerifyDebug") }
+tasks.named("check") { dependsOn("koverVerifyFullDebug") }
 ```
 
 **Local commands**:
 
 ```bash
-./gradlew :app:koverVerifyDebug      # threshold check
-./gradlew :app:koverHtmlReportDebug  # drill-down per package/file
+./gradlew :app:koverVerifyFullDebug      # threshold check
+./gradlew :app:koverHtmlReportFullDebug  # drill-down per package/file
 ./gradlew :app:koverLog              # one-liner aggregate %
 ```
 
 **Reports**:
-- `app/build/reports/kover/htmlDebug/index.html`
-- `app/build/reports/kover/reportDebug.xml`
+- `app/build/reports/kover/htmlFullDebug/index.html`
+- `app/build/reports/kover/reportFullDebug.xml`
 
 ---
 

@@ -82,8 +82,12 @@ plugins {
     alias(libs.plugins.detekt)
     alias(libs.plugins.ktlint)
     alias(libs.plugins.kover)
-    alias(libs.plugins.google.services)
-    alias(libs.plugins.firebase.crashlytics)
+    // The `google-services` and `firebase-crashlytics` Gradle plugins are NOT
+    // applied here unconditionally. They are proprietary and pull Google's
+    // build-time tooling into the graph, which the F-Droid channel rejects.
+    // Instead they are applied further down only when a `full`-flavour task is
+    // requested (see the `fullVariantRequested` guard after the `android {}`
+    // block), so an `assembleFossRelease` build never loads them.
 }
 
 // The androidx.appfunctions KSP processor generates the per-class
@@ -194,6 +198,33 @@ android {
             }
         }
     }
+
+    // Distribution flavours. `full` ships Firebase Crashlytics/Analytics and is
+    // the default for day-to-day development and the Play/direct-APK channel.
+    // `foss` is the F-Droid-compatible build: it carries no Firebase/Google
+    // dependency (see the flavour-scoped `fullImplementation(...)` block and
+    // the conditional plugin application below) and binds a no-op
+    // `CrashReportingRepository`. The two flavours share all `main` sources;
+    // only the crash-reporting impl + DI module differ (under `src/full` /
+    // `src/foss`).
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("full") {
+            dimension = "distribution"
+            // Pre-selected variant in Android Studio and the default target for
+            // ambiguous instrumentation/test tasks.
+            isDefault = true
+            // Surfaces to the presentation layer whether the in-app
+            // crash-reporting consent toggle has a live collector behind it.
+            // `full` does; `foss` hides the toggle entirely.
+            buildConfigField("boolean", "CRASH_REPORTING_AVAILABLE", "true")
+        }
+        create("foss") {
+            dimension = "distribution"
+            buildConfigField("boolean", "CRASH_REPORTING_AVAILABLE", "false")
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -265,6 +296,33 @@ android {
     }
 }
 
+// Apply the proprietary Google build plugins for every build EXCEPT an
+// exclusively-`foss` one. `google-services` (and the `firebase-crashlytics`
+// plugin it backs) is what makes the Firebase SDK initialise cleanly — it
+// generates the `google_app_id` resource from `google-services.json`. The
+// `foss` flavour ships no Firebase SDK, so it needs none of this; the F-Droid
+// build (`./gradlew assembleFossRelease`, every requested task `Foss`-scoped)
+// skips the plugins entirely and produces an APK with zero Google build-time
+// tooling in its graph.
+//
+// The plugins MUST stay applied for mixed invocations such as `./gradlew check`
+// (which builds and Robolectric-tests the `full` variant): without the
+// generated `google_app_id`, Firebase's startup provider throws
+// `IllegalStateException: Default FirebaseApp is not initialized` under
+// Robolectric and the full-variant unit tests fail. Hence the guard skips the
+// plugins only when *every* requested task targets `foss`.
+//
+// The `foss` flavour's freedom from the `com.google.firebase` runtime classpath
+// is guaranteed independently by the flavour-scoped `fullImplementation(...)`
+// dependencies, not by this guard.
+val requestedTaskNames = gradle.startParameter.taskNames
+val fossOnlyBuild = requestedTaskNames.isNotEmpty() &&
+    requestedTaskNames.all { taskName -> taskName.contains("Foss", ignoreCase = true) }
+if (!fossOnlyBuild) {
+    apply(plugin = libs.plugins.google.services.get().pluginId)
+    apply(plugin = libs.plugins.firebase.crashlytics.get().pluginId)
+}
+
 detekt {
     config.setFrom(files("$rootDir/config/detekt/detekt.yml"))
     buildUponDefaultConfig = true
@@ -279,19 +337,23 @@ detekt {
 
 // Coroutine-cancellation gate. `SuspendFunSwallowedCancellation` requires
 // type resolution, which the plain `detekt` task above cannot provide, so the
-// rule lives in a second, deliberately narrow run: `detektDebug` (the
-// plugin-generated type-resolution task for the debug variant) is rewired to
+// rule lives in a second, deliberately narrow run: the plugin-generated
+// type-resolution tasks for the debug variant of each distribution flavour
+// (`detektFullDebug` / `detektFossDebug`) are rewired to
 // `detekt-cancellation.yml`, a config that activates only that single rule.
-// Running the full strict config under type resolution instead would surface
-// ~1.1k findings from rules that have never been part of the gate — adopting
-// them is a separate effort, not a side effect of this wiring. Full-config
-// type-resolution analysis remains available via `detektMain`/`detektRelease`.
-tasks.matching { it.name == "detektDebug" }.configureEach {
+// Both flavours are wired so the gate also covers the flavour-specific
+// crash-reporting sources (`src/full` / `src/foss`). Running the full strict
+// config under type resolution instead would surface ~1.1k findings from rules
+// that have never been part of the gate — adopting them is a separate effort,
+// not a side effect of this wiring. Full-config type-resolution analysis
+// remains available via `detektMain`/`detektRelease`.
+val cancellationGateDetektTasks = setOf("detektFullDebug", "detektFossDebug")
+tasks.matching { it.name in cancellationGateDetektTasks }.configureEach {
     this as Detekt
     config.setFrom(files("$rootDir/config/detekt/detekt-cancellation.yml"))
     buildUponDefaultConfig.set(false)
 }
-tasks.named("check") { dependsOn("detektDebug") }
+tasks.named("check") { dependsOn(cancellationGateDetektTasks) }
 
 tasks.withType<Detekt>().configureEach {
     reports {
@@ -480,15 +542,18 @@ kover {
                     // parsers that delegate to the (excluded) Android-runtime
                     // tools above — they are JVM-unit-testable and covered by
                     // `*ExecutorTest`s under `data/tools/local/executors/`.
-                    // Firebase Crashlytics glue: the repository impl and the
-                    // Timber tree thinly wrap `FirebaseCrashlytics` /
-                    // `FirebaseAnalytics` singletons which need the Android
-                    // runtime and Google Play services to initialise.
-                    // Unit-test coverage for the no-op-when-disabled and
-                    // dispatch branches lives under
-                    // `FirebaseCrashReportingRepositoryImplTest` /
-                    // `CrashlyticsTimberTreeTest`, but the production
-                    // `getInstance()` paths are not exercised on the JVM.
+                    // Firebase Crashlytics glue: the `CrashlyticsTimberTree`
+                    // (in `src/main`) and the `full`-flavour
+                    // `FirebaseCrashReportingRepositoryImpl` (in `src/full`)
+                    // thinly wrap `FirebaseCrashlytics` / `FirebaseAnalytics`
+                    // singletons which need the Android runtime and Google Play
+                    // services to initialise. Unit-test coverage for the
+                    // no-op-when-disabled and dispatch branches lives under
+                    // `FirebaseCrashReportingRepositoryImplTest` (`src/testFull`)
+                    // / `CrashlyticsTimberTreeTest`, but the production
+                    // `getInstance()` paths are not exercised on the JVM. The
+                    // `foss` no-op impl carries no logic and is covered by
+                    // `NoOpCrashReportingRepositoryTest` (`src/testFoss`).
                     "app.knotwork.android.data.logging.CrashlyticsTimberTree*",
                 )
                 // Belt-and-braces: also skip any @Preview-annotated function that
@@ -522,10 +587,14 @@ kover {
     }
 }
 
-// Wire `koverVerifyDebug` into the `check` lifecycle
-// so a single `./gradlew check` invocation runs detekt + ktlintCheck +
-// lintDebug + unit tests + coverage verification.
-tasks.named("check") { dependsOn("koverVerifyDebug") }
+// Wire `koverVerifyFullDebug` into the `check` lifecycle so a single
+// `./gradlew check` invocation runs detekt + ktlintCheck + lint + unit tests +
+// coverage verification. With the `distribution` flavour dimension the
+// per-variant Kover task gains the flavour segment (`koverVerifyDebug` →
+// `koverVerifyFullDebug`); the `full` variant is the representative coverage
+// target because both flavours share every measured source — they differ only
+// in the crash-reporting impl, and the `foss` no-op carries no logic to cover.
+tasks.named("check") { dependsOn("koverVerifyFullDebug") }
 
 // Enforces the "no internal FQN" rule for the
 // `app.knotwork.android.*` package. References like
@@ -771,12 +840,15 @@ dependencies {
     implementation(libs.gson)
 
     // Firebase — Crashlytics + Analytics (Analytics is required by Crashlytics).
-    // The BoM (Bill of Materials) pins inter-library versions; individual
-    // modules are intentionally un-versioned. Starting from Firebase BoM 34.0
-    // the `-ktx` artifacts were folded into the base modules and removed.
-    implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.crashlytics)
-    implementation(libs.firebase.analytics)
+    // Scoped to the `full` flavour ONLY (`fullImplementation`) so the `foss`
+    // build carries no `com.google.firebase` artifact on any classpath — the
+    // hard requirement for F-Droid. The BoM (Bill of Materials) pins
+    // inter-library versions; individual modules are intentionally un-versioned.
+    // Starting from Firebase BoM 34.0 the `-ktx` artifacts were folded into the
+    // base modules and removed.
+    "fullImplementation"(platform(libs.firebase.bom))
+    "fullImplementation"(libs.firebase.crashlytics)
+    "fullImplementation"(libs.firebase.analytics)
 
     testImplementation(libs.json)
     testImplementation(libs.junit)
@@ -821,6 +893,10 @@ dependencies {
 //     `./gradlew :app:connectedDebugAndroidTest --dry-run`. Without this branch the
 //     CLI run never installs the probe and the e2e test times out with an empty
 //     discovery list.
+// The `distribution` flavour dimension adds the flavour segment to the
+// androidTest task names; the e2e instrumented suite runs against the default
+// `full` flavour, so hook the probe install onto the `full`-variant tasks.
 val toolsProbeInstall = ":tools-probe:installDebug"
-tasks.matching { it.name == "installDebugAndroidTest" || it.name == "connectedDebugAndroidTest" }
-    .configureEach { dependsOn(toolsProbeInstall) }
+tasks.matching {
+    it.name == "installFullDebugAndroidTest" || it.name == "connectedFullDebugAndroidTest"
+}.configureEach { dependsOn(toolsProbeInstall) }

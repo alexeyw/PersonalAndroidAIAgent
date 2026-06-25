@@ -5,7 +5,7 @@ This file maps the contents of the main application package.
 - `App.kt` - Main Android Application class.
 - `data/` - Data layer encompassing local, remote, and repository implementations.
   - `logging/` - Application-level Timber sinks.
-    - `CrashlyticsTimberTree.kt` - Timber tree forwarding `Log.WARN` / `Log.ERROR` records to Firebase Crashlytics via `CrashReportingRepository`. Planted only after the user opts in (release builds).
+    - `CrashlyticsTimberTree.kt` - Timber tree forwarding `Log.WARN` / `Log.ERROR` records to the flavour-specific `CrashReportingRepository` (Firebase in `full`, no-op in `foss`). Planted only after the user opts in (release builds).
   - `engine/` - Core LLM and inference engines.
     - `KoogClientFactory.kt` - Factory for Koog clients; data-layer impl of `domain/engine/CloudLlmClientFactory`. Every constructed client is retry-wrapped via `CloudRetryWrapper`; `createClient` threads a `CloudRetryListener` for console observability, the per-provider helpers wrap with no observation.
     - `KoogStructuredInferenceClientFactory.kt` - Data-layer impl of `domain/engine/structured/CloudStructuredInferenceClientFactory`; builds a retry-wrapped Koog client, detects native JSON via `LLModel.capabilities`, and exposes a `StructuredInferenceClient` that collapses the streamed response for the gate.
@@ -106,7 +106,7 @@ This file maps the contents of the main application package.
     - `BestEffortStore.kt` - Shared `absorbingStoreFailure` helper implementing the best-effort persistence contract (absorb storage failures, re-throw `CancellationException` first) reused by the run-record and run-trace repositories.
     - `ChatRepositoryImpl.kt` - Chat repository implementation.
     - `ClarificationRepositoryImpl.kt` - In-memory implementation of `ClarificationRepository` that suspends pipeline coroutines until the user answers (or the request times out).
-    - `FirebaseCrashReportingRepositoryImpl.kt` - Firebase-backed `CrashReportingRepository`. Every method is gated on `SettingsRepository.crashReportingEnabled` and short-circuits to no-op when the user has not opted in.
+    - `FirebaseCrashReportingRepositoryImpl.kt` - **Lives in the `full` flavour source set (`app/src/full/...`), not `main`.** Firebase-backed `CrashReportingRepository`. Every method is gated on `SettingsRepository.crashReportingEnabled` and short-circuits to no-op when the user has not opted in. See the *Distribution flavour source sets* section at the end of this file.
     - `IdentityRepositoryImpl.kt` - Resolves the Settings identity card snapshot (ANDROID_ID → 8-hex device id, AndroidKeyStore probe).
     - `LocalModelRepositoryImpl.kt` - Local model repository implementation; observes the active model file metadata for the Settings local-model card.
     - `LocalPipelinePresetRepositoryImpl.kt` - Local impl of `PipelinePresetRepository`. Composes the bundled `assets/presets/pipelines/*.json` catalogue (lazy IO-dispatched read, cached for process lifetime, malformed files skipped) with user-saved Room rows; rejects bundled presets on the user-save path.
@@ -658,3 +658,19 @@ This file maps the contents of the main application package.
       - `AllowedDomainsUiState.kt` - UI state for the allowlist editor: the stored `hosts`, the `addInput` text, and the `AddHostFeedback` (Idle / Valid / Invalid / Duplicate) for the add field.
       - `AllowedDomainsViewModel.kt` - Drives `AllowedDomainsScreen`. Observes `SettingsRepository.allowedHttpDomains`; computes the add-field feedback via `HttpRequestPolicy.normalizeDomain` (same helper the tool enforces with), and persists add/remove via `setAllowedHttpDomains`.
 - `FILE_MAP.md` - This file mapping the current directory structure.
+
+## Distribution flavour source sets
+
+The app has a `distribution` product-flavour dimension (`full` / `foss`). The
+crash-reporting implementation is the only code that differs between flavours;
+everything else lives in `main`. These files are outside the `main` package
+above:
+
+- `app/google-services.json` - Firebase project config (placeholder) at the module root, processed by the Google Services plugin for every build except a `foss`-only one (the F-Droid build skips the plugin and never reads it).
+- `app/src/full/` - Full distribution (Play / direct APK): Firebase Crashlytics.
+  - `AndroidManifest.xml` - Overlay adding the `firebase_crashlytics_collection_enabled` / `firebase_analytics_collection_enabled` opt-in meta-data.
+  - `data/repositories/FirebaseCrashReportingRepositoryImpl.kt` - Firebase-backed `CrashReportingRepository` (gated on the opt-in flag).
+  - `di/CrashReportingModule.kt` - Binds the Firebase impl to `CrashReportingRepository` and provides the `FirebaseCrashlytics` / `FirebaseAnalytics` singletons.
+- `app/src/foss/` - F-Droid distribution: zero Firebase/Google dependency.
+  - `data/repositories/NoOpCrashReportingRepository.kt` - No-op `CrashReportingRepository`; records and transmits nothing.
+  - `di/CrashReportingModule.kt` - Binds the no-op impl (same FQN as the `full` module; exactly one is compiled per build).

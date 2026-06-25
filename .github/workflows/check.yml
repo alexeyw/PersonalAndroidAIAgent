@@ -2,7 +2,8 @@ name: Check
 
 # Strict-mode CI gate.
 # Runs the aggregate `./gradlew check` task, which itself triggers detekt,
-# ktlintCheck, lintDebug, testDebugUnitTest, koverVerifyDebug,
+# ktlintCheck, lint, the unit tests for both distribution flavours
+# (testFullDebugUnitTest + testFossDebugUnitTest), koverVerifyFullDebug,
 # verifyBrowserEditorConstants, and the project-level `checkNoInternalFqn`.
 # `:buildSrc:test` is added explicitly because the build-logic module's own
 # unit tests (e.g. the browser-editor constants generator) are not reachable
@@ -78,8 +79,10 @@ jobs:
         with:
           name: lint-report
           path: |
-            app/build/reports/lint-results-debug.html
-            app/build/reports/lint-results-debug.xml
+            app/build/reports/lint-results-fullDebug.html
+            app/build/reports/lint-results-fullDebug.xml
+            app/build/reports/lint-results-fossDebug.html
+            app/build/reports/lint-results-fossDebug.xml
           if-no-files-found: ignore
 
       - name: Upload Kover coverage report

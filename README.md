@@ -212,8 +212,13 @@ configured it.
   different embedding provider).
 - Standalone browser-based editor (`pipeline-editor.html`) for authoring
   and exporting pipelines without launching the app.
-- Opt-in Firebase Crashlytics for anonymous crash reporting — off by
-  default, never collects message content. See [SECURITY.md](SECURITY.md).
+- Opt-in Firebase Crashlytics for anonymous crash reporting (`full` build only)
+  — off by default, never collects message content. The **`foss` build** ships
+  no Firebase/Google dependency at all and hides the toggle. See
+  [SECURITY.md](SECURITY.md).
+- **FOSS / F-Droid build available.** A `foss` product flavour with zero
+  proprietary dependencies and no crash reporting, suitable for F-Droid. See
+  [docs/release.md](docs/release.md) § *FOSS / F-Droid build*.
 - At-rest encryption: Room database is SQLCipher-encrypted, API keys are
   encrypted with AES-GCM under a dedicated Android Keystore key.
 
@@ -303,6 +308,8 @@ After installing:
 | Network          | OkHttp + Ktor (via Koog)                                |
 | Image loading    | Coil 3 (attachment thumbnails / viewer)                 |
 | Local storage    | Room + DataStore                                        |
+| Crash reporting  | Firebase Crashlytics (`full` flavour) / none (`foss`)   |
+| Distribution     | `full` (Play / direct APK) + `foss` (F-Droid, no Google)|
 | Testing          | JUnit + MockK                                           |
 | Architecture tests | Konsist (Clean-Architecture layer guard, in `check`)  |
 
