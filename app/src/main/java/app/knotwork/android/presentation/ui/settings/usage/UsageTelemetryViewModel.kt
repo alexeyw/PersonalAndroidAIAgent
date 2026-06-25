@@ -50,13 +50,13 @@ class UsageTelemetryViewModel @Inject constructor(
     val uiState: StateFlow<UsageTelemetryUiState> = combine(
         usageTelemetry.summary,
         settingsRepository.usageTelemetryEnabled,
-        pipelineRepository.getAllPipelines(),
-    ) { summary, recordingEnabled, pipelines ->
+        pipelineRepository.observePipelineNames(),
+    ) { summary, recordingEnabled, pipelineNames ->
         UsageTelemetryUiState(
             loading = false,
             recordingEnabled = recordingEnabled,
             summary = summary,
-            pipelineNames = pipelines.associate { it.id to it.name },
+            pipelineNames = pipelineNames,
         )
     }
         // A repository read error must not strand the screen on the LOADING

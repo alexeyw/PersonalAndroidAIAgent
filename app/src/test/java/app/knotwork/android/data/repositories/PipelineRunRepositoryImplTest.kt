@@ -568,6 +568,19 @@ class PipelineRunRepositoryImplTest {
     }
 
     @Test
+    fun `given a run that never resolved a pipeline finishes then it is not recorded`() = runTest {
+        coEvery { usageTelemetry.isEnabled() } returns true
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        // A queued run reaped as INTERRUPTED by the orphan sweep: pipelineId never resolved.
+        coEvery { pipelineRunDao.getRun("orphan-1") } returns
+            sampleEntity.copy(id = "orphan-1", pipelineId = null, parentRunId = null)
+
+        repository.finishRun("orphan-1", PipelineRunStatus.INTERRUPTED)
+
+        coVerify(exactly = 0) { usageTelemetry.recordPipelineRunOutcome(any(), any(), any()) }
+    }
+
+    @Test
     fun `given telemetry disabled when a run finishes then the run is not read back for telemetry`() = runTest {
         // isEnabled() is stubbed false in setup; the run should never be re-read.
         coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1

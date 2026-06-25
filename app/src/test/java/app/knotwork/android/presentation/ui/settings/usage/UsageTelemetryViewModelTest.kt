@@ -1,6 +1,5 @@
 package app.knotwork.android.presentation.ui.settings.usage
 
-import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.PipelineRunTally
 import app.knotwork.android.domain.models.UsageTelemetrySummary
@@ -55,9 +54,7 @@ class UsageTelemetryViewModelTest {
         pipelineRepository = mockk()
         every { usageTelemetry.summary } returns flowOf(summary)
         every { settingsRepository.usageTelemetryEnabled } returns flowOf(true)
-        every { pipelineRepository.getAllPipelines() } returns flowOf(
-            listOf(PipelineGraph(id = "pipe-1", name = "Daily digest", nodes = emptyList(), connections = emptyList())),
-        )
+        every { pipelineRepository.observePipelineNames() } returns flowOf(mapOf("pipe-1" to "Daily digest"))
         viewModel = UsageTelemetryViewModel(
             usageTelemetry = usageTelemetry,
             settingsRepository = settingsRepository,

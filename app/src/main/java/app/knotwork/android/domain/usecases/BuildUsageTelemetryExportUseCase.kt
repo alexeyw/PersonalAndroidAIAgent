@@ -10,6 +10,7 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import javax.inject.Inject
+import kotlin.math.roundToInt
 
 /**
  * The two voluntary export renderings of the local usage statistics: a
@@ -58,8 +59,9 @@ class BuildUsageTelemetryExportUseCase @Inject constructor() {
     private fun pipelineLabel(pipelineId: String?, pipelineNames: Map<String, String>): String =
         pipelineId?.let { pipelineNames[it] } ?: UNKNOWN_PIPELINE_LABEL
 
-    /** Integer percentage [count] is of [total]; `0` when [total] is zero. */
-    private fun percent(count: Int, total: Int): Int = if (total == 0) 0 else (count * PERCENT) / total
+    /** Rounded integer percentage [count] is of [total]; `0` when [total] is zero. */
+    private fun percent(count: Int, total: Int): Int =
+        if (total == 0) 0 else (count.toDouble() * PERCENT / total).roundToInt()
 
     /**
      * Renders the plain-text summary. The opening line states the on-device

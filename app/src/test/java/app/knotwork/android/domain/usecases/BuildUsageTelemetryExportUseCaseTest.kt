@@ -69,6 +69,23 @@ class BuildUsageTelemetryExportUseCaseTest {
     }
 
     @Test
+    fun `given a fractional outcome share when rendered then the percentage is rounded not truncated`() {
+        // 1 of 8 = 12.5% → rounds to 13% (truncation would have shown 12%).
+        val summary = UsageTelemetrySummary(
+            runsByPipeline = emptyList(),
+            runsByOutcome = mapOf(PipelineRunStatus.COMPLETED to 1, PipelineRunStatus.FAILED to 7),
+            triggerFiresByKind = emptyMap(),
+            activeDays = 1,
+            firstActiveDay = "2026-06-25",
+            lastActiveDay = "2026-06-25",
+        )
+
+        val export = useCase(summary, emptyMap(), "25 Jun 2026 14:30")
+
+        assertTrue(export.text.contains("COMPLETED: 1 (13%)"))
+    }
+
+    @Test
     fun `given an empty summary when rendered then text and JSON both reflect zero usage`() {
         val export = useCase(UsageTelemetrySummary.EMPTY, emptyMap(), "25 Jun 2026 14:30")
 

@@ -124,21 +124,31 @@ class PipelineRunRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Records the terminal outcome of a **root** run into the privacy-preserving
-     * local usage statistics, best-effort.
+     * Records the terminal outcome of a **root**, pipeline-bound run into the
+     * privacy-preserving local usage statistics, best-effort.
      *
-     * Gated on the opt-in flag before reading the run back, so a disabled
-     * statistics feature costs nothing here. Only top-level runs are counted
-     * (`parentRunId == null`): a nested sub-pipeline run is an implementation
-     * detail of one user-initiated run and must not inflate the tally. The
-     * telemetry repository absorbs its own storage failures, so this can never
-     * disturb the run it describes.
+     * Filters applied so the statistics reflect genuine pipeline usage:
+     * - **Opt-in gate first.** Checked before the run read-back, so an opted-out
+     *   user pays nothing here (no `getRun`). The telemetry repository re-checks
+     *   the flag, but that inner gate is for the trigger path; this outer check
+     *   is purely the cost optimisation, not a redundant guard.
+     * - **Root runs only** (`parentRunId == null`): a nested sub-pipeline run is
+     *   an implementation detail of one user-initiated run and must not inflate
+     *   the tally.
+     * - **Pipeline-bound only** (`pipelineId != null`): a run that never resolved
+     *   a pipeline never executed any pipeline work — e.g. a queued run reaped as
+     *   `INTERRUPTED` by the startup orphan sweep, or cancelled before it started.
+     *   Counting these would pollute the outcome shares with process-death noise.
+     *
+     * The telemetry repository absorbs its own storage failures, so this can
+     * never disturb the run it describes.
      */
     private suspend fun recordRunTelemetry(runId: String, status: PipelineRunStatus) {
         if (!usageTelemetry.isEnabled()) return
         val run = getRun(runId) ?: return
         if (run.parentRunId != null) return
-        usageTelemetry.recordPipelineRunOutcome(run.pipelineId, status, System.currentTimeMillis())
+        val pipelineId = run.pipelineId ?: return
+        usageTelemetry.recordPipelineRunOutcome(pipelineId, status, System.currentTimeMillis())
     }
 
     override suspend fun getRun(runId: String): PipelineRun? = absorbing("getRun") {

@@ -23,6 +23,7 @@ import app.knotwork.design.screens.settings.UsageStatRow
 import app.knotwork.design.screens.settings.UsageTelemetryCallbacks
 import app.knotwork.design.screens.settings.UsageTelemetryContent
 import app.knotwork.design.screens.settings.UsageTelemetryViewState
+import kotlin.math.roundToInt
 
 /** MIME type of the JSON usage-statistics export document. */
 private const val MIME_JSON = "application/json"
@@ -137,7 +138,7 @@ private fun buildOutcomeRows(summary: UsageTelemetrySummary): List<UsageStatRow>
         PipelineRunStatus.INTERRUPTED to R.string.settings_usage_outcome_interrupted,
     ).map { (status, labelRes) ->
         val count = summary.runsByOutcome[status] ?: 0
-        val percent = if (total == 0) 0 else (count * PERCENT) / total
+        val percent = if (total == 0) 0 else (count.toDouble() * PERCENT / total).roundToInt()
         UsageStatRow(
             label = stringResource(labelRes),
             value = stringResource(R.string.settings_usage_outcome_value, count, percent),
