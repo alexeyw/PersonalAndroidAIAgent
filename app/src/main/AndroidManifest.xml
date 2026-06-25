@@ -202,29 +202,6 @@
         <receiver
             android:name=".presentation.receivers.AgentApprovalReceiver"
             android:exported="false" />
-
-        <!--
-            Makes charging triggers event-driven: ACTION_POWER_CONNECTED /
-            ACTION_POWER_DISCONNECTED are exempt from the implicit-broadcast ban,
-            so this manifest receiver is delivered the edge even when the app is
-            closed and fires the trigger immediately instead of waiting for the
-            next 15-minute poll.
-
-            exported="true" is REQUIRED: these are system broadcasts originating
-            from system_server (a different process), and a manifest receiver
-            with exported="false" is not delivered cross-process broadcasts
-            (unlike a context-registered receiver, which has no exported notion).
-            Both actions are protected broadcasts that only the system can send,
-            so exporting the receiver is not a spoofing surface.
-        -->
-        <receiver
-            android:name=".data.services.PowerConnectionReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
-                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
-            </intent-filter>
-        </receiver>
     </application>
 
 </manifest>

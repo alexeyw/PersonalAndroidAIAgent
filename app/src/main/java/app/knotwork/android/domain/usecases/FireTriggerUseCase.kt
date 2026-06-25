@@ -11,6 +11,7 @@ import app.knotwork.android.domain.repositories.TriggerRepository
 import app.knotwork.android.domain.services.ScheduledTaskConstraints
 import app.knotwork.android.domain.services.ScheduledTaskNotifier
 import app.knotwork.android.domain.services.TaskScheduler
+import app.knotwork.android.domain.services.TriggerScheduler
 import kotlinx.coroutines.CancellationException
 import timber.log.Timber
 import javax.inject.Inject
@@ -117,6 +118,7 @@ class FireTriggerUseCase @Inject constructor(
     private val taskScheduler: TaskScheduler,
     private val chatRepository: ChatRepository,
     private val scheduledTaskNotifier: ScheduledTaskNotifier,
+    private val triggerScheduler: TriggerScheduler,
 ) {
 
     /**
@@ -148,6 +150,10 @@ class FireTriggerUseCase @Inject constructor(
 
             TriggerFiringDecision.ReArm -> {
                 triggerRepository.setArmed(triggerId, true)
+                // Re-arming means the event condition just dropped (e.g. unplugged).
+                // Re-register so the consumed charging one-shot watch is recreated,
+                // ready to fire instantly on the next charge edge.
+                triggerScheduler.register(trigger)
                 Timber.tag(TAG).d("Trigger %s re-armed.", triggerId)
                 TriggerFireOutcome.ReArmed
             }

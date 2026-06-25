@@ -45,10 +45,11 @@ details.
   take effect immediately — creating, editing, enabling or deleting a trigger
   re-syncs the background runtime without waiting for the next launch.
 - **Charging triggers fire instantly.** A charging trigger now runs within
-  seconds of plugging in (and re-arms on unplug) via a manifest power-connection
-  receiver, instead of waiting for the next ~15-minute background poll. The poll
-  remains as a backstop, and interval/daily/network triggers stay poll-driven
-  (their broadcasts aren't manifest-deliverable).
+  seconds of plugging in — even when the app is closed — via a
+  charging-constrained WorkManager job (`setRequiresCharging`), which the OS
+  wakes through JobScheduler, instead of waiting for the next ~15-minute
+  background poll. The poll remains as a backstop and re-arms the fast path on
+  unplug; interval/daily/network triggers stay poll-driven.
 - **Trigger results and notifications.** A fired trigger now lands its run in a
   dedicated chat session named after the trigger; recurring fires accumulate in
   that same conversation instead of spawning a new chat each time, and a deleted

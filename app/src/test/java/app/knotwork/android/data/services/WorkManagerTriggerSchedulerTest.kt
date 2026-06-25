@@ -1,7 +1,9 @@
 package app.knotwork.android.data.services
 
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequest
 import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkManager
 import app.knotwork.android.domain.models.Trigger
@@ -34,6 +36,9 @@ class WorkManagerTriggerSchedulerTest {
         workManager = mockk()
         every {
             workManager.enqueueUniquePeriodicWork(any(), any(), any<PeriodicWorkRequest>())
+        } returns mockk()
+        every {
+            workManager.enqueueUniqueWork(any(), any<ExistingWorkPolicy>(), any<OneTimeWorkRequest>())
         } returns mockk()
         every { workManager.cancelUniqueWork(any()) } returns mockk()
         scheduler = WorkManagerTriggerScheduler(workManager)
@@ -138,6 +143,41 @@ class WorkManagerTriggerSchedulerTest {
         scheduler.cancel("t9")
 
         verify(exactly = 1) { workManager.cancelUniqueWork(TriggerWatchWorker.UNIQUE_NAME_PREFIX + "t9") }
+    }
+
+    @Test
+    fun `given charging trigger when registered then also enqueues a charging-constrained one-shot watch`() {
+        val nameSlot = slot<String>()
+        val policySlot = slot<ExistingWorkPolicy>()
+        val requestSlot = slot<OneTimeWorkRequest>()
+
+        scheduler.register(trigger(condition = TriggerCondition.Charging))
+
+        verify {
+            workManager.enqueueUniqueWork(capture(nameSlot), capture(policySlot), capture(requestSlot))
+        }
+        assertEquals(WorkManagerTriggerScheduler.CHARGING_WATCH_NAME, nameSlot.captured)
+        // KEEP so the shared watch coalesces across charging triggers.
+        assertEquals(ExistingWorkPolicy.KEEP, policySlot.captured)
+        // JobScheduler wakes the (even closed) app on this constraint — the instant path.
+        assertTrue(requestSlot.captured.workSpec.constraints.requiresCharging())
+        assertTrue(requestSlot.captured.workSpec.constraints.requiresBatteryNotLow())
+    }
+
+    @Test
+    fun `given a non-charging trigger when registered then enqueues no charging watch`() {
+        scheduler.register(trigger(condition = TriggerCondition.IntervalSchedule(30)))
+
+        verify(exactly = 0) {
+            workManager.enqueueUniqueWork(any(), any<ExistingWorkPolicy>(), any<OneTimeWorkRequest>())
+        }
+    }
+
+    @Test
+    fun `given syncAll with no charging trigger then cancels the shared charging watch`() {
+        scheduler.syncAll(listOf(trigger(condition = TriggerCondition.IntervalSchedule(30))))
+
+        verify(exactly = 1) { workManager.cancelUniqueWork(WorkManagerTriggerScheduler.CHARGING_WATCH_NAME) }
     }
 
     @Test

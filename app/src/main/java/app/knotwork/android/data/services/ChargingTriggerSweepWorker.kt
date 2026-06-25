@@ -14,23 +14,24 @@ import kotlinx.coroutines.flow.first
 import timber.log.Timber
 
 /**
- * One-shot worker that evaluates every active **charging** trigger immediately,
- * enqueued by [PowerConnectionReceiver] the moment the device is plugged in or
- * unplugged.
+ * One-shot worker that evaluates every active **charging** trigger the moment
+ * the device starts charging.
  *
- * Charging triggers are otherwise only visited by the 15-minute periodic poll
- * ([WorkManagerTriggerScheduler]), so plugging in could take up to a quarter of
- * an hour to fire. Because `ACTION_POWER_CONNECTED` / `ACTION_POWER_DISCONNECTED`
- * are exempt from the implicit-broadcast ban, a manifest receiver can wake the
- * app on the edge even when it is closed; this worker turns that wake into a
- * near-instant fire. The periodic poll remains as a backstop (e.g. if a wake is
- * missed under aggressive OEM power management).
+ * It is registered by [WorkManagerTriggerScheduler] as a single shared
+ * `setRequiresCharging(true)` one-time request: `JobScheduler` honours that
+ * constraint and wakes even a closed app within seconds of the cable going in —
+ * unlike a manifest `ACTION_POWER_CONNECTED` receiver, which is never delivered
+ * (that broadcast is not on the implicit-broadcast exception list). Without this
+ * fast path charging triggers would only be visited by the 15-minute periodic
+ * poll, so plugging in could take up to a quarter of an hour to fire. The poll
+ * remains as a backstop and, on unplug, re-arms and re-enqueues this one-shot
+ * for the next charge edge.
  *
  * It does **no** firing logic of its own: it loads the active charging triggers
  * and hands each to [FireTriggerUseCase], which re-checks the live power state,
- * applies the armed-edge latch (so a connect fires once and an unplug re-arms),
- * verifies the bound pipeline, and enqueues the run. The decision therefore
- * stays single-sourced with the poll path.
+ * applies the armed-edge latch (so a connect fires once), verifies the bound
+ * pipeline, and enqueues the run. The decision therefore stays single-sourced
+ * with the poll path.
  *
  * @property triggerRepository Source of the active-trigger set.
  * @property fireTriggerUseCase The per-trigger fire/skip decision + enqueue.
@@ -65,10 +66,7 @@ class ChargingTriggerSweepWorker @AssistedInject constructor(
         Result.retry()
     }
 
-    companion object {
-        private const val TAG = "Trigger"
-
-        /** Unique work name coalescing rapid plug/unplug edges into one in-flight sweep. */
-        const val UNIQUE_NAME = "charging-trigger-sweep"
+    private companion object {
+        const val TAG = "Trigger"
     }
 }

@@ -14,6 +14,7 @@ import app.knotwork.android.domain.repositories.PowerStateRepository
 import app.knotwork.android.domain.repositories.TriggerRepository
 import app.knotwork.android.domain.services.ScheduledTaskNotifier
 import app.knotwork.android.domain.services.TaskScheduler
+import app.knotwork.android.domain.services.TriggerScheduler
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -48,6 +49,7 @@ class FireTriggerUseCaseTest {
     private lateinit var taskScheduler: TaskScheduler
     private lateinit var chatRepository: ChatRepository
     private lateinit var scheduledTaskNotifier: ScheduledTaskNotifier
+    private lateinit var triggerScheduler: TriggerScheduler
     private lateinit var useCase: FireTriggerUseCase
 
     private val triggerId = "t1"
@@ -74,6 +76,7 @@ class FireTriggerUseCaseTest {
         taskScheduler = mockk(relaxed = true)
         chatRepository = mockk(relaxed = true)
         scheduledTaskNotifier = mockk(relaxed = true)
+        triggerScheduler = mockk(relaxed = true)
         useCase = FireTriggerUseCase(
             triggerRepository = triggerRepository,
             pipelineRepository = pipelineRepository,
@@ -83,6 +86,7 @@ class FireTriggerUseCaseTest {
             taskScheduler = taskScheduler,
             chatRepository = chatRepository,
             scheduledTaskNotifier = scheduledTaskNotifier,
+            triggerScheduler = triggerScheduler,
         )
     }
 
@@ -118,6 +122,8 @@ class FireTriggerUseCaseTest {
 
         assertEquals(TriggerFireOutcome.ReArmed, outcome)
         coVerify(exactly = 1) { triggerRepository.setArmed(triggerId, true) }
+        // Re-arm re-registers so the consumed charging one-shot watch is recreated.
+        verify(exactly = 1) { triggerScheduler.register(chargingTrigger) }
         verify(exactly = 0) { taskScheduler.scheduleOneTime(any(), any(), any(), any(), any(), any()) }
         coVerify(exactly = 0) { triggerRepository.markFired(any(), any()) }
     }
