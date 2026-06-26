@@ -124,6 +124,55 @@ class ScheduledTaskNotifierImplTest {
     }
 
     @Test
+    fun `given enabled when notifyTriggerFired is called then posts fired title with trigger name body`() = runTest {
+        enable()
+
+        notifier.notifyTriggerFired("session-1", "Morning brief")
+
+        val shadow = Shadows.shadowOf(notificationManager())
+        assertEquals(1, shadow.size())
+        val posted = shadow.allNotifications.first()
+        assertEquals(NotificationChannels.TASK_RESULTS, posted.channelId)
+        val postedShadow = Shadows.shadowOf(posted)
+        assertEquals("Trigger fired", postedShadow.contentTitle)
+        assertEquals("Morning brief", postedShadow.contentText)
+    }
+
+    @Test
+    fun `given notifications disabled when notifyTriggerFired is called then nothing is posted`() = runTest {
+        every { settings.scheduledTaskNotificationsEnabled } returns flowOf(false)
+        grantPostNotifications()
+
+        notifier.notifyTriggerFired("session-1", "Morning brief")
+
+        assertEquals(0, Shadows.shadowOf(notificationManager()).size())
+    }
+
+    @Test
+    fun `given a fired notification then its tap action deep-links into the bound session`() = runTest {
+        enable()
+
+        notifier.notifyTriggerFired("session-7", "Morning brief")
+
+        val posted = Shadows.shadowOf(notificationManager()).allNotifications.first()
+        val savedIntent: Intent = Shadows.shadowOf(posted.contentIntent).savedIntent
+        assertEquals("knotwork://chat/session-7", savedIntent.data.toString())
+    }
+
+    @Test
+    fun `given a fired notification when the outcome lands on the same session then it is superseded`() = runTest {
+        enable()
+
+        notifier.notifyTriggerFired("session-a", "Morning brief")
+        notifier.notifyCompleted("session-a", "Summary is ready.")
+
+        // Same session id → the outcome replaces the "fired" ping, never stacks.
+        val shadow = Shadows.shadowOf(notificationManager())
+        assertEquals(1, shadow.size())
+        assertEquals("Task completed", Shadows.shadowOf(shadow.allNotifications.first()).contentTitle)
+    }
+
+    @Test
     fun `given enabled when notifyFailed is called then posts failed title with reason body`() = runTest {
         enable()
 

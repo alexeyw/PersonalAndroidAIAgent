@@ -1,5 +1,7 @@
 package app.knotwork.android.domain.services
 
+import app.knotwork.android.domain.models.RunOrigin
+
 /**
  * Domain-level constraints a scheduled agent task must satisfy before the
  * background runtime is allowed to execute it.
@@ -43,8 +45,22 @@ interface TaskScheduler {
      *   arguments). `null` lets the worker create a fresh auto-named session.
      * @param constraints Domain constraints the runtime must honour before
      *   executing the task.
+     * @param pipelineId Id of the pipeline the run must execute against. `null`
+     *   defers to the application default (the `schedule_task` tool path);
+     *   entry surfaces (e.g. the Quick Settings tile) pass an explicit binding
+     *   so the run uses the user's chosen pipeline regardless of the default.
+     * @param origin What triggered the run, recorded on the persistent run
+     *   record. Defaults to [RunOrigin.SCHEDULER] for the scheduler tool; the
+     *   tile passes [RunOrigin.QUICK_TILE].
      */
-    fun scheduleOneTime(prompt: String, delayMinutes: Long, sessionId: String?, constraints: ScheduledTaskConstraints)
+    fun scheduleOneTime(
+        prompt: String,
+        delayMinutes: Long,
+        sessionId: String?,
+        constraints: ScheduledTaskConstraints,
+        pipelineId: String? = null,
+        origin: RunOrigin = RunOrigin.SCHEDULER,
+    )
 
     /**
      * Schedules a task to run repeatedly on a fixed interval.

@@ -68,6 +68,30 @@ enum class RunOrigin {
 
     /** The run was started by the background task scheduler. */
     SCHEDULER,
+
+    /**
+     * The run was started by an OS share target — the user shared text or an
+     * image into the app via `ACTION_SEND`. Behaves like an interactive run
+     * (the share activity brings the app to the foreground) but is attributed
+     * to the share surface for observability.
+     */
+    SHARE,
+
+    /**
+     * The run was started by the Quick Settings tile — a one-tap launch of the
+     * user's duty pipeline from the system shade. Executes in the background
+     * (the app may not be in the foreground), so it rides the same WorkManager
+     * path as [SCHEDULER] but is attributed to the tile surface.
+     */
+    QUICK_TILE,
+
+    /**
+     * The run was started by a user-defined automation trigger (a schedule, a
+     * charging event, or a network/Wi-Fi connection). Executes in the
+     * background through the same WorkManager path as [SCHEDULER] / [QUICK_TILE]
+     * but is attributed to the trigger surface for observability.
+     */
+    TRIGGER,
 }
 
 /**

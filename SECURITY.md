@@ -177,6 +177,70 @@ much of that derived content exists at all:
 - Deleting a chat session removes its runs and traces immediately,
   independent of the retention schedule.
 
+### Automation triggers and entry surfaces (background execution)
+
+The agent can now start a pipeline run **without an interactive prompt**: an
+**automation trigger** fires a bound pipeline when a device condition is met, and
+the OS **entry surfaces** (a share target and a Quick Settings tile) start one
+from outside the app. Autonomous, possibly-unattended execution is a new risk
+surface, and the design constrains it deliberately:
+
+- **Low-sensitivity conditions only (first wave).** A trigger fires on a **time
+  schedule** (every N, or daily at a set time), the device **starting to
+  charge**, or **gaining network / Wi-Fi connectivity**. None of these requires a
+  runtime permission, and none reads user content or location to make its
+  decision — the trigger evaluator sees only a charging flag, a connectivity
+  flag, and the clock. They reveal nothing about the user beyond the fact that a
+  schedule elapsed or a hardware state changed.
+- **High-sensitivity conditions are deliberately deferred.** Conditions that
+  would require privileged, content-bearing access — a
+  **NotificationListenerService** (reads every notification on the device),
+  **geofencing / location**, and **SMS** — are intentionally **out of scope for
+  this release**. They are higher-value automation but a much larger privacy and
+  attack surface (each is a standing read into sensitive user data), so they are
+  held back rather than shipped behind a checkbox. This is a design boundary, not
+  an oversight; if they are added later they will get their own threat-model
+  entry and an explicit, revocable consent.
+- **Inert until the user binds a pipeline.** A trigger, the share target and the
+  tile all do **nothing** until the user explicitly points them at a pipeline —
+  the privacy-first default. An unbound trigger never fires, and a bound trigger
+  is **auto-disabled** if its pipeline is later deleted, so a dangling automation
+  can never wake and run an unintended graph.
+- **No new execution path, no relaxed gate.** A fired trigger (or an entry
+  surface) runs through the **exact same background path** as a scheduled task —
+  the same persisted-run lifecycle, the same foreground-service promotion, and
+  the same engine — attributed with a distinct run origin
+  (`TRIGGER` / `SHARE` / `QUICK_TILE`) only for accounting. Crucially, the
+  **human-in-the-loop gate stays fully in force**: before any `SENSITIVE` or
+  `DESTRUCTIVE` tool executes inside a background trigger run, the run **parks**
+  on a persistent approval notification and waits — it does **not** auto-approve
+  because no UI is attached. An unattended automation can therefore *propose* a
+  sensitive action but never *execute* one unreviewed; an unanswered park is
+  failed once the approval window elapses (see *Run-history retention* above and
+  *Two-phase HITL* in [docs/architecture.md](docs/architecture.md)). The
+  background-execution arc — trigger fires → background run → notification →
+  result in the bound chat, including the park-and-approve path — is covered
+  end-to-end by an integration test.
+- **Each trigger owns one bound chat.** A trigger's runs land in a single chat
+  session named after it (recurring fires accumulate there), so the results of an
+  autonomous run are visible and auditable in the same encrypted store as the
+  rest of the conversation — never hidden.
+
+### Local usage statistics (on-device only)
+
+The optional **Usage statistics** screen records coarse counts of how the app is
+used — runs per pipeline, run outcomes, trigger firings by kind, and active
+days. **Nothing on this path ever leaves the device:** the counters live in the
+same SQLCipher-encrypted database as the rest of the user's data, the figures
+are deliberately coarse (a firing *kind*, never a schedule time or a Wi-Fi-only
+flag), and a **build-time architecture guard** forbids any network import on the
+telemetry surface so a regression cannot quietly add an upload. Recording is a
+local-only opt-in the user can disable or clear at any time; the *Share as text*
+/ *Export JSON* actions are voluntary, one-shot, and routed only to a
+destination the user picks (a share sheet or a file). This is **separate from
+crash reporting** below, which is the only path that can transmit anything
+off-device, and only after an explicit opt-in.
+
 ### Message attachments — images and audio (on-device guarantee)
 
 A chat message can now carry **multimodal** input: one image attachment
@@ -394,10 +458,15 @@ The threat model does not attempt to defend against:
 
 ## What Is Collected (Crash Reporting)
 
-Crash reporting is **opt-in and disabled by default**. The following controls
-apply:
+Crash reporting is **opt-in and disabled by default** — and entirely absent
+from the FOSS build:
 
-- The `AndroidManifest.xml` sets both
+- **The `foss` (F-Droid) build has no crash reporting at all.** It ships no
+  Firebase/Google dependency, binds a no-op crash reporter that records and
+  transmits nothing, and hides the consent toggle. The controls below apply to
+  the `full` distribution only. See [docs/release.md](docs/release.md) §
+  *FOSS / F-Droid build*.
+- The `full` flavour's `AndroidManifest.xml` overlay sets both
   `firebase_crashlytics_collection_enabled` and
   `firebase_analytics_collection_enabled` to `false`, which disables Firebase
   auto-collection at process start.

@@ -6,12 +6,24 @@ should be runnable verbatim from a clean checkout.
 
 ## 1. Variants at a glance
 
-| Variant    | Minified | Resource-shrunk | Signing                             | Output            |
-|------------|----------|------------------|-------------------------------------|-------------------|
-| `debug`    | no       | no               | Android debug key                   | `app-debug.apk`   |
-| `release`  | yes (R8) | yes              | Release keystore (debug fallback) * | `app-release.apk` / `app-release.aab` |
+The app has two build types (`debug` / `release`) and a **`distribution`
+product-flavour dimension** with two flavours, so a full build variant is
+`<flavour><BuildType>` (e.g. `fullRelease`, `fossDebug`):
 
-\* See §3 below. The `release` variant uses a dedicated `signingConfigs.release`
+| Flavour | Crash reporting          | Google/Firebase dependency | Intended channel        |
+|---------|--------------------------|----------------------------|-------------------------|
+| `full`  | Firebase Crashlytics (opt-in) | yes (`fullImplementation`) | Play Store / direct APK |
+| `foss`  | none (no-op)             | **none** — provably absent | **F-Droid** (§8)        |
+
+`full` is the default flavour (`isDefault = true`), so plain commands and
+Android Studio's variant selector resolve to it.
+
+| Build type | Minified | Resource-shrunk | Signing                             |
+|------------|----------|------------------|-------------------------------------|
+| `debug`    | no       | no               | Android debug key                   |
+| `release`  | yes (R8) | yes              | Release keystore (debug fallback) * |
+
+\* See §3 below. The `release` build type uses a dedicated `signingConfigs.release`
 when its credentials are provisioned via `local.properties` or environment
 variables; when they are absent it **falls back to the debug keystore** so a
 clean checkout still builds. A debug-signed `release` artefact is suitable for
@@ -23,16 +35,18 @@ sideloading on a developer device but **not** acceptable for Play Store upload.
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 
 # Universal arm64-v8a APK (used for sideload smoke-tests).
-./gradlew :app:assembleRelease
+./gradlew :app:assembleFullRelease   # Play / direct-APK build (Firebase)
+./gradlew :app:assembleFossRelease   # F-Droid build (no Google/Firebase) — see §8
 
-# Android App Bundle (the Play Store upload format).
-./gradlew :app:bundleRelease
+# Android App Bundle (the Play Store upload format; full flavour only).
+./gradlew :app:bundleFullRelease
 ```
 
-Outputs:
+Outputs (the flavour name is part of the path):
 
-- `app/build/outputs/apk/release/app-release.apk`
-- `app/build/outputs/bundle/release/app-release.aab`
+- `app/build/outputs/apk/full/release/app-full-release.apk`
+- `app/build/outputs/apk/foss/release/app-foss-release.apk`
+- `app/build/outputs/bundle/fullRelease/app-full-release.aab`
 
 The release variant strips every ABI except `arm64-v8a`
 (`build.gradle.kts → buildTypes.release.ndk.abiFilters`). With
@@ -246,15 +260,102 @@ bundletool get-size total --apks=app.apks
 ## 7. Quality gate before release
 
 ```bash
-./gradlew check :app:lintRelease :app:bundleRelease
+./gradlew check :app:lintFullRelease :app:bundleFullRelease
 ```
 
-- `check` aggregates `detekt`, `ktlintCheck`, `lintDebug`, `testDebugUnitTest`,
-  and `koverVerifyDebug`.
-- `lintRelease` re-runs lint on the release configuration (catches issues
+- `check` aggregates `detekt`, `ktlintCheck`, lint, the unit-test suite for
+  **both** flavours (`testFullDebugUnitTest` + `testFossDebugUnitTest`), and
+  `koverVerifyFullDebug` (coverage is measured on the representative `full`
+  variant; the flavours share every measured source).
+- `lintFullRelease` re-runs lint on the release configuration (catches issues
   hidden by debug-only resources).
-- `bundleRelease` confirms R8 + resource shrinking still produce a valid AAB.
+- `bundleFullRelease` confirms R8 + resource shrinking still produce a valid AAB.
 
 The integration PR gates on the same three commands in CI, plus the
 manual smoke test on the reference device described in
 [`testing.md`](testing.md) § *What the automated gate does NOT cover*.
+
+## 8. FOSS / F-Droid build
+
+F-Droid requires a build that is **free of proprietary dependencies and
+build-time tooling**. The `foss` flavour is exactly that build, and the
+`full` flavour is everything else:
+
+```bash
+# F-Droid-compatible release APK — no Google/Firebase anywhere in the graph.
+./gradlew :app:assembleFossRelease
+```
+
+How the freedom is guaranteed:
+
+- **No crash-reporting / telemetry SDK.** Firebase Crashlytics + Analytics are
+  declared as `fullImplementation(...)` in `app/build.gradle.kts`, so the
+  Crashlytics/Analytics SDKs (and their `firebase-common` /
+  `firebase-installations` / `play-services` transitive graph) are on the `full`
+  classpath only. Verify the `foss` classpath carries none of them:
+
+  ```bash
+  ./gradlew :app:dependencies --configuration fossReleaseRuntimeClasspath \
+      | grep -iE 'firebase-crashlytics|firebase-analytics|firebase-common|firebase-installations|play-services'
+  # expected: no output
+  ```
+
+- **No proprietary build plugin.** The `com.google.gms.google-services` and
+  `com.google.firebase.crashlytics` Gradle plugins are applied *conditionally* —
+  skipped whenever **every** requested Gradle task is `Foss`-scoped (the
+  `fossOnlyBuild` guard in `app/build.gradle.kts`). An `assembleFossRelease`
+  invocation therefore never loads them and never reads `google-services.json`.
+  (Mixed invocations such as `./gradlew check`, which also build/test the `full`
+  variant, do apply the plugins — the `full` variant needs the generated
+  `google_app_id` for its Robolectric tests. The `foss` artifact stays clean
+  because the F-Droid build is `foss`-only.)
+
+- **No crash collector in the app.** The `foss` flavour binds a no-op
+  `CrashReportingRepository` (`app/src/foss/.../NoOpCrashReportingRepository.kt`)
+  that records and transmits nothing, and the in-app crash-reporting consent
+  toggle is hidden (driven by `BuildConfig.CRASH_REPORTING_AVAILABLE = false`).
+  The `full` flavour keeps the Firebase-backed implementation under
+  `app/src/full/`.
+
+The `foss` and `full` flavours share **all** `main` sources; only the
+crash-reporting implementation, its Hilt module, and the Crashlytics/Analytics
+manifest meta-data differ between the two source sets. This keeps the two builds
+behaviourally identical apart from crash reporting.
+
+### Known residuals (out of scope for the crash-reporting split)
+
+Removing Crashlytics/Analytics is the blocker this flavour split targets. Two
+larger items remain before the `foss` build is fully F-Droid-*eligible* — they
+are inherent to the product, not to crash reporting, and are tracked separately:
+
+- **`com.google.firebase:firebase-encoders{,-json,-proto}`** still appear on the
+  `foss` classpath. They are **not** the telemetry SDK — they are Apache-2.0
+  serialization utilities pulled transitively by MediaPipe
+  (`com.google.mediapipe:tasks-text` → `com.google.android.datatransport` →
+  `firebase-encoders`), present in **both** flavours. They could be excluded from
+  the `foss` configuration, but MediaPipe declares `datatransport` for its own
+  logging, so an exclusion needs an on-device smoke of the embeddings / text
+  tasks before it can be trusted.
+- **Proprietary on-device inference binaries.** `com.google.ai.edge.litertlm`
+  and `com.google.mediapipe:tasks-text` ship prebuilt, non-free native
+  libraries. The official F-Droid repo cannot build these from source, so true
+  inclusion there requires either a free inference backend or F-Droid's
+  prebuilt-binary allowance. This is a product-architecture decision well beyond
+  the crash-reporting split.
+
+### Reproducible builds
+
+F-Droid prefers builds it can reproduce bit-for-bit from source. Two known
+sources of non-determinism in this project:
+
+- `BuildConfig.GIT_COMMIT_DATE_EPOCH_MS` is stamped from
+  `System.currentTimeMillis()` at configuration time (see `defaultConfig` in
+  `app/build.gradle.kts`). For a reproducible F-Droid build this should be
+  pinned to the commit timestamp (e.g. `SOURCE_DATE_EPOCH`) by the F-Droid
+  recipe rather than read from the wall clock.
+- `BuildConfig.GIT_SHA` resolves the short commit SHA, which is deterministic
+  for a given checkout.
+
+The `foss` release is otherwise a standard R8-minified arm64-v8a build (§4); the
+F-Droid build recipe should disable any signing config so F-Droid applies its
+own signature.

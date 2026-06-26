@@ -259,6 +259,14 @@
     <string name="knotwork_library_section_library">LIBRARY</string>
     <!-- "DEFAULT" pill on the row that's marked as the user's default pipeline. -->
     <string name="knotwork_library_badge_default">DEFAULT</string>
+    <!-- Outlined "SHARE" pill on the row bound to the OS Share target. -->
+    <string name="knotwork_library_badge_share">SHARE</string>
+    <!-- Accessibility reading for the SHARE pill. -->
+    <string name="knotwork_library_badge_share_cd">Bound to the share target</string>
+    <!-- Outlined "TILE" pill on the row bound to the Quick Settings tile. -->
+    <string name="knotwork_library_badge_tile">TILE</string>
+    <!-- Accessibility reading for the TILE pill. -->
+    <string name="knotwork_library_badge_tile_cd">Bound to the Quick Settings tile</string>
     <!-- Footer label introducing the Import JSON affordance. -->
     <string name="knotwork_library_footer_header">FROM BROWSER EDITOR</string>
     <!-- Import-JSON button label. -->
@@ -269,6 +277,8 @@
     <string name="knotwork_library_menu_load">Load in editor</string>
     <string name="knotwork_library_menu_set_default">Set as default</string>
     <string name="knotwork_library_menu_set_default_active">Default</string>
+    <string name="knotwork_library_menu_use_for_share">Use for sharing</string>
+    <string name="knotwork_library_menu_use_for_tile">Use for Quick Settings tile</string>
     <string name="knotwork_library_menu_rename">Rename</string>
     <string name="knotwork_library_menu_duplicate">Duplicate</string>
     <string name="knotwork_library_menu_export">Export JSON</string>
@@ -445,6 +455,24 @@
     <string name="knotwork_settings_cat_about_title">About</string>
     <string name="knotwork_settings_cat_about_summary">Version · identity · reset</string>
 
+    <!-- Usage statistics (Privacy → on-device local telemetry) -->
+    <string name="knotwork_settings_privacy_usage_title">Usage statistics</string>
+    <string name="knotwork_settings_privacy_usage_subtitle">On-device counts · nothing leaves the device</string>
+    <string name="knotwork_usage_title">Usage statistics</string>
+    <string name="knotwork_usage_subtitle">On this device only</string>
+    <string name="knotwork_usage_record_label">Record usage on this device</string>
+    <string name="knotwork_usage_record_hint">Count runs and trigger firings locally, for your own analysis.</string>
+    <string name="knotwork_usage_local_only">Everything here is stored only on this device and is never sent anywhere.</string>
+    <string name="knotwork_usage_empty">No usage recorded yet. As you run pipelines and triggers fire, local counts appear here.</string>
+    <string name="knotwork_usage_section_runs">Runs</string>
+    <string name="knotwork_usage_section_pipelines">Runs by pipeline</string>
+    <string name="knotwork_usage_section_triggers">Trigger firings</string>
+    <string name="knotwork_usage_section_active_days">Active days</string>
+    <string name="knotwork_usage_none">None</string>
+    <string name="knotwork_usage_action_share">Share as text</string>
+    <string name="knotwork_usage_action_export">Export JSON</string>
+    <string name="knotwork_usage_action_reset">Reset statistics</string>
+
     <string name="knotwork_settings_system_instructions_counter" tools:ignore="PluralsCandidate">%1$d / %2$d chars · ≈ %3$d tok</string>
 
     <string name="knotwork_settings_restrictions_approve">Approve tool calls</string>
@@ -469,6 +497,8 @@
     <string name="knotwork_settings_notifications_long_running_subtitle">Ping when a pipeline runs &gt; 8 s in background.</string>
     <string name="knotwork_settings_notifications_scheduled_results">Scheduled task results</string>
     <string name="knotwork_settings_notifications_scheduled_results_subtitle">Notify when a scheduled task completes or fails.</string>
+    <string name="knotwork_settings_share_pipeline_title">Pipeline for sharing</string>
+    <string name="knotwork_settings_tile_pipeline_title">Quick Settings pipeline</string>
 
     <string name="knotwork_settings_crash_reporting_label">Send anonymous crash reports</string>
     <string name="knotwork_settings_crash_reporting_hint">Help improve stability by sharing anonymous crash data.</string>

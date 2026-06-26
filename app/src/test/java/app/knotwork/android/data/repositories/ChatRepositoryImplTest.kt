@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -46,6 +48,15 @@ class ChatRepositoryImplTest {
         repository.deleteSession("session-abc")
 
         coVerify { chatDao.deleteSessionCompletely("session-abc") }
+    }
+
+    @Test
+    fun `given sessionExists then delegates to the dao existence probe`() = runTest {
+        coEvery { chatDao.sessionExists("sess-1") } returns true
+        coEvery { chatDao.sessionExists("missing") } returns false
+
+        assertTrue(repository.sessionExists("sess-1"))
+        assertFalse(repository.sessionExists("missing"))
     }
 
     @Test

@@ -18,6 +18,8 @@ import app.knotwork.android.data.local.dao.PromptPresetDao
 import app.knotwork.android.data.local.dao.PromptTemplateDao
 import app.knotwork.android.data.local.dao.SkillDao
 import app.knotwork.android.data.local.dao.TraceStepDao
+import app.knotwork.android.data.local.dao.TriggerDao
+import app.knotwork.android.data.local.dao.UsageTelemetryDao
 import app.knotwork.android.data.local.models.ChatHistorySummaryEntity
 import app.knotwork.android.data.local.models.ChatMessageEntity
 import app.knotwork.android.data.local.models.ChatSessionEntity
@@ -34,6 +36,9 @@ import app.knotwork.android.data.local.models.PromptPresetEntity
 import app.knotwork.android.data.local.models.PromptTemplateEntity
 import app.knotwork.android.data.local.models.SkillEntity
 import app.knotwork.android.data.local.models.TraceStepEntity
+import app.knotwork.android.data.local.models.TriggerEntity
+import app.knotwork.android.data.local.models.UsageActiveDayEntity
+import app.knotwork.android.data.local.models.UsageCounterEntity
 
 /**
  * Main Room Database for the Android AI Agent.
@@ -65,8 +70,11 @@ import app.knotwork.android.data.local.models.TraceStepEntity
         SkillEntity::class,
         ChatHistorySummaryEntity::class,
         ModelPerformanceSampleEntity::class,
+        TriggerEntity::class,
+        UsageCounterEntity::class,
+        UsageActiveDayEntity::class,
     ],
-    version = 44,
+    version = 47,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -169,6 +177,23 @@ abstract class AppDatabase : RoomDatabase() {
      * @return The [ModelPerformanceDao] instance.
      */
     abstract fun modelPerformanceDao(): ModelPerformanceDao
+
+    /**
+     * Provides access to the [TriggerDao] backing user-defined automation
+     * triggers (the `triggers` table).
+     *
+     * @return The [TriggerDao] instance.
+     */
+    abstract fun triggerDao(): TriggerDao
+
+    /**
+     * Provides access to the [UsageTelemetryDao] backing the privacy-preserving
+     * local usage statistics (the `usage_counter` and `usage_active_day`
+     * tables). Every figure stays on-device.
+     *
+     * @return The [UsageTelemetryDao] instance.
+     */
+    abstract fun usageTelemetryDao(): UsageTelemetryDao
 
     companion object {
         /**
@@ -1004,6 +1029,95 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_43_44 = object : Migration(43, 44) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `chat_messages` ADD COLUMN `modelName` TEXT")
+            }
+        }
+
+        /**
+         * Adds the `triggers` table backing user-defined automation triggers
+         * (a persisted `condition → bound pipeline` rule). Additive — no
+         * existing rows are touched.
+         *
+         * The activation condition is stored as a JSON string in `conditionJson`
+         * (see [app.knotwork.android.domain.triggerio.TriggerConditionCodec]) so
+         * the schema stays narrow across condition shapes. `pipelineId` carries
+         * no foreign key: a trigger may outlive its bound pipeline, and the fire
+         * path auto-disables a trigger whose pipeline has been deleted. The
+         * `enabled` index backs the active-trigger query the scheduler sync runs.
+         */
+        val MIGRATION_44_45 = object : Migration(44, 45) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `triggers` (
+                        `id` TEXT NOT NULL,
+                        `name` TEXT NOT NULL,
+                        `pipelineId` TEXT,
+                        `prompt` TEXT NOT NULL,
+                        `conditionJson` TEXT NOT NULL,
+                        `enabled` INTEGER NOT NULL,
+                        `armed` INTEGER NOT NULL DEFAULT 1,
+                        `createdAt` INTEGER NOT NULL,
+                        `lastFiredAt` INTEGER,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_triggers_enabled` ON `triggers` (`enabled`)",
+                )
+            }
+        }
+
+        /**
+         * Adds the `sessionId` column to the `triggers` table backing the bound
+         * chat session a trigger's background runs land in. Additive — the column
+         * is nullable with no default, so existing trigger rows keep `NULL` and
+         * lazily bind a session on their next fire.
+         *
+         * No foreign key: a trigger may outlive (or be reconfigured past) the
+         * bound session, which is detected at fire time and replaced rather than
+         * cascaded here.
+         */
+        val MIGRATION_45_46 = object : Migration(45, 46) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `triggers` ADD COLUMN `sessionId` TEXT")
+            }
+        }
+
+        /**
+         * Adds the local usage-telemetry tables backing the privacy-preserving
+         * Usage statistics screen. Additive — no existing rows are touched.
+         *
+         * - `usage_counter` — a generic `(category, counterKey) → count` tally
+         *   (terminal root runs per pipeline and per outcome, trigger firings per
+         *   kind). The composite primary key matches the entity so atomic UPSERT
+         *   increments target a single row.
+         * - `usage_active_day` — the set of distinct device-local active days
+         *   (one row per ISO `yyyy-MM-dd` day), backing the daily-active count.
+         *
+         * Both tables live in the SQLCipher-encrypted database and nothing they
+         * hold ever leaves the device.
+         */
+        val MIGRATION_46_47 = object : Migration(46, 47) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `usage_counter` (
+                        `category` TEXT NOT NULL,
+                        `counterKey` TEXT NOT NULL,
+                        `count` INTEGER NOT NULL,
+                        PRIMARY KEY(`category`, `counterKey`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `usage_active_day` (
+                        `day` TEXT NOT NULL,
+                        PRIMARY KEY(`day`)
+                    )
+                    """.trimIndent(),
+                )
             }
         }
     }

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholder monochrome glyph for the "Pipelines" shortcut. Tracked for
+     designer replacement in
+     project_docs/design_requests/36-1-entry-surface-icons.md. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M4,4m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M20,12m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0" />
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M4,20m-2,0a2,2 0,1 1,4 0a2,2 0,1 1,-4 0" />
+    <path
+        android:strokeColor="@android:color/white"
+        android:strokeWidth="2"
+        android:pathData="M6,4h6a2,2 0,0 1,2 2v6M6,20h6a2,2 0,0 0,2 -2v-6" />
+</vector>

@@ -23,7 +23,8 @@ import kotlinx.coroutines.flow.update
 
 /**
  * Mutable handle on the single [MutableStateFlow] of [ChatHomeScreenState]
- * that backs the mocked [ChatHomeViewModel]. Tests mutate the flow directly
+ * that backs the mocked [ChatHomeViewModel], plus the per-feature delegate
+ * mocks the screen dispatches through. Tests mutate the flow directly
  * (via [state] `.update { it.copy(...) }` or the convenience setters) to
  * drive the screen through state transitions, then call
  * `composeTestRule.waitForIdle()` to recompose.
@@ -31,10 +32,34 @@ import kotlinx.coroutines.flow.update
  * Exposing the mutable handle (rather than just the readable mock) keeps
  * the tests free of MockK re-stubbing between phases of a single scenario
  * (e.g. send → Generating → Idle).
+ *
+ * The delegate mocks are exposed so a test can `verify`/`every` **directly**
+ * on the delegate (`handles.hitl.approveTool()`) instead of chaining through
+ * the getter (`viewModel.hitl.approveTool()`). The chained form makes MockK
+ * apply the verification count to the intermediate `getHitl()` too, which the
+ * screen reads many times per composition — so an `exactly = 1` chain fails
+ * with "N matching calls found, but needs exactly 1". Verifying on the
+ * captured delegate sidesteps that entirely.
  */
 internal class ChatHomeMockHandles(
     /** The single source-of-truth flow the mocked ViewModel returns from `state`. */
     val state: MutableStateFlow<ChatHomeScreenState>,
+    /** The pipeline-binding delegate the screen reads as `viewModel.pipelineBinding`. */
+    val pipelineBinding: ChatHomePipelineBindingDelegate,
+    /** The threads/drawer delegate the screen reads as `viewModel.threads`. */
+    val threads: ChatHomeThreadsDelegate,
+    /** The reattach delegate the screen reads as `viewModel.reattach`. */
+    val reattach: ChatHomeReattachDelegate,
+    /** The HITL delegate the screen reads as `viewModel.hitl`. */
+    val hitl: ChatHomeHitlDelegate,
+    /** The console delegate the screen reads as `viewModel.console`. */
+    val console: ChatHomeConsoleDelegate,
+    /** The voice-input delegate the screen reads as `viewModel.voice`. */
+    val voice: ChatHomeVoiceDelegate,
+    /** The attachment delegate the screen reads as `viewModel.attachments`. */
+    val attachments: ChatHomeAttachmentDelegate,
+    /** The export/import/memory transfer delegate the screen reads as `viewModel.transfer`. */
+    val transfer: ChatHomeTransferDelegate,
 ) {
     /** Replaces the sealed visual state, leaving every other slice untouched. */
     fun setVisual(visual: ChatHomeUiState) {
@@ -164,5 +189,15 @@ internal fun mockChatHomeViewModel(
     every { transferDelegate.memorySaveEvents } returns MutableSharedFlow()
     every { vm.transfer } returns transferDelegate
 
-    return vm to ChatHomeMockHandles(state = stateFlow)
+    return vm to ChatHomeMockHandles(
+        state = stateFlow,
+        pipelineBinding = pipelineBindingDelegate,
+        threads = threadsDelegate,
+        reattach = reattachDelegate,
+        hitl = hitlDelegate,
+        console = consoleDelegate,
+        voice = voiceDelegate,
+        attachments = attachmentDelegate,
+        transfer = transferDelegate,
+    )
 }

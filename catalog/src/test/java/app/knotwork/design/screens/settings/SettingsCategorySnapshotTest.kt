@@ -110,8 +110,28 @@ class SettingsCategorySnapshotTest {
     }
 
     @Test
+    fun privacy_foss_hidden_light() = snapshot("privacy_foss_hidden", dark = false) {
+        PrivacySettingsContent(state = SettingsPreview.privacyFossHidden(), advancedExpanded = true)
+    }
+
+    @Test
     fun about_advanced_light() = snapshot("about_advanced", dark = false) {
         AboutSettingsContent(state = SettingsPreview.about(), advancedExpanded = true)
+    }
+
+    @Test
+    fun usage_populated_light() = snapshot("usage_populated", dark = false) {
+        UsageTelemetryContent(state = SettingsPreview.usageTelemetry())
+    }
+
+    @Test
+    fun usage_populated_dark() = snapshot("usage_populated", dark = true) {
+        UsageTelemetryContent(state = SettingsPreview.usageTelemetry())
+    }
+
+    @Test
+    fun usage_empty_light() = snapshot("usage_empty", dark = false) {
+        UsageTelemetryContent(state = SettingsPreview.usageTelemetryEmpty())
     }
 
     private fun snapshot(name: String, dark: Boolean, fontScale: Float = 1f, content: @Composable () -> Unit) {

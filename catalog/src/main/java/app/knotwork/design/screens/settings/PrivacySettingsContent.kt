@@ -25,21 +25,33 @@ fun PrivacySettingsContent(
     callbacks: SettingsCallbacks = noopSettingsCallbacks(),
     advancedExpanded: Boolean = false,
 ) {
+    // The crash-reporting consent toggle is only shown when the build has a live
+    // collector behind it (the full distribution). The FOSS / F-Droid build
+    // ships no Firebase and hides the row, dropping it from the row count too.
+    val basicRowCount = if (state.crashReportingAvailable) 1 else 0
     CategoryScaffold(
         title = stringResource(R.string.knotwork_settings_cat_privacy_title),
-        subtitle = stringResource(R.string.knotwork_settings_count, 1 + state.advancedSliders.size),
+        subtitle = stringResource(R.string.knotwork_settings_count, basicRowCount + state.advancedSliders.size),
         onBack = callbacks.onBack,
         modifier = modifier,
     ) {
-        SettingsAnchor(anchorKey = SettingsRowAnchors.CRASH_REPORTING_ENABLED) {
-            IconToggleRow(
-                icon = AppIcons.Shield,
-                title = stringResource(R.string.knotwork_settings_crash_reporting_label),
-                subtitle = stringResource(R.string.knotwork_settings_crash_reporting_hint),
-                checked = state.crashReportingEnabled,
-                onCheckedChange = callbacks.onCrashReportingToggle,
-            )
+        if (state.crashReportingAvailable) {
+            SettingsAnchor(anchorKey = SettingsRowAnchors.CRASH_REPORTING_ENABLED) {
+                IconToggleRow(
+                    icon = AppIcons.Shield,
+                    title = stringResource(R.string.knotwork_settings_crash_reporting_label),
+                    subtitle = stringResource(R.string.knotwork_settings_crash_reporting_hint),
+                    checked = state.crashReportingEnabled,
+                    onCheckedChange = callbacks.onCrashReportingToggle,
+                )
+            }
         }
+        NavLinkRow(
+            icon = AppIcons.Gauge,
+            title = stringResource(R.string.knotwork_settings_privacy_usage_title),
+            subtitle = stringResource(R.string.knotwork_settings_privacy_usage_subtitle),
+            onClick = callbacks.onOpenUsageStatistics,
+        )
         AdvancedDisclosure(initiallyExpanded = advancedExpanded) {
             Column(
                 modifier = Modifier.fillMaxWidth(),

@@ -108,6 +108,21 @@ configured it.
   with the **Audio support** toggle on the Models screen. A text-only model, a
   denied mic permission, or a busy engine each surface a calm, non-blocking
   notice. The clip is deleted after a successful transcription.
+- **Entry surfaces** — reach the agent from outside the app. A **share
+  target** runs your chosen pipeline over text or an image shared from any app
+  and opens the resulting chat; **launcher shortcuts** (long-press the icon)
+  offer New chat / Pipelines plus your recent chats; a **Quick Settings tile**
+  runs a duty pipeline in the background with one tap. Each surface stays inert
+  until you bind a pipeline to it (in *Settings → Background & triggers* or a
+  pipeline's library row menu) — a privacy-first default.
+- **Local usage statistics (privacy-preserving)** — a *Settings → Privacy →
+  Usage statistics* screen shows fully on-device counts of how you use the app:
+  runs per pipeline, run outcomes, trigger firings by kind, and active days.
+  **Nothing on this path ever leaves the device** (a build-time guard forbids
+  any network import on the telemetry surface); the figures live in the existing
+  encrypted database. Recording is on by default, framed as local-only, and can
+  be turned off or reset at any time, with a voluntary **Share as text** /
+  **Export JSON** for your own analysis.
 - **Settings as a searchable category hub** — a hub with a short *Basic*
   block and a search field over eight focused category sub-screens
   (Generation, Models, Memory, Pipelines & structured output, Tools &
@@ -205,8 +220,13 @@ configured it.
   different embedding provider).
 - Standalone browser-based editor (`pipeline-editor.html`) for authoring
   and exporting pipelines without launching the app.
-- Opt-in Firebase Crashlytics for anonymous crash reporting — off by
-  default, never collects message content. See [SECURITY.md](SECURITY.md).
+- Opt-in Firebase Crashlytics for anonymous crash reporting (`full` build only)
+  — off by default, never collects message content. The **`foss` build** ships
+  no Firebase/Google dependency at all and hides the toggle. See
+  [SECURITY.md](SECURITY.md).
+- **FOSS / F-Droid build available.** A `foss` product flavour with zero
+  proprietary dependencies and no crash reporting, suitable for F-Droid. See
+  [docs/release.md](docs/release.md) § *FOSS / F-Droid build*.
 - At-rest encryption: Room database is SQLCipher-encrypted, API keys are
   encrypted with AES-GCM under a dedicated Android Keystore key.
 
@@ -296,6 +316,8 @@ After installing:
 | Network          | OkHttp + Ktor (via Koog)                                |
 | Image loading    | Coil 3 (attachment thumbnails / viewer)                 |
 | Local storage    | Room + DataStore                                        |
+| Crash reporting  | Firebase Crashlytics (`full` flavour) / none (`foss`)   |
+| Distribution     | `full` (Play / direct APK) + `foss` (F-Droid, no Google)|
 | Testing          | JUnit + MockK                                           |
 | Architecture tests | Konsist (Clean-Architecture layer guard, in `check`)  |
 

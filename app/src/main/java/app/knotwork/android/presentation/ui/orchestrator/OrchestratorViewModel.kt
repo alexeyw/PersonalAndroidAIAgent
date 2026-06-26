@@ -6,6 +6,7 @@ import app.knotwork.android.R
 import app.knotwork.android.domain.engine.DefaultPipelineFactory
 import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.ConnectionModel
+import app.knotwork.android.domain.models.EntrySurface
 import app.knotwork.android.domain.models.NodeContextConfig
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
@@ -37,10 +38,12 @@ import app.knotwork.android.domain.usecases.ImportPipelineUseCase
 import app.knotwork.android.domain.usecases.LoadPipelineFromPresetUseCase
 import app.knotwork.android.domain.usecases.LoadPipelineUseCase
 import app.knotwork.android.domain.usecases.RenamePipelineUseCase
+import app.knotwork.android.domain.usecases.ResolveSurfacePipelineUseCase
 import app.knotwork.android.domain.usecases.SavePipelineAsPresetUseCase
 import app.knotwork.android.domain.usecases.SavePipelineUseCase
 import app.knotwork.android.domain.usecases.SavePromptAsPresetUseCase
 import app.knotwork.android.domain.usecases.SavePromptTemplateUseCase
+import app.knotwork.android.domain.usecases.SetSurfacePipelineUseCase
 import app.knotwork.android.presentation.ui.common.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -85,6 +88,8 @@ class OrchestratorViewModel @Inject constructor(
     private val duplicatePipelineUseCase: DuplicatePipelineUseCase,
     private val deletePipelineUseCase: DeletePipelineUseCase,
     private val createPipelineUseCase: CreatePipelineUseCase,
+    private val resolveSurfacePipelineUseCase: ResolveSurfacePipelineUseCase,
+    private val setSurfacePipelineUseCase: SetSurfacePipelineUseCase,
     private val getPromptTemplatesUseCase: GetPromptTemplatesUseCase,
     private val savePromptTemplateUseCase: SavePromptTemplateUseCase,
     private val savePipelineAsPresetUseCase: SavePipelineAsPresetUseCase,
@@ -136,6 +141,7 @@ class OrchestratorViewModel @Inject constructor(
         observeLocalModels()
         observePromptTemplates()
         observeDefaultPipelineId()
+        observeSurfaceBindingIds()
     }
 
     /**
@@ -171,6 +177,27 @@ class OrchestratorViewModel @Inject constructor(
     }
 
     /**
+     * Mirrors the two OS-entry-surface bindings
+     * (`SettingsRepository.shareTargetPipelineId` /
+     * `quickSettingsTilePipelineId`) into [OrchestratorUiState] so the library
+     * renders the outlined "SHARE" / "TILE" pills on the bound rows and they
+     * update live the moment the user (re)binds a surface — from this screen's
+     * row menu ([bindPipelineToSurface]) or from Settings → Background.
+     */
+    private fun observeSurfaceBindingIds() {
+        viewModelScope.launch {
+            settingsRepository.shareTargetPipelineId.collect { id ->
+                _uiState.update { it.copy(shareTargetPipelineId = id) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.quickSettingsTilePipelineId.collect { id ->
+                _uiState.update { it.copy(quickSettingsTilePipelineId = id) }
+            }
+        }
+    }
+
+    /**
      * Marks [pipelineId] as the application-wide default pipeline. Used by
      * the library's "Set as default" menu item. The setting is observed by
      * the chat ViewModel which uses it in the TopAppBar subtitle and the
@@ -183,6 +210,26 @@ class OrchestratorViewModel @Inject constructor(
                 it.copy(feedbackMessage = UiText(R.string.orchestrator_feedback_default_pipeline_updated))
             }
         }
+    }
+
+    /**
+     * Binds [pipelineId] to an entry [surface] (library row menu "Use for
+     * sharing" / "Use for Quick Settings tile"). Mirrors [setDefaultPipeline];
+     * the binding is observed by the Background settings screen. The write goes
+     * through [SetSurfacePipelineUseCase] so every surface shares one dispatch
+     * point with [ResolveSurfacePipelineUseCase].
+     */
+    fun bindPipelineToSurface(surface: EntrySurface, pipelineId: String) {
+        viewModelScope.launch {
+            setSurfacePipelineUseCase(surface, pipelineId)
+            _uiState.update { it.copy(feedbackMessage = UiText(surfaceBoundFeedback(surface))) }
+        }
+    }
+
+    /** Snackbar feedback shown after binding a pipeline to [surface]. */
+    private fun surfaceBoundFeedback(surface: EntrySurface): Int = when (surface) {
+        EntrySurface.SHARE -> R.string.orchestrator_feedback_share_pipeline_bound
+        EntrySurface.QUICK_TILE -> R.string.orchestrator_feedback_tile_pipeline_bound
     }
 
     private fun observePromptTemplates() {
@@ -982,6 +1029,18 @@ class OrchestratorViewModel @Inject constructor(
             // immediately fall back to the new "first in library" default.
             if (result.isSuccess && _uiState.value.defaultPipelineId == pipelineId) {
                 settingsRepository.setDefaultPipelineId(null)
+            }
+            // Clear any per-surface entry-point binding dangling on the deleted
+            // pipeline so the surface falls back to its inert privacy-first
+            // default rather than a non-existent id. Looping EntrySurface.entries
+            // through the shared resolve/set use cases means a future surface is
+            // covered automatically (no per-surface copy-paste).
+            if (result.isSuccess) {
+                EntrySurface.entries.forEach { surface ->
+                    if (resolveSurfacePipelineUseCase(surface) == pipelineId) {
+                        setSurfacePipelineUseCase(surface, null)
+                    }
+                }
             }
             _uiState.update { state ->
                 state.copy(

@@ -65,6 +65,12 @@ object SettingsRowAnchors {
     /** Background · scheduled-task notifications toggle. */
     const val SCHEDULED_TASK_NOTIFICATIONS = "SCHEDULED_TASK_NOTIFICATIONS"
 
+    /** Background · share-target pipeline binding row. */
+    const val SHARE_TARGET_PIPELINE_ID = "SHARE_TARGET_PIPELINE_ID"
+
+    /** Background · Quick Settings tile pipeline binding row. */
+    const val QUICK_SETTINGS_TILE_PIPELINE_ID = "QUICK_SETTINGS_TILE_PIPELINE_ID"
+
     /** Privacy · crash-reporting toggle. */
     const val CRASH_REPORTING_ENABLED = "CRASH_REPORTING_ENABLED"
 
@@ -96,6 +102,8 @@ object SettingsRowAnchors {
         LINK_FILES_DOMAINS,
         LONG_RUNNING_TASKS_NOTIFICATIONS,
         SCHEDULED_TASK_NOTIFICATIONS,
+        SHARE_TARGET_PIPELINE_ID,
+        QUICK_SETTINGS_TILE_PIPELINE_ID,
         CRASH_REPORTING_ENABLED,
         IDENTITY,
         LINK_LICENSES,

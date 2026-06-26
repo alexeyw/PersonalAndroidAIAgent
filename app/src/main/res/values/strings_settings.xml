@@ -149,6 +149,7 @@
     <string name="notifications_scheduled_running_body">Agent is working in the background…</string>
     <string name="notifications_task_results_channel_name">Scheduled task results</string>
     <string name="notifications_task_results_channel_description">Outcome of scheduled background tasks.</string>
+    <string name="notifications_trigger_fired_title">Trigger fired</string>
     <string name="notifications_task_completed_title">Task completed</string>
     <string name="notifications_task_failed_title">Task failed</string>
     <string name="scheduled_session_name">Scheduled: %1$s</string>
@@ -171,4 +172,34 @@
     <string name="settings_cloud_retry_subtitle">Applies to all cloud providers and cloud embeddings. Transient failures (rate limits, 5xx, timeouts) are retried with exponential backoff; authentication errors are not.</string>
     <string name="settings_cloud_retry_attempts_label">Max attempts: %1$d (1 disables retries)</string>
     <string name="settings_cloud_retry_delay_label">Base delay: %1$d ms</string>
+
+    <!-- Entry-surface pipeline bindings (Background category) -->
+    <string name="settings_pipeline_not_set">Not set</string>
+    <string name="settings_pipeline_picker_share_title">Pipeline for sharing</string>
+    <string name="settings_pipeline_picker_tile_title">Quick Settings pipeline</string>
+    <string name="settings_pipeline_picker_none">None</string>
+
+    <!-- On-device usage statistics (Privacy → Usage statistics) -->
+    <string name="settings_usage_runs_total">Total: %1$d</string>
+    <string name="settings_usage_triggers_total">Total: %1$d</string>
+    <string name="settings_usage_outcome_completed">Completed</string>
+    <string name="settings_usage_outcome_failed">Failed</string>
+    <string name="settings_usage_outcome_cancelled">Cancelled</string>
+    <string name="settings_usage_outcome_interrupted">Interrupted</string>
+    <string name="settings_usage_outcome_value">%1$d (%2$d%%)</string>
+    <string name="settings_usage_pipeline_unknown">Unknown pipeline</string>
+    <string name="settings_usage_trigger_interval">Interval schedule</string>
+    <string name="settings_usage_trigger_daily">Daily schedule</string>
+    <string name="settings_usage_trigger_charging">Charging</string>
+    <string name="settings_usage_trigger_network">Network connected</string>
+    <string name="settings_usage_active_days_count">Days</string>
+    <string name="settings_usage_active_days_first">First</string>
+    <string name="settings_usage_active_days_last">Last</string>
+    <string name="settings_usage_active_days_none">—</string>
+    <string name="settings_usage_export_filename">knotwork-usage.json</string>
+    <string name="settings_usage_share_title">Knotwork usage statistics</string>
+    <string name="settings_usage_reset_title">Reset usage statistics?</string>
+    <string name="settings_usage_reset_body">This permanently clears every on-device usage count. It does not change the recording setting.</string>
+    <string name="settings_usage_reset_confirm">Reset</string>
+    <string name="settings_usage_reset_cancel">Cancel</string>
 </resources>

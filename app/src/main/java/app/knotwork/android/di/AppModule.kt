@@ -27,6 +27,8 @@ import app.knotwork.android.data.local.dao.PromptPresetDao
 import app.knotwork.android.data.local.dao.PromptTemplateDao
 import app.knotwork.android.data.local.dao.SkillDao
 import app.knotwork.android.data.local.dao.TraceStepDao
+import app.knotwork.android.data.local.dao.TriggerDao
+import app.knotwork.android.data.local.dao.UsageTelemetryDao
 import app.knotwork.android.data.services.WorkManagerTaskScheduler
 import app.knotwork.android.data.tools.local.AppFunctionDataCodec
 import app.knotwork.android.data.tools.local.LocalAppFunctionManager
@@ -38,9 +40,6 @@ import app.knotwork.android.presentation.notifications.ApprovalNotificationManag
 import app.knotwork.android.presentation.notifications.ClarificationNotificationManager
 import app.knotwork.android.presentation.notifications.ScheduledTaskNotifierImpl
 import app.knotwork.android.presentation.state.ActiveSessionTracker
-import com.google.firebase.FirebaseApp
-import com.google.firebase.analytics.FirebaseAnalytics
-import com.google.firebase.crashlytics.FirebaseCrashlytics
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -193,6 +192,9 @@ object AppModule {
                 AppDatabase.MIGRATION_41_42,
                 AppDatabase.MIGRATION_42_43,
                 AppDatabase.MIGRATION_43_44,
+                AppDatabase.MIGRATION_44_45,
+                AppDatabase.MIGRATION_45_46,
+                AppDatabase.MIGRATION_46_47,
             )
             // No destructive fallback on upgrade: every version bump must supply an explicit
             // migration above so user data survives. Destructive recreation is kept only for the
@@ -286,6 +288,19 @@ object AppModule {
     fun provideModelPerformanceDao(database: AppDatabase): ModelPerformanceDao = database.modelPerformanceDao()
 
     /**
+     * Provides the [TriggerDao] backing user-defined automation triggers.
+     */
+    @Provides
+    fun provideTriggerDao(database: AppDatabase): TriggerDao = database.triggerDao()
+
+    /**
+     * Provides the [UsageTelemetryDao] backing the privacy-preserving local
+     * usage statistics (the `usage_counter` / `usage_active_day` tables).
+     */
+    @Provides
+    fun provideUsageTelemetryDao(database: AppDatabase): UsageTelemetryDao = database.usageTelemetryDao()
+
+    /**
      * Provides the singleton instance of Converters for Room mapping.
      */
     @Provides
@@ -351,56 +366,11 @@ object AppModule {
     @Singleton
     fun provideTaskScheduler(impl: WorkManagerTaskScheduler): TaskScheduler = impl
 
-    /**
-     * Provides the Firebase Crashlytics singleton.
-     *
-     * Wired through Hilt so unit tests can substitute a mock instead of
-     * touching the static `getInstance()` entry point. Crashlytics
-     * auto-collection is disabled by manifest meta-data — actual
-     * upload only happens once the user opts in via
-     * [app.knotwork.android.domain.repositories.CrashReportingRepository.setEnabled].
-     *
-     * Defensively initialises [FirebaseApp] if it hasn't been by
-     * `FirebaseInitProvider` yet. The `ProcessPhoenix.triggerRebirth`
-     * restart spawns a transient `:phoenix` sub-process whose Hilt
-     * graph is constructed before the Firebase ContentProvider has had
-     * a chance to fire — without this guard the process crashes with
-     * `IllegalStateException: Default FirebaseApp is not initialized`
-     * and the restart silently fails.
-     */
-    @Provides
-    @Singleton
-    fun provideFirebaseCrashlytics(@ApplicationContext appContext: Context): FirebaseCrashlytics {
-        ensureFirebaseInitialised(context = appContext)
-        return FirebaseCrashlytics.getInstance()
-    }
-
-    /**
-     * Provides the Firebase Analytics singleton. Analytics is required as
-     * a transitive dependency of Crashlytics; both opt-in flags toggle
-     * together inside `FirebaseCrashReportingRepositoryImpl`.
-     *
-     * Shares the same `:phoenix`-process resilience as
-     * [provideFirebaseCrashlytics].
-     */
-    @Provides
-    @Singleton
-    fun provideFirebaseAnalytics(@ApplicationContext appContext: Context): FirebaseAnalytics {
-        ensureFirebaseInitialised(context = appContext)
-        return FirebaseAnalytics.getInstance(appContext)
-    }
-
-    /**
-     * Idempotent helper that calls [FirebaseApp.initializeApp] when no
-     * default app has been registered yet. `initializeApp(Context)` is a
-     * no-op the second time around, so this is safe to call from every
-     * Firebase provider without churn.
-     */
-    private fun ensureFirebaseInitialised(context: Context) {
-        if (FirebaseApp.getApps(context).isEmpty()) {
-            runCatching { FirebaseApp.initializeApp(context) }
-        }
-    }
+    // The Firebase Crashlytics / Analytics singleton providers (and the
+    // `CrashReportingRepository` binding) live in the `full`-flavour
+    // `CrashReportingModule` (under `src/full`) so the shared `main` DI graph
+    // never references the Firebase SDK. The `foss` flavour binds a no-op
+    // implementation with no Firebase dependency.
 
     /**
      * Provides the singleton instance of ApprovalNotifier.

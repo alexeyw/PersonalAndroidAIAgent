@@ -28,7 +28,7 @@ fun BackgroundSettingsContent(
 ) {
     CategoryScaffold(
         title = stringResource(R.string.knotwork_settings_cat_background_title),
-        subtitle = stringResource(R.string.knotwork_settings_count, 2 + state.advancedSliders.size),
+        subtitle = stringResource(R.string.knotwork_settings_count, BASIC_ROW_COUNT + state.advancedSliders.size),
         onBack = callbacks.onBack,
         modifier = modifier,
     ) {
@@ -50,6 +50,22 @@ fun BackgroundSettingsContent(
                 onCheckedChange = callbacks.onScheduledResultsToggle,
             )
         }
+        SettingsAnchor(anchorKey = SettingsRowAnchors.SHARE_TARGET_PIPELINE_ID) {
+            NavLinkRow(
+                icon = AppIcons.Share,
+                title = stringResource(R.string.knotwork_settings_share_pipeline_title),
+                subtitle = state.shareTargetPipelineLabel,
+                onClick = callbacks.onShareTargetPipelineClick,
+            )
+        }
+        SettingsAnchor(anchorKey = SettingsRowAnchors.QUICK_SETTINGS_TILE_PIPELINE_ID) {
+            NavLinkRow(
+                icon = AppIcons.Bolt,
+                title = stringResource(R.string.knotwork_settings_tile_pipeline_title),
+                subtitle = state.quickTilePipelineLabel,
+                onClick = callbacks.onQuickTilePipelineClick,
+            )
+        }
         AdvancedDisclosure(initiallyExpanded = advancedExpanded) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -64,3 +80,6 @@ fun BackgroundSettingsContent(
         }
     }
 }
+
+/** Number of Basic-tier rows on the Background sub-screen (two toggles + two pipeline bindings). */
+private const val BASIC_ROW_COUNT = 4

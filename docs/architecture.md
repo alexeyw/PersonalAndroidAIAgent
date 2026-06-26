@@ -968,6 +968,33 @@ A refused tool call (path escape, quota exceeded, non-allowlisted host,
 stored-key leak) never crashes the run: it maps to a `ToolResult.Error` that
 lands in the observation log, and the pipeline keeps executing.
 
+### 4.6. Crash reporting and distribution flavours
+
+Crash reporting sits behind the domain port `CrashReportingRepository`
+(`setEnabled` / `recordException` / `setCustomKey`), so the rest of the app —
+`App`, `GraphExecutionEngine`, the Settings privacy delegate, the
+`CrashlyticsTimberTree` log sink — depends only on the flavour-agnostic
+interface and never imports the Firebase SDK.
+
+The app declares a `distribution` product-flavour dimension with two flavours,
+and the crash-reporting implementation is the **only** behavioural difference
+between them:
+
+| Flavour | `CrashReportingRepository` impl | Firebase on classpath | Channel  |
+|---------|---------------------------------|-----------------------|----------|
+| `full`  | `FirebaseCrashReportingRepositoryImpl` (`src/full`) | yes (`fullImplementation`) | Play / direct APK |
+| `foss`  | `NoOpCrashReportingRepository` (`src/foss`) — records nothing | **none** | F-Droid |
+
+Each flavour source set ships its own `di/CrashReportingModule` (same FQN,
+exactly one compiled per build) that binds the interface to the flavour's impl;
+the `full` module also provides the `FirebaseCrashlytics` / `FirebaseAnalytics`
+singletons. The shared `main` graph contains no Firebase binding at all — a
+Konsist guard (`FirebaseIsolationKonsistTest`) fails the build if any `main`
+source imports `com.google.firebase.*`. The `foss` build additionally hides the
+in-app crash-reporting consent toggle via `BuildConfig.CRASH_REPORTING_AVAILABLE`.
+Build-time mechanics (conditional Google plugins, F-Droid build) live in
+[`release.md`](release.md) § *FOSS / F-Droid build*.
+
 ---
 
 ## 5. Persistence
@@ -1151,7 +1178,10 @@ idle. Three components coordinate that lifecycle:
 | `AgentWorker` (WorkManager)| Executes deferred / scheduled tasks (driven by `ScheduleTaskUseCase`).                        |
 | `AgentIdleManager`         | Watches device idle / Doze state and signals when the agent can safely unload the model.     |
 | `AgentPowerManager`        | Watches charging and battery state; throttles or defers work on low battery.                  |
-| `ScheduledTaskNotifier`    | Announces scheduled-run outcomes ("Task completed" / "Task failed") with a deep-link into the session. |
+| `ScheduledTaskNotifier`    | Announces scheduled / trigger runs: the "Trigger fired" start notice and the "Task completed" / "Task failed" outcomes, each deep-linking into the session. |
+| `TriggerWatchWorker`       | Periodic (~15 min) poll that evaluates due triggers through `FireTriggerUseCase` (the always-on path for time and network triggers, and the backstop for charging). |
+| `ChargingTriggerSweepWorker` | Charging-constrained one-shot (`setRequiresCharging`) that the OS wakes the instant the device is plugged in, firing charging triggers without waiting for the poll. |
+| `WorkManagerTriggerScheduler` | `TriggerScheduler` impl: registers / cancels the per-condition watches as triggers are created, edited, enabled or deleted, so changes take effect immediately. |
 | `PendingInteractionMaintenanceWorker` | Periodic (6 h) expiry pass: fails runs whose parked approval / clarification outlived the approval window. |
 | `RunRetentionWorker`       | Daily (charging + idle) retention pass over `pipeline_runs` / `trace_steps` — see *Run retention* below. |
 | `MemoryCompactionWorker`   | Daily (charging + idle) long-term-memory compaction (see the memory lifecycle section).        |
@@ -1300,6 +1330,73 @@ Both limits are user-tunable in **Settings → Privacy** (defaults: 20
 runs per chat, 30 days). Non-terminal runs — including parked
 `WAITING_*` runs — are never retention candidates; their lifetime is
 bounded by the approval window instead (see above).
+
+### 6.4. Triggers and entry surfaces → background runs
+
+A run no longer needs an interactive prompt to start. Two product
+surfaces enqueue work into the same background path:
+
+- **Automation triggers** fire a bound pipeline when a device condition
+  is met — a time schedule (interval or daily), the device starting to
+  charge, or gaining network / Wi-Fi connectivity. The decision is a
+  pure-domain core: `EvaluateTriggerFiringUseCase` takes a `Trigger` plus
+  a `PowerState` / `NetworkState` snapshot and the clock and returns
+  *fire* / *re-arm* / *skip*, with no Android or I/O dependency.
+  `FireTriggerUseCase` is the thin worker-side orchestrator around it:
+  load the trigger, defer the yes/no to the evaluator, and on *fire*
+  resolve the bound chat session, record the fire/disarm state, enqueue,
+  and post the "Trigger fired" notification.
+- **OS entry surfaces** — the **share target** and the **Quick Settings
+  tile** — start a run from outside the app. Each is **inert until the
+  user binds a pipeline** (the privacy default) and enqueues with an
+  explicit `pipelineId` so it runs the user's choice regardless of the
+  app default.
+
+Neither is a new execution path. Both land on
+`TaskScheduler.scheduleOneTime(...)` (the `WorkManagerTaskScheduler`
+impl), which drives `AgentWorker` → the **same** `TaskQueueManager` →
+`GraphExecutionEngine` chain as a `schedule_task` run — only the
+`RunOrigin` differs (`TRIGGER` / `SHARE` / `QUICK_TILE`), recorded on the
+persistent `pipeline_runs` record for accounting. Everything in §6.1–§6.3
+therefore applies unchanged: the persisted run lifecycle, foreground-service
+promotion, headless engine unload, the two-phase HITL gate (a `SENSITIVE`
+/ `DESTRUCTIVE` tool inside an **unattended** trigger run **parks** on a
+persistent approval notification rather than auto-approving), and run
+retention.
+
+**Bound session.** A scheduled task inherits the chat it was scheduled
+from; a trigger has no originating conversation, so it lazily owns one —
+a session named after the trigger, minted on first fire and persisted
+**only after** the enqueue succeeds (a failed fire strands nothing).
+Recurring fires accumulate in that one session; a deleted session is
+re-created on the next fire.
+
+**Firing latency.** Time and network triggers ride a periodic
+(~15-minute) `TriggerWatchWorker` poll. Charging triggers additionally
+register a charging-constrained one-shot (`ChargingTriggerSweepWorker`
+via `setRequiresCharging`) that the OS wakes the instant the device is
+plugged in — even with the app closed — so a charging trigger fires
+within seconds instead of waiting for the poll; the poll remains a
+backstop and the unplug edge re-arms the one-shot. Event triggers fire on
+the *edge* into the satisfied state (an `armed` latch), so a sustained
+state (e.g. an overnight charge) fires exactly once.
+
+```mermaid
+flowchart TD
+    Cond["Condition met<br/>(charge edge / poll / tile / share)"] --> Fire[FireTriggerUseCase]
+    Fire --> Eval{EvaluateTriggerFiringUseCase}
+    Eval -- skip / re-arm --> Done([No run])
+    Eval -- fire --> Bound[Resolve bound session<br/>+ record fired/disarm]
+    Bound --> Sched["TaskScheduler.scheduleOneTime<br/>(origin = TRIGGER)"]
+    Sched --> Worker[AgentWorker]
+    Worker --> Queue["TaskQueueManager → GraphExecutionEngine<br/>(same path as a scheduled task)"]
+    Queue --> Notify["ScheduledTaskNotifier<br/>'Trigger fired' / outcome"]
+    Queue --> Hitl{SENSITIVE / DESTRUCTIVE tool?}
+    Hitl -- yes, unattended --> Park[Park: WAITING_APPROVAL<br/>+ approval notification]
+    Park -- approve from notification --> Queue
+    Hitl -- no --> Result[Final answer in the bound chat]
+    Queue --> Result
+```
 
 ---
 

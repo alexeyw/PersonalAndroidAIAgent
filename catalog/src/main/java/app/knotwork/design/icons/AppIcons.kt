@@ -106,6 +106,7 @@ import app.knotwork.design.icons.imagevector.knotworkThemeIcon
 import app.knotwork.design.icons.imagevector.knotworkToolActiveIcon
 import app.knotwork.design.icons.imagevector.knotworkToolIcon
 import app.knotwork.design.icons.imagevector.knotworkTrashIcon
+import app.knotwork.design.icons.imagevector.knotworkTriggerIcon
 import app.knotwork.design.icons.imagevector.knotworkUndoIcon
 import app.knotwork.design.icons.imagevector.knotworkWarnIcon
 import app.knotwork.design.icons.imagevector.knotworkWordmarkIcon
@@ -312,6 +313,9 @@ object AppIcons {
 
     /** `I.skill` — Skill library entry (framed star, mixed glyph). */
     val Skill: ImageVector get() = knotworkSkillIcon
+
+    /** `I.trigger` — Triggers management entry (framed bolt). */
+    val Trigger: ImageVector get() = knotworkTriggerIcon
 
     /** `I.branch` — branch / IF. */
     val Branch: ImageVector get() = knotworkBranchIcon

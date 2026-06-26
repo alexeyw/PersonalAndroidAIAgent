@@ -76,7 +76,7 @@ class ChatHomeConsolePaneTest {
 
     @Test
     fun tabStrip_clickingVars_invokesOnConsoleTabChange() {
-        val (viewModel, _) = mockChatHomeViewModel(
+        val (viewModel, handles) = mockChatHomeViewModel(
             initialConsoleSnap = ConsoleSnap.Partial,
             initialConsoleLines = listOf(sampleLine("first line")),
         )
@@ -87,12 +87,12 @@ class ChatHomeConsolePaneTest {
         composeTestRule.onNodeWithText(ConsoleTab.Vars.name).performClick()
         composeTestRule.waitForIdle()
 
-        verify(exactly = 1) { viewModel.console.onConsoleTabChange(ConsoleTab.Vars) }
+        verify(exactly = 1) { handles.console.onConsoleTabChange(ConsoleTab.Vars) }
     }
 
     @Test
     fun tabStrip_clickingTraces_invokesOnConsoleTabChange() {
-        val (viewModel, _) = mockChatHomeViewModel(
+        val (viewModel, handles) = mockChatHomeViewModel(
             initialConsoleSnap = ConsoleSnap.Partial,
         )
         setContentWithConsoleOpen(viewModel)
@@ -100,12 +100,12 @@ class ChatHomeConsolePaneTest {
         composeTestRule.onNodeWithText(ConsoleTab.Traces.name).performClick()
         composeTestRule.waitForIdle()
 
-        verify(exactly = 1) { viewModel.console.onConsoleTabChange(ConsoleTab.Traces) }
+        verify(exactly = 1) { handles.console.onConsoleTabChange(ConsoleTab.Traces) }
     }
 
     @Test
     fun sourceFilterChip_tap_invokesOnConsoleFilterChange() {
-        val (viewModel, _) = mockChatHomeViewModel(
+        val (viewModel, handles) = mockChatHomeViewModel(
             initialConsoleSnap = ConsoleSnap.Partial,
             initialConsoleLines = listOf(sampleLine("hello")),
         )
@@ -117,7 +117,7 @@ class ChatHomeConsolePaneTest {
         composeTestRule.waitForIdle()
 
         verify(exactly = 1) {
-            viewModel.console.onConsoleFilterChange(
+            handles.console.onConsoleFilterChange(
                 match {
                     it.sources == setOf(
                         ConsoleSource.TOOL,
@@ -154,7 +154,7 @@ class ChatHomeConsolePaneTest {
 
     @Test
     fun memoryFilterChip_tap_invokesOnConsoleFilterChange() {
-        val (viewModel, _) = mockChatHomeViewModel(
+        val (viewModel, handles) = mockChatHomeViewModel(
             initialConsoleSnap = ConsoleSnap.Partial,
             initialConsoleLines = listOf(sampleLine("hello")),
         )
@@ -165,7 +165,7 @@ class ChatHomeConsolePaneTest {
         composeTestRule.waitForIdle()
 
         verify(exactly = 1) {
-            viewModel.console.onConsoleFilterChange(
+            handles.console.onConsoleFilterChange(
                 match {
                     it.sources == setOf(
                         ConsoleSource.NODE,
@@ -180,7 +180,7 @@ class ChatHomeConsolePaneTest {
 
     @Test
     fun searchHeaderIcon_tap_invokesToggleConsoleSearch() {
-        val (viewModel, _) = mockChatHomeViewModel(
+        val (viewModel, handles) = mockChatHomeViewModel(
             initialConsoleSnap = ConsoleSnap.Partial,
         )
         setContentWithConsoleOpen(viewModel)
@@ -190,12 +190,12 @@ class ChatHomeConsolePaneTest {
         composeTestRule.onNodeWithContentDescription(searchCd).performClick()
         composeTestRule.waitForIdle()
 
-        verify(exactly = 1) { viewModel.console.toggleConsoleSearch() }
+        verify(exactly = 1) { handles.console.toggleConsoleSearch() }
     }
 
     @Test
     fun searchField_textInput_forwardsToOnConsoleSearchQueryChange() {
-        val (viewModel, _) = mockChatHomeViewModel(
+        val (viewModel, handles) = mockChatHomeViewModel(
             initialConsoleSnap = ConsoleSnap.Partial,
             // Non-null searchQuery makes the inline search bar visible.
             initialConsoleSearchQuery = "",
@@ -207,12 +207,12 @@ class ChatHomeConsolePaneTest {
         composeTestRule.onNodeWithContentDescription(fieldCd).performTextInput("err")
         composeTestRule.waitForIdle()
 
-        verify(atLeast = 1) { viewModel.console.onConsoleSearchQueryChange(any()) }
+        verify(atLeast = 1) { handles.console.onConsoleSearchQueryChange(any()) }
     }
 
     @Test
     fun clearHeaderIcon_tap_invokesRequestConsoleClear() {
-        val (viewModel, _) = mockChatHomeViewModel(
+        val (viewModel, handles) = mockChatHomeViewModel(
             initialConsoleSnap = ConsoleSnap.Partial,
         )
         setContentWithConsoleOpen(viewModel)
@@ -222,12 +222,12 @@ class ChatHomeConsolePaneTest {
         composeTestRule.onNodeWithContentDescription(clearCd).performClick()
         composeTestRule.waitForIdle()
 
-        verify(atLeast = 1) { viewModel.console.requestConsoleClear() }
+        verify(atLeast = 1) { handles.console.requestConsoleClear() }
     }
 
     @Test
     fun clearConfirmDialog_confirmButton_invokesConfirmConsoleClear() {
-        val (viewModel, _) = mockChatHomeViewModel(
+        val (viewModel, handles) = mockChatHomeViewModel(
             initialConsoleSnap = ConsoleSnap.Partial,
             initialConsoleClearConfirm = true,
         )
@@ -238,12 +238,12 @@ class ChatHomeConsolePaneTest {
         composeTestRule.onNodeWithText(confirmLabel).performClick()
         composeTestRule.waitForIdle()
 
-        verify(exactly = 1) { viewModel.console.confirmConsoleClear() }
+        verify(exactly = 1) { handles.console.confirmConsoleClear() }
     }
 
     @Test
     fun clearConfirmDialog_cancelButton_invokesDismissConsoleClear() {
-        val (viewModel, _) = mockChatHomeViewModel(
+        val (viewModel, handles) = mockChatHomeViewModel(
             initialConsoleSnap = ConsoleSnap.Partial,
             initialConsoleClearConfirm = true,
         )
@@ -254,18 +254,18 @@ class ChatHomeConsolePaneTest {
         composeTestRule.onNodeWithText(cancelLabel).performClick()
         composeTestRule.waitForIdle()
 
-        verify(atLeast = 1) { viewModel.console.dismissConsoleClear() }
+        verify(atLeast = 1) { handles.console.dismissConsoleClear() }
     }
 
     @Test
     fun copyLine_longPressThenMenuItem_writesPayloadToClipboard() {
         val line = sampleLine("the line we copy")
-        val (viewModel, _) = mockChatHomeViewModel(
+        val (viewModel, handles) = mockChatHomeViewModel(
             initialConsoleSnap = ConsoleSnap.Partial,
             initialConsoleLines = listOf(line),
             initialConsoleFilter = ConsoleFilter.allOn,
         )
-        every { viewModel.console.buildConsoleLineCopyPayload(line) } returns "12:00:00.000 [NODE] the line we copy"
+        every { handles.console.buildConsoleLineCopyPayload(line) } returns "12:00:00.000 [NODE] the line we copy"
         val clipboard = RecordingClipboardManager()
         setContentWithConsoleOpen(viewModel, clipboard = clipboard)
 
@@ -285,7 +285,7 @@ class ChatHomeConsolePaneTest {
         assert(clipboard.lastText?.text == "12:00:00.000 [NODE] the line we copy") {
             "Clipboard payload mismatch — got: ${clipboard.lastText?.text}"
         }
-        verify(exactly = 1) { viewModel.console.signalConsoleLineCopied() }
+        verify(exactly = 1) { handles.console.signalConsoleLineCopied() }
     }
 
     private fun sampleLine(text: String): ConsoleLine = ConsoleLine(

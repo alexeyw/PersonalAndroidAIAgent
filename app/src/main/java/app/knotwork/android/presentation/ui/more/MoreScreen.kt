@@ -19,8 +19,9 @@ import app.knotwork.design.screens.more.MoreViewState
 
 /**
  * Landing screen of the "More" bottom-nav tab. Renders the Knotwork
- * [MoreContent] surface with seven navigation rows, live counters, and a
- * footer status pill summarising recent outbound network activity.
+ * [MoreContent] surface with the secondary-destination navigation rows, live
+ * counters, and a footer status pill summarising recent outbound network
+ * activity.
  */
 @Composable
 fun MoreScreen(
@@ -31,6 +32,7 @@ fun MoreScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToPrompts: () -> Unit,
     onNavigateToSkills: () -> Unit,
+    onNavigateToTriggers: () -> Unit,
     onNavigateToAbout: () -> Unit,
     onNavigateToLibrary: () -> Unit,
     onNavigateToFiles: () -> Unit,
@@ -43,6 +45,8 @@ fun MoreScreen(
         titlePrompts = stringResource(R.string.more_row_prompts),
         titleSkills = stringResource(R.string.more_skills_title),
         subtitleSkills = stringResource(R.string.more_skills_subtitle),
+        titleTriggers = stringResource(R.string.more_row_triggers),
+        subtitleTriggers = stringResource(R.string.more_triggers_subtitle),
         titleTasks = stringResource(R.string.more_row_task_monitor),
         titleMetrics = stringResource(R.string.more_row_monitoring),
         titleSettings = stringResource(R.string.more_row_settings),
@@ -53,6 +57,7 @@ fun MoreScreen(
         onModels = onNavigateToModels,
         onPrompts = onNavigateToPrompts,
         onSkills = onNavigateToSkills,
+        onTriggers = onNavigateToTriggers,
         onTasks = onNavigateToTaskMonitor,
         onMetrics = onNavigateToMonitoring,
         onSettings = onNavigateToSettings,
@@ -79,6 +84,8 @@ internal fun MoreUiState.toViewState(
     titlePrompts: String,
     titleSkills: String,
     subtitleSkills: String,
+    titleTriggers: String,
+    subtitleTriggers: String,
     titleTasks: String,
     titleMetrics: String,
     titleSettings: String,
@@ -89,6 +96,7 @@ internal fun MoreUiState.toViewState(
     onModels: () -> Unit,
     onPrompts: () -> Unit,
     onSkills: () -> Unit,
+    onTriggers: () -> Unit,
     onTasks: () -> Unit,
     onMetrics: () -> Unit,
     onSettings: () -> Unit,
@@ -131,6 +139,13 @@ internal fun MoreUiState.toViewState(
             subtitle = subtitleSkills,
             icon = AppIcons.Skill,
             onClick = onSkills,
+        ),
+        MoreRow(
+            id = "triggers",
+            title = titleTriggers,
+            subtitle = subtitleTriggers,
+            icon = AppIcons.Trigger,
+            onClick = onTriggers,
         ),
         MoreRow(
             id = "library",

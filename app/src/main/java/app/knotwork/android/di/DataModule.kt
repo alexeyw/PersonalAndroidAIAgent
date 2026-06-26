@@ -22,7 +22,6 @@ import app.knotwork.android.data.repositories.AssetBundledSkillSource
 import app.knotwork.android.data.repositories.BundledSkillSource
 import app.knotwork.android.data.repositories.ChatRepositoryImpl
 import app.knotwork.android.data.repositories.ClarificationRepositoryImpl
-import app.knotwork.android.data.repositories.FirebaseCrashReportingRepositoryImpl
 import app.knotwork.android.data.repositories.IdentityRepositoryImpl
 import app.knotwork.android.data.repositories.LocalModelRepositoryImpl
 import app.knotwork.android.data.repositories.LocalPipelinePresetRepositoryImpl
@@ -42,15 +41,17 @@ import app.knotwork.android.data.repositories.PromptRepositoryImpl
 import app.knotwork.android.data.repositories.RunTraceRepositoryImpl
 import app.knotwork.android.data.repositories.SkillRepositoryImpl
 import app.knotwork.android.data.repositories.ToolRepositoryImpl
+import app.knotwork.android.data.repositories.TriggerRepositoryImpl
+import app.knotwork.android.data.repositories.UsageTelemetryRepositoryImpl
 import app.knotwork.android.data.services.LongRunningTaskNotifierImpl
 import app.knotwork.android.data.services.WorkManagerMemoryReembedScheduler
+import app.knotwork.android.data.services.WorkManagerTriggerScheduler
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.engine.TaskQueueManager
 import app.knotwork.android.domain.engine.TextEmbeddingEngine
 import app.knotwork.android.domain.repositories.ApiKeyRepository
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.ClarificationRepository
-import app.knotwork.android.domain.repositories.CrashReportingRepository
 import app.knotwork.android.domain.repositories.IdentityRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.McpServerRepository
@@ -72,6 +73,8 @@ import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.SkillRepository
 import app.knotwork.android.domain.repositories.ToolRepository
+import app.knotwork.android.domain.repositories.TriggerRepository
+import app.knotwork.android.domain.repositories.UsageTelemetryRepository
 import app.knotwork.android.domain.services.AgentWorkspace
 import app.knotwork.android.domain.services.AttachmentStore
 import app.knotwork.android.domain.services.AudioCaptureStore
@@ -80,6 +83,7 @@ import app.knotwork.android.domain.services.DatabaseResetService
 import app.knotwork.android.domain.services.LongRunningTaskNotifier
 import app.knotwork.android.domain.services.MemoryReembedScheduler
 import app.knotwork.android.domain.services.NativeMemorySampler
+import app.knotwork.android.domain.services.TriggerScheduler
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -245,6 +249,15 @@ abstract class DataModule {
     abstract fun bindMetricsRepository(repository: MetricsRepositoryImpl): MetricsRepository
 
     /**
+     * Binds the [UsageTelemetryRepositoryImpl] implementation to the
+     * [UsageTelemetryRepository] interface backing the privacy-preserving
+     * on-device usage statistics.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindUsageTelemetryRepository(repository: UsageTelemetryRepositoryImpl): UsageTelemetryRepository
+
+    /**
      * Binds the [ModelPerformanceRepositoryImpl] implementation to the
      * [ModelPerformanceRepository] interface backing the per-model inference
      * performance samples (TTFT / decode speed / peak native memory).
@@ -332,6 +345,23 @@ abstract class DataModule {
     abstract fun bindBundledSkillSource(source: AssetBundledSkillSource): BundledSkillSource
 
     /**
+     * Binds [TriggerRepositoryImpl] to [TriggerRepository] — the `triggers`
+     * table holding user-defined automation triggers.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindTriggerRepository(repository: TriggerRepositoryImpl): TriggerRepository
+
+    /**
+     * Binds the `WorkManager`-backed [WorkManagerTriggerScheduler] to the
+     * domain-level [TriggerScheduler] port that registers each active trigger's
+     * constraint-gated background watch.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindTriggerScheduler(scheduler: WorkManagerTriggerScheduler): TriggerScheduler
+
+    /**
      * Binds the [PromptRepositoryImpl] implementation to the [PromptRepository] interface.
      */
     @Binds
@@ -344,17 +374,6 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindClarificationRepository(repository: ClarificationRepositoryImpl): ClarificationRepository
-
-    /**
-     * Binds [FirebaseCrashReportingRepositoryImpl] to [CrashReportingRepository]. The implementation
-     * gates every method on [SettingsRepository.crashReportingEnabled], so the binding is safe to
-     * provide unconditionally — no data leaves the device until the user opts in.
-     */
-    @Binds
-    @Singleton
-    abstract fun bindCrashReportingRepository(
-        repository: FirebaseCrashReportingRepositoryImpl,
-    ): CrashReportingRepository
 
     /**
      * Binds [IdentityRepositoryImpl] to [IdentityRepository]. Surfaces the

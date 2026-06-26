@@ -232,7 +232,7 @@ private fun AppBottomNavigationBar(currentRoute: String?, onTabSelected: (TabDes
  * editing would feel like a navigation bug.
  */
 internal fun String.belongsToTab(tab: TabDestination): Boolean = when (tab.route) {
-    NavRoutes.CHAT_TAB -> this == NavRoutes.CHAT_TAB || this == NavRoutes.CHAT_WITH_THREAD
+    NavRoutes.CHAT_TAB -> this == NavRoutes.CHAT_TAB
     NavRoutes.PIPELINES_GRAPH ->
         this == NavRoutes.PIPELINES_GRAPH ||
             this == NavRoutes.PIPELINE_LIBRARY ||

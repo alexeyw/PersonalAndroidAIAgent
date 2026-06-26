@@ -1,5 +1,7 @@
 *.iml
 .gradle
+# Kotlin build-tools daemon working directory (Kotlin 2.x).
+.kotlin
 /local.properties
 /.idea/caches
 /.idea/libraries

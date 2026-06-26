@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import app.knotwork.android.R
 import app.knotwork.android.domain.models.CloudProvider
+import app.knotwork.android.domain.models.EntrySurface
 import app.knotwork.android.domain.models.MemoryImportStrategy
 import app.knotwork.android.domain.models.ProviderId
 import app.knotwork.android.domain.models.ToolApprovalPolicy
@@ -13,6 +14,7 @@ import app.knotwork.android.domain.repositories.CrashReportingRepository
 import app.knotwork.android.domain.repositories.IdentityRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.MemoryRepository
+import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.EmbeddingProvider
 import app.knotwork.android.domain.services.MemorySearchStatsTracker
@@ -29,6 +31,7 @@ import app.knotwork.android.domain.usecases.MemoryImportUseCase
 import app.knotwork.android.domain.usecases.ReembedAllMemoriesUseCase
 import app.knotwork.android.domain.usecases.ResetSamplingDefaultsUseCase
 import app.knotwork.android.domain.usecases.ResetToRecommendedDefaultsUseCase
+import app.knotwork.android.domain.usecases.SetSurfacePipelineUseCase
 import app.knotwork.android.domain.usecases.TestBackendUseCase
 import app.knotwork.design.components.dialogs.typedConfirmMatches
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -77,6 +80,8 @@ class SettingsViewModel @Inject constructor(
     getSystemPromptVariableCatalogUseCase: GetSystemPromptVariableCatalogUseCase,
     embeddingProviders: Map<String, @JvmSuppressWildcards EmbeddingProvider>,
     memorySearchStatsTracker: MemorySearchStatsTracker,
+    pipelineRepository: PipelineRepository,
+    setSurfacePipelineUseCase: SetSurfacePipelineUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -119,7 +124,14 @@ class SettingsViewModel @Inject constructor(
 
     private val tools = ToolsSettingsDelegate(viewModelScope, _uiState, settingsRepository)
 
-    private val background = BackgroundSettingsDelegate(viewModelScope, _uiState, settingsRepository)
+    private val background =
+        BackgroundSettingsDelegate(
+            viewModelScope,
+            _uiState,
+            settingsRepository,
+            pipelineRepository,
+            setSurfacePipelineUseCase,
+        )
 
     private val privacy = PrivacySettingsDelegate(
         scope = viewModelScope,
@@ -170,6 +182,10 @@ class SettingsViewModel @Inject constructor(
         background.setLongRunningTaskNotificationsEnabled(enabled)
     fun setScheduledTaskNotificationsEnabled(enabled: Boolean) =
         background.setScheduledTaskNotificationsEnabled(enabled)
+
+    /** Binds (or clears, with `null`) the pipeline run by an entry [surface] (share / tile). */
+    fun setSurfacePipeline(surface: EntrySurface, pipelineId: String?) =
+        background.setSurfacePipeline(surface, pipelineId)
 
     // ─── Privacy ─────────────────────────────────────────────────────────────
 

@@ -12,7 +12,7 @@ coverage materially.
 | Branch base  | integration branch at the 2026-05-26 refresh                   |
 | Kover        | 0.9.8 (latest on the Gradle Plugin Portal)                     |
 | Variant      | `debug` (Android default unit-test variant)                    |
-| Test command | `./gradlew :app:testDebugUnitTest`                             |
+| Test command | `./gradlew :app:testFullDebugUnitTest`                             |
 | Build gate   | aggregate LINE ≥ **75 %** (raised 70 % → 75 % in this task)    |
 
 `./gradlew :app:koverLog` headline figure: **`application line coverage: 77.62 %`**
@@ -183,7 +183,7 @@ mistake them for missing work.
 - **`presentation.ui`** (root entry-points) — `MainActivity` plus the
   `*ScreenKt` host shells under the top-level `presentation/ui/` directory.
   These are Android-runtime-bound Compose roots; their coverage is the
-  domain of `connectedDebugAndroidTest`, not the JVM Kover pipeline.
+  domain of `connectedFullDebugAndroidTest`, not the JVM Kover pipeline.
 - **`data.local.dao`** — Room DAO interfaces. Their generated `*_Impl`
   implementations are covered, the interface lines themselves are
   declarative.
@@ -195,12 +195,12 @@ mistake them for missing work.
 export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"
 
 # HTML report (visual drill-down):
-./gradlew :app:koverHtmlReportDebug
-open app/build/reports/kover/htmlDebug/index.html
+./gradlew :app:koverHtmlReportFullDebug
+open app/build/reports/kover/htmlFullDebug/index.html
 
 # XML report (machine-readable, used by CI parsers):
-./gradlew :app:koverXmlReportDebug
-# → app/build/reports/kover/reportDebug.xml
+./gradlew :app:koverXmlReportFullDebug
+# → app/build/reports/kover/reportFullDebug.xml
 
 # Console summary (single number, useful in scripts):
 ./gradlew :app:koverLog
@@ -220,16 +220,16 @@ so the same constraint that blocked the CI workflow applies here.
 
 The eventual workflow should:
 
-1. Run `./gradlew :app:koverHtmlReportDebug :app:koverXmlReportDebug` on each
+1. Run `./gradlew :app:koverHtmlReportFullDebug :app:koverXmlReportFullDebug` on each
    PR to publish the report (the build-failing threshold itself is already
-   enforced locally and in `./gradlew check` via `koverVerifyDebug` — see
+   enforced locally and in `./gradlew check` via `koverVerifyFullDebug` — see
    *Enforced threshold* below).
-2. Upload `app/build/reports/kover/htmlDebug/` and
-   `app/build/reports/kover/reportDebug.xml` via `actions/upload-artifact`.
+2. Upload `app/build/reports/kover/htmlFullDebug/` and
+   `app/build/reports/kover/reportFullDebug.xml` via `actions/upload-artifact`.
 3. Optionally print the `koverLog` headline figure as a PR comment.
 
 This artefact-publishing job is still pending; the coverage **gate**
-(`koverVerifyDebug`) is already wired into `./gradlew check` and is not
+(`koverVerifyFullDebug`) is already wired into `./gradlew check` and is not
 blocked on it.
 
 ## What this baseline does **not** do
@@ -242,7 +242,7 @@ blocked on it.
 
 ## Enforced threshold (current)
 
-`koverVerifyDebug` fails the build when aggregate LINE coverage over the
+`koverVerifyFullDebug` fails the build when aggregate LINE coverage over the
 unit-testable surface drops below **75 %** (raised from 70 %).
 Today's measurement is **77.6 %**, giving the gate ~2.6 pp of
 headroom against silent regression.

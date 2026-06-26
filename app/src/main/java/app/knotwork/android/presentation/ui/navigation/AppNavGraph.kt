@@ -1,5 +1,6 @@
 package app.knotwork.android.presentation.ui.navigation
 
+import android.content.Intent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -13,8 +14,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.navArgument
-import androidx.navigation.navDeepLink
 import app.knotwork.android.domain.models.ProviderId
+import app.knotwork.android.presentation.state.ChatEntryRequest
+import app.knotwork.android.presentation.state.ChatEntryRequestRelay
 import app.knotwork.android.presentation.ui.about.AboutScreen
 import app.knotwork.android.presentation.ui.chat.home.ChatHomeScreen
 import app.knotwork.android.presentation.ui.chat.home.ChatHomeViewModel
@@ -45,6 +47,7 @@ import app.knotwork.android.presentation.ui.settings.SettingsViewModel
 import app.knotwork.android.presentation.ui.settings.ToolsSettingsScreen
 import app.knotwork.android.presentation.ui.settings.provider.ProviderDetailScreen
 import app.knotwork.android.presentation.ui.settings.provider.ProviderPickerScreen
+import app.knotwork.android.presentation.ui.settings.usage.UsageTelemetryScreen
 import app.knotwork.android.presentation.ui.skills.SkillLibraryScreen
 import app.knotwork.android.presentation.ui.splash.SplashScreen
 import app.knotwork.android.presentation.ui.taskmonitor.TaskMonitorScreen
@@ -53,6 +56,7 @@ import app.knotwork.android.presentation.ui.tools.AllowedDomainsScreen
 import app.knotwork.android.presentation.ui.tools.McpServerConfigScreen
 import app.knotwork.android.presentation.ui.tools.ToolDetailScreen
 import app.knotwork.android.presentation.ui.tools.ToolsScreen
+import app.knotwork.android.presentation.ui.triggers.TriggersScreen
 import app.knotwork.design.screens.settings.SettingsCategoryId
 import timber.log.Timber
 
@@ -83,10 +87,28 @@ import timber.log.Timber
  *        (inverted) — a flag that survives `InitializeAppUseCase` and so
  *        is the right gate for the UI surface, unlike `isFirstLaunch`
  *        which is cleared during cold-start init.
+ * @param pendingDeepLink the `knotwork://` deep-link [Intent] the host activity
+ *        was launched with (launcher shortcut, share target, notification tap),
+ *        or `null` for a normal launch. The deep link is **not** auto-handled by
+ *        the NavHost (the `navDeepLink` registrations were removed) — instead the
+ *        splash handler builds the back stack deterministically: splash →
+ *        [NavRoutes.CHAT_TAB] (home) → the deep-link target on top. This avoids
+ *        the implicit-deep-link race that buried the target under the home chat
+ *        (or produced a half-loaded second chat surface).
+ * @param chatEntryRequestRelay bus connecting `knotwork://chat…` / `new-chat`
+ *        entry surfaces to the single chat home: the deep-link handler posts an
+ *        open-thread / new-chat request and the `CHAT_TAB` composable drains it
+ *        into `selectThread` / `createNewSessionWithPipeline`.
  * @param modifier Inset-padding passthrough from [AppShellScaffold].
  */
 @Composable
-fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modifier: Modifier = Modifier) {
+fun AppNavGraph(
+    navController: NavHostController,
+    showOnboarding: Boolean,
+    pendingDeepLink: Intent?,
+    chatEntryRequestRelay: ChatEntryRequestRelay,
+    modifier: Modifier = Modifier,
+) {
     NavHost(
         navController = navController,
         startDestination = NavRoutes.SPLASH,
@@ -99,6 +121,14 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                     navController.navigate(next) {
                         popUpTo(NavRoutes.SPLASH) { inclusive = true }
                         launchSingleTop = true
+                    }
+                    // A launch deep link is applied AFTER landing on the chat home,
+                    // so the back stack is deterministically [CHAT_TAB, target] —
+                    // the target on top (Back returns home), never a half-loaded
+                    // chat buried under the home surface. Skipped during onboarding;
+                    // a first-run user has no sessions to deep-link into yet.
+                    if (!showOnboarding) {
+                        pendingDeepLink?.let { navController.navigateToDeepLink(it, chatEntryRequestRelay) }
                     }
                 },
                 modifier = Modifier.fillMaxSize(),
@@ -131,32 +161,27 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
             )
         }
 
-        // ─── Chat tab ──────────────────────────────────────────────────────
-        composable(NavRoutes.CHAT_TAB) {
+        // ─── Chat tab — the single chat home ───────────────────────────────
+        // There is ONE chat destination: the chat *is* the home. A deep link
+        // (knotwork://chat, knotwork://chat/{id}, knotwork://new-chat) never adds
+        // a second chat entry — it lands here and the session change is posted
+        // through `chatEntryRequestRelay`, so Back from the chat always closes the
+        // app, exactly like a normal launch. Deep links are NOT registered as
+        // `navDeepLink`s (auto-handling raced the splash and produced a doubled /
+        // blank chat); MainActivity routes them via DeepLinkRouter.
+        composable(route = NavRoutes.CHAT_TAB) {
             val chatHomeViewModel: ChatHomeViewModel = hiltViewModel()
-            ChatHomeScreen(
-                viewModel = chatHomeViewModel,
-                onOpenSettings = { navController.navigate(NavRoutes.SETTINGS) },
-                onOpenModels = { navController.navigate(NavRoutes.MODELS) },
-            )
-        }
-        composable(
-            route = NavRoutes.CHAT_WITH_THREAD,
-            arguments = listOf(
-                navArgument(NavRoutes.CHAT_THREAD_ARG) {
-                    type = NavType.StringType
-                    nullable = false
-                },
-            ),
-            deepLinks = listOf(
-                navDeepLink { uriPattern = NavRoutes.CHAT_DEEP_LINK_PATTERN },
-            ),
-        ) { entry ->
-            val threadId = entry.arguments?.getString(NavRoutes.CHAT_THREAD_ARG)
-            val chatHomeViewModel: ChatHomeViewModel = hiltViewModel()
-            LaunchedEffect(threadId) {
-                if (!threadId.isNullOrBlank()) {
-                    chatHomeViewModel.selectThread(threadId)
+            // Drain entry requests into the one chat home. A request may be
+            // buffered (CONFLATED) from before this collector mounted on a cold
+            // launch, so it is delivered as soon as we land here.
+            LaunchedEffect(chatHomeViewModel) {
+                chatEntryRequestRelay.requests.collect { request ->
+                    when (request) {
+                        ChatEntryRequest.NewChat ->
+                            chatHomeViewModel.threads.createNewSessionWithPipeline(pipelineId = null)
+                        is ChatEntryRequest.OpenThread ->
+                            chatHomeViewModel.selectThread(request.threadId)
+                    }
                 }
             }
             ChatHomeScreen(
@@ -171,7 +196,7 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
             startDestination = NavRoutes.PIPELINE_LIBRARY,
             route = NavRoutes.PIPELINES_GRAPH,
         ) {
-            composable(NavRoutes.PIPELINE_LIBRARY) { entry ->
+            composable(route = NavRoutes.PIPELINE_LIBRARY) { entry ->
                 val parentEntry = remember(entry) {
                     navController.getBackStackEntry(NavRoutes.PIPELINES_GRAPH)
                 }
@@ -289,6 +314,7 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                 onNavigateToSettings = { navController.navigate(NavRoutes.SETTINGS) },
                 onNavigateToPrompts = { navController.navigate(NavRoutes.PROMPTS) },
                 onNavigateToSkills = { navController.navigate(NavRoutes.SKILLS) },
+                onNavigateToTriggers = { navController.navigate(NavRoutes.TRIGGERS) },
                 onNavigateToAbout = { navController.navigate(NavRoutes.ABOUT) },
                 onNavigateToLibrary = { navController.navigate(NavRoutes.PIPELINE_PRESETS) },
                 onNavigateToFiles = { navController.navigate(NavRoutes.FILES) },
@@ -379,6 +405,9 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
             composable(NavRoutes.SETTINGS_PRIVACY) { entry ->
                 PrivacySettingsScreen(viewModel = settingsGraphViewModel(navController, entry), nav = nav)
             }
+            composable(NavRoutes.SETTINGS_PRIVACY_USAGE) {
+                UsageTelemetryScreen(onBack = { navController.popBackStack() })
+            }
             composable(NavRoutes.SETTINGS_ABOUT) { entry ->
                 AboutSettingsScreen(viewModel = settingsGraphViewModel(navController, entry), nav = nav)
             }
@@ -432,6 +461,12 @@ fun AppNavGraph(navController: NavHostController, showOnboarding: Boolean, modif
                 onBack = { navController.popBackStack() },
             )
         }
+        composable(NavRoutes.TRIGGERS) {
+            TriggersScreen(
+                modifier = Modifier.fillMaxSize(),
+                onBack = { navController.popBackStack() },
+            )
+        }
         composable(NavRoutes.ABOUT) {
             AboutScreen(onBack = { navController.popBackStack() })
         }
@@ -474,6 +509,7 @@ private fun settingsNavActions(navController: NavHostController): SettingsNavAct
     onOpenManageTools = { navController.navigate(NavRoutes.TOOLS) },
     onOpenAllowedDomains = { navController.navigate(NavRoutes.ALLOWED_DOMAINS) },
     onOpenLicenses = { navController.navigate(NavRoutes.ABOUT) },
+    onOpenUsageStatistics = { navController.navigate(NavRoutes.SETTINGS_PRIVACY_USAGE) },
 )
 
 /** Maps a settings category id to its sub-screen route. */

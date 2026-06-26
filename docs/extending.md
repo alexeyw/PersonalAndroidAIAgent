@@ -1176,9 +1176,9 @@ The aggregated `check` task runs:
 
 - `detekt` — static analysis (style and complexity).
 - `ktlintCheck` — Kotlin formatting.
-- `lintDebug` — Android Lint.
-- `testDebugUnitTest` — JVM unit tests.
-- `koverVerifyDebug` — line-coverage verification.
+- `lintFullDebug` — Android Lint.
+- `testFullDebugUnitTest` — JVM unit tests.
+- `koverVerifyFullDebug` — line-coverage verification.
 
 The same task gates every pull request in CI, so running it locally
 just trades local feedback for slower CI feedback. The coverage

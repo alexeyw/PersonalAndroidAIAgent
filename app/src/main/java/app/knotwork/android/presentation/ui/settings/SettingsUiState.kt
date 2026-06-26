@@ -113,6 +113,12 @@ import app.knotwork.design.screens.settings.HubSearchResultRow
  *   renders the normal hub body, non-blank swaps it for [searchResults].
  * @property searchResults Ranked search hits for [searchQuery] (empty while the
  *   query is blank or nothing matches).
+ * @property shareTargetPipelineId Id of the pipeline bound to the share target,
+ *   or `null` when the surface is unbound (inert).
+ * @property quickSettingsTilePipelineId Id of the pipeline bound to the Quick
+ *   Settings tile, or `null` when the surface is unbound (inert).
+ * @property bindablePipelines Pipelines offered in the Background binding
+ *   pickers (id + display name), in library order.
  */
 data class SettingsUiState(
     val identity: Identity? = null,
@@ -160,6 +166,9 @@ data class SettingsUiState(
     val reembedProgress: Float? = null,
     val longRunningTaskNotificationsEnabled: Boolean = true,
     val scheduledTaskNotificationsEnabled: Boolean = true,
+    val shareTargetPipelineId: String? = null,
+    val quickSettingsTilePipelineId: String? = null,
+    val bindablePipelines: List<PipelineBindingOption> = emptyList(),
     val crashReportingEnabled: Boolean = false,
     val verboseMemoryLoggingEnabled: Boolean = SettingsDefaults.VERBOSE_MEMORY_LOGGING_ENABLED_DEFAULT,
     val traceRetentionRunsPerSession: Int = SettingsDefaults.TRACE_RETENTION_RUNS_PER_SESSION_DEFAULT,
@@ -173,6 +182,15 @@ data class SettingsUiState(
     val searchQuery: String = "",
     val searchResults: List<HubSearchResultRow> = emptyList(),
 )
+
+/**
+ * A pipeline the user can bind to an entry surface, shown in the Background
+ * binding pickers.
+ *
+ * @property id The pipeline id persisted as the surface binding.
+ * @property name The pipeline's display name.
+ */
+data class PipelineBindingOption(val id: String, val name: String)
 
 /**
  * A successfully-parsed memory import file awaiting the user's strategy choice

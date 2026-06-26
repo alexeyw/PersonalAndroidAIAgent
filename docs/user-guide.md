@@ -25,13 +25,15 @@ before the next release ships.
 2. [Chats](#chats)
 3. [Console](#console)
 4. [Background tasks](#background-tasks)
-5. [Pipelines](#pipelines)
-6. [Browser pipeline editor](#browser-pipeline-editor)
-7. [Tools and MCP](#tools-and-mcp)
-8. [Files](#files)
-9. [Memory](#memory)
-10. [Settings](#settings)
-11. [Troubleshooting](#troubleshooting)
+5. [Entry surfaces](#entry-surfaces)
+6. [Triggers](#triggers)
+7. [Pipelines](#pipelines)
+8. [Browser pipeline editor](#browser-pipeline-editor)
+9. [Tools and MCP](#tools-and-mcp)
+10. [Files](#files)
+11. [Memory](#memory)
+12. [Settings](#settings)
+13. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -570,6 +572,141 @@ Runs still waiting on an approval or clarification are never removed by
 retention — they stay until you respond or their approval window
 expires. Deleting a conversation removes its runs and traces
 immediately.
+
+---
+
+## Entry surfaces
+
+Beyond opening the app, three OS surfaces let you reach the agent from
+elsewhere on the device. Every surface is **off by default**: it does
+nothing until you point it at a pipeline, so the agent never acts on
+shared content or a tap until you have opted in.
+
+### Sharing into the agent
+
+The app appears in the Android share sheet for **text and images**.
+Share something and pick the app: it runs your chosen *share pipeline*
+over the shared content and opens the new chat so you can watch the run.
+A shared image is attached exactly like a composer attachment (the local
+model reads it; it never leaves the device). If you have not bound a
+share pipeline yet, the app opens with a reminder instead of running
+anything.
+
+### Launcher shortcuts
+
+Long-press the app icon for quick actions:
+
+- **New chat** — opens a fresh conversation.
+- **Pipelines** — opens the pipeline library.
+- **Recent chats** — the app also keeps a couple of dynamic shortcuts to
+  your most recently used conversations, so you can jump straight back in.
+
+### Quick Settings tile
+
+Add the **Run pipeline** tile to your Quick Settings (notification
+shade). One tap runs your chosen *tile pipeline* in the background — even
+when the app is closed — and posts a notification when it finishes, with
+a tap-through into the resulting chat. While no pipeline is bound the tile
+is inactive and a tap opens the app so you can set one up. Right after you
+bind a tile pipeline in Settings, Android offers to add the tile for you.
+
+### Choosing a pipeline per surface
+
+Bind a pipeline to a surface in either place:
+
+- **Settings → Background & triggers** — the *Pipeline for sharing* and
+  *Quick Settings pipeline* rows open a picker (choose a pipeline, or
+  **None** to switch the surface back off).
+- **Pipeline library** — a pipeline's row menu (⋮) has **Use for sharing**
+  and **Use for Quick Settings tile**. The bound pipelines are easy to spot
+  at a glance: the library row carries an outlined **SHARE** pill when it is
+  the share-target pipeline and an outlined **TILE** pill when it is the
+  Quick Settings tile pipeline (next to the filled **DEFAULT** pill).
+
+If you delete a pipeline that a surface was using, that surface simply
+turns off again until you bind another.
+
+---
+
+## Triggers
+
+A **trigger** runs a pipeline on its own when a condition is met — a time
+of day, a repeating interval, the device starting to charge, or a network
+connection — and drops the result into a chat in the background. Open
+**More → Triggers** to manage them.
+
+The list shows each trigger with a plain-language condition line ("Every
+day at 08:00", "When charging connected", "When Wi-Fi connects"), its
+bound pipeline, and a switch to enable or disable it on the spot. The
+first time you open the screen, an empty state explains the model —
+*trigger → background run → result in chat* — with a button to create your
+first one.
+
+### Creating or editing a trigger
+
+Tap **New trigger** (or a row to edit one). The editor has:
+
+- **Name** — a label for the list.
+- **When** — the condition type:
+  - **Interval** — repeat every 15 min, 30 min, 1 h, 6 h or 24 h, or a
+    **Custom** value in minutes or hours. The minimum is 15 minutes:
+    background runs are batched, so the system may defer a run by a few
+    minutes.
+  - **Daily** — a time of day (24-hour).
+  - **Charging** — fires once **the moment you plug in** (and re-arms when
+    you unplug). This one is event-driven, so it runs right away rather
+    than waiting for a poll.
+  - **Network** — fires on connecting; flip **Wi-Fi only** to ignore
+    mobile data.
+- **Run this pipeline** — bind the pipeline to run. Choosing **None**
+  leaves the trigger inert (saved but it fires nothing).
+- **Input prompt** — the message handed to the pipeline each time it
+  fires.
+- **Enabled** — on/off. Off means saved but it won't fire; you can also
+  toggle this from the list.
+
+An **unbound** trigger (no pipeline) is always inert and shows "No
+pipeline — tap to bind" with a disabled switch — a trigger fires nothing
+without a pipeline. Saving, enabling, disabling or deleting a trigger
+takes effect immediately, without waiting for the next app launch. If you
+delete the bound pipeline, the trigger is disabled automatically.
+
+### How soon a trigger fires
+
+**Charging** triggers are event-driven — plugging in fires the run within
+seconds, even if the app is closed. **Interval**, **Daily** and **Network**
+triggers are checked on a background poll the system runs roughly every
+**15 minutes** (the platform minimum), so they fire at the next check after
+their condition is met, not the instant it changes. When the device is idle
+or under aggressive battery optimisation the system may defer that poll
+further; keeping the app excluded from battery optimisation makes background
+runs more punctual.
+
+### Results and notifications
+
+Each trigger owns its **own chat session**, named after the trigger. The
+first time it fires it creates that chat, and every later run lands in the
+**same** conversation, so a recurring trigger keeps one running log instead
+of scattering a new chat each time. (If you delete that chat, the next fire
+quietly starts a fresh one.) The run streams its work and final answer into
+the session exactly as if you had typed the prompt yourself.
+
+While a run happens in the background you get up to three notifications,
+all on the **"Scheduled task results"** channel and gated by the same
+**Settings → Background & triggers** notifications toggle:
+
+- **Trigger fired** — when an automation starts a background run.
+- **Task completed** — with a preview of the final answer.
+- **Task failed** — with the reason.
+
+Tapping any of them deep-links straight into the trigger's chat. If a run
+pauses for approval of a sensitive or destructive tool, you get the usual
+**approval notification** with **Approve / Deny** actions, so you can let a
+background trigger run proceed (or stop it) without opening the app.
+
+This first wave covers only **low-sensitivity** conditions (time,
+charging, network) that need no dangerous permission; notification,
+location and SMS triggers are intentionally deferred.
 
 ---
 
@@ -1449,7 +1586,11 @@ Advanced:
 - **Send anonymous crash reports** *(Basic)* — forwards stack traces + device
   meta + active pipeline / model identifiers to Firebase Crashlytics. Off by
   default; debug builds never report. Full policy in
-  [SECURITY.md](../SECURITY.md).
+  [SECURITY.md](../SECURITY.md). **This toggle exists only on the standard
+  build.** The **F-Droid / FOSS build** ships with no crash-reporting
+  dependency at all — it collects and transmits nothing, and the toggle is
+  absent — so which build you installed decides whether this control is even
+  present. The rest of the app is identical between builds.
 - **Keep run history per chat** *(Advanced)* (5–100, default 20) — how many
   most-recent pipeline runs each conversation keeps. Older finished runs and
   their traces are deleted by the daily maintenance pass (see
@@ -1457,6 +1598,35 @@ Advanced:
 - **Run history max age** *(Advanced)* (7–180 days, default 30) — finished runs
   older than this are deleted regardless of the per-chat count. Runs still
   waiting on an approval or clarification are never removed by retention.
+- **Usage statistics** *(link)* — opens a fully on-device usage dashboard (see
+  below).
+
+#### Usage statistics
+
+A privacy-preserving picture of how you use the app, computed entirely on the
+device. **Nothing on this screen is ever transmitted** — the counts live in the
+same encrypted database as the rest of your data, and there is no network call
+anywhere on this path (a build-time guard enforces that). The screen shows:
+
+- **Runs** — total finished runs and the share that **completed**, **failed**,
+  were **cancelled**, or were **interrupted** (a run cut short by the app being
+  killed). Nested sub-pipeline runs are not double-counted.
+- **Runs by pipeline** — how many runs each pipeline accounted for.
+- **Trigger firings** — how many times each kind of automation trigger
+  (schedule / daily / charging / network) fired.
+- **Active days** — the number of distinct days with any activity, plus the
+  first and last.
+
+Controls:
+
+- **Record usage on this device** — the opt-in toggle. On by default and
+  local-only; turn it off to stop the counters advancing (already-recorded
+  figures are untouched).
+- **Share as text** / **Export JSON** — take a voluntary snapshot for your own
+  analysis. The text goes through the system share sheet; the JSON is written to
+  a file you pick. Neither happens automatically.
+- **Reset statistics** — permanently clears every recorded count (it does not
+  change the recording toggle).
 
 ### About
 

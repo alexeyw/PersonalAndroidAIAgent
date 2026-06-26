@@ -2,6 +2,7 @@ package app.knotwork.android.presentation.ui.settings
 
 import android.content.Context
 import androidx.annotation.StringRes
+import app.knotwork.android.BuildConfig
 import app.knotwork.android.R
 import app.knotwork.android.domain.settings.SettingTier
 import app.knotwork.android.domain.settings.SettingsCategoryId
@@ -34,6 +35,13 @@ data class SettingsSearchStrings(@StringRes val nameRes: Int, @StringRes val des
  * preference can never silently fall out of search.
  */
 object SettingsSearchCatalog {
+
+    /**
+     * Anchor key of the crash-reporting consent row. Held as a constant because
+     * it is referenced both as a [SEARCH_STRINGS] key and in [buildIndex], where
+     * the row is filtered out for the `foss` distribution (which hides it).
+     */
+    private const val CRASH_REPORTING_ANCHOR = "CRASH_REPORTING_ENABLED"
 
     /**
      * Anchor → localized search strings. Authored from the ratified settings
@@ -206,6 +214,14 @@ object SettingsSearchCatalog {
             R.string.settings_search_name_scheduled_task_notifications,
             R.string.settings_search_desc_scheduled_task_notifications,
         ),
+        "SHARE_TARGET_PIPELINE_ID" to strings(
+            R.string.settings_search_name_share_target_pipeline_id,
+            R.string.settings_search_desc_share_target_pipeline_id,
+        ),
+        "QUICK_SETTINGS_TILE_PIPELINE_ID" to strings(
+            R.string.settings_search_name_quick_settings_tile_pipeline_id,
+            R.string.settings_search_desc_quick_settings_tile_pipeline_id,
+        ),
         "RESUME_MAX_AGE_HOURS" to strings(
             R.string.settings_search_name_resume_max_age_hours,
             R.string.settings_search_desc_resume_max_age_hours,
@@ -215,7 +231,7 @@ object SettingsSearchCatalog {
             R.string.settings_search_desc_background_approval_window_hours,
         ),
         // ─── Privacy ─────────────────────────────────────────────────────────
-        "CRASH_REPORTING_ENABLED" to strings(
+        CRASH_REPORTING_ANCHOR to strings(
             R.string.settings_search_name_crash_reporting_enabled,
             R.string.settings_search_desc_crash_reporting_enabled,
         ),
@@ -243,19 +259,24 @@ object SettingsSearchCatalog {
      *   string resources.
      * @return One [SettingsSearchableEntry] per registry row, in display order.
      */
-    fun buildIndex(context: Context): List<SettingsSearchableEntry> = SettingsRegistry.allEntries().map { entry ->
-        val anchor = entry.anchorKey()
-        val copy = requireNotNull(SEARCH_STRINGS[anchor]) { "Missing search copy for anchor '$anchor'" }
-        SettingsSearchableEntry(
-            anchorKey = anchor,
-            categoryId = entry.categoryId,
-            tier = entry.tier,
-            name = context.getString(copy.nameRes),
-            description = copy.descRes?.let(context::getString).orEmpty(),
-            categoryTitle = context.getString(categoryTitleRes(entry.categoryId)),
-            synonyms = entry.synonyms,
-        )
-    }
+    fun buildIndex(context: Context): List<SettingsSearchableEntry> = SettingsRegistry.allEntries()
+        // The crash-reporting consent row is hidden in the `foss` distribution
+        // (no live collector). Drop it from the search index there too, so a
+        // search hit can never deep-link to a Privacy row that is never rendered.
+        .filterNot { !BuildConfig.CRASH_REPORTING_AVAILABLE && it.anchorKey() == CRASH_REPORTING_ANCHOR }
+        .map { entry ->
+            val anchor = entry.anchorKey()
+            val copy = requireNotNull(SEARCH_STRINGS[anchor]) { "Missing search copy for anchor '$anchor'" }
+            SettingsSearchableEntry(
+                anchorKey = anchor,
+                categoryId = entry.categoryId,
+                tier = entry.tier,
+                name = context.getString(copy.nameRes),
+                description = copy.descRes?.let(context::getString).orEmpty(),
+                categoryTitle = context.getString(categoryTitleRes(entry.categoryId)),
+                synonyms = entry.synonyms,
+            )
+        }
 
     private fun strings(@StringRes nameRes: Int, @StringRes descRes: Int?) = SettingsSearchStrings(nameRes, descRes)
 

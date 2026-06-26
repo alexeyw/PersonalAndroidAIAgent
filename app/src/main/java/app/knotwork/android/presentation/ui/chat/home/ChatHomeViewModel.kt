@@ -3,7 +3,6 @@ package app.knotwork.android.presentation.ui.chat.home
 import androidx.annotation.VisibleForTesting
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ChatMessage
@@ -27,6 +26,7 @@ import app.knotwork.android.domain.services.AudioRecorder
 import app.knotwork.android.domain.services.ChatHistoryCompressionCoordinator
 import app.knotwork.android.domain.services.MemoryAutoExtractionCoordinator
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
+import app.knotwork.android.domain.usecases.AttachmentMessageContent
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.ResolveEntryInferenceUseCase
@@ -383,8 +383,9 @@ class ChatHomeViewModel @Inject constructor(
         // default instruction so the all-text pipeline graph has a prompt to
         // travel; the saved message keeps the empty caption so the bubble shows
         // just the thumbnail.
-        val prompt = draftText.ifEmpty { DefaultPrompts.IMAGE_ONLY_DEFAULT_INSTRUCTION }
-        val displayContent = if (draftText.isEmpty()) "" else null
+        val content = AttachmentMessageContent.resolve(draftText)
+        val prompt = content.prompt
+        val displayContent = content.displayContent
         _state.update { it.copy(composer = it.composer.copy(value = "", attachment = null)) }
 
         val sessionId = _state.value.thread.currentSessionId
@@ -577,7 +578,17 @@ class ChatHomeViewModel @Inject constructor(
      */
     private fun initializeSession() {
         viewModelScope.launch {
+            // A deep-link entry request (open-thread / new-chat, drained by the
+            // CHAT_TAB composable into selectThread / createNewSessionWithPipeline)
+            // may set the session before or during this default restore. Never let
+            // the persisted default override an explicit selection — otherwise a
+            // launcher shortcut to a specific chat would flash the last-active one
+            // instead. The selection can land synchronously before this body runs
+            // OR during the `currentChatSessionId.first()` suspend below, so the
+            // guard is re-checked after every suspension point.
+            if (_state.value.thread.currentSessionId.isNotBlank()) return@launch
             val savedSessionId = settingsRepository.currentChatSessionId.first()
+            if (_state.value.thread.currentSessionId.isNotBlank()) return@launch
             val sessionId = if (savedSessionId.isNullOrBlank()) {
                 val newId = UUID.randomUUID().toString()
                 settingsRepository.setCurrentChatSessionId(newId)
@@ -592,6 +603,7 @@ class ChatHomeViewModel @Inject constructor(
             } else {
                 savedSessionId
             }
+            if (_state.value.thread.currentSessionId.isNotBlank()) return@launch
             _state.update {
                 threads.sessionMetadataRefreshed(it.copy(thread = it.thread.copy(currentSessionId = sessionId)))
             }

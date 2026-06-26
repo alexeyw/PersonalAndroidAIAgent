@@ -122,6 +122,13 @@ private val TOOLS_ENTRIES = listOf(
 private val BACKGROUND_ENTRIES = listOf(
     setting("LONG_RUNNING_TASKS_NOTIFICATIONS", BASIC, TOGGLE, hubBasic = true, syn = listOf("notify")),
     setting("SCHEDULED_TASK_NOTIFICATIONS", BASIC, TOGGLE, syn = listOf("notify", "schedule")),
+    setting("SHARE_TARGET_PIPELINE_ID", BASIC, DROPDOWN, syn = listOf("share", "send", "pipeline", "surface")),
+    setting(
+        "QUICK_SETTINGS_TILE_PIPELINE_ID",
+        BASIC,
+        DROPDOWN,
+        syn = listOf("tile", "quick settings", "shade", "pipeline", "surface"),
+    ),
     setting("RESUME_MAX_AGE_HOURS", ADVANCED, SLIDER, syn = listOf("resume", "max")),
     setting("BACKGROUND_APPROVAL_WINDOW_HOURS", ADVANCED, SLIDER, syn = listOf("approval", "window")),
 )

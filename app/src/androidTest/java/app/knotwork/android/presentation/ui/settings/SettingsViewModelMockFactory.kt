@@ -50,4 +50,5 @@ internal fun settingsNavStub(): SettingsNavActions = SettingsNavActions(
     onOpenManageTools = {},
     onOpenAllowedDomains = {},
     onOpenLicenses = {},
+    onOpenUsageStatistics = {},
 )

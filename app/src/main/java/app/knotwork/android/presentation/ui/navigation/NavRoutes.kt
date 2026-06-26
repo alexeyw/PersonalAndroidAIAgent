@@ -40,6 +40,27 @@ object NavRoutes {
     /** Deep-link uri pattern matching [CHAT_WITH_THREAD]. */
     const val CHAT_DEEP_LINK_PATTERN: String = "$DEEP_LINK_SCHEME://chat/{$CHAT_THREAD_ARG}"
 
+    /**
+     * Deep-link uri for the chat tab without a specific thread, used by the
+     * static "New chat" launcher shortcut. Distinct from [CHAT_DEEP_LINK_PATTERN]
+     * (which carries a `{threadId}` path segment).
+     */
+    const val CHAT_TAB_DEEP_LINK_PATTERN: String = "$DEEP_LINK_SCHEME://chat"
+
+    /**
+     * Deep-link uri for the pipeline library, used by the static "Pipelines"
+     * launcher shortcut.
+     */
+    const val PIPELINES_DEEP_LINK_PATTERN: String = "$DEEP_LINK_SCHEME://pipelines"
+
+    /**
+     * Deep-link uri for the static "New chat" launcher shortcut. Distinct from
+     * [CHAT_TAB_DEEP_LINK_PATTERN] (`knotwork://chat`, which opens the chat home
+     * on the *current* session): this one creates a fresh empty session first.
+     * Handled explicitly by the deep-link router, not as a `navDeepLink`.
+     */
+    const val NEW_CHAT_DEEP_LINK_PATTERN: String = "$DEEP_LINK_SCHEME://new-chat"
+
     /** Builds a concrete `chat/<id>` route for `navController.navigate`. */
     fun chatRoute(threadId: String): String = "chat/$threadId"
 
@@ -153,6 +174,9 @@ object NavRoutes {
     /** Privacy category sub-screen. */
     const val SETTINGS_PRIVACY: String = "settings/privacy"
 
+    /** On-device usage-statistics screen, reached from Privacy. */
+    const val SETTINGS_PRIVACY_USAGE: String = "settings/privacy/usage"
+
     /** About category sub-screen. */
     const val SETTINGS_ABOUT: String = "settings/about"
 
@@ -161,6 +185,9 @@ object NavRoutes {
 
     /** Skill library (under More). */
     const val SKILLS: String = "skills"
+
+    /** Triggers management (under More). */
+    const val TRIGGERS: String = "triggers"
 
     /** Pipeline-preset manager (under More → Library). */
     const val PIPELINE_PRESETS: String = "pipeline-presets"

@@ -271,6 +271,8 @@ internal fun buildBackgroundViewState(uiState: SettingsUiState): BackgroundSetti
     BackgroundSettingsViewState(
         longRunningEnabled = uiState.longRunningTaskNotificationsEnabled,
         scheduledResultsEnabled = uiState.scheduledTaskNotificationsEnabled,
+        shareTargetPipelineLabel = pipelineBindingLabel(uiState, uiState.shareTargetPipelineId),
+        quickTilePipelineLabel = pipelineBindingLabel(uiState, uiState.quickSettingsTilePipelineId),
         advancedSliders = listOf(
             SettingSliderRow(
                 id = SLIDER_BACKGROUND_RESUME_MAX_AGE,
@@ -289,10 +291,24 @@ internal fun buildBackgroundViewState(uiState: SettingsUiState): BackgroundSetti
         ).withAnchors(),
     )
 
+/**
+ * Resolves the display label for a surface pipeline binding: the bound
+ * pipeline's name, or a localised "Not set" placeholder when [pipelineId] is
+ * `null` or no longer matches a known pipeline (e.g. it was deleted).
+ */
+@Composable
+private fun pipelineBindingLabel(uiState: SettingsUiState, pipelineId: String?): String =
+    uiState.bindablePipelines.firstOrNull { it.id == pipelineId }?.name
+        ?: stringResource(R.string.settings_pipeline_not_set)
+
 /** Builds the Privacy category state (crash reporting + retention sliders). */
 @Composable
 internal fun buildPrivacyViewState(uiState: SettingsUiState): PrivacySettingsViewState = PrivacySettingsViewState(
     crashReportingEnabled = uiState.crashReportingEnabled,
+    // Hidden in the FOSS / F-Droid build, which ships no crash collector. The
+    // flavour-specific `BuildConfig.CRASH_REPORTING_AVAILABLE` is `true` for the
+    // full distribution and `false` for `foss`.
+    crashReportingAvailable = BuildConfig.CRASH_REPORTING_AVAILABLE,
     advancedSliders = listOf(
         SettingSliderRow(
             id = SLIDER_PRIVACY_RETENTION_RUNS,

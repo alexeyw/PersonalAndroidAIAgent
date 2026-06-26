@@ -96,12 +96,18 @@ class SettingsCallbacks(
     val onScheduledResultsToggle: (Boolean) -> Unit = {},
     /** Background slider change (resume / approval window), keyed by id. */
     val onBackgroundSliderChange: (id: String, value: Float) -> Unit = { _, _ -> },
+    /** Open the picker binding a pipeline to the share target. */
+    val onShareTargetPipelineClick: () -> Unit = {},
+    /** Open the picker binding a pipeline to the Quick Settings tile. */
+    val onQuickTilePipelineClick: () -> Unit = {},
 
     // ─── Privacy ─────────────────────────────────────────────────────────────
     /** "Crash reporting" toggle. */
     val onCrashReportingToggle: (Boolean) -> Unit = {},
     /** Trace-retention slider change, keyed by `SLIDER_PRIVACY_*` id. */
     val onPrivacySliderChange: (id: String, value: Float) -> Unit = { _, _ -> },
+    /** Open the on-device Usage statistics sub-screen. */
+    val onOpenUsageStatistics: () -> Unit = {},
 
     // ─── About ───────────────────────────────────────────────────────────────
     /** Stage the reset-all-settings destructive action. */

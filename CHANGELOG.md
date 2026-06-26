@@ -15,6 +15,69 @@ details.
 
 ### Added
 
+- **FOSS / F-Droid build.** A new `foss` product flavour ships with **no
+  Firebase/Google dependency** anywhere in its graph, unblocking the F-Droid
+  channel. Crash reporting is now behind a flavour-agnostic `CrashReporter`
+  abstraction: the `full` flavour keeps Firebase Crashlytics, while `foss` binds
+  a no-op implementation and hides the crash-reporting consent toggle entirely.
+  The proprietary `google-services` / `firebase-crashlytics` Gradle plugins are
+  applied only for `full` builds, so `./gradlew assembleFossRelease` never loads
+  them. See [docs/release.md](docs/release.md) § *FOSS / F-Droid build*.
+- **Entry surfaces.** The agent now reaches outside its own screen. A **share
+  target** accepts text or an image shared from any app and runs your chosen
+  pipeline over it, landing the result in a new chat you are taken straight to.
+  **Launcher shortcuts** (long-press the app icon) offer "New chat" and
+  "Pipelines", plus dynamic shortcuts to your most recent chats. A **Quick
+  Settings tile** runs a "duty" pipeline in the background with one tap from the
+  shade and notifies you when it finishes. Each surface is **off until you point
+  it at a pipeline** (privacy-first default): bind one per surface in *Settings →
+  Background & triggers*, or from a pipeline's row menu in the library ("Use for
+  sharing" / "Use for Quick Settings tile").
+- **Automation triggers — foundation.** Groundwork for running a bound pipeline
+  in the background when a condition is met: a time schedule (every N, or daily
+  at a set time), the device starting to charge, or gaining network / Wi-Fi
+  connectivity. A trigger is inert until you bind a pipeline and is auto-disabled
+  if that pipeline is later deleted; a fired trigger runs through the same
+  background path as a scheduled task. The first wave is deliberately limited to
+  low-sensitivity conditions (no notification-listener / location / SMS access).
+  The management UI lands in a following change.
+- **Manage automation triggers.** A new **Triggers** screen (under *More*) lists
+  your triggers, each showing a plain-language condition ("Every day at 08:00",
+  "When charging connected", "When Wi-Fi connects") and its bound pipeline, with
+  an inline switch to enable or disable it. A full-screen editor creates and edits
+  triggers: pick the condition type (interval presets `15m / 30m / 1h / 6h / 24h`
+  or a custom value, a daily time, charging, or network with a Wi-Fi-only
+  option), bind a pipeline, write the input prompt, and toggle enabled. An unbound
+  trigger reads as inert ("No pipeline — tap to bind"), and a first-run empty
+  state explains the "trigger → background run → result in chat" model. Changes
+  take effect immediately — creating, editing, enabling or deleting a trigger
+  re-syncs the background runtime without waiting for the next launch.
+- **Charging triggers fire instantly.** A charging trigger now runs within
+  seconds of plugging in — even when the app is closed — via a
+  charging-constrained WorkManager job (`setRequiresCharging`), which the OS
+  wakes through JobScheduler, instead of waiting for the next ~15-minute
+  background poll. The poll remains as a backstop and re-arms the fast path on
+  unplug; interval/daily/network triggers stay poll-driven.
+- **Trigger results and notifications.** A fired trigger now lands its run in a
+  dedicated chat session named after the trigger; recurring fires accumulate in
+  that same conversation instead of spawning a new chat each time, and a deleted
+  session is re-created on the next fire. A **"Trigger fired"** notification
+  announces the start of a background run, alongside the existing **"Task
+  completed" / "Task failed"** outcome notifications (same channel and toggle, no
+  new surfaces) — each deep-links into the trigger's chat. Sensitive or
+  destructive tools inside a trigger run surface the usual background
+  **Approve / Deny** approval notification, so an unattended run can be settled
+  from the shade without opening the app.
+- **Local usage statistics (privacy-preserving).** A new **Usage statistics**
+  screen (*Settings → Privacy*) shows fully on-device counts of how the app is
+  used — runs per pipeline, run outcomes (completed / failed / cancelled /
+  interrupted), trigger firings by kind, and active days. **Nothing on this path
+  ever leaves the device** (enforced by a build-time guard that forbids any
+  network import on the telemetry surface); the figures live in the existing
+  encrypted database. Recording is on by default, clearly framed as local-only,
+  and can be turned off or cleared at any time. A voluntary **Share as text** /
+  **Export JSON** lets you take a snapshot for your own analysis — to a file or
+  share sheet you choose, never automatically.
 - **Search the settings.** The settings hub now has a search field. Typing
   filters every setting by name, description, owning category and synonyms (so
   `max` surfaces *Cap autonomous steps* via the synonym *max steps*), with the
@@ -436,6 +499,29 @@ details.
   history** settings, and how repair / cloud-retry / history-compression
   events read in the console. No behaviour change — documentation catching up
   to the shipped reliability contour.
+
+- **Automation & background-execution surfaces documented and tested
+  end-to-end.** [`SECURITY.md`](SECURITY.md) gains an *Automation triggers and
+  entry surfaces* section (low-sensitivity conditions only; NotificationListener
+  / location / SMS deliberately deferred; inert-until-bound, auto-disable on
+  pipeline delete, and the unchanged human-in-the-loop gate as the mitigations
+  for unattended background execution) and a *Local usage statistics* note (the
+  on-device-only guarantee and its build-time network guard).
+  [`docs/architecture.md`](docs/architecture.md) gains a *Triggers and entry
+  surfaces → background runs* section with a flow diagram, and the background-work
+  component table now lists the trigger watch / charging-sweep workers and the
+  trigger scheduler. [`docs/user-guide.md`](docs/user-guide.md) notes that crash
+  reporting is absent from the F-Droid / FOSS build. A new Robolectric
+  integration test drives a charging trigger through firing → background run →
+  notification → result in the bound chat, including the background
+  HITL-approve-from-notification path. No behaviour change — documentation and
+  test coverage catching up to the shipped automation surface.
+
+- **Bump Hilt / Dagger `2.59.2` → `2.60`** to clear the `NewerVersionAvailable`
+  lint gate (`hilt-android`, `hilt-android-compiler` and the Hilt Gradle plugin
+  move together via the shared version). The existing `kotlin-metadata-jvm`
+  force-pin already covers the unshaded-metadata dependency, so no further change
+  was needed. No code change.
 
 - **Bump `dev.detekt` `2.0.0-alpha.4` → `2.0.0-alpha.5`** to clear the
   `NewerVersionAvailable` lint gate. Build tooling only (not shipped in the
