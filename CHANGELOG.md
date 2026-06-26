@@ -517,6 +517,12 @@ details.
   HITL-approve-from-notification path. No behaviour change — documentation and
   test coverage catching up to the shipped automation surface.
 
+- **Bump Hilt / Dagger `2.59.2` → `2.60`** to clear the `NewerVersionAvailable`
+  lint gate (`hilt-android`, `hilt-android-compiler` and the Hilt Gradle plugin
+  move together via the shared version). The existing `kotlin-metadata-jvm`
+  force-pin already covers the unshaded-metadata dependency, so no further change
+  was needed. No code change.
+
 - **Bump `dev.detekt` `2.0.0-alpha.4` → `2.0.0-alpha.5`** to clear the
   `NewerVersionAvailable` lint gate. Build tooling only (not shipped in the
   APK); no rule-set changes affecting the codebase.
