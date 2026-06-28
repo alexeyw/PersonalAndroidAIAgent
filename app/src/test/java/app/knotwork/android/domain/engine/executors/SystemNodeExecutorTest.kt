@@ -7,12 +7,10 @@ import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.ConsoleEventType
-import app.knotwork.android.domain.models.EngineImageInput
 import app.knotwork.android.domain.models.ExecutionScope
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.Result
-import app.knotwork.android.domain.models.RunImageDelivery
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.usecases.LoadModelUseCase
@@ -87,9 +85,7 @@ class SystemNodeExecutorTest {
             "input",
             "session-1",
             "prompt",
-            scope = ExecutionScope(
-                imageDelivery = RunImageDelivery(EngineImageInput("/tmp/x.jpg", 1, 1, 1L)),
-            ),
+            scope = ExecutionScope(imagePresent = true),
         ).toList()
 
         assertTrue(
@@ -123,9 +119,7 @@ class SystemNodeExecutorTest {
             "input",
             "session-1",
             "prompt",
-            scope = ExecutionScope(
-                imageDelivery = RunImageDelivery(EngineImageInput("/tmp/x.jpg", 1, 1, 1L)),
-            ),
+            scope = ExecutionScope(imagePresent = true),
         ).toList()
 
         assertFalse(promptSlot.captured.contains(DefaultPrompts.System.IMAGE_PRESENT_NOTE))

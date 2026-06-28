@@ -39,6 +39,10 @@ import androidx.room.PrimaryKey
  *   run tree. Session-level queries filter to `parentRunId IS NULL` so children
  *   never surface as standalone runs in the reattach / status-card / activity
  *   paths — children are internal and only ever resumed through their root.
+ * @property hadImage `true` when the originating message carried an image attachment.
+ *   Persisted so a resumed run (which never re-delivers the image) can still report
+ *   image presence to IF/router nodes executing live past the resume point. Defaults
+ *   to `false`.
  */
 @Entity(
     tableName = "pipeline_runs",
@@ -70,4 +74,5 @@ data class PipelineRunEntity(
     val graphContentHash: String?,
     val userPrompt: String? = null,
     val parentRunId: String? = null,
+    val hadImage: Boolean = false,
 )

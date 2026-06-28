@@ -324,6 +324,7 @@ private fun PipelineRun.toEntity(): PipelineRunEntity = PipelineRunEntity(
     graphContentHash = graphContentHash,
     userPrompt = userPrompt,
     parentRunId = parentRunId,
+    hadImage = hadImage,
 )
 
 /**
@@ -347,4 +348,5 @@ private fun PipelineRunEntity.toDomain(): PipelineRun = PipelineRun(
     graphContentHash = graphContentHash,
     userPrompt = userPrompt,
     parentRunId = parentRunId,
+    hadImage = hadImage,
 )

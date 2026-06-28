@@ -595,4 +595,29 @@ class AppDatabaseMigrationTest {
             sql.contains("NOT NULL DEFAULT 0"),
         )
     }
+
+    @Test
+    fun `MIGRATION_48_49 targets versions 48 to 49`() {
+        val migration = AppDatabase.MIGRATION_48_49
+
+        assertEquals(48, migration.startVersion)
+        assertEquals(49, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_48_49 adds a non-null hadImage column to pipeline_runs`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val sqlSlot = slot<String>()
+
+        AppDatabase.MIGRATION_48_49.migrate(db)
+
+        verify(exactly = 1) { db.execSQL(capture(sqlSlot)) }
+        val sql = sqlSlot.captured.uppercase()
+        assertTrue(
+            "Expected ALTER pipeline_runs ADD hadImage, got: ${sqlSlot.captured}",
+            sql.contains("ALTER TABLE `PIPELINE_RUNS` ADD COLUMN `HADIMAGE`"),
+        )
+        // Additive + NOT NULL DEFAULT 0 so existing runs get false (no image).
+        assertTrue("hadImage must be NOT NULL DEFAULT 0: ${sqlSlot.captured}", sql.contains("NOT NULL DEFAULT 0"))
+    }
 }

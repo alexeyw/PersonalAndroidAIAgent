@@ -618,7 +618,7 @@ class TaskQueueManagerImplTest {
     // region Checkpoint resume
 
     /** Interrupted-then-requeued run record matching the [graph] under resume. */
-    private fun resumedRun(graph: PipelineGraph, runId: String): PipelineRun = PipelineRun(
+    private fun resumedRun(graph: PipelineGraph, runId: String, hadImage: Boolean = false): PipelineRun = PipelineRun(
         id = runId,
         sessionId = "session_resume",
         pipelineId = graph.id,
@@ -630,6 +630,7 @@ class TaskQueueManagerImplTest {
         errorMessage = null,
         graphContentHash = graph.contentHash(),
         userPrompt = "original prompt",
+        hadImage = hadImage,
     )
 
     /**
@@ -684,6 +685,36 @@ class TaskQueueManagerImplTest {
             assertEquals(6L, resumeSlot.captured.nextSeq)
             coVerify { pipelineRunRepository.finishRun(runId, PipelineRunStatus.COMPLETED) }
         }
+
+    /**
+     * A resumed run never re-delivers the image, but the *fact* that the run carried
+     * one is persisted on the record (`hadImage`) and forwarded to the engine as
+     * `runHadImage`, so an IF/router node executing live past the resume point can
+     * still branch on image presence.
+     */
+    @Test
+    fun `given resume task whose run had an image then engine gets runHadImage true`() = testScope.runTest {
+        val graph = PipelineGraph(id = "pipe-r", name = "Resume")
+        val runId = "run-resume-img"
+        coEvery { pipelineRunRepository.getRun(runId) } returns resumedRun(graph, runId, hadImage = true)
+        coEvery { pipelineRepository.getPipelineById("pipe-r") } returns graph
+        coEvery { runTraceRepository.getTraceForRun(runId) } returns emptyList()
+
+        val hadImageSlot = slot<Boolean>()
+        every {
+            // ...imageInput(8), imageDelivery(9), runHadImage(10) — capture the 10th.
+            graphExecutionEngine.invoke(
+                any(), any(), any(), any(), any(), any(), any(), any(), any(), capture(hadImageSlot),
+            )
+        } returns flowOf(AgentOrchestratorState.Completed("ok"))
+
+        taskQueueManager.enqueueTask(
+            AgentTask(id = runId, sessionId = "session_resume", prompt = "original prompt", isResume = true),
+        )
+        advanceUntilIdle()
+
+        assertTrue("Resume must forward persisted image presence to the engine", hadImageSlot.captured)
+    }
 
     /**
      * The graph hash is re-validated at worker pickup: an edit saved in the
