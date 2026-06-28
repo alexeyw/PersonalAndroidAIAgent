@@ -4,6 +4,7 @@ import app.knotwork.android.data.mcp.McpClient
 import app.knotwork.android.data.mcp.McpClientFactory
 import app.knotwork.android.data.tools.local.LocalAppFunctionManager
 import app.knotwork.android.data.tools.local.SearchTool
+import app.knotwork.android.data.tools.local.executors.AppendFileExecutor
 import app.knotwork.android.data.tools.local.executors.DeleteFileExecutor
 import app.knotwork.android.data.tools.local.executors.EditFileExecutor
 import app.knotwork.android.data.tools.local.executors.FindFilesExecutor
@@ -149,6 +150,12 @@ class ToolRepositoryImpl @Inject constructor(
                 name = EditFileExecutor.TOOL_NAME,
                 description = EditFileExecutor.DESCRIPTION,
                 parameters = EditFileExecutor.PARAMETERS,
+                risk = ToolRisk.SENSITIVE,
+            ),
+            workspaceWriteTool(
+                name = AppendFileExecutor.TOOL_NAME,
+                description = AppendFileExecutor.DESCRIPTION,
+                parameters = AppendFileExecutor.PARAMETERS,
                 risk = ToolRisk.SENSITIVE,
             ),
             workspaceWriteTool(

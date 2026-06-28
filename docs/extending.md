@@ -421,9 +421,9 @@ externally.
 ### 2.6. Add a workspace tool
 
 A **workspace tool** is a `LocalToolExecutor` that reads or writes the agent's
-private file sandbox instead of calling the network. The six built-ins
-(`read_file`, `write_file`, `edit_file`, `delete_file`, `list_files`,
-`find_files`) all share one rule: **they never touch `java.io.File`
+private file sandbox instead of calling the network. The seven built-ins
+(`read_file`, `write_file`, `edit_file`, `append_file`, `delete_file`,
+`list_files`, `find_files`) all share one rule: **they never touch `java.io.File`
 directly** — every byte goes through the
 [`AgentWorkspace`](../app/src/main/java/app/knotwork/android/domain/services/AgentWorkspace.kt)
 interface, which is the single trust boundary for agent-driven file I/O.

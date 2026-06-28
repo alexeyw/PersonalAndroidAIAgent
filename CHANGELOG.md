@@ -15,6 +15,14 @@ details.
 
 ### Added
 
+- **`append_file` workspace tool.** A new built-in file tool that adds text to the
+  **end** of a workspace file, creating it on the first call and always keeping
+  existing content (there is no overwrite). It makes "accumulate entries in a daily
+  log / report" possible in a single tool call — previously only `write_file`
+  (whole-file replace) and `edit_file` (anchored find-replace) existed, neither of
+  which can append without first reading the file back. Risk **SENSITIVE** (asks for
+  confirmation), routed through the same `AgentWorkspace` sandbox (containment +
+  quotas) as the other file tools.
 - **FOSS / F-Droid build.** A new `foss` product flavour ships with **no
   Firebase/Google dependency** anywhere in its graph, unblocking the F-Droid
   channel. Crash reporting is now behind a flavour-agnostic `CrashReporter`

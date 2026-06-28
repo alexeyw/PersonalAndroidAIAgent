@@ -1095,6 +1095,7 @@ The app ships with the following tools:
 | **find_files**     | Finds workspace files whose path matches a glob pattern (`*.md`, `reports/**`).      |
 | **write_file**     | Writes a text file to the workspace. Creating a new file is the default; replacing an existing one needs an explicit overwrite flag, so content is never clobbered by accident. Asks for confirmation before running. |
 | **edit_file**      | Makes a targeted change to an existing workspace file by replacing a unique snippet of text. The snippet must match exactly once, so an edit never lands in the wrong place. Asks for confirmation before running. |
+| **append_file**    | Adds text to the **end** of a workspace file, creating it on the first call. Existing content is always kept (there is no overwrite), so it is the natural fit for accumulating entries in a daily log or report. Asks for confirmation before running. |
 | **delete_file**    | Deletes a file from the workspace. This is irreversible and always asks you to confirm before it runs. |
 | **http_request**   | Calls a remote HTTP(S) API (GET/POST/PUT/DELETE). It can only reach domains you have explicitly added to the **Allowed domains** list — until you add one, the tool is hidden from the agent entirely. A GET asks for confirmation; a POST/PUT/DELETE asks for the stronger destructive-action confirmation. See the warning below before adding a domain. |
 

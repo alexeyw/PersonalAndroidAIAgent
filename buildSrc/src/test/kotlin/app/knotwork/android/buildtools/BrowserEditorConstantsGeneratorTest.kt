@@ -71,6 +71,8 @@ class BrowserEditorConstantsGeneratorTest {
             abstract fun bindWriteFileExecutor(executor: WriteFileExecutor): LocalToolExecutor
             @Binds @IntoMap @StringKey(EditFileExecutor.TOOL_NAME)
             abstract fun bindEditFileExecutor(executor: EditFileExecutor): LocalToolExecutor
+            @Binds @IntoMap @StringKey(AppendFileExecutor.TOOL_NAME)
+            abstract fun bindAppendFileExecutor(executor: AppendFileExecutor): LocalToolExecutor
             @Binds @IntoMap @StringKey(DeleteFileExecutor.TOOL_NAME)
             abstract fun bindDeleteFileExecutor(executor: DeleteFileExecutor): LocalToolExecutor
             @Binds @IntoMap @StringKey(HttpRequestExecutor.TOOL_NAME)
@@ -111,6 +113,7 @@ class BrowserEditorConstantsGeneratorTest {
         "FindFilesExecutor" to toolSource("find_files"),
         "WriteFileExecutor" to toolSource("write_file"),
         "EditFileExecutor" to toolSource("edit_file"),
+        "AppendFileExecutor" to toolSource("append_file"),
         "DeleteFileExecutor" to toolSource("delete_file"),
         "HttpRequestExecutor" to toolSource("http_request"),
     )
@@ -172,6 +175,7 @@ class BrowserEditorConstantsGeneratorTest {
                 "FindFilesExecutor",
                 "WriteFileExecutor",
                 "EditFileExecutor",
+                "AppendFileExecutor",
                 "DeleteFileExecutor",
                 "HttpRequestExecutor",
             ),
@@ -255,7 +259,7 @@ class BrowserEditorConstantsGeneratorTest {
             listOf(
                 "schedule_task", "search_tool", "delegate_task",
                 "read_file", "list_files", "find_files",
-                "write_file", "edit_file", "delete_file", "http_request",
+                "write_file", "edit_file", "append_file", "delete_file", "http_request",
             ),
         )
         // Display order from TOOL_META: search, delegate, schedule, then the read
@@ -267,7 +271,8 @@ class BrowserEditorConstantsGeneratorTest {
         assertTrue(js.indexOf("list_files") < js.indexOf("find_files"))
         assertTrue(js.indexOf("find_files") < js.indexOf("write_file"))
         assertTrue(js.indexOf("write_file") < js.indexOf("edit_file"))
-        assertTrue(js.indexOf("edit_file") < js.indexOf("delete_file"))
+        assertTrue(js.indexOf("edit_file") < js.indexOf("append_file"))
+        assertTrue(js.indexOf("append_file") < js.indexOf("delete_file"))
         assertTrue(js.indexOf("delete_file") < js.indexOf("http_request"))
     }
 

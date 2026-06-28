@@ -97,6 +97,28 @@ interface AgentWorkspace {
     ): WorkspaceResult<WorkspaceFile>
 
     /**
+     * Appends UTF-8 [content] to the end of a workspace file, creating it (and any
+     * parent directories) when it does not yet exist.
+     *
+     * The read-existing → concatenate → write is performed atomically under the
+     * workspace's own lock, so concurrent appends can never interleave or lose an
+     * entry, and the rewritten content is subject to the same per-file and total-size
+     * quotas as [writeText]. Unlike [writeText] there is no `overwrite` flag: appending
+     * is always additive and never refuses on an existing file — exactly the
+     * "accumulate into a daily log / report" shape callers need.
+     *
+     * @param relativePath Path of the file to append to, relative to the workspace
+     *   root.
+     * @param content Text to append, encoded as UTF-8.
+     * @return [WorkspaceResult.Success] with the resulting [WorkspaceFile] metadata,
+     *   or [WorkspaceResult.Failure] with [WorkspaceError.PathOutsideWorkspace],
+     *   [WorkspaceError.IsDirectory] (the path is a directory),
+     *   [WorkspaceError.NotAText] (existing content is binary),
+     *   [WorkspaceError.TooLarge] or [WorkspaceError.QuotaExceeded].
+     */
+    suspend fun appendText(relativePath: String, content: String): WorkspaceResult<WorkspaceFile>
+
+    /**
      * Replaces the single occurrence of [oldText] with [newText] in an existing
      * workspace file, anchoring the edit on a uniquely-matching fragment.
      *

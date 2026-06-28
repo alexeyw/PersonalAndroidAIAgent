@@ -4,6 +4,7 @@ import app.knotwork.android.data.engine.KoogClientFactory
 import app.knotwork.android.data.engine.KoogCloudLlmModelResolver
 import app.knotwork.android.data.engine.KoogStructuredInferenceClientFactory
 import app.knotwork.android.data.tools.local.SearchTool
+import app.knotwork.android.data.tools.local.executors.AppendFileExecutor
 import app.knotwork.android.data.tools.local.executors.DelegateTaskExecutor
 import app.knotwork.android.data.tools.local.executors.DeleteFileExecutor
 import app.knotwork.android.data.tools.local.executors.EditFileExecutor
@@ -79,6 +80,11 @@ abstract class LocalToolsModule {
     @IntoMap
     @StringKey(EditFileExecutor.TOOL_NAME)
     abstract fun bindEditFileExecutor(executor: EditFileExecutor): LocalToolExecutor
+
+    @Binds
+    @IntoMap
+    @StringKey(AppendFileExecutor.TOOL_NAME)
+    abstract fun bindAppendFileExecutor(executor: AppendFileExecutor): LocalToolExecutor
 
     @Binds
     @IntoMap
