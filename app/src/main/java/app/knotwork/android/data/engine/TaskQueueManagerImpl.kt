@@ -279,7 +279,9 @@ class TaskQueueManagerImpl @Inject constructor(
         )
 
         pipelineRunRepository.markRunning(task.id, graph.id, recordedHash)
-        executeRun(task, graph, resume)
+        // Carry the persisted image-presence forward: a resumed run never re-delivers the
+        // image, but an IF/router node executing live past the resume point must still see it.
+        executeRun(task, graph, resume, runHadImage = run.hadImage)
     }
 
     /**
@@ -292,8 +294,16 @@ class TaskQueueManagerImpl @Inject constructor(
      * @param task The task being processed ([AgentTask.id] is the run id).
      * @param pipeline The resolved graph to execute.
      * @param resume Checkpoint payload for a resumed run, `null` for a fresh one.
+     * @param runHadImage Presence-only signal for a resumed run, sourced from the
+     *   persisted [PipelineRun.hadImage]. A fresh run leaves it `false` and the engine
+     *   derives presence from the live image input instead.
      */
-    private suspend fun executeRun(task: AgentTask, pipeline: PipelineGraph, resume: ResumeContext?) {
+    private suspend fun executeRun(
+        task: AgentTask,
+        pipeline: PipelineGraph,
+        resume: ResumeContext?,
+        runHadImage: Boolean = false,
+    ) {
         val stateFlow = getOrCreateStateFlow(task.sessionId)
         // Set when the engine parks the run in its persistent waiting phase:
         // the flow then completes without a terminal state on purpose, and the
@@ -316,7 +326,15 @@ class TaskQueueManagerImpl @Inject constructor(
                 )
             }
         try {
-            graphExecutionEngine(task.sessionId, task.prompt, pipeline, task.id, resume, imageInput = imageInput)
+            graphExecutionEngine(
+                task.sessionId,
+                task.prompt,
+                pipeline,
+                task.id,
+                resume,
+                imageInput = imageInput,
+                runHadImage = runHadImage,
+            )
                 .collect { state ->
                     // Terminal engine states are mirrored into the persistent run
                     // record as they pass through, so the record is already
@@ -396,6 +414,7 @@ class TaskQueueManagerImpl @Inject constructor(
         errorMessage = null,
         graphContentHash = null,
         userPrompt = prompt,
+        hadImage = attachment != null,
     )
 
     /**

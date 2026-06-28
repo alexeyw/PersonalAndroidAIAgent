@@ -733,6 +733,7 @@
     <string name="knotwork_node_field_input_name">Input variable name</string>
     <string name="knotwork_node_field_schema_json">JSON Schema (optional)</string>
     <string name="knotwork_node_field_expression">Expression</string>
+    <string name="knotwork_node_field_branch_on_image">Branch True when input has an image</string>
     <string name="knotwork_node_field_label_true">True label</string>
     <string name="knotwork_node_field_label_false">False label</string>
     <string name="knotwork_node_field_question">Question template</string>

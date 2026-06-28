@@ -100,7 +100,10 @@ configured it.
   cloud models**. Mark a model vision-capable with the **Image support** toggle
   on the Models screen; a pre-flight check blocks (with a clear message) sending
   an image to a text-only model or to a cloud-first pipeline before the run
-  starts.
+  starts. Pipelines can also **fork on whether a picture was sent** — an *If
+  Condition* node has a deterministic "branch on image" toggle and an *Intent
+  Router* is told when the message carries an image — while only the on-device
+  vision step ever sees the pixels.
 - **Voice input** — record a short clip (or pick an audio file) and a
   multimodal local model **transcribes it to editable text before the pipeline
   runs** — the audio never travels the graph. Canonical 16 kHz mono capture, a

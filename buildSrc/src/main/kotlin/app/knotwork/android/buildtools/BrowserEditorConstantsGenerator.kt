@@ -96,6 +96,7 @@ object BrowserEditorConstantsGenerator {
         "find_files" to "Find Files",
         "write_file" to "Write File",
         "edit_file" to "Edit File",
+        "append_file" to "Append File",
         "delete_file" to "Delete File",
         "http_request" to "HTTP Request",
     )

@@ -158,6 +158,12 @@ class GraphExecutionEngine @Inject constructor(
      *   verifies such a sink is *reachable* (recursing into sub-pipelines) before
      *   enqueuing; branch-dependent routing can still skip it, in which case the
      *   top-level run emits an "Image not used" console note.
+     * @param runHadImage Presence-only signal for a resumed run: `true` when the
+     *   interrupted run's originating message carried an image (from the persisted
+     *   `PipelineRun.hadImage`). A fresh run leaves this `false` and derives presence
+     *   from [imageDelivery] instead. Threaded into [ExecutionScope.imagePresent] so a
+     *   live-executed IF/router node past the resume point can still branch on "the user
+     *   sent a picture" even though the image itself is never re-delivered on resume.
      * @return A cold flow of orchestrator states describing the run.
      */
     // Reason: this is the agent's core orchestrator. It is a long single
@@ -177,6 +183,7 @@ class GraphExecutionEngine @Inject constructor(
         stepBudget: RunStepBudget? = null,
         imageInput: EngineImageInput? = null,
         imageDelivery: RunImageDelivery? = null,
+        runHadImage: Boolean = false,
         generatingModel: RunGeneratingModel? = null,
     ): Flow<AgentOrchestratorState> = flow {
         // Buffer of console events accumulated for this run. The engine emits a
@@ -234,6 +241,12 @@ class GraphExecutionEngine @Inject constructor(
         // (threaded in via [imageDelivery]) so a vision sink nested inside a
         // sub-pipeline can consume the image, tracked once across the whole tree.
         val delivery = imageDelivery ?: imageInput?.let { RunImageDelivery(it) }
+
+        // Presence-only signal threaded to every node: true when this run carried an
+        // image. A fresh run knows from [delivery]; a resumed run (delivery == null,
+        // never re-delivers) carries it forward via [runHadImage] from the persisted
+        // PipelineRun. Lets an IF/router node branch on image presence on either path.
+        val imagePresent = delivery != null || runHadImage
 
         // The run tree's shared "which model produced the answer" holder. A
         // top-level run seeds a fresh one; a sub-pipeline reuses the parent's
@@ -675,6 +688,7 @@ class GraphExecutionEngine @Inject constructor(
                             routingChoices = routingChoices,
                             imagePath = imagePathForNode,
                             imageDelivery = delivery,
+                            imagePresent = imagePresent,
                             generatingModel = genModel,
                         ),
                     )

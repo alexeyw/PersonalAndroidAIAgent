@@ -285,7 +285,11 @@ object NodeConfigValidation {
 
     private fun validateIfCondition(config: IfConditionConfig): Map<FieldId, ValidationFailure> {
         val errors = mutableMapOf<FieldId, ValidationFailure>()
-        if (config.expression.isBlank()) errors[FieldId.EXPRESSION] = ValidationFailure.REQUIRED
+        // The text expression is only required when the deterministic image-presence
+        // branch is off — with it on, the expression is ignored, so a blank one is fine.
+        if (!config.branchOnImage && config.expression.isBlank()) {
+            errors[FieldId.EXPRESSION] = ValidationFailure.REQUIRED
+        }
         if (config.labelTrue.isBlank()) errors[FieldId.LABEL_TRUE] = ValidationFailure.REQUIRED
         if (config.labelFalse.isBlank()) errors[FieldId.LABEL_FALSE] = ValidationFailure.REQUIRED
         return errors

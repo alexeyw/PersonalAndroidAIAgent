@@ -86,6 +86,14 @@ class AgentWorkspaceImpl @Inject constructor(
         }
     }
 
+    override suspend fun appendText(relativePath: String, content: String): WorkspaceResult<WorkspaceFile> =
+        withContext(Dispatchers.IO) {
+            when (val resolved = canonicalResolve(relativePath)) {
+                is WorkspaceResult.Failure -> resolved
+                is WorkspaceResult.Success -> mutex.withLock { appendTextLocked(resolved.value, content) }
+            }
+        }
+
     override suspend fun editText(
         relativePath: String,
         oldText: String,
@@ -332,6 +340,26 @@ class AgentWorkspaceImpl @Inject constructor(
             // failure this removes the partial stage so a crash never leaves a stray file.
             if (scratch.exists()) scratch.delete()
         }
+    }
+
+    /**
+     * Performs the read-existing → concatenate → atomic-rewrite append of an
+     * already-resolved (in-bounds) [target]. Must be called while holding [mutex]
+     * so the read and the rewrite cannot be interleaved with another mutation
+     * (two concurrent appends would otherwise lose an entry). A missing file is
+     * treated as empty existing content, so the first append creates the file;
+     * the rewrite funnels through [writeTextLocked] and is therefore quota-checked.
+     */
+    private suspend fun appendTextLocked(target: File, content: String): WorkspaceResult<WorkspaceFile> {
+        val existing = if (target.isFile) {
+            when (val read = readTextResolved(target)) {
+                is WorkspaceResult.Failure -> return read
+                is WorkspaceResult.Success -> read.value
+            }
+        } else {
+            ""
+        }
+        return writeTextLocked(target, existing + content, overwrite = true)
     }
 
     /**

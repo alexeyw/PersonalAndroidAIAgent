@@ -41,6 +41,9 @@ internal data class PortAnchor(val xCanvas: Float, val yCanvas: Float)
 
 private const val NODE_WIDTH_DP = 168f
 private const val NODE_BASE_HEIGHT_DP = 64f
+
+/** Max card height (`NodeCardMaxHeight = 96.dp`): used for whole-card release hit-testing. */
+private const val NODE_MAX_HEIGHT_DP = 96f
 private const val DOT_TRAVEL_SPEED_DP_PER_SEC = 40f
 
 /**
@@ -95,6 +98,39 @@ internal fun outboundPortAnchor(node: NodeModel, ports: NodePorts, portLabel: St
     val index = if (matched >= 0) matched else 0
     val offsetPx = with(density) { outboundPortOffsetDp(index, outbound.size).dp.toPx() }
     return PortAnchor(xCanvas = centreX + offsetPx, yCanvas = outY)
+}
+
+/**
+ * Canvas-space axis-aligned bounds of [node]'s card: top-left `(node.x, node.y)` to
+ * bottom-right `(node.x + width, node.y + height)`. Uses the **max** card height so the
+ * rectangle covers a node that renders a runtime-error line. Used by the canvas to decide
+ * which node a connection drag was released onto (whole-card target, not a tiny anchor).
+ */
+internal data class NodeBounds(val left: Float, val top: Float, val right: Float, val bottom: Float)
+
+internal fun nodeCanvasBounds(node: NodeModel, density: Density): NodeBounds {
+    val widthPx = with(density) { NODE_WIDTH_DP.dp.toPx() }
+    val heightPx = with(density) { NODE_MAX_HEIGHT_DP.dp.toPx() }
+    return NodeBounds(left = node.x, top = node.y, right = node.x + widthPx, bottom = node.y + heightPx)
+}
+
+/**
+ * Canvas-space anchor of every outbound port on [node], paired with its label (`""` for the
+ * single default port). Mirrors [outboundPortAnchor]'s geometry but enumerates all ports, so
+ * the canvas gesture handler can decide whether a press landed on a port (→ start a
+ * connection) instead of panning.
+ */
+internal fun outboundPortAnchors(node: NodeModel, density: Density): List<Pair<String, PortAnchor>> {
+    val outbound = portsFor(node).outbound
+    if (outbound.isEmpty()) return emptyList()
+    val widthPx = with(density) { NODE_WIDTH_DP.dp.toPx() }
+    val heightPx = with(density) { NODE_BASE_HEIGHT_DP.dp.toPx() }
+    val centreX = node.x + widthPx / 2f
+    val outY = node.y + heightPx
+    return outbound.mapIndexed { index, port ->
+        val offsetPx = with(density) { outboundPortOffsetDp(index, outbound.size).dp.toPx() }
+        port.label to PortAnchor(xCanvas = centreX + offsetPx, yCanvas = outY)
+    }
 }
 
 /**

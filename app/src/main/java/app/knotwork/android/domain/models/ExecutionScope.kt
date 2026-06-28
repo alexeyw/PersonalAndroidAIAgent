@@ -51,6 +51,12 @@ package app.knotwork.android.domain.models
  *   letting a vision sink nested inside a sub-pipeline consume the image. Only
  *   [PipelineNodeExecutor][app.knotwork.android.domain.engine.executors.PipelineNodeExecutor]
  *   reads it; the engine sets [imagePath] from it for the actual delivery node.
+ * @property imagePresent `true` when the run's originating message carried an image
+ *   attachment — the presence-only signal a routing/condition node reads to branch on
+ *   "did the user send a picture?". Unlike [imageDelivery] (the actual deliverable image,
+ *   absent on resume), this survives a checkpoint resume: the engine derives it from
+ *   `imageDelivery != null` on a fresh run and from the persisted `PipelineRun.hadImage`
+ *   on a resumed one. Carries no pixels, only the boolean fact.
  * @property generatingModel The run tree's shared holder for the model that
  *   produced the answer, or `null` when the engine was invoked without one.
  *   Threaded through unchanged so a `PIPELINE` node forwards it to its
@@ -65,5 +71,6 @@ data class ExecutionScope(
     val routingChoices: List<String> = emptyList(),
     val imagePath: String? = null,
     val imageDelivery: RunImageDelivery? = null,
+    val imagePresent: Boolean = false,
     val generatingModel: RunGeneratingModel? = null,
 )

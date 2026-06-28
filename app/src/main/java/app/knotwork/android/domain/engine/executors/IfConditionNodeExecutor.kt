@@ -41,7 +41,13 @@ class IfConditionNodeExecutor @Inject constructor(private val evaluateIfConditio
         scope: ExecutionScope,
     ): Flow<NodeOutput> = kotlinx.coroutines.flow.flow {
         val repairListener = CollectingRepairListener()
-        val outcome = evaluateIfConditionUseCase(node, inputText, repairListener)
+        // Presence-only signal: true when the run's message carried an image. The engine
+        // derives it from the live delivery on a fresh run and from the persisted
+        // PipelineRun.hadImage on a resumed one, so an IF node forks correctly on image
+        // presence even when it executes live past a checkpoint resume — and whether or not
+        // a downstream vision node has consumed the image yet.
+        val hasImage = scope.imagePresent
+        val outcome = evaluateIfConditionUseCase(node, inputText, hasImage, repairListener)
 
         // Surface each buffered repair attempt; the engine renders it and bumps
         // the per-node repair counter.

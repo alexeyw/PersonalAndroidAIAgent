@@ -63,6 +63,7 @@ class PipelineJsonSerializerTest {
                 conditionKeywords = "urgent, important",
                 conditionPrompt = "Classify urgency",
                 conditionComplexity = 5,
+                conditionHasImage = true,
                 contextConfig = NodeContextConfig.defaultForType(NodeType.IF_CONDITION),
             ),
             NodeModel(
@@ -126,6 +127,7 @@ class PipelineJsonSerializerTest {
         val ifNode = parsed.nodes.first { it.type == NodeType.IF_CONDITION }
         assertEquals("urgent, important", ifNode.conditionKeywords)
         assertEquals(5, ifNode.conditionComplexity)
+        assertEquals(true, ifNode.conditionHasImage)
 
         val tool = parsed.nodes.first { it.type == NodeType.TOOL }
         assertEquals("web_search", tool.toolName)

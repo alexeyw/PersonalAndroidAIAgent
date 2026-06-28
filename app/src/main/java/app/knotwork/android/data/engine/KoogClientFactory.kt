@@ -128,34 +128,34 @@ class KoogClientFactory @Inject constructor(
 
     private suspend fun rawOpenAI(): LLMClient? {
         if (isLocalOnlyMode()) return null
-        val key = apiKeyRepository.getOpenAIKey().firstOrNull()
+        val key = apiKeyRepository.getOpenAIKey().firstOrNull()?.trim()
         if (key.isNullOrBlank()) return null
         return OpenAILLMClient(apiKey = key, httpClientFactory = httpClientFactory)
     }
 
     private suspend fun rawAnthropic(): LLMClient? {
         if (isLocalOnlyMode()) return null
-        val key = apiKeyRepository.getAnthropicKey().firstOrNull()
+        val key = apiKeyRepository.getAnthropicKey().firstOrNull()?.trim()
         if (key.isNullOrBlank()) return null
         return AnthropicLLMClient(apiKey = key, httpClientFactory = httpClientFactory)
     }
 
     private suspend fun rawGoogle(): LLMClient? {
         if (isLocalOnlyMode()) return null
-        val key = apiKeyRepository.getGoogleKey().firstOrNull()
+        val key = apiKeyRepository.getGoogleKey().firstOrNull()?.trim()
         if (key.isNullOrBlank()) return null
         return GoogleLLMClient(apiKey = key, httpClientFactory = httpClientFactory)
     }
 
     private suspend fun rawDeepSeek(): LLMClient? {
         if (isLocalOnlyMode()) return null
-        val key = apiKeyRepository.getDeepSeekKey().firstOrNull()
+        val key = apiKeyRepository.getDeepSeekKey().firstOrNull()?.trim()
         if (key.isNullOrBlank()) return null
         return DeepSeekLLMClient(apiKey = key, httpClientFactory = httpClientFactory)
     }
 
     private suspend fun rawOllama(): LLMClient? {
-        val url = apiKeyRepository.getOllamaBaseUrl().firstOrNull()
+        val url = apiKeyRepository.getOllamaBaseUrl().firstOrNull()?.trim()
         if (url.isNullOrBlank()) return null
         return OllamaClient(httpClientFactory = httpClientFactory, baseUrl = url)
     }

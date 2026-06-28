@@ -263,6 +263,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
         val autoFixDoneMessage = stringResource(R.string.pipeline_editor_validation_auto_fix_done)
         val saveDoneMessage = stringResource(R.string.pipeline_editor_save_done)
         val runPreviewMessage = stringResource(R.string.pipeline_editor_run_preview)
+        val connectionDroppedHint = stringResource(R.string.pipeline_editor_connection_dropped_hint)
         // Banner shows Running while the orchestrator reports the run is live; falls
         // back to Idle (banner hidden) otherwise. Done / Paused variants land when
         // real run-completion telemetry arrives (engine wiring is tracked separately).
@@ -482,6 +483,9 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
             onAddConnection = { sourceId, targetId, label ->
                 editor.undoRedo.push(pipeline)
                 viewModel.addConnection(sourceId, targetId, label)
+            },
+            onConnectionDropped = {
+                scope.launch { snackbarHostState.showSnackbar(connectionDroppedHint) }
             },
             onOpenNodeConfig = { nodeId ->
                 val target = pipeline.nodes.find { it.id == nodeId } ?: return@PipelineEditorContent

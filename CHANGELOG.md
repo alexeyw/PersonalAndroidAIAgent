@@ -15,6 +15,14 @@ details.
 
 ### Added
 
+- **`append_file` workspace tool.** A new built-in file tool that adds text to the
+  **end** of a workspace file, creating it on the first call and always keeping
+  existing content (there is no overwrite). It makes "accumulate entries in a daily
+  log / report" possible in a single tool call — previously only `write_file`
+  (whole-file replace) and `edit_file` (anchored find-replace) existed, neither of
+  which can append without first reading the file back. Risk **SENSITIVE** (asks for
+  confirmation), routed through the same `AgentWorkspace` sandbox (containment +
+  quotas) as the other file tools.
 - **FOSS / F-Droid build.** A new `foss` product flavour ships with **no
   Firebase/Google dependency** anywhere in its graph, unblocking the F-Droid
   channel. Crash reporting is now behind a flavour-agnostic `CrashReporter`
@@ -313,6 +321,25 @@ details.
 
 ### Fixed
 
+- **Pipelines can branch on whether the message has an image.** Previously the
+  Intent Router and If Condition steps only ever saw text, so a "did the user send
+  a picture?" fork was impossible. An **If Condition** node now has a *Branch True
+  when input has an image* toggle (a deterministic, no-model check), and an
+  **Intent Router** is told when the message includes an image so it can route on
+  it. Only the fact of an attachment is shared with these steps — the picture's
+  contents still reach only the on-device vision model.
+- **Pipeline editor: dragging a connection no longer pans the canvas at high zoom.**
+  While you drag from a node's port to wire up an edge, the canvas now stays put
+  instead of racing the pan gesture and scrolling away — previously, at maximum
+  zoom, the drag often moved the view instead of creating the connection.
+- **Pipeline editor: connecting nodes now tells you when a drag missed.** Releasing
+  a connection drag in empty space (or back on the same node) shows a short hint on
+  how to wire nodes, instead of silently doing nothing.
+- **Deleting a just-created chat no longer removes the previous one.** Creating a
+  new chat now switches the active thread immediately instead of after the
+  background save settled. Previously a "delete" tapped right after creating an
+  empty chat could remove the previously-active chat instead, because the active
+  thread id still pointed at it during that brief window.
 - **Agent messages keep the model that generated them.** Each agent answer now
   records the model it was produced with — the answering node's on-device model
   or cloud provider, not just whatever model happens to be active — so the name

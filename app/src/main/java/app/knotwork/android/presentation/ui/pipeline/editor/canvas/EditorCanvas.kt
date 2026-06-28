@@ -1,8 +1,12 @@
 package app.knotwork.android.presentation.ui.pipeline.editor.canvas
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -22,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -64,6 +69,9 @@ import app.knotwork.design.theme.KnotworkTheme
  * @param onMoveNode invoked on drag-end with the committed canvas-space delta.
  * @param onAddNode invoked when a quick-add tile is picked.
  * @param onAddConnection invoked when a connection draft drops on a valid target node.
+ * @param onConnectionDropped invoked when a connection drag ends without a valid target
+ * (released in empty space or back on the source node) so the screen can hint how
+ * connections are made instead of failing silently.
  * @param modifier optional layout modifier applied to the canvas root.
  */
 @Composable
@@ -77,6 +85,7 @@ internal fun EditorCanvas(
     onMoveNode: (nodeId: String, dxCanvas: Float, dyCanvas: Float) -> Unit,
     onAddNode: (type: NodeType, canvasX: Float, canvasY: Float) -> Unit,
     onAddConnection: (sourceNodeId: String, targetNodeId: String, label: String?) -> Unit,
+    onConnectionDropped: () -> Unit,
     onOpenNodeConfig: (nodeId: String) -> Unit,
     onLongPressEdge: (connectionId: String) -> Unit,
     onStartWithInput: () -> Unit,
@@ -175,21 +184,59 @@ internal fun EditorCanvas(
                     },
                 )
             }
-            // Single transform-gesture handler covers 1-finger pan AND 2-finger pinch in
-            // one detector — replaces the prior `transformable` + standalone
-            // `detectDragGestures` pair, where the drag detector consumed the first
-            // pointer before `transformable` could see the second finger and route to
-            // zoom. `panZoomLock = false` lets pan and zoom compose freely on the same
-            // gesture. We also get the true pinch `centroid` (vs. the prior
-            // viewport-centre approximation) so zoom anchors precisely under the fingers.
+            // Pan / pinch-zoom, but only when the gesture does NOT start on an outbound
+            // port. A press that begins on a port is a connection drag, owned by that
+            // node's port handler; the canvas opts out here (returns before consuming
+            // anything) so it never races the port drag and pans instead — the failure
+            // that hijacked edge creation at maximum zoom. A press on a node body is left
+            // to the node's own move/tap handlers: the touch-slop wait below mirrors
+            // `detectTransformGestures` so a child node-move detector crosses its slop and
+            // consumes FIRST, after which the `isConsumed` guard makes the canvas stand
+            // down — without the slop the canvas panned on the very first pixel and stole
+            // node dragging (most visibly on nodes with no outbound port, e.g. OUTPUT).
             .pointerInput(graph.id) {
-                detectTransformGestures(panZoomLock = false) { centroid, pan, zoom, _ ->
-                    if (zoom != 1f) {
-                        editor.transform = editor.transform.zoomedBy(zoom, centroid.x, centroid.y)
+                val touchSlop = viewConfiguration.touchSlop
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    val downCanvasX = editor.transform.screenToCanvasX(down.position.x)
+                    val downCanvasY = editor.transform.screenToCanvasY(down.position.y)
+                    if (hitTestOutboundPort(
+                            downCanvasX,
+                            downCanvasY,
+                            currentNodesById.values,
+                            editor.transform,
+                            density,
+                        ) != null
+                    ) {
+                        return@awaitEachGesture
                     }
-                    if (pan != Offset.Zero) {
-                        editor.transform = editor.transform.panBy(pan.x, pan.y)
-                    }
+                    var pastSlop = false
+                    var slopTravel = 0f
+                    do {
+                        val event = awaitPointerEvent()
+                        // A node-body drag (move) or tap consumes first; don't also pan.
+                        if (event.changes.any { it.isConsumed }) {
+                            if (event.changes.none { it.pressed }) break else continue
+                        }
+                        val zoom = event.calculateZoom()
+                        val pan = event.calculatePan()
+                        if (!pastSlop) {
+                            // Accumulate motion until it clears touch slop, giving the node's
+                            // own move/tap detectors first claim on small movements.
+                            slopTravel += pan.getDistance() + kotlin.math.abs(1f - zoom) * touchSlop
+                            if (slopTravel > touchSlop) pastSlop = true
+                        }
+                        if (pastSlop) {
+                            val centroid = event.calculateCentroid()
+                            if (zoom != 1f) {
+                                editor.transform = editor.transform.zoomedBy(zoom, centroid.x, centroid.y)
+                            }
+                            if (pan != Offset.Zero) {
+                                editor.transform = editor.transform.panBy(pan.x, pan.y)
+                            }
+                            event.changes.forEach { if (it.positionChanged()) it.consume() }
+                        }
+                    } while (event.changes.any { it.pressed })
                 }
             },
     ) {
@@ -311,14 +358,14 @@ internal fun EditorCanvas(
                     val draft = editor.connectionInProgress
                     editor.connectionInProgress = null
                     if (draft != null) {
-                        val target = hitTestInputPort(
+                        val target = hitTestInputNode(
                             pointerCanvasX = draft.pointerCanvasX,
                             pointerCanvasY = draft.pointerCanvasY,
-                            nodes = nodesByIdLive.values.toList(),
-                            transform = editor.transform,
+                            nodes = nodesByIdLive.values,
                             density = density,
+                            excludeNodeId = draft.sourceNodeId,
                         )
-                        if (target != null && target.id != draft.sourceNodeId) {
+                        if (target != null) {
                             // Forward the source-port label so multi-out nodes (IF / Queue /
                             // Eval / IntentRouter) persist which port the user dragged from.
                             onAddConnection(
@@ -326,8 +373,18 @@ internal fun EditorCanvas(
                                 target.id,
                                 draft.sourcePortLabel.ifBlank { null },
                             )
+                        } else {
+                            // The drag ended without landing on another node's inbound port
+                            // (released in empty space, or back on the source). Without a
+                            // cue the edge just silently fails to appear; tell the user how
+                            // connections are made instead.
+                            onConnectionDropped()
                         }
                     }
+                },
+                onConnectionCancel = {
+                    // System-cancelled gesture: drop the draft silently, no "missed" hint.
+                    editor.connectionInProgress = null
                 },
                 canvasLayoutCoordinatesRef = editor.canvasLayoutCoordinatesRef,
             )
@@ -503,38 +560,87 @@ internal fun EditorCanvas(
 private typealias IntPair = Pair<Int, Int>
 
 /**
- * Returns the node whose inbound port is closest to a **canvas-space** point — used to
- * decide which node a release-from-port gesture lands on. Returns `null` when no node is
- * within the hit tolerance of [INBOUND_HIT_DP].
+ * Returns the node a release-from-port gesture lands on, in **canvas-space**: the user only
+ * has to drop the connection anywhere on (or within [INBOUND_HIT_DP] of) the target node's
+ * card — not on a pixel-precise top-edge anchor. Whole-card targeting is what users expect
+ * ("drag onto the node") and, unlike the old anchor-radius test, it does not shrink in
+ * canvas-space as you zoom in, so it works at maximum zoom. When the point is inside more
+ * than one padded rectangle the nearest-centre node wins.
  *
- * The tolerance is supplied in dp (a screen-space measure) and is divided by the current
- * canvas scale so that the user always gets the same visual tolerance regardless of zoom.
+ * [excludeNodeId] (the source node) is skipped: when the target sits just below the source,
+ * a release near the target's TOP edge can be closer to the *source's* centre than the
+ * target's, which would otherwise resolve to a self-drop and be rejected — the exact reason
+ * a tightly-stacked pair (e.g. a node directly above the one you're connecting to) refused
+ * to connect while every other pair worked.
  */
-private fun hitTestInputPort(
+internal fun hitTestInputNode(
     pointerCanvasX: Float,
     pointerCanvasY: Float,
-    nodes: List<NodeModel>,
-    transform: CanvasTransform,
+    nodes: Collection<NodeModel>,
     density: androidx.compose.ui.unit.Density,
+    excludeNodeId: String? = null,
 ): NodeModel? {
-    val toleranceScreenPx = with(density) { INBOUND_HIT_DP.dp.toPx() }
-    val toleranceCanvas = toleranceScreenPx / transform.scale
+    val padCanvas = with(density) { INBOUND_HIT_DP.dp.toPx() }
     var best: NodeModel? = null
     var bestDist = Float.MAX_VALUE
     nodes.forEach { node ->
-        val anchor = inboundPortAnchor(node, density)
-        val dx = anchor.xCanvas - pointerCanvasX
-        val dy = anchor.yCanvas - pointerCanvasY
-        val dist = kotlin.math.hypot(dx, dy)
-        if (dist < toleranceCanvas && dist < bestDist) {
-            best = node
-            bestDist = dist
+        if (node.id == excludeNodeId) return@forEach
+        val b = nodeCanvasBounds(node, density)
+        val inside = pointerCanvasX in (b.left - padCanvas)..(b.right + padCanvas) &&
+            pointerCanvasY in (b.top - padCanvas)..(b.bottom + padCanvas)
+        if (inside) {
+            val cx = (b.left + b.right) / 2f
+            val cy = (b.top + b.bottom) / 2f
+            val dist = kotlin.math.hypot(cx - pointerCanvasX, cy - pointerCanvasY)
+            if (dist < bestDist) {
+                best = node
+                bestDist = dist
+            }
         }
     }
     return best
 }
 
+/**
+ * Returns the outbound port (node id + label) nearest a **canvas-space** press, or `null`
+ * when the press is not within [OUTBOUND_HIT_DP] of any port. Lets the canvas decide whether
+ * a gesture is a connection drag (→ leave it to the node's port handler, do not pan) or a
+ * pan. The tolerance is a screen-space dp divided by the canvas scale so the grab area stays
+ * visually constant across zoom.
+ */
+internal fun hitTestOutboundPort(
+    pointerCanvasX: Float,
+    pointerCanvasY: Float,
+    nodes: Collection<NodeModel>,
+    transform: CanvasTransform,
+    density: androidx.compose.ui.unit.Density,
+): OutboundHit? {
+    val toleranceCanvas = with(density) { OUTBOUND_HIT_DP.dp.toPx() } / transform.scale
+    var best: OutboundHit? = null
+    var bestDist = Float.MAX_VALUE
+    nodes.forEach { node ->
+        outboundPortAnchors(node, density).forEach { (label, anchor) ->
+            val dist = kotlin.math.hypot(anchor.xCanvas - pointerCanvasX, anchor.yCanvas - pointerCanvasY)
+            if (dist < toleranceCanvas && dist < bestDist) {
+                best = OutboundHit(node.id, label)
+                bestDist = dist
+            }
+        }
+    }
+    return best
+}
+
+internal data class OutboundHit(val nodeId: String, val label: String)
+
 private const val INBOUND_HIT_DP = 32f
+
+/**
+ * Grab radius (dp) around an outbound port anchor for the canvas's "is this gesture a
+ * connection drag?" opt-out test. Sized to cover the per-port hit circle (24 dp ⇒ ~12 dp
+ * radius) with a small margin so the opt-out reliably overlaps wherever the port handler
+ * grabs, while keeping the no-pan zone just below a node tight.
+ */
+private const val OUTBOUND_HIT_DP = 20f
 
 /**
  * Canvas-space pixel width of a [app.knotwork.design.components.pipelineeditor.NodeCard].

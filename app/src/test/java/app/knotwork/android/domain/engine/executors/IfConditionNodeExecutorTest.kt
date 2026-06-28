@@ -2,14 +2,17 @@ package app.knotwork.android.domain.engine.executors
 
 import app.knotwork.android.domain.engine.structured.RepairListener
 import app.knotwork.android.domain.models.ConsoleEventType
+import app.knotwork.android.domain.models.ExecutionScope
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.usecases.EvaluateIfConditionUseCase
 import io.mockk.coEvery
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -21,7 +24,7 @@ class IfConditionNodeExecutorTest {
 
     @Test
     fun `execute evaluates condition and returns result`() = runTest {
-        coEvery { evaluateIfConditionUseCase(node, "test input", any()) } returns
+        coEvery { evaluateIfConditionUseCase(node, "test input", any(), any()) } returns
             EvaluateIfConditionUseCase.Outcome(value = true)
 
         val outputs = executor.execute(node, "test input", "session-1", "prompt").toList()
@@ -34,8 +37,8 @@ class IfConditionNodeExecutorTest {
 
     @Test
     fun `execute surfaces each repair attempt as a console event`() = runTest {
-        coEvery { evaluateIfConditionUseCase(node, "test input", any()) } answers {
-            val listener = thirdArg<RepairListener>()
+        coEvery { evaluateIfConditionUseCase(node, "test input", any(), any()) } answers {
+            val listener = arg<RepairListener>(3)
             listener.onRepairAttempt(node.label, 1, 2)
             EvaluateIfConditionUseCase.Outcome(value = true)
         }
@@ -48,8 +51,33 @@ class IfConditionNodeExecutorTest {
     }
 
     @Test
+    fun `execute forwards image presence to the use case when the run carries an image`() = runTest {
+        val hasImageSlot = slot<Boolean>()
+        coEvery {
+            evaluateIfConditionUseCase(node, "test input", capture(hasImageSlot), any())
+        } returns EvaluateIfConditionUseCase.Outcome(value = true)
+        val scope = ExecutionScope(imagePresent = true)
+
+        executor.execute(node, "test input", "session-1", "prompt", null, scope).toList()
+
+        assertTrue("IF executor must report image presence to the use case", hasImageSlot.captured)
+    }
+
+    @Test
+    fun `execute reports no image when the run carries none`() = runTest {
+        val hasImageSlot = slot<Boolean>()
+        coEvery {
+            evaluateIfConditionUseCase(node, "test input", capture(hasImageSlot), any())
+        } returns EvaluateIfConditionUseCase.Outcome(value = false)
+
+        executor.execute(node, "test input", "session-1", "prompt").toList()
+
+        assertFalse(hasImageSlot.captured)
+    }
+
+    @Test
     fun `execute on gate failure keeps default branch and emits an error console event`() = runTest {
-        coEvery { evaluateIfConditionUseCase(node, "test input", any()) } returns
+        coEvery { evaluateIfConditionUseCase(node, "test input", any(), any()) } returns
             EvaluateIfConditionUseCase.Outcome(value = false, gateFailed = true)
 
         val outputs = executor.execute(node, "test input", "session-1", "prompt").toList()

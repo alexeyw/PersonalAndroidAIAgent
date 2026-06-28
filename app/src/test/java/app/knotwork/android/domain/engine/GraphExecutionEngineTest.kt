@@ -591,7 +591,7 @@ class GraphExecutionEngineTest {
         )
 
         // Evaluate to true
-        coEvery { evaluateIfConditionUseCase(ifNode, "Test prompt", any()) } returns
+        coEvery { evaluateIfConditionUseCase(ifNode, "Test prompt", any(), any()) } returns
             EvaluateIfConditionUseCase.Outcome(value = true)
         every { llmEngine.generateResponseStream(any()) } returns flowOf("Test prompt")
 
@@ -619,7 +619,7 @@ class GraphExecutionEngineTest {
             ),
         )
 
-        coEvery { evaluateIfConditionUseCase(ifNode, "Test prompt", any()) } returns
+        coEvery { evaluateIfConditionUseCase(ifNode, "Test prompt", any(), any()) } returns
             EvaluateIfConditionUseCase.Outcome(value = false)
         every { llmEngine.generateResponseStream(any()) } returns flowOf("Test prompt")
 
@@ -2843,7 +2843,7 @@ class GraphExecutionEngineTest {
 
         // The condition is never re-evaluated (the strict mock would throw),
         // and the recorded False verdict routes into llm_false.
-        coVerify(exactly = 0) { evaluateIfConditionUseCase(any(), any()) }
+        coVerify(exactly = 0) { evaluateIfConditionUseCase(any(), any(), any(), any()) }
         assertEquals("FalseBranch", (states.last() as AgentOrchestratorState.Completed).finalResponse)
     }
 

@@ -150,6 +150,7 @@ internal object NodeConfigCodec {
             )
             is IfConditionConfig -> withJson.copy(
                 conditionPrompt = config.expression,
+                conditionHasImage = config.branchOnImage,
                 cloudProvider = engineWire(config.engineProvider),
             )
             is ClarificationConfig -> withJson.copy(
@@ -339,6 +340,7 @@ internal object NodeConfigCodec {
             CatalogNodeType.IF_CONDITION -> IfConditionConfig(
                 title = title,
                 expression = node.conditionPrompt.orEmpty(),
+                branchOnImage = node.conditionHasImage == true,
                 engineProvider = engineProviderFromWire(node.cloudProvider),
             )
             CatalogNodeType.CLARIFICATION -> ClarificationConfig(
@@ -430,6 +432,7 @@ internal object NodeConfigCodec {
         json.put("expression", c.expression)
         json.put("labelTrue", c.labelTrue)
         json.put("labelFalse", c.labelFalse)
+        json.put("branchOnImage", c.branchOnImage)
         c.engineProvider?.let { json.put("engineProvider", it.name) }
     }
 
@@ -572,6 +575,7 @@ internal object NodeConfigCodec {
         expression = p.optString("expression").ifBlank { fb.conditionPrompt.orEmpty() },
         labelTrue = p.optString("labelTrue").ifBlank { "True" },
         labelFalse = p.optString("labelFalse").ifBlank { "False" },
+        branchOnImage = p.optBoolean("branchOnImage", fb.conditionHasImage == true),
         engineProvider = decodeEngineProvider(p, fb),
     )
 

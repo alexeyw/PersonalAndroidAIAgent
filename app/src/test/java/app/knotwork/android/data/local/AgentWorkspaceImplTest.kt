@@ -108,6 +108,62 @@ class AgentWorkspaceImplTest {
     }
 
     @Test
+    fun `given no file when appendText then creates it with the content`() = runTest {
+        val workspace = workspaceWith()
+
+        val file = assertSuccess(workspace.appendText("reports/daily.md", "first entry"))
+
+        assertEquals("reports/daily.md", file.relativePath)
+        assertEquals("first entry", assertSuccess(workspace.readText("reports/daily.md")))
+    }
+
+    @Test
+    fun `given existing file when appendText then concatenates to the end preserving prior content`() = runTest {
+        val workspace = workspaceWith()
+        assertSuccess(workspace.writeText("log.md", "line 1\n"))
+
+        assertSuccess(workspace.appendText("log.md", "line 2\n"))
+        assertSuccess(workspace.appendText("log.md", "line 3\n"))
+
+        assertEquals("line 1\nline 2\nline 3\n", assertSuccess(workspace.readText("log.md")))
+    }
+
+    @Test
+    fun `given content that would exceed the total quota when appendText then QuotaExceeded and file unchanged`() =
+        runTest {
+            val workspace = workspaceWith(maxTotal = 10)
+            assertSuccess(workspace.writeText("a.txt", "12345"))
+
+            assertFailure(workspace.appendText("a.txt", "678901"), WorkspaceError.QuotaExceeded)
+            assertEquals("12345", assertSuccess(workspace.readText("a.txt")))
+        }
+
+    @Test
+    fun `given a directory path when appendText then IsDirectory`() = runTest {
+        val workspace = workspaceWith()
+        File(workspaceRoot(), "reports").mkdirs()
+
+        assertFailure(workspace.appendText("reports", "x"), WorkspaceError.IsDirectory)
+    }
+
+    @Test
+    fun `given a binary file when appendText then NotAText and file unchanged`() = runTest {
+        val workspace = workspaceWith()
+        val binary = byteArrayOf(0x00, 0x01, 0x02, 0x00)
+        putRawFile("blob.bin", binary)
+
+        assertFailure(workspace.appendText("blob.bin", "text"), WorkspaceError.NotAText)
+        assertTrue(File(workspaceRoot(), "blob.bin").readBytes().contentEquals(binary))
+    }
+
+    @Test
+    fun `given path escaping the workspace when appendText then PathOutsideWorkspace`() = runTest {
+        val workspace = workspaceWith()
+
+        assertFailure(workspace.appendText("../escape.txt", "x"), WorkspaceError.PathOutsideWorkspace)
+    }
+
+    @Test
     fun `given non-existent in-bounds path when resolve then succeeds with empty metadata`() = runTest {
         val workspace = workspaceWith()
 

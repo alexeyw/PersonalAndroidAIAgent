@@ -107,6 +107,17 @@ delegate to `SystemNodeExecutor` because they have the same
 existing executor when the new type fits that shape; otherwise write a
 fresh class.
 
+**Detecting an image attachment.** Only text travels the graph — the picture
+itself reaches a single on-device vision step. If your executor needs to know
+*whether* the run carries an image (e.g. to branch on it), read
+`scope.imageDelivery != null` from the `ExecutionScope` passed to `execute`. The
+holder is non-null for the whole run tree whenever the input has an image,
+regardless of whether the vision step has consumed it yet, so it is a stable
+"the user sent a picture" signal that never leaks the pixels. `IF_CONDITION`
+(via its `Branch True when input has an image` toggle) and `INTENT_ROUTER`
+(which appends `DefaultPrompts.System.IMAGE_PRESENT_NOTE` to its prompt) both
+use it.
+
 ### 1.4. Provide default context flags
 
 `NodeContextConfig.defaultForType(type)` in
@@ -410,9 +421,9 @@ externally.
 ### 2.6. Add a workspace tool
 
 A **workspace tool** is a `LocalToolExecutor` that reads or writes the agent's
-private file sandbox instead of calling the network. The six built-ins
-(`read_file`, `write_file`, `edit_file`, `delete_file`, `list_files`,
-`find_files`) all share one rule: **they never touch `java.io.File`
+private file sandbox instead of calling the network. The seven built-ins
+(`read_file`, `write_file`, `edit_file`, `append_file`, `delete_file`,
+`list_files`, `find_files`) all share one rule: **they never touch `java.io.File`
 directly** — every byte goes through the
 [`AgentWorkspace`](../app/src/main/java/app/knotwork/android/domain/services/AgentWorkspace.kt)
 interface, which is the single trust boundary for agent-driven file I/O.

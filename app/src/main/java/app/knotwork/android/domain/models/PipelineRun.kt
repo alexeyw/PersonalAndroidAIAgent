@@ -43,6 +43,11 @@ package app.knotwork.android.domain.models
  *   links form the run tree the nested console, the shared step budget and the
  *   resume-across-boundary mechanism rely on. The root of a tree is reached by
  *   walking [parentRunId] up until it is `null`.
+ * @property hadImage `true` when the run's originating message carried an image
+ *   attachment. Persisted so a checkpoint resume — which never re-delivers the
+ *   image — can still tell presence-only consumers (an IF_CONDITION that branches
+ *   on image presence, the INTENT_ROUTER image note) that the run had a picture,
+ *   even for nodes that execute live past the resume point. Defaults to `false`.
  */
 data class PipelineRun(
     val id: String,
@@ -57,6 +62,7 @@ data class PipelineRun(
     val graphContentHash: String?,
     val userPrompt: String? = null,
     val parentRunId: String? = null,
+    val hadImage: Boolean = false,
 )
 
 /**

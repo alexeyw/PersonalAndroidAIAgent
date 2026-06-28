@@ -64,6 +64,9 @@ class EvaluateIfConditionUseCase @Inject constructor(
      * Evaluates the condition against the provided input text.
      *
      * The evaluation is done in the following priority:
+     * 0. **Image presence:** If [NodeModel.conditionHasImage] is `true`, returns true as soon as
+     *    the run input carries an image ([hasImage]). A deterministic, no-LLM check that runs
+     *    before everything else so a pipeline can fork on "did the user send a picture?".
      * 1. **Keywords:** If [NodeModel.conditionKeywords] is provided, returns true if the input contains any of the keywords (case-insensitive).
      * 2. **Complexity:** If [NodeModel.conditionComplexity] is provided, returns true if the input length exceeds the complexity threshold.
      * 3. **Prompt:** If [NodeModel.conditionPrompt] is provided, uses the LLM (via the gate) to classify the input.
@@ -72,6 +75,8 @@ class EvaluateIfConditionUseCase @Inject constructor(
      *
      * @param node The [NodeModel] containing the condition configuration. Must be of type [NodeType.IF_CONDITION].
      * @param inputText The text (context or user message) to evaluate.
+     * @param hasImage `true` when the current run's input carries an image attachment. Only
+     *   consulted when the node opts in via [NodeModel.conditionHasImage]; defaults to `false`.
      * @param repairListener Sink the gate reports repair attempts to; defaults to
      *   [RepairListener.NONE]. The executor passes a buffering listener so it can
      *   surface each attempt as a console line.
@@ -80,33 +85,23 @@ class EvaluateIfConditionUseCase @Inject constructor(
     suspend operator fun invoke(
         node: NodeModel,
         inputText: String,
+        hasImage: Boolean = false,
         repairListener: RepairListener = RepairListener.NONE,
     ): Outcome {
         require(node.type == NodeType.IF_CONDITION) { "Node must be an IF_CONDITION type" }
 
-        if (inputText.isBlank()) return Outcome(value = false)
-
-        // 1. Check keywords
-        val keywordsStr = node.conditionKeywords
-        if (!keywordsStr.isNullOrBlank()) {
-            val keywords = keywordsStr.split(",")
-                .map { it.trim().lowercase() }
-                .filter { it.isNotEmpty() }
-
-            if (keywords.isNotEmpty()) {
-                val lowerInput = inputText.lowercase()
-                if (keywords.any { lowerInput.contains(it) }) {
-                    return Outcome(value = true)
-                }
-            }
+        // 0. Deterministic image-presence check (opt-in). Runs before the blank-input
+        //    short-circuit: an image-only message has empty text but should still fork True.
+        if (node.conditionHasImage == true) {
+            return Outcome(value = hasImage)
         }
 
-        // 2. Check complexity (e.g., text length threshold)
-        val complexityThreshold = node.conditionComplexity
-        if (complexityThreshold != null && complexityThreshold > 0) {
-            if (inputText.length >= complexityThreshold) {
-                return Outcome(value = true)
-            }
+        if (inputText.isBlank()) return Outcome(value = false)
+
+        // 1 & 2. Deterministic text heuristics: a keyword match (case-insensitive
+        //    substring) or the input clearing the complexity (length) threshold.
+        if (matchesKeywords(node, inputText) || matchesComplexity(node, inputText)) {
+            return Outcome(value = true)
         }
 
         // 3. Evaluate using LLM (through the gate) if a prompt is provided
@@ -116,6 +111,31 @@ class EvaluateIfConditionUseCase @Inject constructor(
         }
 
         return Outcome(value = false)
+    }
+
+    /**
+     * Returns `true` when [inputText] contains any of the node's comma-separated
+     * [NodeModel.conditionKeywords] (case-insensitive substring match). Blank or
+     * absent keywords never match.
+     */
+    private fun matchesKeywords(node: NodeModel, inputText: String): Boolean {
+        val keywords = node.conditionKeywords
+            ?.split(",")
+            ?.map { it.trim().lowercase() }
+            ?.filter { it.isNotEmpty() }
+            .orEmpty()
+        if (keywords.isEmpty()) return false
+        val lowerInput = inputText.lowercase()
+        return keywords.any { lowerInput.contains(it) }
+    }
+
+    /**
+     * Returns `true` when the node declares a positive [NodeModel.conditionComplexity]
+     * threshold and [inputText] is at least that many characters long.
+     */
+    private fun matchesComplexity(node: NodeModel, inputText: String): Boolean {
+        val threshold = node.conditionComplexity ?: return false
+        return threshold > 0 && inputText.length >= threshold
     }
 
     /**

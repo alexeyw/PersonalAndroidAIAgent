@@ -114,6 +114,21 @@ class NodeConfigCodecTest {
         assertEquals("score > 0.8", decoded.expression)
         assertEquals("Yes", decoded.labelTrue)
         assertEquals("No", decoded.labelFalse)
+        assertEquals(false, decoded.branchOnImage)
+    }
+
+    @Test
+    fun `given IfCondition config with image branch when round-trip then flag preserved`() {
+        val src = node(NodeType.IF_CONDITION, "Has image?")
+        val config = IfConditionConfig(title = "Has image?", branchOnImage = true)
+
+        val roundTripped = src.copy(configJson = NodeConfigCodec.encode(config))
+        val decoded = NodeConfigCodec.decode(roundTripped) as IfConditionConfig
+
+        assertEquals(true, decoded.branchOnImage)
+        // The encode side must also project the flag onto the flat domain row so the
+        // executor reads it even for older callers that ignore the JSON payload.
+        assertEquals(true, NodeConfigCodec.apply(src, config).conditionHasImage)
     }
 
     @Test

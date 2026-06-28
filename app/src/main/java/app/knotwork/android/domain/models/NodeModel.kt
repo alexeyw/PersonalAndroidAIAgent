@@ -25,6 +25,12 @@ import app.knotwork.android.domain.constants.DefaultPrompts
  * @property conditionComplexity Threshold for task complexity if type is [NodeType.IF_CONDITION].
  * @property conditionKeywords Comma-separated keywords for condition if type is [NodeType.IF_CONDITION].
  * @property conditionPrompt Free-form prompt for condition classification if type is [NodeType.IF_CONDITION].
+ * @property conditionHasImage When `true` on an [NodeType.IF_CONDITION] node, the node takes the
+ * "True" branch whenever the run's user input carries an image attachment — a deterministic,
+ * no-LLM check evaluated before keywords / complexity / prompt. `null`/`false` leaves image
+ * presence out of the decision. Lets a pipeline fork on "did the user send a picture?".
+ * Nullable to mirror the `pipeline_nodes.conditionHasImage` column (added as a nullable
+ * `INTEGER` in schema v48); `null` and `false` are treated identically.
  * @property systemPrompt An optional system prompt to configure the behavior of the node.
  * @property cloudProvider An optional provider id for a CLOUD node. Either [CloudProvider.AUTO_KEY]
  * (executor picks at runtime) or one of the [CloudProvider.id]s. Persisted as a raw string for
@@ -58,6 +64,7 @@ data class NodeModel(
     val conditionComplexity: Int? = null,
     val conditionKeywords: String? = null,
     val conditionPrompt: String? = null,
+    val conditionHasImage: Boolean? = null,
     val systemPrompt: String? = DefaultPrompts.getDefaultPromptForNodeType(type),
     val cloudProvider: String? = null,
     val clarificationTimeoutMs: Long? = null,
