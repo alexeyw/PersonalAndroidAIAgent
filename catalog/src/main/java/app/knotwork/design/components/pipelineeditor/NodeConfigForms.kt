@@ -431,6 +431,19 @@ private fun IntSliderField(
     )
 }
 
+/** Labelled boolean toggle: a [FieldLabel] on the left and a [Switch] pushed to the right. */
+@Composable
+private fun ToggleRowField(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FieldLabel(text = label)
+        Spacer(modifier = Modifier.fillMaxWidth().weight(1f))
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
 /** Segmented chip row that picks one enum value out of a labelled set. */
 @Composable
 private fun <T> SegmentedChipRow(label: String, values: List<Pair<T, String>>, selected: T, onSelect: (T) -> Unit) {
@@ -795,17 +808,11 @@ private fun IfConditionFormBody(
     // Deterministic image-presence branch. When on, the node forks True whenever the
     // user's message carries an image — no LLM call — and the `expression` below is
     // ignored. Surfaced first so it is clearly the overriding switch.
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        FieldLabel(text = stringResource(R.string.knotwork_node_field_branch_on_image))
-        androidx.compose.foundation.layout.Spacer(modifier = Modifier.fillMaxWidth().weight(1f))
-        Switch(
-            checked = config.branchOnImage,
-            onCheckedChange = { next -> onChange(config.copy(branchOnImage = next)) },
-        )
-    }
+    ToggleRowField(
+        label = stringResource(R.string.knotwork_node_field_branch_on_image),
+        checked = config.branchOnImage,
+        onChange = { next -> onChange(config.copy(branchOnImage = next)) },
+    )
     // The `expression` field maps to domain `NodeModel.conditionPrompt` —
     // a free-form natural-language condition the LLM classifies as
     // `true`/`false` via `DefaultPrompts.IfCondition.EVALUATION_TEMPLATE`.
@@ -1317,17 +1324,11 @@ private fun QueueProcessorFormBody(
         error = errors[FieldId.PARALLELISM],
         onChange = { next -> onChange(config.copy(parallelism = next)) },
     )
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        FieldLabel(text = stringResource(R.string.knotwork_node_field_stop_on_error))
-        androidx.compose.foundation.layout.Spacer(modifier = Modifier.fillMaxWidth().weight(1f))
-        Switch(
-            checked = config.stopOnError,
-            onCheckedChange = { next -> onChange(config.copy(stopOnError = next)) },
-        )
-    }
+    ToggleRowField(
+        label = stringResource(R.string.knotwork_node_field_stop_on_error),
+        checked = config.stopOnError,
+        onChange = { next -> onChange(config.copy(stopOnError = next)) },
+    )
 }
 
 @Composable

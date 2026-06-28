@@ -98,9 +98,12 @@ private const val DIMMED_ALPHA = 0.40f
  * (including the per-node `graphicsLayer` scale that bakes `transform.scale` into the
  * node's local coords) without accumulating rounding error or losing the touch-slop
  * distance Compose hides between `awaitDownEvent` and the first drag event.
- * @param onConnectionEnd invoked on release. The caller hit-tests the pointer position
- * from `EditorState.connectionInProgress` (already in canvas-space) directly — no
+ * @param onConnectionEnd invoked on a deliberate release. The caller hit-tests the pointer
+ * position from `EditorState.connectionInProgress` (already in canvas-space) directly — no
  * coordinate parameters are needed here.
+ * @param onConnectionCancel invoked when the connection gesture is cancelled by the system
+ * (gesture-arbitration loss, a second pointer) rather than released by the user. The caller
+ * discards the draft without the "missed target" feedback that [onConnectionEnd] surfaces.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -124,6 +127,7 @@ internal fun EditorNode(
     onConnectionStart: (portLabel: String, pointerCanvasBoxX: Float, pointerCanvasBoxY: Float) -> Unit,
     onConnectionMove: (pointerCanvasBoxX: Float, pointerCanvasBoxY: Float) -> Unit,
     onConnectionEnd: () -> Unit,
+    onConnectionCancel: () -> Unit,
     canvasLayoutCoordinatesRef: CoordinatesRef,
 ) {
     val scale = remember { AnimFloat(1f) }
@@ -236,7 +240,11 @@ internal fun EditorNode(
                                 onConnectionMove(pos.x, pos.y)
                             },
                             onDragEnd = { onConnectionEnd() },
-                            onDragCancel = { onConnectionEnd() },
+                            // A *cancelled* gesture (gesture-arbitration loss, a second
+                            // pointer) is not a deliberate drop, so it discards the draft
+                            // silently — routing it through onConnectionEnd would fire the
+                            // "drag onto a node to connect" hint the user never earned.
+                            onDragCancel = { onConnectionCancel() },
                         )
                     },
             )

@@ -26,7 +26,7 @@ import app.knotwork.android.domain.models.NodeContextConfig
  * @property conditionKeywords Comma-separated keywords for condition.
  * @property conditionPrompt Free-form prompt for condition classification.
  * @property conditionHasImage When `true` on an IF_CONDITION node, branch True whenever the run
- *   input carries an image attachment (deterministic, no-LLM check).
+ *   input carries an image attachment (deterministic, no-LLM check). Defaults to `false`.
  * @property systemPrompt An optional system prompt to configure the behavior of the node.
  * @property cloudProvider An optional provider for a CLOUD node.
  * @property clarificationTimeoutMs Timeout (in ms) for a CLARIFICATION node before it falls back
@@ -68,7 +68,7 @@ data class NodeEntity(
     val conditionComplexity: Int? = null,
     val conditionKeywords: String? = null,
     val conditionPrompt: String? = null,
-    val conditionHasImage: Boolean? = null,
+    val conditionHasImage: Boolean = false,
     val systemPrompt: String? = null,
     val cloudProvider: String? = null,
     val clarificationTimeoutMs: Long? = null,

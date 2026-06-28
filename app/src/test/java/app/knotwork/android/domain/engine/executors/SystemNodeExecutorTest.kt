@@ -110,6 +110,28 @@ class SystemNodeExecutorTest {
     }
 
     @Test
+    fun `given DECOMPOSITION and the run carries an image then the prompt omits the attachment note`() = runTest {
+        // The image note is scoped to INTENT_ROUTER; DECOMPOSITION and EVALUATION share
+        // this executor and must not have their prompts mutated by an attachment they
+        // never act on.
+        val node = NodeModel("1", NodeType.DECOMPOSITION, 0f, 0f)
+        val promptSlot = slot<String>()
+        every { llmEngine.generateResponseStream(capture(promptSlot), any(), any()) } returns flowOf("[\"task a\"]")
+
+        executor.execute(
+            node,
+            "input",
+            "session-1",
+            "prompt",
+            scope = ExecutionScope(
+                imageDelivery = RunImageDelivery(EngineImageInput("/tmp/x.jpg", 1, 1, 1L)),
+            ),
+        ).toList()
+
+        assertFalse(promptSlot.captured.contains(DefaultPrompts.System.IMAGE_PRESENT_NOTE))
+    }
+
+    @Test
     fun `given INTENT_ROUTER with labelled edges then routing key is the matched label`() = runTest {
         val node = NodeModel("1", NodeType.INTENT_ROUTER, 0f, 0f)
         every { llmEngine.generateResponseStream(any(), any(), any()) } returns flowOf("I think this is Weather data")

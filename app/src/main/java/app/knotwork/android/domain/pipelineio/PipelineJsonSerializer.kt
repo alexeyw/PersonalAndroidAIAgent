@@ -40,7 +40,7 @@ import org.json.JSONObject
  *         "conditionPrompt": "",
  *         "conditionKeywords": "",
  *         "conditionComplexity": null,
- *         "conditionHasImage": null
+ *         "conditionHasImage": false
  *       },
  *       "contextConfig": { "chatHistory": true, ... },
  *       "nodeConfig": { "v": 1, "type": "CLOUD", "title": "Cloud", ... }
@@ -136,7 +136,7 @@ object PipelineJsonSerializer {
             .put("conditionPrompt", node.conditionPrompt ?: JSONObject.NULL)
             .put("conditionKeywords", node.conditionKeywords ?: JSONObject.NULL)
             .put("conditionComplexity", node.conditionComplexity ?: JSONObject.NULL)
-            .put("conditionHasImage", node.conditionHasImage ?: JSONObject.NULL)
+            .put("conditionHasImage", node.conditionHasImage)
 
         val contextConfig = JSONObject()
             .put("chatHistory", node.contextConfig.chatHistory)
@@ -296,7 +296,7 @@ object PipelineJsonSerializer {
             conditionComplexity = config.optIntOrNull("conditionComplexity"),
             conditionKeywords = config.optStringOrNull("conditionKeywords"),
             conditionPrompt = config.optStringOrNull("conditionPrompt"),
-            conditionHasImage = config.optBooleanOrNull("conditionHasImage"),
+            conditionHasImage = config.optBoolean("conditionHasImage", false),
             systemPrompt = config.optStringOrNull("systemPrompt"),
             cloudProvider = config.optStringOrNull("cloudProvider"),
             clarificationTimeoutMs = config.optLongOrNull("clarificationTimeoutMs"),
@@ -338,6 +338,3 @@ private fun JSONObject.optStringOrNull(name: String): String? =
 private fun JSONObject.optIntOrNull(name: String): Int? = if (!has(name) || isNull(name)) null else getInt(name)
 
 private fun JSONObject.optLongOrNull(name: String): Long? = if (!has(name) || isNull(name)) null else getLong(name)
-
-private fun JSONObject.optBooleanOrNull(name: String): Boolean? =
-    if (!has(name) || isNull(name)) null else getBoolean(name)

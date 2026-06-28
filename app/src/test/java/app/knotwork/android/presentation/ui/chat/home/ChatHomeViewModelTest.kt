@@ -929,6 +929,13 @@ class ChatHomeViewModelTest {
                 "Previously-active chat must NOT be deleted",
                 sessionsFlow.value.any { it.id == previousId },
             )
+            // …and the new chat must actually be gone: delete joins the in-flight
+            // create-write, so the late insert cannot resurrect it as an orphan.
+            val newId = deletedSlot.captured
+            assertFalse(
+                "The just-created chat must not linger after deletion",
+                sessionsFlow.value.any { it.id == newId },
+            )
         }
 
     @Test

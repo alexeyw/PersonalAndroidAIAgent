@@ -1122,14 +1122,14 @@ abstract class AppDatabase : RoomDatabase() {
         }
 
         /**
-         * v47 → v48: adds the nullable `conditionHasImage` flag to `pipeline_nodes`,
+         * v47 → v48: adds the non-null `conditionHasImage` flag to `pipeline_nodes`,
          * backing the IF_CONDITION node's "branch True when the input carries an image"
          * deterministic check. Purely additive `ALTER TABLE … ADD COLUMN`; existing
-         * rows default to `NULL` (image-presence branching off).
+         * rows default to `0` (image-presence branching off).
          */
         val MIGRATION_47_48 = object : Migration(47, 48) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE `pipeline_nodes` ADD COLUMN `conditionHasImage` INTEGER")
+                db.execSQL("ALTER TABLE `pipeline_nodes` ADD COLUMN `conditionHasImage` INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

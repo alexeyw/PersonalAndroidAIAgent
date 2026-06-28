@@ -340,7 +340,7 @@ internal object NodeConfigCodec {
             CatalogNodeType.IF_CONDITION -> IfConditionConfig(
                 title = title,
                 expression = node.conditionPrompt.orEmpty(),
-                branchOnImage = node.conditionHasImage == true,
+                branchOnImage = node.conditionHasImage,
                 engineProvider = engineProviderFromWire(node.cloudProvider),
             )
             CatalogNodeType.CLARIFICATION -> ClarificationConfig(
@@ -575,7 +575,7 @@ internal object NodeConfigCodec {
         expression = p.optString("expression").ifBlank { fb.conditionPrompt.orEmpty() },
         labelTrue = p.optString("labelTrue").ifBlank { "True" },
         labelFalse = p.optString("labelFalse").ifBlank { "False" },
-        branchOnImage = p.optBoolean("branchOnImage", fb.conditionHasImage == true),
+        branchOnImage = p.optBoolean("branchOnImage", fb.conditionHasImage),
         engineProvider = decodeEngineProvider(p, fb),
     )
 

@@ -347,6 +347,10 @@ internal fun EditorCanvas(
                         }
                     }
                 },
+                onConnectionCancel = {
+                    // System-cancelled gesture: drop the draft silently, no "missed" hint.
+                    editor.connectionInProgress = null
+                },
                 canvasLayoutCoordinatesRef = editor.canvasLayoutCoordinatesRef,
             )
         }

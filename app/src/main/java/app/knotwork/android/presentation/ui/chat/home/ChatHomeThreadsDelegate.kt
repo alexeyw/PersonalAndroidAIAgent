@@ -5,6 +5,7 @@ import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.design.screens.chat.ChatHomeThreadRow
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -54,6 +55,15 @@ class ChatHomeThreadsDelegate(
 ) {
 
     private var sessions: List<ChatSession> = emptyList()
+
+    /**
+     * The in-flight persistence write of the most recently created chat, or `null`
+     * once it has settled. [createNewSessionWithPipeline] switches the active thread
+     * synchronously but persists the row asynchronously; [deleteCurrentSession] joins
+     * this job first so deleting a just-created chat removes its (now-persisted) row
+     * instead of racing the write and leaving an orphan that the late insert re-adds.
+     */
+    private var pendingNewSessionSave: Job? = null
 
     /**
      * Session ids that currently own a pipeline run in a non-terminal status.
@@ -151,7 +161,7 @@ class ChatHomeThreadsDelegate(
     fun createNewSessionWithPipeline(pipelineId: String?) {
         val newId = UUID.randomUUID().toString()
         // Persist the new session off the main thread…
-        scope.launch {
+        pendingNewSessionSave = scope.launch {
             chatRepository.saveSession(
                 ChatSession(
                     id = newId,
@@ -166,7 +176,8 @@ class ChatHomeThreadsDelegate(
         // created chat was on screen while `currentSessionId` still pointed at
         // the previously-active chat — so an immediately-following overflow
         // "delete" removed the wrong chat. Flipping the id before the suspension
-        // point closes that race; the persisted row lands a moment later.
+        // point closes that race; the persisted row lands a moment later (and
+        // [deleteCurrentSession] joins it so a quick create→delete is safe).
         selectThread(newId)
     }
 
@@ -201,6 +212,10 @@ class ChatHomeThreadsDelegate(
         val sessionId = state.value.thread.currentSessionId
         if (sessionId.isBlank()) return
         scope.launch {
+            // Let any in-flight create-write settle first: deleting a chat created
+            // a moment ago must remove its persisted row, not race the still-pending
+            // insert and leave an orphan the insert re-adds.
+            pendingNewSessionSave?.join()
             chatRepository.deleteSession(sessionId)
             val remaining = sessions.filter { it.id != sessionId }
             if (remaining.isNotEmpty()) {

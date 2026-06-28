@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 48,
-    "identityHash": "10fbf85e28f6ebe254063cba474642d4",
+    "identityHash": "60616dbf89b19a5987f01319d1911e7c",
     "entities": [
       {
         "tableName": "local_models",
@@ -299,7 +299,7 @@
       },
       {
         "tableName": "pipeline_nodes",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `pipelineId` TEXT NOT NULL, `type` TEXT NOT NULL, `x` REAL NOT NULL, `y` REAL NOT NULL, `label` TEXT NOT NULL, `toolName` TEXT, `targetPipelineId` TEXT, `skillId` TEXT, `modelPath` TEXT, `conditionComplexity` INTEGER, `conditionKeywords` TEXT, `conditionPrompt` TEXT, `conditionHasImage` INTEGER, `systemPrompt` TEXT, `cloudProvider` TEXT, `clarificationTimeoutMs` INTEGER, `context_config` TEXT NOT NULL, `config_json` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`pipelineId`) REFERENCES `pipelines`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `pipelineId` TEXT NOT NULL, `type` TEXT NOT NULL, `x` REAL NOT NULL, `y` REAL NOT NULL, `label` TEXT NOT NULL, `toolName` TEXT, `targetPipelineId` TEXT, `skillId` TEXT, `modelPath` TEXT, `conditionComplexity` INTEGER, `conditionKeywords` TEXT, `conditionPrompt` TEXT, `conditionHasImage` INTEGER NOT NULL, `systemPrompt` TEXT, `cloudProvider` TEXT, `clarificationTimeoutMs` INTEGER, `context_config` TEXT NOT NULL, `config_json` TEXT, PRIMARY KEY(`id`), FOREIGN KEY(`pipelineId`) REFERENCES `pipelines`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
         "fields": [
           {
             "fieldPath": "id",
@@ -375,7 +375,8 @@
           {
             "fieldPath": "conditionHasImage",
             "columnName": "conditionHasImage",
-            "affinity": "INTEGER"
+            "affinity": "INTEGER",
+            "notNull": true
           },
           {
             "fieldPath": "systemPrompt",
@@ -1319,7 +1320,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '10fbf85e28f6ebe254063cba474642d4')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '60616dbf89b19a5987f01319d1911e7c')"
     ]
   }
 }

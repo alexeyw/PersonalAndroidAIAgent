@@ -215,7 +215,7 @@ data class PipelineGraph(
                 append(node.conditionComplexity?.toString().orEmpty()).append(FIELD_SEPARATOR)
                 append(node.conditionKeywords.orEmpty()).append(FIELD_SEPARATOR)
                 append(node.conditionPrompt.orEmpty()).append(FIELD_SEPARATOR)
-                append(node.conditionHasImage?.toString().orEmpty()).append(FIELD_SEPARATOR)
+                append(node.conditionHasImage.toString()).append(FIELD_SEPARATOR)
                 append(node.systemPrompt.orEmpty()).append(FIELD_SEPARATOR)
                 append(node.cloudProvider.orEmpty()).append(FIELD_SEPARATOR)
                 append(node.clarificationTimeoutMs?.toString().orEmpty()).append(FIELD_SEPARATOR)

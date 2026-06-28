@@ -44,6 +44,13 @@ class IfConditionNodeExecutor @Inject constructor(private val evaluateIfConditio
         // The run carries an image when the shared delivery holder is present, regardless of
         // whether a downstream vision node has consumed it yet — so an IF node that forks on
         // image presence sees it even when it runs before the vision sink.
+        //
+        // Limitation: the delivery holder is per-execution and not persisted, so a *resumed*
+        // run (one that paused at a HITL gate) sees `imageDelivery == null`. An image-branching
+        // IF node positioned AFTER such a gate therefore evaluates `hasImage == false` on resume.
+        // In practice image-branching nodes route the picture early — before any HITL gate — so
+        // they replay from the trace rather than re-executing live; the gap only bites the
+        // unusual "branch on image after a human-in-the-loop pause" topology.
         val hasImage = scope.imageDelivery != null
         val outcome = evaluateIfConditionUseCase(node, inputText, hasImage, repairListener)
 

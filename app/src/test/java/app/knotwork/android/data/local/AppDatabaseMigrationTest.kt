@@ -577,7 +577,7 @@ class AppDatabaseMigrationTest {
     }
 
     @Test
-    fun `MIGRATION_47_48 adds a nullable conditionHasImage column to pipeline_nodes`() {
+    fun `MIGRATION_47_48 adds a non-null conditionHasImage column to pipeline_nodes`() {
         val db = mockk<SupportSQLiteDatabase>(relaxed = true)
         val sqlSlot = slot<String>()
 
@@ -589,7 +589,10 @@ class AppDatabaseMigrationTest {
             "Expected ALTER pipeline_nodes ADD conditionHasImage, got: ${sqlSlot.captured}",
             sql.contains("ALTER TABLE `PIPELINE_NODES` ADD COLUMN `CONDITIONHASIMAGE`"),
         )
-        // Additive + nullable so existing IF nodes keep NULL (image branching off).
-        assertTrue("conditionHasImage must be nullable (no NOT NULL): ${sqlSlot.captured}", !sql.contains("NOT NULL"))
+        // Additive + NOT NULL DEFAULT 0 so existing IF nodes get false (image branching off).
+        assertTrue(
+            "conditionHasImage must be NOT NULL DEFAULT 0: ${sqlSlot.captured}",
+            sql.contains("NOT NULL DEFAULT 0"),
+        )
     }
 }
