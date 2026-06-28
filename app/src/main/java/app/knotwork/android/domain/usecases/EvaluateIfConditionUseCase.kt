@@ -92,7 +92,7 @@ class EvaluateIfConditionUseCase @Inject constructor(
 
         // 0. Deterministic image-presence check (opt-in). Runs before the blank-input
         //    short-circuit: an image-only message has empty text but should still fork True.
-        if (node.conditionHasImage) {
+        if (node.conditionHasImage == true) {
             return Outcome(value = hasImage)
         }
 

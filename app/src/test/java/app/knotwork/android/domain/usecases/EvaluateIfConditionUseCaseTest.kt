@@ -47,7 +47,7 @@ class EvaluateIfConditionUseCaseTest {
         keywords: String? = null,
         complexity: Int? = null,
         prompt: String? = null,
-        hasImageBranch: Boolean = false,
+        hasImageBranch: Boolean? = null,
     ): NodeModel = NodeModel(
         id = UUID.randomUUID().toString(),
         type = NodeType.IF_CONDITION,
