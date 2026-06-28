@@ -189,9 +189,13 @@ internal fun EditorCanvas(
             // node's port handler; the canvas opts out here (returns before consuming
             // anything) so it never races the port drag and pans instead — the failure
             // that hijacked edge creation at maximum zoom. A press on a node body is left
-            // to the node's own move/tap handlers (they consume first, child-before-parent,
-            // and the `isConsumed` guard below keeps the canvas from also panning).
+            // to the node's own move/tap handlers: the touch-slop wait below mirrors
+            // `detectTransformGestures` so a child node-move detector crosses its slop and
+            // consumes FIRST, after which the `isConsumed` guard makes the canvas stand
+            // down — without the slop the canvas panned on the very first pixel and stole
+            // node dragging (most visibly on nodes with no outbound port, e.g. OUTPUT).
             .pointerInput(graph.id) {
+                val touchSlop = viewConfiguration.touchSlop
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     val downCanvasX = editor.transform.screenToCanvasX(down.position.x)
@@ -206,6 +210,8 @@ internal fun EditorCanvas(
                     ) {
                         return@awaitEachGesture
                     }
+                    var pastSlop = false
+                    var slopTravel = 0f
                     do {
                         val event = awaitPointerEvent()
                         // A node-body drag (move) or tap consumes first; don't also pan.
@@ -214,14 +220,22 @@ internal fun EditorCanvas(
                         }
                         val zoom = event.calculateZoom()
                         val pan = event.calculatePan()
-                        val centroid = event.calculateCentroid()
-                        if (zoom != 1f) {
-                            editor.transform = editor.transform.zoomedBy(zoom, centroid.x, centroid.y)
+                        if (!pastSlop) {
+                            // Accumulate motion until it clears touch slop, giving the node's
+                            // own move/tap detectors first claim on small movements.
+                            slopTravel += pan.getDistance() + kotlin.math.abs(1f - zoom) * touchSlop
+                            if (slopTravel > touchSlop) pastSlop = true
                         }
-                        if (pan != Offset.Zero) {
-                            editor.transform = editor.transform.panBy(pan.x, pan.y)
+                        if (pastSlop) {
+                            val centroid = event.calculateCentroid()
+                            if (zoom != 1f) {
+                                editor.transform = editor.transform.zoomedBy(zoom, centroid.x, centroid.y)
+                            }
+                            if (pan != Offset.Zero) {
+                                editor.transform = editor.transform.panBy(pan.x, pan.y)
+                            }
+                            event.changes.forEach { if (it.positionChanged()) it.consume() }
                         }
-                        event.changes.forEach { if (it.positionChanged()) it.consume() }
                     } while (event.changes.any { it.pressed })
                 }
             },
