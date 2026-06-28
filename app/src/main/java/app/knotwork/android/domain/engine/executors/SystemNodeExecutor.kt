@@ -81,7 +81,12 @@ class SystemNodeExecutor @Inject constructor(
         scope: ExecutionScope,
     ): Flow<NodeOutput> = flow {
         val nodeSystemPrompt = node.systemPrompt ?: DefaultPrompts.System.SYSTEM_FALLBACK
-        val fullPrompt = "$nodeSystemPrompt\n\nUSER: $inputText\nAGENT: "
+        // Make image presence visible to the routing/reasoning LLM. Only a boolean fact
+        // travels here (the pixels never leave the vision sink), but it lets an
+        // INTENT_ROUTER branch on "the user attached an image" — otherwise invisible
+        // because only text flows along the graph.
+        val imageNote = if (scope.imageDelivery != null) "\n\n${DefaultPrompts.System.IMAGE_PRESENT_NOTE}" else ""
+        val fullPrompt = "$nodeSystemPrompt$imageNote\n\nUSER: $inputText\nAGENT: "
 
         val configuredMaxRepairs = settingsRepository.structuredOutputMaxRepairs.first()
         // The last inference attempt's streamed text. Reset on every repair (see

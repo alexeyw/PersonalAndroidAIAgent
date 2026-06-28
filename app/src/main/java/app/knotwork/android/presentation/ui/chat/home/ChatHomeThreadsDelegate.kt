@@ -149,8 +149,9 @@ class ChatHomeThreadsDelegate(
      *   application-wide default pipeline.
      */
     fun createNewSessionWithPipeline(pipelineId: String?) {
+        val newId = UUID.randomUUID().toString()
+        // Persist the new session off the main thread…
         scope.launch {
-            val newId = UUID.randomUUID().toString()
             chatRepository.saveSession(
                 ChatSession(
                     id = newId,
@@ -159,8 +160,14 @@ class ChatHomeThreadsDelegate(
                     pipelineId = pipelineId,
                 ),
             )
-            selectThread(newId)
         }
+        // …but switch the active thread *synchronously*. Deferring the switch
+        // behind the suspending `saveSession` left a window where the freshly
+        // created chat was on screen while `currentSessionId` still pointed at
+        // the previously-active chat — so an immediately-following overflow
+        // "delete" removed the wrong chat. Flipping the id before the suspension
+        // point closes that race; the persisted row lands a moment later.
+        selectThread(newId)
     }
 
     /**

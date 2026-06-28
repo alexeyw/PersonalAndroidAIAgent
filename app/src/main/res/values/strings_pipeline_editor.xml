@@ -119,6 +119,7 @@
 
     <!-- Edge selection / removal -->
     <string name="pipeline_editor_edge_selected_hint">Connection selected. Press 🗑 to remove.</string>
+    <string name="pipeline_editor_connection_dropped_hint">To connect nodes, drag from a node\'s bottom port onto another node.</string>
     <string name="pipeline_editor_remove_connection_title">Remove connection?</string>
     <string name="pipeline_editor_remove_connection_text">This will delete the link between the two nodes. The change is undoable from the editor toolbar.</string>
     <string name="pipeline_editor_remove_connection_confirm">Remove</string>

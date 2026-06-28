@@ -214,6 +214,15 @@ object DefaultPrompts {
     object System {
         /** Used when no `systemPrompt` is set on a system-style node. */
         const val SYSTEM_FALLBACK = "You are an AI assistant."
+
+        /**
+         * One-line note appended to a system node's prompt by
+         * [app.knotwork.android.domain.engine.executors.SystemNodeExecutor] when the run input
+         * carries an image attachment. Only the boolean fact of an attachment travels the graph
+         * (never the pixels), so a routing node can branch on "the user sent a picture" without
+         * the image itself ever reaching it.
+         */
+        const val IMAGE_PRESENT_NOTE = "Note: the user's message includes an image attachment."
     }
 
     /** Prompts for [NodeType.OUTPUT] nodes. */

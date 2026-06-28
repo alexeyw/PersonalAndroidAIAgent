@@ -567,4 +567,29 @@ class AppDatabaseMigrationTest {
             dayTable.contains("PRIMARY KEY(`DAY`)"),
         )
     }
+
+    @Test
+    fun `MIGRATION_47_48 targets versions 47 to 48`() {
+        val migration = AppDatabase.MIGRATION_47_48
+
+        assertEquals(47, migration.startVersion)
+        assertEquals(48, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_47_48 adds a nullable conditionHasImage column to pipeline_nodes`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val sqlSlot = slot<String>()
+
+        AppDatabase.MIGRATION_47_48.migrate(db)
+
+        verify(exactly = 1) { db.execSQL(capture(sqlSlot)) }
+        val sql = sqlSlot.captured.uppercase()
+        assertTrue(
+            "Expected ALTER pipeline_nodes ADD conditionHasImage, got: ${sqlSlot.captured}",
+            sql.contains("ALTER TABLE `PIPELINE_NODES` ADD COLUMN `CONDITIONHASIMAGE`"),
+        )
+        // Additive + nullable so existing IF nodes keep NULL (image branching off).
+        assertTrue("conditionHasImage must be nullable (no NOT NULL): ${sqlSlot.captured}", !sql.contains("NOT NULL"))
+    }
 }

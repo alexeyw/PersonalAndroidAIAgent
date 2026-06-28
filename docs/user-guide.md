@@ -295,6 +295,21 @@ on the path the run actually takes. If a branch is taken that has no such step,
 the agent says so on the console (`Image not used …`) instead of pretending the
 model saw the picture.
 
+**Branching on whether a picture was sent.** Two node types can react to the
+presence of an image even though the picture itself only ever reaches the vision
+step:
+
+- An **If Condition** node has a *“Branch True when input has an image”* toggle.
+  Turn it on and the node takes the **True** branch whenever the message carries
+  an image and **False** otherwise — a plain check with no model call, evaluated
+  before the text expression (which is ignored while the toggle is on). This is
+  the simplest way to fork a pipeline into an “image” path and a “text” path.
+- An **Intent Router** is told when the message includes an image, so you can add
+  a route (an outgoing edge labelled e.g. `image`) and the router can pick it.
+
+Only the *fact* that an image is attached is shared with these steps — never the
+picture's contents, which stay with the on-device vision model.
+
 ### Voice input
 
 Tap the **microphone** button in the composer to add voice. A small sheet

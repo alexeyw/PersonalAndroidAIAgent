@@ -43,16 +43,68 @@ class EvaluateIfConditionUseCaseTest {
         )
     }
 
-    private fun ifNode(keywords: String? = null, complexity: Int? = null, prompt: String? = null): NodeModel =
-        NodeModel(
-            id = UUID.randomUUID().toString(),
-            type = NodeType.IF_CONDITION,
-            x = 0f,
-            y = 0f,
-            conditionKeywords = keywords,
-            conditionComplexity = complexity,
-            conditionPrompt = prompt,
+    private fun ifNode(
+        keywords: String? = null,
+        complexity: Int? = null,
+        prompt: String? = null,
+        hasImageBranch: Boolean? = null,
+    ): NodeModel = NodeModel(
+        id = UUID.randomUUID().toString(),
+        type = NodeType.IF_CONDITION,
+        x = 0f,
+        y = 0f,
+        conditionKeywords = keywords,
+        conditionComplexity = complexity,
+        conditionPrompt = prompt,
+        conditionHasImage = hasImageBranch,
+    )
+
+    @Test
+    fun `given image branch and an image present when invoke then returns true`() = runTest {
+        val outcome = evaluateIfConditionUseCase(
+            ifNode(hasImageBranch = true),
+            "Look at this",
+            hasImage = true,
         )
+
+        assertTrue(outcome.value)
+        assertFalse(outcome.gateFailed)
+    }
+
+    @Test
+    fun `given image branch and no image when invoke then returns false`() = runTest {
+        val outcome = evaluateIfConditionUseCase(
+            ifNode(hasImageBranch = true),
+            "Just text",
+            hasImage = false,
+        )
+
+        assertFalse(outcome.value)
+    }
+
+    @Test
+    fun `given image branch with image-only blank text when invoke then still returns true`() = runTest {
+        val outcome = evaluateIfConditionUseCase(
+            ifNode(hasImageBranch = true),
+            "",
+            hasImage = true,
+        )
+
+        assertTrue(outcome.value)
+    }
+
+    @Test
+    fun `given image branch then image presence wins over matching keywords`() = runTest {
+        // Keywords would match, but the deterministic image check runs first and the
+        // run carries no image, so the branch is False regardless of the keyword hit.
+        val outcome = evaluateIfConditionUseCase(
+            ifNode(keywords = "urgent", hasImageBranch = true),
+            "This is URGENT",
+            hasImage = false,
+        )
+
+        assertFalse(outcome.value)
+    }
 
     @Test
     fun `given matching keywords when invoke then returns true without gate`() = runTest {
@@ -140,7 +192,11 @@ class EvaluateIfConditionUseCaseTest {
         )
         val listener = CollectingRepairListener()
 
-        val outcome = evaluateIfConditionUseCase(ifNode(prompt = "Is this a question?"), "How are you?", listener)
+        val outcome = evaluateIfConditionUseCase(
+            ifNode(prompt = "Is this a question?"),
+            "How are you?",
+            repairListener = listener,
+        )
 
         assertTrue(outcome.value)
         assertFalse(outcome.gateFailed)
@@ -153,7 +209,11 @@ class EvaluateIfConditionUseCaseTest {
         every { llmInferenceEngine.generateResponseStream(any(), any(), any()) } returns flowOf("inconclusive")
         val listener = CollectingRepairListener()
 
-        val outcome = evaluateIfConditionUseCase(ifNode(prompt = "Is this a question?"), "How are you?", listener)
+        val outcome = evaluateIfConditionUseCase(
+            ifNode(prompt = "Is this a question?"),
+            "How are you?",
+            repairListener = listener,
+        )
 
         assertFalse(outcome.value)
         assertTrue(outcome.gateFailed)

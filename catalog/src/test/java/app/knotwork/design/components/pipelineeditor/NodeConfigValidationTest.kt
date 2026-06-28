@@ -125,6 +125,16 @@ class NodeConfigValidationTest {
     }
 
     @Test
+    fun `given IfConditionConfig with image branch and blank expression when validate then no expression error`() {
+        val errors = NodeConfigValidation.validate(
+            config = IfConditionConfig(title = "branch", expression = "", branchOnImage = true),
+            peerTitles = noPeers,
+        )
+
+        assertEquals(null, errors[FieldId.EXPRESSION])
+    }
+
+    @Test
     fun `given ClarificationConfig with five quick replies when validate then OUT_OF_RANGE`() {
         val errors = NodeConfigValidation.validate(
             config = ClarificationConfig(

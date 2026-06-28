@@ -792,10 +792,25 @@ private fun IfConditionFormBody(
     onPickFromLibrary: PromptLibraryHook?,
     onSavePreset: SavePresetHook?,
 ) {
+    // Deterministic image-presence branch. When on, the node forks True whenever the
+    // user's message carries an image — no LLM call — and the `expression` below is
+    // ignored. Surfaced first so it is clearly the overriding switch.
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FieldLabel(text = stringResource(R.string.knotwork_node_field_branch_on_image))
+        androidx.compose.foundation.layout.Spacer(modifier = Modifier.fillMaxWidth().weight(1f))
+        Switch(
+            checked = config.branchOnImage,
+            onCheckedChange = { next -> onChange(config.copy(branchOnImage = next)) },
+        )
+    }
     // The `expression` field maps to domain `NodeModel.conditionPrompt` —
     // a free-form natural-language condition the LLM classifies as
     // `true`/`false` via `DefaultPrompts.IfCondition.EVALUATION_TEMPLATE`.
-    // It accepts presets exactly like the other LLM-driven fields.
+    // It accepts presets exactly like the other LLM-driven fields. Ignored at
+    // runtime while the image-presence branch above owns the decision.
     TextField(
         label = stringResource(R.string.knotwork_node_field_expression),
         value = config.expression,

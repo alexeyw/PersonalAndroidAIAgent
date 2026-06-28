@@ -64,6 +64,9 @@ import app.knotwork.design.theme.KnotworkTheme
  * @param onMoveNode invoked on drag-end with the committed canvas-space delta.
  * @param onAddNode invoked when a quick-add tile is picked.
  * @param onAddConnection invoked when a connection draft drops on a valid target node.
+ * @param onConnectionDropped invoked when a connection drag ends without a valid target
+ * (released in empty space or back on the source node) so the screen can hint how
+ * connections are made instead of failing silently.
  * @param modifier optional layout modifier applied to the canvas root.
  */
 @Composable
@@ -77,6 +80,7 @@ internal fun EditorCanvas(
     onMoveNode: (nodeId: String, dxCanvas: Float, dyCanvas: Float) -> Unit,
     onAddNode: (type: NodeType, canvasX: Float, canvasY: Float) -> Unit,
     onAddConnection: (sourceNodeId: String, targetNodeId: String, label: String?) -> Unit,
+    onConnectionDropped: () -> Unit,
     onOpenNodeConfig: (nodeId: String) -> Unit,
     onLongPressEdge: (connectionId: String) -> Unit,
     onStartWithInput: () -> Unit,
@@ -184,6 +188,14 @@ internal fun EditorCanvas(
             // viewport-centre approximation) so zoom anchors precisely under the fingers.
             .pointerInput(graph.id) {
                 detectTransformGestures(panZoomLock = false) { centroid, pan, zoom, _ ->
+                    // While a port-to-port connection is being dragged, the canvas must
+                    // stay put. Otherwise the one-finger transform gesture races the
+                    // port's drag handler and pans the canvas instead of (or on top of)
+                    // drawing the edge — most visibly at maximum zoom, where a small
+                    // pointer delta becomes a large pan. The port's `onConnectionStart`
+                    // sets `connectionInProgress` before this fires, so the flag is a
+                    // reliable "an edge drag owns the gesture" signal.
+                    if (editor.connectionInProgress != null) return@detectTransformGestures
                     if (zoom != 1f) {
                         editor.transform = editor.transform.zoomedBy(zoom, centroid.x, centroid.y)
                     }
@@ -326,6 +338,12 @@ internal fun EditorCanvas(
                                 target.id,
                                 draft.sourcePortLabel.ifBlank { null },
                             )
+                        } else {
+                            // The drag ended without landing on another node's inbound port
+                            // (released in empty space, or back on the source). Without a
+                            // cue the edge just silently fails to appear; tell the user how
+                            // connections are made instead.
+                            onConnectionDropped()
                         }
                     }
                 },

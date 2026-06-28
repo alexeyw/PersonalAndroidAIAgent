@@ -1,25 +1,30 @@
 package app.knotwork.android.domain.engine.executors
 
+import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.engine.structured.CloudStructuredInferenceClientFactory
 import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.ConsoleEventType
+import app.knotwork.android.domain.models.EngineImageInput
 import app.knotwork.android.domain.models.ExecutionScope
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.Result
+import app.knotwork.android.domain.models.RunImageDelivery
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -69,6 +74,39 @@ class SystemNodeExecutorTest {
         val result = outputs.lastResult()
         assertEquals("Result", result.outputText)
         assertEquals("Result", result.routingKey)
+    }
+
+    @Test
+    fun `given INTENT_ROUTER and the run carries an image then the prompt notes the attachment`() = runTest {
+        val node = NodeModel("1", NodeType.INTENT_ROUTER, 0f, 0f)
+        val promptSlot = slot<String>()
+        every { llmEngine.generateResponseStream(capture(promptSlot), any(), any()) } returns flowOf("Result")
+
+        executor.execute(
+            node,
+            "input",
+            "session-1",
+            "prompt",
+            scope = ExecutionScope(
+                imageDelivery = RunImageDelivery(EngineImageInput("/tmp/x.jpg", 1, 1, 1L)),
+            ),
+        ).toList()
+
+        assertTrue(
+            "Router prompt must surface image presence so it can branch on it",
+            promptSlot.captured.contains(DefaultPrompts.System.IMAGE_PRESENT_NOTE),
+        )
+    }
+
+    @Test
+    fun `given INTENT_ROUTER and no image then the prompt omits the attachment note`() = runTest {
+        val node = NodeModel("1", NodeType.INTENT_ROUTER, 0f, 0f)
+        val promptSlot = slot<String>()
+        every { llmEngine.generateResponseStream(capture(promptSlot), any(), any()) } returns flowOf("Result")
+
+        executor.execute(node, "input", "session-1", "prompt").toList()
+
+        assertFalse(promptSlot.captured.contains(DefaultPrompts.System.IMAGE_PRESENT_NOTE))
     }
 
     @Test

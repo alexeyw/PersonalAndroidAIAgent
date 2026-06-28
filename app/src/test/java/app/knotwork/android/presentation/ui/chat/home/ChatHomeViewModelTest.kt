@@ -53,7 +53,9 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
@@ -73,6 +75,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -878,6 +881,54 @@ class ChatHomeViewModelTest {
             assertEquals("Other", viewModel.state.value.thread.title)
             coVerify { settingsRepository.setCurrentChatSessionId(target) }
             verify { chatRepository.getDisplayMessagesForSession(target) }
+        }
+
+    @Test
+    fun `creating a new chat then deleting removes the new chat, not the previously-active one`() =
+        runTest(testDispatcher) {
+            // Given an app that auto-restored the last active chat on launch.
+            val previousId = "previous-active-chat"
+            savedSessionIdFlow.value = previousId
+            sessionsFlow.value = listOf(ChatSession(id = previousId, name = "Previous", updatedAt = 100))
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            assertEquals(previousId, viewModel.state.value.thread.currentSessionId)
+
+            // Model the real-device race window: the new chat's persistence write is
+            // still in flight (suspended on IO) when the user taps delete. The gate
+            // keeps `saveSession` suspended so the create coroutine cannot run past it.
+            val saveGate = CompletableDeferred<Unit>()
+            coEvery { chatRepository.saveSession(any()) } coAnswers {
+                val saved = firstArg<ChatSession>()
+                saveGate.await()
+                sessionsFlow.value = sessionsFlow.value.filterNot { it.id == saved.id } + saved
+            }
+            val deletedSlot = slot<String>()
+            coEvery { chatRepository.deleteSession(capture(deletedSlot)) } answers {
+                sessionsFlow.value = sessionsFlow.value.filterNot { it.id == deletedSlot.captured }
+            }
+
+            // When the user creates a new empty chat…
+            viewModel.threads.createNewSessionWithPipeline(pipelineId = null)
+            runCurrent()
+            // …and immediately deletes it via the overflow menu, before the new-chat
+            // write has settled.
+            viewModel.threads.deleteCurrentSession()
+            runCurrent()
+            saveGate.complete(Unit)
+            advanceUntilIdle()
+
+            // The previously-active chat must survive; the just-created empty chat is
+            // the one removed.
+            assertNotEquals(
+                "Delete must target the new chat, never the previously-active one",
+                previousId,
+                deletedSlot.captured,
+            )
+            assertTrue(
+                "Previously-active chat must NOT be deleted",
+                sessionsFlow.value.any { it.id == previousId },
+            )
         }
 
     @Test

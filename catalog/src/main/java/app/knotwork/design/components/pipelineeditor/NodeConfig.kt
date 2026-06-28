@@ -183,6 +183,10 @@ data class IntentRouterConfig(
  * node outputs.
  * @property labelTrue port label for the True branch (also the [EdgeLabel]).
  * @property labelFalse port label for the False branch.
+ * @property branchOnImage when `true`, the node takes the True branch whenever the
+ * run input carries an image attachment — a deterministic check evaluated before the
+ * [expression], so a pipeline can fork on "did the user send a picture?". The
+ * [expression] is ignored while this is on.
  * @property engineProvider optional cloud provider backing this node's
  * structured inference; `null` runs on-device (the default).
  */
@@ -192,6 +196,7 @@ data class IfConditionConfig(
     val expression: String = "",
     val labelTrue: String = "True",
     val labelFalse: String = "False",
+    val branchOnImage: Boolean = false,
     val engineProvider: CloudProvider? = null,
 ) : NodeConfig {
     override val type: NodeType get() = NodeType.IF_CONDITION

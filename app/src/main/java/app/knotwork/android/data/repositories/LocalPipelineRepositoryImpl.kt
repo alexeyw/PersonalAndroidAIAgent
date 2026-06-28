@@ -51,6 +51,7 @@ class LocalPipelineRepositoryImpl @Inject constructor(private val pipelineDao: P
                 conditionComplexity = it.conditionComplexity,
                 conditionKeywords = it.conditionKeywords,
                 conditionPrompt = it.conditionPrompt,
+                conditionHasImage = it.conditionHasImage,
                 systemPrompt = it.systemPrompt,
                 cloudProvider = it.cloudProvider,
                 clarificationTimeoutMs = it.clarificationTimeoutMs,
@@ -93,6 +94,7 @@ class LocalPipelineRepositoryImpl @Inject constructor(private val pipelineDao: P
                 conditionComplexity = it.conditionComplexity,
                 conditionKeywords = it.conditionKeywords,
                 conditionPrompt = it.conditionPrompt,
+                conditionHasImage = it.conditionHasImage,
                 systemPrompt =
                 it.systemPrompt
                     ?: DefaultPrompts.getDefaultPromptForNodeType(

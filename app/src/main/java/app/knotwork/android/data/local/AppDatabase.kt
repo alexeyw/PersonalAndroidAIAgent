@@ -74,7 +74,7 @@ import app.knotwork.android.data.local.models.UsageCounterEntity
         UsageCounterEntity::class,
         UsageActiveDayEntity::class,
     ],
-    version = 47,
+    version = 48,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -1118,6 +1118,18 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                     """.trimIndent(),
                 )
+            }
+        }
+
+        /**
+         * v47 → v48: adds the nullable `conditionHasImage` flag to `pipeline_nodes`,
+         * backing the IF_CONDITION node's "branch True when the input carries an image"
+         * deterministic check. Purely additive `ALTER TABLE … ADD COLUMN`; existing
+         * rows default to `NULL` (image-presence branching off).
+         */
+        val MIGRATION_47_48 = object : Migration(47, 48) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `pipeline_nodes` ADD COLUMN `conditionHasImage` INTEGER")
             }
         }
     }

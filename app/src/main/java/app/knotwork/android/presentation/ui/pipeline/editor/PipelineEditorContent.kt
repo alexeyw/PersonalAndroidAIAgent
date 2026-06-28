@@ -63,6 +63,7 @@ import app.knotwork.design.theme.KnotworkTheme
  * @param onMoveNode forwarded from the canvas drag handler — commits the canvas-space delta.
  * @param onAddNode forwarded from the radial quick-add menu.
  * @param onAddConnection forwarded from a connection-draft drop onto an inbound port.
+ * @param onConnectionDropped forwarded when a connection drag ends without a valid target.
  * @param onFocusNode forwarded from a `ValidationBar` row tap.
  * @param onMultiSelectCancel exits multi-select without acting.
  * @param onMultiSelectDelete removes every multi-selected node + their connections.
@@ -92,6 +93,7 @@ internal fun PipelineEditorContent(
     onMoveNode: (nodeId: String, dxCanvas: Float, dyCanvas: Float) -> Unit,
     onAddNode: (type: NodeType, canvasX: Float, canvasY: Float) -> Unit,
     onAddConnection: (sourceNodeId: String, targetNodeId: String, label: String?) -> Unit,
+    onConnectionDropped: () -> Unit,
     onOpenNodeConfig: (nodeId: String) -> Unit,
     onLongPressEdge: (connectionId: String) -> Unit,
     onStartWithInput: () -> Unit,
@@ -150,6 +152,7 @@ internal fun PipelineEditorContent(
             onMoveNode = onMoveNode,
             onAddNode = onAddNode,
             onAddConnection = onAddConnection,
+            onConnectionDropped = onConnectionDropped,
             onOpenNodeConfig = onOpenNodeConfig,
             onLongPressEdge = onLongPressEdge,
             onStartWithInput = onStartWithInput,
