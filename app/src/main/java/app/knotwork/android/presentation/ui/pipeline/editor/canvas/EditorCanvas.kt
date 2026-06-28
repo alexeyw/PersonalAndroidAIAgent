@@ -349,8 +349,9 @@ internal fun EditorCanvas(
                             pointerCanvasY = draft.pointerCanvasY,
                             nodes = nodesByIdLive.values,
                             density = density,
+                            excludeNodeId = draft.sourceNodeId,
                         )
-                        if (target != null && target.id != draft.sourceNodeId) {
+                        if (target != null) {
                             // Forward the source-port label so multi-out nodes (IF / Queue /
                             // Eval / IntentRouter) persist which port the user dragged from.
                             onAddConnection(
@@ -551,17 +552,25 @@ private typealias IntPair = Pair<Int, Int>
  * ("drag onto the node") and, unlike the old anchor-radius test, it does not shrink in
  * canvas-space as you zoom in, so it works at maximum zoom. When the point is inside more
  * than one padded rectangle the nearest-centre node wins.
+ *
+ * [excludeNodeId] (the source node) is skipped: when the target sits just below the source,
+ * a release near the target's TOP edge can be closer to the *source's* centre than the
+ * target's, which would otherwise resolve to a self-drop and be rejected — the exact reason
+ * a tightly-stacked pair (e.g. a node directly above the one you're connecting to) refused
+ * to connect while every other pair worked.
  */
 internal fun hitTestInputNode(
     pointerCanvasX: Float,
     pointerCanvasY: Float,
     nodes: Collection<NodeModel>,
     density: androidx.compose.ui.unit.Density,
+    excludeNodeId: String? = null,
 ): NodeModel? {
     val padCanvas = with(density) { INBOUND_HIT_DP.dp.toPx() }
     var best: NodeModel? = null
     var bestDist = Float.MAX_VALUE
     nodes.forEach { node ->
+        if (node.id == excludeNodeId) return@forEach
         val b = nodeCanvasBounds(node, density)
         val inside = pointerCanvasX in (b.left - padCanvas)..(b.right + padCanvas) &&
             pointerCanvasY in (b.top - padCanvas)..(b.bottom + padCanvas)

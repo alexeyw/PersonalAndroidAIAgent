@@ -68,6 +68,23 @@ class EditorHitTestTest {
     }
 
     @Test
+    fun `release near a target stacked just below the source connects to the target, not the source`() {
+        // Source card at origin (centre y=96); target just below it (centre y=356). A release
+        // in the gap near the target's top edge (y=200) is actually closer to the SOURCE centre
+        // (104) than the target centre (156) — without excluding the source this resolves to a
+        // self-drop and the connection is rejected. This is the tightly-stacked pair that
+        // refused to connect while every other pair worked.
+        val source = node("src", NodeType.LITE_RT, x = 0f, y = 0f)
+        val target = node("tgt", NodeType.TOOL, x = 0f, y = 260f)
+        val nodes = listOf(source, target)
+
+        // Without excluding the source the buggy nearest-centre pick returns the source…
+        assertEquals("src", hitTestInputNode(168f, 200f, nodes, density)?.id)
+        // …excluding it (the real call passes the draft's source id) lands on the target.
+        assertEquals("tgt", hitTestInputNode(168f, 200f, nodes, density, excludeNodeId = "src")?.id)
+    }
+
+    @Test
     fun `press on the single outbound port is recognised`() {
         // Default port anchor: (width/2, baseHeight) = (168, 128) at density 2.
         val hit = hitTestOutboundPort(
