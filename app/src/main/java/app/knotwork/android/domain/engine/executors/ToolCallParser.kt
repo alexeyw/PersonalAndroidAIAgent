@@ -83,7 +83,13 @@ object ToolCallParser {
             // catching the supertype routes every format problem to a `null` result. Safe
             // w.r.t. cancellation: `decodeFromString` is non-suspend and cannot raise a
             // coroutine `CancellationException`.
-            Timber.tag("PipelineDebug").e(e, "Error parsing tool selection JSON")
+            //
+            // "Not a tool call" is the EXPECTED outcome for a pure-inference skill (a
+            // translator, a summarizer, or any skill whose output is plain final text) —
+            // [SkillNodeExecutor] treats a `null` result as "use the text as the output".
+            // Log it at debug level only; surfacing it as an error made every text-output
+            // skill look like it had crashed in the console.
+            Timber.tag("PipelineDebug").d("Skill output is not a tool-call JSON; using it as final text: ${e.message}")
             null
         }
     }
