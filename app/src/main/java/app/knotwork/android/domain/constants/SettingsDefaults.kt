@@ -456,6 +456,14 @@ object SettingsDefaults {
     const val SCHEDULED_TASK_NOTIFICATIONS_ENABLED_DEFAULT: Boolean = true
 
     /**
+     * Default for the "keep shares in one chat" flag. `true` so every item shared
+     * into the app accumulates in a single reusable **Shared** chat instead of
+     * spawning a fresh chat per share — the friendlier, more legible default the
+     * user asked for. Opt out to get one new chat per share.
+     */
+    const val SHARE_REUSE_SESSION_DEFAULT: Boolean = true
+
+    /**
      * Default for the hard-block-every-destructive-tool flag. `false` so
      * destructive tools are gated by the standard Human-in-the-loop prompt
      * rather than refused outright — a blanket block is an opt-in safety stance.

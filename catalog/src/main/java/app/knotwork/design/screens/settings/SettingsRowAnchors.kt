@@ -68,6 +68,9 @@ object SettingsRowAnchors {
     /** Background · share-target pipeline binding row. */
     const val SHARE_TARGET_PIPELINE_ID = "SHARE_TARGET_PIPELINE_ID"
 
+    /** Background · "keep shares in one chat" toggle. */
+    const val SHARE_REUSE_SESSION = "SHARE_REUSE_SESSION"
+
     /** Background · Quick Settings tile pipeline binding row. */
     const val QUICK_SETTINGS_TILE_PIPELINE_ID = "QUICK_SETTINGS_TILE_PIPELINE_ID"
 
@@ -103,6 +106,7 @@ object SettingsRowAnchors {
         LONG_RUNNING_TASKS_NOTIFICATIONS,
         SCHEDULED_TASK_NOTIFICATIONS,
         SHARE_TARGET_PIPELINE_ID,
+        SHARE_REUSE_SESSION,
         QUICK_SETTINGS_TILE_PIPELINE_ID,
         CRASH_REPORTING_ENABLED,
         IDENTITY,

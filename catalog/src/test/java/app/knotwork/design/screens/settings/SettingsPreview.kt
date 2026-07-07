@@ -171,6 +171,7 @@ internal object SettingsPreview {
         longRunningEnabled = true,
         scheduledResultsEnabled = true,
         shareTargetPipelineLabel = "Default System Pipeline",
+        shareReuseSessionEnabled = true,
         quickTilePipelineLabel = "Not set",
         advancedSliders = listOf(
             SettingSliderRow(SLIDER_BACKGROUND_RESUME_MAX_AGE, "Resume window", "48 h", 48f, 1f..168f),

@@ -6,7 +6,9 @@ import app.knotwork.android.domain.models.MessageAttachment
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.SharedPayload
 import app.knotwork.android.domain.repositories.ChatRepository
+import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.AttachmentStore
+import kotlinx.coroutines.flow.first
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -16,9 +18,16 @@ import javax.inject.Inject
  *
  * The share activity brings the app to the foreground, so unlike the tile this
  * uses the interactive queue ([AgentOrchestratorUseCase]) and returns the id of
- * the session it created so the caller can deep-link the user straight into the
- * live run. A fresh session is always created (bound to the share pipeline) so
- * a share never pollutes the active chat.
+ * the session it ran in so the caller can deep-link the user straight into the
+ * live run.
+ *
+ * **Session reuse.** When [SettingsRepository.shareReuseSession] is `true` (the
+ * default) every share accumulates in one reusable **Shared** chat
+ * ([SHARED_INBOX_SESSION_ID]) — new shares are appended, keeping the history in
+ * one legible place. When it is `false` a fresh, auto-named session is created
+ * per share (the original behaviour). Either way the active chat is never
+ * polluted — shares land in the Shared chat or a brand-new one, not the chat the
+ * user was in.
  *
  * Shared images are ingested through [AttachmentStore] exactly like a composer
  * attachment; per the multimodal contract only the text travels the graph while
@@ -33,6 +42,7 @@ class LaunchSharePipelineUseCase @Inject constructor(
     private val chatRepository: ChatRepository,
     private val attachmentStore: AttachmentStore,
     private val agentOrchestrator: AgentOrchestratorUseCase,
+    private val settingsRepository: SettingsRepository,
 ) {
 
     /**
@@ -40,17 +50,20 @@ class LaunchSharePipelineUseCase @Inject constructor(
      * creates a bound session and enqueues a run over the shared content.
      *
      * @param payload The normalised shared content (text and/or image URI).
+     * @param reusedSessionName Localised name for the single **Shared** chat used
+     *   when session reuse is on (the caller resolves it from a string resource —
+     *   the domain layer keeps no user-visible literals).
      * @param imageSessionName Localised name for an image-only share's session
-     *   (the caller resolves it from a string resource — the domain layer keeps
-     *   no user-visible literals).
+     *   (used only in per-share mode).
      * @param contentSessionName Localised name fallback when no readable text or
-     *   image is present.
-     * @return [ShareLaunchResult.Launched] with the new session id,
+     *   image is present (used only in per-share mode).
+     * @return [ShareLaunchResult.Launched] with the session id,
      *   [ShareLaunchResult.NotConfigured] when nothing is bound, or
      *   [ShareLaunchResult.NothingShared] when the payload had no content.
      */
     suspend operator fun invoke(
         payload: SharedPayload,
+        reusedSessionName: String,
         imageSessionName: String,
         contentSessionName: String,
     ): ShareLaunchResult {
@@ -62,25 +75,53 @@ class LaunchSharePipelineUseCase @Inject constructor(
         // Image-only share with a failed ingest leaves us nothing to run.
         if (!hasText && attachment == null) return ShareLaunchResult.NothingShared
 
-        val session = ChatSession.create(
-            name = sessionName(payload.text, attachment != null, imageSessionName, contentSessionName),
+        val session = resolveSession(
+            payload = payload,
+            hasImage = attachment != null,
             pipelineId = pipelineId,
+            reusedSessionName = reusedSessionName,
+            imageSessionName = imageSessionName,
+            contentSessionName = contentSessionName,
         )
-        val sessionId = session.id
         chatRepository.saveSession(session)
 
         // Prompt / display content follow the shared image-only contract.
         val content = AttachmentMessageContent.resolve(payload.text?.trim().orEmpty())
 
         agentOrchestrator(
-            sessionId = sessionId,
+            sessionId = session.id,
             userPrompt = content.prompt,
             pipelineId = pipelineId,
             attachment = attachment,
             displayContent = content.displayContent,
             origin = RunOrigin.SHARE,
         )
-        return ShareLaunchResult.Launched(sessionId)
+        return ShareLaunchResult.Launched(session.id)
+    }
+
+    /**
+     * Picks the session the share runs in. With reuse on, the single Shared chat
+     * ([SHARED_INBOX_SESSION_ID]) is reused if it still exists (re-pointing its
+     * binding to the current share pipeline) or created; with reuse off, a fresh
+     * auto-named session is created per share.
+     */
+    private suspend fun resolveSession(
+        payload: SharedPayload,
+        hasImage: Boolean,
+        pipelineId: String,
+        reusedSessionName: String,
+        imageSessionName: String,
+        contentSessionName: String,
+    ): ChatSession {
+        if (!settingsRepository.shareReuseSession.first()) {
+            return ChatSession.create(
+                name = sessionName(payload.text, hasImage, imageSessionName, contentSessionName),
+                pipelineId = pipelineId,
+            )
+        }
+        val existing = chatRepository.getSessionById(SHARED_INBOX_SESSION_ID)
+        return existing?.copy(pipelineId = pipelineId)
+            ?: ChatSession.create(id = SHARED_INBOX_SESSION_ID, name = reusedSessionName, pipelineId = pipelineId)
     }
 
     /** Best-effort image ingest; a failure degrades to a text-only (or empty) share. */
@@ -114,12 +155,21 @@ class LaunchSharePipelineUseCase @Inject constructor(
         }
     }
 
-    private companion object {
+    /** Constants for the share launch flow, incl. the reserved Shared-chat id. */
+    companion object {
+        /**
+         * Reserved, stable id of the single **Shared** chat that accumulates every
+         * share when session reuse is on. A fixed id (not a random UUID) lets the
+         * chat be found and reused across shares, and re-created with the same id
+         * if the user deletes it.
+         */
+        const val SHARED_INBOX_SESSION_ID = "shared-inbox"
+
         /** Max characters of shared text used for the auto-generated session name. */
-        const val SESSION_NAME_MAX_LENGTH = 60
+        private const val SESSION_NAME_MAX_LENGTH = 60
 
         /** Suffix appended when the shared text is longer than [SESSION_NAME_MAX_LENGTH]. */
-        const val SESSION_NAME_SUFFIX = "…"
+        private const val SESSION_NAME_SUFFIX = "…"
 
         /** Matches a run of one or more whitespace characters (spaces, tabs, newlines). */
         private val WHITESPACE_RUN = Regex("\\s+")

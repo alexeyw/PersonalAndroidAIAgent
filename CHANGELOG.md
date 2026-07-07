@@ -15,6 +15,13 @@ details.
 
 ### Added
 
+- **Shares can accumulate in one chat.** By default, everything you share into
+  the app (text and images) now lands in a single running **Shared** chat — new
+  shares are appended instead of spawning a fresh chat each time, which was noisy
+  and hard to follow. A new **Settings → Background & triggers → Keep shares in
+  one chat** toggle (on by default) controls it; turn it off to get a new,
+  auto-named chat per share (the previous behaviour). Either way a share never
+  disturbs the chat you were already in.
 - **Wi-Fi triggers can target specific networks.** A Wi-Fi trigger can now be
   scoped to one or more network names (SSIDs) in the editor, so it fires only on,
   say, your home or office Wi-Fi instead of any connection. Leaving the list empty

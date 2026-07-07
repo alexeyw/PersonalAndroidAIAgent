@@ -98,6 +98,8 @@ class SettingsCallbacks(
     val onBackgroundSliderChange: (id: String, value: Float) -> Unit = { _, _ -> },
     /** Open the picker binding a pipeline to the share target. */
     val onShareTargetPipelineClick: () -> Unit = {},
+    /** "Keep shares in one chat" toggle. */
+    val onShareReuseSessionToggle: (Boolean) -> Unit = {},
     /** Open the picker binding a pipeline to the Quick Settings tile. */
     val onQuickTilePipelineClick: () -> Unit = {},
 

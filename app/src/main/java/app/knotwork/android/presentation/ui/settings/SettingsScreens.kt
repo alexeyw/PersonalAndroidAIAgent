@@ -475,6 +475,7 @@ private fun rememberSettingsCallbacks(
         onScheduledResultsToggle = viewModel::setScheduledTaskNotificationsEnabled,
         onBackgroundSliderChange = { id, value -> routeBackgroundSlider(viewModel, id, value) },
         onShareTargetPipelineClick = onShareTargetPipelineClick,
+        onShareReuseSessionToggle = viewModel::setShareReuseSession,
         onQuickTilePipelineClick = onQuickTilePipelineClick,
         onCrashReportingToggle = viewModel::setCrashReportingEnabled,
         onPrivacySliderChange = { id, value -> routePrivacySlider(viewModel, id, value) },

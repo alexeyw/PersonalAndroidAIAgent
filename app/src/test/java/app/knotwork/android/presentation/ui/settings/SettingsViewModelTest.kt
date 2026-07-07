@@ -572,6 +572,14 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `setShareReuseSession routes through repository`() = runTest {
+        advanceUntilIdle()
+        viewModel.setShareReuseSession(false)
+        advanceUntilIdle()
+        coVerify { settings.setShareReuseSession(false) }
+    }
+
+    @Test
     fun `scheduledTaskNotificationsEnabled mirrors the repository flow into ui state`() = runTest {
         every { settings.scheduledTaskNotificationsEnabled } returns MutableStateFlow(false)
         viewModel = newViewModel()

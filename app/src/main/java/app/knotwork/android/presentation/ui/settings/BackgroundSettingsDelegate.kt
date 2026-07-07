@@ -56,6 +56,10 @@ class BackgroundSettingsDelegate(
             state.update { it.copy(shareTargetPipelineId = value) }
         }.launchIn(scope)
 
+        settingsRepository.shareReuseSession.onEach { value ->
+            state.update { it.copy(shareReuseSession = value) }
+        }.launchIn(scope)
+
         settingsRepository.quickSettingsTilePipelineId.onEach { value ->
             state.update { it.copy(quickSettingsTilePipelineId = value) }
         }.launchIn(scope)
@@ -83,6 +87,11 @@ class BackgroundSettingsDelegate(
     /** Persists the "notify me when a scheduled task fires" toggle. */
     fun setScheduledTaskNotificationsEnabled(enabled: Boolean) {
         scope.launch { settingsRepository.setScheduledTaskNotificationsEnabled(enabled) }
+    }
+
+    /** Persists the "keep every share in one Shared chat" toggle. */
+    fun setShareReuseSession(reuse: Boolean) {
+        scope.launch { settingsRepository.setShareReuseSession(reuse) }
     }
 
     /**

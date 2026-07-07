@@ -601,11 +601,18 @@ shared content or a tap until you have opted in.
 
 The app appears in the Android share sheet for **text and images**.
 Share something and pick the app: it runs your chosen *share pipeline*
-over the shared content and opens the new chat so you can watch the run.
+over the shared content and opens the chat so you can watch the run.
 A shared image is attached exactly like a composer attachment (the local
 model reads it; it never leaves the device). If you have not bound a
 share pipeline yet, the app opens with a reminder instead of running
 anything.
+
+By default every share lands in one running **Shared** chat, so
+everything you send accumulates in one place — new shares are appended to
+it rather than starting a fresh chat each time. Turn this off with
+**Settings → Background & triggers → Keep shares in one chat** to get a
+new, auto-named chat per share instead. Either way, shares never touch
+the chat you were already in.
 
 ### Launcher shortcuts
 

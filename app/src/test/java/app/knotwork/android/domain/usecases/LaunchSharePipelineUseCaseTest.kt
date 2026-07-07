@@ -6,19 +6,24 @@ import app.knotwork.android.domain.models.MessageAttachment
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.SharedPayload
 import app.knotwork.android.domain.repositories.ChatRepository
+import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.AttachmentStore
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Unit tests for [LaunchSharePipelineUseCase]: the empty / unbound guards and
- * the text-only, image-only and failed-ingest launch branches.
+ * Unit tests for [LaunchSharePipelineUseCase]: the empty / unbound guards, the
+ * text-only, image-only and failed-ingest launch branches, and the single-chat
+ * session-reuse toggle.
  */
 class LaunchSharePipelineUseCaseTest {
 
@@ -26,11 +31,27 @@ class LaunchSharePipelineUseCaseTest {
     private val chatRepository = mockk<ChatRepository>(relaxed = true)
     private val attachmentStore = mockk<AttachmentStore>()
     private val orchestrator = mockk<AgentOrchestratorUseCase>(relaxed = true)
-    private val useCase =
-        LaunchSharePipelineUseCase(resolveSurfacePipeline, chatRepository, attachmentStore, orchestrator)
+    private val settingsRepository = mockk<SettingsRepository>()
+    private val useCase = LaunchSharePipelineUseCase(
+        resolveSurfacePipeline,
+        chatRepository,
+        attachmentStore,
+        orchestrator,
+        settingsRepository,
+    )
 
-    private suspend fun launch(payload: SharedPayload): ShareLaunchResult =
-        useCase(payload, imageSessionName = "Shared image", contentSessionName = "Shared content")
+    init {
+        // Default: per-share mode (a new session each time). Reuse tests override.
+        every { settingsRepository.shareReuseSession } returns flowOf(false)
+        coEvery { chatRepository.getSessionById(any()) } returns null
+    }
+
+    private suspend fun launch(payload: SharedPayload): ShareLaunchResult = useCase(
+        payload,
+        reusedSessionName = "Shared",
+        imageSessionName = "Shared image",
+        contentSessionName = "Shared content",
+    )
 
     @Test
     fun `given empty payload when invoked then reports NothingShared`() = runTest {
@@ -127,5 +148,73 @@ class LaunchSharePipelineUseCaseTest {
         val result = launch(SharedPayload(text = null, imageUri = "content://media/1"))
 
         assertTrue(result is ShareLaunchResult.NothingShared)
+    }
+
+    // ─── Session reuse (keep shares in one chat) ─────────────────────────────
+
+    @Test
+    fun `given reuse on and no existing chat when shared then creates the reserved Shared chat`() = runTest {
+        every { settingsRepository.shareReuseSession } returns flowOf(true)
+        coEvery { resolveSurfacePipeline(any()) } returns "share-pipe"
+        coEvery { chatRepository.getSessionById(LaunchSharePipelineUseCase.SHARED_INBOX_SESSION_ID) } returns null
+        val sessionSlot = slot<ChatSession>()
+        coEvery { chatRepository.saveSession(capture(sessionSlot)) } returns Unit
+
+        val result = launch(SharedPayload(text = "hello", imageUri = null))
+
+        assertEquals(LaunchSharePipelineUseCase.SHARED_INBOX_SESSION_ID, sessionSlot.captured.id)
+        assertEquals("Shared", sessionSlot.captured.name)
+        assertEquals(
+            LaunchSharePipelineUseCase.SHARED_INBOX_SESSION_ID,
+            (result as ShareLaunchResult.Launched).sessionId,
+        )
+    }
+
+    @Test
+    fun `given reuse on and an existing Shared chat when shared then appends to it and refreshes its pipeline`() =
+        runTest {
+            every { settingsRepository.shareReuseSession } returns flowOf(true)
+            coEvery { resolveSurfacePipeline(any()) } returns "share-pipe"
+            val existing = ChatSession.create(
+                name = "Shared",
+                pipelineId = "old-pipe",
+                id = LaunchSharePipelineUseCase.SHARED_INBOX_SESSION_ID,
+            )
+            coEvery {
+                chatRepository.getSessionById(LaunchSharePipelineUseCase.SHARED_INBOX_SESSION_ID)
+            } returns existing
+            val sessionSlot = slot<ChatSession>()
+            coEvery { chatRepository.saveSession(capture(sessionSlot)) } returns Unit
+
+            launch(SharedPayload(text = "another", imageUri = null))
+
+            assertEquals(LaunchSharePipelineUseCase.SHARED_INBOX_SESSION_ID, sessionSlot.captured.id)
+            assertEquals("Shared", sessionSlot.captured.name) // name preserved, not overwritten by share text
+            assertEquals("share-pipe", sessionSlot.captured.pipelineId) // binding re-pointed to the current pipeline
+            coVerify {
+                orchestrator(
+                    sessionId = LaunchSharePipelineUseCase.SHARED_INBOX_SESSION_ID,
+                    userPrompt = "another",
+                    pipelineId = "share-pipe",
+                    attachment = null,
+                    displayContent = null,
+                    origin = RunOrigin.SHARE,
+                )
+            }
+        }
+
+    @Test
+    fun `given reuse off when two shares arrive then each opens a distinct new session`() = runTest {
+        every { settingsRepository.shareReuseSession } returns flowOf(false)
+        coEvery { resolveSurfacePipeline(any()) } returns "share-pipe"
+        val ids = mutableListOf<String>()
+        coEvery { chatRepository.saveSession(any()) } answers { ids.add(firstArg<ChatSession>().id) }
+
+        launch(SharedPayload(text = "first", imageUri = null))
+        launch(SharedPayload(text = "second", imageUri = null))
+
+        assertEquals(2, ids.size)
+        assertNotEquals(ids[0], ids[1])
+        assertNotEquals(LaunchSharePipelineUseCase.SHARED_INBOX_SESSION_ID, ids[0])
     }
 }
