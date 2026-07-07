@@ -93,7 +93,6 @@
     <string name="triggers_ssid_section_desc">Leave empty to fire on any Wi-Fi. Add names to fire only on them (needs location permission).</string>
     <string name="triggers_ssid_placeholder">e.g. Home</string>
     <string name="triggers_ssid_add">Add</string>
-    <string name="triggers_ssid_remove_cd">Remove network</string>
 
     <!-- Pipeline binding -->
     <string name="triggers_pipeline_label">RUN THIS PIPELINE</string>

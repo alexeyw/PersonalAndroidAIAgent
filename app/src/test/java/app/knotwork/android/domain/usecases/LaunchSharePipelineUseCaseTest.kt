@@ -3,9 +3,11 @@ package app.knotwork.android.domain.usecases
 import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.MessageAttachment
+import app.knotwork.android.domain.models.PendingInteraction
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.SharedPayload
 import app.knotwork.android.domain.repositories.ChatRepository
+import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.AttachmentStore
 import io.mockk.coEvery
@@ -32,18 +34,22 @@ class LaunchSharePipelineUseCaseTest {
     private val attachmentStore = mockk<AttachmentStore>()
     private val orchestrator = mockk<AgentOrchestratorUseCase>(relaxed = true)
     private val settingsRepository = mockk<SettingsRepository>()
+    private val pendingInteractionRepository = mockk<PendingInteractionRepository>()
     private val useCase = LaunchSharePipelineUseCase(
         resolveSurfacePipeline,
         chatRepository,
         attachmentStore,
         orchestrator,
         settingsRepository,
+        pendingInteractionRepository,
     )
 
     init {
         // Default: per-share mode (a new session each time). Reuse tests override.
         every { settingsRepository.shareReuseSession } returns flowOf(false)
         coEvery { chatRepository.getSessionById(any()) } returns null
+        // Default: the Shared chat is not mid-approval.
+        coEvery { pendingInteractionRepository.getForSession(any()) } returns null
     }
 
     private suspend fun launch(payload: SharedPayload): ShareLaunchResult = useCase(
@@ -171,7 +177,7 @@ class LaunchSharePipelineUseCaseTest {
     }
 
     @Test
-    fun `given reuse on and an existing Shared chat when shared then appends to it and refreshes its pipeline`() =
+    fun `given reuse on and an existing Shared chat when shared then appends to it and preserves its binding`() =
         runTest {
             every { settingsRepository.shareReuseSession } returns flowOf(true)
             coEvery { resolveSurfacePipeline(any()) } returns "share-pipe"
@@ -190,8 +196,10 @@ class LaunchSharePipelineUseCaseTest {
 
             assertEquals(LaunchSharePipelineUseCase.SHARED_INBOX_SESSION_ID, sessionSlot.captured.id)
             assertEquals("Shared", sessionSlot.captured.name) // name preserved, not overwritten by share text
-            assertEquals("share-pipe", sessionSlot.captured.pipelineId) // binding re-pointed to the current pipeline
+            // The chat's own binding is left untouched — not silently re-pointed.
+            assertEquals("old-pipe", sessionSlot.captured.pipelineId)
             coVerify {
+                // The run still uses the current share pipeline, passed explicitly.
                 orchestrator(
                     sessionId = LaunchSharePipelineUseCase.SHARED_INBOX_SESSION_ID,
                     userPrompt = "another",
@@ -202,6 +210,24 @@ class LaunchSharePipelineUseCaseTest {
                 )
             }
         }
+
+    @Test
+    fun `given reuse on but the Shared chat is mid-approval when shared then spills into a fresh session`() = runTest {
+        every { settingsRepository.shareReuseSession } returns flowOf(true)
+        coEvery { resolveSurfacePipeline(any()) } returns "share-pipe"
+        // The Shared chat is parked awaiting a HITL approval.
+        coEvery {
+            pendingInteractionRepository.getForSession(LaunchSharePipelineUseCase.SHARED_INBOX_SESSION_ID)
+        } returns mockk<PendingInteraction>()
+        val sessionSlot = slot<ChatSession>()
+        coEvery { chatRepository.saveSession(capture(sessionSlot)) } returns Unit
+
+        launch(SharedPayload(text = "urgent", imageUri = null))
+
+        // Must NOT collide on the reserved Shared session while it awaits approval.
+        assertNotEquals(LaunchSharePipelineUseCase.SHARED_INBOX_SESSION_ID, sessionSlot.captured.id)
+        assertEquals("urgent", sessionSlot.captured.name)
+    }
 
     @Test
     fun `given reuse off when two shares arrive then each opens a distinct new session`() = runTest {

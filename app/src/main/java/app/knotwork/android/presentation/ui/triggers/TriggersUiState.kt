@@ -74,10 +74,11 @@ data class TriggerEditorDraft(
         TriggerConditionType.Interval -> TriggerCondition.IntervalSchedule(effectiveIntervalMinutes)
         TriggerConditionType.Daily -> TriggerCondition.DailySchedule(dailyHour, dailyMinute)
         TriggerConditionType.Charging -> TriggerCondition.Charging
-        // Scoping to SSIDs implies Wi-Fi; force wifiOnly so the resolved condition
-        // is internally consistent regardless of the toggle's last value.
+        // Persist wifiOnly exactly as the user set it — no silent forcing. When
+        // ssids is non-empty the evaluator already requires Wi-Fi (SSID scope
+        // implies Wi-Fi), so the flag does not need to be overridden here.
         TriggerConditionType.Network -> TriggerCondition.NetworkConnected(
-            wifiOnly = wifiOnly || ssids.isNotEmpty(),
+            wifiOnly = wifiOnly,
             ssids = ssids,
         )
     }

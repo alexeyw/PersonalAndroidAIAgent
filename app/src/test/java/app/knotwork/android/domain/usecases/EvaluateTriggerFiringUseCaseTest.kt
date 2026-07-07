@@ -199,6 +199,18 @@ class EvaluateTriggerFiringUseCaseTest {
     }
 
     @Test
+    fun `given ssid-scoped armed and wifi name differs only by case then fires`() {
+        // The editor de-dups SSIDs case-insensitively, so matching must be too —
+        // a "home" entry has to fire on a "HOME" network.
+        val decision = eval(
+            trigger(TriggerCondition.NetworkConnected(wifiOnly = true, ssids = listOf("home")), armed = true),
+            network = NetworkState(isConnected = true, isWifiConnected = true, wifiSsid = "HOME"),
+        )
+
+        assertEquals(TriggerFiringDecision.Fire("pipe-1", "do it"), decision)
+    }
+
+    @Test
     fun `given ssid-scoped armed but on a non-matching wifi then condition not met`() {
         val decision = eval(
             trigger(TriggerCondition.NetworkConnected(wifiOnly = true, ssids = listOf("Home")), armed = true),

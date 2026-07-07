@@ -57,10 +57,12 @@ class NetworkStateRepositoryImpl @Inject constructor(@ApplicationContext private
     }
 
     private fun getCurrentState(capabilities: NetworkCapabilities? = null): NetworkState {
-        val activeNetwork = connectivityManager.activeNetwork ?: return NetworkState(false, false)
-        val caps =
-            capabilities ?: connectivityManager.getNetworkCapabilities(activeNetwork)
-                ?: return NetworkState(false, false)
+        // Prefer the capabilities the callback already delivered; only fall back to
+        // the activeNetwork lookup (a binder IPC) when none were supplied — the
+        // hot onCapabilitiesChanged path passes them, so it pays no round-trip.
+        val caps = capabilities
+            ?: connectivityManager.activeNetwork?.let { connectivityManager.getNetworkCapabilities(it) }
+            ?: return NetworkState(false, false)
 
         val isConnected = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
         val isWifi = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)

@@ -116,10 +116,12 @@ class EvaluateTriggerFiringUseCase @Inject constructor() {
                     if (condition.wifiOnly) network.isWifiConnected else network.isConnected
                 } else {
                     // SSID-scoped: require a Wi-Fi connection whose name matches one
-                    // of the configured SSIDs. A null/unreadable SSID never matches.
+                    // of the configured SSIDs. Matching is case-insensitive to agree
+                    // with the editor's case-insensitive de-duplication — otherwise a
+                    // "home" entry would silently never match a "Home" network. A
+                    // null/unreadable SSID matches nothing (equals returns false).
                     network.isWifiConnected &&
-                        network.wifiSsid != null &&
-                        condition.ssids.any { it == network.wifiSsid }
+                        condition.ssids.any { it.equals(network.wifiSsid, ignoreCase = true) }
                 }
                 evaluateEvent(satisfied, trigger.armed, fire)
             }

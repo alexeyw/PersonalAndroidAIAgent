@@ -324,7 +324,6 @@ private fun triggerEditorStrings(): TriggerEditorStrings = TriggerEditorStrings(
     ssidSectionDesc = stringResource(R.string.triggers_ssid_section_desc),
     ssidPlaceholder = stringResource(R.string.triggers_ssid_placeholder),
     ssidAdd = stringResource(R.string.triggers_ssid_add),
-    ssidRemoveCd = stringResource(R.string.triggers_ssid_remove_cd),
     pipelineLabel = stringResource(R.string.triggers_pipeline_label),
     pipelineNone = stringResource(R.string.triggers_pipeline_none),
     pipelineNoneSub = stringResource(R.string.triggers_pipeline_none_sub),

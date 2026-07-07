@@ -202,6 +202,7 @@ class TriggersViewModelTest {
             vm.openNewTrigger()
             vm.onNameChange("At home")
             vm.onTypeChange(TriggerConditionType.Network)
+            vm.onWifiOnlyToggle() // user turns Wi-Fi-only on explicitly
             vm.onSsidAdd("Home")
             vm.onSsidAdd("  home  ") // case-insensitive duplicate → ignored
             vm.onSsidAdd("Office")
@@ -214,6 +215,28 @@ class TriggersViewModelTest {
 
             assertEquals(
                 TriggerCondition.NetworkConnected(wifiOnly = true, ssids = listOf("Home", "Office")),
+                saved.captured.condition,
+            )
+        }
+
+    @Test
+    fun `given ssids added without toggling wifiOnly when saved then wifiOnly stays as the user left it`() =
+        runTest(testDispatcher) {
+            val vm = viewModel()
+            advanceUntilIdle()
+            vm.openNewTrigger()
+            vm.onNameChange("Scoped")
+            vm.onTypeChange(TriggerConditionType.Network)
+            vm.onSsidAdd("Home") // adding an SSID must NOT silently force wifiOnly on
+            vm.onPipelineSelect("p1")
+
+            val saved = slot<Trigger>()
+            coEvery { triggerRepository.saveTrigger(capture(saved)) } returns Unit
+            vm.saveEditor()
+            advanceUntilIdle()
+
+            assertEquals(
+                TriggerCondition.NetworkConnected(wifiOnly = false, ssids = listOf("Home")),
                 saved.captured.condition,
             )
         }

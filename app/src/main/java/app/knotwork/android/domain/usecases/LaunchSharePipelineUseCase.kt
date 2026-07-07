@@ -6,8 +6,10 @@ import app.knotwork.android.domain.models.MessageAttachment
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.SharedPayload
 import app.knotwork.android.domain.repositories.ChatRepository
+import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.AttachmentStore
+import app.knotwork.android.domain.text.toSingleLineTitle
 import kotlinx.coroutines.flow.first
 import timber.log.Timber
 import javax.inject.Inject
@@ -43,6 +45,7 @@ class LaunchSharePipelineUseCase @Inject constructor(
     private val attachmentStore: AttachmentStore,
     private val agentOrchestrator: AgentOrchestratorUseCase,
     private val settingsRepository: SettingsRepository,
+    private val pendingInteractionRepository: PendingInteractionRepository,
 ) {
 
     /**
@@ -100,10 +103,19 @@ class LaunchSharePipelineUseCase @Inject constructor(
     }
 
     /**
-     * Picks the session the share runs in. With reuse on, the single Shared chat
-     * ([SHARED_INBOX_SESSION_ID]) is reused if it still exists (re-pointing its
-     * binding to the current share pipeline) or created; with reuse off, a fresh
-     * auto-named session is created per share.
+     * Picks the session the share runs in.
+     *
+     * With reuse off, a fresh auto-named session is created per share. With reuse
+     * on, the single Shared chat ([SHARED_INBOX_SESSION_ID]) is reused as-is (its
+     * pipeline binding is left untouched — the run already carries the current
+     * share pipeline explicitly, so re-pointing it would silently clobber a
+     * binding the user may have changed) or created if absent.
+     *
+     * **Collision guard:** if the Shared chat is currently parked awaiting a
+     * Human-in-the-loop approval, this share spills into a fresh session instead
+     * of reusing it. A second HITL run on the same session would share the
+     * per-session approval notification slot and the newest-parked-wins in-chat
+     * fallback, making the first, still-pending approval unreachable.
      */
     private suspend fun resolveSession(
         payload: SharedPayload,
@@ -113,15 +125,16 @@ class LaunchSharePipelineUseCase @Inject constructor(
         imageSessionName: String,
         contentSessionName: String,
     ): ChatSession {
-        if (!settingsRepository.shareReuseSession.first()) {
-            return ChatSession.create(
-                name = sessionName(payload.text, hasImage, imageSessionName, contentSessionName),
-                pipelineId = pipelineId,
-            )
+        val reuse = settingsRepository.shareReuseSession.first() &&
+            pendingInteractionRepository.getForSession(SHARED_INBOX_SESSION_ID) == null
+        if (reuse) {
+            return chatRepository.getSessionById(SHARED_INBOX_SESSION_ID)
+                ?: ChatSession.create(id = SHARED_INBOX_SESSION_ID, name = reusedSessionName, pipelineId = pipelineId)
         }
-        val existing = chatRepository.getSessionById(SHARED_INBOX_SESSION_ID)
-        return existing?.copy(pipelineId = pipelineId)
-            ?: ChatSession.create(id = SHARED_INBOX_SESSION_ID, name = reusedSessionName, pipelineId = pipelineId)
+        return ChatSession.create(
+            name = sessionName(payload.text, hasImage, imageSessionName, contentSessionName),
+            pipelineId = pipelineId,
+        )
     }
 
     /** Best-effort image ingest; a failure degrades to a text-only (or empty) share. */
@@ -138,18 +151,12 @@ class LaunchSharePipelineUseCase @Inject constructor(
         imageSessionName: String,
         contentSessionName: String,
     ): String {
-        // Collapse all whitespace (including line breaks) into single spaces so the
-        // whole shared payload — not just its first line — contributes to a clean,
-        // informative single-line title. A shared article often opens with a short
-        // header line; flowing the following text in makes the title far more useful.
-        val normalized = text?.trim()?.replace(WHITESPACE_RUN, " ").orEmpty()
+        // The whole shared payload — not just its first line — contributes to a
+        // clean single-line title; a shared article often opens with a short header
+        // line, so flowing the following text in makes the title far more useful.
+        val title = text?.toSingleLineTitle(SESSION_NAME_MAX_LENGTH, SESSION_NAME_SUFFIX).orEmpty()
         return when {
-            normalized.isNotEmpty() ->
-                if (normalized.length > SESSION_NAME_MAX_LENGTH) {
-                    normalized.take(SESSION_NAME_MAX_LENGTH).trimEnd() + SESSION_NAME_SUFFIX
-                } else {
-                    normalized
-                }
+            title.isNotEmpty() -> title
             hasImage -> imageSessionName
             else -> contentSessionName
         }
@@ -170,9 +177,6 @@ class LaunchSharePipelineUseCase @Inject constructor(
 
         /** Suffix appended when the shared text is longer than [SESSION_NAME_MAX_LENGTH]. */
         private const val SESSION_NAME_SUFFIX = "…"
-
-        /** Matches a run of one or more whitespace characters (spaces, tabs, newlines). */
-        private val WHITESPACE_RUN = Regex("\\s+")
     }
 }
 
