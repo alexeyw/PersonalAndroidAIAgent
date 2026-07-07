@@ -195,6 +195,44 @@ class TriggersViewModelTest {
     }
 
     @Test
+    fun `given a network draft with ssids when saved then persists an ssid-scoped wifi condition`() =
+        runTest(testDispatcher) {
+            val vm = viewModel()
+            advanceUntilIdle()
+            vm.openNewTrigger()
+            vm.onNameChange("At home")
+            vm.onTypeChange(TriggerConditionType.Network)
+            vm.onSsidAdd("Home")
+            vm.onSsidAdd("  home  ") // case-insensitive duplicate → ignored
+            vm.onSsidAdd("Office")
+            vm.onPipelineSelect("p1")
+
+            val saved = slot<Trigger>()
+            coEvery { triggerRepository.saveTrigger(capture(saved)) } returns Unit
+            vm.saveEditor()
+            advanceUntilIdle()
+
+            assertEquals(
+                TriggerCondition.NetworkConnected(wifiOnly = true, ssids = listOf("Home", "Office")),
+                saved.captured.condition,
+            )
+        }
+
+    @Test
+    fun `given ssids added when one removed then the draft drops only that ssid`() = runTest(testDispatcher) {
+        val vm = viewModel()
+        advanceUntilIdle()
+        vm.openNewTrigger()
+        vm.onTypeChange(TriggerConditionType.Network)
+        vm.onSsidAdd("Home")
+        vm.onSsidAdd("Office")
+
+        vm.onSsidRemove("Home")
+
+        assertEquals(listOf("Office"), vm.uiState.value.editor?.ssids)
+    }
+
+    @Test
     fun `given an existing trigger when editing then the draft round-trips the condition`() = runTest(testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()

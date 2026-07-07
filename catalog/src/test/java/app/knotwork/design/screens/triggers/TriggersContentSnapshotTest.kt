@@ -105,6 +105,16 @@ class TriggersContentSnapshotTest {
     }
 
     @Test
+    fun editor_network_scoped_light() = snapshot(name = "editor_network_scoped", dark = false) {
+        TriggerEditorContent(state = TriggersPreview.editorNetworkScoped())
+    }
+
+    @Test
+    fun editor_network_scoped_dark() = snapshot(name = "editor_network_scoped", dark = true) {
+        TriggerEditorContent(state = TriggersPreview.editorNetworkScoped())
+    }
+
+    @Test
     fun editor_invalid_light() = snapshot(name = "editor_invalid", dark = false) {
         TriggerEditorContent(state = TriggersPreview.editorInvalid())
     }

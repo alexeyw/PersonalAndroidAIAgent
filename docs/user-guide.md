@@ -672,7 +672,13 @@ Tap **New trigger** (or a row to edit one). The editor has:
     you unplug). This one is event-driven, so it runs right away rather
     than waiting for a poll.
   - **Network** — fires on connecting; flip **Wi-Fi only** to ignore
-    mobile data.
+    mobile data. Under **Only on these Wi-Fi networks** you can add one or
+    more network names (SSIDs) so the trigger fires *only* on those — e.g.
+    just your home or office Wi-Fi. Leave it empty to fire on any Wi-Fi.
+    Adding a name asks for **location permission** the first time (Android
+    ties the Wi-Fi name to location); if you decline, the trigger stays
+    saved but won't fire until you grant it. The names are used only for
+    the match on your device — they are never uploaded.
 - **Run this pipeline** — bind the pipeline to run. Choosing **None**
   leaves the trigger inert (saved but it fires nothing).
 - **Input prompt** — the message handed to the pipeline each time it

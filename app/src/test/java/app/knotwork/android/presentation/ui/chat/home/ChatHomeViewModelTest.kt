@@ -837,22 +837,21 @@ class ChatHomeViewModelTest {
     }
 
     @Test
-    fun `sendMessage collapses whitespace into a single-line title when auto-renaming`() =
-        runTest(testDispatcher) {
-            viewModel = createViewModel()
-            advanceUntilIdle()
-            val sessionId = viewModel.state.value.thread.currentSessionId
-            coEvery { agentOrchestratorUseCase(sessionId, any(), any()) } returns flowOf(
-                AgentOrchestratorState.Completed("ok"),
-            )
+    fun `sendMessage collapses whitespace into a single-line title when auto-renaming`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, any(), any()) } returns flowOf(
+            AgentOrchestratorState.Completed("ok"),
+        )
 
-            viewModel.onComposerValueChange("  Plan a trip\n\nto   Rome  ")
-            viewModel.sendMessage()
-            advanceUntilIdle()
+        viewModel.onComposerValueChange("  Plan a trip\n\nto   Rome  ")
+        viewModel.sendMessage()
+        advanceUntilIdle()
 
-            val renamed = sessionsFlow.value.first { it.id == sessionId }.name
-            assertEquals("Plan a trip to Rome", renamed)
-        }
+        val renamed = sessionsFlow.value.first { it.id == sessionId }.name
+        assertEquals("Plan a trip to Rome", renamed)
+    }
 
     @Test
     fun `stopGeneration cancels the in-flight job and returns to a resting state`() = runTest(testDispatcher) {
@@ -2224,28 +2223,26 @@ class ChatHomeViewModelTest {
     // region active-session tracking (HITL notification suppression)
 
     @Test
-    fun `given chat visible when onChatScreenVisible then active session id is published`() =
-        runTest(testDispatcher) {
-            viewModel = createViewModel()
-            advanceUntilIdle()
-            val sessionId = viewModel.state.value.thread.currentSessionId
+    fun `given chat visible when onChatScreenVisible then active session id is published`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
 
-            viewModel.onChatScreenVisible()
+        viewModel.onChatScreenVisible()
 
-            assertEquals(sessionId, activeSessionTracker.activeSessionId.value)
-        }
+        assertEquals(sessionId, activeSessionTracker.activeSessionId.value)
+    }
 
     @Test
-    fun `given chat visible when onChatScreenHidden then active session id is cleared`() =
-        runTest(testDispatcher) {
-            viewModel = createViewModel()
-            advanceUntilIdle()
-            viewModel.onChatScreenVisible()
+    fun `given chat visible when onChatScreenHidden then active session id is cleared`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        viewModel.onChatScreenVisible()
 
-            viewModel.onChatScreenHidden()
+        viewModel.onChatScreenHidden()
 
-            assertNull(activeSessionTracker.activeSessionId.value)
-        }
+        assertNull(activeSessionTracker.activeSessionId.value)
+    }
 
     // endregion
 

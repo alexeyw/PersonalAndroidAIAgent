@@ -1,6 +1,7 @@
 package app.knotwork.android.domain.triggerio
 
 import app.knotwork.android.domain.models.TriggerCondition
+import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
 
@@ -46,6 +47,9 @@ object TriggerConditionCodec {
     /** Payload key for [TriggerCondition.NetworkConnected.wifiOnly]. */
     const val KEY_WIFI_ONLY: String = "wifiOnly"
 
+    /** Payload key for [TriggerCondition.NetworkConnected.ssids] (a JSON string array). */
+    const val KEY_SSIDS: String = "ssids"
+
     /**
      * Encodes [condition] into its canonical JSON string form.
      *
@@ -67,6 +71,9 @@ object TriggerConditionCodec {
             is TriggerCondition.NetworkConnected -> {
                 put(KEY_TYPE, TYPE_NETWORK)
                 put(KEY_WIFI_ONLY, condition.wifiOnly)
+                if (condition.ssids.isNotEmpty()) {
+                    put(KEY_SSIDS, JSONArray(condition.ssids))
+                }
             }
         }
     }.toString()
@@ -101,11 +108,32 @@ object TriggerConditionCodec {
                         null
                     }
                 TYPE_CHARGING -> TriggerCondition.Charging
-                TYPE_NETWORK -> TriggerCondition.NetworkConnected(obj.optBoolean(KEY_WIFI_ONLY, false))
+                TYPE_NETWORK -> TriggerCondition.NetworkConnected(
+                    wifiOnly = obj.optBoolean(KEY_WIFI_ONLY, false),
+                    // Absent for pre-SSID triggers → empty list preserves the
+                    // original any-connection / any-Wi-Fi behaviour.
+                    ssids = obj.optJSONArray(KEY_SSIDS).toStringList(),
+                )
                 else -> null
             }
         } catch (_: JSONException) {
             null
         }
+    }
+
+    /**
+     * Reads a nullable [JSONArray] into a list of non-blank, trimmed strings.
+     *
+     * A `null` array (the key was absent) or any non-string / blank element
+     * yields an empty / filtered list rather than throwing, keeping [decode]
+     * total.
+     *
+     * @receiver The array to flatten, or `null`.
+     * @return The trimmed, non-blank string elements in order.
+     */
+    private fun JSONArray?.toStringList(): List<String> {
+        if (this == null) return emptyList()
+        return (0 until length())
+            .mapNotNull { index -> optString(index, "").trim().takeIf(String::isNotEmpty) }
     }
 }

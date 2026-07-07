@@ -484,6 +484,7 @@ private fun DailyParams(state: TriggerEditorUi, strings: TriggerEditorStrings, c
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun NetworkParams(state: TriggerEditorUi, strings: TriggerEditorStrings, callbacks: TriggerEditorCallbacks) {
     Column(
@@ -500,6 +501,94 @@ private fun NetworkParams(state: TriggerEditorUi, strings: TriggerEditorStrings,
             onToggle = callbacks.onWifiOnlyToggle,
             modifier = Modifier.background(MaterialTheme.colorScheme.surface),
         )
+    }
+    SsidScope(state = state, strings = strings, callbacks = callbacks)
+}
+
+/**
+ * SSID-scoping controls for the Network condition: the current network names as
+ * removable chips plus an "add a name" input. Empty list = fire on any Wi-Fi.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SsidScope(state: TriggerEditorUi, strings: TriggerEditorStrings, callbacks: TriggerEditorCallbacks) {
+    var input by remember { mutableStateOf("") }
+    val submit = {
+        if (input.isNotBlank()) {
+            callbacks.onSsidAdd(input)
+            input = ""
+        }
+    }
+    Column(modifier = Modifier.fillMaxWidth().padding(top = KnotworkTheme.spacing.sp3)) {
+        Text(
+            text = strings.ssidSectionLabel,
+            style = KnotworkTextStyles.LabelMd.copy(fontWeight = FontWeight.SemiBold),
+            color = KnotworkTheme.extended.onSurface2,
+        )
+        Text(
+            text = strings.ssidSectionDesc,
+            style = KnotworkTextStyles.MonoSm,
+            color = KnotworkTheme.extended.onSurfaceMuted,
+            modifier = Modifier.padding(top = KnotworkTheme.spacing.sp1),
+        )
+        if (state.ssids.isNotEmpty()) {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth().padding(top = KnotworkTheme.spacing.sp2),
+                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+                verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+            ) {
+                state.ssids.forEach { ssid ->
+                    SsidChip(
+                        label = ssid,
+                        removeCd = strings.ssidRemoveCd,
+                        onRemove = { callbacks.onSsidRemove(ssid) },
+                    )
+                }
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = KnotworkTheme.spacing.sp2),
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                EditorField(
+                    value = input,
+                    placeholder = strings.ssidPlaceholder,
+                    onValueChange = { input = it },
+                )
+            }
+            KnotworkTextButton(text = strings.ssidAdd, onClick = submit, enabled = input.isNotBlank())
+        }
+    }
+}
+
+/** A removable network-name chip: the SSID label with a trailing remove button. */
+@Composable
+private fun SsidChip(label: String, removeCd: String, onRemove: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .clip(KnotworkTheme.shapes.full)
+            .background(KnotworkTheme.extended.surface1)
+            .border(1.dp, MaterialTheme.colorScheme.outline, KnotworkTheme.shapes.full)
+            .padding(start = KnotworkTheme.spacing.sp3, end = KnotworkTheme.spacing.sp1)
+            .padding(vertical = KnotworkTheme.spacing.sp1),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+    ) {
+        Text(
+            text = label,
+            style = KnotworkTextStyles.MonoSm.copy(fontWeight = FontWeight.SemiBold),
+            color = KnotworkTheme.extended.onSurface2,
+        )
+        IconButton(onClick = onRemove, modifier = Modifier.size(24.dp)) {
+            Icon(
+                imageVector = AppIcons.X,
+                contentDescription = removeCd,
+                tint = KnotworkTheme.extended.onSurfaceMuted,
+                modifier = Modifier.size(14.dp),
+            )
+        }
     }
 }
 
@@ -799,6 +888,12 @@ data class TriggerEditorStrings(
     val chargingBody: String = "Fires once each time the device starts charging; re-arms when you unplug.",
     val wifiOnlyLabel: String = "Wi-Fi only",
     val wifiOnlyDesc: String = "On = only Wi-Fi connections fire it. Off = any network.",
+    val ssidSectionLabel: String = "Only on these Wi-Fi networks",
+    val ssidSectionDesc: String =
+        "Leave empty to fire on any Wi-Fi. Add names to fire only on them (needs location permission).",
+    val ssidPlaceholder: String = "e.g. Home",
+    val ssidAdd: String = "Add",
+    val ssidRemoveCd: String = "Remove network",
     val pipelineLabel: String = "RUN THIS PIPELINE",
     val pipelineNone: String = "None — leave unbound",
     val pipelineNoneSub: String = "The trigger stays inert",

@@ -111,7 +111,16 @@ class EvaluateTriggerFiringUseCase @Inject constructor() {
             is TriggerCondition.DailySchedule -> evaluateDaily(condition, trigger.lastFiredAt, nowMillis, zone, fire)
             TriggerCondition.Charging -> evaluateEvent(power.isCharging, trigger.armed, fire)
             is TriggerCondition.NetworkConnected -> {
-                val satisfied = if (condition.wifiOnly) network.isWifiConnected else network.isConnected
+                val satisfied = if (condition.ssids.isEmpty()) {
+                    // No SSID scope: fire on any Wi-Fi (wifiOnly) or any network.
+                    if (condition.wifiOnly) network.isWifiConnected else network.isConnected
+                } else {
+                    // SSID-scoped: require a Wi-Fi connection whose name matches one
+                    // of the configured SSIDs. A null/unreadable SSID never matches.
+                    network.isWifiConnected &&
+                        network.wifiSsid != null &&
+                        condition.ssids.any { it == network.wifiSsid }
+                }
                 evaluateEvent(satisfied, trigger.armed, fire)
             }
         }

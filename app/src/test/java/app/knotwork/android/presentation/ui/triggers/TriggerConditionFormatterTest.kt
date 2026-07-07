@@ -82,4 +82,13 @@ class TriggerConditionFormatterTest {
 
         assertEquals(TriggerConditionLabel.NetworkAny, label)
     }
+
+    @Test
+    fun `given an ssid-scoped network condition when formatting then maps to named label`() {
+        val label = TriggerConditionFormatter.toLabel(
+            TriggerCondition.NetworkConnected(wifiOnly = true, ssids = listOf("Home", "Office")),
+        )
+
+        assertEquals(TriggerConditionLabel.NetworkNamed(listOf("Home", "Office")), label)
+    }
 }

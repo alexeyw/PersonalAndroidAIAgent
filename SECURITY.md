@@ -185,13 +185,23 @@ the OS **entry surfaces** (a share target and a Quick Settings tile) start one
 from outside the app. Autonomous, possibly-unattended execution is a new risk
 surface, and the design constrains it deliberately:
 
-- **Low-sensitivity conditions only (first wave).** A trigger fires on a **time
+- **Low-sensitivity conditions by default.** A trigger fires on a **time
   schedule** (every N, or daily at a set time), the device **starting to
-  charge**, or **gaining network / Wi-Fi connectivity**. None of these requires a
-  runtime permission, and none reads user content or location to make its
-  decision — the trigger evaluator sees only a charging flag, a connectivity
-  flag, and the clock. They reveal nothing about the user beyond the fact that a
-  schedule elapsed or a hardware state changed.
+  charge**, or **gaining network / Wi-Fi connectivity**. In their default form
+  none of these requires a runtime permission, and none reads user content or
+  location to make its decision — the trigger evaluator sees only a charging
+  flag, a connectivity flag, and the clock. They reveal nothing about the user
+  beyond the fact that a schedule elapsed or a hardware state changed.
+- **Wi-Fi SSID scoping is opt-in and gated on location.** A Wi-Fi trigger can
+  optionally be narrowed to specific network names (SSIDs) so it fires only on,
+  say, home or office Wi-Fi. Because Android treats the connected SSID as
+  location-derived, this is the one trigger feature that needs a runtime
+  permission (`ACCESS_FINE_LOCATION`), and it is requested **only** when the user
+  adds an SSID in the editor — never for the default network condition. The SSID
+  is used solely for the on-device match: it is never persisted beyond the
+  trigger's own condition, never logged, and never leaves the device. If the
+  permission is not granted the SSID reads back as unknown and an SSID-scoped
+  trigger simply never fires (fail-safe, never fail-open).
 - **High-sensitivity conditions are deliberately deferred.** Conditions that
   would require privileged, content-bearing access — a
   **NotificationListenerService** (reads every notification on the device),

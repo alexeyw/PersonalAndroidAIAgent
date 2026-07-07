@@ -4,6 +4,14 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Optional: only requested when the user scopes a Wi-Fi trigger to specific
+         network names (SSIDs). Reading the connected Wi-Fi SSID requires fine
+         location on modern Android; without the grant, SSID-scoped triggers simply
+         never match (fail-safe) and no other feature depends on it. COARSE is
+         declared alongside FINE because Android 12+ lets the user grant only
+         coarse — in which case the SSID stays redacted and the trigger stays inert. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.EXECUTE_APP_FUNCTIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />

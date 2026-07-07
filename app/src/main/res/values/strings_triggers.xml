@@ -37,6 +37,7 @@
     <string name="triggers_condition_charging">When charging connected</string>
     <string name="triggers_condition_network_any">When connected to any network</string>
     <string name="triggers_condition_network_wifi">When Wi-Fi connects</string>
+    <string name="triggers_condition_network_named">When joining %1$s</string>
     <plurals name="triggers_interval_minutes">
         <item quantity="one">Every %1$d minute</item>
         <item quantity="other">Every %1$d minutes</item>
@@ -88,6 +89,11 @@
     <!-- Network params -->
     <string name="triggers_wifi_only_label">Wi-Fi only</string>
     <string name="triggers_wifi_only_desc">On = only Wi-Fi connections fire it. Off = any network.</string>
+    <string name="triggers_ssid_section_label">Only on these Wi-Fi networks</string>
+    <string name="triggers_ssid_section_desc">Leave empty to fire on any Wi-Fi. Add names to fire only on them (needs location permission).</string>
+    <string name="triggers_ssid_placeholder">e.g. Home</string>
+    <string name="triggers_ssid_add">Add</string>
+    <string name="triggers_ssid_remove_cd">Remove network</string>
 
     <!-- Pipeline binding -->
     <string name="triggers_pipeline_label">RUN THIS PIPELINE</string>

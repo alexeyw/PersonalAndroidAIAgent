@@ -15,6 +15,14 @@ details.
 
 ### Added
 
+- **Wi-Fi triggers can target specific networks.** A Wi-Fi trigger can now be
+  scoped to one or more network names (SSIDs) in the editor, so it fires only on,
+  say, your home or office Wi-Fi instead of any connection. Leaving the list empty
+  keeps the previous any-Wi-Fi behaviour. Because Android derives the connected
+  SSID from location, scoping a trigger requests the location permission the first
+  time you add a name; if it is not granted, the trigger stays saved but never
+  fires (fail-safe). The network names are used only for the on-device match and
+  never leave the device.
 - **`append_file` workspace tool.** A new built-in file tool that adds text to the
   **end** of a workspace file, creating it on the first call and always keeping
   existing content (there is no overwrite). It makes "accumulate entries in a daily

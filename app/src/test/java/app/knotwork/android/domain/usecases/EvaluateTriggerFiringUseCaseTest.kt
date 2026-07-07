@@ -188,6 +188,38 @@ class EvaluateTriggerFiringUseCaseTest {
         assertEquals(TriggerFiringDecision.ReArm, decision)
     }
 
+    @Test
+    fun `given ssid-scoped armed and on a matching wifi then fires`() {
+        val decision = eval(
+            trigger(TriggerCondition.NetworkConnected(wifiOnly = true, ssids = listOf("Home", "Office")), armed = true),
+            network = NetworkState(isConnected = true, isWifiConnected = true, wifiSsid = "Office"),
+        )
+
+        assertEquals(TriggerFiringDecision.Fire("pipe-1", "do it"), decision)
+    }
+
+    @Test
+    fun `given ssid-scoped armed but on a non-matching wifi then condition not met`() {
+        val decision = eval(
+            trigger(TriggerCondition.NetworkConnected(wifiOnly = true, ssids = listOf("Home")), armed = true),
+            network = NetworkState(isConnected = true, isWifiConnected = true, wifiSsid = "Cafe"),
+        )
+
+        assertEquals(TriggerFiringDecision.Skip(TriggerSkipReason.CONDITION_NOT_MET), decision)
+    }
+
+    @Test
+    fun `given ssid-scoped armed but ssid unreadable then condition not met`() {
+        // No location permission → SSID reads back null → an SSID-scoped trigger
+        // must never match (fail-safe), even though Wi-Fi is connected.
+        val decision = eval(
+            trigger(TriggerCondition.NetworkConnected(wifiOnly = true, ssids = listOf("Home")), armed = true),
+            network = NetworkState(isConnected = true, isWifiConnected = true, wifiSsid = null),
+        )
+
+        assertEquals(TriggerFiringDecision.Skip(TriggerSkipReason.CONDITION_NOT_MET), decision)
+    }
+
     // --- Daily schedule ---
 
     @Test

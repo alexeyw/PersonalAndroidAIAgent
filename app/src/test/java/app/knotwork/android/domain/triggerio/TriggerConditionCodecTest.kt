@@ -90,4 +90,32 @@ class TriggerConditionCodecTest {
 
         assertEquals(TriggerCondition.NetworkConnected(wifiOnly = false), decoded)
     }
+
+    @Test
+    fun `given ssid-scoped network when round-tripped then names preserved`() {
+        val condition = TriggerCondition.NetworkConnected(wifiOnly = true, ssids = listOf("Home", "Office"))
+
+        val decoded = TriggerConditionCodec.decode(TriggerConditionCodec.encode(condition))
+
+        assertEquals(condition, decoded)
+    }
+
+    @Test
+    fun `given legacy network json without ssids when decoded then ssids default to empty`() {
+        val decoded = TriggerConditionCodec.decode("""{"type":"NETWORK","wifiOnly":true}""")
+
+        assertEquals(TriggerCondition.NetworkConnected(wifiOnly = true, ssids = emptyList()), decoded)
+    }
+
+    @Test
+    fun `given ssids array with blanks when decoded then blanks are dropped and trimmed`() {
+        val decoded = TriggerConditionCodec.decode(
+            """{"type":"NETWORK","wifiOnly":true,"ssids":["  Home  ","","Office"]}""",
+        )
+
+        assertEquals(
+            TriggerCondition.NetworkConnected(wifiOnly = true, ssids = listOf("Home", "Office")),
+            decoded,
+        )
+    }
 }

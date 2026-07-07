@@ -146,6 +146,38 @@ class TriggersViewModel @Inject constructor(
     /** Toggles the Network condition's Wi-Fi-only flag. */
     fun onWifiOnlyToggle() = updateDraft { it.copy(wifiOnly = !it.wifiOnly) }
 
+    /**
+     * Adds a Wi-Fi network name (SSID) to the Network condition's scope.
+     *
+     * Trims the input and ignores blanks and case-insensitive duplicates so the
+     * chip list stays clean. Adding the first SSID narrows the trigger to the
+     * named networks only.
+     *
+     * @param ssid The network name to add.
+     */
+    fun onSsidAdd(ssid: String) {
+        val trimmed = ssid.trim()
+        if (trimmed.isEmpty()) return
+        updateDraft { draft ->
+            if (draft.ssids.any { it.equals(trimmed, ignoreCase = true) }) {
+                draft
+            } else {
+                draft.copy(ssids = draft.ssids + trimmed)
+            }
+        }
+    }
+
+    /**
+     * Removes a Wi-Fi network name (SSID) from the Network condition's scope.
+     *
+     * Removing the last SSID widens the trigger back to any-Wi-Fi / any-network.
+     *
+     * @param ssid The network name to remove.
+     */
+    fun onSsidRemove(ssid: String) = updateDraft { draft ->
+        draft.copy(ssids = draft.ssids.filterNot { it == ssid })
+    }
+
     /** Binds (or unbinds, when [pipelineId] is `null`) the editor's pipeline. */
     fun onPipelineSelect(pipelineId: String?) = updateDraft { it.copy(pipelineId = pipelineId) }
 
