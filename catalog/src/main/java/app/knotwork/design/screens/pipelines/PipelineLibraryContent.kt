@@ -661,6 +661,19 @@ private fun RowOverflowMenu(row: PipelineLibraryRow, expanded: Boolean, callback
         DropdownMenuItem(
             leadingIcon = {
                 Icon(
+                    imageVector = AppIcons.Download,
+                    contentDescription = null,
+                )
+            },
+            text = { Text(stringResource(R.string.knotwork_library_menu_export_bundle)) },
+            onClick = {
+                callbacks.onOverflowDismiss()
+                callbacks.onExportBundle(row.id)
+            },
+        )
+        DropdownMenuItem(
+            leadingIcon = {
+                Icon(
                     imageVector = AppIcons.Bookmark,
                     contentDescription = null,
                 )

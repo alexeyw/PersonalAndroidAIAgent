@@ -1,5 +1,6 @@
 package app.knotwork.android.presentation.ui.common
 
+import androidx.annotation.PluralsRes
 import androidx.annotation.StringRes
 
 /**
@@ -55,6 +56,17 @@ sealed interface UiText {
      *   parts. Defaults to `", "`.
      */
     data class Joined(val parts: List<UiText>, val separator: String = ", ") : UiText
+
+    /**
+     * Reference to a quantity-aware plural resource, resolved through
+     * `Resources.getQuantityString(id, quantity, *args)`.
+     *
+     * @property id Stable `R.plurals.*` identifier of the message.
+     * @property quantity The count that selects the plural form.
+     * @property args Positional format arguments (commonly `listOf(quantity)`
+     *   when the message renders the count itself).
+     */
+    data class Plural(@PluralsRes val id: Int, val quantity: Int, val args: List<Any> = emptyList()) : UiText
 
     companion object {
         /** Convenience factory for a resource with no format arguments. */

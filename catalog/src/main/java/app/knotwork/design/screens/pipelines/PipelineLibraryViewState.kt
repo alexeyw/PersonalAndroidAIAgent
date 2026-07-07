@@ -176,6 +176,8 @@ class PipelineLibraryCallbacks(
     val onUseForTile: (String) -> Unit = {},
     val onRename: (String) -> Unit = {},
     val onExportJson: (String) -> Unit = {},
+    /** Export this pipeline plus the transitive closure of its PIPELINE dependencies as a bundle. */
+    val onExportBundle: (String) -> Unit = {},
     val onSaveAsPreset: (String) -> Unit = {},
     val onImportJson: () -> Unit = {},
     val onOpenDrawer: () -> Unit = {},

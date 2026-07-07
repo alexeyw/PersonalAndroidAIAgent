@@ -36,5 +36,6 @@ fun Context.resolve(text: UiText): String = when (text) {
     }
     is UiText.Dynamic -> text.text
     is UiText.Joined -> text.parts.joinToString(text.separator) { resolve(it) }
+    is UiText.Plural -> resources.getQuantityString(text.id, text.quantity, *text.args.toTypedArray())
     UiText.Empty -> ""
 }

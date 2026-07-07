@@ -1097,6 +1097,35 @@ the app's import flow, so there is no manual conversion step.
 4. The imported pipeline is saved into the library and becomes the
    one currently open in the editor.
 
+### Moving a whole composition — bundles
+
+A single **Export JSON** / **Import JSON** moves *one* pipeline. If your
+pipeline calls other pipelines (through **Pipeline** nodes), those
+sub-pipelines are separate files — moving the parent alone would leave
+dangling references. A **bundle** solves this: it packs the pipeline
+*and* every sub-pipeline it depends on into one file.
+
+- **Export a bundle.** In the pipeline library, open a pipeline's
+  overflow menu and choose **Export bundle (with dependencies)**. The
+  app walks the pipeline's dependencies, gathers the whole set, and
+  writes a single `knotwork-bundle-YYYY-MM-DD.json`. If a dependency
+  can't be found the export stops and tells you which one — a bundle is
+  only useful if it's complete. In the browser editor the matching
+  button is **📦 Export bundle**.
+- **Import a bundle.** Use the same **Import JSON** affordance — it
+  recognises a bundle automatically and imports every pipeline in it at
+  once, reporting how many landed. In the browser editor, **📦 Import
+  bundle** adds them to your *Mine* presets.
+- **When something already exists.** If a pipeline you're importing has
+  the same identity as one already in your library, the app asks what to
+  do: **Replace** it (update in place, keeping anything bound to it) or
+  **import as a copy** (leave the existing one untouched and add a fresh
+  duplicate). This choice now appears for ordinary single-pipeline
+  imports too, so an import never silently overwrites your work.
+
+Bundles carry pipelines only — not triggers, tool/MCP settings, prompt
+presets, or chat history. Those stay on the device they were set up on.
+
 ---
 
 ## Tools and MCP
