@@ -576,6 +576,15 @@ details.
   `NewerVersionAvailable` lint gate. Build tooling only (not shipped in the
   APK); no rule-set changes affecting the codebase.
 
+- **Dependency refresh to clear the `NewerVersionAvailable` / `GradleDependency`
+  lint gate.** Compose BOM `2026.06.00` → `2026.06.01`, Hilt/Dagger `2.60` →
+  `2.60.1`, the AndroidX Hilt extensions (`hilt-navigation-compose`, `hilt-work`,
+  `hilt-compiler`) `1.3.0` → `1.4.0`, and Roborazzi `1.64.0` → `1.66.0`. No code
+  change. `androidx.appfunctions` stays on `1.0.0-alpha09`: only `appfunctions`
+  and `appfunctions-compiler` published `-alpha10`, while the `appfunctions-service`
+  sibling (pinned to the same version) did not, so that finding is grandfathered
+  in the lint baseline until the whole family moves together.
+
 ## [0.5.0] - 2026-06-14
 
 ### Added
