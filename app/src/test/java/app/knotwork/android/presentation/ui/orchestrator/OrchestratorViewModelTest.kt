@@ -17,6 +17,7 @@ import app.knotwork.android.domain.prompt.PromptTemplateEngine
 import app.knotwork.android.domain.prompt.PromptVariableProvider
 import app.knotwork.android.domain.repositories.ApiKeyRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
+import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PromptPresetRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.SkillRepository
@@ -25,7 +26,9 @@ import app.knotwork.android.domain.services.PipelineCompositionValidator
 import app.knotwork.android.domain.usecases.CreatePipelineUseCase
 import app.knotwork.android.domain.usecases.DeletePipelineUseCase
 import app.knotwork.android.domain.usecases.DuplicatePipelineUseCase
+import app.knotwork.android.domain.usecases.ExportPipelineBundleUseCase
 import app.knotwork.android.domain.usecases.GetPromptTemplatesUseCase
+import app.knotwork.android.domain.usecases.ImportPipelineBundleUseCase
 import app.knotwork.android.domain.usecases.ImportPipelineUseCase
 import app.knotwork.android.domain.usecases.LoadPipelineFromPresetUseCase
 import app.knotwork.android.domain.usecases.LoadPipelineUseCase
@@ -62,6 +65,9 @@ class OrchestratorViewModelTest {
     private lateinit var savePipelineUseCase: SavePipelineUseCase
     private lateinit var loadPipelineUseCase: LoadPipelineUseCase
     private lateinit var importPipelineUseCase: ImportPipelineUseCase
+    private lateinit var importPipelineBundleUseCase: ImportPipelineBundleUseCase
+    private lateinit var exportPipelineBundleUseCase: ExportPipelineBundleUseCase
+    private lateinit var pipelineRepository: PipelineRepository
     private lateinit var loadPipelineFromPresetUseCase: LoadPipelineFromPresetUseCase
     private lateinit var renamePipelineUseCase: RenamePipelineUseCase
     private lateinit var duplicatePipelineUseCase: DuplicatePipelineUseCase
@@ -98,8 +104,15 @@ class OrchestratorViewModelTest {
         coEvery { savePipelineUseCase(any()) } returns Result.success(Unit)
         loadPipelineUseCase = mockk()
         // Use the real ImportPipelineUseCase against the mocked save: the
-        // import path here is exercised end-to-end (parse + persist).
-        importPipelineUseCase = ImportPipelineUseCase(savePipelineUseCase)
+        // import path here is exercised end-to-end (parse + persist). No
+        // collision by default so a clean import still auto-persists.
+        pipelineRepository = mockk()
+        coEvery { pipelineRepository.getPipelineById(any()) } returns null
+        coEvery { pipelineRepository.savePipelines(any()) } returns Unit
+        importPipelineUseCase = ImportPipelineUseCase(savePipelineUseCase, pipelineRepository)
+        compositionValidator = mockk()
+        importPipelineBundleUseCase = ImportPipelineBundleUseCase(pipelineRepository, compositionValidator)
+        exportPipelineBundleUseCase = mockk()
         loadPipelineFromPresetUseCase = mockk()
         renamePipelineUseCase = mockk()
         duplicatePipelineUseCase = mockk()
@@ -112,7 +125,6 @@ class OrchestratorViewModelTest {
         promptPresetRepository = mockk(relaxed = true) {
             every { getPresetsForType(any()) } returns flowOf(emptyList())
         }
-        compositionValidator = mockk()
         skillRepository = mockk(relaxed = true)
         apiKeyRepository = mockk()
         toolRepository = mockk()
@@ -157,6 +169,8 @@ class OrchestratorViewModelTest {
         savePipelineUseCase,
         loadPipelineUseCase,
         importPipelineUseCase,
+        importPipelineBundleUseCase,
+        exportPipelineBundleUseCase,
         loadPipelineFromPresetUseCase,
         renamePipelineUseCase,
         duplicatePipelineUseCase,

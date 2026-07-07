@@ -7,6 +7,7 @@ import app.knotwork.android.domain.engine.DefaultPipelineFactory
 import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.ConnectionModel
 import app.knotwork.android.domain.models.EntrySurface
+import app.knotwork.android.domain.models.ImportCollisionResolution
 import app.knotwork.android.domain.models.NodeContextConfig
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
@@ -19,6 +20,7 @@ import app.knotwork.android.domain.models.PresetCategory
 import app.knotwork.android.domain.models.PromptPreset
 import app.knotwork.android.domain.models.PromptTemplate
 import app.knotwork.android.domain.models.Skill
+import app.knotwork.android.domain.pipelineio.PipelineBundleJsonSerializer
 import app.knotwork.android.domain.pipelineio.PipelineJsonSerializer
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
 import app.knotwork.android.domain.prompt.PromptVariableProvider
@@ -30,13 +32,17 @@ import app.knotwork.android.domain.repositories.SkillRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.PipelineCompositionValidator
 import app.knotwork.android.domain.services.findDependentPipelines
+import app.knotwork.android.domain.usecases.ConfirmedImport
 import app.knotwork.android.domain.usecases.CreatePipelineUseCase
 import app.knotwork.android.domain.usecases.DeletePipelineUseCase
 import app.knotwork.android.domain.usecases.DuplicatePipelineUseCase
+import app.knotwork.android.domain.usecases.ExportPipelineBundleUseCase
 import app.knotwork.android.domain.usecases.GetPromptTemplatesUseCase
+import app.knotwork.android.domain.usecases.ImportPipelineBundleUseCase
 import app.knotwork.android.domain.usecases.ImportPipelineUseCase
 import app.knotwork.android.domain.usecases.LoadPipelineFromPresetUseCase
 import app.knotwork.android.domain.usecases.LoadPipelineUseCase
+import app.knotwork.android.domain.usecases.PipelineBundlePrepareResult
 import app.knotwork.android.domain.usecases.RenamePipelineUseCase
 import app.knotwork.android.domain.usecases.ResolveSurfacePipelineUseCase
 import app.knotwork.android.domain.usecases.SavePipelineAsPresetUseCase
@@ -83,6 +89,8 @@ class OrchestratorViewModel @Inject constructor(
     private val savePipelineUseCase: SavePipelineUseCase,
     private val loadPipelineUseCase: LoadPipelineUseCase,
     private val importPipelineUseCase: ImportPipelineUseCase,
+    private val importPipelineBundleUseCase: ImportPipelineBundleUseCase,
+    private val exportPipelineBundleUseCase: ExportPipelineBundleUseCase,
     private val loadPipelineFromPresetUseCase: LoadPipelineFromPresetUseCase,
     private val renamePipelineUseCase: RenamePipelineUseCase,
     private val duplicatePipelineUseCase: DuplicatePipelineUseCase,
@@ -681,12 +689,33 @@ class OrchestratorViewModel @Inject constructor(
     fun exportPipelineToJson(): String = PipelineJsonSerializer.serialize(_uiState.value.currentPipeline)
 
     /**
-     * Parses [jsonString] and, on success, persists the imported pipeline
-     * through [SavePipelineUseCase] so it appears in the saved-pipelines
-     * list immediately. On a `schemaVersion` mismatch the parsed graph is
-     * stashed in [OrchestratorUiState.pendingImport] for the UI to
-     * confirm; nothing is written until the user accepts via
-     * [confirmPendingImport].
+     * Entry point for the shared "Import JSON" affordance. Detects whether
+     * [jsonString] is a bundle envelope (a self-contained closure of several
+     * pipelines) or a single-pipeline document and routes to the matching
+     * flow, so the library screen exposes one import affordance regardless of
+     * the file shape.
+     *
+     * @param jsonString Raw JSON read from the picked document.
+     */
+    fun importJson(jsonString: String) {
+        if (PipelineBundleJsonSerializer.looksLikeBundle(jsonString)) {
+            importBundleFromJson(jsonString)
+        } else {
+            importPipelineFromJson(jsonString)
+        }
+    }
+
+    /**
+     * Parses [jsonString] as a single pipeline and, on a clean non-colliding
+     * success, persists it through [SavePipelineUseCase] so it appears in the
+     * saved-pipelines list immediately.
+     *
+     * Two deferral paths write nothing until the user decides:
+     * - a `schemaVersion` mismatch stashes the graph in
+     *   [OrchestratorUiState.pendingImport] for [confirmPendingImport];
+     * - an id collision (the imported id already names a saved pipeline)
+     *   stashes the graph in [OrchestratorUiState.pendingCollision] for
+     *   [resolveCollision], closing the previous silent-overwrite behaviour.
      */
     fun importPipelineFromJson(jsonString: String) {
         viewModelScope.launch {
@@ -695,13 +724,19 @@ class OrchestratorViewModel @Inject constructor(
             _uiState.update { state ->
                 when (val outcome = invocation.outcome) {
                     is PipelineImportOutcome.Success -> {
+                        val collision = invocation.pendingCollision
                         val saveErr = invocation.saveResult?.let { res ->
                             res.exceptionOrNull()?.let(::messageForSaveError)
                         }
                         state.copy(
-                            currentPipeline = if (saveErr == null) outcome.graph else state.currentPipeline,
+                            currentPipeline = if (collision == null && saveErr == null) {
+                                outcome.graph
+                            } else {
+                                state.currentPipeline
+                            },
                             isLoading = false,
                             pendingImport = null,
+                            pendingCollision = collision,
                             errorMessage = saveErr,
                         )
                     }
@@ -723,6 +758,176 @@ class OrchestratorViewModel @Inject constructor(
     }
 
     /**
+     * Resolves a pending single-import id collision with the user's choice
+     * ([ImportCollisionResolution.REPLACE] overwrites in place;
+     * [ImportCollisionResolution.IMPORT_AS_COPY] saves a fresh copy). No-op
+     * when no collision is pending.
+     *
+     * @param resolution The user's collision choice.
+     */
+    fun resolveCollision(resolution: ImportCollisionResolution) {
+        val graph = _uiState.value.pendingCollision ?: return
+        _uiState.update { it.copy(isLoading = true, pendingCollision = null) }
+        viewModelScope.launch {
+            val result = importPipelineUseCase.persistWithResolution(graph, resolution)
+            _uiState.update { state ->
+                val saveErr = result.exceptionOrNull()?.let(::messageForSaveError)
+                state.copy(
+                    currentPipeline = if (saveErr == null && resolution == ImportCollisionResolution.REPLACE) {
+                        graph
+                    } else {
+                        state.currentPipeline
+                    },
+                    isLoading = false,
+                    errorMessage = saveErr,
+                )
+            }
+        }
+    }
+
+    /**
+     * Discards a pending single-import id collision without persisting.
+     */
+    fun cancelCollision() {
+        _uiState.update { it.copy(pendingCollision = null) }
+    }
+
+    /**
+     * Parses [jsonString] as a pipeline bundle, validates every contained
+     * graph, and either persists straight away (no collisions, no schema
+     * mismatch) or stashes the prepared closure in
+     * [OrchestratorUiState.pendingBundleImport] for the user to resolve. A
+     * parse or validation failure surfaces through [OrchestratorUiState.errorMessage].
+     */
+    fun importBundleFromJson(jsonString: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            when (val prepared = importPipelineBundleUseCase.prepare(jsonString)) {
+                is PipelineBundlePrepareResult.Failure ->
+                    _uiState.update {
+                        it.copy(isLoading = false, errorMessage = UiText.Dynamic(prepared.message))
+                    }
+
+                is PipelineBundlePrepareResult.Ready -> {
+                    val needsPrompt = prepared.collidingIds.isNotEmpty() || prepared.schemaMismatches.isNotEmpty()
+                    if (needsPrompt) {
+                        _uiState.update {
+                            it.copy(
+                                isLoading = false,
+                                pendingBundleImport = PendingBundleImport(
+                                    pipelines = prepared.pipelines,
+                                    collidingIds = prepared.collidingIds,
+                                    schemaMismatches = prepared.schemaMismatches,
+                                ),
+                            )
+                        }
+                    } else {
+                        persistBundle(prepared.pipelines, ImportCollisionResolution.REPLACE)
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Resolves a pending bundle import with the user's collision choice and
+     * writes the closure atomically. No-op when no bundle import is pending.
+     *
+     * @param resolution How to treat ids that collide with the library.
+     */
+    fun resolveBundleImport(resolution: ImportCollisionResolution) {
+        val pending = _uiState.value.pendingBundleImport ?: return
+        _uiState.update { it.copy(isLoading = true, pendingBundleImport = null) }
+        viewModelScope.launch { persistBundle(pending.pipelines, resolution) }
+    }
+
+    /**
+     * Discards a pending bundle import without persisting.
+     */
+    fun cancelBundleImport() {
+        _uiState.update { it.copy(pendingBundleImport = null) }
+    }
+
+    /**
+     * Atomically persists [pipelines] under [resolution], surfacing either a
+     * success count feedback or an error. Shared by the direct (no-collision)
+     * and dialog-resolved bundle-import paths.
+     */
+    private suspend fun persistBundle(pipelines: List<PipelineGraph>, resolution: ImportCollisionResolution) {
+        val result = importPipelineBundleUseCase.persist(pipelines, resolution)
+        _uiState.update { state ->
+            result.fold(
+                onSuccess = { saved ->
+                    // If the bundle replaced the pipeline currently open in the
+                    // editor (REPLACE keeps ids), refresh the in-memory copy to
+                    // the just-persisted graph so a later Save writes the
+                    // imported content instead of silently reverting to stale
+                    // state. Under copy every id changes, so nothing matches and
+                    // the open pipeline is left untouched.
+                    val refreshed = saved.firstOrNull { it.id == state.currentPipeline.id }
+                    state.copy(
+                        isLoading = false,
+                        currentPipeline = refreshed ?: state.currentPipeline,
+                        feedbackMessage = UiText.Plural(
+                            R.plurals.orchestrator_library_import_bundle_success,
+                            saved.size,
+                            listOf(saved.size),
+                        ),
+                    )
+                },
+                onFailure = { e ->
+                    state.copy(isLoading = false, errorMessage = throwableAsUiText(e))
+                },
+            )
+        }
+    }
+
+    /**
+     * Exports the pipeline identified by [pipelineId] together with the
+     * transitive closure of its `PIPELINE` dependencies as a bundle document,
+     * stashing the result in [OrchestratorUiState.pendingBundleExport] for the
+     * library screen to write to a user-picked file. A fail-fast export error
+     * (missing root, unresolvable dependency, or over-limit closure) surfaces
+     * through [OrchestratorUiState.errorMessage].
+     *
+     * @param pipelineId Id of the saved pipeline to export as the bundle root.
+     * @param fileName Suggested destination file name.
+     */
+    fun exportBundle(pipelineId: String, fileName: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            val result = exportPipelineBundleUseCase(pipelineId)
+            _uiState.update { state ->
+                result.fold(
+                    onSuccess = { json ->
+                        state.copy(
+                            isLoading = false,
+                            pendingBundleExport = PendingBundleExport(fileName = fileName, content = json),
+                        )
+                    },
+                    onFailure = { e ->
+                        state.copy(
+                            isLoading = false,
+                            errorMessage = UiText.of(
+                                R.string.orchestrator_library_export_bundle_failed,
+                                e.message ?: "",
+                            ),
+                        )
+                    },
+                )
+            }
+        }
+    }
+
+    /**
+     * Clears the pending bundle-export payload once the library screen has
+     * written it (or the user cancelled the file picker).
+     */
+    fun consumeBundleExport() {
+        _uiState.update { it.copy(pendingBundleExport = null) }
+    }
+
+    /**
      * Persists the graph captured in [OrchestratorUiState.pendingImport]
      * after the user has accepted the schema-mismatch warning. No-op when
      * no import is pending.
@@ -736,14 +941,21 @@ class OrchestratorViewModel @Inject constructor(
         // graph.
         _uiState.update { it.copy(isLoading = true, pendingImport = null) }
         viewModelScope.launch {
-            val result = importPipelineUseCase.persistConfirmed(pending)
-            _uiState.update { state ->
-                val saveErr = result.exceptionOrNull()?.let(::messageForSaveError)
-                state.copy(
-                    currentPipeline = if (saveErr == null) pending.graph else state.currentPipeline,
-                    isLoading = false,
-                    errorMessage = saveErr,
-                )
+            when (val confirmed = importPipelineUseCase.persistConfirmed(pending)) {
+                // The confirmed graph collides with an existing pipeline: defer
+                // to the collision dialog instead of silently overwriting.
+                is ConfirmedImport.Collision ->
+                    _uiState.update { it.copy(isLoading = false, pendingCollision = confirmed.graph) }
+
+                is ConfirmedImport.Saved ->
+                    _uiState.update { state ->
+                        val saveErr = confirmed.result.exceptionOrNull()?.let(::messageForSaveError)
+                        state.copy(
+                            currentPipeline = if (saveErr == null) pending.graph else state.currentPipeline,
+                            isLoading = false,
+                            errorMessage = saveErr,
+                        )
+                    }
             }
         }
     }

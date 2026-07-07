@@ -15,6 +15,17 @@ details.
 
 ### Added
 
+- **Move whole compositions in one file — pipeline bundles.** A pipeline that
+  calls sub-pipelines (through `PIPELINE` nodes) can now be exported as a single
+  **bundle** that carries the root plus every sub-pipeline it depends on. In the
+  library, a pipeline's overflow menu gains **Export bundle (with dependencies)**;
+  the existing **Import JSON** affordance detects a bundle and imports the whole
+  set at once. The browser editor gets matching **📦 Export bundle** / **📦 Import
+  bundle** buttons. When an imported pipeline's id already exists, the app now
+  asks whether to **Replace** it or **import as a copy** instead of silently
+  overwriting — for both bundles and single-pipeline imports. Triggers, MCP
+  servers, prompt presets and settings are intentionally out of scope; a bundle
+  is pipelines only.
 - **Shares can accumulate in one chat.** By default, everything you share into
   the app (text and images) now lands in a single running **Shared** chat — new
   shares are appended instead of spawning a fresh chat each time, which was noisy

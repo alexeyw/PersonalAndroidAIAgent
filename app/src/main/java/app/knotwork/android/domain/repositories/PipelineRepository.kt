@@ -39,6 +39,16 @@ interface PipelineRepository {
     suspend fun savePipeline(pipeline: PipelineGraph)
 
     /**
+     * Atomically saves several pipeline graphs in a single transaction —
+     * either all of them are persisted or none are. Backs the bundle-import
+     * flow, where one structurally-broken graph must roll back the entire
+     * import rather than leave a partially-written dependency closure.
+     *
+     * @param pipelines The pipeline graphs to persist as one atomic unit.
+     */
+    suspend fun savePipelines(pipelines: List<PipelineGraph>)
+
+    /**
      * Deletes a pipeline by its ID.
      *
      * @param pipelineId The unique identifier of the pipeline to delete.

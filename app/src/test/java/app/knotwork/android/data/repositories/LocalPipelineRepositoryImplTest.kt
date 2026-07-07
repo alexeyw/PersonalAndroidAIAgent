@@ -138,6 +138,34 @@ class LocalPipelineRepositoryImplTest {
     }
 
     @Test
+    fun `savePipelines flattens every graph into one atomic transaction`() = runTest {
+        val root = PipelineGraph(
+            id = "root",
+            name = "Root",
+            nodes = listOf(NodeModel("rn", NodeType.PIPELINE, 0f, 0f, "Sub", targetPipelineId = "sub")),
+            connections = emptyList(),
+        )
+        val sub = PipelineGraph(
+            id = "sub",
+            name = "Sub",
+            nodes = listOf(NodeModel("sn", NodeType.LITE_RT, 0f, 0f, "Label")),
+            connections = listOf(ConnectionModel("sc", "sn", "sn2")),
+        )
+
+        coEvery { pipelineDao.savePipelinesTransaction(any(), any(), any()) } returns Unit
+
+        repository.savePipelines(listOf(root, sub))
+
+        coVerify(exactly = 1) {
+            pipelineDao.savePipelinesTransaction(
+                match { it.map { p -> p.id }.toSet() == setOf("root", "sub") },
+                match { nodes -> nodes.size == 2 && nodes.all { it.pipelineId in setOf("root", "sub") } },
+                match { conns -> conns.size == 1 && conns[0].pipelineId == "sub" },
+            )
+        }
+    }
+
+    @Test
     fun `savePipeline forwards context config to entity layer`() = runTest {
         val customConfig = NodeContextConfig(
             chatHistory = false,

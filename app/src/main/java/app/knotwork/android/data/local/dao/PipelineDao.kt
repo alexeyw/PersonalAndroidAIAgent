@@ -100,9 +100,38 @@ interface PipelineDao {
         nodes: List<NodeEntity>,
         connections: List<ConnectionEntity>,
     ) {
-        insertPipeline(pipeline)
-        deleteNodesForPipeline(pipeline.id)
-        deleteConnectionsForPipeline(pipeline.id)
+        // Single-pipeline save is the one-element case of the batch save; delegate
+        // so the upsert→purge→insert ordering lives in exactly one place.
+        savePipelinesTransaction(listOf(pipeline), nodes, connections)
+    }
+
+    /**
+     * Atomically replaces **several** pipelines' meta, nodes and connections in
+     * a single transaction — either all pipelines land or none do. Backs the
+     * bundle-import path, where a single structurally-broken graph must roll
+     * back the whole import rather than leave a half-written closure behind.
+     *
+     * Each pipeline is fully replaced (meta upsert + old nodes/connections
+     * purged) before the fresh nodes and connections for the whole set are
+     * inserted, mirroring the single-pipeline [savePipelineTransaction]
+     * semantics across the batch. Callers must pass every node / connection
+     * tagged with its owning `pipelineId`.
+     *
+     * @param pipelines The pipeline meta rows to upsert.
+     * @param nodes All nodes across every pipeline in [pipelines].
+     * @param connections All connections across every pipeline in [pipelines].
+     */
+    @Transaction
+    suspend fun savePipelinesTransaction(
+        pipelines: List<PipelineEntity>,
+        nodes: List<NodeEntity>,
+        connections: List<ConnectionEntity>,
+    ) {
+        pipelines.forEach { pipeline ->
+            insertPipeline(pipeline)
+            deleteNodesForPipeline(pipeline.id)
+            deleteConnectionsForPipeline(pipeline.id)
+        }
         insertNodes(nodes)
         insertConnections(connections)
     }

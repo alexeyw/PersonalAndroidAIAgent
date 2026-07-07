@@ -47,17 +47,27 @@ class PipelineCompositionValidator @Inject constructor(
      * Validates the composition rooted at [graph].
      *
      * @param graph The in-memory pipeline graph being saved.
+     * @param extraResolvable Additional in-memory pipelines that should resolve
+     *   ahead of the repository — used when validating a pipeline whose
+     *   dependencies are not yet persisted (e.g. every graph of a bundle being
+     *   imported, so intra-bundle references, cross-library cycles the bundle
+     *   would splice in, and depth are all decided against the incoming set).
+     *   The root ([graph]) always wins for its own id.
      * @return The composition errors found; empty when the composition is
      *   sound (and trivially empty when [graph] has no PIPELINE nodes).
      */
-    suspend fun validate(graph: PipelineGraph): List<PipelineValidationError> {
+    suspend fun validate(
+        graph: PipelineGraph,
+        extraResolvable: Map<String, PipelineGraph> = emptyMap(),
+    ): List<PipelineValidationError> {
         // Cheap short-circuit: nothing to compose if there are no PIPELINE nodes.
         if (graph.nodes.none { it.type == NodeType.PIPELINE }) return emptyList()
 
         val maxDepth = settingsRepository.pipelineMaxNestingDepth.first()
         val errors = LinkedHashSet<PipelineValidationError>()
-        // The root resolves to the in-memory instance; descendants come from the repo.
-        val resolved = mutableMapOf(graph.id to graph)
+        // Descendants resolve from the supplied in-memory set first, then the
+        // repo. The root resolves to its own in-memory instance regardless.
+        val resolved = extraResolvable.toMutableMap().apply { put(graph.id, graph) }
 
         suspend fun resolve(pipelineId: String): PipelineGraph? =
             resolved[pipelineId] ?: pipelineRepository.getPipelineById(pipelineId)?.also { resolved[pipelineId] = it }

@@ -5,6 +5,7 @@ import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.ConnectionModel
 import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.NodeModel
+import app.knotwork.android.domain.models.PipelineBundleImportOutcome
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineImportOutcome
 import app.knotwork.android.domain.models.PipelineValidationError
@@ -27,6 +28,15 @@ import app.knotwork.android.presentation.ui.common.UiText
  * @property previewState Current state of the prompt-preview bottom sheet.
  * @property pendingImport A schema-mismatch outcome awaiting user
  * confirmation before being persisted. `null` when no import is pending.
+ * @property pendingCollision A cleanly-parsed single-import graph whose id
+ * already names a saved pipeline, awaiting the user's collision choice
+ * (replace / import as copy). `null` when no single-import collision is pending.
+ * @property pendingBundleImport A prepared bundle awaiting the user's collision
+ * / schema-mismatch decision before the closure is written atomically. `null`
+ * when no bundle import is pending.
+ * @property pendingBundleExport A produced bundle document awaiting the user to
+ * pick a destination file. Observed by the library screen to launch the
+ * create-document picker. `null` when no export is in flight.
  * @property feedbackMessage One-shot success-flavoured message for the
  * library Snackbar (e.g. "Pipeline duplicated"). Distinct from
  * [errorMessage] so the UI can style green/blue toast vs. red error.
@@ -64,6 +74,9 @@ data class OrchestratorUiState(
     val availableVariables: List<String> = emptyList(),
     val previewState: PromptPreviewState = PromptPreviewState.Hidden,
     val pendingImport: PipelineImportOutcome.SchemaMismatch? = null,
+    val pendingCollision: PipelineGraph? = null,
+    val pendingBundleImport: PendingBundleImport? = null,
+    val pendingBundleExport: PendingBundleExport? = null,
     val feedbackMessage: UiText? = null,
     val pendingEditorNavigation: Boolean = false,
     val defaultPipelineId: String? = null,
@@ -108,6 +121,32 @@ data class OrchestratorUiState(
         const val DEFAULT_PIPELINE_NAME = "New Pipeline"
     }
 }
+
+/**
+ * A prepared pipeline bundle held in UI state between the parse/validate step
+ * and the atomic write, so the library screen can prompt the user for a
+ * collision / schema-mismatch decision first.
+ *
+ * @property pipelines The closure of pipelines to persist, in file order.
+ * @property collidingIds The subset of [pipelines] ids that already exist in
+ * the library. Empty means no collision dialog is required.
+ * @property schemaMismatches Per-pipeline schema-version divergences to warn
+ * about, if any.
+ */
+data class PendingBundleImport(
+    val pipelines: List<PipelineGraph>,
+    val collidingIds: List<String>,
+    val schemaMismatches: List<PipelineBundleImportOutcome.SchemaMismatch>,
+)
+
+/**
+ * A produced bundle document awaiting a destination file, driving the
+ * create-document picker in the library screen.
+ *
+ * @property fileName Suggested file name (e.g. `knotwork-bundle-2026-07-07.json`).
+ * @property content The full bundle JSON to write once the user picks a target.
+ */
+data class PendingBundleExport(val fileName: String, val content: String)
 
 /**
  * State of the prompt-preview bottom sheet shared by every editor that supports the

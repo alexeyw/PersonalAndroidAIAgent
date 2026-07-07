@@ -5,6 +5,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
@@ -32,6 +33,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.knotwork.android.R
 import app.knotwork.android.domain.models.EntrySurface
+import app.knotwork.android.domain.models.ImportCollisionResolution
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.presentation.ui.common.asString
 import app.knotwork.android.presentation.ui.orchestrator.presets.GraphFlowPreview
@@ -56,6 +58,7 @@ import app.knotwork.design.tokens.KnotworkTextStyles
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
 
 /**
  * Library screen listing every saved pipeline. Acts as the entry point for
@@ -107,9 +110,49 @@ fun PipelineLibraryScreen(
             if (json.isNullOrBlank()) {
                 snackbarHostState.showSnackbar(message = importUnreadableMessage)
             } else {
-                viewModel.importPipelineFromJson(json)
+                // Detects a bundle envelope vs a single-pipeline document and
+                // routes to the matching flow — one affordance, two shapes.
+                viewModel.importJson(json)
             }
         }
+    }
+
+    val exportFailedMessage = stringResource(R.string.errors_generic_unexpected)
+
+    // Holds the bundle content between launching the create-document picker and
+    // the picker returning. The VM's `pendingBundleExport` is consumed the moment
+    // we launch (below), so a configuration change / recomposition can't re-fire
+    // the picker for the same payload.
+    var pendingExportContent by remember { mutableStateOf<String?>(null) }
+
+    // SAF launcher for "Export bundle" — writes the already-computed payload to
+    // the chosen file.
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument(mimeType = "application/json"),
+    ) { uri ->
+        val content = pendingExportContent
+        pendingExportContent = null
+        if (uri == null || content == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val failure = withContext(Dispatchers.IO) {
+                runCatching {
+                    context.contentResolver.openOutputStream(uri)?.use { out ->
+                        out.write(content.toByteArray())
+                    }
+                }.exceptionOrNull()
+            }
+            if (failure != null) {
+                snackbarHostState.showSnackbar(message = failure.message ?: exportFailedMessage)
+            }
+        }
+    }
+
+    LaunchedEffect(uiState.pendingBundleExport) {
+        val export = uiState.pendingBundleExport ?: return@LaunchedEffect
+        pendingExportContent = export.content
+        // Consume before launching so the picker fires exactly once per payload.
+        viewModel.consumeBundleExport()
+        exportLauncher.launch(export.fileName)
     }
 
     var activeFilter by remember { mutableStateOf(PipelineLibraryFilter.All) }
@@ -212,10 +255,14 @@ fun PipelineLibraryScreen(
         },
         onDuplicate = { id -> viewModel.duplicatePipeline(pipelineId = id) },
         onExportJson = {
-            // Per-id export needs a domain hook that streams a specific
-            // pipeline through `PipelineJsonSerializer`. Until that lands,
-            // surface a snackbar so the affordance is visible.
+            // Per-id single-pipeline export needs a domain hook that streams a
+            // specific pipeline through `PipelineJsonSerializer`. Until that
+            // lands, surface a snackbar so the affordance is visible. The
+            // bundle export below is the shipped path.
             scope.launch { snackbarHostState.showSnackbar(message = EXPORT_COMING_SOON_MESSAGE) }
+        },
+        onExportBundle = { id ->
+            viewModel.exportBundle(pipelineId = id, fileName = "knotwork-bundle-${LocalDate.now()}.json")
         },
         onImportJson = { importLauncher.launch(arrayOf("application/json", "text/*")) },
         // Archive: phase-21 has no archival table yet — treat as delete so
@@ -423,6 +470,82 @@ fun PipelineLibraryScreen(
             },
             dismissButton = {
                 TextButton(onClick = viewModel::cancelPendingImport) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+        )
+    }
+    uiState.pendingCollision?.let { graph ->
+        AlertDialog(
+            onDismissRequest = viewModel::cancelCollision,
+            title = { Text(stringResource(R.string.orchestrator_library_import_collision_title)) },
+            text = {
+                Text(
+                    stringResource(
+                        R.string.orchestrator_library_import_collision_single_body,
+                        graph.name.ifBlank { "untitled" },
+                    ),
+                )
+            },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
+                    TextButton(onClick = { viewModel.resolveCollision(ImportCollisionResolution.REPLACE) }) {
+                        Text(stringResource(R.string.orchestrator_library_import_collision_replace))
+                    }
+                    TextButton(onClick = { viewModel.resolveCollision(ImportCollisionResolution.IMPORT_AS_COPY) }) {
+                        Text(stringResource(R.string.orchestrator_library_import_collision_copy))
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::cancelCollision) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+        )
+    }
+    uiState.pendingBundleImport?.let { pending ->
+        val hasCollision = pending.collidingIds.isNotEmpty()
+        AlertDialog(
+            onDismissRequest = viewModel::cancelBundleImport,
+            title = { Text(stringResource(R.string.orchestrator_library_import_bundle_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2)) {
+                    if (hasCollision) {
+                        Text(
+                            pluralStringResource(
+                                R.plurals.orchestrator_library_import_bundle_collision_body,
+                                pending.collidingIds.size,
+                                pending.collidingIds.size,
+                                pending.pipelines.size,
+                            ),
+                        )
+                    }
+                    if (pending.schemaMismatches.isNotEmpty()) {
+                        Text(stringResource(R.string.orchestrator_library_import_bundle_schema_body))
+                    }
+                }
+            },
+            confirmButton = {
+                if (hasCollision) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
+                        TextButton(onClick = { viewModel.resolveBundleImport(ImportCollisionResolution.REPLACE) }) {
+                            Text(stringResource(R.string.orchestrator_library_import_bundle_replace))
+                        }
+                        TextButton(
+                            onClick = { viewModel.resolveBundleImport(ImportCollisionResolution.IMPORT_AS_COPY) },
+                        ) {
+                            Text(stringResource(R.string.orchestrator_library_import_bundle_copies))
+                        }
+                    }
+                } else {
+                    TextButton(onClick = { viewModel.resolveBundleImport(ImportCollisionResolution.REPLACE) }) {
+                        Text(stringResource(R.string.orchestrator_library_import_anyway))
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::cancelBundleImport) {
                     Text(stringResource(R.string.common_cancel))
                 }
             },

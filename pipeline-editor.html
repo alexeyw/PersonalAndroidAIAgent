@@ -1073,9 +1073,12 @@
             <button id="btn-autolayout" title="Auto-layout the graph (left-to-right by topological depth)">🪄 Auto-layout</button>
             <button id="btn-export" title="Export pipeline JSON">📤 Export JSON</button>
             <button id="btn-import" title="Import pipeline JSON">📥 Import JSON</button>
+            <button id="btn-export-bundle" title="Export this pipeline with its PIPELINE dependencies as a bundle">📦 Export bundle</button>
+            <button id="btn-import-bundle" title="Import a pipeline bundle into your Mine presets">📦 Import bundle</button>
             <button id="btn-presets" title="Browse and manage pipeline presets">📚 Presets</button>
             <input id="file-import" type="file" accept="application/json,.json" hidden>
             <input id="file-import-preset" type="file" accept="application/json,.json,.preset.json" hidden>
+            <input id="file-import-bundle" type="file" accept="application/json,.json" hidden>
             <span class="name-label">Name</span>
             <input id="pipeline-name" type="text" placeholder="Untitled pipeline">
             <span class="spacer"></span>
@@ -6797,13 +6800,18 @@
         };
     }
 
-    function downloadJson(obj) {
+    /** Today's date as YYYY-MM-DD, used in default download filenames. */
+    function todayStamp() {
+        return new Date().toISOString().slice(0, 10);
+    }
+
+    /** Downloads [obj] as pretty-printed JSON under [filename] (single download primitive). */
+    function downloadJson(obj, filename) {
         const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-        a.download = `pipeline-${today}.json`;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -6812,7 +6820,7 @@
 
     exportBtn.addEventListener('click', () => {
         if (validateGraph().errors.length > 0) return;
-        downloadJson(exportToJson());
+        downloadJson(exportToJson(), `pipeline-${todayStamp()}.json`);
     });
 
     /* -------------------------------------------------------------------- *
@@ -7106,15 +7114,7 @@
 
     /** Downloads a preset document as `<id>.preset.json`. */
     function downloadPresetJson(doc) {
-        const blob = new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = (doc.id || slugifyPresetId(doc.name)) + '.preset.json';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        downloadJson(doc, (doc.id || slugifyPresetId(doc.name)) + '.preset.json');
     }
 
     /**
@@ -7123,6 +7123,29 @@
      * importFromJson so a malformed file is rejected cleanly instead of
      * surfacing later when the user tries to load it onto the canvas.
      */
+    /**
+     * Structural validation for a single pipeline document (shared by the
+     * preset importer and the bundle importer). Returns an error string, or
+     * null when the document is structurally sound.
+     */
+    function pipelineDocStructureError(doc) {
+        if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
+            return 'File does not contain a valid JSON document.';
+        }
+        if (doc.nodes != null && !Array.isArray(doc.nodes)) return '"nodes" must be an array.';
+        if (doc.connections != null && !Array.isArray(doc.connections)) return '"connections" must be an array.';
+        const nodes = doc.nodes || [];
+        for (let i = 0; i < nodes.length; i++) {
+            const n = nodes[i];
+            if (!n || typeof n !== 'object' || Array.isArray(n)) return `nodes[${i}] is not an object.`;
+            if (typeof n.id !== 'string' || !n.id) return `nodes[${i}].id is missing.`;
+            if (typeof n.type !== 'string' || !NODE_TYPE_BY_ID[n.type]) {
+                return `nodes[${i}] has unknown type "${n.type}".`;
+            }
+        }
+        return null;
+    }
+
     function parsePresetDoc(text) {
         let doc;
         try {
@@ -7130,24 +7153,8 @@
         } catch (e) {
             return { error: 'Failed to parse JSON: ' + e.message };
         }
-        if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
-            return { error: 'File does not contain a valid JSON document.' };
-        }
-        if (doc.nodes != null && !Array.isArray(doc.nodes)) {
-            return { error: '"nodes" must be an array.' };
-        }
-        if (doc.connections != null && !Array.isArray(doc.connections)) {
-            return { error: '"connections" must be an array.' };
-        }
-        const nodes = doc.nodes || [];
-        for (let i = 0; i < nodes.length; i++) {
-            const n = nodes[i];
-            if (!n || typeof n !== 'object' || Array.isArray(n)) return { error: `nodes[${i}] is not an object.` };
-            if (typeof n.id !== 'string' || !n.id) return { error: `nodes[${i}].id is missing.` };
-            if (typeof n.type !== 'string' || !NODE_TYPE_BY_ID[n.type]) {
-                return { error: `nodes[${i}] has unknown type "${n.type}".` };
-            }
-        }
+        const structureError = pipelineDocStructureError(doc);
+        if (structureError) return { error: structureError };
         return { doc };
     }
 
@@ -7382,6 +7389,165 @@
     presetSaveDialog.querySelector('[data-role="cancel"]').addEventListener('click', () => presetSaveDialog.close());
     presetSaveDialog.querySelector('[data-role="confirm"]').addEventListener('click', commitSavePreset);
 
+    /* ==================================================================== *
+     *  Pipeline bundles — a root pipeline plus the transitive closure of its
+     *  PIPELINE dependencies, in one self-contained file. Mirrors the Android
+     *  PipelineBundleJsonSerializer envelope. KEEP IN SYNC (DESCRIPTION.md §8).
+     * ==================================================================== */
+    const CURRENT_BUNDLE_VERSION = 1;
+    const MAX_BUNDLE_PIPELINES = 50;
+    const exportBundleBtn = document.getElementById('btn-export-bundle');
+    const importBundleBtn = document.getElementById('btn-import-bundle');
+    const fileImportBundleInput = document.getElementById('file-import-bundle');
+
+    /** Full pipeline documents reachable as PIPELINE targets: Bundled + Mine presets. */
+    function knownPipelineDocs() {
+        return BUILTIN_PIPELINE_PRESETS.concat(loadUserPipelinePresets());
+    }
+
+    /** Reduces any document to the pure single-pipeline shape used in a bundle. */
+    function toPurePipelineDoc(doc) {
+        return {
+            schemaVersion: doc.schemaVersion || CURRENT_SCHEMA_VERSION,
+            id: doc.id,
+            name: doc.name || 'Untitled pipeline',
+            updatedAt: doc.updatedAt || Date.now(),
+            nodes: doc.nodes || [],
+            connections: doc.connections || [],
+        };
+    }
+
+    /** Collects the PIPELINE `targetPipelineId`s referenced by a document's nodes. */
+    function pipelineTargetsOf(doc) {
+        return (doc.nodes || [])
+            .filter(n => n.type === 'PIPELINE')
+            .map(n => (n.config && n.config.targetPipelineId) || (n.data && n.data.targetPipelineId) || '')
+            .filter(id => typeof id === 'string' && id.length > 0);
+    }
+
+    /**
+     * Walks the dependency closure of the current canvas over the Mine +
+     * Bundled catalogues. Returns `{ pipelines }` on success, or `{ error }`
+     * when a dependency is unresolved (a bundle must be self-contained) or the
+     * closure exceeds the pipeline limit — the browser analogue of Android's
+     * fail-fast export.
+     */
+    function collectBundleClosure() {
+        const rootDoc = exportToJson();
+        const byId = new Map();
+        knownPipelineDocs().forEach(d => { if (d && typeof d.id === 'string' && d.id) byId.set(d.id, d); });
+
+        const collected = new Map();
+        const unresolved = new Set();
+        const queue = [rootDoc];
+        while (queue.length) {
+            const doc = queue.shift();
+            if (!doc || collected.has(doc.id)) continue;
+            collected.set(doc.id, toPurePipelineDoc(doc));
+            pipelineTargetsOf(doc).forEach(targetId => {
+                if (collected.has(targetId)) return;
+                const dep = byId.get(targetId);
+                if (dep) queue.push(dep); else unresolved.add(targetId);
+            });
+        }
+
+        if (unresolved.size > 0) {
+            return { error: 'Cannot export bundle — these PIPELINE dependencies are not among the ' +
+                'Bundled or Mine presets: ' + Array.from(unresolved).join(', ') +
+                '. Save them as presets first.' };
+        }
+        if (collected.size > MAX_BUNDLE_PIPELINES) {
+            return { error: `Dependency closure exceeds the limit of ${MAX_BUNDLE_PIPELINES} pipelines.` };
+        }
+        return { pipelines: Array.from(collected.values()) };
+    }
+
+    exportBundleBtn.addEventListener('click', () => {
+        // The root must itself be valid, matching the plain Export gate.
+        if (validateGraph().errors.length > 0) return;
+        const result = collectBundleClosure();
+        if (result.error) { alert(result.error); return; }
+        downloadJson({
+            bundleVersion: CURRENT_BUNDLE_VERSION,
+            exportedAt: Date.now(),
+            pipelines: result.pipelines,
+        }, `knotwork-bundle-${todayStamp()}.json`);
+    });
+
+    /**
+     * Parses and validates a bundle envelope, enforcing the same invariants as
+     * the Android parser: a `bundleVersion`, a non-empty `pipelines` array
+     * within the limit, a structurally sound document per element, no duplicate
+     * pipeline ids, and full referential integrity (every PIPELINE
+     * `targetPipelineId` resolves to a pipeline in the bundle).
+     */
+    function parseBundleDoc(text) {
+        let doc;
+        try {
+            doc = JSON.parse(text);
+        } catch (e) {
+            return { error: 'Failed to parse JSON: ' + e.message };
+        }
+        if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
+            return { error: 'File does not contain a valid JSON document.' };
+        }
+        if (typeof doc.bundleVersion === 'undefined') return { error: 'Not a bundle (missing bundleVersion).' };
+        if (!Array.isArray(doc.pipelines) || doc.pipelines.length === 0) {
+            return { error: 'Bundle contains no pipelines.' };
+        }
+        if (doc.pipelines.length > MAX_BUNDLE_PIPELINES) {
+            return { error: `Bundle contains ${doc.pipelines.length} pipelines, exceeding the limit of ` +
+                `${MAX_BUNDLE_PIPELINES}.` };
+        }
+        for (let i = 0; i < doc.pipelines.length; i++) {
+            const structureError = pipelineDocStructureError(doc.pipelines[i]);
+            if (structureError) return { error: `Bundle pipeline #${i}: ${structureError}` };
+        }
+        const ids = doc.pipelines.map(p => p.id);
+        const duplicate = ids.find((id, i) => ids.indexOf(id) !== i);
+        if (duplicate) return { error: `Bundle contains duplicate pipeline id "${duplicate}".` };
+        const idSet = new Set(ids);
+        for (const p of doc.pipelines) {
+            const dangling = pipelineTargetsOf(p).find(t => !idSet.has(t));
+            if (dangling) return { error: `Bundle references pipeline "${dangling}" that it does not contain.` };
+        }
+        return { doc };
+    }
+
+    /* ---- Import bundle → "Mine" (non-destructive; never touches canvas) ---- */
+    importBundleBtn.addEventListener('click', () => fileImportBundleInput.click());
+    fileImportBundleInput.addEventListener('change', e => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        fileImportBundleInput.value = '';
+        const reader = new FileReader();
+        reader.onload = () => {
+            const res = parseBundleDoc(reader.result);
+            if (res.error) { alert('Failed to import bundle: ' + res.error); return; }
+            // Only a real, numeric, older/newer schemaVersion counts as a
+            // mismatch — a missing schemaVersion is treated as current (avoids a
+            // 'schema vundefined' prompt), matching export's default.
+            const mismatched = res.doc.pipelines.find(
+                p => typeof p.schemaVersion === 'number' && p.schemaVersion !== CURRENT_SCHEMA_VERSION,
+            );
+            if (mismatched && !confirmPresetSchema({ schemaVersion: mismatched.schemaVersion })) return;
+            let list = loadUserPipelinePresets();
+            const incomingIds = new Set(res.doc.pipelines.map(p => p.id).filter(Boolean));
+            // Drop any existing Mine preset the bundle re-supplies, so a re-import
+            // replaces in place instead of leaving ambiguous duplicate-id entries.
+            list = list.filter(p => !incomingIds.has(p.id));
+            // Prepend in reverse so the bundle's own order is preserved in Mine.
+            res.doc.pipelines.slice().reverse().forEach(p => {
+                list.unshift(Object.assign({}, p, { id: p.id || generateUuid(), savedAt: Date.now() }));
+            });
+            saveUserPipelinePresets(list);
+            presetActiveTab = 'mine';
+            openPresetLibrary();
+        };
+        reader.onerror = () => alert('Failed to read file.');
+        reader.readAsText(file);
+    });
+
     // Re-validation on dialog save and on undo/redo lives inside the
     // original commitDialog / applySnapshot bodies (see below) — function
     // declarations are hoisted so they can call runValidation() defined
@@ -7401,6 +7567,8 @@
     window.__exportPresetJson = exportToPresetJson;
     window.__pipelinePresets = BUILTIN_PIPELINE_PRESETS;
     window.__openPresetLibrary = openPresetLibrary;
+    window.__collectBundleClosure = collectBundleClosure;
+    window.__parseBundleDoc = parseBundleDoc;
 </script>
 </body>
 </html>

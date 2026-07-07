@@ -31,49 +31,62 @@ class LocalPipelineRepositoryImpl @Inject constructor(private val pipelineDao: P
         pipelineDao.getPipelineById(pipelineId)?.toDomainModel()
 
     override suspend fun savePipeline(pipeline: PipelineGraph) {
-        val pipelineEntity = PipelineEntity(
-            id = pipeline.id,
-            name = pipeline.name,
-            updatedAt = System.currentTimeMillis(),
+        val timestamp = System.currentTimeMillis()
+        pipelineDao.savePipelineTransaction(
+            pipeline = pipeline.toPipelineEntity(timestamp),
+            nodes = pipeline.toNodeEntities(),
+            connections = pipeline.toConnectionEntities(),
         )
-        val nodeEntities = pipeline.nodes.map {
-            NodeEntity(
-                id = it.id,
-                pipelineId = pipeline.id,
-                type = it.type.name,
-                x = it.x,
-                y = it.y,
-                label = it.label,
-                toolName = it.toolName,
-                targetPipelineId = it.targetPipelineId,
-                skillId = it.skillId,
-                modelPath = it.modelPath,
-                conditionComplexity = it.conditionComplexity,
-                conditionKeywords = it.conditionKeywords,
-                conditionPrompt = it.conditionPrompt,
-                conditionHasImage = it.conditionHasImage,
-                systemPrompt = it.systemPrompt,
-                cloudProvider = it.cloudProvider,
-                clarificationTimeoutMs = it.clarificationTimeoutMs,
-                contextConfig = it.contextConfig,
-                configJson = it.configJson,
-            )
-        }
-        val connectionEntities = pipeline.connections.map {
-            ConnectionEntity(
-                id = it.id,
-                pipelineId = pipeline.id,
-                sourceNodeId = it.sourceNodeId,
-                targetNodeId = it.targetNodeId,
-                label = it.label,
-            )
-        }
+    }
 
-        pipelineDao.savePipelineTransaction(pipelineEntity, nodeEntities, connectionEntities)
+    override suspend fun savePipelines(pipelines: List<PipelineGraph>) {
+        val timestamp = System.currentTimeMillis()
+        pipelineDao.savePipelinesTransaction(
+            pipelines = pipelines.map { it.toPipelineEntity(timestamp) },
+            nodes = pipelines.flatMap { it.toNodeEntities() },
+            connections = pipelines.flatMap { it.toConnectionEntities() },
+        )
     }
 
     override suspend fun deletePipeline(pipelineId: String) {
         pipelineDao.deletePipelineById(pipelineId)
+    }
+
+    private fun PipelineGraph.toPipelineEntity(updatedAt: Long): PipelineEntity =
+        PipelineEntity(id = id, name = name, updatedAt = updatedAt)
+
+    private fun PipelineGraph.toNodeEntities(): List<NodeEntity> = nodes.map {
+        NodeEntity(
+            id = it.id,
+            pipelineId = id,
+            type = it.type.name,
+            x = it.x,
+            y = it.y,
+            label = it.label,
+            toolName = it.toolName,
+            targetPipelineId = it.targetPipelineId,
+            skillId = it.skillId,
+            modelPath = it.modelPath,
+            conditionComplexity = it.conditionComplexity,
+            conditionKeywords = it.conditionKeywords,
+            conditionPrompt = it.conditionPrompt,
+            conditionHasImage = it.conditionHasImage,
+            systemPrompt = it.systemPrompt,
+            cloudProvider = it.cloudProvider,
+            clarificationTimeoutMs = it.clarificationTimeoutMs,
+            contextConfig = it.contextConfig,
+            configJson = it.configJson,
+        )
+    }
+
+    private fun PipelineGraph.toConnectionEntities(): List<ConnectionEntity> = connections.map {
+        ConnectionEntity(
+            id = it.id,
+            pipelineId = id,
+            sourceNodeId = it.sourceNodeId,
+            targetNodeId = it.targetNodeId,
+            label = it.label,
+        )
     }
 
     private fun PipelineWithNodesAndConnections.toDomainModel(): PipelineGraph = PipelineGraph(
