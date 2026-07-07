@@ -142,10 +142,14 @@ class ChatHomeThreadsDelegate(
         if (prompt.isBlank()) return
         val session = sessions.firstOrNull { it.id == sessionId } ?: return
         if (session.name != DEFAULT_NEW_CHAT_NAME) return
-        val truncated = if (prompt.length > AUTO_RENAME_CHAR_LIMIT) {
-            prompt.take(AUTO_RENAME_CHAR_LIMIT) + AUTO_RENAME_SUFFIX
+        // Collapse runs of whitespace (including newlines) into single spaces so a
+        // multi-line first message still produces a clean, informative single-line
+        // title instead of a truncated first fragment.
+        val normalized = prompt.trim().replace(WHITESPACE_RUN, " ")
+        val truncated = if (normalized.length > AUTO_RENAME_CHAR_LIMIT) {
+            normalized.take(AUTO_RENAME_CHAR_LIMIT).trimEnd() + AUTO_RENAME_SUFFIX
         } else {
-            prompt
+            normalized
         }
         scope.launch {
             chatRepository.saveSession(session.copy(name = truncated))
@@ -291,10 +295,13 @@ class ChatHomeThreadsDelegate(
         const val DEFAULT_NEW_CHAT_NAME: String = "New Chat"
 
         /** Maximum characters of the first user message used as the auto-generated session name. */
-        const val AUTO_RENAME_CHAR_LIMIT: Int = 20
+        const val AUTO_RENAME_CHAR_LIMIT: Int = 40
 
         /** Suffix appended to a truncated auto-rename name. */
         const val AUTO_RENAME_SUFFIX: String = "..."
+
+        /** Matches a run of one or more whitespace characters (spaces, tabs, newlines). */
+        private val WHITESPACE_RUN = Regex("\\s+")
 
         /** Pattern used for the drawer thread subtitle (e.g. `Mon 14:32`). */
         private const val THREAD_SUBTITLE_PATTERN: String = "EEE HH:mm"

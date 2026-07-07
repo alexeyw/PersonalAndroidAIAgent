@@ -321,6 +321,12 @@ details.
 
 ### Fixed
 
+- **Chat titles are more informative, especially for shares.** Auto-generated
+  chat names now use more of your first message (up to 40 characters, up from 20),
+  and titles for chats created from the **share** target draw on the whole shared
+  text — up to 60 characters — instead of just its first line, collapsing line
+  breaks so the title reads as one clean line. In the chat drawer, titles now use
+  a more compact type style so more of each name fits on a row.
 - **Tool-approval prompt no longer double-shows and no longer lingers.** When a
   tool needed your confirmation, the request could appear **both** as the inline
   card in the chat **and** as a system notification at the same time, and

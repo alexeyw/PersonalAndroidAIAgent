@@ -97,9 +97,18 @@ class LaunchSharePipelineUseCase @Inject constructor(
         imageSessionName: String,
         contentSessionName: String,
     ): String {
-        val firstLine = text?.lineSequence()?.firstOrNull { it.isNotBlank() }?.trim()
+        // Collapse all whitespace (including line breaks) into single spaces so the
+        // whole shared payload — not just its first line — contributes to a clean,
+        // informative single-line title. A shared article often opens with a short
+        // header line; flowing the following text in makes the title far more useful.
+        val normalized = text?.trim()?.replace(WHITESPACE_RUN, " ").orEmpty()
         return when {
-            !firstLine.isNullOrEmpty() -> firstLine.take(SESSION_NAME_MAX_LENGTH)
+            normalized.isNotEmpty() ->
+                if (normalized.length > SESSION_NAME_MAX_LENGTH) {
+                    normalized.take(SESSION_NAME_MAX_LENGTH).trimEnd() + SESSION_NAME_SUFFIX
+                } else {
+                    normalized
+                }
             hasImage -> imageSessionName
             else -> contentSessionName
         }
@@ -107,7 +116,13 @@ class LaunchSharePipelineUseCase @Inject constructor(
 
     private companion object {
         /** Max characters of shared text used for the auto-generated session name. */
-        const val SESSION_NAME_MAX_LENGTH = 40
+        const val SESSION_NAME_MAX_LENGTH = 60
+
+        /** Suffix appended when the shared text is longer than [SESSION_NAME_MAX_LENGTH]. */
+        const val SESSION_NAME_SUFFIX = "…"
+
+        /** Matches a run of one or more whitespace characters (spaces, tabs, newlines). */
+        private val WHITESPACE_RUN = Regex("\\s+")
     }
 }
 

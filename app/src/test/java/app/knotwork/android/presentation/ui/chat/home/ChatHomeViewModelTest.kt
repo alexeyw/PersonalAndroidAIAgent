@@ -837,6 +837,24 @@ class ChatHomeViewModelTest {
     }
 
     @Test
+    fun `sendMessage collapses whitespace into a single-line title when auto-renaming`() =
+        runTest(testDispatcher) {
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            val sessionId = viewModel.state.value.thread.currentSessionId
+            coEvery { agentOrchestratorUseCase(sessionId, any(), any()) } returns flowOf(
+                AgentOrchestratorState.Completed("ok"),
+            )
+
+            viewModel.onComposerValueChange("  Plan a trip\n\nto   Rome  ")
+            viewModel.sendMessage()
+            advanceUntilIdle()
+
+            val renamed = sessionsFlow.value.first { it.id == sessionId }.name
+            assertEquals("Plan a trip to Rome", renamed)
+        }
+
+    @Test
     fun `stopGeneration cancels the in-flight job and returns to a resting state`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()

@@ -72,6 +72,33 @@ class LaunchSharePipelineUseCaseTest {
     }
 
     @Test
+    fun `given multi-line share when invoked then title flows the whole text onto one line`() = runTest {
+        coEvery { resolveSurfacePipeline(any()) } returns "share-pipe"
+        val sessionSlot = slot<ChatSession>()
+        coEvery { chatRepository.saveSession(capture(sessionSlot)) } returns Unit
+
+        launch(SharedPayload(text = "Weekend plan\n\nvisit   the museum", imageUri = null))
+
+        // Not just the first line ("Weekend plan"): the following text flows in,
+        // with runs of whitespace collapsed to single spaces.
+        assertEquals("Weekend plan visit the museum", sessionSlot.captured.name)
+    }
+
+    @Test
+    fun `given over-long share when invoked then title is truncated with an ellipsis`() = runTest {
+        coEvery { resolveSurfacePipeline(any()) } returns "share-pipe"
+        val sessionSlot = slot<ChatSession>()
+        coEvery { chatRepository.saveSession(capture(sessionSlot)) } returns Unit
+
+        val long = "x".repeat(80) // no whitespace, well over the 60-char cap
+        launch(SharedPayload(text = long, imageUri = null))
+
+        val name = sessionSlot.captured.name
+        assertTrue("Title must end with an ellipsis when truncated", name.endsWith("…"))
+        assertEquals(61, name.length) // 60 chars + the ellipsis
+    }
+
+    @Test
     fun `given image-only share when invoked then uses the image-only instruction with empty display`() = runTest {
         coEvery { resolveSurfacePipeline(any()) } returns "share-pipe"
         val attachment = MessageAttachment(path = "img.jpg", mimeType = "image/jpeg", width = 100, height = 80)
