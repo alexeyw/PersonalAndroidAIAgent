@@ -1,5 +1,6 @@
 package app.knotwork.android.domain.pipelineio
 
+import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.pipelineio.PipelineBundleTestFixtures.linearGraph
 import org.junit.Assert.assertEquals
@@ -59,5 +60,38 @@ class PipelineBundleIdRemapperTest {
         val copy = PipelineBundleIdRemapper.regenerate(listOf(graph), counterGenerator()).single()
 
         assertTrue("a remapped valid graph stays valid", copy.validate().isEmpty())
+    }
+
+    @Test
+    fun `freshenElementIds keeps pipeline ids and targets but regenerates node and connection ids`() {
+        val root = linearGraph("root", targets = listOf("sub"))
+        val sub = linearGraph("sub")
+
+        val (newRoot, newSub) = PipelineBundleIdRemapper.freshenElementIds(listOf(root, sub), counterGenerator())
+
+        // Pipeline ids and the PIPELINE target are preserved (REPLACE = sync).
+        assertEquals("root", newRoot.id)
+        assertEquals("sub", newSub.id)
+        assertEquals("sub", newRoot.nodes.first { it.type == NodeType.PIPELINE }.targetPipelineId)
+        // Node ids are fresh, endpoints stay consistent, graph stays valid.
+        assertTrue(newRoot.nodes.none { it.id in root.nodes.map { n -> n.id } })
+        assertTrue(newRoot.validate().isEmpty())
+    }
+
+    @Test
+    fun `freshenElementIds makes node ids unique across pipelines that reused them`() {
+        val a = linearGraph("a").copy(
+            nodes = listOf(
+                NodeModel(id = "node-1", type = NodeType.INPUT, x = 0f, y = 0f),
+                NodeModel(id = "node-2", type = NodeType.OUTPUT, x = 0f, y = 0f),
+            ),
+            connections = emptyList(),
+        )
+        val b = a.copy(id = "b")
+
+        val out = PipelineBundleIdRemapper.freshenElementIds(listOf(a, b), counterGenerator())
+
+        val nodeIds = out.flatMap { g -> g.nodes.map { it.id } }
+        assertEquals(nodeIds.size, nodeIds.toSet().size)
     }
 }

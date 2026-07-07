@@ -119,21 +119,25 @@ fun PipelineLibraryScreen(
 
     val exportFailedMessage = stringResource(R.string.errors_generic_unexpected)
 
-    // SAF launcher for "Export bundle". The VM produces the bundle document
-    // first (walking the dependency closure) and stashes it in
-    // `pendingBundleExport`; the LaunchedEffect below fires this picker, and
-    // this callback writes the already-computed payload to the chosen file.
+    // Holds the bundle content between launching the create-document picker and
+    // the picker returning. The VM's `pendingBundleExport` is consumed the moment
+    // we launch (below), so a configuration change / recomposition can't re-fire
+    // the picker for the same payload.
+    var pendingExportContent by remember { mutableStateOf<String?>(null) }
+
+    // SAF launcher for "Export bundle" — writes the already-computed payload to
+    // the chosen file.
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument(mimeType = "application/json"),
     ) { uri ->
-        val payload = uiState.pendingBundleExport
-        viewModel.consumeBundleExport()
-        if (uri == null || payload == null) return@rememberLauncherForActivityResult
+        val content = pendingExportContent
+        pendingExportContent = null
+        if (uri == null || content == null) return@rememberLauncherForActivityResult
         scope.launch {
             val failure = withContext(Dispatchers.IO) {
                 runCatching {
                     context.contentResolver.openOutputStream(uri)?.use { out ->
-                        out.write(payload.content.toByteArray())
+                        out.write(content.toByteArray())
                     }
                 }.exceptionOrNull()
             }
@@ -143,8 +147,12 @@ fun PipelineLibraryScreen(
         }
     }
 
-    LaunchedEffect(uiState.pendingBundleExport?.fileName) {
-        uiState.pendingBundleExport?.let { export -> exportLauncher.launch(export.fileName) }
+    LaunchedEffect(uiState.pendingBundleExport) {
+        val export = uiState.pendingBundleExport ?: return@LaunchedEffect
+        pendingExportContent = export.content
+        // Consume before launching so the picker fires exactly once per payload.
+        viewModel.consumeBundleExport()
+        exportLauncher.launch(export.fileName)
     }
 
     var activeFilter by remember { mutableStateOf(PipelineLibraryFilter.All) }

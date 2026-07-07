@@ -6800,13 +6800,18 @@
         };
     }
 
-    function downloadJson(obj) {
+    /** Today's date as YYYY-MM-DD, used in default download filenames. */
+    function todayStamp() {
+        return new Date().toISOString().slice(0, 10);
+    }
+
+    /** Downloads [obj] as pretty-printed JSON under [filename] (single download primitive). */
+    function downloadJson(obj, filename) {
         const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-        a.download = `pipeline-${today}.json`;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -6815,7 +6820,7 @@
 
     exportBtn.addEventListener('click', () => {
         if (validateGraph().errors.length > 0) return;
-        downloadJson(exportToJson());
+        downloadJson(exportToJson(), `pipeline-${todayStamp()}.json`);
     });
 
     /* -------------------------------------------------------------------- *
@@ -7109,15 +7114,7 @@
 
     /** Downloads a preset document as `<id>.preset.json`. */
     function downloadPresetJson(doc) {
-        const blob = new Blob([JSON.stringify(doc, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = (doc.id || slugifyPresetId(doc.name)) + '.preset.json';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        downloadJson(doc, (doc.id || slugifyPresetId(doc.name)) + '.preset.json');
     }
 
     /**
@@ -7465,38 +7462,24 @@
         return { pipelines: Array.from(collected.values()) };
     }
 
-    /** Downloads a bundle document as `knotwork-bundle-YYYY-MM-DD.json`. */
-    function downloadBundleJson(bundle) {
-        const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const today = new Date().toISOString().slice(0, 10);
-        a.download = `knotwork-bundle-${today}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }
-
     exportBundleBtn.addEventListener('click', () => {
         // The root must itself be valid, matching the plain Export gate.
         if (validateGraph().errors.length > 0) return;
         const result = collectBundleClosure();
         if (result.error) { alert(result.error); return; }
-        downloadBundleJson({
+        downloadJson({
             bundleVersion: CURRENT_BUNDLE_VERSION,
             exportedAt: Date.now(),
             pipelines: result.pipelines,
-        });
+        }, `knotwork-bundle-${todayStamp()}.json`);
     });
 
     /**
-     * Parses and structurally validates a bundle envelope, enforcing the same
-     * invariants as the Android parser: a `bundleVersion`, a non-empty
-     * `pipelines` array within the limit, and a structurally sound document per
-     * element. Referential integrity is not re-checked here — the importer
-     * lands the elements as independent Mine presets.
+     * Parses and validates a bundle envelope, enforcing the same invariants as
+     * the Android parser: a `bundleVersion`, a non-empty `pipelines` array
+     * within the limit, a structurally sound document per element, no duplicate
+     * pipeline ids, and full referential integrity (every PIPELINE
+     * `targetPipelineId` resolves to a pipeline in the bundle).
      */
     function parseBundleDoc(text) {
         let doc;
@@ -7520,6 +7503,14 @@
             const structureError = pipelineDocStructureError(doc.pipelines[i]);
             if (structureError) return { error: `Bundle pipeline #${i}: ${structureError}` };
         }
+        const ids = doc.pipelines.map(p => p.id);
+        const duplicate = ids.find((id, i) => ids.indexOf(id) !== i);
+        if (duplicate) return { error: `Bundle contains duplicate pipeline id "${duplicate}".` };
+        const idSet = new Set(ids);
+        for (const p of doc.pipelines) {
+            const dangling = pipelineTargetsOf(p).find(t => !idSet.has(t));
+            if (dangling) return { error: `Bundle references pipeline "${dangling}" that it does not contain.` };
+        }
         return { doc };
     }
 
@@ -7533,12 +7524,18 @@
         reader.onload = () => {
             const res = parseBundleDoc(reader.result);
             if (res.error) { alert('Failed to import bundle: ' + res.error); return; }
-            const anyMismatch = res.doc.pipelines.some(p => p.schemaVersion !== CURRENT_SCHEMA_VERSION);
-            if (anyMismatch && !confirmPresetSchema({ schemaVersion: res.doc.pipelines
-                    .find(p => p.schemaVersion !== CURRENT_SCHEMA_VERSION).schemaVersion })) {
-                return;
-            }
-            const list = loadUserPipelinePresets();
+            // Only a real, numeric, older/newer schemaVersion counts as a
+            // mismatch — a missing schemaVersion is treated as current (avoids a
+            // 'schema vundefined' prompt), matching export's default.
+            const mismatched = res.doc.pipelines.find(
+                p => typeof p.schemaVersion === 'number' && p.schemaVersion !== CURRENT_SCHEMA_VERSION,
+            );
+            if (mismatched && !confirmPresetSchema({ schemaVersion: mismatched.schemaVersion })) return;
+            let list = loadUserPipelinePresets();
+            const incomingIds = new Set(res.doc.pipelines.map(p => p.id).filter(Boolean));
+            // Drop any existing Mine preset the bundle re-supplies, so a re-import
+            // replaces in place instead of leaving ambiguous duplicate-id entries.
+            list = list.filter(p => !incomingIds.has(p.id));
             // Prepend in reverse so the bundle's own order is preserved in Mine.
             res.doc.pipelines.slice().reverse().forEach(p => {
                 list.unshift(Object.assign({}, p, { id: p.id || generateUuid(), savedAt: Date.now() }));

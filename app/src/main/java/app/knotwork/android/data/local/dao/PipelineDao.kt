@@ -100,11 +100,9 @@ interface PipelineDao {
         nodes: List<NodeEntity>,
         connections: List<ConnectionEntity>,
     ) {
-        insertPipeline(pipeline)
-        deleteNodesForPipeline(pipeline.id)
-        deleteConnectionsForPipeline(pipeline.id)
-        insertNodes(nodes)
-        insertConnections(connections)
+        // Single-pipeline save is the one-element case of the batch save; delegate
+        // so the upsert→purge→insert ordering lives in exactly one place.
+        savePipelinesTransaction(listOf(pipeline), nodes, connections)
     }
 
     /**

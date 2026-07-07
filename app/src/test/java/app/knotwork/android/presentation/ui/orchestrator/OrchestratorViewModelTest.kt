@@ -110,7 +110,8 @@ class OrchestratorViewModelTest {
         coEvery { pipelineRepository.getPipelineById(any()) } returns null
         coEvery { pipelineRepository.savePipelines(any()) } returns Unit
         importPipelineUseCase = ImportPipelineUseCase(savePipelineUseCase, pipelineRepository)
-        importPipelineBundleUseCase = ImportPipelineBundleUseCase(pipelineRepository)
+        compositionValidator = mockk()
+        importPipelineBundleUseCase = ImportPipelineBundleUseCase(pipelineRepository, compositionValidator)
         exportPipelineBundleUseCase = mockk()
         loadPipelineFromPresetUseCase = mockk()
         renamePipelineUseCase = mockk()
@@ -124,7 +125,6 @@ class OrchestratorViewModelTest {
         promptPresetRepository = mockk(relaxed = true) {
             every { getPresetsForType(any()) } returns flowOf(emptyList())
         }
-        compositionValidator = mockk()
         skillRepository = mockk(relaxed = true)
         apiKeyRepository = mockk()
         toolRepository = mockk()

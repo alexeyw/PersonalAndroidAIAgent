@@ -7,7 +7,9 @@ import app.knotwork.android.domain.models.PipelineValidationException
 import app.knotwork.android.domain.pipelineio.PipelineBundleIdRemapper
 import app.knotwork.android.domain.pipelineio.PipelineBundleJsonSerializer
 import app.knotwork.android.domain.repositories.PipelineRepository
+import app.knotwork.android.domain.services.PipelineCompositionValidator
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
 import java.util.UUID
 import javax.inject.Inject
 
@@ -28,7 +30,10 @@ import javax.inject.Inject
  *    whole closure **atomically** — a single structurally-broken graph rolls
  *    back the entire import.
  */
-class ImportPipelineBundleUseCase @Inject constructor(private val pipelineRepository: PipelineRepository) {
+class ImportPipelineBundleUseCase @Inject constructor(
+    private val pipelineRepository: PipelineRepository,
+    private val compositionValidator: PipelineCompositionValidator,
+) {
 
     /**
      * Parses [jsonText], validates each contained graph, and reports which ids
@@ -50,18 +55,27 @@ class ImportPipelineBundleUseCase @Inject constructor(private val pipelineReposi
             is PipelineBundleImportOutcome.PartialSchemaMismatch -> outcome.pipelines to outcome.mismatches
         }
 
-        // Per-graph structural validation. One broken graph aborts the whole
-        // import (atomic, observable) rather than writing a partial closure.
+        // Per-graph structural validation, then cross-pipeline composition
+        // validation resolved against the incoming set (so intra-bundle cycles,
+        // self-references, over-depth nesting, and cross-library cycles a
+        // REPLACE would splice in are all rejected here — the same authoritative
+        // defence a single-pipeline save gets through SavePipelineUseCase). One
+        // broken graph aborts the whole import (atomic, observable) rather than
+        // writing a partial closure.
+        val bundleById = pipelines.associateBy { it.id }
         pipelines.firstNotNullOfOrNull { graph ->
-            graph.validate().takeIf { it.isNotEmpty() }?.let { graph to it }
+            val errors = graph.validate() + compositionValidator.validate(graph, extraResolvable = bundleById)
+            errors.takeIf { it.isNotEmpty() }?.let { graph to it }
         }?.let { (graph, errors) ->
             return PipelineBundlePrepareResult.Failure(
                 "Pipeline \"${graph.name}\" is invalid: ${PipelineValidationException(errors).message}",
             )
         }
 
-        val collidingIds = pipelines.map { it.id }
-            .filter { pipelineRepository.getPipelineById(it) != null }
+        // Lightweight existence check: id → name projection, one query, no graph
+        // materialisation (vs. getPipelineById per id, which loads full graphs).
+        val existingIds = pipelineRepository.observePipelineNames().first().keys
+        val collidingIds = pipelines.map { it.id }.filter { it in existingIds }
 
         return PipelineBundlePrepareResult.Ready(
             pipelines = pipelines,
@@ -80,19 +94,29 @@ class ImportPipelineBundleUseCase @Inject constructor(private val pipelineReposi
      *
      * @param pipelines The closure to persist (as produced by [prepare]).
      * @param resolution How to treat ids that collide with the library.
-     * @return [Result.success] with the number of pipelines written, or
-     *   [Result.failure] if the atomic save fails.
+     * @return [Result.success] with the pipelines actually written (ids as
+     *   persisted — regenerated under copy), or [Result.failure] if the atomic
+     *   save fails.
      */
-    suspend fun persist(pipelines: List<PipelineGraph>, resolution: ImportCollisionResolution): Result<Int> {
+    suspend fun persist(
+        pipelines: List<PipelineGraph>,
+        resolution: ImportCollisionResolution,
+    ): Result<List<PipelineGraph>> {
+        val newId = { _: String -> UUID.randomUUID().toString() }
         val toSave = when (resolution) {
-            ImportCollisionResolution.REPLACE -> pipelines
-            ImportCollisionResolution.IMPORT_AS_COPY ->
-                PipelineBundleIdRemapper.regenerate(pipelines) { UUID.randomUUID().toString() }
+            // Keep pipeline ids (sync semantics) but always freshen node /
+            // connection ids: they are globally-unique primary keys, so two
+            // bundle pipelines reusing a node id would otherwise collapse under
+            // the multi-save's REPLACE conflict strategy.
+            ImportCollisionResolution.REPLACE -> PipelineBundleIdRemapper.freshenElementIds(pipelines, newId)
+            // Regenerate every id (pipeline + node + connection) and remap
+            // intra-bundle references, so the copy is fully self-consistent.
+            ImportCollisionResolution.IMPORT_AS_COPY -> PipelineBundleIdRemapper.regenerate(pipelines, newId)
         }
 
         return try {
             pipelineRepository.savePipelines(toSave)
-            Result.success(toSave.size)
+            Result.success(toSave)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

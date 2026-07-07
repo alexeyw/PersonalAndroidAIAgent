@@ -65,11 +65,21 @@ class ImportPipelineUseCase @Inject constructor(
 
     /**
      * Persists [outcome.graph] after the user has explicitly accepted the
-     * compatibility warning. No-op for any other outcome variant — the
-     * caller should never reach this branch otherwise.
+     * compatibility warning — unless its id collides with an existing pipeline,
+     * in which case it returns [ConfirmedImport.Collision] so the UI can prompt
+     * for Replace / Import-as-copy first (closing the silent-overwrite gap on
+     * the schema-mismatch branch, not just the clean-success branch).
+     *
+     * @param outcome The schema-mismatch outcome the user confirmed.
+     * @return [ConfirmedImport.Saved] with the save result when the id is free,
+     *   or [ConfirmedImport.Collision] carrying the graph when it collides.
      */
-    suspend fun persistConfirmed(outcome: PipelineImportOutcome.SchemaMismatch): Result<Unit> =
-        savePipelineUseCase(outcome.graph)
+    suspend fun persistConfirmed(outcome: PipelineImportOutcome.SchemaMismatch): ConfirmedImport =
+        if (pipelineRepository.getPipelineById(outcome.graph.id) != null) {
+            ConfirmedImport.Collision(outcome.graph)
+        } else {
+            ConfirmedImport.Saved(savePipelineUseCase(outcome.graph))
+        }
 
     /**
      * Persists [graph] after the user has resolved an id collision.
@@ -92,6 +102,27 @@ class ImportPipelineUseCase @Inject constructor(
         }
         return savePipelineUseCase(toSave)
     }
+}
+
+/**
+ * Result of confirming a schema-mismatch import ([ImportPipelineUseCase.persistConfirmed]).
+ */
+sealed class ConfirmedImport {
+
+    /**
+     * The confirmed graph's id was free, so it was persisted.
+     *
+     * @property result The save attempt's result.
+     */
+    data class Saved(val result: Result<Unit>) : ConfirmedImport()
+
+    /**
+     * The confirmed graph's id collides with an existing pipeline; nothing was
+     * written. The UI must resolve the collision (Replace / Import as copy).
+     *
+     * @property graph The parsed graph awaiting collision resolution.
+     */
+    data class Collision(val graph: PipelineGraph) : ConfirmedImport()
 }
 
 /**

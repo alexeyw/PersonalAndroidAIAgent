@@ -111,16 +111,29 @@ class ImportPipelineUseCaseTest {
     }
 
     @Test
-    fun `persistConfirmed forwards SchemaMismatch graph to save use case`() = runTest {
+    fun `persistConfirmed saves the SchemaMismatch graph when its id is free`() = runTest {
         coEvery { savePipelineUseCase(any()) } returns Result.success(Unit)
         val mismatch = useCase(mismatchJson).outcome as PipelineImportOutcome.SchemaMismatch
 
-        val result = useCase.persistConfirmed(mismatch)
+        val confirmed = useCase.persistConfirmed(mismatch)
 
-        assertTrue(result.isSuccess)
+        assertTrue(confirmed is ConfirmedImport.Saved)
+        assertTrue((confirmed as ConfirmedImport.Saved).result.isSuccess)
         coVerify(exactly = 1) {
             savePipelineUseCase(match<PipelineGraph> { it.id == mismatch.graph.id })
         }
+    }
+
+    @Test
+    fun `persistConfirmed returns Collision without saving when the id already exists`() = runTest {
+        coEvery { pipelineRepository.getPipelineById("p") } returns
+            PipelineGraph(id = "p", name = "existing")
+        val mismatch = useCase(mismatchJson).outcome as PipelineImportOutcome.SchemaMismatch
+
+        val confirmed = useCase.persistConfirmed(mismatch)
+
+        assertTrue(confirmed is ConfirmedImport.Collision)
+        coVerify(exactly = 0) { savePipelineUseCase(any()) }
     }
 
     @Test

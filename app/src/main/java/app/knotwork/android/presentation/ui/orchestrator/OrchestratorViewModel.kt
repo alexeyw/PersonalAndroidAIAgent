@@ -32,6 +32,7 @@ import app.knotwork.android.domain.repositories.SkillRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.PipelineCompositionValidator
 import app.knotwork.android.domain.services.findDependentPipelines
+import app.knotwork.android.domain.usecases.ConfirmedImport
 import app.knotwork.android.domain.usecases.CreatePipelineUseCase
 import app.knotwork.android.domain.usecases.DeletePipelineUseCase
 import app.knotwork.android.domain.usecases.DuplicatePipelineUseCase
@@ -856,13 +857,21 @@ class OrchestratorViewModel @Inject constructor(
         val result = importPipelineBundleUseCase.persist(pipelines, resolution)
         _uiState.update { state ->
             result.fold(
-                onSuccess = { count ->
+                onSuccess = { saved ->
+                    // If the bundle replaced the pipeline currently open in the
+                    // editor (REPLACE keeps ids), refresh the in-memory copy to
+                    // the just-persisted graph so a later Save writes the
+                    // imported content instead of silently reverting to stale
+                    // state. Under copy every id changes, so nothing matches and
+                    // the open pipeline is left untouched.
+                    val refreshed = saved.firstOrNull { it.id == state.currentPipeline.id }
                     state.copy(
                         isLoading = false,
+                        currentPipeline = refreshed ?: state.currentPipeline,
                         feedbackMessage = UiText.Plural(
                             R.plurals.orchestrator_library_import_bundle_success,
-                            count,
-                            listOf(count),
+                            saved.size,
+                            listOf(saved.size),
                         ),
                     )
                 },
@@ -932,14 +941,21 @@ class OrchestratorViewModel @Inject constructor(
         // graph.
         _uiState.update { it.copy(isLoading = true, pendingImport = null) }
         viewModelScope.launch {
-            val result = importPipelineUseCase.persistConfirmed(pending)
-            _uiState.update { state ->
-                val saveErr = result.exceptionOrNull()?.let(::messageForSaveError)
-                state.copy(
-                    currentPipeline = if (saveErr == null) pending.graph else state.currentPipeline,
-                    isLoading = false,
-                    errorMessage = saveErr,
-                )
+            when (val confirmed = importPipelineUseCase.persistConfirmed(pending)) {
+                // The confirmed graph collides with an existing pipeline: defer
+                // to the collision dialog instead of silently overwriting.
+                is ConfirmedImport.Collision ->
+                    _uiState.update { it.copy(isLoading = false, pendingCollision = confirmed.graph) }
+
+                is ConfirmedImport.Saved ->
+                    _uiState.update { state ->
+                        val saveErr = confirmed.result.exceptionOrNull()?.let(::messageForSaveError)
+                        state.copy(
+                            currentPipeline = if (saveErr == null) pending.graph else state.currentPipeline,
+                            isLoading = false,
+                            errorMessage = saveErr,
+                        )
+                    }
             }
         }
     }
