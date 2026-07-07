@@ -4247,6 +4247,10 @@
             case 'EVALUATION':
                 return flags(false, true,  false, true);
             case 'OUTPUT':
+                // Echoes the previous node by default; a formatter systemPrompt
+                // should re-format only that upstream output, not the whole
+                // conversation. Mirrors NodeContextConfig.defaultForType(OUTPUT).
+                return flags(false, false, false, false);
             default:
                 return flags(true, true, true, true);
         }

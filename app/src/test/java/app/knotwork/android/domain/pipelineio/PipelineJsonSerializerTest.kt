@@ -337,8 +337,9 @@ class PipelineJsonSerializerTest {
 
         assertTrue(outcome is PipelineImportOutcome.Success)
         val node = (outcome as PipelineImportOutcome.Success).graph.nodes.single()
-        // OUTPUT default is ALL_ENABLED
-        assertEquals(NodeContextConfig.ALL_ENABLED, node.contextConfig)
+        // Missing contextConfig falls back to the OUTPUT per-type default
+        // (nodeInput-only), not a blanket ALL_ENABLED.
+        assertEquals(NodeContextConfig.defaultForType(NodeType.OUTPUT), node.contextConfig)
     }
 
     @Test

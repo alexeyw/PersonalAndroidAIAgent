@@ -69,8 +69,13 @@ data class NodeContextConfig(
          *   `nodeInput` only.
          * - [NodeType.CLARIFICATION]: needs the question's source plus the
          *   user's original goal to phrase a useful clarifier.
-         * - [NodeType.OUTPUT]: terminal node that composes the user-facing
-         *   reply — full context is allowed.
+         * - [NodeType.OUTPUT]: terminal node. By default it forwards the
+         *   previous node's output verbatim (echo mode, no `systemPrompt`), so
+         *   context composition is bypassed entirely. If the user gives it a
+         *   formatting `systemPrompt`, it should re-format only that upstream
+         *   output — not the whole conversation — so the default context is
+         *   `nodeInput` only. Enable other blocks explicitly when a formatter
+         *   genuinely needs them.
          * - [NodeType.SUMMARY] / [NodeType.EVALUATION]: post-processing nodes
          *   that work over tool results plus the original task.
          * - [NodeType.INTENT_ROUTER] / [NodeType.DECOMPOSITION]: classifiers
@@ -135,7 +140,13 @@ data class NodeContextConfig(
                 toolResults = true,
             )
 
-            NodeType.OUTPUT -> ALL_ENABLED
+            NodeType.OUTPUT -> NodeContextConfig(
+                chatHistory = false,
+                originalTask = false,
+                nodeInput = true,
+                longTermMemory = false,
+                toolResults = false,
+            )
         }
     }
 }

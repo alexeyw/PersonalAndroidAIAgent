@@ -348,9 +348,12 @@ details.
   running an extra "Formatter" model pass over it. That formatting pass could
   bolt on preambles and reword answers, which was especially noticeable in short,
   simple pipelines. Formatting is now opt-in: give the Output node a system prompt
-  (a ready-made "Formatter" template is offered) to re-enable it. Existing saved
-  pipelines already shipped a blank Output prompt, so only the default for
-  newly-created nodes and the built-in starter pipeline changes.
+  (a ready-made "Formatter" template is offered) to re-enable it. The Output
+  node's default incoming context is now the **previous node's output only** —
+  no chat history, original task, memory or tool results — so even when you do
+  turn on formatting it re-formats just that upstream reply rather than the whole
+  conversation. Existing saved pipelines already shipped a blank Output prompt, so
+  only the default for newly-created nodes and the built-in starter pipeline changes.
 - **Pipelines can branch on whether the message has an image.** Previously the
   Intent Router and If Condition steps only ever saw text, so a "did the user send
   a picture?" fork was impossible. An **If Condition** node now has a *Branch True

@@ -917,7 +917,10 @@ produced is exactly what you see, with no extra processing. This keeps simple
 pipelines clean. If you *do* want the Output node to re-format the reply, give
 it a system prompt (there is a ready-made "Formatter" template you can pick in
 its config sheet): it then runs one more model pass over the incoming text and
-returns the formatted result instead.
+returns the formatted result instead. Even then, its default context is just the
+**previous node's output** — not the chat history, the original task, memory or
+tool results — so it re-formats only that reply. Enable the other context blocks
+in the node's config if a formatter genuinely needs them.
 
 For the **IntentRouter** node, the Classes section in its config
 sheet lets you grow / shrink the class list: each row has a small

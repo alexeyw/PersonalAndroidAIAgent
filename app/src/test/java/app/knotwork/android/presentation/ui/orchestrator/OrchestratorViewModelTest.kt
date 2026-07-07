@@ -574,11 +574,16 @@ class OrchestratorViewModelTest {
     }
 
     @Test
-    fun `addNode applies recommended contextConfig for OUTPUT (all enabled)`() {
+    fun `addNode applies recommended contextConfig for OUTPUT (nodeInput only)`() {
         viewModel.addNode(NodeType.OUTPUT, 0f, 0f)
 
         val node = viewModel.uiState.value.currentPipeline.nodes.single()
-        assertEquals(NodeContextConfig.ALL_ENABLED, node.contextConfig)
+        assertEquals(NodeContextConfig.defaultForType(NodeType.OUTPUT), node.contextConfig)
+        assertEquals(false, node.contextConfig.chatHistory)
+        assertEquals(false, node.contextConfig.originalTask)
+        assertEquals(true, node.contextConfig.nodeInput)
+        assertEquals(false, node.contextConfig.longTermMemory)
+        assertEquals(false, node.contextConfig.toolResults)
     }
 
     @Test
