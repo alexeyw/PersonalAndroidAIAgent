@@ -905,6 +905,14 @@ QueueProcessor, Evaluation, Summary, Pipeline, Skill — has its own
 form, with inline validation that disables Save until every required
 field is filled.
 
+By default an **Output** node has **no system prompt** and simply forwards
+the previous node's text to you *verbatim* — what the last model or tool
+produced is exactly what you see, with no extra processing. This keeps simple
+pipelines clean. If you *do* want the Output node to re-format the reply, give
+it a system prompt (there is a ready-made "Formatter" template you can pick in
+its config sheet): it then runs one more model pass over the incoming text and
+returns the formatted result instead.
+
 For the **IntentRouter** node, the Classes section in its config
 sheet lets you grow / shrink the class list: each row has a small
 **−** button to remove it (disabled below the 2-class minimum), and a

@@ -321,6 +321,14 @@ details.
 
 ### Fixed
 
+- **Output nodes no longer add filler to simple replies.** A fresh **Output**
+  node now defaults to forwarding the previous node's text *verbatim* instead of
+  running an extra "Formatter" model pass over it. That formatting pass could
+  bolt on preambles and reword answers, which was especially noticeable in short,
+  simple pipelines. Formatting is now opt-in: give the Output node a system prompt
+  (a ready-made "Formatter" template is offered) to re-enable it. Existing saved
+  pipelines already shipped a blank Output prompt, so only the default for
+  newly-created nodes and the built-in starter pipeline changes.
 - **Pipelines can branch on whether the message has an image.** Previously the
   Intent Router and If Condition steps only ever saw text, so a "did the user send
   a picture?" fork was impossible. An **If Condition** node now has a *Branch True

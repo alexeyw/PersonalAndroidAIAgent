@@ -168,7 +168,6 @@ class DefaultPromptsTest {
         )
         assertEquals(DefaultPrompts.EVALUATION_PROMPT, DefaultPrompts.getDefaultPromptForNodeType(NodeType.EVALUATION))
         assertEquals(DefaultPrompts.SUMMARY_PROMPT, DefaultPrompts.getDefaultPromptForNodeType(NodeType.SUMMARY))
-        assertEquals(DefaultPrompts.OUTPUT_FORMAT_PROMPT, DefaultPrompts.getDefaultPromptForNodeType(NodeType.OUTPUT))
         assertEquals(
             DefaultPrompts.CLARIFICATION_PROMPT,
             DefaultPrompts.getDefaultPromptForNodeType(NodeType.CLARIFICATION),
@@ -183,6 +182,14 @@ class DefaultPromptsTest {
         assertNull(DefaultPrompts.getDefaultPromptForNodeType(NodeType.IF_CONDITION))
         assertNull(DefaultPrompts.getDefaultPromptForNodeType(NodeType.TOOL))
         assertNull(DefaultPrompts.getDefaultPromptForNodeType(NodeType.QUEUE_PROCESSOR))
+    }
+
+    @Test
+    fun `given OUTPUT node type when getDefaultPromptForNodeType then returns null for pass-through mode`() {
+        // A fresh OUTPUT node must default to pass-through (echo) mode so simple
+        // pipelines forward the upstream text verbatim without an extra formatting
+        // LLM pass. The formatter prompt is opt-in, not the default.
+        assertNull(DefaultPrompts.getDefaultPromptForNodeType(NodeType.OUTPUT))
     }
 
     @Test
