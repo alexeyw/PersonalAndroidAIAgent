@@ -3,6 +3,7 @@ package app.knotwork.android.presentation.ui.chat.home
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
+import app.knotwork.android.domain.text.toSingleLineTitle
 import app.knotwork.design.screens.chat.ChatHomeThreadRow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -142,11 +143,9 @@ class ChatHomeThreadsDelegate(
         if (prompt.isBlank()) return
         val session = sessions.firstOrNull { it.id == sessionId } ?: return
         if (session.name != DEFAULT_NEW_CHAT_NAME) return
-        val truncated = if (prompt.length > AUTO_RENAME_CHAR_LIMIT) {
-            prompt.take(AUTO_RENAME_CHAR_LIMIT) + AUTO_RENAME_SUFFIX
-        } else {
-            prompt
-        }
+        // Collapse whitespace (including newlines) so a multi-line first message
+        // still yields a clean, informative single-line title.
+        val truncated = prompt.toSingleLineTitle(AUTO_RENAME_CHAR_LIMIT, AUTO_RENAME_SUFFIX)
         scope.launch {
             chatRepository.saveSession(session.copy(name = truncated))
         }
@@ -291,7 +290,7 @@ class ChatHomeThreadsDelegate(
         const val DEFAULT_NEW_CHAT_NAME: String = "New Chat"
 
         /** Maximum characters of the first user message used as the auto-generated session name. */
-        const val AUTO_RENAME_CHAR_LIMIT: Int = 20
+        const val AUTO_RENAME_CHAR_LIMIT: Int = 40
 
         /** Suffix appended to a truncated auto-rename name. */
         const val AUTO_RENAME_SUFFIX: String = "..."

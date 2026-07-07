@@ -57,6 +57,7 @@ class ToolNodeExecutorTest {
     private lateinit var approvalNotifier: ApprovalNotifier
     private lateinit var chatRepository: ChatRepository
     private lateinit var pendingInteractionRepository: PendingInteractionRepository
+    private lateinit var toolInvocationGate: ToolInvocationGate
     private lateinit var executor: ToolNodeExecutor
 
     @Before
@@ -71,17 +72,18 @@ class ToolNodeExecutorTest {
         coEvery { pendingInteractionRepository.getForRun(any()) } returns null
         coEvery { pendingInteractionRepository.save(any()) } returns true
 
+        toolInvocationGate = ToolInvocationGate(
+            toolRepository = toolRepository,
+            settingsRepository = settingsRepository,
+            approvalNotifier = approvalNotifier,
+            chatRepository = chatRepository,
+            pendingInteractionRepository = pendingInteractionRepository,
+        )
         executor = ToolNodeExecutor(
             llmEngine = llmEngine,
             loadModelUseCase = loadModelUseCase,
             toolRepository = toolRepository,
-            toolInvocationGate = ToolInvocationGate(
-                toolRepository = toolRepository,
-                settingsRepository = settingsRepository,
-                approvalNotifier = approvalNotifier,
-                chatRepository = chatRepository,
-                pendingInteractionRepository = pendingInteractionRepository,
-            ),
+            toolInvocationGate = toolInvocationGate,
             structuredOutputGate = StructuredOutputGate(),
             settingsRepository = settingsRepository,
             cloudStructuredFactory = CloudStructuredInferenceClientFactory { _, _ -> null },
@@ -293,6 +295,16 @@ class ToolNodeExecutorTest {
             }
             job.cancel()
         }
+
+    @Test
+    fun `given a pending approval when resumeWithApproval then the approval notification is cancelled`() {
+        // Answering the request from the in-chat card must dismiss any live-phase
+        // notification that was posted while the app was backgrounded, so a stale
+        // shade entry cannot offer a choice that has already been made.
+        toolInvocationGate.resumeWithApproval("session-1", isApproved = true)
+
+        verify(exactly = 1) { approvalNotifier.cancelApprovalNotification("session-1") }
+    }
 
     @Test
     fun `given DESTRUCTIVE tool and blockDestructiveTools on when execute then emits error result and skips HITL`() =

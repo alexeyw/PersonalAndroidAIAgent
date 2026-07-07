@@ -1,6 +1,5 @@
 package app.knotwork.android.domain.engine
 
-import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.ConnectionModel
 import app.knotwork.android.domain.models.NodeContextConfig
@@ -112,7 +111,10 @@ object DefaultPipelineFactory {
             id = UUID.randomUUID().toString(),
             type = NodeType.OUTPUT,
             label = "Output",
-            systemPrompt = DefaultPrompts.OUTPUT_FORMAT_PROMPT,
+            // No systemPrompt: the OUTPUT node runs in pass-through mode and forwards
+            // the upstream text verbatim, instead of adding an extra formatting pass
+            // that pollutes simple answers with LLM filler.
+            systemPrompt = null,
             x = 1300f,
             y = 300f,
             contextConfig = NodeContextConfig.defaultForType(NodeType.OUTPUT),

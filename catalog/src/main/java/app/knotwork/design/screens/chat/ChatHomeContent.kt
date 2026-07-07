@@ -899,9 +899,10 @@ private fun ChatHomeDrawerThreadRow(row: ChatHomeThreadRow, onClick: () -> Unit,
                 }
                 Text(
                     text = row.title,
-                    style = KnotworkTextStyles.TitleMd.copy(
-                        fontWeight = FontWeight.SemiBold,
-                    ),
+                    // Compact list-title token (15 sp Medium) — the drawer holds many
+                    // rows, so a lighter, denser title reads better than the larger
+                    // 17 sp SemiBold used for standalone list rows.
+                    style = KnotworkTextStyles.LabelLg,
                     color = rowFg,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

@@ -167,9 +167,14 @@ object DefaultPrompts {
         "a concise and comprehensive summary of the overall outcome."
 
     /**
-     * Default `systemPrompt` for an [NodeType.OUTPUT] node when the user has not
-     * authored one. See [Output.FORMATTING_TEMPLATE] for the wrap-template that
-     * embeds this prompt before sending to the LLM.
+     * Opt-in formatter `systemPrompt` for an [NodeType.OUTPUT] node.
+     *
+     * This is **not** the default for a fresh OUTPUT node — a node without a
+     * `systemPrompt` runs in pass-through mode and forwards the upstream text
+     * verbatim (see [getDefaultPromptForNodeType]). This constant is offered as a
+     * selectable prompt template so a user can explicitly turn an OUTPUT node into
+     * a formatting pass. See [Output.FORMATTING_TEMPLATE] for the wrap-template
+     * that embeds this prompt before sending to the LLM.
      */
     const val OUTPUT_FORMAT_PROMPT = "You are a Formatter. Please format the provided input text into a clear, " +
         "readable markdown response for the user."
@@ -600,7 +605,11 @@ object DefaultPrompts {
         NodeType.DECOMPOSITION -> DECOMPOSITION_PROMPT
         NodeType.EVALUATION -> EVALUATION_PROMPT
         NodeType.SUMMARY -> SUMMARY_PROMPT
-        NodeType.OUTPUT -> OUTPUT_FORMAT_PROMPT
+        // OUTPUT intentionally has NO default systemPrompt: a fresh OUTPUT node runs
+        // in pass-through (echo) mode, forwarding the upstream node's text verbatim
+        // without an extra formatting LLM pass. This keeps simple pipelines clean —
+        // the formatter behaviour is opt-in via the OUTPUT_FORMAT_PROMPT template.
+        NodeType.OUTPUT -> null
         NodeType.CLARIFICATION -> CLARIFICATION_PROMPT
         NodeType.LITE_RT, NodeType.CLOUD -> SYSTEM_PROMPT_PREFIX
         else -> null

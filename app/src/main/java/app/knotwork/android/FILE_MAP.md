@@ -260,6 +260,8 @@ This file maps the contents of the main application package.
     - `PromptVariableProvider.kt` - Contract for a single substitutable prompt variable.
     - `PromptTemplateEngine.kt` - Renders templates by substituting `$KEY` placeholders.
     - `PromptSegment.kt` - Sealed interface modelling rendered prompt chunks (literal/resolved/unknown) for previews.
+  - `text/` - Pure-Kotlin text helpers.
+    - `TitleText.kt` - `String.collapseWhitespace()` + `String.toSingleLineTitle(maxLength, ellipsis)`, shared by chat auto-rename and share-session naming so their single-line-title logic cannot drift.
   - `models/` - Domain entity models.
     - `ActiveModelMeta.kt` - Rich metadata for the currently active local model rendered on the Settings local-model card.
     - `AgentMetrics.kt` - Agent metrics model.

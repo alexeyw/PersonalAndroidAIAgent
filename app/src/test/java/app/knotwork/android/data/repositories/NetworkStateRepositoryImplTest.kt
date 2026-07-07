@@ -1,10 +1,12 @@
 package app.knotwork.android.data.repositories
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.net.wifi.WifiInfo
 import app.knotwork.android.domain.models.NetworkState
 import io.mockk.every
 import io.mockk.mockk
@@ -34,6 +36,9 @@ class NetworkStateRepositoryImplTest {
         every { context.getSystemService(Context.CONNECTIVITY_SERVICE) } returns connectivityManager
         every { connectivityManager.registerNetworkCallback(any(), capture(callbackSlot)) } returns Unit
         every { connectivityManager.activeNetwork } returns null
+        // Default: location permission not granted (ContextCompat.checkSelfPermission
+        // delegates to Context.checkPermission), so the SSID read short-circuits.
+        every { context.checkPermission(any(), any(), any()) } returns PackageManager.PERMISSION_DENIED
     }
 
     @After
@@ -82,5 +87,44 @@ class NetworkStateRepositoryImplTest {
         callbackSlot.captured.onLost(mockNetwork)
 
         assertEquals(NetworkState(isConnected = false, isWifiConnected = false), repo.networkState.value)
+    }
+
+    @Test
+    fun `given wifi and location granted when capabilities change then ssid is read and unquoted`() {
+        val mockNetwork = mockk<Network>()
+        val mockCapabilities = mockk<NetworkCapabilities>()
+        val wifiInfo = mockk<WifiInfo>()
+        every { context.checkPermission(any(), any(), any()) } returns PackageManager.PERMISSION_GRANTED
+        every { connectivityManager.activeNetwork } returns mockNetwork
+        every { mockCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) } returns true
+        every { mockCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) } returns true
+        every { mockCapabilities.transportInfo } returns wifiInfo
+        every { wifiInfo.ssid } returns "\"Home\""
+
+        val repo = NetworkStateRepositoryImpl(context)
+        callbackSlot.captured.onCapabilitiesChanged(mockNetwork, mockCapabilities)
+
+        assertEquals(
+            NetworkState(isConnected = true, isWifiConnected = true, wifiSsid = "Home"),
+            repo.networkState.value,
+        )
+    }
+
+    @Test
+    fun `given wifi but location denied when capabilities change then ssid is null`() {
+        val mockNetwork = mockk<Network>()
+        val mockCapabilities = mockk<NetworkCapabilities>()
+        every { context.checkPermission(any(), any(), any()) } returns PackageManager.PERMISSION_DENIED
+        every { connectivityManager.activeNetwork } returns mockNetwork
+        every { mockCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) } returns true
+        every { mockCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) } returns true
+
+        val repo = NetworkStateRepositoryImpl(context)
+        callbackSlot.captured.onCapabilitiesChanged(mockNetwork, mockCapabilities)
+
+        assertEquals(
+            NetworkState(isConnected = true, isWifiConnected = true, wifiSsid = null),
+            repo.networkState.value,
+        )
     }
 }

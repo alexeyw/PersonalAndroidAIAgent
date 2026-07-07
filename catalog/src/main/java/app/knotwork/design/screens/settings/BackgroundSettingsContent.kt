@@ -58,6 +58,15 @@ fun BackgroundSettingsContent(
                 onClick = callbacks.onShareTargetPipelineClick,
             )
         }
+        SettingsAnchor(anchorKey = SettingsRowAnchors.SHARE_REUSE_SESSION) {
+            IconToggleRow(
+                icon = AppIcons.Chat,
+                title = stringResource(R.string.knotwork_settings_share_reuse_title),
+                subtitle = stringResource(R.string.knotwork_settings_share_reuse_subtitle),
+                checked = state.shareReuseSessionEnabled,
+                onCheckedChange = callbacks.onShareReuseSessionToggle,
+            )
+        }
         SettingsAnchor(anchorKey = SettingsRowAnchors.QUICK_SETTINGS_TILE_PIPELINE_ID) {
             NavLinkRow(
                 icon = AppIcons.Bolt,
@@ -81,5 +90,5 @@ fun BackgroundSettingsContent(
     }
 }
 
-/** Number of Basic-tier rows on the Background sub-screen (two toggles + two pipeline bindings). */
-private const val BASIC_ROW_COUNT = 4
+/** Number of Basic-tier rows on the Background sub-screen (three toggles + two pipeline bindings). */
+private const val BASIC_ROW_COUNT = 5

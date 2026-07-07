@@ -15,6 +15,21 @@ details.
 
 ### Added
 
+- **Shares can accumulate in one chat.** By default, everything you share into
+  the app (text and images) now lands in a single running **Shared** chat — new
+  shares are appended instead of spawning a fresh chat each time, which was noisy
+  and hard to follow. A new **Settings → Background & triggers → Keep shares in
+  one chat** toggle (on by default) controls it; turn it off to get a new,
+  auto-named chat per share (the previous behaviour). Either way a share never
+  disturbs the chat you were already in.
+- **Wi-Fi triggers can target specific networks.** A Wi-Fi trigger can now be
+  scoped to one or more network names (SSIDs) in the editor, so it fires only on,
+  say, your home or office Wi-Fi instead of any connection. Leaving the list empty
+  keeps the previous any-Wi-Fi behaviour. Because Android derives the connected
+  SSID from location, scoping a trigger requests the location permission the first
+  time you add a name; if it is not granted, the trigger stays saved but never
+  fires (fail-safe). The network names are used only for the on-device match and
+  never leave the device.
 - **`append_file` workspace tool.** A new built-in file tool that adds text to the
   **end** of a workspace file, creating it on the first call and always keeping
   existing content (there is no overwrite). It makes "accumulate entries in a daily
@@ -321,6 +336,31 @@ details.
 
 ### Fixed
 
+- **Chat titles are more informative, especially for shares.** Auto-generated
+  chat names now use more of your first message (up to 40 characters, up from 20),
+  and titles for chats created from the **share** target draw on the whole shared
+  text — up to 60 characters — instead of just its first line, collapsing line
+  breaks so the title reads as one clean line. In the chat drawer, titles now use
+  a more compact type style so more of each name fits on a row.
+- **Tool-approval prompt no longer double-shows and no longer lingers.** When a
+  tool needed your confirmation, the request could appear **both** as the inline
+  card in the chat **and** as a system notification at the same time, and
+  answering it in the chat left the notification stranded in the shade. The
+  active chat is now correctly tracked, so while you are looking at a chat its
+  approval prompt stays inline only (no duplicate notification); a request raised
+  while the app is in the background still notifies you. Answering from the chat
+  now also dismisses any notification that was posted for it.
+- **Output nodes no longer add filler to simple replies.** A fresh **Output**
+  node now defaults to forwarding the previous node's text *verbatim* instead of
+  running an extra "Formatter" model pass over it. That formatting pass could
+  bolt on preambles and reword answers, which was especially noticeable in short,
+  simple pipelines. Formatting is now opt-in: give the Output node a system prompt
+  (a ready-made "Formatter" template is offered) to re-enable it. The Output
+  node's default incoming context is now the **previous node's output only** —
+  no chat history, original task, memory or tool results — so even when you do
+  turn on formatting it re-formats just that upstream reply rather than the whole
+  conversation. Existing saved pipelines already shipped a blank Output prompt, so
+  only the default for newly-created nodes and the built-in starter pipeline changes.
 - **Pipelines can branch on whether the message has an image.** Previously the
   Intent Router and If Condition steps only ever saw text, so a "did the user send
   a picture?" fork was impossible. An **If Condition** node now has a *Branch True
@@ -553,6 +593,15 @@ details.
 - **Bump `dev.detekt` `2.0.0-alpha.4` → `2.0.0-alpha.5`** to clear the
   `NewerVersionAvailable` lint gate. Build tooling only (not shipped in the
   APK); no rule-set changes affecting the codebase.
+
+- **Dependency refresh to clear the `NewerVersionAvailable` / `GradleDependency`
+  lint gate.** Compose BOM `2026.06.00` → `2026.06.01`, Hilt/Dagger `2.60` →
+  `2.60.1`, the AndroidX Hilt extensions (`hilt-navigation-compose`, `hilt-work`,
+  `hilt-compiler`) `1.3.0` → `1.4.0`, and Roborazzi `1.64.0` → `1.66.0`. No code
+  change. `androidx.appfunctions` stays on `1.0.0-alpha09`: only `appfunctions`
+  and `appfunctions-compiler` published `-alpha10`, while the `appfunctions-service`
+  sibling (pinned to the same version) did not, so that finding is grandfathered
+  in the lint baseline until the whole family moves together.
 
 ## [0.5.0] - 2026-06-14
 

@@ -80,12 +80,18 @@ sealed interface TriggerCondition {
      * @property wifiOnly When `true`, the condition is satisfied only by a Wi-Fi
      *   connection ([NetworkState.isWifiConnected]); when `false`, any connected
      *   network ([NetworkState.isConnected]) satisfies it. The gate and the live
-     *   re-check use this same predicate, so they cannot disagree. Matching a
-     *   specific Wi-Fi SSID is intentionally **not** modelled in the first wave —
-     *   reading the SSID requires a location permission, which is deferred (see
-     *   `project_docs/decisions.md`).
+     *   re-check use this same predicate, so they cannot disagree. Ignored when
+     *   [ssids] is non-empty (SSID matching is inherently Wi-Fi-only).
+     * @property ssids When non-empty, the condition additionally requires the
+     *   device to be connected to a Wi-Fi network whose name (SSID) exactly
+     *   matches one of these entries — so an automation can fire only on, say,
+     *   "home" or "office" Wi-Fi rather than on any connection. An empty list
+     *   (the default) keeps the original any-connection / any-Wi-Fi behaviour.
+     *   Reading the current SSID needs a runtime location permission; when it is
+     *   not granted the live SSID reads back as `null` and an SSID-scoped trigger
+     *   simply never matches (fail-safe).
      */
-    data class NetworkConnected(val wifiOnly: Boolean) : TriggerCondition {
+    data class NetworkConnected(val wifiOnly: Boolean, val ssids: List<String> = emptyList()) : TriggerCondition {
         override val isEventTriggered: Boolean get() = true
     }
 }

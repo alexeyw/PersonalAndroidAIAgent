@@ -167,6 +167,7 @@ data class SettingsUiState(
     val longRunningTaskNotificationsEnabled: Boolean = true,
     val scheduledTaskNotificationsEnabled: Boolean = true,
     val shareTargetPipelineId: String? = null,
+    val shareReuseSession: Boolean = SettingsDefaults.SHARE_REUSE_SESSION_DEFAULT,
     val quickSettingsTilePipelineId: String? = null,
     val bindablePipelines: List<PipelineBindingOption> = emptyList(),
     val crashReportingEnabled: Boolean = false,

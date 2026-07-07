@@ -52,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.buttons.KnotworkTextButton
+import app.knotwork.design.components.chips.KnotworkInputChip
 import app.knotwork.design.components.controls.KnotworkSegmentedControl
 import app.knotwork.design.components.controls.LabeledSwitchRow
 import app.knotwork.design.icons.AppIcons
@@ -484,6 +485,7 @@ private fun DailyParams(state: TriggerEditorUi, strings: TriggerEditorStrings, c
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun NetworkParams(state: TriggerEditorUi, strings: TriggerEditorStrings, callbacks: TriggerEditorCallbacks) {
     Column(
@@ -500,6 +502,61 @@ private fun NetworkParams(state: TriggerEditorUi, strings: TriggerEditorStrings,
             onToggle = callbacks.onWifiOnlyToggle,
             modifier = Modifier.background(MaterialTheme.colorScheme.surface),
         )
+    }
+    SsidScope(state = state, strings = strings, callbacks = callbacks)
+}
+
+/**
+ * SSID-scoping controls for the Network condition: the current network names as
+ * removable chips plus an "add a name" input. Empty list = fire on any Wi-Fi.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SsidScope(state: TriggerEditorUi, strings: TriggerEditorStrings, callbacks: TriggerEditorCallbacks) {
+    var input by remember { mutableStateOf("") }
+    val submit = {
+        if (input.isNotBlank()) {
+            callbacks.onSsidAdd(input)
+            input = ""
+        }
+    }
+    Column(modifier = Modifier.fillMaxWidth().padding(top = KnotworkTheme.spacing.sp3)) {
+        Text(
+            text = strings.ssidSectionLabel,
+            style = KnotworkTextStyles.LabelMd.copy(fontWeight = FontWeight.SemiBold),
+            color = KnotworkTheme.extended.onSurface2,
+        )
+        Text(
+            text = strings.ssidSectionDesc,
+            style = KnotworkTextStyles.MonoSm,
+            color = KnotworkTheme.extended.onSurfaceMuted,
+            modifier = Modifier.padding(top = KnotworkTheme.spacing.sp1),
+        )
+        if (state.ssids.isNotEmpty()) {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth().padding(top = KnotworkTheme.spacing.sp2),
+                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+                verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+            ) {
+                state.ssids.forEach { ssid ->
+                    KnotworkInputChip(label = ssid, onRemove = { callbacks.onSsidRemove(ssid) })
+                }
+            }
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = KnotworkTheme.spacing.sp2),
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(modifier = Modifier.weight(1f)) {
+                EditorField(
+                    value = input,
+                    placeholder = strings.ssidPlaceholder,
+                    onValueChange = { input = it },
+                )
+            }
+            KnotworkTextButton(text = strings.ssidAdd, onClick = submit, enabled = input.isNotBlank())
+        }
     }
 }
 
@@ -799,6 +856,11 @@ data class TriggerEditorStrings(
     val chargingBody: String = "Fires once each time the device starts charging; re-arms when you unplug.",
     val wifiOnlyLabel: String = "Wi-Fi only",
     val wifiOnlyDesc: String = "On = only Wi-Fi connections fire it. Off = any network.",
+    val ssidSectionLabel: String = "Only on these Wi-Fi networks",
+    val ssidSectionDesc: String =
+        "Leave empty to fire on any Wi-Fi. Add names to fire only on them (needs location permission).",
+    val ssidPlaceholder: String = "e.g. Home",
+    val ssidAdd: String = "Add",
     val pipelineLabel: String = "RUN THIS PIPELINE",
     val pipelineNone: String = "None — leave unbound",
     val pipelineNoneSub: String = "The trigger stays inert",

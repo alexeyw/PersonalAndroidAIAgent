@@ -29,6 +29,13 @@ sealed interface TriggerConditionLabel {
 
     /** "When Wi-Fi connects". */
     data object NetworkWifi : TriggerConditionLabel
+
+    /**
+     * "When joining <names>" — Wi-Fi scoped to one or more named networks.
+     *
+     * @property ssids the network names the trigger is scoped to (non-empty).
+     */
+    data class NetworkNamed(val ssids: List<String>) : TriggerConditionLabel
 }
 
 /**
@@ -71,7 +78,10 @@ object TriggerConditionFormatter {
 
         TriggerCondition.Charging -> TriggerConditionLabel.Charging
 
-        is TriggerCondition.NetworkConnected ->
-            if (condition.wifiOnly) TriggerConditionLabel.NetworkWifi else TriggerConditionLabel.NetworkAny
+        is TriggerCondition.NetworkConnected -> when {
+            condition.ssids.isNotEmpty() -> TriggerConditionLabel.NetworkNamed(condition.ssids)
+            condition.wifiOnly -> TriggerConditionLabel.NetworkWifi
+            else -> TriggerConditionLabel.NetworkAny
+        }
     }
 }

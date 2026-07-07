@@ -601,11 +601,18 @@ shared content or a tap until you have opted in.
 
 The app appears in the Android share sheet for **text and images**.
 Share something and pick the app: it runs your chosen *share pipeline*
-over the shared content and opens the new chat so you can watch the run.
+over the shared content and opens the chat so you can watch the run.
 A shared image is attached exactly like a composer attachment (the local
 model reads it; it never leaves the device). If you have not bound a
 share pipeline yet, the app opens with a reminder instead of running
 anything.
+
+By default every share lands in one running **Shared** chat, so
+everything you send accumulates in one place — new shares are appended to
+it rather than starting a fresh chat each time. Turn this off with
+**Settings → Background & triggers → Keep shares in one chat** to get a
+new, auto-named chat per share instead. Either way, shares never touch
+the chat you were already in.
 
 ### Launcher shortcuts
 
@@ -672,7 +679,13 @@ Tap **New trigger** (or a row to edit one). The editor has:
     you unplug). This one is event-driven, so it runs right away rather
     than waiting for a poll.
   - **Network** — fires on connecting; flip **Wi-Fi only** to ignore
-    mobile data.
+    mobile data. Under **Only on these Wi-Fi networks** you can add one or
+    more network names (SSIDs) so the trigger fires *only* on those — e.g.
+    just your home or office Wi-Fi. Leave it empty to fire on any Wi-Fi.
+    Adding a name asks for **location permission** the first time (Android
+    ties the Wi-Fi name to location); if you decline, the trigger stays
+    saved but won't fire until you grant it. The names are used only for
+    the match on your device — they are never uploaded.
 - **Run this pipeline** — bind the pipeline to run. Choosing **None**
   leaves the trigger inert (saved but it fires nothing).
 - **Input prompt** — the message handed to the pipeline each time it
@@ -904,6 +917,17 @@ IntentRouter, IfCondition, Clarification, Tool, Decomposition,
 QueueProcessor, Evaluation, Summary, Pipeline, Skill — has its own
 form, with inline validation that disables Save until every required
 field is filled.
+
+By default an **Output** node has **no system prompt** and simply forwards
+the previous node's text to you *verbatim* — what the last model or tool
+produced is exactly what you see, with no extra processing. This keeps simple
+pipelines clean. If you *do* want the Output node to re-format the reply, give
+it a system prompt (there is a ready-made "Formatter" template you can pick in
+its config sheet): it then runs one more model pass over the incoming text and
+returns the formatted result instead. Even then, its default context is just the
+**previous node's output** — not the chat history, the original task, memory or
+tool results — so it re-formats only that reply. Enable the other context blocks
+in the node's config if a formatter genuinely needs them.
 
 For the **IntentRouter** node, the Classes section in its config
 sheet lets you grow / shrink the class list: each row has a small

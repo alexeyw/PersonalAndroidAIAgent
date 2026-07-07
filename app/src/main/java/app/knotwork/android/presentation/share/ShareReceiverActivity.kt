@@ -59,6 +59,7 @@ class ShareReceiverActivity : ComponentActivity() {
             val result = try {
                 launchSharePipeline(
                     payload = payload,
+                    reusedSessionName = getString(R.string.share_session_reused_name),
                     imageSessionName = getString(R.string.share_session_image_name),
                     contentSessionName = getString(R.string.share_session_content_name),
                 )

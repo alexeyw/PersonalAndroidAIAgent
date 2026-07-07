@@ -35,6 +35,7 @@ import app.knotwork.android.domain.usecases.SaveMessageToMemoryUseCase
 import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
 import app.knotwork.android.domain.usecases.SubmitClarificationAnswerUseCase
 import app.knotwork.android.domain.usecases.TranscribeAudioUseCase
+import app.knotwork.android.presentation.state.ActiveSessionTracker
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ChatMessageStatus
 import app.knotwork.design.components.chat.ChatMetadata
@@ -127,6 +128,7 @@ class ChatHomeViewModel @Inject constructor(
     private val audioRecorder: AudioRecorder,
     private val audioCaptureStore: AudioCaptureStore,
     private val transcribeAudioUseCase: TranscribeAudioUseCase,
+    private val activeSessionTracker: ActiveSessionTracker,
 ) : ViewModel() {
 
     private val _state: MutableStateFlow<ChatHomeScreenState> = MutableStateFlow(ChatHomeScreenState())
@@ -138,6 +140,32 @@ class ChatHomeViewModel @Inject constructor(
      * down the tree as-is.
      */
     val state: StateFlow<ChatHomeScreenState> = _state.asStateFlow()
+
+    /**
+     * Marks the chat surface as visible and in the foreground, publishing the
+     * currently open session id to [ActiveSessionTracker].
+     *
+     * While a session is the active one, the live-phase HITL approval gate
+     * suppresses its system notification ([ApprovalNotificationManager]) — the
+     * user already sees the inline approval card, so a duplicate notification in
+     * the shade would be noise. Called by the screen on `ON_RESUME` and whenever
+     * the open session changes while resumed.
+     */
+    fun onChatScreenVisible() {
+        activeSessionTracker.setActiveSessionId(state.value.thread.currentSessionId.takeIf { it.isNotBlank() })
+    }
+
+    /**
+     * Marks the chat surface as no longer visible (navigated away or app sent to
+     * background), clearing [ActiveSessionTracker].
+     *
+     * Clearing it re-enables the approval notification so a run that raises a
+     * HITL gate while the app is backgrounded still reaches the user through the
+     * notification shade. Called by the screen on `ON_STOP` and on dispose.
+     */
+    fun onChatScreenHidden() {
+        activeSessionTracker.setActiveSessionId(null)
+    }
 
     private var messagesJob: Job? = null
     private var generationJob: Job? = null

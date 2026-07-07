@@ -720,6 +720,24 @@ interface SettingsRepository {
     suspend fun setShareTargetPipelineId(pipelineId: String?)
 
     /**
+     * `true` when content shared into the app should accumulate in a single
+     * reusable **Shared** chat instead of opening a fresh chat per share.
+     *
+     * Unlike [shareTargetPipelineId] this is a tunable behaviour preference (not
+     * a user binding), so `resetToRecommendedDefaults` restores it to
+     * [SettingsDefaults.SHARE_REUSE_SESSION_DEFAULT] (`true`).
+     */
+    val shareReuseSession: Flow<Boolean>
+
+    /**
+     * Updates the "keep shares in one chat" preference.
+     *
+     * @param reuse `true` to append every share to the single Shared chat,
+     *   `false` to start a new chat per share.
+     */
+    suspend fun setShareReuseSession(reuse: Boolean)
+
+    /**
      * A [Flow] of the pipeline id bound to the **Quick Settings tile** ("duty"
      * pipeline). `null` means the tile is unbound: tapping it opens the app's
      * Background settings instead of running anything (privacy-first default).

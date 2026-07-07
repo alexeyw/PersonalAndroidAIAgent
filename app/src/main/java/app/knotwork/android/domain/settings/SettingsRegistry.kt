@@ -123,6 +123,7 @@ private val BACKGROUND_ENTRIES = listOf(
     setting("LONG_RUNNING_TASKS_NOTIFICATIONS", BASIC, TOGGLE, hubBasic = true, syn = listOf("notify")),
     setting("SCHEDULED_TASK_NOTIFICATIONS", BASIC, TOGGLE, syn = listOf("notify", "schedule")),
     setting("SHARE_TARGET_PIPELINE_ID", BASIC, DROPDOWN, syn = listOf("share", "send", "pipeline", "surface")),
+    setting("SHARE_REUSE_SESSION", BASIC, TOGGLE, syn = listOf("share", "one", "chat", "same", "reuse")),
     setting(
         "QUICK_SETTINGS_TILE_PIPELINE_ID",
         BASIC,

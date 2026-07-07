@@ -183,6 +183,9 @@ class SettingsViewModel @Inject constructor(
     fun setScheduledTaskNotificationsEnabled(enabled: Boolean) =
         background.setScheduledTaskNotificationsEnabled(enabled)
 
+    /** Toggles whether shares accumulate in one Shared chat (`true`) or open a new chat each time. */
+    fun setShareReuseSession(reuse: Boolean) = background.setShareReuseSession(reuse)
+
     /** Binds (or clears, with `null`) the pipeline run by an entry [surface] (share / tile). */
     fun setSurfacePipeline(surface: EntrySurface, pipelineId: String?) =
         background.setSurfacePipeline(surface, pipelineId)

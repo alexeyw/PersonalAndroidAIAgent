@@ -8,7 +8,7 @@
         errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/AndroidManifest.xml"
-            line="91"
+            line="114"
             column="13"/>
     </issue>
 
@@ -35,17 +35,6 @@
     </issue>
 
     <issue
-        id="AndroidGradlePluginVersion"
-        message="A newer version of Gradle than 9.5.1 is available: 9.6.0"
-        errorLine1="distributionUrl=https\://services.gradle.org/distributions/gradle-9.5.1-bin.zip"
-        errorLine2="                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="../gradle/wrapper/gradle-wrapper.properties"
-            line="3"
-            column="17"/>
-    </issue>
-
-    <issue
         id="GradleDependency"
         message="A newer version of com.google.mediapipe:tasks-text than 0.10.35 is available: 0.20230731"
         errorLine1="mediapipe = &quot;0.10.35&quot;"
@@ -57,14 +46,25 @@
     </issue>
 
     <issue
-        id="NewerVersionAvailable"
-        message="A newer version of org.jetbrains.kotlin.plugin.compose than 2.3.21 is available: 2.4.0"
-        errorLine1="kotlin = &quot;2.3.21&quot;"
-        errorLine2="         ~~~~~~~~">
+        id="GradleDependency"
+        message="A newer version of androidx.appfunctions:appfunctions than 1.0.0-alpha09 is available: 1.0.0-alpha10"
+        errorLine1="appfunctions = &quot;1.0.0-alpha09&quot;"
+        errorLine2="               ~~~~~~~~~~~~~~~">
         <location
             file="../gradle/libs.versions.toml"
-            line="9"
-            column="10"/>
+            line="31"
+            column="16"/>
+    </issue>
+
+    <issue
+        id="GradleDependency"
+        message="A newer version of androidx.appfunctions:appfunctions-compiler than 1.0.0-alpha09 is available: 1.0.0-alpha10"
+        errorLine1="appfunctions = &quot;1.0.0-alpha09&quot;"
+        errorLine2="               ~~~~~~~~~~~~~~~">
+        <location
+            file="../gradle/libs.versions.toml"
+            line="31"
+            column="16"/>
     </issue>
 
     <issue
@@ -72,6 +72,17 @@
         message="This folder configuration (`v26`) is unnecessary; `minSdkVersion` is 36.0. Merge all the resources in this folder into `mipmap-anydpi`.">
         <location
             file="src/main/res/mipmap-anydpi-v26"/>
+    </issue>
+
+    <issue
+        id="ReportShortcutUsage"
+        message="Calling this method indicates use of dynamic shortcuts, but there are no calls to methods that track shortcut usage, such as `pushDynamicShortcut` or `reportShortcutUsed`. Calling these methods is recommended, as they track shortcut usage and allow launchers to adjust which shortcuts appear based on activation history. Please see https://developer.android.com/develop/ui/views/launch/shortcuts/managing-shortcuts#track-usage"
+        errorLine1="            ShortcutManagerCompat.setDynamicShortcuts(context, specs.map { it.toShortcutInfo() })"
+        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
+        <location
+            file="src/main/java/app/knotwork/android/presentation/shortcuts/AppShortcutPublisher.kt"
+            line="52"
+            column="13"/>
     </issue>
 
 </issues>

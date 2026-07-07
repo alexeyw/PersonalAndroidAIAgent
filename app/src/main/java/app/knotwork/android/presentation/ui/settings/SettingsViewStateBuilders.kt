@@ -272,6 +272,7 @@ internal fun buildBackgroundViewState(uiState: SettingsUiState): BackgroundSetti
         longRunningEnabled = uiState.longRunningTaskNotificationsEnabled,
         scheduledResultsEnabled = uiState.scheduledTaskNotificationsEnabled,
         shareTargetPipelineLabel = pipelineBindingLabel(uiState, uiState.shareTargetPipelineId),
+        shareReuseSessionEnabled = uiState.shareReuseSession,
         quickTilePipelineLabel = pipelineBindingLabel(uiState, uiState.quickSettingsTilePipelineId),
         advancedSliders = listOf(
             SettingSliderRow(

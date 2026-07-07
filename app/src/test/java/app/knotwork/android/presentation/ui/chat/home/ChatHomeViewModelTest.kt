@@ -44,6 +44,7 @@ import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
 import app.knotwork.android.domain.usecases.SubmitClarificationAnswerUseCase
 import app.knotwork.android.domain.usecases.TranscribeAudioUseCase
 import app.knotwork.android.domain.usecases.TranscriptionOutcome
+import app.knotwork.android.presentation.state.ActiveSessionTracker
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ChatRole
 import app.knotwork.design.components.chat.ComposerVoiceNotice
@@ -139,10 +140,12 @@ class ChatHomeViewModelTest {
     private lateinit var activeRunsFlow: MutableStateFlow<Set<String>>
 
     private lateinit var viewModel: ChatHomeViewModel
+    private lateinit var activeSessionTracker: ActiveSessionTracker
 
     @Before
     fun setUp() {
         Dispatchers.setMain(testDispatcher)
+        activeSessionTracker = ActiveSessionTracker()
         agentOrchestratorUseCase = mockk(relaxed = true)
         chatRepository = mockk()
         pipelineRepository = mockk()
@@ -255,6 +258,7 @@ class ChatHomeViewModelTest {
         audioRecorder,
         audioCaptureStore,
         transcribeAudioUseCase,
+        activeSessionTracker,
     ).also { vm ->
         // Keep the replay projection on the test scheduler so
         // advanceUntilIdle() deterministically covers it.
@@ -830,6 +834,23 @@ class ChatHomeViewModelTest {
             "x".repeat(ChatHomeThreadsDelegate.AUTO_RENAME_CHAR_LIMIT) + ChatHomeThreadsDelegate.AUTO_RENAME_SUFFIX,
             renamed,
         )
+    }
+
+    @Test
+    fun `sendMessage collapses whitespace into a single-line title when auto-renaming`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, any(), any()) } returns flowOf(
+            AgentOrchestratorState.Completed("ok"),
+        )
+
+        viewModel.onComposerValueChange("  Plan a trip\n\nto   Rome  ")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        val renamed = sessionsFlow.value.first { it.id == sessionId }.name
+        assertEquals("Plan a trip to Rome", renamed)
     }
 
     @Test
@@ -2195,6 +2216,32 @@ class ChatHomeViewModelTest {
 
         assertEquals(VoiceInputState.Idle, viewModel.state.value.composer.voice)
         coVerify(exactly = 0) { transcribeAudioUseCase(any()) }
+    }
+
+    // endregion
+
+    // region active-session tracking (HITL notification suppression)
+
+    @Test
+    fun `given chat visible when onChatScreenVisible then active session id is published`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+
+        viewModel.onChatScreenVisible()
+
+        assertEquals(sessionId, activeSessionTracker.activeSessionId.value)
+    }
+
+    @Test
+    fun `given chat visible when onChatScreenHidden then active session id is cleared`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        viewModel.onChatScreenVisible()
+
+        viewModel.onChatScreenHidden()
+
+        assertNull(activeSessionTracker.activeSessionId.value)
     }
 
     // endregion

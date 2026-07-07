@@ -31,6 +31,8 @@ private const val MINUTES_PER_HOUR = 60L
  * @property dailyHour selected hour `0..23` for the Daily condition.
  * @property dailyMinute selected minute `0..59` for the Daily condition.
  * @property wifiOnly `true` restricts the Network condition to Wi-Fi.
+ * @property ssids network names the Wi-Fi condition is scoped to; empty means
+ *   "any network / any Wi-Fi" (the original behaviour).
  * @property pipelineId the bound pipeline id, or `null` (unbound, inert).
  * @property prompt the input message handed to the pipeline on fire.
  * @property enabled the on/off value edited inside the editor.
@@ -46,6 +48,7 @@ data class TriggerEditorDraft(
     val dailyHour: Int,
     val dailyMinute: Int,
     val wifiOnly: Boolean,
+    val ssids: List<String>,
     val pipelineId: String?,
     val prompt: String,
     val enabled: Boolean,
@@ -71,7 +74,13 @@ data class TriggerEditorDraft(
         TriggerConditionType.Interval -> TriggerCondition.IntervalSchedule(effectiveIntervalMinutes)
         TriggerConditionType.Daily -> TriggerCondition.DailySchedule(dailyHour, dailyMinute)
         TriggerConditionType.Charging -> TriggerCondition.Charging
-        TriggerConditionType.Network -> TriggerCondition.NetworkConnected(wifiOnly)
+        // Persist wifiOnly exactly as the user set it — no silent forcing. When
+        // ssids is non-empty the evaluator already requires Wi-Fi (SSID scope
+        // implies Wi-Fi), so the flag does not need to be overridden here.
+        TriggerConditionType.Network -> TriggerCondition.NetworkConnected(
+            wifiOnly = wifiOnly,
+            ssids = ssids,
+        )
     }
 
     companion object {
@@ -97,6 +106,7 @@ data class TriggerEditorDraft(
             dailyHour = 8,
             dailyMinute = 0,
             wifiOnly = false,
+            ssids = emptyList(),
             pipelineId = null,
             prompt = "",
             enabled = true,
@@ -122,6 +132,7 @@ data class TriggerEditorDraft(
                 is TriggerCondition.NetworkConnected -> base.copy(
                     type = TriggerConditionType.Network,
                     wifiOnly = condition.wifiOnly,
+                    ssids = condition.ssids,
                 )
             }
         }

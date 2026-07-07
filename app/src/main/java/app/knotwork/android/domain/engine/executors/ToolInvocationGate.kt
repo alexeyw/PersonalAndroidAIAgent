@@ -94,6 +94,13 @@ class ToolInvocationGate @Inject constructor(
     fun resumeWithApproval(sessionId: String, isApproved: Boolean) {
         val holder = activeApprovalDeferreds.remove(sessionId)
         holder?.deferred?.complete(isApproved)
+        // Settle any approval notification for this session. When the decision is
+        // made from the in-chat card (the common case) the live-phase notification
+        // — posted while the app was backgrounded — would otherwise keep hanging in
+        // the shade offering a choice that has already been made. Idempotent: a
+        // no-op when nothing was posted (e.g. the request was answered while the
+        // chat was on screen and the notification was suppressed to begin with).
+        approvalNotifier.cancelApprovalNotification(sessionId)
     }
 
     /**

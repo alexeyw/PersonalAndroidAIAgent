@@ -88,6 +88,7 @@ object TriggersPreview {
         dailyHour = 8,
         dailyMinute = 0,
         wifiOnly = false,
+        ssids = emptyList(),
         pipelines = PIPELINES,
         pipelineName = "Daily briefing",
         prompt = "Summarize today's calendar and unread mail into a short briefing.",
@@ -108,6 +109,7 @@ object TriggersPreview {
         dailyHour = 8,
         dailyMinute = 0,
         wifiOnly = false,
+        ssids = emptyList(),
         pipelines = PIPELINES,
         pipelineName = null,
         prompt = "",
@@ -128,6 +130,12 @@ object TriggersPreview {
     fun editorCharging(): TriggerEditorUi = baseEditor().copy(type = TriggerConditionType.Charging)
 
     fun editorNetwork(): TriggerEditorUi = baseEditor().copy(type = TriggerConditionType.Network, wifiOnly = true)
+
+    fun editorNetworkScoped(): TriggerEditorUi = baseEditor().copy(
+        type = TriggerConditionType.Network,
+        wifiOnly = true,
+        ssids = listOf("Home", "Office"),
+    )
 
     fun editorInvalid(): TriggerEditorUi = editorCreate().copy(
         type = TriggerConditionType.Interval,

@@ -218,6 +218,10 @@ object SettingsSearchCatalog {
             R.string.settings_search_name_share_target_pipeline_id,
             R.string.settings_search_desc_share_target_pipeline_id,
         ),
+        "SHARE_REUSE_SESSION" to strings(
+            R.string.settings_search_name_share_reuse_session,
+            R.string.settings_search_desc_share_reuse_session,
+        ),
         "QUICK_SETTINGS_TILE_PIPELINE_ID" to strings(
             R.string.settings_search_name_quick_settings_tile_pipeline_id,
             R.string.settings_search_desc_quick_settings_tile_pipeline_id,

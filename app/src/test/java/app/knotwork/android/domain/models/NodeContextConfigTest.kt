@@ -116,10 +116,22 @@ class NodeContextConfigTest {
     }
 
     @Test
-    fun `defaultForType returns ALL_ENABLED for OUTPUT`() {
+    fun `defaultForType returns nodeInput-only for OUTPUT`() {
+        // A default OUTPUT node echoes the previous node's output. Even when the
+        // user turns on formatter mode with a systemPrompt, it should re-format
+        // only that upstream output — not the whole conversation.
         val config = NodeContextConfig.defaultForType(NodeType.OUTPUT)
 
-        assertEquals(NodeContextConfig.ALL_ENABLED, config)
+        assertEquals(
+            NodeContextConfig(
+                chatHistory = false,
+                originalTask = false,
+                nodeInput = true,
+                longTermMemory = false,
+                toolResults = false,
+            ),
+            config,
+        )
     }
 
     @Test

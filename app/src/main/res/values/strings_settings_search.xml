@@ -108,6 +108,8 @@
     <string name="settings_search_desc_scheduled_task_notifications">Notify when a scheduled task fires.</string>
     <string name="settings_search_name_share_target_pipeline_id">Pipeline for sharing</string>
     <string name="settings_search_desc_share_target_pipeline_id">Pipeline run when you share text or an image into the app.</string>
+    <string name="settings_search_name_share_reuse_session">Keep shares in one chat</string>
+    <string name="settings_search_desc_share_reuse_session">Add every share to a single Shared chat instead of a new one each time.</string>
     <string name="settings_search_name_quick_settings_tile_pipeline_id">Quick Settings pipeline</string>
     <string name="settings_search_desc_quick_settings_tile_pipeline_id">Pipeline run by the one-tap Quick Settings tile.</string>
     <string name="settings_search_name_resume_max_age_hours">Resume max age</string>

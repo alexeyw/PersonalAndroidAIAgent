@@ -1,5 +1,9 @@
 package app.knotwork.android.presentation.ui.triggers
 
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.SnackbarHost
@@ -10,9 +14,11 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.Dialog
+import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import app.knotwork.android.R
 import app.knotwork.android.domain.models.TriggerCondition
@@ -54,6 +60,20 @@ fun TriggersScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+
+    // Reading a connected Wi-Fi SSID needs fine location; request it the first time
+    // the user scopes a trigger to specific networks. The SSID is stored regardless
+    // of the grant — an ungranted trigger simply never matches until permission is
+    // given (fail-safe) — so the result callback is intentionally a no-op.
+    val locationPermissionLauncher =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    val addSsid: (String) -> Unit = { ssid ->
+        viewModel.onSsidAdd(ssid)
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+        if (!granted) locationPermissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+    }
 
     // Surface a one-shot mutation error (save / toggle / delete) as a snackbar
     // over whichever surface is showing, then clear it.
@@ -81,6 +101,8 @@ fun TriggersScreen(
                     onIntervalUnitChange = viewModel::onIntervalUnitChange,
                     onDailyTimeChange = viewModel::onDailyTimeChange,
                     onWifiOnlyToggle = viewModel::onWifiOnlyToggle,
+                    onSsidAdd = addSsid,
+                    onSsidRemove = viewModel::onSsidRemove,
                     onPipelineSelect = viewModel::onPipelineSelect,
                     onPromptChange = viewModel::onPromptChange,
                     onEnabledToggle = viewModel::onEnabledToggle,
@@ -163,6 +185,8 @@ private fun conditionText(label: TriggerConditionLabel): String = when (label) {
     TriggerConditionLabel.Charging -> stringResource(R.string.triggers_condition_charging)
     TriggerConditionLabel.NetworkAny -> stringResource(R.string.triggers_condition_network_any)
     TriggerConditionLabel.NetworkWifi -> stringResource(R.string.triggers_condition_network_wifi)
+    is TriggerConditionLabel.NetworkNamed ->
+        stringResource(R.string.triggers_condition_network_named, label.ssids.joinToString(", "))
 }
 
 /** Maps the app state onto the catalog list view state. */
@@ -224,6 +248,7 @@ private fun TriggersUiState.toEditorUi(draft: TriggerEditorDraft): TriggerEditor
         dailyHour = draft.dailyHour,
         dailyMinute = draft.dailyMinute,
         wifiOnly = draft.wifiOnly,
+        ssids = draft.ssids,
         pipelines = options,
         pipelineName = pipelineName,
         prompt = draft.prompt,
@@ -295,6 +320,10 @@ private fun triggerEditorStrings(): TriggerEditorStrings = TriggerEditorStrings(
     chargingBody = stringResource(R.string.triggers_charging_body),
     wifiOnlyLabel = stringResource(R.string.triggers_wifi_only_label),
     wifiOnlyDesc = stringResource(R.string.triggers_wifi_only_desc),
+    ssidSectionLabel = stringResource(R.string.triggers_ssid_section_label),
+    ssidSectionDesc = stringResource(R.string.triggers_ssid_section_desc),
+    ssidPlaceholder = stringResource(R.string.triggers_ssid_placeholder),
+    ssidAdd = stringResource(R.string.triggers_ssid_add),
     pipelineLabel = stringResource(R.string.triggers_pipeline_label),
     pipelineNone = stringResource(R.string.triggers_pipeline_none),
     pipelineNoneSub = stringResource(R.string.triggers_pipeline_none_sub),

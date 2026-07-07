@@ -498,6 +498,8 @@
     <string name="knotwork_settings_notifications_scheduled_results">Scheduled task results</string>
     <string name="knotwork_settings_notifications_scheduled_results_subtitle">Notify when a scheduled task completes or fails.</string>
     <string name="knotwork_settings_share_pipeline_title">Pipeline for sharing</string>
+    <string name="knotwork_settings_share_reuse_title">Keep shares in one chat</string>
+    <string name="knotwork_settings_share_reuse_subtitle">Add every share to a single Shared chat instead of a new one each time.</string>
     <string name="knotwork_settings_tile_pipeline_title">Quick Settings pipeline</string>
 
     <string name="knotwork_settings_crash_reporting_label">Send anonymous crash reports</string>

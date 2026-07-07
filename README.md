@@ -282,6 +282,9 @@ variant via your browser's `prefers-color-scheme`.
 - Approximately 2 GB of free RAM available for the LLM at runtime.
 - Optional: hardware acceleration via NPU or GPU for noticeably faster
   inference. CPU-only operation is supported but slower.
+- Optional: **location permission**, requested only if you scope a Wi-Fi
+  trigger to specific network names (Android ties the Wi-Fi name to location).
+  Nothing else uses it, and the name never leaves the device.
 
 ## Quick start
 

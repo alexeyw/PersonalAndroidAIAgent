@@ -131,6 +131,9 @@ class SettingsManager @Inject constructor(
         // DEFAULT_PIPELINE_ID), so excluded from resetToRecommendedDefaults.
         val SHARE_TARGET_PIPELINE_ID = stringPreferencesKey("share_target_pipeline_id")
         val QUICK_SETTINGS_TILE_PIPELINE_ID = stringPreferencesKey("quick_settings_tile_pipeline_id")
+
+        // Tunable behaviour preference (reset by resetToRecommendedDefaults).
+        val SHARE_REUSE_SESSION = booleanPreferencesKey("share_reuse_session")
         val CRASH_REPORTING_ENABLED = booleanPreferencesKey("crash_reporting_enabled")
         val USAGE_TELEMETRY_ENABLED = booleanPreferencesKey("usage_telemetry_enabled")
         val CONSOLE_PREFERRED_TAB = stringPreferencesKey("console_preferred_tab")
@@ -1085,6 +1088,26 @@ class SettingsManager @Inject constructor(
         }
     }
 
+    override val shareReuseSession: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.SHARE_REUSE_SESSION]
+                ?: SettingsDefaults.SHARE_REUSE_SESSION_DEFAULT
+        }
+
+    override suspend fun setShareReuseSession(reuse: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.SHARE_REUSE_SESSION] = reuse
+        }
+    }
+
     override val quickSettingsTilePipelineId: Flow<String?> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -1953,6 +1976,8 @@ class SettingsManager @Inject constructor(
                 SettingsDefaults.LONG_RUNNING_TASK_NOTIFICATIONS_ENABLED_DEFAULT
             preferences[PreferencesKeys.SCHEDULED_TASK_NOTIFICATIONS] =
                 SettingsDefaults.SCHEDULED_TASK_NOTIFICATIONS_ENABLED_DEFAULT
+            preferences[PreferencesKeys.SHARE_REUSE_SESSION] =
+                SettingsDefaults.SHARE_REUSE_SESSION_DEFAULT
             preferences[PreferencesKeys.CRASH_REPORTING_ENABLED] =
                 SettingsDefaults.CRASH_REPORTING_ENABLED_DEFAULT
             preferences[PreferencesKeys.USAGE_TELEMETRY_ENABLED] =
