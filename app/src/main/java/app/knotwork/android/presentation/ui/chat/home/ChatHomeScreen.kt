@@ -58,6 +58,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.knotwork.android.R
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
@@ -164,6 +165,16 @@ fun ChatHomeScreen(
                 knownMessages = messageCount
                 knownItems = itemCount
             }
+    }
+
+    // Publish the open session as "active" while this chat is in the foreground so
+    // the live HITL approval gate suppresses its duplicate system notification —
+    // the user already sees the inline approval card. Cleared on pause / dispose /
+    // background so a run that raises a gate while the app is away still notifies.
+    // Keyed on currentSessionId so switching threads re-points the tracker.
+    LifecycleResumeEffect(currentSessionId) {
+        viewModel.onChatScreenVisible()
+        onPauseOrDispose { viewModel.onChatScreenHidden() }
     }
 
     var debugPickerExpanded by remember { mutableStateOf(false) }

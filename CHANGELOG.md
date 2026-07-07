@@ -321,6 +321,14 @@ details.
 
 ### Fixed
 
+- **Tool-approval prompt no longer double-shows and no longer lingers.** When a
+  tool needed your confirmation, the request could appear **both** as the inline
+  card in the chat **and** as a system notification at the same time, and
+  answering it in the chat left the notification stranded in the shade. The
+  active chat is now correctly tracked, so while you are looking at a chat its
+  approval prompt stays inline only (no duplicate notification); a request raised
+  while the app is in the background still notifies you. Answering from the chat
+  now also dismisses any notification that was posted for it.
 - **Output nodes no longer add filler to simple replies.** A fresh **Output**
   node now defaults to forwarding the previous node's text *verbatim* instead of
   running an extra "Formatter" model pass over it. That formatting pass could
