@@ -47,8 +47,10 @@ import javax.inject.Inject
  * 4. Emit [AgentOrchestratorState.AwaitingClarification] and call
  *    [ClarificationRepository.requestAnswer], which suspends until the user submits
  *    a reply or the configured timeout elapses.
- * 5. Emit [NodeExecutionResult] with the user's answer as `outputText` for the next
- *    node downstream.
+ * 5. Emit [NodeExecutionResult] whose `outputText` carries BOTH the asked
+ *    question and the user's answer as a `Q: <question>\nA: <answer>` pair, so
+ *    downstream nodes (and the `QUEUE_PROCESSOR` results list) retain the full
+ *    exchange instead of a context-free bare answer.
  *
  * The live wait is only the first phase of a two-phase protocol. When it
  * times out on a persisted run, the executor parks the run instead of
@@ -83,9 +85,14 @@ class ClarificationNodeExecutor @Inject constructor(
         // question inference. The record never survives its first
         // consumption attempt; an unanswered record (a resume that did not
         // come through the answer path) falls through to a fresh question.
-        val parkedAnswer = consumeParkedAnswer(runId)
-        if (parkedAnswer != null) {
-            emit(NodeOutput.Result(NodeExecutionResult(outputText = parkedAnswer)))
+        val parked = consumeParkedAnswer(runId)
+        if (parked != null) {
+            val (parkedQuestion, parkedAnswer) = parked
+            emit(
+                NodeOutput.Result(
+                    NodeExecutionResult(outputText = pairQuestionWithAnswer(parkedQuestion, parkedAnswer)),
+                ),
+            )
             return@flow
         }
 
@@ -140,7 +147,11 @@ class ClarificationNodeExecutor @Inject constructor(
         emit(NodeOutput.State(AgentOrchestratorState.AwaitingClarification(request)))
         when (val outcome = clarificationRepository.requestAnswer(request)) {
             is ClarificationOutcome.Answered ->
-                emit(NodeOutput.Result(NodeExecutionResult(outputText = outcome.answer)))
+                emit(
+                    NodeOutput.Result(
+                        NodeExecutionResult(outputText = pairQuestionWithAnswer(question, outcome.answer)),
+                    ),
+                )
             is ClarificationOutcome.TimedOut -> {
                 if (runId != null && parkRun(runId, sessionId, question, options)) {
                     // Two-phase wait, second phase: the run parks on its
@@ -157,7 +168,11 @@ class ClarificationNodeExecutor @Inject constructor(
                     // failures keep the legacy default-answer fallback.
                     val defaultAnswer = request.options?.firstOrNull().orEmpty()
                     Timber.tag(TAG).w("Clarification timed out; using default answer: %s", defaultAnswer)
-                    emit(NodeOutput.Result(NodeExecutionResult(outputText = defaultAnswer)))
+                    emit(
+                        NodeOutput.Result(
+                            NodeExecutionResult(outputText = pairQuestionWithAnswer(question, defaultAnswer)),
+                        ),
+                    )
                 }
             }
         }
@@ -167,16 +182,36 @@ class ClarificationNodeExecutor @Inject constructor(
      * Consumes the parked clarification record of a resumed run, one-shot.
      *
      * @param runId Id of the executing run, or `null` for non-persisted runs.
-     * @return The recorded answer when present, or `null` when a fresh
-     *   question must be asked (no record, or an unanswered record).
+     * @return The recorded `(question, answer)` pair when an answer is present,
+     *   or `null` when a fresh question must be asked (no record, wrong kind, or
+     *   an unanswered record). The record is deleted on every hit so a stale
+     *   unanswered record never lingers.
      */
-    private suspend fun consumeParkedAnswer(runId: String?): String? {
+    private suspend fun consumeParkedAnswer(runId: String?): Pair<String, String>? {
         if (runId == null) return null
         val parked = pendingInteractionRepository.getForRun(runId) ?: return null
         if (parked.kind != PendingInteractionKind.CLARIFICATION) return null
         pendingInteractionRepository.delete(runId)
-        return parked.answer
+        val answer = parked.answer ?: return null
+        return parked.question.orEmpty() to answer
     }
+
+    /**
+     * Formats the clarification exchange as the node's downstream output.
+     *
+     * The node must forward BOTH the asked question and the user's answer, not
+     * the bare answer: downstream nodes (and the `QUEUE_PROCESSOR` results list
+     * that concatenates child outputs) otherwise lose all record of what was
+     * asked, so an LLM node cannot reconstruct question/answer pairs. The `Q:` /
+     * `A:` labels disambiguate the pair for downstream LLM prompts; they are
+     * neutral context markers, not user-facing copy (the UI question shown to
+     * the user comes from [ClarificationRequest.question], untouched here).
+     *
+     * @param question The question that was put to the user.
+     * @param answer The user's answer (may be empty on the timeout-default path).
+     * @return A two-line `Q: <question>\nA: <answer>` string.
+     */
+    private fun pairQuestionWithAnswer(question: String, answer: String): String = "Q: $question\nA: $answer"
 
     /**
      * Parks the run in its persistent waiting phase: persists the generated

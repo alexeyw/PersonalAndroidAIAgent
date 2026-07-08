@@ -40,7 +40,8 @@ import org.junit.Test
  * - generates a clarifying question (and optional options) via the local LLM,
  * - emits [AgentOrchestratorState.Thinking] tokens during generation,
  * - emits [AgentOrchestratorState.AwaitingClarification] with a parsed request,
- * - suspends on [ClarificationRepository.requestAnswer] and forwards the answer as
+ * - suspends on [ClarificationRepository.requestAnswer] and forwards BOTH the
+ *   asked question and the answer as a `Q: <question>\nA: <answer>` pair in
  *   [NodeExecutionResult.outputText].
  *
  * On malformed LLM output the raw text becomes the question (no options).
@@ -85,9 +86,9 @@ class ClarificationNodeExecutorTest {
 
         val states = executor.execute(node, "ctx", "session", "prompt").toList().unwrap()
 
-        // Final NodeExecutionResult carries the user's answer.
+        // Final NodeExecutionResult carries the asked question paired with the answer.
         val result = states.last() as NodeExecutionResult
-        assertEquals("red", result.outputText)
+        assertEquals("Q: Pick a color\nA: red", result.outputText)
         assertNull(result.error)
 
         // The intermediate AwaitingClarification carries the parsed request.
@@ -116,7 +117,7 @@ class ClarificationNodeExecutorTest {
         assertEquals("Describe issue", awaiting.request.question)
         assertNull(awaiting.request.options)
 
-        assertEquals("free text", (states.last() as NodeExecutionResult).outputText)
+        assertEquals("Q: Describe issue\nA: free text", (states.last() as NodeExecutionResult).outputText)
     }
 
     @Test
@@ -280,7 +281,7 @@ class ClarificationNodeExecutorTest {
         val states = executor.execute(node, "ctx", "session", "prompt").toList().unwrap()
 
         val result = states.filterIsInstance<NodeExecutionResult>().last()
-        assertEquals("red", result.outputText)
+        assertEquals("Q: Pick a color\nA: red", result.outputText)
         coVerify(exactly = 0) { pendingInteractionRepository.save(any()) }
     }
 
@@ -297,7 +298,7 @@ class ClarificationNodeExecutorTest {
         val states = executor.execute(node, "ctx", "session", "prompt", runId = "run-1").toList().unwrap()
 
         val result = states.filterIsInstance<NodeExecutionResult>().last()
-        assertEquals("red", result.outputText)
+        assertEquals("Q: Pick a color\nA: red", result.outputText)
         verify(exactly = 0) { clarificationNotifier.sendPersistentClarificationRequest(any(), any(), any()) }
     }
 
@@ -317,7 +318,8 @@ class ClarificationNodeExecutorTest {
         val states = executor.execute(node, "ctx", "session", "prompt", runId = "run-1").toList().unwrap()
 
         val result = states.filterIsInstance<NodeExecutionResult>().last()
-        assertEquals("blue", result.outputText)
+        // Resume path pairs the recorded question with the recorded answer.
+        assertEquals("Q: Pick a color\nA: blue", result.outputText)
         // One-shot consumption, and the LLM was never touched.
         coVerify { pendingInteractionRepository.delete("run-1") }
         verify(exactly = 0) { llmEngine.generateResponseStream(any()) }
@@ -342,7 +344,7 @@ class ClarificationNodeExecutorTest {
         val states = executor.execute(node, "ctx", "session", "prompt", runId = "run-1").toList().unwrap()
 
         val result = states.filterIsInstance<NodeExecutionResult>().last()
-        assertEquals("red", result.outputText)
+        assertEquals("Q: Pick a color\nA: red", result.outputText)
         coVerify { pendingInteractionRepository.delete("run-1") }
     }
 }
