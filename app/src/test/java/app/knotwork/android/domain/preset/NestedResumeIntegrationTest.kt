@@ -226,7 +226,9 @@ class NestedResumeIntegrationTest {
 
             val completed = second.filterIsInstance<AgentOrchestratorState.Completed>().lastOrNull()
             assertNotNull("Resume must complete, got: ${second.map { it::class.simpleName }}", completed)
-            assertEquals(recordedAnswer, completed!!.finalResponse)
+            // The clarification output pairs the recorded question with the recorded
+            // answer, and both pass-through OUTPUT nodes echo it up to the final response.
+            assertEquals("Q: What color?\nA: $recordedAnswer", completed!!.finalResponse)
         }
 
     /** Reconstructs the checkpoint of [runId] from its persisted trace, as the task queue does. */

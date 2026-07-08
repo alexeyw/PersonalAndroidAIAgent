@@ -437,7 +437,9 @@ class GraphExecutionEngineTest {
     fun `routes user reply through CLARIFICATION node into OUTPUT`() = runTest {
         // Arrange a pipeline INPUT → CLARIFICATION → OUTPUT.
         // The clarification node generates a JSON question, the repository returns
-        // "user reply", and the OUTPUT node (no systemPrompt) echoes its input.
+        // "user reply", and the OUTPUT node (no systemPrompt) echoes its input. The
+        // clarification output pairs the asked question with the answer, so the echo
+        // is the full "Q: <question>\nA: <answer>" exchange, not the bare answer.
         val inputNode = NodeModel("input_1", NodeType.INPUT, 0f, 0f)
         val clarificationNode = NodeModel(
             id = "clar_1",
@@ -473,9 +475,10 @@ class GraphExecutionEngineTest {
         assertEquals(listOf("yes", "no"), awaiting.request.options)
         assertEquals(5_000L, awaiting.request.timeoutMs)
 
-        // The user's reply propagates downstream and ends up in the final Completed state.
+        // The user's reply propagates downstream and ends up in the final Completed state,
+        // paired with the question that was asked.
         val completed = states.last() as AgentOrchestratorState.Completed
-        assertEquals("user reply", completed.finalResponse)
+        assertEquals("Q: Confirm?\nA: user reply", completed.finalResponse)
         coVerify { clarificationRepository.requestAnswer(any()) }
     }
 
@@ -1599,9 +1602,10 @@ class GraphExecutionEngineTest {
 
             // The default option (first in the list) reached OUTPUT and surfaced as the
             // final completed response — proving the pipeline did NOT stall on the
-            // unanswered request.
+            // unanswered request. The clarification output pairs the question with the
+            // (defaulted) answer, so the echoed response carries both.
             val completed = states.last() as AgentOrchestratorState.Completed
-            assertEquals("default-option", completed.finalResponse)
+            assertEquals("Q: Pick one\nA: default-option", completed.finalResponse)
         }
 
     // ─── NodeContextBuilder integration ──────────────────────────────────────

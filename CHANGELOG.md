@@ -347,6 +347,15 @@ details.
 
 ### Fixed
 
+- **Clarification questions are no longer lost after they're answered.** A
+  **Clarification** node used to pass only the user's answer to the next node,
+  discarding the question it had asked. In pipelines that collect several
+  answers — for example a looped journaling ritual that asks three reflection
+  questions — the downstream node then saw a list of bare answers with no idea
+  which question each belonged to, so the composed result mixed them up or
+  dropped the questions entirely. A clarification node now forwards the full
+  exchange (the question together with the answer) to the next node, so later
+  steps can pair each answer with what was asked.
 - **Chat titles are more informative, especially for shares.** Auto-generated
   chat names now use more of your first message (up to 40 characters, up from 20),
   and titles for chats created from the **share** target draw on the whole shared
