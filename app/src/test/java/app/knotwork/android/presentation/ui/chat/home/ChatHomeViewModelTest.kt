@@ -4,6 +4,7 @@ import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.constants.SettingsDefaults
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AgentOrchestratorState
+import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.ClarificationRequest
@@ -397,8 +398,40 @@ class ChatHomeViewModelTest {
     }
 
     @Test
-    fun `sendMessage flips to Error when model is not initialized`() = runTest(testDispatcher) {
+    fun `sendMessage auto-loads the model then sends when it was not initialized`() = runTest(testDispatcher) {
+        // The model starts unloaded and becomes ready once the load succeeds —
+        // the send must then proceed automatically, in a single user tap.
+        var modelLoaded = false
+        every { llmInferenceEngine.isInitialized } answers { modelLoaded }
+        coEvery { loadModelUseCase() } answers {
+            modelLoaded = true
+            Result.Success(Unit)
+        }
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(AgentOrchestratorState.Completed("done"))
+        }
+
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        coVerify { loadModelUseCase() }
+        coVerify { agentOrchestratorUseCase(sessionId, "hi", null) }
+        // The composer clears only because the message was actually sent.
+        assertEquals("", viewModel.state.value.composer.value)
+    }
+
+    @Test
+    fun `sendMessage surfaces an error and keeps the draft when the model load fails`() = runTest(testDispatcher) {
         every { llmInferenceEngine.isInitialized } returns false
+        coEvery { loadModelUseCase() } returns Result.Error(
+            error = object : AppError.System {},
+            message = "no active model",
+        )
 
         viewModel = createViewModel()
         advanceUntilIdle()
@@ -408,11 +441,43 @@ class ChatHomeViewModelTest {
 
         val state = viewModel.state.value.visual
         assertTrue("Expected Error, got $state", state is ChatHomeUiState.Error)
-        assertEquals(
-            ChatHomeViewModel.MODEL_NOT_LOADED_MESSAGE,
-            (state as ChatHomeUiState.Error).message,
-        )
+        // The draft survives so Retry (or a manual resend) can deliver it.
+        assertEquals("hello", viewModel.state.value.composer.value)
         coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any()) }
+    }
+
+    @Test
+    fun `retryAfterError loads the model and resends the retained draft`() = runTest(testDispatcher) {
+        // First send fails to load; Retry then succeeds and must deliver the
+        // draft that is still sitting in the composer.
+        var modelLoaded = false
+        every { llmInferenceEngine.isInitialized } answers { modelLoaded }
+        coEvery { loadModelUseCase() } returns Result.Error(
+            error = object : AppError.System {},
+            message = "no active model",
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(AgentOrchestratorState.Completed("done"))
+        }
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+        assertTrue(viewModel.state.value.visual is ChatHomeUiState.Error)
+
+        // Now the model can load; Retry must load-and-send.
+        coEvery { loadModelUseCase() } answers {
+            modelLoaded = true
+            Result.Success(Unit)
+        }
+        viewModel.retryAfterError()
+        advanceUntilIdle()
+
+        coVerify { agentOrchestratorUseCase(sessionId, "hi", null) }
+        assertEquals("", viewModel.state.value.composer.value)
     }
 
     @Test
@@ -903,6 +968,62 @@ class ChatHomeViewModelTest {
             coVerify { settingsRepository.setCurrentChatSessionId(target) }
             verify { chatRepository.getDisplayMessagesForSession(target) }
         }
+
+    @Test
+    fun `selectThread preserves each chat's unsent draft independently`() = runTest(testDispatcher) {
+        val first = "chat-A"
+        savedSessionIdFlow.value = first
+        sessionsFlow.value = listOf(
+            ChatSession(id = first, name = "A", updatedAt = 0),
+            ChatSession(id = "chat-B", name = "B", updatedAt = 0),
+        )
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        assertEquals(first, viewModel.state.value.thread.currentSessionId)
+
+        // Type a draft in A, switch to B: B starts with an empty composer.
+        viewModel.onComposerValueChange("half-written A")
+        viewModel.selectThread("chat-B")
+        advanceUntilIdle()
+        assertEquals("", viewModel.state.value.composer.value)
+
+        // Type a draft in B, switch back to A: A's draft is restored.
+        viewModel.onComposerValueChange("half-written B")
+        viewModel.selectThread(first)
+        advanceUntilIdle()
+        assertEquals("half-written A", viewModel.state.value.composer.value)
+
+        // Return to B: its own draft is restored, not A's.
+        viewModel.selectThread("chat-B")
+        advanceUntilIdle()
+        assertEquals("half-written B", viewModel.state.value.composer.value)
+    }
+
+    @Test
+    fun `sending a message clears that chat's stored draft`() = runTest(testDispatcher) {
+        savedSessionIdFlow.value = "chat-A"
+        sessionsFlow.value = listOf(
+            ChatSession(id = "chat-A", name = "A", updatedAt = 0),
+            ChatSession(id = "chat-B", name = "B", updatedAt = 0),
+        )
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        coEvery { agentOrchestratorUseCase("chat-A", "hi", null) } returns flow {
+            emit(AgentOrchestratorState.Completed("done"))
+        }
+
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+        assertEquals("", viewModel.state.value.composer.value)
+
+        // Leaving and returning must not resurrect the already-sent draft.
+        viewModel.selectThread("chat-B")
+        advanceUntilIdle()
+        viewModel.selectThread("chat-A")
+        advanceUntilIdle()
+        assertEquals("", viewModel.state.value.composer.value)
+    }
 
     @Test
     fun `creating a new chat then deleting removes the new chat, not the previously-active one`() =

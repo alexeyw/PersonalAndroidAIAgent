@@ -145,6 +145,8 @@
     <!-- Mirrors the hardcoded channel name registered by AgentForegroundService so a
          headless-process registration by AgentWorker does not rename the user-visible channel. -->
     <string name="notifications_agent_foreground_channel_name">Agent Service</string>
+    <string name="notifications_agent_foreground_channel_description">Shows a status while the agent is actively working; dismissed automatically when it finishes.</string>
+    <string name="notifications_agent_foreground_title">Knotwork agent</string>
     <string name="notifications_scheduled_running_title">Scheduled task</string>
     <string name="notifications_scheduled_running_body">Agent is working in the background…</string>
     <string name="notifications_task_results_channel_name">Scheduled task results</string>

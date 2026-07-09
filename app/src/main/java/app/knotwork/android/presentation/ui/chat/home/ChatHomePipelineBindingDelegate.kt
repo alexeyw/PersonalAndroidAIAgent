@@ -79,7 +79,9 @@ class ChatHomePipelineBindingDelegate(
     private fun observeAvailablePipelines() {
         scope.launch {
             pipelineRepository.getAllPipelines().collect { graphs ->
-                val summaries = graphs.map { PipelineSummary(id = it.id, name = it.name) }
+                val summaries = graphs.map {
+                    PipelineSummary(id = it.id, name = it.name, samplePrompts = it.samplePrompts)
+                }
                 state.update { pipelineNameRefreshed(it.copy(availablePipelines = summaries)) }
                 availablePipelinesObserved = true
                 handleDeletedBoundPipeline(summaries)
@@ -122,23 +124,30 @@ class ChatHomePipelineBindingDelegate(
     suspend fun handleDeletedBoundPipeline() = handleDeletedBoundPipeline(state.value.availablePipelines)
 
     /**
-     * Pure transformer: recomputes the pipeline subtitle for [s] from the
-     * session cache and the default-pipeline binding. Composed into a caller's
-     * `state.update` block (never its own emission) so the refresh rides the
-     * same atomic emission as the change that triggered it — including the
-     * threads delegate's session-metadata refresh.
+     * Pure transformer: recomputes the pipeline-derived projections for [s] —
+     * the TopAppBar subtitle ([ChatHomeScreenState.pipelineName]) and the
+     * active pipeline's empty-state starter prompts
+     * ([ChatHomeScreenState.activeSamplePrompts]) — from the session cache and
+     * the default-pipeline binding. Composed into a caller's `state.update`
+     * block (never its own emission) so the refresh rides the same atomic
+     * emission as the change that triggered it — including the threads
+     * delegate's session-metadata refresh.
      *
-     * @param s The snapshot to recompute the subtitle for.
-     * @return [s] with [ChatHomeScreenState.pipelineName] refreshed.
+     * @param s The snapshot to recompute the pipeline projections for.
+     * @return [s] with the pipeline subtitle and sample prompts refreshed.
      */
-    fun pipelineNameRefreshed(s: ChatHomeScreenState): ChatHomeScreenState = s.copy(
-        pipelineName = resolvePipelineName(
+    fun pipelineNameRefreshed(s: ChatHomeScreenState): ChatHomeScreenState {
+        val active = resolveActivePipeline(
             sessions = sessions(),
             currentSessionId = s.thread.currentSessionId,
             summaries = s.availablePipelines,
             defaultPipelineId = defaultPipelineId,
-        ),
-    )
+        )
+        return s.copy(
+            pipelineName = active?.name,
+            activeSamplePrompts = active?.samplePrompts.orEmpty(),
+        )
+    }
 
     /**
      * Returns the active session's pipeline binding (or `null` when the session
@@ -149,23 +158,23 @@ class ChatHomePipelineBindingDelegate(
         sessions().firstOrNull { it.id == state.value.thread.currentSessionId }?.pipelineId
 
     /**
-     * Resolves the pipeline display name for the active chat — explicit binding
-     * when set, otherwise the user-marked default. Returns `null` when neither
-     * resolves (empty library, or no default marked): the subtitle must not
-     * advertise a pipeline that execution would never pick, so there is no
-     * order-dependent "first in the library" fallback.
+     * Resolves the pipeline the active chat will actually run — explicit
+     * binding when set, otherwise the user-marked default. Returns `null` when
+     * neither resolves (empty library, or no default marked): the subtitle and
+     * suggestions must not advertise a pipeline that execution would never
+     * pick, so there is no order-dependent "first in the library" fallback.
      */
-    private fun resolvePipelineName(
+    private fun resolveActivePipeline(
         sessions: List<ChatSession>,
         currentSessionId: String,
         summaries: List<PipelineSummary>,
         defaultPipelineId: String?,
-    ): String? {
+    ): PipelineSummary? {
         if (summaries.isEmpty()) return null
         val session = sessions.firstOrNull { it.id == currentSessionId }
         val boundId = session?.pipelineId
         val boundMatch = boundId?.let { id -> summaries.firstOrNull { it.id == id } }
-        if (boundMatch != null) return boundMatch.name
-        return defaultPipelineId?.let { id -> summaries.firstOrNull { it.id == id } }?.name
+        if (boundMatch != null) return boundMatch
+        return defaultPipelineId?.let { id -> summaries.firstOrNull { it.id == id } }
     }
 }

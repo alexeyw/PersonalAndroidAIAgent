@@ -169,7 +169,9 @@ class PipelineGraphContentHashTest {
         )
 
         val hashedGraphFields = setOf("nodes", "connections")
-        val excludedGraphFields = setOf("id", "name", "updatedAt")
+        // samplePrompts is display-only starter-prompt metadata (like name):
+        // editing it must never invalidate a resumable run, so it is excluded.
+        val excludedGraphFields = setOf("id", "name", "updatedAt", "samplePrompts")
         assertEquals(
             "PipelineGraph gained or lost a field — classify it in contentHash() " +
                 "and update this guard.",

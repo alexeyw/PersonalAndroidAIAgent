@@ -152,13 +152,19 @@ now built on the Knotwork design system and shows, top to bottom:
 - A pinned **composer** at the bottom — type a message or dictate with
   the microphone. The send button morphs into a **stop** button while
   the agent is generating, and into a **retry** button after an error.
+  Anything you type but do not send is **kept per chat**: switch to
+  another conversation and back and your half-written message is still
+  there (drafts live for the session and are not kept across an app
+  restart). If you send before the on-device model has loaded, the app
+  **loads it and then sends your message automatically** — you no longer
+  have to load the model and press send separately.
 
 The surface adapts to eight deterministic visual states, all reachable
 from the same screen:
 
 | State            | When it appears                                                 |
 |------------------|-----------------------------------------------------------------|
-| Empty            | A brand-new thread with no messages — shows sample prompts.     |
+| Empty            | A brand-new thread with no messages — shows the active pipeline's starter prompts. |
 | Idle             | History present, no in-flight request. The default.             |
 | Generating       | The assistant is producing tokens.                              |
 | HITL Confirm     | A tool call awaits your approval (read-only / sensitive /       |
@@ -539,7 +545,10 @@ chat-level details live in [Chats](#chats).
 
 - **Backgrounding the app** keeps the run alive: a foreground service
   (or, for scheduled tasks, the worker itself) holds the process while
-  inference continues, with a persistent status notification.
+  inference continues, with a status notification. That notification is
+  shown **only while the agent is actively working** and is removed on
+  its own once the run settles — it does not linger in the shade after
+  the agent has finished. Tap it to jump back into the app.
 - **Process death** (battery optimisation, memory pressure, swiping
   the app away) cannot be survived in place — but every run writes its
   progress to the encrypted database as it executes. On the next app
@@ -556,7 +565,7 @@ chat-level details live in [Chats](#chats).
 
 | Notification | When | Actions |
 |---|---|---|
-| *Agent is working* (persistent) | While a run executes in the background | Opens the app |
+| *Agent is working* (only while working) | While a run executes in the background; auto-removed when it finishes | Opens the app |
 | *Approval required* | A sensitive/destructive tool call awaits your decision | **Approve** / **Deny** (destructive: **Deny** / **Review in chat**) |
 | *Agent needs your input* | A clarification question is waiting | Deep-links into the chat |
 | *Task completed* / *Task failed* | A scheduled task finished | Opens the conversation the result landed in |

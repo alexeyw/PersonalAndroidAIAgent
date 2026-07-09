@@ -40,6 +40,8 @@ import java.util.UUID
  * @property chatRepository Source of the session list; session CRUD.
  * @property pipelineRunRepository Source of the active-run session-id set (drawer badges).
  * @property selectThread Seam into the ViewModel's thread switch.
+ * @property clearDraft Seam into the ViewModel's per-session draft store; called
+ *   on session deletion so the removed chat's unsent text does not linger.
  * @property pipelineNameRefresher Recomputes the pipeline subtitle for a snapshot
  *   (supplied by the pipeline-binding delegate) so it rides the metadata refresh.
  * @property onSessionsChanged Invoked after each sessions-flow emission so the
@@ -51,6 +53,7 @@ class ChatHomeThreadsDelegate(
     private val chatRepository: ChatRepository,
     private val pipelineRunRepository: PipelineRunRepository,
     private val selectThread: (String) -> Unit,
+    private val clearDraft: (String) -> Unit,
     private val pipelineNameRefresher: (ChatHomeScreenState) -> ChatHomeScreenState,
     private val onSessionsChanged: suspend () -> Unit,
 ) {
@@ -216,6 +219,9 @@ class ChatHomeThreadsDelegate(
             // insert and leave an orphan the insert re-adds.
             pendingNewSessionSave?.join()
             chatRepository.deleteSession(sessionId)
+            // Discard the deleted chat's unsent draft so it does not outlive the
+            // session it belonged to.
+            clearDraft(sessionId)
             val remaining = sessions.filter { it.id != sessionId }
             if (remaining.isNotEmpty()) {
                 selectThread(remaining.first().id)

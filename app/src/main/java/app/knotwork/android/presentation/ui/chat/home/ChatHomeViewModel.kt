@@ -9,6 +9,7 @@ import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.MessageAttachment
 import app.knotwork.android.domain.models.PipelineRunStatus
+import app.knotwork.android.domain.models.PipelineSamplePrompt
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.models.ToolRisk
@@ -171,6 +172,28 @@ class ChatHomeViewModel @Inject constructor(
     private var generationJob: Job? = null
 
     /**
+     * The in-flight "load the active model, then send" coroutine, or `null`
+     * once it settles. Tracked separately from [generationJob] so the
+     * transient [ChatHomeUiState.PreparingModel] phase can be cancelled by
+     * [stopGeneration] without disturbing a real generation, and so re-entering
+     * the send path after a successful load does not cancel its own launcher.
+     */
+    private var modelLoadJob: Job? = null
+
+    /**
+     * Per-session unsent composer text ("drafts"), keyed by chat session id.
+     *
+     * The composer holds exactly one live [ChatHomeComposerState.value] for the
+     * whole surface, so a bare thread switch would carry one chat's half-typed
+     * text into another. This map lets [selectThread] stash the outgoing chat's
+     * draft and restore the incoming chat's, giving every conversation its own
+     * independent input buffer. In-memory only: drafts are ephemeral and are
+     * intentionally not persisted across process death. Entries are dropped when
+     * a draft is sent ([proceedSend]) or its session is deleted ([clearDraft]).
+     */
+    private val sessionDrafts: MutableMap<String, String> = mutableMapOf()
+
+    /**
      * Re-entrancy guard for the image send path: the attachment pre-flight is
      * asynchronous (it resolves the pipeline graph), so a second `sendMessage`
      * could slip through the synchronous `Generating` guard before the first
@@ -274,6 +297,7 @@ class ChatHomeViewModel @Inject constructor(
         chatRepository = chatRepository,
         pipelineRunRepository = pipelineRunRepository,
         selectThread = ::selectThread,
+        clearDraft = ::clearDraft,
         pipelineNameRefresher = pipelineBinding::pipelineNameRefreshed,
         onSessionsChanged = pipelineBinding::handleDeletedBoundPipeline,
     )
@@ -355,12 +379,14 @@ class ChatHomeViewModel @Inject constructor(
         if (draftText.isEmpty() && readyAttachment == null) return
         if (_state.value.visual is ChatHomeUiState.Generating) return
         if (!llmInferenceEngine.isInitialized) {
-            // Surface the error with copy that matches what Retry actually
-            // does — Retry attempts to load the active model in-place
-            // through `retryAfterError`, not "open Settings and load it
-            // there". If no active model is registered the load fails and
-            // the error message switches to the Settings-redirect copy.
-            _state.update { it.copy(visual = ChatHomeUiState.Error(MODEL_NOT_LOADED_MESSAGE)) }
+            // The model isn't loaded yet — instead of dead-ending on an error
+            // tile that forces the user to tap Retry (load) and then Send
+            // again, auto-load the active model and re-enter the send path so
+            // the message goes out in one tap. Only a genuine load failure
+            // (no active model registered) surfaces the error, from where
+            // Retry re-attempts the load-and-send. The draft/attachment stay
+            // in the composer across the load (nothing is cleared here).
+            loadModelThenSend()
             return
         }
         // Multimodal pre-flight: an image can only travel into a run that starts
@@ -418,6 +444,9 @@ class ChatHomeViewModel @Inject constructor(
 
         val sessionId = _state.value.thread.currentSessionId
         if (sessionId.isBlank()) return
+        // The draft has now been sent; drop its per-session buffer so returning
+        // to this chat later shows an empty composer, not the just-sent text.
+        sessionDrafts.remove(sessionId)
         val pipelineId = threads.sessionsSnapshot().firstOrNull { it.id == sessionId }?.pipelineId
 
         // Fresh run = fresh cumulative log upstream; the baseline carried
@@ -483,30 +512,73 @@ class ChatHomeViewModel @Inject constructor(
         this == AgentOrchestratorState.Idle
 
     /**
-     * Handles the Retry CTA on the chat error tile. The previous behaviour
-     * simply flipped to Idle, which on the "model not loaded" branch
-     * meant the user had to manually open Settings → Models → load —
-     * Retry never actually did anything. Now Retry actively tries to
-     * recover:
+     * Loads the active local model and, on success, re-enters [sendMessage] so
+     * the user's retained composer draft (and any attachment) is delivered
+     * automatically without a second tap. Drives the transient
+     * [ChatHomeUiState.PreparingModel] state so the surface shows an honest
+     * "loading model" affordance rather than the misleading "generating" pill
+     * while nothing is being generated yet.
      *
-     *  - If the inference engine isn't initialised, runs
-     *    `LoadModelUseCase()` (null path = active model). Success settles
-     *    to the resting state; failure flips back to Error with copy that
-     *    explicitly redirects to Settings (typically "no active model
-     *    registered" — only Settings can fix that).
-     *  - Otherwise the engine is healthy and Retry collapses to "clear
-     *    error → resting state", same as the prior behaviour.
+     * A load failure (typically "no active model registered") flips to
+     * [ChatHomeUiState.Error] without clearing the composer, so Retry — or the
+     * user, after registering a model in Settings — can resend. Tracked via
+     * [modelLoadJob] so [stopGeneration] can cancel the pending send.
+     */
+    private fun loadModelThenSend() {
+        _state.update { it.copy(visual = ChatHomeUiState.PreparingModel) }
+        modelLoadJob?.cancel()
+        modelLoadJob = viewModelScope.launch {
+            when (val outcome = loadModelUseCase()) {
+                is Result.Success -> {
+                    if (llmInferenceEngine.isInitialized) {
+                        // Clear the transient PreparingModel first so sendMessage's
+                        // "already busy" guard does not reject the re-entry; the
+                        // resting visual is derived from the live receiver so a
+                        // message emission that landed during the load is honoured.
+                        _state.update { it.copy(visual = it.restingVisual()) }
+                        sendMessage()
+                    } else {
+                        // Defensive: a reported success that somehow left the
+                        // engine uninitialised must not loop back into another
+                        // load attempt — surface the error instead.
+                        _state.update { it.copy(visual = ChatHomeUiState.Error(NO_ACTIVE_MODEL_MESSAGE)) }
+                    }
+                }
+                is Result.Error ->
+                    _state.update {
+                        it.copy(visual = ChatHomeUiState.Error(outcome.message ?: NO_ACTIVE_MODEL_MESSAGE))
+                    }
+            }
+        }
+    }
+
+    /**
+     * Handles the Retry CTA on the chat error tile. Recovers by loading the
+     * model when needed and resending the retained draft so the user never has
+     * to re-type or re-tap Send:
+     *
+     *  - Engine healthy: clears the error and, if the composer still holds the
+     *    draft that failed, resends it via [sendMessage]; otherwise settles to
+     *    the resting state.
+     *  - Engine cold with a pending draft: [loadModelThenSend] loads then
+     *    resends. A further load failure re-shows the Error (typically "no
+     *    active model registered" — only Settings can fix that).
+     *  - Engine cold with no pending draft: loads the model only.
      */
     fun retryAfterError() {
+        val hasDraft = _state.value.composer.value.trim().isNotEmpty() ||
+            _state.value.composer.attachment is ComposerAttachmentDraft.Ready
         if (llmInferenceEngine.isInitialized) {
-            _state.update { it.copy(visual = it.restingVisual()) }
+            if (hasDraft) sendMessage() else _state.update { it.copy(visual = it.restingVisual()) }
             return
         }
-        // Surface a transient "loading…" hint via the generating state — the
-        // catalog renders the same composer affordance and the user sees
-        // forward motion. Reset back to Error / resting on the load result.
-        _state.update { it.copy(visual = ChatHomeUiState.Generating) }
-        viewModelScope.launch {
+        if (hasDraft) {
+            loadModelThenSend()
+            return
+        }
+        _state.update { it.copy(visual = ChatHomeUiState.PreparingModel) }
+        modelLoadJob?.cancel()
+        modelLoadJob = viewModelScope.launch {
             val outcome = loadModelUseCase()
             // The resting visual is derived from the update receiver, not a
             // pre-computed snapshot — a message emission landing while
@@ -536,10 +608,14 @@ class ChatHomeViewModel @Inject constructor(
      */
     fun stopGeneration() {
         generationJob?.cancel()
+        // Also abort a pending "load model then send" so tapping Stop during
+        // the PreparingModel phase cancels the queued send instead of letting
+        // it fire once the load completes.
+        modelLoadJob?.cancel()
         reattach.cancel()
         _state.update { current ->
             val cleared = current.withPendingCleared()
-            if (current.visual is ChatHomeUiState.Generating) {
+            if (current.visual is ChatHomeUiState.Generating || current.visual is ChatHomeUiState.PreparingModel) {
                 cleared.copy(visual = cleared.restingVisual())
             } else {
                 cleared
@@ -563,6 +639,15 @@ class ChatHomeViewModel @Inject constructor(
         generationJob?.cancel()
         messagesJob?.cancel()
         resetConsoleCachesForNewRun()
+        // Per-chat drafts: stash the outgoing chat's unsent text before the
+        // switch, then restore the incoming chat's saved draft (empty when it
+        // has none). Read/write the map outside `_state.update` — the update
+        // lambda may re-run under CAS contention and must stay side-effect free.
+        val outgoingSessionId = _state.value.thread.currentSessionId
+        if (outgoingSessionId.isNotBlank()) {
+            sessionDrafts[outgoingSessionId] = _state.value.composer.value
+        }
+        val restoredDraft = sessionDrafts[threadId].orEmpty()
         _state.update { current ->
             val cleared = current.withPendingCleared().withConsoleProjectionsCleared()
             threads.sessionMetadataRefreshed(
@@ -572,6 +657,7 @@ class ChatHomeViewModel @Inject constructor(
                     tokens = cleared.tokens.copy(used = 0),
                     visual = ChatHomeUiState.Empty,
                     thread = cleared.thread.copy(currentSessionId = threadId),
+                    composer = cleared.composer.copy(value = restoredDraft),
                 ),
             )
         }
@@ -586,6 +672,17 @@ class ChatHomeViewModel @Inject constructor(
             // to the default and surfaces the one-shot Snackbar instead.
             pipelineBinding.handleDeletedBoundPipeline()
         }
+    }
+
+    /**
+     * Drops the stored per-session draft for [sessionId]. Called by the threads
+     * delegate when a session is deleted so its unsent text does not linger in
+     * [sessionDrafts] for an id that no longer exists.
+     *
+     * @param sessionId The chat session whose draft buffer should be discarded.
+     */
+    fun clearDraft(sessionId: String) {
+        sessionDrafts.remove(sessionId)
     }
 
     /**
@@ -862,21 +959,11 @@ class ChatHomeViewModel @Inject constructor(
         const val UNKNOWN_ERROR_FALLBACK: String = "Unknown error"
 
         /**
-         * User-facing message surfaced when [sendMessage] is invoked
-         * while no LLM model is loaded. The Retry CTA on the resulting
-         * error tile triggers [retryAfterError], which attempts to load
-         * the active model in-place rather than redirecting to Settings.
-         * Copy reflects that: "Tap Retry to load the active model".
-         */
-        const val MODEL_NOT_LOADED_MESSAGE: String =
-            "No model is loaded. Tap Retry to load the active model."
-
-        /**
-         * User-facing message surfaced when [retryAfterError] tries to
-         * load the model but `LoadModelUseCase` can't find an active one
-         * (no models installed, or the registered active model file is
-         * missing). At that point only Settings → Models can fix the
-         * problem, so the copy redirects there.
+         * User-facing message surfaced when the auto load-and-send path
+         * ([loadModelThenSend]) or [retryAfterError] tries to load the model
+         * but `LoadModelUseCase` can't find an active one (no models installed,
+         * or the registered active model file is missing). At that point only
+         * Settings → Models can fix the problem, so the copy redirects there.
          */
         const val NO_ACTIVE_MODEL_MESSAGE: String =
             "No active model. Open Settings → Models to install or activate one."
@@ -953,12 +1040,19 @@ class ChatHomeViewModel @Inject constructor(
 
 /**
  * Minimal pipeline summary used by [ChatHomeViewModel] to resolve the
- * TopAppBar subtitle and the deleted-pipeline fallback.
+ * TopAppBar subtitle, the deleted-pipeline fallback, and the active pipeline's
+ * empty-state starter prompts.
  *
  * @property id stable identifier of the pipeline.
  * @property name display name of the pipeline.
+ * @property samplePrompts starter ("quick action") prompts the pipeline
+ *   declares for the new-chat empty state (empty when it declares none).
  */
-data class PipelineSummary(val id: String, val name: String)
+data class PipelineSummary(
+    val id: String,
+    val name: String,
+    val samplePrompts: List<PipelineSamplePrompt> = emptyList(),
+)
 
 /**
  * Snapshot of the tool the orchestrator is currently paused on, exposed

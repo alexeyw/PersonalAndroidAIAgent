@@ -74,7 +74,7 @@ import app.knotwork.android.data.local.models.UsageCounterEntity
         UsageCounterEntity::class,
         UsageActiveDayEntity::class,
     ],
-    version = 49,
+    version = 50,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -1150,6 +1150,20 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_48_49 = object : Migration(48, 49) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `pipeline_runs` ADD COLUMN `hadImage` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * v49 → v50: adds the non-null `samplePrompts` column to `pipelines`,
+         * storing the pipeline's starter ("quick action") suggestions shown on
+         * the new-chat empty state as a JSON array string. Purely additive
+         * `ALTER TABLE … ADD COLUMN`; existing rows default to `'[]'` (no
+         * suggestions), which the `Converters` type converter reads as an empty
+         * list.
+         */
+        val MIGRATION_49_50 = object : Migration(49, 50) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `pipelines` ADD COLUMN `samplePrompts` TEXT NOT NULL DEFAULT '[]'")
             }
         }
     }

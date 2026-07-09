@@ -4,6 +4,7 @@ import app.knotwork.android.domain.constants.SettingsDefaults
 import app.knotwork.android.domain.models.ClarificationRequest
 import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.MessageAttachment
+import app.knotwork.android.domain.models.PipelineSamplePrompt
 import app.knotwork.design.components.chat.ComposerVoiceNotice
 import app.knotwork.design.screens.chat.ChatHomeConsoleState
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
@@ -48,6 +49,10 @@ import app.knotwork.design.screens.chat.ChatHomeThreadRow
  *   that execution would never pick.
  * @property availablePipelines pipeline summaries surfaced by the
  *   new-thread pipeline picker.
+ * @property activeSamplePrompts starter ("quick action") prompts declared by
+ *   the pipeline bound to the active chat, rendered on the empty state. Empty
+ *   when the pipeline declares none — the mapping then falls back to a generic
+ *   pipeline-agnostic set.
  * @property sourceChooserVisible whether the image-source chooser sheet
  *   (Photo library / Camera) is currently shown.
  * @property imageViewer target of the full-screen image viewer, or `null`
@@ -65,6 +70,7 @@ data class ChatHomeScreenState(
     val messages: List<ChatHomeMessageRow> = emptyList(),
     val pipelineName: String? = null,
     val availablePipelines: List<PipelineSummary> = emptyList(),
+    val activeSamplePrompts: List<PipelineSamplePrompt> = emptyList(),
     val sourceChooserVisible: Boolean = false,
     val imageViewer: ImageViewerTarget? = null,
 )

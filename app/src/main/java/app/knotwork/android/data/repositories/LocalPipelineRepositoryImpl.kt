@@ -53,7 +53,7 @@ class LocalPipelineRepositoryImpl @Inject constructor(private val pipelineDao: P
     }
 
     private fun PipelineGraph.toPipelineEntity(updatedAt: Long): PipelineEntity =
-        PipelineEntity(id = id, name = name, updatedAt = updatedAt)
+        PipelineEntity(id = id, name = name, updatedAt = updatedAt, samplePrompts = samplePrompts)
 
     private fun PipelineGraph.toNodeEntities(): List<NodeEntity> = nodes.map {
         NodeEntity(
@@ -93,6 +93,7 @@ class LocalPipelineRepositoryImpl @Inject constructor(private val pipelineDao: P
         id = this.pipeline.id,
         name = this.pipeline.name,
         updatedAt = this.pipeline.updatedAt,
+        samplePrompts = this.pipeline.samplePrompts,
         nodes = this.nodes.map {
             NodeModel(
                 id = it.id,

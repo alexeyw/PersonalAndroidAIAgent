@@ -11,6 +11,10 @@ import java.security.MessageDigest
  * @property nodes The list of [NodeModel]s present in the pipeline.
  * @property connections The list of [ConnectionModel]s linking the nodes.
  * @property updatedAt Timestamp of the last update.
+ * @property samplePrompts Starter ("quick action") prompts this pipeline
+ *   suggests on the new-chat empty state. Display-only metadata — deliberately
+ *   excluded from [contentHash] (like [name]) so editing the suggestions never
+ *   invalidates a resumable run.
  */
 data class PipelineGraph(
     val id: String,
@@ -18,6 +22,7 @@ data class PipelineGraph(
     val nodes: List<NodeModel> = emptyList(),
     val connections: List<ConnectionModel> = emptyList(),
     val updatedAt: Long = System.currentTimeMillis(),
+    val samplePrompts: List<PipelineSamplePrompt> = emptyList(),
 ) {
     /**
      * Validates if the current graph is a valid Directed Acyclic Graph (DAG).

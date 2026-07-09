@@ -30,6 +30,16 @@ sealed interface ChatHomeUiState {
     data object Generating : ChatHomeUiState
 
     /**
+     * A transient state entered when the user sends a message while no LLM
+     * model is loaded: the active model is being loaded before the send
+     * proceeds automatically. Distinct from [Generating] so the composer can
+     * show an honest "loading model" affordance rather than the misleading
+     * "generating" status while nothing is being generated yet. Settles into
+     * the actual send ([Generating]) on success or [Error] if the load fails.
+     */
+    data object PreparingModel : ChatHomeUiState
+
+    /**
      * A tool call awaits user approval. The bubble at the tail of the
      * conversation hosts the HITL confirmation card whose visuals depend
      * on the [risk] tier.

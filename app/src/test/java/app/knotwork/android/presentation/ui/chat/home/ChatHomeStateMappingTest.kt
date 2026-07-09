@@ -1,5 +1,6 @@
 package app.knotwork.android.presentation.ui.chat.home
 
+import app.knotwork.android.domain.models.PipelineSamplePrompt
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ComposerState
 import app.knotwork.design.components.chips.Risk
@@ -43,6 +44,7 @@ class ChatHomeStateMappingTest {
         composerValue: String = "",
         pendingTypedConfirm: String = "",
         console: ChatHomeConsoleState = ChatHomeConsoleState(),
+        activeSamplePrompts: List<PipelineSamplePrompt> = emptyList(),
     ): ChatHomeScreenState = ChatHomeScreenState(
         visual = visual,
         composer = ChatHomeComposerState(value = composerValue, typedConfirm = pendingTypedConfirm),
@@ -50,6 +52,7 @@ class ChatHomeStateMappingTest {
         thread = ChatHomeThreadState(title = title),
         model = ChatHomeModelState(name = model),
         messages = messages,
+        activeSamplePrompts = activeSamplePrompts,
     )
 
     @Test
@@ -61,6 +64,40 @@ class ChatHomeStateMappingTest {
         // (mockup) instead of the legacy
         // single-line chip row.
         assertTrue(view.samplePromptCards.isNotEmpty())
+        assertNull(view.errorMessage)
+    }
+
+    @Test
+    fun `Empty sources its suggestion cards from the active pipeline's sample prompts`() {
+        val prompts = listOf(
+            PipelineSamplePrompt(title = "Look up benchmarks", toolsHint = "search_tool"),
+            PipelineSamplePrompt(title = "Explain on-device inference"),
+        )
+        val view = screenState(ChatHomeUiState.Empty, activeSamplePrompts = prompts).toViewState()
+
+        assertEquals(2, view.samplePromptCards.size)
+        assertEquals("Look up benchmarks", view.samplePromptCards[0].title)
+        assertEquals("search_tool", view.samplePromptCards[0].toolsUsed)
+        // A null tools hint maps to an empty subtitle (hidden by the card).
+        assertEquals("", view.samplePromptCards[1].toolsUsed)
+    }
+
+    @Test
+    fun `Empty falls back to the generic fixture cards when the pipeline declares no prompts`() {
+        val view = screenState(ChatHomeUiState.Empty, activeSamplePrompts = emptyList())
+            .toViewState(ChatHomeFixtures.forTesting())
+
+        assertEquals(ChatHomeFixtures.forTesting().suggestionCards, view.samplePromptCards)
+    }
+
+    @Test
+    fun `PreparingModel pairs a busy composer with the loading-model status line`() {
+        val fixtures = ChatHomeFixtures.forTesting()
+        val view = screenState(ChatHomeUiState.PreparingModel).toViewState(fixtures)
+
+        assertEquals(ChatHomeVisualState.Generating, view.visualState)
+        assertTrue(view.composerState is ComposerState.Generating)
+        assertEquals(fixtures.statusPreparingModel, view.agentStatusLine)
         assertNull(view.errorMessage)
     }
 

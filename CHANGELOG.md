@@ -15,6 +15,15 @@ details.
 
 ### Added
 
+- **Pipelines suggest their own starter prompts.** A pipeline can now carry a
+  list of **sample prompts** shown as the quick-action cards on a new chat's
+  empty state. Because the suggestions come from the pipeline that will actually
+  run them, the `uses · …` tool hint on each card is honest — it reflects the
+  tools that pipeline really wires, instead of a fixed promise that a simple
+  chat pipeline could not keep. The built-in default pipeline ships three
+  fitting starters (a web lookup, an on-device answer, and a multi-step plan);
+  a pipeline that declares none falls back to a generic, tool-agnostic set. The
+  field rides the pipeline JSON, so it travels with export / import and bundles.
 - **Move whole compositions in one file — pipeline bundles.** A pipeline that
   calls sub-pipelines (through `PIPELINE` nodes) can now be exported as a single
   **bundle** that carries the root plus every sub-pipeline it depends on. In the
@@ -347,6 +356,26 @@ details.
 
 ### Fixed
 
+- **Each chat keeps its own unsent draft.** Text you have typed but not yet sent
+  now stays with the chat it belongs to. Previously the input box was shared
+  across the whole screen, so starting a message in one chat and switching to
+  another lost the text; switching back showed an empty box. Every conversation
+  now remembers its own half-written message until you send it (drafts are held
+  in memory for the session, not persisted across an app restart).
+- **The "agent working" notification no longer gets stuck.** The foreground
+  status notification used to stay in the shade permanently — often frozen on
+  "Answering…" long after the agent had finished, with a generic icon and no
+  effect when tapped. It now appears only while the agent is actively working
+  and is **removed automatically** once it settles, uses a proper Knotwork
+  status-bar icon, and **opens the app** when tapped.
+- **Sending with no model loaded now just works.** If you sent a message before
+  the on-device model had loaded, you used to get an error with a **Retry** that
+  only loaded the model — you then had to press send a second time, while a
+  misleading "generating" status showed during the load. Sending now
+  **loads the model and then delivers your message automatically** in one tap,
+  showing an honest "loading model" status meanwhile; an error appears only if
+  no model can be loaded at all (and Retry then loads-and-sends your still-intact
+  message).
 - **Clarification questions are no longer lost after they're answered.** A
   **Clarification** node used to pass only the user's answer to the next node,
   discarding the question it had asked. In pipelines that collect several

@@ -1,8 +1,10 @@
 package app.knotwork.android.data.services
 
+import android.app.ForegroundServiceStartNotAllowedException
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -12,6 +14,7 @@ import android.os.PowerManager
 import androidx.annotation.VisibleForTesting
 import androidx.core.app.NotificationCompat
 import androidx.work.WorkManager
+import app.knotwork.android.R
 import app.knotwork.android.domain.constants.NotificationChannels
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AgentOrchestratorState
@@ -25,6 +28,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -72,6 +76,20 @@ class AgentForegroundService : Service() {
     private lateinit var powerManager: AgentPowerManager
     private var wakeLock: PowerManager.WakeLock? = null
 
+    /**
+     * Whether the service currently holds the foreground status notification.
+     * The notification is shown only while the agent is actively working and is
+     * removed the moment it settles to idle, so this flag guards against
+     * redundant [Service.startForeground] promotions and [stopForeground]
+     * demotions on every state emission.
+     */
+    private var isForeground: Boolean = false
+
+    /** Lazily-resolved system notification manager used to update the status notification. */
+    private val notificationManager: NotificationManager by lazy {
+        getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    }
+
     companion object {
         private const val NOTIFICATION_ID = 101
         private const val WAKE_LOCK_TAG = "AndroidAIAgent:InferenceLock"
@@ -107,7 +125,11 @@ class AgentForegroundService : Service() {
         super.onCreate()
         isRunning = true
         createNotificationChannel()
-        startForegroundServiceWithNotification("Initializing...")
+        // Promote immediately to satisfy the startForegroundService contract
+        // (a notification must appear within a few seconds of the start). The
+        // state collector below demotes as soon as the agent settles to idle,
+        // so the notification is only present while there is active work.
+        promoteForeground("Initializing…")
 
         wakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG)
@@ -133,7 +155,7 @@ class AgentForegroundService : Service() {
 
         serviceScope.launch {
             agentOrchestratorUseCase.globalState.collectLatest { state ->
-                updateNotification(getStatusTextForState(state))
+                updateForegroundPresence(state)
                 when (state) {
                     is AgentOrchestratorState.Loading,
                     is AgentOrchestratorState.Thinking,
@@ -204,36 +226,105 @@ class AgentForegroundService : Service() {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             NotificationChannels.AGENT_FOREGROUND,
-            "Agent Service",
+            getString(R.string.notifications_agent_foreground_channel_name),
             NotificationManager.IMPORTANCE_LOW,
         )
-        channel.description = "Keeps the AI Agent running in the background."
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.createNotificationChannel(channel)
+        channel.description = getString(R.string.notifications_agent_foreground_channel_description)
+        notificationManager.createNotificationChannel(channel)
     }
 
-    private fun startForegroundServiceWithNotification(status: String) {
+    /**
+     * Reconciles the foreground notification with the agent [state]: shows it
+     * (promoting the service to the foreground) while the agent is actively
+     * working, and removes it once the work settles. Idle / terminal states and
+     * human-wait states drop the notification so it never lingers after the
+     * agent has finished — the latter are surfaced by their own dedicated
+     * approval / clarification notifications instead of this generic one.
+     *
+     * @param state The latest global agent state.
+     */
+    private fun updateForegroundPresence(state: AgentOrchestratorState) {
+        if (state.isActiveWork()) {
+            promoteForeground(getStatusTextForState(state))
+        } else {
+            demoteForeground()
+        }
+    }
+
+    /**
+     * Whether this state represents active, user-relevant agent work that
+     * warrants the foreground status notification. Exhaustive so a newly added
+     * [AgentOrchestratorState] must consciously choose a side.
+     *
+     * @return `true` for in-flight work (loading / thinking / tool / streaming /
+     *   pipeline progress); `false` for idle, terminal and human-wait states.
+     */
+    private fun AgentOrchestratorState.isActiveWork(): Boolean = when (this) {
+        is AgentOrchestratorState.Loading,
+        is AgentOrchestratorState.Thinking,
+        is AgentOrchestratorState.ExecutingTool,
+        is AgentOrchestratorState.ObservationResult,
+        is AgentOrchestratorState.Answering,
+        is AgentOrchestratorState.PipelineStage,
+        is AgentOrchestratorState.PipelineTrace,
+        is AgentOrchestratorState.ConsoleLog,
+        is AgentOrchestratorState.NodeIO,
+        -> true
+        is AgentOrchestratorState.Idle,
+        is AgentOrchestratorState.Completed,
+        is AgentOrchestratorState.Error,
+        is AgentOrchestratorState.WaitingForApproval,
+        is AgentOrchestratorState.AwaitingClarification,
+        is AgentOrchestratorState.SuspendedInBackground,
+        -> false
+    }
+
+    /**
+     * Shows / updates the foreground status notification with [status]. On the
+     * first call it promotes the service to the foreground; subsequent calls
+     * only refresh the notification content. A foreground promotion forbidden
+     * from the background (a headless run driving the global state, which owns
+     * its own [AgentWorker] notification) is caught rather than crashing.
+     *
+     * @param status The status line rendered as the notification content text.
+     */
+    private fun promoteForeground(status: String) {
         val notification = buildNotification(status)
-        startForeground(
-            NOTIFICATION_ID,
-            notification,
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
-        )
+        if (isForeground) {
+            notificationManager.notify(NOTIFICATION_ID, notification)
+            return
+        }
+        try {
+            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            isForeground = true
+        } catch (e: ForegroundServiceStartNotAllowedException) {
+            Timber.w(e, "Foreground promotion not allowed from background; skipping notification")
+        }
     }
 
-    private fun updateNotification(status: String) {
-        val notification = buildNotification(status)
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        manager.notify(NOTIFICATION_ID, notification)
+    /** Removes the foreground status notification, demoting the service (which stays alive). */
+    private fun demoteForeground() {
+        if (!isForeground) return
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        isForeground = false
     }
 
-    private fun buildNotification(status: String): Notification =
-        NotificationCompat.Builder(this, NotificationChannels.AGENT_FOREGROUND)
-            .setContentTitle("Android AI Agent")
+    private fun buildNotification(status: String): Notification {
+        // Tapping the notification opens the app's launcher activity. Built via
+        // the package launch intent (not a direct Activity reference) so the
+        // data-layer service does not depend on the presentation layer.
+        val contentIntent = packageManager.getLaunchIntentForPackage(packageName)?.let { launchIntent ->
+            PendingIntent.getActivity(this, 0, launchIntent, PendingIntent.FLAG_IMMUTABLE)
+        }
+        return NotificationCompat.Builder(this, NotificationChannels.AGENT_FOREGROUND)
+            .setContentTitle(getString(R.string.notifications_agent_foreground_title))
             .setContentText(status)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.ic_stat_agent)
             .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setContentIntent(contentIntent)
             .build()
+    }
 
     /**
      * Called by the system every time a client explicitly starts the service.

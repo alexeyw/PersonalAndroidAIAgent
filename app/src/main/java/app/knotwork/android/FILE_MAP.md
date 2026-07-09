@@ -311,7 +311,8 @@ This file maps the contents of the main application package.
     - `NodeModel.kt` - Node model.
     - `NodeOutput.kt` - Sealed class wrapping `NodeExecutor.execute()` flow elements (`State` for orchestrator updates / `Result` for the terminal node result / `Console` for a console line the engine stamps and renders, e.g. structured-output repair / failure), replacing the legacy untyped `Flow<Any>` channel.
     - `NodeType.kt` - Node type enum.
-    - `PipelineGraph.kt` - Pipeline graph model. Also hosts `contentHash()` — a stable SHA-256 over execution-relevant graph content (canvas coordinates / pipeline name / `updatedAt` excluded), captured into run records as the checkpoint-invalidation contract.
+    - `PipelineGraph.kt` - Pipeline graph model. Also hosts `contentHash()` — a stable SHA-256 over execution-relevant graph content (canvas coordinates / pipeline name / `updatedAt` / `samplePrompts` excluded), captured into run records as the checkpoint-invalidation contract.
+    - `PipelineSamplePrompt.kt` - One pipeline-declared starter ("quick action") prompt for the new-chat empty state (`title` + optional `toolsHint`); a display-only pipeline-level field surfaced by the active pipeline.
     - `PendingInteraction.kt` - Domain model of one parked HITL interaction (`PendingInteractionKind`, `PendingDecision`): the durable request snapshot and the one-shot recorded response, TOCTOU-bound to the exact tool call it was given for.
     - `ClarificationOutcome.kt` - Typed result of the live clarification wait (`Answered` / `TimedOut`) — moves the timeout policy to the clarification executor.
     - `PipelineRun.kt` - Persistent pipeline-run domain model plus `PipelineRunStatus` (QUEUED → RUNNING → WAITING_* → terminal, with `isTerminal`) and `RunOrigin` (CHAT / SCHEDULER / SHARE / QUICK_TILE / TRIGGER). Carries the originating `userPrompt` for checkpoint resume.

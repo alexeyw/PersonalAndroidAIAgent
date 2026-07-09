@@ -20,18 +20,22 @@ import app.knotwork.design.screens.chat.ChatHomeThreadRow
  * @property statusIdle agent-status pill text rendered while the surface
  * is in `ChatHomeUiState.Empty` or `.Idle`.
  * @property statusGenerating pill text while the assistant is streaming.
+ * @property statusPreparingModel pill text while the active model is loading
+ * before an auto-triggered send (`ChatHomeUiState.PreparingModel`).
  * @property statusHitl pill text while a HITL approval is pending.
  * @property statusClarification pill text while the assistant is waiting on
  * a clarification reply.
  * @property statusError pill text rendered in `ChatHomeUiState.Error`.
  * @property sessionRows stub thread rows surfaced inside the drawer
  * overlay (`ChatHomeUiState.DrawerOpen`).
- * @property suggestionCards stub suggestion cards rendered in the empty
- * surface body.
+ * @property suggestionCards generic, pipeline-agnostic fallback suggestion
+ * cards rendered in the empty surface body when the active pipeline declares
+ * no starter prompts of its own.
  */
 data class ChatHomeFixtures(
     val statusIdle: String,
     val statusGenerating: String,
+    val statusPreparingModel: String,
     val statusHitl: String,
     val statusClarification: String,
     val statusError: String,
@@ -47,6 +51,7 @@ data class ChatHomeFixtures(
         fun forTesting(): ChatHomeFixtures = ChatHomeFixtures(
             statusIdle = "idle",
             statusGenerating = "generating",
+            statusPreparingModel = "preparing_model",
             statusHitl = "hitl",
             statusClarification = "clarification",
             statusError = "error",
@@ -71,6 +76,7 @@ data class ChatHomeFixtures(
 fun rememberChatHomeFixtures(): ChatHomeFixtures = ChatHomeFixtures(
     statusIdle = stringResource(R.string.chat_home_status_idle),
     statusGenerating = stringResource(R.string.chat_home_status_generating),
+    statusPreparingModel = stringResource(R.string.chat_home_status_preparing_model),
     statusHitl = stringResource(R.string.chat_home_status_hitl),
     statusClarification = stringResource(R.string.chat_home_status_clarification),
     statusError = stringResource(R.string.chat_home_status_error),

@@ -78,6 +78,7 @@ class DuplicatePipelineUseCase @Inject constructor(private val pipelineRepositor
                 nodes = duplicatedNodes,
                 connections = duplicatedConnections,
                 updatedAt = System.currentTimeMillis(),
+                samplePrompts = source.samplePrompts,
             )
 
             pipelineRepository.savePipeline(duplicate)

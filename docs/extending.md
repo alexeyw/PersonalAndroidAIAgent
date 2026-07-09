@@ -804,6 +804,26 @@ Rules:
 - `name` must not exceed 60 characters (the cross-feature
   `MAX_NAME_LENGTH`).
 
+A pipeline may also declare an optional top-level `samplePrompts` array —
+the starter ("quick action") cards shown on a new chat's empty state when
+this pipeline is the active one. Each entry is `{ "title": "…",
+"toolsHint": "…" }`; `toolsHint` is optional and, when omitted, the card
+renders without its `uses · …` subtitle. Keep the hints honest — only name
+tools the pipeline actually wires:
+
+```json
+"samplePrompts": [
+  { "title": "Look up the latest on-device LLM benchmarks", "toolsHint": "search_tool" },
+  { "title": "Explain how on-device inference keeps my data private" }
+]
+```
+
+The field is additive and display-only: it is excluded from
+`PipelineGraph.contentHash()` (editing the suggestions never invalidates a
+resumable run), documents without it import fine (they decode to no
+suggestions), and a pipeline that declares none falls back to a generic,
+tool-agnostic card set on the empty state.
+
 Each node may also carry an optional `nodeConfig` object alongside `config`
 and `contextConfig` — the rich `NodeConfig` payload (the
 `NodeConfigCodec` envelope: `{ "v": 1, "type", "title", ...type-specific

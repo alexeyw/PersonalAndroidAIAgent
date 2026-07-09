@@ -161,7 +161,7 @@ class AgentWorker @AssistedInject constructor(
         val notification = NotificationCompat.Builder(applicationContext, NotificationChannels.AGENT_FOREGROUND)
             .setContentTitle(applicationContext.getString(R.string.notifications_scheduled_running_title))
             .setContentText(applicationContext.getString(R.string.notifications_scheduled_running_body))
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.ic_stat_agent)
             .setOngoing(true)
             .build()
         return ForegroundInfo(

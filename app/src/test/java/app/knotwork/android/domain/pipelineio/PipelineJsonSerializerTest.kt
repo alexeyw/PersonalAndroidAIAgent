@@ -6,6 +6,7 @@ import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineImportOutcome
+import app.knotwork.android.domain.models.PipelineSamplePrompt
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -142,6 +143,37 @@ class PipelineJsonSerializerTest {
         assertEquals("False", branchFalse.label)
         // Empty labels round-trip as null (not "")
         assertNull(parsed.connections.first { it.id == "c1" }.label)
+    }
+
+    @Test
+    fun `serialize then parse round-trips pipeline sample prompts including a null tools hint`() {
+        val graph = sampleGraph.copy(
+            samplePrompts = listOf(
+                PipelineSamplePrompt(title = "Look up the latest benchmarks", toolsHint = "search_tool"),
+                PipelineSamplePrompt(title = "Explain on-device inference"),
+            ),
+        )
+
+        val outcome = PipelineJsonSerializer.parse(PipelineJsonSerializer.serialize(graph))
+
+        assertTrue(outcome is PipelineImportOutcome.Success)
+        val parsed = (outcome as PipelineImportOutcome.Success).graph
+        assertEquals(graph.samplePrompts, parsed.samplePrompts)
+        // The second card's absent hint round-trips as null (not "").
+        assertNull(parsed.samplePrompts[1].toolsHint)
+    }
+
+    @Test
+    fun `parse tolerates a document without a samplePrompts key by yielding an empty list`() {
+        // Backward compatibility: documents from builds predating the field
+        // simply lack the key, which must decode to no suggestions.
+        val json = PipelineJsonSerializer.serialize(sampleGraph)
+        val stripped = JSONObject(json).apply { remove("samplePrompts") }.toString()
+
+        val outcome = PipelineJsonSerializer.parse(stripped)
+
+        assertTrue(outcome is PipelineImportOutcome.Success)
+        assertTrue((outcome as PipelineImportOutcome.Success).graph.samplePrompts.isEmpty())
     }
 
     @Test

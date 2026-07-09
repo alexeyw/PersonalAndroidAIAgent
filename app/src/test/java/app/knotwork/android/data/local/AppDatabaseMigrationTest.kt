@@ -618,4 +618,38 @@ class AppDatabaseMigrationTest {
         // Additive + NOT NULL DEFAULT 0 so existing runs get false (no image).
         assertTrue("hadImage must be NOT NULL DEFAULT 0: ${sqlSlot.captured}", sql.contains("NOT NULL DEFAULT 0"))
     }
+
+    @Test
+    fun `MIGRATION_49_50 targets versions 49 to 50`() {
+        val migration = AppDatabase.MIGRATION_49_50
+
+        assertEquals(49, migration.startVersion)
+        assertEquals(50, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_49_50 adds a non-null samplePrompts column to pipelines defaulting to empty array`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val sqlSlot = slot<String>()
+
+        AppDatabase.MIGRATION_49_50.migrate(db)
+
+        verify(exactly = 1) { db.execSQL(capture(sqlSlot)) }
+        val sql = sqlSlot.captured.uppercase()
+        assertTrue(
+            "Expected ALTER pipelines ADD samplePrompts, got: ${sqlSlot.captured}",
+            sql.contains("ALTER TABLE `PIPELINES` ADD COLUMN `SAMPLEPROMPTS`"),
+        )
+        // Additive + NOT NULL so existing rows keep working; the '[]' default
+        // reads back through Converters.toSamplePrompts as an empty list.
+        assertTrue(
+            "samplePrompts must be NOT NULL DEFAULT '[]': ${sqlSlot.captured}",
+            sql.contains("NOT NULL DEFAULT '[]'"),
+        )
+        assertEquals(
+            "The '[]' default must decode to an empty prompt list",
+            emptyList<Any>(),
+            Converters().toSamplePrompts("[]"),
+        )
+    }
 }
