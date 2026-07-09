@@ -356,6 +356,14 @@ details.
 
 ### Fixed
 
+- **Importing a pipeline can no longer empty other pipelines.** Every exported
+  pipeline numbers its nodes `node-1`, `node-2`, … independently, so importing a
+  single-pipeline JSON whose node ids happened to match another saved pipeline's
+  used to silently reassign those rows to the import — leaving the other pipeline
+  with an empty graph. Single-pipeline imports now regenerate node and connection
+  ids on save (the pipeline's own id is preserved), the same safeguard bundle
+  imports already applied. Re-importing an affected pipeline's JSON restores it
+  cleanly.
 - **Each chat keeps its own unsent draft.** Text you have typed but not yet sent
   now stays with the chat it belongs to. Previously the input box was shared
   across the whole screen, so starting a message in one chat and switching to

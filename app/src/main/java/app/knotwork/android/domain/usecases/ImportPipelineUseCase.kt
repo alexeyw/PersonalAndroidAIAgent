@@ -31,6 +31,18 @@ import javax.inject.Inject
  * Splitting parse from persist keeps the use case testable without a
  * fake `Activity` and lets the UI display a confirm-dialog before any
  * mutation hits the database.
+ *
+ * **Node/connection ids are always freshened before persistence.** The
+ * browser editor and every shipped preset number nodes `node-1`, `node-2`, …
+ * independently per pipeline, but [app.knotwork.android.data.local.models.NodeEntity]
+ * / [app.knotwork.android.data.local.models.ConnectionEntity] use a **global**
+ * primary key. Persisting an imported graph verbatim therefore lets its
+ * `node-N` ids collide with an unrelated pipeline that already owns those ids,
+ * and `OnConflictStrategy.REPLACE` silently reassigns the existing rows to the
+ * import — emptying the other pipeline's graph. Running every keep-id save path
+ * through [PipelineBundleIdRemapper.freshenElementIds] (pipeline id preserved,
+ * node/connection ids regenerated) closes this data-loss hole, mirroring the
+ * identical guard the bundle-import path already applies.
  */
 class ImportPipelineUseCase @Inject constructor(
     private val savePipelineUseCase: SavePipelineUseCase,
@@ -59,7 +71,7 @@ class ImportPipelineUseCase @Inject constructor(
         return if (collides) {
             ImportInvocation(outcome = outcome, saveResult = null, pendingCollision = outcome.graph)
         } else {
-            ImportInvocation(outcome = outcome, saveResult = savePipelineUseCase(outcome.graph))
+            ImportInvocation(outcome = outcome, saveResult = savePipelineUseCase(freshenElementIds(outcome.graph)))
         }
     }
 
@@ -78,16 +90,20 @@ class ImportPipelineUseCase @Inject constructor(
         if (pipelineRepository.getPipelineById(outcome.graph.id) != null) {
             ConfirmedImport.Collision(outcome.graph)
         } else {
-            ConfirmedImport.Saved(savePipelineUseCase(outcome.graph))
+            ConfirmedImport.Saved(savePipelineUseCase(freshenElementIds(outcome.graph)))
         }
 
     /**
      * Persists [graph] after the user has resolved an id collision.
      *
-     * [ImportCollisionResolution.REPLACE] keeps the id and overwrites the
-     * existing pipeline; [ImportCollisionResolution.IMPORT_AS_COPY] regenerates
-     * the graph's ids through [PipelineBundleIdRemapper] so it is saved as a
-     * fresh pipeline (references to *other* library pipelines are preserved,
+     * [ImportCollisionResolution.REPLACE] keeps the pipeline id and overwrites
+     * the existing pipeline, but still freshens its node/connection ids through
+     * [PipelineBundleIdRemapper.freshenElementIds] — otherwise the imported
+     * `node-N` ids could collide with an *unrelated* pipeline's globally-unique
+     * node rows and steal them under `OnConflictStrategy.REPLACE`.
+     * [ImportCollisionResolution.IMPORT_AS_COPY] regenerates every id (pipeline
+     * included) through [PipelineBundleIdRemapper.regenerate] so it is saved as
+     * a fresh pipeline (references to *other* library pipelines are preserved,
      * since a single import carries no intra-bundle targets to remap).
      *
      * @param graph The graph captured in [ImportInvocation.pendingCollision].
@@ -96,12 +112,22 @@ class ImportPipelineUseCase @Inject constructor(
      */
     suspend fun persistWithResolution(graph: PipelineGraph, resolution: ImportCollisionResolution): Result<Unit> {
         val toSave = when (resolution) {
-            ImportCollisionResolution.REPLACE -> graph
+            ImportCollisionResolution.REPLACE -> freshenElementIds(graph)
             ImportCollisionResolution.IMPORT_AS_COPY ->
                 PipelineBundleIdRemapper.regenerate(listOf(graph)) { UUID.randomUUID().toString() }.first()
         }
         return savePipelineUseCase(toSave)
     }
+
+    /**
+     * Regenerates [graph]'s node and connection ids (pipeline id preserved) so
+     * they are globally unique before persistence, shielding other pipelines
+     * that happen to reuse the same `node-N` ids from
+     * `OnConflictStrategy.REPLACE`. Thin single-graph adapter over
+     * [PipelineBundleIdRemapper.freshenElementIds].
+     */
+    private fun freshenElementIds(graph: PipelineGraph): PipelineGraph =
+        PipelineBundleIdRemapper.freshenElementIds(listOf(graph)) { UUID.randomUUID().toString() }.first()
 }
 
 /**
