@@ -78,6 +78,63 @@ class ImportPipelineUseCaseTest {
     }
 
     @Test
+    fun `given valid JSON when invoke then node and connection ids are freshened before save`() = runTest {
+        val saved = slot<PipelineGraph>()
+        coEvery { savePipelineUseCase(capture(saved)) } returns Result.success(Unit)
+
+        useCase(validJson)
+
+        // Pipeline id is preserved (sync semantics) but every node/connection id
+        // is regenerated so it cannot collide with another pipeline's global rows.
+        val graph = saved.captured
+        assertEquals("pipeline id must be preserved", "p", graph.id)
+        assertTrue("node ids must be freshened", graph.nodes.none { it.id == "n1" || it.id == "n2" })
+        assertTrue("connection ids must be freshened", graph.connections.none { it.id == "c1" })
+        // Endpoints must be remapped to the freshened node ids, not left dangling.
+        val nodeIds = graph.nodes.map { it.id }.toSet()
+        assertTrue(
+            "connection endpoints must resolve to freshened nodes",
+            graph.connections.all { it.sourceNodeId in nodeIds && it.targetNodeId in nodeIds },
+        )
+    }
+
+    @Test
+    fun `given two imports reusing the same node ids when invoke then saved graphs share no node id`() = runTest {
+        val savedGraphs = mutableListOf<PipelineGraph>()
+        coEvery { savePipelineUseCase(capture(savedGraphs)) } returns Result.success(Unit)
+
+        // Same node ids (n1/n2), different pipeline ids — the real-world case where
+        // importing a second pipeline used to steal the first's rows via REPLACE.
+        useCase(validJson)
+        useCase(validJson.replace("\"id\": \"p\"", "\"id\": \"q\""))
+
+        assertEquals(2, savedGraphs.size)
+        val firstNodeIds = savedGraphs[0].nodes.map { it.id }.toSet()
+        val secondNodeIds = savedGraphs[1].nodes.map { it.id }.toSet()
+        assertTrue(
+            "the two imports must not share any node id (no cross-pipeline collision)",
+            firstNodeIds.intersect(secondNodeIds).isEmpty(),
+        )
+    }
+
+    @Test
+    fun `given collision when resolve REPLACE then node ids are freshened`() = runTest {
+        val saved = slot<PipelineGraph>()
+        coEvery { savePipelineUseCase(capture(saved)) } returns Result.success(Unit)
+        val graph = useCase(validJson).let {
+            (it.outcome as PipelineImportOutcome.Success).graph
+        }
+
+        useCase.persistWithResolution(graph, ImportCollisionResolution.REPLACE)
+
+        assertEquals("REPLACE keeps the pipeline id", "p", saved.captured.id)
+        assertTrue(
+            "REPLACE must still freshen node ids to avoid stealing another pipeline's rows",
+            saved.captured.nodes.none { it.id == "n1" || it.id == "n2" },
+        )
+    }
+
+    @Test
     fun `given schema mismatch when invoke then save is not called`() = runTest {
         val invocation = useCase(mismatchJson)
 
