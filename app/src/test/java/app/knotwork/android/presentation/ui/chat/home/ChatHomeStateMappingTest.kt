@@ -91,9 +91,9 @@ class ChatHomeStateMappingTest {
     }
 
     @Test
-    fun `PreparingModel pairs a busy composer with the loading-model status line`() {
+    fun `Generating with preparingModel pairs a busy composer with the loading-model status line`() {
         val fixtures = ChatHomeFixtures.forTesting()
-        val view = screenState(ChatHomeUiState.PreparingModel).toViewState(fixtures)
+        val view = screenState(ChatHomeUiState.Generating(preparingModel = true)).toViewState(fixtures)
 
         assertEquals(ChatHomeVisualState.Generating, view.visualState)
         assertTrue(view.composerState is ComposerState.Generating)
@@ -119,7 +119,7 @@ class ChatHomeStateMappingTest {
 
     @Test
     fun `Generating pairs the visual with ComposerState_Generating`() {
-        val view = screenState(ChatHomeUiState.Generating).toViewState()
+        val view = screenState(ChatHomeUiState.Generating()).toViewState()
         assertEquals(ChatHomeVisualState.Generating, view.visualState)
         assertTrue(view.composerState is ComposerState.Generating)
     }
@@ -197,7 +197,7 @@ class ChatHomeStateMappingTest {
         // Console pane open while the chat state is Generating — overlay
         // and underlying state are orthogonal post-refactor.
         val view = screenState(
-            ChatHomeUiState.Generating,
+            ChatHomeUiState.Generating(),
             console = ChatHomeConsoleState(
                 snap = ConsoleSnap.Full,
                 tab = ConsoleTab.Traces,
@@ -230,7 +230,7 @@ class ChatHomeStateMappingTest {
         val states = listOf(
             ChatHomeUiState.Empty,
             ChatHomeUiState.Idle,
-            ChatHomeUiState.Generating,
+            ChatHomeUiState.Generating(),
             ChatHomeUiState.HitlConfirm(Risk.Readonly),
             ChatHomeUiState.Clarification,
             ChatHomeUiState.Error("boom"),

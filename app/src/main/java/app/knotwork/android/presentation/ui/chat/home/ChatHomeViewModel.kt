@@ -175,7 +175,7 @@ class ChatHomeViewModel @Inject constructor(
     /**
      * The in-flight "load the active model, then send" coroutine, or `null`
      * once it settles. Tracked separately from [generationJob] so the
-     * transient [ChatHomeUiState.PreparingModel] phase can be cancelled by
+     * transient model-loading phase (`Generating(preparingModel = true)`) can be cancelled by
      * [stopGeneration] without disturbing a real generation, and so re-entering
      * the send path after a successful load does not cancel its own launcher.
      */
@@ -379,13 +379,10 @@ class ChatHomeViewModel @Inject constructor(
         if (_state.value.composer.attachment is ComposerAttachmentDraft.Processing) return
         if (draftText.isEmpty() && readyAttachment == null) return
         // Busy: a generation is streaming, or a model load kicked off by this
-        // very path is still in flight. Guarding PreparingModel too stops a
-        // second tap from cancelling and restarting the in-progress load.
-        if (_state.value.visual is ChatHomeUiState.Generating ||
-            _state.value.visual is ChatHomeUiState.PreparingModel
-        ) {
-            return
-        }
+        // very path is still in flight (`Generating(preparingModel = true)`).
+        // A single `is Generating` covers both, so a second tap cannot cancel
+        // and restart the in-progress load.
+        if (_state.value.visual is ChatHomeUiState.Generating) return
         if (!llmInferenceEngine.isInitialized) {
             // The model isn't loaded yet — instead of dead-ending on an error
             // tile that forces the user to tap Retry (load) and then Send
@@ -470,7 +467,7 @@ class ChatHomeViewModel @Inject constructor(
         // snapshots, and clear the console projections of the previous run.
         _state.update { current ->
             current.withPendingCleared().withConsoleProjectionsCleared().copy(
-                visual = ChatHomeUiState.Generating,
+                visual = ChatHomeUiState.Generating(),
                 tokens = current.tokens.copy(streaming = 0),
             )
         }
@@ -523,7 +520,7 @@ class ChatHomeViewModel @Inject constructor(
      * Loads the active local model and, on success, re-enters [sendMessage] so
      * the user's retained composer draft (and any attachment) is delivered
      * automatically without a second tap. Drives the transient
-     * [ChatHomeUiState.PreparingModel] state so the surface shows an honest
+     * `Generating(preparingModel = true)` state so the surface shows an honest
      * "loading model" affordance rather than the misleading "generating" pill
      * while nothing is being generated yet.
      *
@@ -533,7 +530,7 @@ class ChatHomeViewModel @Inject constructor(
      * [modelLoadJob] so [stopGeneration] can cancel the pending send.
      */
     private fun loadModelThenSend() {
-        _state.update { it.copy(visual = ChatHomeUiState.PreparingModel) }
+        _state.update { it.copy(visual = ChatHomeUiState.Generating(preparingModel = true)) }
         modelLoadJob?.cancel()
         modelLoadJob = viewModelScope.launch {
             when (val outcome = loadModelUseCase()) {
@@ -544,7 +541,7 @@ class ChatHomeViewModel @Inject constructor(
                     // with no further suspension point for cancellation to land.
                     if (!isActive) return@launch
                     if (llmInferenceEngine.isInitialized) {
-                        // Clear the transient PreparingModel first so sendMessage's
+                        // Clear the transient preparing-model state first so sendMessage's
                         // "already busy" guard does not reject the re-entry; the
                         // resting visual is derived from the live receiver so a
                         // message emission that landed during the load is honoured.
@@ -590,7 +587,7 @@ class ChatHomeViewModel @Inject constructor(
             loadModelThenSend()
             return
         }
-        _state.update { it.copy(visual = ChatHomeUiState.PreparingModel) }
+        _state.update { it.copy(visual = ChatHomeUiState.Generating(preparingModel = true)) }
         modelLoadJob?.cancel()
         modelLoadJob = viewModelScope.launch {
             val outcome = loadModelUseCase()
@@ -623,13 +620,13 @@ class ChatHomeViewModel @Inject constructor(
     fun stopGeneration() {
         generationJob?.cancel()
         // Also abort a pending "load model then send" so tapping Stop during
-        // the PreparingModel phase cancels the queued send instead of letting
+        // the preparing-model phase cancels the queued send instead of letting
         // it fire once the load completes.
         modelLoadJob?.cancel()
         reattach.cancel()
         _state.update { current ->
             val cleared = current.withPendingCleared()
-            if (current.visual is ChatHomeUiState.Generating || current.visual is ChatHomeUiState.PreparingModel) {
+            if (current.visual is ChatHomeUiState.Generating) {
                 cleared.copy(visual = cleared.restingVisual())
             } else {
                 cleared
@@ -923,7 +920,7 @@ class ChatHomeViewModel @Inject constructor(
     private suspend fun attachToLiveRun(sessionId: String, status: PipelineRunStatus) {
         _state.update { current ->
             if (current.visual.isRestingOrCold()) {
-                current.copy(visual = ChatHomeUiState.Generating)
+                current.copy(visual = ChatHomeUiState.Generating())
             } else {
                 current
             }

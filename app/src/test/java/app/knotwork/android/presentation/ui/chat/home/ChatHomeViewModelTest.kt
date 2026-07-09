@@ -522,7 +522,10 @@ class ChatHomeViewModelTest {
             viewModel.onComposerValueChange("hello from A")
             viewModel.sendMessage()
             runCurrent()
-            assertTrue(viewModel.state.value.visual is ChatHomeUiState.PreparingModel)
+            assertEquals(
+                ChatHomeUiState.Generating(preparingModel = true),
+                viewModel.state.value.visual,
+            )
 
             // Switch chats while the load is still suspended → the pending send
             // must be cancelled.
@@ -987,7 +990,7 @@ class ChatHomeViewModelTest {
         viewModel.onComposerValueChange("hi")
         viewModel.sendMessage()
         testScheduler.advanceTimeBy(100)
-        assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
+        assertEquals(ChatHomeUiState.Generating(), viewModel.state.value.visual)
 
         viewModel.stopGeneration()
         advanceUntilIdle()
@@ -1373,7 +1376,7 @@ class ChatHomeViewModelTest {
         advanceUntilIdle()
 
         coVerify { submitApprovalDecisionUseCase(sessionId, true, null) }
-        assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
+        assertEquals(ChatHomeUiState.Generating(), viewModel.state.value.visual)
         assertNull(viewModel.state.value.pending.tool)
     }
 
@@ -1412,7 +1415,7 @@ class ChatHomeViewModelTest {
         assertNull(viewModel.state.value.pending.tool)
         // Resuming the pipeline restarts orchestrator emission — the surface stays
         // in Generating until the next state (or a terminal Completed / Error) lands.
-        assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
+        assertEquals(ChatHomeUiState.Generating(), viewModel.state.value.visual)
     }
 
     @Test
@@ -1445,7 +1448,7 @@ class ChatHomeViewModelTest {
         viewModel.hitl.approveTool()
         advanceUntilIdle()
         coVerify { submitApprovalDecisionUseCase(sessionId, true, null) }
-        assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
+        assertEquals(ChatHomeUiState.Generating(), viewModel.state.value.visual)
     }
 
     @Test
@@ -1498,7 +1501,7 @@ class ChatHomeViewModelTest {
 
         coVerify { submitClarificationAnswerUseCase(sessionId, "req-7", "Yes") }
         assertNull(viewModel.state.value.pending.clarification)
-        assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
+        assertEquals(ChatHomeUiState.Generating(), viewModel.state.value.visual)
     }
 
     @Test
@@ -1560,7 +1563,7 @@ class ChatHomeViewModelTest {
 
         coVerify { submitClarificationAnswerUseCase(sessionId, "req-blank", "") }
         assertNull(viewModel.state.value.pending.clarification)
-        assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
+        assertEquals(ChatHomeUiState.Generating(), viewModel.state.value.visual)
     }
 
     @Test
@@ -1856,7 +1859,7 @@ class ChatHomeViewModelTest {
             viewModel = createViewModel()
             advanceUntilIdle()
 
-            assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
+            assertEquals(ChatHomeUiState.Generating(), viewModel.state.value.visual)
             verify { agentOrchestratorUseCase.observe(sessionId) }
             verify(exactly = 0) { agentOrchestratorUseCase.invoke(any(), any(), any()) }
         }
@@ -1883,7 +1886,7 @@ class ChatHomeViewModelTest {
             )
             advanceUntilIdle()
 
-            assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
+            assertEquals(ChatHomeUiState.Generating(), viewModel.state.value.visual)
             verify { agentOrchestratorUseCase.observe(sessionId) }
             verify(exactly = 0) { agentOrchestratorUseCase.invoke(any(), any(), any()) }
         }
@@ -2057,7 +2060,7 @@ class ChatHomeViewModelTest {
         viewModel.selectThread(second)
         advanceUntilIdle()
 
-        assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
+        assertEquals(ChatHomeUiState.Generating(), viewModel.state.value.visual)
         verify { agentOrchestratorUseCase.observe(second) }
     }
 
@@ -2098,7 +2101,7 @@ class ChatHomeViewModelTest {
         advanceUntilIdle()
 
         assertNull(viewModel.state.value.pending.interrupted)
-        assertEquals(ChatHomeUiState.Generating, viewModel.state.value.visual)
+        assertEquals(ChatHomeUiState.Generating(), viewModel.state.value.visual)
         coVerify { resumePipelineRunUseCase("run-r") }
     }
 

@@ -103,28 +103,16 @@ fun ChatHomeScreenState.toViewState(fixtures: ChatHomeFixtures = ChatHomeFixture
             tokensUsed = tokens.used,
             tokensMax = tokens.max,
             favorite = thread.favorite,
-            // Append the running token count so the pill reads
-            // "generating · 42 tok" — gives the user visible progress on
-            // long generations.
-            agentStatusLine = formatGeneratingStatus(fixtures.statusGenerating, tokens.streaming),
-            console = console,
-        )
-
-        is ChatHomeUiState.PreparingModel -> ChatHomeViewState(
-            visualState = ChatHomeVisualState.Generating,
-            threadTitle = threadTitle,
-            modelName = modelName,
-            messages = messages,
-            composerValue = composerValue,
-            // Busy composer affordance while the model loads; the honest status
-            // line below reads "loading model" rather than "generating" so the
-            // user is not told the assistant is producing tokens when it isn't.
-            composerState = ComposerState.Generating,
-            pipelineName = resolvedPipelineName,
-            tokensUsed = tokens.used,
-            tokensMax = tokens.max,
-            favorite = thread.favorite,
-            agentStatusLine = fixtures.statusPreparingModel,
+            // While the model loads before an auto-send (`preparingModel`), read
+            // the honest "loading model" line rather than telling the user the
+            // assistant is producing tokens. Otherwise append the running token
+            // count so the pill reads "generating · 42 tok" — visible progress
+            // on long generations.
+            agentStatusLine = if (visual.preparingModel) {
+                fixtures.statusPreparingModel
+            } else {
+                formatGeneratingStatus(fixtures.statusGenerating, tokens.streaming)
+            },
             console = console,
         )
 
@@ -475,7 +463,7 @@ internal object DebugStateIds {
 internal fun debugStateForId(id: String): ChatHomeUiState? = when (id) {
     DebugStateIds.EMPTY -> ChatHomeUiState.Empty
     DebugStateIds.IDLE -> ChatHomeUiState.Idle
-    DebugStateIds.GENERATING -> ChatHomeUiState.Generating
+    DebugStateIds.GENERATING -> ChatHomeUiState.Generating()
     DebugStateIds.HITL_READONLY -> ChatHomeUiState.HitlConfirm(Risk.Readonly)
     DebugStateIds.HITL_SENSITIVE -> ChatHomeUiState.HitlConfirm(Risk.Sensitive)
     DebugStateIds.HITL_DESTRUCTIVE -> ChatHomeUiState.HitlConfirm(Risk.Destructive)

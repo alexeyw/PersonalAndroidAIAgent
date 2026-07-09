@@ -21,7 +21,7 @@ import app.knotwork.design.screens.chat.ChatHomeThreadRow
  * is in `ChatHomeUiState.Empty` or `.Idle`.
  * @property statusGenerating pill text while the assistant is streaming.
  * @property statusPreparingModel pill text while the active model is loading
- * before an auto-triggered send (`ChatHomeUiState.PreparingModel`).
+ * before an auto-triggered send (`Generating(preparingModel = true)`).
  * @property statusHitl pill text while a HITL approval is pending.
  * @property statusClarification pill text while the assistant is waiting on
  * a clarification reply.

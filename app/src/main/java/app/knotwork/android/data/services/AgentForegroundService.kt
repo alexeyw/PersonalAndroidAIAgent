@@ -12,7 +12,6 @@ import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.os.PowerManager
 import androidx.annotation.VisibleForTesting
-import androidx.core.app.NotificationCompat
 import androidx.work.WorkManager
 import app.knotwork.android.R
 import app.knotwork.android.domain.constants.NotificationChannels
@@ -101,16 +100,12 @@ class AgentForegroundService : Service() {
 
     /**
      * Content intent that opens the app's launcher activity, resolved once for
-     * the service's lifetime. Built via the package launch intent (not a direct
-     * Activity reference) so the data-layer service does not depend on the
-     * presentation layer; cached because the target never changes and rebuilding
-     * it per notification update would issue a PackageManager query per streamed
-     * token.
+     * the service's lifetime. Cached because the target never changes and
+     * rebuilding it per notification update would issue a PackageManager query
+     * per streamed token.
      */
     private val contentPendingIntent: PendingIntent? by lazy {
-        packageManager.getLaunchIntentForPackage(packageName)?.let { launchIntent ->
-            PendingIntent.getActivity(this, 0, launchIntent, PendingIntent.FLAG_IMMUTABLE)
-        }
+        AgentForegroundNotification.launchContentIntent(this)
     }
 
     companion object {
@@ -341,15 +336,12 @@ class AgentForegroundService : Service() {
         lastNotifiedStatus = null
     }
 
-    private fun buildNotification(status: String): Notification =
-        NotificationCompat.Builder(this, NotificationChannels.AGENT_FOREGROUND)
-            .setContentTitle(getString(R.string.notifications_agent_foreground_title))
-            .setContentText(status)
-            .setSmallIcon(R.drawable.ic_stat_agent)
-            .setOngoing(true)
-            .setOnlyAlertOnce(true)
-            .setContentIntent(contentPendingIntent)
-            .build()
+    private fun buildNotification(status: String): Notification = AgentForegroundNotification.build(
+        context = this,
+        contentTitle = getString(R.string.notifications_agent_foreground_title),
+        contentText = status,
+        contentIntent = contentPendingIntent,
+    )
 
     /**
      * Called by the system every time a client explicitly starts the service.
