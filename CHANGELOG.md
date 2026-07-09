@@ -521,6 +521,8 @@ details.
 
 ### Changed
 
+- **On-device inference engine updated.** Bumped `com.google.ai.edge.litertlm`
+  (LiteRT-LM) from `0.13.1` to `0.14.0`.
 - **Settings internals reorganised ahead of the categorised settings redesign
   (no behaviour change).** `SettingsViewModel` is now a thin coordinator over
   eight per-category delegates (Generation, Models, Memory, Pipelines, Tools,
