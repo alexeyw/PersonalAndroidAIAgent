@@ -13,6 +13,7 @@ import app.knotwork.design.components.chat.InterruptedRunCardModel
 import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.components.console.ConsoleSnap
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
+import app.knotwork.design.screens.chat.ChatHomeSamplePromptCard
 import app.knotwork.design.screens.chat.ChatHomeViewState
 import app.knotwork.design.screens.chat.ChatHomeVisualState
 import org.json.JSONArray
@@ -68,7 +69,7 @@ fun ChatHomeScreenState.toViewState(fixtures: ChatHomeFixtures = ChatHomeFixture
             threadTitle = threadTitle,
             modelName = modelName,
             composerValue = composerValue,
-            samplePromptCards = fixtures.suggestionCards,
+            samplePromptCards = samplePromptCards(fixtures),
             pipelineName = resolvedPipelineName,
             tokensUsed = tokens.used,
             tokensMax = tokens.max,
@@ -102,10 +103,16 @@ fun ChatHomeScreenState.toViewState(fixtures: ChatHomeFixtures = ChatHomeFixture
             tokensUsed = tokens.used,
             tokensMax = tokens.max,
             favorite = thread.favorite,
-            // Append the running token count so the pill reads
-            // "generating · 42 tok" — gives the user visible progress on
-            // long generations.
-            agentStatusLine = formatGeneratingStatus(fixtures.statusGenerating, tokens.streaming),
+            // While the model loads before an auto-send (`preparingModel`), read
+            // the honest "loading model" line rather than telling the user the
+            // assistant is producing tokens. Otherwise append the running token
+            // count so the pill reads "generating · 42 tok" — visible progress
+            // on long generations.
+            agentStatusLine = if (visual.preparingModel) {
+                fixtures.statusPreparingModel
+            } else {
+                formatGeneratingStatus(fixtures.statusGenerating, tokens.streaming)
+            },
             console = console,
         )
 
@@ -456,7 +463,7 @@ internal object DebugStateIds {
 internal fun debugStateForId(id: String): ChatHomeUiState? = when (id) {
     DebugStateIds.EMPTY -> ChatHomeUiState.Empty
     DebugStateIds.IDLE -> ChatHomeUiState.Idle
-    DebugStateIds.GENERATING -> ChatHomeUiState.Generating
+    DebugStateIds.GENERATING -> ChatHomeUiState.Generating()
     DebugStateIds.HITL_READONLY -> ChatHomeUiState.HitlConfirm(Risk.Readonly)
     DebugStateIds.HITL_SENSITIVE -> ChatHomeUiState.HitlConfirm(Risk.Sensitive)
     DebugStateIds.HITL_DESTRUCTIVE -> ChatHomeUiState.HitlConfirm(Risk.Destructive)
@@ -491,3 +498,24 @@ internal fun debugConsoleSnapForId(id: String): ConsoleSnap? = when (id) {
  */
 internal fun formatGeneratingStatus(baseLabel: String, tokens: Int): String =
     if (tokens > 0) "$baseLabel · $tokens tok" else baseLabel
+
+/**
+ * Resolves the empty-state suggestion cards for the active chat: the cards
+ * declared by the active pipeline when it has any, otherwise the generic,
+ * pipeline-agnostic fallback set from [fixtures]. Sourcing the cards from the
+ * pipeline keeps the `uses · …` tool hints honest — they reflect what that
+ * pipeline actually wires rather than a static promise the pipeline may not
+ * keep. A `null` [PipelineSamplePrompt.toolsHint] maps to an empty
+ * `toolsUsed`, which the catalog card renders without a subtitle.
+ *
+ * @param fixtures locale-resolved fallback cards.
+ * @return the pipeline's cards, or the fallback when it declares none.
+ */
+private fun ChatHomeScreenState.samplePromptCards(fixtures: ChatHomeFixtures): List<ChatHomeSamplePromptCard> =
+    activeSamplePrompts.takeIf { it.isNotEmpty() }?.mapIndexed { index, prompt ->
+        ChatHomeSamplePromptCard(
+            id = "pipeline-prompt-$index",
+            title = prompt.title,
+            toolsUsed = prompt.toolsHint.orEmpty(),
+        )
+    } ?: fixtures.suggestionCards

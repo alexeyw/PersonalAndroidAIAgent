@@ -111,6 +111,8 @@ object PipelineJsonSerializer {
         graph.connections.forEach { c -> connectionsJson.put(serializeConnection(c)) }
         root.put("connections", connectionsJson)
 
+        root.put("samplePrompts", PipelineSamplePromptJson.encodeToArray(graph.samplePrompts))
+
         return root.toString()
     }
 
@@ -236,12 +238,18 @@ object PipelineJsonSerializer {
             buildConnection(connectionsJson.getJSONObject(i), index = i, nodeIds = nodeIds)
         }
 
+        // Optional + additive: documents from older builds simply lack the key,
+        // which decodes to an empty list (no suggestions) — preserving the
+        // schema-version-1 forward-compatibility contract.
+        val samplePrompts = PipelineSamplePromptJson.decodeFromArray(root.optJSONArray("samplePrompts"))
+
         return PipelineGraph(
             id = id,
             name = name,
             nodes = nodes,
             connections = connections,
             updatedAt = updatedAt,
+            samplePrompts = samplePrompts,
         )
     }
 

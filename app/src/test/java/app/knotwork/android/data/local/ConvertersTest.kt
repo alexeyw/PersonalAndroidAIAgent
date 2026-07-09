@@ -2,9 +2,11 @@ package app.knotwork.android.data.local
 
 import app.knotwork.android.domain.models.MemorySource
 import app.knotwork.android.domain.models.NodeContextConfig
+import app.knotwork.android.domain.models.PipelineSamplePrompt
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -128,5 +130,40 @@ class ConvertersTest {
         val restored = converters.toFloatArray(converters.fromFloatArray(original))
 
         assertArrayEquals(original, restored, 0.0f)
+    }
+
+    @Test
+    fun `sample prompts round-trip through converters preserving a null tools hint`() {
+        val prompts = listOf(
+            PipelineSamplePrompt(title = "Look up benchmarks", toolsHint = "search_tool"),
+            PipelineSamplePrompt(title = "Explain on-device inference"),
+        )
+
+        val restored = converters.toSamplePrompts(converters.fromSamplePrompts(prompts))
+
+        assertEquals(prompts, restored)
+        assertNull(restored[1].toolsHint)
+    }
+
+    @Test
+    fun `toSamplePrompts returns empty list for the empty-array default and blank input`() {
+        assertTrue(converters.toSamplePrompts("[]").isEmpty())
+        assertTrue(converters.toSamplePrompts("   ").isEmpty())
+    }
+
+    @Test
+    fun `toSamplePrompts returns empty list for malformed JSON`() {
+        assertTrue(converters.toSamplePrompts("{not json").isEmpty())
+    }
+
+    @Test
+    fun `toSamplePrompts skips entries without a title`() {
+        // A title is mandatory; a stray object missing one is dropped rather
+        // than surfacing a blank card.
+        val json = "[{\"toolsHint\":\"search_tool\"},{\"title\":\"Keep me\"}]"
+
+        val restored = converters.toSamplePrompts(json)
+
+        assertEquals(listOf(PipelineSamplePrompt(title = "Keep me")), restored)
     }
 }

@@ -121,8 +121,19 @@ class MainActivity : ComponentActivity() {
         // Start the background agent service. Application init (incl. the
         // first-launch defaults that used to live here) is now driven by
         // the splash screen via `AppInitializationUseCase`.
-        val serviceIntent = Intent(this, AgentForegroundService::class.java)
-        startForegroundService(serviceIntent)
+        //
+        // Only start it when it is not already running. The service shows its
+        // foreground notification only while the agent is actively working and
+        // drops to the background (demoted) when idle; calling
+        // startForegroundService() again on an already-running, demoted service
+        // would re-arm the 5-second startForeground() obligation that cannot be
+        // met while idle, crashing with ForegroundServiceDidNotStartInTime — so
+        // a plain Activity recreate (e.g. rotation) while idle must not re-issue
+        // the start.
+        if (!AgentForegroundService.isRunning) {
+            val serviceIntent = Intent(this, AgentForegroundService::class.java)
+            startForegroundService(serviceIntent)
+        }
 
         // Schedule background long-term-memory maintenance off the main thread:
         // a daily charging + idle compaction pass plus an out-of-schedule watch

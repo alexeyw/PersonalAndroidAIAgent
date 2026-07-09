@@ -4,7 +4,6 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.ServiceInfo
 import androidx.core.app.NotificationChannelCompat
-import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
@@ -158,12 +157,12 @@ class AgentWorker @AssistedInject constructor(
      */
     override suspend fun getForegroundInfo(): ForegroundInfo {
         ensureForegroundChannel()
-        val notification = NotificationCompat.Builder(applicationContext, NotificationChannels.AGENT_FOREGROUND)
-            .setContentTitle(applicationContext.getString(R.string.notifications_scheduled_running_title))
-            .setContentText(applicationContext.getString(R.string.notifications_scheduled_running_body))
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setOngoing(true)
-            .build()
+        val notification = AgentForegroundNotification.build(
+            context = applicationContext,
+            contentTitle = applicationContext.getString(R.string.notifications_scheduled_running_title),
+            contentText = applicationContext.getString(R.string.notifications_scheduled_running_body),
+            contentIntent = AgentForegroundNotification.launchContentIntent(applicationContext),
+        )
         return ForegroundInfo(
             FOREGROUND_NOTIFICATION_ID,
             notification,

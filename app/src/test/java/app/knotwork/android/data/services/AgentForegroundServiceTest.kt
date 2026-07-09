@@ -4,6 +4,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.os.Looper
 import androidx.work.WorkManager
+import app.knotwork.android.R
 import app.knotwork.android.domain.constants.NotificationChannels
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AgentOrchestratorState
@@ -150,6 +151,57 @@ class AgentForegroundServiceTest {
             "Foreground-service notification must be posted on the AGENT_FOREGROUND channel",
             NotificationChannels.AGENT_FOREGROUND,
             notification.channelId,
+        )
+    }
+
+    @Test
+    fun `given foreground notification when built then uses the dedicated status-bar icon`() {
+        val controller = newController()
+
+        controller.create()
+        flushAll()
+
+        val notification = Shadows.shadowOf(controller.get()).lastForegroundNotification
+        assertNotNull(notification)
+        assertEquals(
+            "Foreground notification must use the dedicated ic_stat_agent small icon",
+            R.drawable.ic_stat_agent,
+            notification!!.smallIcon.resId,
+        )
+    }
+
+    @Test
+    fun `given active work then Idle when collector runs then foreground notification is removed`() {
+        val controller = newController()
+        controller.create()
+        flushAll()
+        globalState.value = AgentOrchestratorState.Thinking("…")
+        flushAll()
+
+        // The agent finished: the status notification must not linger.
+        globalState.value = AgentOrchestratorState.Idle
+        flushAll()
+
+        assertTrue(
+            "Foreground notification must be removed once the agent settles to idle",
+            Shadows.shadowOf(controller.get()).isForegroundStopped,
+        )
+    }
+
+    @Test
+    fun `given Completed when collector runs then foreground notification is removed`() {
+        val controller = newController()
+        controller.create()
+        flushAll()
+        globalState.value = AgentOrchestratorState.Answering("…")
+        flushAll()
+
+        globalState.value = AgentOrchestratorState.Completed("done")
+        flushAll()
+
+        assertTrue(
+            "Foreground notification must be removed when the run completes",
+            Shadows.shadowOf(controller.get()).isForegroundStopped,
         )
     }
 

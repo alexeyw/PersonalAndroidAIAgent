@@ -6,6 +6,7 @@ import app.knotwork.android.domain.models.NodeContextConfig
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
+import app.knotwork.android.domain.models.PipelineSamplePrompt
 import java.util.UUID
 
 /**
@@ -216,6 +217,23 @@ object DefaultPipelineFactory {
             updatedAt = System.currentTimeMillis(),
             nodes = nodes,
             connections = connections,
+            // Starter prompts chosen to match what THIS pipeline can actually
+            // do: a web lookup (Data branch → search_tool), an on-device answer
+            // (Simple branch → local LLM, privacy identity), and a multi-step
+            // plan (Task branch → decomposition). Only the search card claims a
+            // tool, because only search_tool is wired here.
+            samplePrompts = listOf(
+                PipelineSamplePrompt(
+                    title = "Look up the latest on-device LLM benchmarks",
+                    toolsHint = "search_tool",
+                ),
+                PipelineSamplePrompt(
+                    title = "Explain how on-device inference keeps my data private",
+                ),
+                PipelineSamplePrompt(
+                    title = "Break down \"learn Kotlin coroutines\" into a step-by-step plan",
+                ),
+            ),
         )
     }
 }

@@ -4,6 +4,8 @@ import androidx.room.TypeConverter
 import app.knotwork.android.domain.memoryio.MemorySourceJson
 import app.knotwork.android.domain.models.MemorySource
 import app.knotwork.android.domain.models.NodeContextConfig
+import app.knotwork.android.domain.models.PipelineSamplePrompt
+import app.knotwork.android.domain.pipelineio.PipelineSamplePromptJson
 import org.json.JSONException
 import org.json.JSONObject
 import timber.log.Timber
@@ -14,7 +16,8 @@ import timber.log.Timber
  * Currently handles:
  * - [FloatArray] ↔ little-endian [ByteArray] for vector embeddings (BLOB column);
  * - [NodeContextConfig] ↔ JSON [String] for per-node pipeline context flags;
- * - [MemorySource] ↔ JSON [String] for memory-chunk provenance.
+ * - [MemorySource] ↔ JSON [String] for memory-chunk provenance;
+ * - [List] of [PipelineSamplePrompt] ↔ JSON [String] for pipeline sample prompts.
  */
 class Converters {
 
@@ -127,6 +130,33 @@ class Converters {
             MemorySource.Unknown
         }
     }
+
+    /**
+     * Serialises a pipeline's sample-prompt list to a compact JSON array string
+     * for the single `pipelines.samplePrompts` TEXT column. Delegates the wire
+     * shape to [PipelineSamplePromptJson] so the column encoding stays
+     * byte-identical to the export/import form. The column is `NOT NULL`
+     * (default `'[]'`), so both directions are non-null.
+     *
+     * @param prompts The sample prompts to serialise.
+     * @return A JSON array string (`[]` when empty).
+     */
+    @TypeConverter
+    fun fromSamplePrompts(prompts: List<PipelineSamplePrompt>): String =
+        PipelineSamplePromptJson.encodeToString(prompts)
+
+    /**
+     * Deserialises a JSON array produced by [fromSamplePrompts] back into a
+     * list of [PipelineSamplePrompt]. Blank or malformed payloads (hand-edited
+     * DB, an older/newer wire shape) decode to an empty list — the same value a
+     * pipeline without suggestions carries — so a corrupt column never aborts a
+     * pipeline load.
+     *
+     * @param value The stored JSON array string.
+     * @return The parsed prompts, or an empty list on any error / missing data.
+     */
+    @TypeConverter
+    fun toSamplePrompts(value: String): List<PipelineSamplePrompt> = PipelineSamplePromptJson.decodeFromString(value)
 
     private companion object {
         const val KEY_CHAT_HISTORY = "chatHistory"

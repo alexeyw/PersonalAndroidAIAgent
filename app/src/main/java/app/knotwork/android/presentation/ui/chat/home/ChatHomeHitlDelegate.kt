@@ -73,7 +73,7 @@ class ChatHomeHitlDelegate(
             it.copy(
                 pending = it.pending.copy(tool = null),
                 composer = it.composer.copy(typedConfirm = ""),
-                visual = ChatHomeUiState.Generating,
+                visual = ChatHomeUiState.Generating(),
             )
         }
         scope.launch { submitApprovalDecision(sessionId, isApproved = true) }
@@ -96,7 +96,7 @@ class ChatHomeHitlDelegate(
             it.copy(
                 pending = it.pending.copy(tool = null),
                 composer = it.composer.copy(typedConfirm = ""),
-                visual = ChatHomeUiState.Generating,
+                visual = ChatHomeUiState.Generating(),
             )
         }
         scope.launch {
@@ -132,7 +132,7 @@ class ChatHomeHitlDelegate(
         state.update {
             it.copy(
                 pending = it.pending.copy(clarification = null),
-                visual = ChatHomeUiState.Generating,
+                visual = ChatHomeUiState.Generating(),
             )
         }
         scope.launch {

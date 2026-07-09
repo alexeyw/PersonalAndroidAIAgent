@@ -128,6 +128,10 @@ class LoadPipelineFromPresetUseCase @Inject constructor(
             nodes = instantiatedNodes,
             connections = instantiatedConnections,
             updatedAt = System.currentTimeMillis(),
+            // Carry the preset's starter prompts onto the materialized copy so
+            // the new-chat empty state shows the pipeline's own quick actions
+            // (mirrors DuplicatePipelineUseCase).
+            samplePrompts = template.samplePrompts,
         )
 
         val errors = pipeline.validate()

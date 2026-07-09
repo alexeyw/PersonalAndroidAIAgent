@@ -26,8 +26,18 @@ sealed interface ChatHomeUiState {
     /** History present, no in-flight request. Default after first send. */
     data object Idle : ChatHomeUiState
 
-    /** The assistant is producing tokens; composer morphs to stop. */
-    data object Generating : ChatHomeUiState
+    /**
+     * The surface is busy: the composer morphs to stop.
+     *
+     * @property preparingModel `true` during the transient phase where the user
+     *   sent a message while no LLM model was loaded and the active model is
+     *   being loaded before the send proceeds automatically. The composer then
+     *   shows an honest "loading model" status rather than "generating";
+     *   `false` is the normal case where the assistant is producing tokens.
+     *   Modelled as a flag rather than a separate state so every "busy" guard
+     *   (`is Generating`) covers both phases without a second sealed arm.
+     */
+    data class Generating(val preparingModel: Boolean = false) : ChatHomeUiState
 
     /**
      * A tool call awaits user approval. The bubble at the tail of the

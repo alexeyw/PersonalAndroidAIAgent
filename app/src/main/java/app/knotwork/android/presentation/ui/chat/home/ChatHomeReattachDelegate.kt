@@ -302,7 +302,7 @@ class ChatHomeReattachDelegate(
                 ResumeOutcome.Resumed -> {
                     state.update { current ->
                         current.copy(pending = current.pending.copy(interrupted = null))
-                            .copy(visual = ChatHomeUiState.Generating)
+                            .copy(visual = ChatHomeUiState.Generating())
                     }
                     attachToLiveRun(sessionId, PipelineRunStatus.QUEUED)
                 }
