@@ -5,7 +5,7 @@ import app.knotwork.android.domain.memoryio.MemorySourceJson
 import app.knotwork.android.domain.models.MemorySource
 import app.knotwork.android.domain.models.NodeContextConfig
 import app.knotwork.android.domain.models.PipelineSamplePrompt
-import org.json.JSONArray
+import app.knotwork.android.domain.pipelineio.PipelineSamplePromptJson
 import org.json.JSONException
 import org.json.JSONObject
 import timber.log.Timber
@@ -133,51 +133,30 @@ class Converters {
 
     /**
      * Serialises a pipeline's sample-prompt list to a compact JSON array string
-     * for the single `pipelines.samplePrompts` TEXT column. Each element is a
-     * `{title, toolsHint?}` object; `toolsHint` is omitted when `null`. The
-     * column is `NOT NULL` (default `'[]'`), so both directions are non-null.
+     * for the single `pipelines.samplePrompts` TEXT column. Delegates the wire
+     * shape to [PipelineSamplePromptJson] so the column encoding stays
+     * byte-identical to the export/import form. The column is `NOT NULL`
+     * (default `'[]'`), so both directions are non-null.
      *
      * @param prompts The sample prompts to serialise.
      * @return A JSON array string (`[]` when empty).
      */
     @TypeConverter
-    fun fromSamplePrompts(prompts: List<PipelineSamplePrompt>): String {
-        val array = JSONArray()
-        prompts.forEach { prompt ->
-            val obj = JSONObject().put(KEY_PROMPT_TITLE, prompt.title)
-            prompt.toolsHint?.let { obj.put(KEY_PROMPT_TOOLS_HINT, it) }
-            array.put(obj)
-        }
-        return array.toString()
-    }
+    fun fromSamplePrompts(prompts: List<PipelineSamplePrompt>): String =
+        PipelineSamplePromptJson.encodeToString(prompts)
 
     /**
      * Deserialises a JSON array produced by [fromSamplePrompts] back into a
-     * list of [PipelineSamplePrompt]. Defends against blank or malformed
-     * payloads (hand-edited DB, an older/newer wire shape) by returning an
-     * empty list — the same value a pipeline without suggestions carries — so a
-     * corrupt column never aborts a pipeline load. Entries missing a title are
-     * skipped; a missing `toolsHint` decodes to `null`.
+     * list of [PipelineSamplePrompt]. Blank or malformed payloads (hand-edited
+     * DB, an older/newer wire shape) decode to an empty list — the same value a
+     * pipeline without suggestions carries — so a corrupt column never aborts a
+     * pipeline load.
      *
      * @param value The stored JSON array string.
      * @return The parsed prompts, or an empty list on any error / missing data.
      */
     @TypeConverter
-    fun toSamplePrompts(value: String): List<PipelineSamplePrompt> {
-        if (value.isBlank()) return emptyList()
-        return try {
-            val array = JSONArray(value)
-            (0 until array.length()).mapNotNull { index ->
-                val obj = array.optJSONObject(index) ?: return@mapNotNull null
-                val title = obj.optString(KEY_PROMPT_TITLE).takeIf { it.isNotBlank() } ?: return@mapNotNull null
-                val toolsHint = obj.optString(KEY_PROMPT_TOOLS_HINT).takeIf { it.isNotBlank() }
-                PipelineSamplePrompt(title = title, toolsHint = toolsHint)
-            }
-        } catch (e: JSONException) {
-            Timber.w(e, "Failed to parse sample prompts from value=%s, using empty list", value)
-            emptyList()
-        }
-    }
+    fun toSamplePrompts(value: String): List<PipelineSamplePrompt> = PipelineSamplePromptJson.decodeFromString(value)
 
     private companion object {
         const val KEY_CHAT_HISTORY = "chatHistory"
@@ -185,7 +164,5 @@ class Converters {
         const val KEY_NODE_INPUT = "nodeInput"
         const val KEY_LONG_TERM_MEMORY = "longTermMemory"
         const val KEY_TOOL_RESULTS = "toolResults"
-        const val KEY_PROMPT_TITLE = "title"
-        const val KEY_PROMPT_TOOLS_HINT = "toolsHint"
     }
 }

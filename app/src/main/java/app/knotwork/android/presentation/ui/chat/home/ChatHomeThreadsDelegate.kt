@@ -219,15 +219,17 @@ class ChatHomeThreadsDelegate(
             // insert and leave an orphan the insert re-adds.
             pendingNewSessionSave?.join()
             chatRepository.deleteSession(sessionId)
-            // Discard the deleted chat's unsent draft so it does not outlive the
-            // session it belonged to.
-            clearDraft(sessionId)
             val remaining = sessions.filter { it.id != sessionId }
             if (remaining.isNotEmpty()) {
                 selectThread(remaining.first().id)
             } else {
                 createNewSessionWithPipeline(pipelineId = null)
             }
+            // Discard the deleted chat's unsent draft AFTER the switch: the
+            // switch stashes the outgoing (now-deleted) session's composer text
+            // back into the draft map, so clearing before it would be undone,
+            // leaving an orphan entry keyed by a session that no longer exists.
+            clearDraft(sessionId)
         }
     }
 

@@ -85,9 +85,32 @@ class AgentForegroundService : Service() {
      */
     private var isForeground: Boolean = false
 
+    /**
+     * The status text currently posted to the notification, or `null` when no
+     * notification is showing. Lets [promoteForeground] skip a redundant
+     * `notify()` when the status is unchanged — during token streaming the state
+     * text (e.g. "Answering...") is constant across every emission, so this
+     * collapses thousands of per-token notification rebuilds into one.
+     */
+    private var lastNotifiedStatus: String? = null
+
     /** Lazily-resolved system notification manager used to update the status notification. */
     private val notificationManager: NotificationManager by lazy {
         getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    }
+
+    /**
+     * Content intent that opens the app's launcher activity, resolved once for
+     * the service's lifetime. Built via the package launch intent (not a direct
+     * Activity reference) so the data-layer service does not depend on the
+     * presentation layer; cached because the target never changes and rebuilding
+     * it per notification update would issue a PackageManager query per streamed
+     * token.
+     */
+    private val contentPendingIntent: PendingIntent? by lazy {
+        packageManager.getLaunchIntentForPackage(packageName)?.let { launchIntent ->
+            PendingIntent.getActivity(this, 0, launchIntent, PendingIntent.FLAG_IMMUTABLE)
+        }
     }
 
     companion object {
@@ -289,15 +312,23 @@ class AgentForegroundService : Service() {
      * @param status The status line rendered as the notification content text.
      */
     private fun promoteForeground(status: String) {
-        val notification = buildNotification(status)
         if (isForeground) {
-            notificationManager.notify(NOTIFICATION_ID, notification)
+            // Already foreground: only re-post when the status text actually
+            // changed, so a long stream of identical states does not flood the
+            // NotificationManager with no visible difference.
+            if (status == lastNotifiedStatus) return
+            notificationManager.notify(NOTIFICATION_ID, buildNotification(status))
+            lastNotifiedStatus = status
             return
         }
         try {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+            startForeground(NOTIFICATION_ID, buildNotification(status), ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
             isForeground = true
+            lastNotifiedStatus = status
         } catch (e: ForegroundServiceStartNotAllowedException) {
+            // The app is in the background and the OS forbids a foreground start
+            // from here — a headless/scheduled run driving the global state owns
+            // its own notification via AgentWorker's foreground. Skip, don't crash.
             Timber.w(e, "Foreground promotion not allowed from background; skipping notification")
         }
     }
@@ -307,24 +338,18 @@ class AgentForegroundService : Service() {
         if (!isForeground) return
         stopForeground(STOP_FOREGROUND_REMOVE)
         isForeground = false
+        lastNotifiedStatus = null
     }
 
-    private fun buildNotification(status: String): Notification {
-        // Tapping the notification opens the app's launcher activity. Built via
-        // the package launch intent (not a direct Activity reference) so the
-        // data-layer service does not depend on the presentation layer.
-        val contentIntent = packageManager.getLaunchIntentForPackage(packageName)?.let { launchIntent ->
-            PendingIntent.getActivity(this, 0, launchIntent, PendingIntent.FLAG_IMMUTABLE)
-        }
-        return NotificationCompat.Builder(this, NotificationChannels.AGENT_FOREGROUND)
+    private fun buildNotification(status: String): Notification =
+        NotificationCompat.Builder(this, NotificationChannels.AGENT_FOREGROUND)
             .setContentTitle(getString(R.string.notifications_agent_foreground_title))
             .setContentText(status)
             .setSmallIcon(R.drawable.ic_stat_agent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setContentIntent(contentIntent)
+            .setContentIntent(contentPendingIntent)
             .build()
-    }
 
     /**
      * Called by the system every time a client explicitly starts the service.

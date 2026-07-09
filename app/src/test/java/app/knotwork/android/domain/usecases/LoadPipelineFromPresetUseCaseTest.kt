@@ -6,6 +6,7 @@ import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelinePreset
+import app.knotwork.android.domain.models.PipelineSamplePrompt
 import app.knotwork.android.domain.models.PipelineValidationException
 import app.knotwork.android.domain.models.PresetCategory
 import app.knotwork.android.domain.repositories.PipelinePresetRepository
@@ -98,6 +99,23 @@ class LoadPipelineFromPresetUseCaseTest {
         assertEquals(newInput.id, connection.sourceNodeId)
         assertEquals(newOutput.id, connection.targetNodeId)
         assertEquals("edge", connection.label)
+    }
+
+    @Test
+    fun `given preset with sample prompts when invoke then the materialized pipeline keeps them`() = runTest {
+        val prompts = listOf(
+            PipelineSamplePrompt(title = "Look up benchmarks", toolsHint = "search_tool"),
+            PipelineSamplePrompt(title = "Explain on-device inference"),
+        )
+        coEvery { presetRepository.getPresetById("local_only_qa") } returns
+            preset(graph = validGraph().copy(samplePrompts = prompts))
+        val saved = slot<PipelineGraph>()
+        coEvery { pipelineRepository.savePipeline(capture(saved)) } returns Unit
+
+        val result = useCase("local_only_qa")
+
+        assertTrue(result.isSuccess)
+        assertEquals(prompts, saved.captured.samplePrompts)
     }
 
     @Test

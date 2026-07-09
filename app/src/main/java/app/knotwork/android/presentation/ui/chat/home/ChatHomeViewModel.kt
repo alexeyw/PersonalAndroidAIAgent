@@ -55,6 +55,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -377,7 +378,14 @@ class ChatHomeViewModel @Inject constructor(
         // wholly empty send (no text and no image).
         if (_state.value.composer.attachment is ComposerAttachmentDraft.Processing) return
         if (draftText.isEmpty() && readyAttachment == null) return
-        if (_state.value.visual is ChatHomeUiState.Generating) return
+        // Busy: a generation is streaming, or a model load kicked off by this
+        // very path is still in flight. Guarding PreparingModel too stops a
+        // second tap from cancelling and restarting the in-progress load.
+        if (_state.value.visual is ChatHomeUiState.Generating ||
+            _state.value.visual is ChatHomeUiState.PreparingModel
+        ) {
+            return
+        }
         if (!llmInferenceEngine.isInitialized) {
             // The model isn't loaded yet — instead of dead-ending on an error
             // tile that forces the user to tap Retry (load) and then Send
@@ -530,6 +538,11 @@ class ChatHomeViewModel @Inject constructor(
         modelLoadJob = viewModelScope.launch {
             when (val outcome = loadModelUseCase()) {
                 is Result.Success -> {
+                    // If the user tapped Stop (or switched chats) while the load
+                    // was suspended, the job is cancelled — bail before the send
+                    // fires, since the rest of this branch runs synchronously
+                    // with no further suspension point for cancellation to land.
+                    if (!isActive) return@launch
                     if (llmInferenceEngine.isInitialized) {
                         // Clear the transient PreparingModel first so sendMessage's
                         // "already busy" guard does not reject the re-entry; the
@@ -553,25 +566,26 @@ class ChatHomeViewModel @Inject constructor(
     }
 
     /**
-     * Handles the Retry CTA on the chat error tile. Recovers by loading the
-     * model when needed and resending the retained draft so the user never has
-     * to re-type or re-tap Send:
+     * Handles the Retry CTA on the chat error tile.
      *
-     *  - Engine healthy: clears the error and, if the composer still holds the
-     *    draft that failed, resends it via [sendMessage]; otherwise settles to
-     *    the resting state.
-     *  - Engine cold with a pending draft: [loadModelThenSend] loads then
-     *    resends. A further load failure re-shows the Error (typically "no
-     *    active model registered" — only Settings can fix that).
+     *  - Engine healthy: the failure was not a model-load problem (e.g. a
+     *    generation/tool error), so Retry simply clears the error back to the
+     *    resting state. It deliberately does NOT auto-send the composer text —
+     *    otherwise text the user typed while reading the error would be
+     *    dispatched as a brand-new message.
+     *  - Engine cold with a pending draft: this is the model-not-loaded path;
+     *    [loadModelThenSend] loads then resends the retained draft. A further
+     *    load failure re-shows the Error (typically "no active model
+     *    registered" — only Settings can fix that).
      *  - Engine cold with no pending draft: loads the model only.
      */
     fun retryAfterError() {
-        val hasDraft = _state.value.composer.value.trim().isNotEmpty() ||
-            _state.value.composer.attachment is ComposerAttachmentDraft.Ready
         if (llmInferenceEngine.isInitialized) {
-            if (hasDraft) sendMessage() else _state.update { it.copy(visual = it.restingVisual()) }
+            _state.update { it.copy(visual = it.restingVisual()) }
             return
         }
+        val hasDraft = _state.value.composer.value.trim().isNotEmpty() ||
+            _state.value.composer.attachment is ComposerAttachmentDraft.Ready
         if (hasDraft) {
             loadModelThenSend()
             return
@@ -638,6 +652,10 @@ class ChatHomeViewModel @Inject constructor(
         if (threadId.isBlank() || threadId == _state.value.thread.currentSessionId) return
         generationJob?.cancel()
         messagesJob?.cancel()
+        // Abort any in-flight "load model then send": it captures the session
+        // at send time, so leaving it running would deliver the pending message
+        // into whatever chat is active when the load finishes (or lose it).
+        modelLoadJob?.cancel()
         resetConsoleCachesForNewRun()
         // Per-chat drafts: stash the outgoing chat's unsent text before the
         // switch, then restore the incoming chat's saved draft (empty when it

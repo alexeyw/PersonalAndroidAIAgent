@@ -481,6 +481,61 @@ class ChatHomeViewModelTest {
     }
 
     @Test
+    fun `retryAfterError on a healthy engine clears the error without sending typed text`() = runTest(testDispatcher) {
+        // A non-model error is showing; the user types new text while reading
+        // it and taps Retry. Retry must clear the error, not fire the text.
+        every { llmInferenceEngine.isInitialized } returns true
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        viewModel.forceState(ChatHomeUiState.Error("boom"))
+        viewModel.onComposerValueChange("typed while reading the error")
+
+        viewModel.retryAfterError()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any()) }
+        assertTrue(viewModel.state.value.visual !is ChatHomeUiState.Error)
+        assertEquals("typed while reading the error", viewModel.state.value.composer.value)
+    }
+
+    @Test
+    fun `selectThread cancels an in-flight load-then-send so it never fires on the new chat`() =
+        runTest(testDispatcher) {
+            savedSessionIdFlow.value = "chat-A"
+            sessionsFlow.value = listOf(
+                ChatSession(id = "chat-A", name = "A", updatedAt = 0),
+                ChatSession(id = "chat-B", name = "B", updatedAt = 0),
+            )
+            // Model starts cold; the load suspends on a gate so it is still in
+            // flight when the user switches chats.
+            var modelLoaded = false
+            every { llmInferenceEngine.isInitialized } answers { modelLoaded }
+            val loadGate = CompletableDeferred<Unit>()
+            coEvery { loadModelUseCase() } coAnswers {
+                loadGate.await()
+                modelLoaded = true
+                Result.Success(Unit)
+            }
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            viewModel.onComposerValueChange("hello from A")
+            viewModel.sendMessage()
+            runCurrent()
+            assertTrue(viewModel.state.value.visual is ChatHomeUiState.PreparingModel)
+
+            // Switch chats while the load is still suspended → the pending send
+            // must be cancelled.
+            viewModel.selectThread("chat-B")
+            advanceUntilIdle()
+            // Even if the load now completes, no send may fire.
+            loadGate.complete(Unit)
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any()) }
+        }
+
+    @Test
     fun `sendMessage flips to Generating then Idle when orchestrator completes`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()

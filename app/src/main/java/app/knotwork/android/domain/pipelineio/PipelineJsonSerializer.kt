@@ -6,7 +6,6 @@ import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineImportOutcome
-import app.knotwork.android.domain.models.PipelineSamplePrompt
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
@@ -112,13 +111,7 @@ object PipelineJsonSerializer {
         graph.connections.forEach { c -> connectionsJson.put(serializeConnection(c)) }
         root.put("connections", connectionsJson)
 
-        val samplePromptsJson = JSONArray()
-        graph.samplePrompts.forEach { prompt ->
-            val obj = JSONObject().put("title", prompt.title)
-            prompt.toolsHint?.let { obj.put("toolsHint", it) }
-            samplePromptsJson.put(obj)
-        }
-        root.put("samplePrompts", samplePromptsJson)
+        root.put("samplePrompts", PipelineSamplePromptJson.encodeToArray(graph.samplePrompts))
 
         return root.toString()
     }
@@ -248,12 +241,7 @@ object PipelineJsonSerializer {
         // Optional + additive: documents from older builds simply lack the key,
         // which decodes to an empty list (no suggestions) — preserving the
         // schema-version-1 forward-compatibility contract.
-        val samplePromptsJson = root.optJSONArray("samplePrompts") ?: JSONArray()
-        val samplePrompts = (0 until samplePromptsJson.length()).mapNotNull { i ->
-            val obj = samplePromptsJson.optJSONObject(i) ?: return@mapNotNull null
-            val title = obj.optString("title").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            PipelineSamplePrompt(title = title, toolsHint = obj.optString("toolsHint").takeIf { it.isNotBlank() })
-        }
+        val samplePrompts = PipelineSamplePromptJson.decodeFromArray(root.optJSONArray("samplePrompts"))
 
         return PipelineGraph(
             id = id,
