@@ -279,13 +279,6 @@ fun PipelineLibraryScreen(
             uiState.savedPipelines.firstOrNull { it.id == id }?.let { renameTarget = it }
         },
         onDuplicate = { id -> viewModel.duplicatePipeline(pipelineId = id) },
-        onExportJson = {
-            // Per-id single-pipeline export needs a domain hook that streams a
-            // specific pipeline through `PipelineJsonSerializer`. Until that
-            // lands, surface a snackbar so the affordance is visible. The
-            // bundle export below is the shipped path.
-            scope.launch { snackbarHostState.showSnackbar(message = EXPORT_COMING_SOON_MESSAGE) }
-        },
         onExportBundle = { id ->
             viewModel.exportBundle(pipelineId = id, fileName = "knotwork-bundle-${LocalDate.now()}.json")
         },
@@ -683,9 +676,6 @@ internal const val DELETE_DEPENDENTS_TEST_TAG = "pipeline_delete_dependents_warn
 
 /** TestTag on the delete-dialog confirm button. */
 internal const val DELETE_CONFIRM_TEST_TAG = "pipeline_delete_confirm"
-
-/** Snackbar message shown when the user taps "Export JSON" — per-id export lands post-v0.1. */
-private const val EXPORT_COMING_SOON_MESSAGE = "Per-pipeline export ships in a follow-up."
 
 /**
  * Reads the human-readable display name of the document at [uri] — the file

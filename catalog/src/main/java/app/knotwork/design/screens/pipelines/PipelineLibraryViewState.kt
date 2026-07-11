@@ -175,8 +175,11 @@ class PipelineLibraryCallbacks(
     /** Bind this pipeline to the Quick Settings tile. */
     val onUseForTile: (String) -> Unit = {},
     val onRename: (String) -> Unit = {},
-    val onExportJson: (String) -> Unit = {},
-    /** Export this pipeline plus the transitive closure of its PIPELINE dependencies as a bundle. */
+    /**
+     * Export this pipeline. It carries the transitive closure of its PIPELINE
+     * dependencies as a bundle, so a pipeline with no sub-pipelines exports as a
+     * single-pipeline bundle — this is the one and only export action.
+     */
     val onExportBundle: (String) -> Unit = {},
     val onSaveAsPreset: (String) -> Unit = {},
     val onImportJson: () -> Unit = {},
