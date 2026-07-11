@@ -356,6 +356,12 @@ details.
 
 ### Fixed
 
+- **Exporting a pipeline bundle now confirms it saved.** Tapping **Export bundle
+  (with dependencies)** opens the system "Save file" dialog, where you pick the
+  destination — but on success the app said nothing, so it was unclear whether
+  the file was written. A successful export now shows an **"Exported
+  &lt;file name&gt;"** confirmation; write errors still surface as before, and
+  dismissing the picker stays silent (nothing was saved).
 - **Importing a pipeline can no longer empty other pipelines.** Every exported
   pipeline numbers its nodes `node-1`, `node-2`, … independently, so importing a
   single-pipeline JSON whose node ids happened to match another saved pipeline's

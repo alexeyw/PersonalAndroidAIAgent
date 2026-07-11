@@ -152,4 +152,5 @@
         <item quantity="other">Imported %d pipelines</item>
     </plurals>
     <string name="orchestrator_library_export_bundle_failed">Bundle export failed: %1$s</string>
+    <string name="orchestrator_library_export_bundle_success">Exported %1$s</string>
 </resources>
