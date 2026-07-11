@@ -356,6 +356,16 @@ details.
 
 ### Fixed
 
+- **Exporting a pipeline now confirms it saved, and there is a single Export
+  action.** Tapping **Export** on a library pipeline opens the system "Save
+  file" dialog, where you pick the destination — but on success the app said
+  nothing, so it was unclear whether the file was written. A successful export
+  now shows an **"Exported &lt;file name&gt;"** confirmation; write errors still
+  surface as before, and dismissing the picker stays silent (nothing was saved).
+  The library overflow menu also drops the separate, non-functional **Export
+  JSON** entry: the remaining **Export** always carries the pipeline's
+  sub-pipeline dependencies, so it covers every case (a pipeline with none
+  simply exports as a single-pipeline bundle).
 - **Importing a pipeline can no longer empty other pipelines.** Every exported
   pipeline numbers its nodes `node-1`, `node-2`, … independently, so importing a
   single-pipeline JSON whose node ids happened to match another saved pipeline's

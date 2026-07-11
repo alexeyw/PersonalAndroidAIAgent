@@ -81,7 +81,7 @@ private val DefaultBadgeHeight = 22.dp
  *  - Footer block: `FROM BROWSER EDITOR` header + `Import JSON` link +
  *    explanatory body.
  *  - Per-row overflow opens an anchored [DropdownMenu] with
- *    `Load in editor / Set as default / Rename / Duplicate / Export JSON
+ *    `Load in editor / Set as default / Rename / Duplicate / Export
  *    / Delete`. Visibility is driven by [PipelineLibraryViewState.openOverflowRowId]
  *    so the host owns the open/close transitions.
  *
@@ -643,19 +643,6 @@ private fun RowOverflowMenu(row: PipelineLibraryRow, expanded: Boolean, callback
             onClick = {
                 callbacks.onOverflowDismiss()
                 callbacks.onDuplicate(row.id)
-            },
-        )
-        DropdownMenuItem(
-            leadingIcon = {
-                Icon(
-                    imageVector = AppIcons.Download,
-                    contentDescription = null,
-                )
-            },
-            text = { Text(stringResource(R.string.knotwork_library_menu_export)) },
-            onClick = {
-                callbacks.onOverflowDismiss()
-                callbacks.onExportJson(row.id)
             },
         )
         DropdownMenuItem(

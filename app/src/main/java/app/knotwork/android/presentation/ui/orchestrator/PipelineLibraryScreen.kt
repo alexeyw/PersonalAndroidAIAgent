@@ -1,5 +1,8 @@
 package app.knotwork.android.presentation.ui.orchestrator
 
+import android.content.ContentResolver
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -118,38 +121,60 @@ fun PipelineLibraryScreen(
     }
 
     val exportFailedMessage = stringResource(R.string.errors_generic_unexpected)
+    // Pre-resolved format template ("Exported %1$s") — the file name is only
+    // known at write time, so we format this in the (non-composable) launcher
+    // callback rather than calling stringResource there.
+    val exportSuccessTemplate = stringResource(R.string.orchestrator_library_export_bundle_success)
 
-    // Holds the bundle content between launching the create-document picker and
-    // the picker returning. The VM's `pendingBundleExport` is consumed the moment
-    // we launch (below), so a configuration change / recomposition can't re-fire
-    // the picker for the same payload.
+    // Holds the bundle content + requested file name between launching the
+    // create-document picker and the picker returning. The VM's
+    // `pendingBundleExport` is consumed the moment we launch (below), so a
+    // configuration change / recomposition can't re-fire the picker for the
+    // same payload. The file name is retained as a fallback label for the
+    // success snackbar when the chosen document's display name can't be read.
     var pendingExportContent by remember { mutableStateOf<String?>(null) }
+    var pendingExportFileName by remember { mutableStateOf<String?>(null) }
 
     // SAF launcher for "Export bundle" — writes the already-computed payload to
-    // the chosen file.
+    // the chosen file and confirms the result to the user. A null uri means the
+    // user dismissed the picker: nothing was written, so we stay silent.
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument(mimeType = "application/json"),
     ) { uri ->
         val content = pendingExportContent
+        val fallbackName = pendingExportFileName
         pendingExportContent = null
+        pendingExportFileName = null
         if (uri == null || content == null) return@rememberLauncherForActivityResult
         scope.launch {
-            val failure = withContext(Dispatchers.IO) {
+            // Write, then read back the document's display name — both are
+            // blocking I/O, so they share one IO hop. Success yields the name
+            // to confirm (falling back to the requested file name); failure
+            // yields the throwable.
+            val result = withContext(Dispatchers.IO) {
                 runCatching {
                     context.contentResolver.openOutputStream(uri)?.use { out ->
                         out.write(content.toByteArray())
                     }
-                }.exceptionOrNull()
+                    resolveDisplayName(context.contentResolver, uri) ?: fallbackName
+                }
             }
-            if (failure != null) {
-                snackbarHostState.showSnackbar(message = failure.message ?: exportFailedMessage)
-            }
+            result.fold(
+                onSuccess = { name ->
+                    val label = name ?: fallbackName.orEmpty()
+                    snackbarHostState.showSnackbar(message = exportSuccessTemplate.format(label))
+                },
+                onFailure = { failure ->
+                    snackbarHostState.showSnackbar(message = failure.message ?: exportFailedMessage)
+                },
+            )
         }
     }
 
     LaunchedEffect(uiState.pendingBundleExport) {
         val export = uiState.pendingBundleExport ?: return@LaunchedEffect
         pendingExportContent = export.content
+        pendingExportFileName = export.fileName
         // Consume before launching so the picker fires exactly once per payload.
         viewModel.consumeBundleExport()
         exportLauncher.launch(export.fileName)
@@ -254,13 +279,6 @@ fun PipelineLibraryScreen(
             uiState.savedPipelines.firstOrNull { it.id == id }?.let { renameTarget = it }
         },
         onDuplicate = { id -> viewModel.duplicatePipeline(pipelineId = id) },
-        onExportJson = {
-            // Per-id single-pipeline export needs a domain hook that streams a
-            // specific pipeline through `PipelineJsonSerializer`. Until that
-            // lands, surface a snackbar so the affordance is visible. The
-            // bundle export below is the shipped path.
-            scope.launch { snackbarHostState.showSnackbar(message = EXPORT_COMING_SOON_MESSAGE) }
-        },
         onExportBundle = { id ->
             viewModel.exportBundle(pipelineId = id, fileName = "knotwork-bundle-${LocalDate.now()}.json")
         },
@@ -659,5 +677,20 @@ internal const val DELETE_DEPENDENTS_TEST_TAG = "pipeline_delete_dependents_warn
 /** TestTag on the delete-dialog confirm button. */
 internal const val DELETE_CONFIRM_TEST_TAG = "pipeline_delete_confirm"
 
-/** Snackbar message shown when the user taps "Export JSON" — per-id export lands post-v0.1. */
-private const val EXPORT_COMING_SOON_MESSAGE = "Per-pipeline export ships in a follow-up."
+/**
+ * Reads the human-readable display name of the document at [uri] — the file
+ * name shown in the system "Save file" picker — via
+ * [OpenableColumns.DISPLAY_NAME]. Returns `null` when the backing provider
+ * exposes no such column so the caller can fall back to the requested name.
+ *
+ * Runs a blocking cursor query, so it must be called off the main thread.
+ *
+ * @param resolver The content resolver used to query the document provider.
+ * @param uri The document uri returned by the create-document picker.
+ * @return The document's display name, or `null` if it cannot be resolved.
+ */
+private fun resolveDisplayName(resolver: ContentResolver, uri: Uri): String? =
+    resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+        val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+        if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
+    }
