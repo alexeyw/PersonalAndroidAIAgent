@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "id": "styled_translation",
+  "name": "Styled Translation",
+  "description": "Translate messages while keeping their tone, register and dialect — not just the words. Runs entirely on-device.",
+  "category": "local",
+  "tags": ["translation", "on-device", "starter"],
+  "updatedAt": 1784040821000,
+  "nodes": [
+    {
+      "id": "node-1",
+      "type": "INPUT",
+      "position": { "x": 80.0, "y": 200.0 },
+      "label": "Text",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      }
+    },
+    {
+      "id": "node-2",
+      "type": "LITE_RT",
+      "position": { "x": 320.0, "y": 200.0 },
+      "label": "Translate",
+      "config": {
+        "systemPrompt": "You translate the user's input text. TARGET: translate into Chilean Spanish (Spanish as actually spoken in Chile). REGISTER: use the everyday, casual register — natural, colloquial Chilean speech. To translate formally instead, replace the previous sentence with: use the official, formal register. To translate into a different language, change the TARGET line. Preserve the meaning, tone and politeness level of the original; keep names, numbers and line breaks. Do not add notes, alternatives or explanations. Output only the translated text.",
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      }
+    },
+    {
+      "id": "node-3",
+      "type": "OUTPUT",
+      "position": { "x": 560.0, "y": 200.0 },
+      "label": "Translation",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      }
+    }
+  ],
+  "connections": [
+    { "id": "conn-1", "fromNodeId": "node-1", "toNodeId": "node-2", "label": null },
+    { "id": "conn-2", "fromNodeId": "node-2", "toNodeId": "node-3", "label": null }
+  ]
+}

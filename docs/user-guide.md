@@ -39,8 +39,19 @@ before the next release ships.
 
 ## Getting started
 
-The first time you launch the app you go through a brief onboarding
-screen, then land on the Chat tab.
+The first time you launch the app you go through a short onboarding
+flow, then land on the Chat tab. Instead of asking you to assemble a
+pipeline up front, onboarding leads with **what the agent should do for
+you**: you pick one of a few ready-made scenarios — a styled translator,
+a share-to-capture handler, or a mood-aware companion — and the app sets
+up everything that scenario needs. It materialises the matching pipeline
+as your default, wires any surface it uses (the share handler starts
+listening on the system Share sheet), and downloads exactly the model
+that scenario requires, showing the size and live progress so the wait
+is a known one. When the model has finished warming, the final step
+opens your scenario straight into a working chat. Prefer to build your
+own? The gallery's **Start from scratch** card skips the scenario and
+drops you into the app to wire a pipeline node by node.
 
 The bottom of the screen always shows the four navigation tabs:
 
