@@ -136,6 +136,16 @@ class OnboardingContentSnapshotTest {
         OnboardingContent(state = OnboardingPreview.readyShare())
     }
 
+    @Test
+    fun onboarding_ready_warm_error_light() = snapshot(name = "ready_warm_error", dark = false) {
+        OnboardingContent(state = OnboardingPreview.readyWarmError())
+    }
+
+    @Test
+    fun onboarding_ready_warm_error_dark() = snapshot(name = "ready_warm_error", dark = true) {
+        OnboardingContent(state = OnboardingPreview.readyWarmError())
+    }
+
     private fun snapshot(name: String, dark: Boolean, content: @Composable () -> Unit) {
         composeTestRule.setContent {
             CompositionLocalProvider(LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true)) {
@@ -209,6 +219,17 @@ internal object OnboardingPreview {
         scenarioPreview = sharePreview(),
         installedModelId = OnboardingLiteRtModel.Gemma4E2B.id,
         isModelWarmed = true,
+    )
+
+    /** Ready — warm-up failed: error banner + retry CTA, not a silent dead-end. */
+    fun readyWarmError(): OnboardingViewState = OnboardingViewState(
+        step = OnboardingStep.Ready,
+        selectedScenario = OnboardingScenario.StyledTranslation,
+        liteRtModel = OnboardingLiteRtModel.Gemma4E2B,
+        scenarioPreview = styledPreview(),
+        installedModelId = OnboardingLiteRtModel.Gemma4E2B.id,
+        isModelWarmed = false,
+        downloadError = "Couldn't load the model. Check storage and retry.",
     )
 
     private const val DOWNLOAD_PROGRESS_FIXTURE: Float = 0.42f

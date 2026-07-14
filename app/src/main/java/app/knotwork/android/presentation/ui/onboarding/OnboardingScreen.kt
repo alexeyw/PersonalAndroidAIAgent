@@ -26,8 +26,8 @@ import app.knotwork.design.screens.onboarding.OnboardingStep
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Onboarding entry point — 4-step pager (`Welcome → LiteRtModel →
- * CloudKeys → Ready`) backed by [OnboardingViewModel].
+ * Onboarding entry point — 4-step scenario pager (`Welcome → Choose a
+ * scenario → Download → Ready`) backed by [OnboardingViewModel].
  *
  * The visual surface lives in `:catalog` (`OnboardingContent`); this
  * screen threads the ViewModel state and forwards finish/skip into the
@@ -88,6 +88,7 @@ fun OnboardingScreen(onCompleted: () -> Unit, viewModel: OnboardingViewModel = h
                 onCompleted()
             },
             onLiteRtModelPick = viewModel::pickLiteRtModel,
+            onRetryWarmUp = viewModel::retryWarmUp,
             onStartDownload = viewModel::startDownload,
             onCustomDownloadUrlChanged = viewModel::onCustomDownloadUrlChanged,
         )

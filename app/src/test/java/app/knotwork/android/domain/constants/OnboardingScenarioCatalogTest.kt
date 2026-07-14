@@ -33,23 +33,23 @@ class OnboardingScenarioCatalogTest {
     }
 
     @Test
-    fun `styled translation needs E2B and binds no surface`() {
+    fun `styled translation binds no surface`() {
         val spec = OnboardingScenarioCatalog.byId(OnboardingScenarioCatalog.ID_STYLED_TRANSLATION)!!
-        assertEquals(OnboardingModelCatalog.ID_GEMMA_4_E2B, spec.modelId)
+        assertEquals(OnboardingScenarioCatalog.ID_STYLED_TRANSLATION, spec.presetId)
         assertNull(spec.entrySurface)
     }
 
     @Test
-    fun `share handler needs E2B and binds the share surface`() {
+    fun `share handler binds the share surface`() {
         val spec = OnboardingScenarioCatalog.byId(OnboardingScenarioCatalog.ID_SHARE_HANDLER)!!
-        assertEquals(OnboardingModelCatalog.ID_GEMMA_4_E2B, spec.modelId)
+        assertEquals(OnboardingScenarioCatalog.ID_SHARE_HANDLER, spec.presetId)
         assertEquals(EntrySurface.SHARE, spec.entrySurface)
     }
 
     @Test
-    fun `virtual companion needs E4B and binds no surface`() {
+    fun `virtual companion binds no surface`() {
         val spec = OnboardingScenarioCatalog.byId(OnboardingScenarioCatalog.ID_VIRTUAL_COMPANION)!!
-        assertEquals(OnboardingModelCatalog.ID_GEMMA_4_E4B, spec.modelId)
+        assertEquals(OnboardingScenarioCatalog.ID_VIRTUAL_COMPANION, spec.presetId)
         assertNull(spec.entrySurface)
     }
 

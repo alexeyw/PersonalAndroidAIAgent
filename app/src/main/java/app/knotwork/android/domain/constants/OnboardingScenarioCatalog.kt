@@ -6,23 +6,20 @@ import app.knotwork.android.domain.models.EntrySurface
  * Canonical wiring for the onboarding value-gallery scenarios.
  *
  * Each scenario the user can pick on the "Choose a scenario" step maps to a
- * concrete set-up recipe:
+ * concrete set-up recipe on the domain side:
  *  - the bundled preset that is materialised as the user's default pipeline
  *    (`assets/presets/pipelines/<presetId>.json`, keyed by its stable slug id);
  *  - the OS [EntrySurface] the scenario binds, or `null` when it runs purely
- *    from the chat surface;
- *  - the LiteRT model id the scenario needs, so the motivated-download step
- *    can pre-select and frame the fetch ("Styled Translation needs Gemma 4 E2B").
+ *    from the chat surface.
  *
- * This object is the single source of truth on the domain side, mirroring how
- * [OnboardingModelCatalog] keys download metadata by [OnboardingModelCatalog.Entry.id].
- * The design-system layer keeps its own `OnboardingScenario` enum for rendering
- * (illustration tile, value copy, featured treatment); the two stay decoupled
- * and are joined by the stable [Spec.id] string — exactly the split used for
- * the model picker (`OnboardingLiteRtModel` ↔ `OnboardingModelCatalog`).
+ * The **model** a scenario needs is *not* duplicated here: it lives on the
+ * design-system `OnboardingScenario.requiredModel` enum, which the UI and the
+ * `OnboardingViewModel` already read to pre-select and frame the download. This
+ * object owns only what the domain layer acts on (preset + surface); the two
+ * enums stay decoupled and are joined by the stable [Spec.id] string.
  *
  * Used by [app.knotwork.android.domain.usecases.SetUpScenarioUseCase] to resolve
- * a picked scenario id into the preset / surface / model it materialises.
+ * a picked scenario id into the preset / surface it materialises.
  */
 object OnboardingScenarioCatalog {
 
@@ -46,11 +43,8 @@ object OnboardingScenarioCatalog {
      *   changing the UI-facing scenario key.
      * @property entrySurface OS surface the scenario binds to the materialised
      *   pipeline, or `null` when the scenario is driven only from chat.
-     * @property modelId catalog id of the LiteRT model the scenario needs
-     *   (matches [OnboardingModelCatalog] / `OnboardingLiteRtModel.id`). Drives
-     *   the pre-selection on the motivated-download step.
      */
-    data class Spec(val id: String, val presetId: String, val entrySurface: EntrySurface?, val modelId: String)
+    data class Spec(val id: String, val presetId: String, val entrySurface: EntrySurface?)
 
     /**
      * Every onboarding scenario recipe, in gallery order. Virtual Companion is
@@ -58,24 +52,9 @@ object OnboardingScenarioCatalog {
      * guardrail, VISION §2).
      */
     val SCENARIOS: List<Spec> = listOf(
-        Spec(
-            id = ID_STYLED_TRANSLATION,
-            presetId = ID_STYLED_TRANSLATION,
-            entrySurface = null,
-            modelId = OnboardingModelCatalog.ID_GEMMA_4_E2B,
-        ),
-        Spec(
-            id = ID_SHARE_HANDLER,
-            presetId = ID_SHARE_HANDLER,
-            entrySurface = EntrySurface.SHARE,
-            modelId = OnboardingModelCatalog.ID_GEMMA_4_E2B,
-        ),
-        Spec(
-            id = ID_VIRTUAL_COMPANION,
-            presetId = ID_VIRTUAL_COMPANION,
-            entrySurface = null,
-            modelId = OnboardingModelCatalog.ID_GEMMA_4_E4B,
-        ),
+        Spec(id = ID_STYLED_TRANSLATION, presetId = ID_STYLED_TRANSLATION, entrySurface = null),
+        Spec(id = ID_SHARE_HANDLER, presetId = ID_SHARE_HANDLER, entrySurface = EntrySurface.SHARE),
+        Spec(id = ID_VIRTUAL_COMPANION, presetId = ID_VIRTUAL_COMPANION, entrySurface = null),
     )
 
     /** Returns the recipe for [scenarioId], or `null` for an unknown id. */

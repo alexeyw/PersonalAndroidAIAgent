@@ -2,6 +2,7 @@ package app.knotwork.android.presentation.ui.onboarding
 
 import app.knotwork.android.data.network.AndroidModelDownloadManager
 import app.knotwork.android.domain.constants.OnboardingModelCatalog
+import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.DownloadState
 import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.Result
@@ -167,6 +168,51 @@ class OnboardingViewModelTest {
         assertEquals(OnboardingStep.Download, state.step)
         assertEquals(listOf("INPUT", "LITE_RT", "OUTPUT"), state.scenarioPreview?.nodes)
         coVerify(exactly = 1) { setUpScenarioUseCase(OnboardingScenario.StyledTranslation.id) }
+    }
+
+    @Test
+    fun `setUpScenario re-tap of the same scenario does not materialise twice`() = runTest {
+        val viewModel = newViewModel()
+        viewModel.next() // → ChooseScenario
+        viewModel.pickScenario(OnboardingScenario.StyledTranslation)
+        advanceUntilIdle()
+        viewModel.setUpScenario()
+        advanceUntilIdle()
+        // Back to the gallery, then set up the same scenario again.
+        viewModel.back()
+        viewModel.setUpScenario()
+        advanceUntilIdle()
+
+        assertEquals(OnboardingStep.Download, viewModel.state.value.step)
+        coVerify(exactly = 1) { setUpScenarioUseCase(OnboardingScenario.StyledTranslation.id) }
+    }
+
+    @Test
+    fun `retryWarmUp clears the error and re-warms after a failed warm-up`() = runTest {
+        val e2bFileName = OnboardingModelCatalog.entryById(OnboardingLiteRtModel.Gemma4E2B.id)!!.fileName
+        coEvery { localModelRepository.findByFileName(e2bFileName) } returns LocalModel(
+            id = 7L,
+            name = e2bFileName,
+            path = "/data/model.litertlm",
+            size = 0L,
+            isActive = true,
+        )
+        // First warm-up fails; the retry succeeds.
+        coEvery { loadModelUseCase.invoke("/data/model.litertlm") } returnsMany listOf(
+            Result.Error(error = object : AppError.System {}, message = "warm failed"),
+            Result.Success(Unit),
+        )
+        val viewModel = newViewModel()
+        viewModel.pickScenario(OnboardingScenario.StyledTranslation)
+        advanceUntilIdle()
+        assertEquals("warm failed", viewModel.state.value.downloadError)
+        assertFalse(viewModel.state.value.isModelWarmed)
+
+        viewModel.retryWarmUp()
+        advanceUntilIdle()
+
+        assertNull(viewModel.state.value.downloadError)
+        assertTrue(viewModel.state.value.isModelWarmed)
     }
 
     @Test

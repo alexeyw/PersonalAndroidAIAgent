@@ -166,8 +166,10 @@ data class OnboardingViewState(
      *  - **Download — `Download {name}`** (no install, no download) — enabled
      *    for the bundled presets; for the `CustomUrl` row it depends on
      *    [customDownloadUrl];
-     *  - **Ready** — enabled only after the host has warmed the inference
-     *    handle, so chat works on the first send.
+     *  - **Ready** — enabled once the host has warmed the inference handle
+     *    (so chat works on the first send), *or* when warm-up has failed
+     *    ([downloadError] set) so the CTA can offer a **Retry** instead of a
+     *    permanently-disabled "Preparing…".
      */
     val isPrimaryCtaEnabled: Boolean
         get() = when (step) {
@@ -179,8 +181,15 @@ data class OnboardingViewState(
                 liteRtModel == OnboardingLiteRtModel.CustomUrl -> customDownloadUrl.isNotBlank()
                 else -> true
             }
-            OnboardingStep.Ready -> isModelWarmed
+            OnboardingStep.Ready -> isModelWarmed || downloadError != null
         }
+
+    /**
+     * `true` on the "Ready" step when warm-up has failed — the CTA becomes an
+     * enabled **Retry** and the recap surfaces the error banner, so a failed
+     * warm never dead-ends the flow behind a disabled "Preparing…".
+     */
+    val isReadyWarmUpRetryable: Boolean get() = step == OnboardingStep.Ready && !isModelWarmed && downloadError != null
 
     /** Convenience: are we on the final step? */
     val isFinalStep: Boolean get() = step == OnboardingStep.Ready
@@ -210,6 +219,12 @@ class OnboardingCallbacks(
      */
     val onStartFromScratch: () -> Unit = {},
     val onLiteRtModelPick: (OnboardingLiteRtModel) -> Unit = {},
+    /**
+     * Invoked by the "Ready" CTA when warm-up has failed
+     * ([OnboardingViewState.isReadyWarmUpRetryable]) — the host clears the
+     * error and re-runs the model warm-up.
+     */
+    val onRetryWarmUp: () -> Unit = {},
     /**
      * Invoked when the user taps the download-step CTA to begin a model
      * download. The host resolves the picked model to its URL / filename and

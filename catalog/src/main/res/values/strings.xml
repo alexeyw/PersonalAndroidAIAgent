@@ -651,6 +651,12 @@
     <string name="knotwork_onboarding_download_headline">%1$s needs %2$s.</string>
     <!-- Step 3 body template: "About {size} — …". -->
     <string name="knotwork_onboarding_download_body">About %1$s — it runs entirely on your device once it\'s here. Prefer a lighter model? Pick one below.</string>
+    <!-- Step 3 headline when the user overrides to a non-scenario model. -->
+    <string name="knotwork_onboarding_download_generic_headline">Download %1$s.</string>
+    <!-- Step 3 headline when the Custom URL row is selected. -->
+    <string name="knotwork_onboarding_download_custom_headline">Add a custom model.</string>
+    <!-- Step 3 body when the Custom URL row is selected. -->
+    <string name="knotwork_onboarding_download_custom_body">Paste a direct .task / .litertlm link below to use a model of your own.</string>
     <!-- Step 3 headline when the needed model is already installed. -->
     <string name="knotwork_onboarding_download_installed_headline">%1$s is already on your device.</string>
     <!-- Step 3 body when the needed model is already installed. -->
@@ -711,6 +717,8 @@
     <string name="knotwork_onboarding_ready_open_generic_cta">Open chat</string>
     <!-- Step 4 CTA while the model is still warming. -->
     <string name="knotwork_onboarding_ready_preparing_cta">Preparing…</string>
+    <!-- Step 4 CTA when warm-up failed — re-runs the model load. -->
+    <string name="knotwork_onboarding_ready_retry_cta">Retry</string>
 
     <!-- Step 1 system-back exit-confirm dialog title. -->
     <string name="knotwork_onboarding_exit_title">Quit setup?</string>

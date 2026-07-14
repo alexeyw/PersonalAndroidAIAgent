@@ -195,6 +195,7 @@ private fun OnboardingFooter(state: OnboardingViewState, callbacks: OnboardingCa
         }
         val leadingIcon = if (state.step == OnboardingStep.Ready) AppIcons.ArrowR else null
         val ctaClick: () -> Unit = when {
+            state.isReadyWarmUpRetryable -> callbacks.onRetryWarmUp
             state.isFinalStep -> callbacks.onFinish
             state.step == OnboardingStep.ChooseScenario -> callbacks.onSetUpScenario
             state.step == OnboardingStep.Download && state.installedModelId == null ->
@@ -479,7 +480,11 @@ private fun StartFromScratchCard(onClick: () -> Unit) {
 @Composable
 private fun DownloadStep(state: OnboardingViewState, callbacks: OnboardingCallbacks) {
     val scenario = state.selectedScenario
+    // The scenario's model is shown first ("needs this"), but the headline / body
+    // follow the *currently selected* model so they stay consistent with the CTA
+    // and progress when the user overrides via "Or choose another".
     val requiredModel = scenario?.requiredModel ?: state.liteRtModel
+    val selectedModel = state.liteRtModel
     Column(
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
         modifier = Modifier
@@ -487,24 +492,8 @@ private fun DownloadStep(state: OnboardingViewState, callbacks: OnboardingCallba
             .verticalScroll(rememberScrollState()),
     ) {
         StepIndicator(step = state.step)
-        StepHeadline(
-            text = if (state.installedModelId == requiredModel.id) {
-                stringResource(R.string.knotwork_onboarding_download_installed_headline, requiredModel.displayName)
-            } else {
-                stringResource(
-                    R.string.knotwork_onboarding_download_headline,
-                    scenario?.let { scenarioTitle(it) } ?: requiredModel.displayName,
-                    requiredModel.displayName,
-                )
-            },
-        )
-        StepBody(
-            text = if (state.installedModelId == requiredModel.id) {
-                stringResource(R.string.knotwork_onboarding_download_installed_body)
-            } else {
-                stringResource(R.string.knotwork_onboarding_download_body, requiredModel.sizeLabel)
-            },
-        )
+        StepHeadline(text = downloadHeadline(state = state, scenario = scenario, selectedModel = selectedModel))
+        StepBody(text = downloadBody(state = state, selectedModel = selectedModel))
         Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp2))
 
         // Pre-selected "needs this" model first, then the alternatives.
@@ -732,6 +721,43 @@ private fun NeedsThisPill() {
     }
 }
 
+/**
+ * Download-step headline, framed around the **selected** model so it stays
+ * consistent with the CTA and progress when the user overrides the scenario's
+ * pre-selected model. Uses the "{scenario} needs {model}" copy only while the
+ * selection is still the scenario's own model.
+ */
+@Composable
+private fun downloadHeadline(
+    state: OnboardingViewState,
+    scenario: OnboardingScenario?,
+    selectedModel: OnboardingLiteRtModel,
+): String = when {
+    state.installedModelId == selectedModel.id ->
+        stringResource(R.string.knotwork_onboarding_download_installed_headline, selectedModel.displayName)
+    selectedModel == OnboardingLiteRtModel.CustomUrl ->
+        stringResource(R.string.knotwork_onboarding_download_custom_headline)
+    scenario != null && selectedModel == scenario.requiredModel ->
+        stringResource(
+            R.string.knotwork_onboarding_download_headline,
+            scenarioTitle(scenario),
+            selectedModel.displayName,
+        )
+    else ->
+        stringResource(R.string.knotwork_onboarding_download_generic_headline, selectedModel.displayName)
+}
+
+/** Download-step body, framed around the selected model (see [downloadHeadline]). */
+@Composable
+private fun downloadBody(state: OnboardingViewState, selectedModel: OnboardingLiteRtModel): String = when {
+    state.installedModelId == selectedModel.id ->
+        stringResource(R.string.knotwork_onboarding_download_installed_body)
+    selectedModel == OnboardingLiteRtModel.CustomUrl ->
+        stringResource(R.string.knotwork_onboarding_download_custom_body)
+    else ->
+        stringResource(R.string.knotwork_onboarding_download_body, selectedModel.sizeLabel)
+}
+
 @Composable
 private fun liteRtCtaLabel(state: OnboardingViewState): String = when {
     state.downloadProgress != null -> stringResource(R.string.knotwork_onboarding_models_downloading_cta)
@@ -746,6 +772,7 @@ private fun scenarioCtaLabel(state: OnboardingViewState): String = state.selecte
 
 @Composable
 private fun readyCtaLabel(state: OnboardingViewState): String = when {
+    state.isReadyWarmUpRetryable -> stringResource(R.string.knotwork_onboarding_ready_retry_cta)
     !state.isModelWarmed -> stringResource(R.string.knotwork_onboarding_ready_preparing_cta)
     state.selectedScenario != null ->
         stringResource(R.string.knotwork_onboarding_ready_open_cta, scenarioTitle(state.selectedScenario))
@@ -774,6 +801,9 @@ private fun ReadyStep(state: OnboardingViewState) {
         StepBody(text = stringResource(R.string.knotwork_onboarding_ready_scenario_body))
         Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp2))
         ActiveModelRow(state = state)
+        // A warm-up failure surfaces here (not just on the download step) so the
+        // user sees why the CTA turned into "Retry" instead of a silent dead-end.
+        state.downloadError?.let { ErrorBanner(message = it) }
         state.scenarioPreview?.let { PipelinePreviewCard(preview = it) }
         if (scenario?.bindsShareSurface == true) {
             InfoRow(

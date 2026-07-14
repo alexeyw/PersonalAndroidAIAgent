@@ -101,6 +101,17 @@ class OnboardingViewModel @Inject constructor(
      */
     private var installedModelPath: String? = null
 
+    /** Active scenario set-up job — guards against a double-tap materialising twice. */
+    private var setUpJob: Job? = null
+
+    /**
+     * Id of the scenario whose pipeline has already been materialised in this
+     * session. Lets a re-tap of the *same* scenario re-advance to the download
+     * step without spawning a second pipeline (and overwriting the default);
+     * a different pick re-materialises deliberately.
+     */
+    private var materializedScenarioId: String? = null
+
     /** Advances to the next step. Idempotent at the final step. */
     fun next() {
         _state.update { current ->
@@ -128,6 +139,7 @@ class OnboardingViewModel @Inject constructor(
         installCheckJob?.cancel()
         downloadJob?.cancel()
         warmUpJob?.cancel()
+        setUpJob?.cancel()
         _state.update {
             it.copy(
                 selectedScenario = scenario,
@@ -147,12 +159,25 @@ class OnboardingViewModel @Inject constructor(
      * surface) and advances to the download step. Stores the recap projection
      * for the "Ready" step. No-op when no scenario is picked; surfaces a failure
      * inline when materialisation fails so the user is not stranded.
+     *
+     * Guards against materialising more than once for the same intent: a
+     * double-tap while a set-up is in flight is ignored, and a re-tap of a
+     * scenario already materialised this session just re-advances to the
+     * download step instead of persisting a second pipeline and overwriting the
+     * default. Picking a *different* scenario ([pickScenario] cancels the job)
+     * re-materialises deliberately.
      */
     fun setUpScenario() {
         val scenario = _state.value.selectedScenario ?: return
-        viewModelScope.launch {
+        if (setUpJob?.isActive == true) return
+        if (materializedScenarioId == scenario.id && _state.value.scenarioPreview != null) {
+            _state.update { it.copy(step = OnboardingStep.Download) }
+            return
+        }
+        setUpJob = viewModelScope.launch {
             setUpScenarioUseCase(scenario.id)
                 .onSuccess { setup ->
+                    materializedScenarioId = scenario.id
                     _state.update {
                         it.copy(scenarioPreview = setup.toPreview(), step = OnboardingStep.Download)
                     }
@@ -161,6 +186,17 @@ class OnboardingViewModel @Inject constructor(
                     _state.update { it.copy(downloadError = error.message ?: GENERIC_SETUP_ERROR) }
                 }
         }
+    }
+
+    /**
+     * Retries the model warm-up after a failure surfaced on the "Ready" step.
+     * Clears the error and re-runs [LoadModelUseCase] against the same installed
+     * model path, so a transient warm failure never dead-ends onboarding behind
+     * a disabled "Preparing…" CTA.
+     */
+    fun retryWarmUp() {
+        _state.update { it.copy(downloadError = null) }
+        scheduleWarmUp()
     }
 
     /**
