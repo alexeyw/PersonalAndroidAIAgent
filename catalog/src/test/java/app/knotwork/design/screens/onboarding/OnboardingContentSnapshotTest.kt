@@ -169,13 +169,13 @@ internal object OnboardingPreview {
     fun chooseScenarioPicked(): OnboardingViewState = OnboardingViewState(
         step = OnboardingStep.ChooseScenario,
         selectedScenario = OnboardingScenario.StyledTranslation,
-        liteRtModel = OnboardingLiteRtModel.Gemma4E2B,
+        liteRtModel = OnboardingLiteRtModel.Gemma4E4B,
     )
 
     fun download(): OnboardingViewState = OnboardingViewState(
         step = OnboardingStep.Download,
         selectedScenario = OnboardingScenario.StyledTranslation,
-        liteRtModel = OnboardingLiteRtModel.Gemma4E2B,
+        liteRtModel = OnboardingLiteRtModel.Gemma4E4B,
     )
 
     fun downloading(): OnboardingViewState = download().copy(downloadProgress = DOWNLOAD_PROGRESS_FIXTURE)
@@ -188,7 +188,7 @@ internal object OnboardingPreview {
     )
 
     fun downloadInstalled(): OnboardingViewState = download().copy(
-        installedModelId = OnboardingLiteRtModel.Gemma4E2B.id,
+        installedModelId = OnboardingLiteRtModel.Gemma4E4B.id,
     )
 
     /** Ready — Virtual Companion, model still warming. */
@@ -205,9 +205,9 @@ internal object OnboardingPreview {
     fun readyStyled(): OnboardingViewState = OnboardingViewState(
         step = OnboardingStep.Ready,
         selectedScenario = OnboardingScenario.StyledTranslation,
-        liteRtModel = OnboardingLiteRtModel.Gemma4E2B,
+        liteRtModel = OnboardingLiteRtModel.Gemma4E4B,
         scenarioPreview = styledPreview(),
-        installedModelId = OnboardingLiteRtModel.Gemma4E2B.id,
+        installedModelId = OnboardingLiteRtModel.Gemma4E4B.id,
         isModelWarmed = true,
     )
 
@@ -215,9 +215,9 @@ internal object OnboardingPreview {
     fun readyShare(): OnboardingViewState = OnboardingViewState(
         step = OnboardingStep.Ready,
         selectedScenario = OnboardingScenario.ShareHandler,
-        liteRtModel = OnboardingLiteRtModel.Gemma4E2B,
+        liteRtModel = OnboardingLiteRtModel.Gemma4E4B,
         scenarioPreview = sharePreview(),
-        installedModelId = OnboardingLiteRtModel.Gemma4E2B.id,
+        installedModelId = OnboardingLiteRtModel.Gemma4E4B.id,
         isModelWarmed = true,
     )
 
@@ -225,9 +225,9 @@ internal object OnboardingPreview {
     fun readyWarmError(): OnboardingViewState = OnboardingViewState(
         step = OnboardingStep.Ready,
         selectedScenario = OnboardingScenario.StyledTranslation,
-        liteRtModel = OnboardingLiteRtModel.Gemma4E2B,
+        liteRtModel = OnboardingLiteRtModel.Gemma4E4B,
         scenarioPreview = styledPreview(),
-        installedModelId = OnboardingLiteRtModel.Gemma4E2B.id,
+        installedModelId = OnboardingLiteRtModel.Gemma4E4B.id,
         isModelWarmed = false,
         downloadError = "Couldn't load the model. Check storage and retry.",
     )

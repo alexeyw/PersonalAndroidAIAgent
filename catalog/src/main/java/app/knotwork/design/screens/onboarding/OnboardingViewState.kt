@@ -34,7 +34,9 @@ enum class OnboardingStep(val pageIndex: Int, val indicatorLabel: String) {
  * @property id stable scenario id (matches the bundled preset filename stem and
  *   the `:app` `OnboardingScenarioCatalog` id).
  * @property requiredModel the LiteRT model the scenario needs; pre-selected on
- *   the motivated-download step and framed as "needs this".
+ *   the motivated-download step and framed as "needs this". Every curated
+ *   scenario targets Gemma 4 E4B — the smaller E2B stays reachable under
+ *   "Or choose another" as the genuinely lighter alternative.
  * @property featured `true` for the highlighted card (accent border + "Most
  *   popular" badge). Only Virtual Companion is featured.
  * @property bindsShareSurface `true` when set-up binds the system Share sheet to
@@ -50,7 +52,7 @@ enum class OnboardingScenario(
     /** On-device register/dialect-preserving translator. First / default card. */
     StyledTranslation(
         id = "styled_translation",
-        requiredModel = OnboardingLiteRtModel.Gemma4E2B,
+        requiredModel = OnboardingLiteRtModel.Gemma4E4B,
         featured = false,
         bindsShareSurface = false,
     ),
@@ -58,7 +60,7 @@ enum class OnboardingScenario(
     /** Share-target capture → structured note in the inbox (HITL file write). */
     ShareHandler(
         id = "share_handler",
-        requiredModel = OnboardingLiteRtModel.Gemma4E2B,
+        requiredModel = OnboardingLiteRtModel.Gemma4E4B,
         featured = false,
         bindsShareSurface = true,
     ),
@@ -77,35 +79,15 @@ enum class OnboardingScenario(
  * `:app/OnboardingViewModel` persists to settings; the human-facing label and
  * size come from the catalog so the row presentation stays self-contained.
  */
-enum class OnboardingLiteRtModel(
-    val id: String,
-    val displayName: String,
-    val sizeLabel: String,
-    val recommended: Boolean,
-) {
-    /** Gemma 4 E2B — smallest footprint; the lighter/faster option. */
-    Gemma4E2B(
-        id = "gemma_4_e2b",
-        displayName = "Gemma 4 E2B",
-        sizeLabel = "2.59 GB",
-        recommended = true,
-    ),
+enum class OnboardingLiteRtModel(val id: String, val displayName: String, val sizeLabel: String) {
+    /** Gemma 4 E2B — smallest footprint; the lighter/faster alternative. */
+    Gemma4E2B(id = "gemma_4_e2b", displayName = "Gemma 4 E2B", sizeLabel = "2.59 GB"),
 
-    /** Gemma 4 E4B — larger model with more headroom. */
-    Gemma4E4B(
-        id = "gemma_4_e4b",
-        displayName = "Gemma 4 E4B",
-        sizeLabel = "3.66 GB",
-        recommended = false,
-    ),
+    /** Gemma 4 E4B — the model every curated scenario targets. */
+    Gemma4E4B(id = "gemma_4_e4b", displayName = "Gemma 4 E4B", sizeLabel = "3.66 GB"),
 
     /** User-supplied URL pointing at a `.litertlm` model bundle. */
-    CustomUrl(
-        id = "custom_url",
-        displayName = "Custom URL…",
-        sizeLabel = "paste",
-        recommended = false,
-    ),
+    CustomUrl(id = "custom_url", displayName = "Custom URL…", sizeLabel = "paste"),
 }
 
 /**
@@ -147,7 +129,7 @@ data class OnboardingDefaultPipelinePreview(
 data class OnboardingViewState(
     val step: OnboardingStep = OnboardingStep.Welcome,
     val selectedScenario: OnboardingScenario? = null,
-    val liteRtModel: OnboardingLiteRtModel = OnboardingLiteRtModel.Gemma4E2B,
+    val liteRtModel: OnboardingLiteRtModel = OnboardingLiteRtModel.Gemma4E4B,
     val scenarioPreview: OnboardingDefaultPipelinePreview? = null,
     val downloadProgress: Float? = null,
     val downloadError: String? = null,

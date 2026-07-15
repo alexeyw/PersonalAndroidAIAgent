@@ -189,10 +189,10 @@ class OnboardingViewModelTest {
 
     @Test
     fun `retryWarmUp clears the error and re-warms after a failed warm-up`() = runTest {
-        val e2bFileName = OnboardingModelCatalog.entryById(OnboardingLiteRtModel.Gemma4E2B.id)!!.fileName
-        coEvery { localModelRepository.findByFileName(e2bFileName) } returns LocalModel(
+        val e4bFileName = OnboardingModelCatalog.entryById(OnboardingLiteRtModel.Gemma4E4B.id)!!.fileName
+        coEvery { localModelRepository.findByFileName(e4bFileName) } returns LocalModel(
             id = 7L,
-            name = e2bFileName,
+            name = e4bFileName,
             path = "/data/model.litertlm",
             size = 0L,
             isActive = true,
@@ -239,7 +239,7 @@ class OnboardingViewModelTest {
         every { downloadManager.downloadModel(any(), any(), any()) } returns flowOf(
             DownloadState.Pending,
             DownloadState.Downloading(progress = 50),
-            DownloadState.Success(fileUri = "/tmp/gemma-4-E2B-it.litertlm"),
+            DownloadState.Success(fileUri = "/tmp/gemma-4-E4B-it.litertlm"),
         )
 
         viewModel.startDownload()
@@ -247,23 +247,24 @@ class OnboardingViewModelTest {
 
         val finalState = viewModel.state.value
         assertNull(finalState.downloadProgress)
-        assertEquals(OnboardingLiteRtModel.Gemma4E2B.id, finalState.installedModelId)
+        // The flow defaults to E4B — the model every curated scenario targets.
+        assertEquals(OnboardingLiteRtModel.Gemma4E4B.id, finalState.installedModelId)
         coVerify(exactly = 1) { localModelRepository.insertModel(any()) }
-        coVerify(exactly = 1) { loadModelUseCase.invoke("/tmp/gemma-4-E2B-it.litertlm") }
+        coVerify(exactly = 1) { loadModelUseCase.invoke("/tmp/gemma-4-E4B-it.litertlm") }
     }
 
     @Test
     fun `finishOnboarding persists hasCompletedOnboarding without re-warming`() = runTest {
-        val e2bFileName = OnboardingModelCatalog.entryById(OnboardingLiteRtModel.Gemma4E2B.id)!!.fileName
-        coEvery { localModelRepository.findByFileName(e2bFileName) } returns LocalModel(
+        val e4bFileName = OnboardingModelCatalog.entryById(OnboardingLiteRtModel.Gemma4E4B.id)!!.fileName
+        coEvery { localModelRepository.findByFileName(e4bFileName) } returns LocalModel(
             id = 7L,
-            name = e2bFileName,
+            name = e4bFileName,
             path = "/data/model.litertlm",
             size = 0L,
             isActive = true,
         )
         val viewModel = newViewModel()
-        // Styled Translation needs E2B; picking it warms the installed handle once.
+        // Styled Translation needs E4B; picking it warms the installed handle once.
         viewModel.pickScenario(OnboardingScenario.StyledTranslation)
         advanceUntilIdle()
         coVerify(exactly = 1) { loadModelUseCase.invoke("/data/model.litertlm") }
