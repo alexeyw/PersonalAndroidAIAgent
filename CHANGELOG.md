@@ -561,6 +561,14 @@ details.
   scenario as its one-glance demo, condenses the feature dump into grouped
   highlights (the full tour stays in the user guide), and replaces the outdated
   manual-model quick start with the scenario-onboarding first-run path.
+- **Documentation refreshed for the current release line.** The roadmap's
+  version line and "where the project is today" snapshot are brought up to the
+  `0.5.x` surface (scenario-onboarding gallery, automation triggers and entry
+  surfaces, local usage statistics, the FOSS build flavour); the user guide
+  reconciles its first-run and default-pipeline description with scenario
+  onboarding; and the contributor guide's "Add a Settings section" recipe is
+  rewritten for the registry-driven settings hub, correcting stale source-file
+  links. No code change.
 - **On-device inference engine updated.** Bumped `com.google.ai.edge.litertlm`
   (LiteRT-LM) from `0.13.1` to `0.14.0`.
 - **Encrypted-storage library updated.** Bumped `net.zetetic:sqlcipher-android`

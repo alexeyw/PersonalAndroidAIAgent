@@ -15,7 +15,7 @@ release cadence settles.
 
 ## Where the project is today
 
-The current pre-release line (`0.4.x`) already covers the core loop
+The current pre-release line (`0.5.x`) already covers the core loop
 end-to-end:
 
 - On-device LLM inference through LiteRT-LM, with optional
@@ -29,6 +29,15 @@ end-to-end:
   export / import.
 - At-rest encryption (SQLCipher + Android Keystore) and explicit Room
   migrations that preserve local data across upgrades.
+- Value-first onboarding: a scenario gallery that sets up a ready-made
+  agent — the matching pipeline, its entry surface, and exactly the
+  on-device model it needs — in a single tap.
+- Automation triggers and entry surfaces: run a bound pipeline in the
+  background on a schedule, on charging, or on connectivity, and reach the
+  agent from the system Share sheet, launcher shortcuts, and a Quick
+  Settings tile.
+- Local, on-device usage statistics that never leave the device, and a
+  Firebase-free FOSS build flavour for the F-Droid channel.
 
 See [README.md](../README.md) for the full feature list and
 [architecture.md](architecture.md) for how the pieces fit together.
