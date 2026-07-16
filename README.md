@@ -65,16 +65,7 @@ your default, wires any surface it uses, and downloads exactly the model that
 scenario needs — with size and live progress — before dropping you into a
 working chat. A **Start from scratch** path stays one tap away.
 
-<!--
-  Optional: a longer on-device demo (scenario onboarding + the full Share
-  Handler flow). GitHub only plays videos hosted on its own CDN, so drop the
-  MP4 into the PR/issue comment box to get a user-attachments URL, then embed:
-  <video src="…" controls muted></video>
--->
-
-
 https://github.com/user-attachments/assets/2ea06de5-6832-4e0c-ad48-430f375d8b72
-
 
 > The hero above is a real on-device capture — no mockups.
 
