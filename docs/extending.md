@@ -571,32 +571,51 @@ DataStore, never in `local.properties`, never committed to git.
 
 ### 3.5. Add a Settings section
 
-The Settings screen renders nine Knotwork cards — *identity*, *system
-instructions*, *restrictions*, *LLM parameters*, *local model*,
-*external providers*, *memory*, *notifications*, *privacy* — through
-the catalog
-[`SettingsContent`](../catalog/src/main/java/app/knotwork/design/screens/settings/SettingsContent.kt).
-Each row arrives as a `SettingsRowState` and is mapped to a Compose
-control via the `rowContent` lambda in
-[`SettingsScreen`](../app/src/main/java/app/knotwork/android/presentation/ui/settings/SettingsScreen.kt).
+Settings is a **hub with per-category sub-screens**, driven by a
+pure-domain registry. Every user-facing setting is declared once as a
+`SettingEntry` in
+[`SettingsRegistry`](../app/src/main/java/app/knotwork/android/domain/settings/SettingsRegistry.kt)
+— that single declaration stamps its category (Generation, Models,
+Memory, Pipelines, Tools, Background, Privacy, About), its Basic/Advanced
+tier, its control type and its search synonyms, so the control lands in
+the right sub-screen and becomes searchable automatically. Each category
+renders through a catalog `*SettingsContent` composable
+(`catalog/src/main/java/app/knotwork/design/screens/settings/`) fed by a
+per-category delegate
+(`app/src/main/java/app/knotwork/android/presentation/ui/settings/*SettingsDelegate.kt`)
+under the coordinating `SettingsViewModel`.
 
-To add a new provider:
+To add a new external LLM provider:
 
-1. Allocate a stable `ROW_ID_<PROVIDER>` constant inside `SettingsScreen.kt`.
-2. Append a `row(ROW_ID_<PROVIDER>, "<Name>")` line under the
-   **External providers** block in `buildViewState`.
-3. Wire a `when` branch in the `rowContent` lambda that delegates to the
-   catalog
+1. Add a `ProviderId` entry in
+   [`ProviderSummary.kt`](../app/src/main/java/app/knotwork/android/domain/models/ProviderSummary.kt)
+   with its `cloudProvider` mapping (the wire id used for navigation and
+   key storage).
+2. Add a `providerSummary(ProviderId.<Name>, "<Name>", …)` row to the
+   **External providers** block in
+   [`ModelsSettingsDelegate`](../app/src/main/java/app/knotwork/android/presentation/ui/settings/ModelsSettingsDelegate.kt)
+   — this renders the provider row inside the Models category and links it
+   to its editor.
+3. For a standard cloud provider there is nothing to wire in the editor:
+   [`ProviderDetailScreen`](../app/src/main/java/app/knotwork/android/presentation/ui/settings/provider/ProviderDetailScreen.kt)
+   dispatches on the wire id and renders the shared catalog
    [`KnotworkProviderRow`](../catalog/src/main/java/app/knotwork/design/screens/settings/KnotworkProviderRow.kt).
-   For cloud providers, leave the `ollama` parameter `null`; for
-   network-local providers, supply an `OllamaProviderInputs` bundle with
-   the base-URL and context-window fields.
-4. Extend `SettingsViewModel` with `updateXxxKey` / `updateXxxModel`
-   methods that flush through `ApiKeyRepository`. Wrap the model picker
-   in `markPending(ROW_ID_<PROVIDER>)` + `clearPending(...)` so the
-   per-row `KnotworkLoader` spins during the async DataStore write.
+   A network-local provider (Ollama-style) supplies an
+   `OllamaProviderInputs` bundle for the extra base-URL and context-window
+   fields.
+4. Persist the key and model through `ApiKeyRepository` (Keystore-backed)
+   and `SettingsRepository`, exactly as `ProviderDetailViewModel` already
+   does for the built-in providers.
 
-The catalog composables that power this screen:
+To add a **non-provider setting**: declare a `SettingEntry` in the right
+category list of `SettingsRegistry`, add its persisted key to
+`SettingsRepository` with a default in
+[`SettingsDefaults`](../app/src/main/java/app/knotwork/android/domain/constants/SettingsDefaults.kt),
+and render the control in that category's `*SettingsContent` (plus its
+delegate). The hub, sub-screen placement and search index pick it up from
+the registry entry.
+
+The catalog composables that power these screens:
 
 - `KnotworkProviderRow` — collapsible provider card.
 - `KnotworkParamSlider` — branded labelled slider.
@@ -1012,7 +1031,6 @@ it asks `EmbeddingProviderResolver` for the active one on every call — so
 adding a backend is purely additive: implement the interface, bind it into
 the Hilt map, and it shows up in the Settings picker automatically. The
 full memory lifecycle these vectors flow through is documented in
-[`DESCRIPTION.md`](../project_docs/DESCRIPTION.md) §6.6–§6.12 and
 [`architecture.md`](architecture.md) §2.2.
 
 > **Dimension warning.** Vectors from different providers are **not**
