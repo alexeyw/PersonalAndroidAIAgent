@@ -328,19 +328,24 @@ private fun ChooseScenarioStep(state: OnboardingViewState, callbacks: Onboarding
         StepHeadline(text = stringResource(R.string.knotwork_onboarding_scenario_headline))
         StepBody(text = stringResource(R.string.knotwork_onboarding_scenario_body))
         Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp2))
+        // While a set-up is materialising, the gallery stops taking input: a
+        // card tap would otherwise cancel the in-flight job and a second CTA
+        // tap could persist a duplicate pipeline.
+        val interactive = !state.isSettingUpScenario
         OnboardingScenario.entries.forEach { scenario ->
             ScenarioCard(
                 scenario = scenario,
                 selected = scenario == state.selectedScenario,
+                enabled = interactive,
                 onClick = { callbacks.onScenarioPick(scenario) },
             )
         }
-        StartFromScratchCard(onClick = callbacks.onStartFromScratch)
+        StartFromScratchCard(enabled = interactive, onClick = callbacks.onStartFromScratch)
     }
 }
 
 @Composable
-private fun ScenarioCard(scenario: OnboardingScenario, selected: Boolean, onClick: () -> Unit) {
+private fun ScenarioCard(scenario: OnboardingScenario, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
     val containerColor = if (selected) {
         MaterialTheme.colorScheme.primaryContainer
     } else {
@@ -360,7 +365,7 @@ private fun ScenarioCard(scenario: OnboardingScenario, selected: Boolean, onClic
             .clip(KnotworkTheme.shapes.md)
             .background(color = containerColor)
             .border(width = OutlineBorderWidth, color = borderColor, shape = KnotworkTheme.shapes.md)
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(KnotworkTheme.spacing.sp4),
     ) {
         if (scenario.featured) {
@@ -440,7 +445,7 @@ private fun FeaturedBadge() {
 }
 
 @Composable
-private fun StartFromScratchCard(onClick: () -> Unit) {
+private fun StartFromScratchCard(enabled: Boolean, onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
@@ -448,7 +453,7 @@ private fun StartFromScratchCard(onClick: () -> Unit) {
             .fillMaxWidth()
             .clip(KnotworkTheme.shapes.md)
             .border(width = OutlineBorderWidth, color = KnotworkTheme.extended.divider, shape = KnotworkTheme.shapes.md)
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(KnotworkTheme.spacing.sp4),
     ) {
         Icon(
@@ -766,9 +771,12 @@ private fun liteRtCtaLabel(state: OnboardingViewState): String = when {
 }
 
 @Composable
-private fun scenarioCtaLabel(state: OnboardingViewState): String = state.selectedScenario?.let { scenario ->
-    stringResource(R.string.knotwork_onboarding_scenario_cta_setup, scenarioTitle(scenario))
-} ?: stringResource(R.string.knotwork_onboarding_scenario_cta_empty)
+private fun scenarioCtaLabel(state: OnboardingViewState): String = when {
+    state.isSettingUpScenario -> stringResource(R.string.knotwork_onboarding_scenario_cta_setting_up)
+    state.selectedScenario != null ->
+        stringResource(R.string.knotwork_onboarding_scenario_cta_setup, scenarioTitle(state.selectedScenario))
+    else -> stringResource(R.string.knotwork_onboarding_scenario_cta_empty)
+}
 
 @Composable
 private fun readyCtaLabel(state: OnboardingViewState): String = when {

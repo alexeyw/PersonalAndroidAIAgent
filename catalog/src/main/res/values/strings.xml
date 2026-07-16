@@ -618,6 +618,8 @@
     <string name="knotwork_onboarding_scenario_cta_empty">Choose a scenario</string>
     <!-- Step 2 CTA template once a scenario is picked: "Set up {scenario}". -->
     <string name="knotwork_onboarding_scenario_cta_setup">Set up %1$s</string>
+    <!-- Step 2 CTA while the picked scenario is being materialised. -->
+    <string name="knotwork_onboarding_scenario_cta_setting_up">Setting up…</string>
     <!-- Featured badge pinned to the highlighted scenario card. -->
     <string name="knotwork_onboarding_scenario_featured_badge">Most popular</string>
     <!-- Scenario meta chip template: "{size} model", e.g. "2.59 GB model". -->

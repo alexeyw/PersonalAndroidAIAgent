@@ -109,6 +109,10 @@ data class OnboardingDefaultPipelinePreview(
  * @property step current page index (0..3).
  * @property selectedScenario the scenario the user has picked on the gallery
  * step, or `null` before a pick (the gallery CTA stays disabled until set).
+ * @property isSettingUpScenario `true` while the host materialises the picked
+ * scenario. Gallery interaction is suppressed and the CTA reads "Setting up…"
+ * so the wait is visible — an unresponsive-looking CTA is what drives users to
+ * tap again and again.
  * @property liteRtModel currently-selected model on the download step. Defaults
  * to the picked scenario's [OnboardingScenario.requiredModel]; the user can
  * still switch to an alternative under "Or choose another".
@@ -129,6 +133,7 @@ data class OnboardingDefaultPipelinePreview(
 data class OnboardingViewState(
     val step: OnboardingStep = OnboardingStep.Welcome,
     val selectedScenario: OnboardingScenario? = null,
+    val isSettingUpScenario: Boolean = false,
     val liteRtModel: OnboardingLiteRtModel = OnboardingLiteRtModel.Gemma4E4B,
     val scenarioPreview: OnboardingDefaultPipelinePreview? = null,
     val downloadProgress: Float? = null,
@@ -142,7 +147,8 @@ data class OnboardingViewState(
      * depending on download state (the catalog renders distinct labels for
      * each), so enablement has to follow the matching state:
      *  - **Welcome** — always enabled (`Continue`);
-     *  - **ChooseScenario** — enabled once a scenario is picked (`Set up …`);
+     *  - **ChooseScenario** — enabled once a scenario is picked (`Set up …`),
+     *    and disabled again while that set-up is in flight;
      *  - **Download — `Continue`** (model already on disk) — enabled;
      *  - **Download — `Downloading…`** (download in flight) — disabled;
      *  - **Download — `Download {name}`** (no install, no download) — enabled
@@ -156,7 +162,7 @@ data class OnboardingViewState(
     val isPrimaryCtaEnabled: Boolean
         get() = when (step) {
             OnboardingStep.Welcome -> true
-            OnboardingStep.ChooseScenario -> selectedScenario != null
+            OnboardingStep.ChooseScenario -> selectedScenario != null && !isSettingUpScenario
             OnboardingStep.Download -> when {
                 installedModelId != null -> true
                 downloadProgress != null -> false

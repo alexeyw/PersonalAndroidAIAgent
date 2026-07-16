@@ -171,6 +171,49 @@ class OnboardingViewModelTest {
     }
 
     @Test
+    fun `setUpScenario marks the gallery busy and ignores picks until it settles`() = runTest {
+        // Hold the materialisation open so the in-flight window is observable.
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        coEvery { setUpScenarioUseCase(any()) } coAnswers {
+            gate.await()
+            kotlin.Result.success(
+                SetUpScenarioUseCase.ScenarioSetup(
+                    scenarioId = OnboardingScenario.StyledTranslation.id,
+                    pipelineId = "pipe-1",
+                    nodeTypeNames = listOf("INPUT", "LITE_RT", "OUTPUT"),
+                    nodeCount = 3,
+                    edgeCount = 2,
+                ),
+            )
+        }
+        val viewModel = newViewModel()
+        viewModel.next() // → ChooseScenario
+        viewModel.pickScenario(OnboardingScenario.StyledTranslation)
+        advanceUntilIdle()
+
+        viewModel.setUpScenario()
+        advanceUntilIdle()
+
+        // Busy: the CTA is disabled and a card tap must not cancel the set-up
+        // (cancelling after the preset was persisted would orphan a pipeline
+        // and let the next tap create a duplicate).
+        assertTrue(viewModel.state.value.isSettingUpScenario)
+        assertFalse(viewModel.state.value.isPrimaryCtaEnabled)
+        viewModel.pickScenario(OnboardingScenario.VirtualCompanion)
+        viewModel.setUpScenario()
+        advanceUntilIdle()
+        assertEquals(OnboardingScenario.StyledTranslation, viewModel.state.value.selectedScenario)
+
+        gate.complete(Unit)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.isSettingUpScenario)
+        assertEquals(OnboardingStep.Download, viewModel.state.value.step)
+        // Exactly one pipeline materialised despite the extra taps.
+        coVerify(exactly = 1) { setUpScenarioUseCase(any()) }
+    }
+
+    @Test
     fun `setUpScenario re-tap of the same scenario does not materialise twice`() = runTest {
         val viewModel = newViewModel()
         viewModel.next() // → ChooseScenario

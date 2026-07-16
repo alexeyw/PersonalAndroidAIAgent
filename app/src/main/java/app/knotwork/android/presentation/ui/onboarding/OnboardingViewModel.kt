@@ -136,10 +136,15 @@ class OnboardingViewModel @Inject constructor(
      * the previous selection's state.
      */
     fun pickScenario(scenario: OnboardingScenario) {
+        // Never interrupt an in-flight set-up: cancelling it after the preset
+        // has already been persisted would orphan that pipeline and leave
+        // `materializedScenarioId` unset, so the next "Set up" tap would
+        // persist a duplicate. The gallery is non-interactive while busy; this
+        // guard is the authoritative one.
+        if (setUpJob?.isActive == true) return
         installCheckJob?.cancel()
         downloadJob?.cancel()
         warmUpJob?.cancel()
-        setUpJob?.cancel()
         _state.update {
             it.copy(
                 selectedScenario = scenario,
@@ -175,16 +180,26 @@ class OnboardingViewModel @Inject constructor(
             return
         }
         setUpJob = viewModelScope.launch {
-            setUpScenarioUseCase(scenario.id)
-                .onSuccess { setup ->
-                    materializedScenarioId = scenario.id
-                    _state.update {
-                        it.copy(scenarioPreview = setup.toPreview(), step = OnboardingStep.Download)
+            // Surfacing the wait is what stops the user from tapping again:
+            // materialising reads the preset asset, parses it and writes to
+            // Room, which is not instant on a cold first launch.
+            _state.update { it.copy(isSettingUpScenario = true) }
+            try {
+                setUpScenarioUseCase(scenario.id)
+                    .onSuccess { setup ->
+                        materializedScenarioId = scenario.id
+                        _state.update {
+                            it.copy(scenarioPreview = setup.toPreview(), step = OnboardingStep.Download)
+                        }
                     }
-                }
-                .onFailure { error ->
-                    _state.update { it.copy(downloadError = error.message ?: GENERIC_SETUP_ERROR) }
-                }
+                    .onFailure { error ->
+                        _state.update { it.copy(downloadError = error.message ?: GENERIC_SETUP_ERROR) }
+                    }
+            } finally {
+                // Runs on the cancellation path too, so a cancelled set-up can
+                // never strand the gallery in a permanently busy state.
+                _state.update { it.copy(isSettingUpScenario = false) }
+            }
         }
     }
 
