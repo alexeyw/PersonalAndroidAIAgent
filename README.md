@@ -1,251 +1,120 @@
-# On-Device AI Agent for Android
+# Knotwork — On-Device AI Agent for Android
 
 [![Check](https://github.com/alexeyw/PersonalAndroidAIAgent/actions/workflows/check.yml/badge.svg)](https://github.com/alexeyw/PersonalAndroidAIAgent/actions/workflows/check.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 ![Version](https://img.shields.io/badge/version-0.5.0-orange.svg)
 ![Android API](https://img.shields.io/badge/Android-API%2036%2B-3DDC84.svg?logo=android)
 
-> An autonomous AI agent that runs on the device, understands natural language,
-> plans tasks, and takes real actions across Android — without requiring an
-> internet connection.
+> **Tasker for the LLM era.** A local-first Android agent whose behaviour you
+> build from explicit, verifiable blocks — and every risky action waits for
+> your confirmation. It plans and acts across your phone, and a typical
+> conversation never leaves the device.
 
+<!--
+  Hero visual. Currently the static chat-home render; it will be replaced by a
+  short on-device Share Handler demo loop (light/dark). Keep the <picture>
+  element so prefers-color-scheme keeps working.
+-->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-chat-home-dark.png">
-  <img alt="On-Device AI Agent — chat home" src="docs/images/hero-chat-home.png" width="540">
+  <img alt="Knotwork — on-device chat home" src="docs/images/hero-chat-home.png" width="540">
 </picture>
 
-> The Knotwork chat surface — every message is processed end-to-end on-device
-> by a user-editable pipeline of typed nodes (input, local LLM, cloud LLM,
-> tools, routing, output). The drag-and-drop pipeline editor lives one tap
-> away under the **Pipelines** tab.
+## What it is
 
-## Pre-release notice
+Knotwork is an autonomous assistant that takes a request in plain language,
+decides what to do, and carries the work out across your Android device.
+Inference runs **on-device** via [LiteRT-LM](https://ai.google.dev/edge)
+(Google Edge AI, the successor to TensorFlow Lite), so planning, tool calls,
+and replies stay on the phone unless you deliberately reach for a cloud model.
 
-This project is currently at **version 0.5.0** and is published for review and
-experimentation. Expect rough edges:
+What makes it Knotwork rather than another chat box is that **you build the
+behaviour**. Every conversation is processed by a pipeline — a graph of typed
+nodes (input, on-device LLM, optional cloud LLM, tool calls, routing,
+decomposition, evaluation, clarifications, output) that you can edit inside the
+app or in a standalone browser editor. Automations that can act on their own
+still can't act *unsupervised*: destructive or sensitive tool calls pass
+through a human-in-the-loop gate, so the agent never sends a message or writes a
+file without showing you the request first.
 
-- There are no stability guarantees for the public surface (Kotlin APIs,
-  pipeline JSON schema, settings layout) between versions.
-- On-device storage formats (encrypted preferences, exported pipeline JSON)
-  may still change between versions.
-- **Upgrades preserve local data.** Every Room schema-version bump ships with
-  an explicit migration, so an in-place update keeps your chat history,
-  long-term memory, run traces, custom pipelines, and saved presets / prompt
-  templates. (Note: *downgrading* to an older build recreates the database
-  empty — forward migrations cannot be reversed — so export anything you want
-  to keep before installing an older version.)
-- **Signing identity will change before the first signed release.** Builds up
-  to and including `0.5.0` are signed with the Android debug keystore. Once a
-  real release keystore is configured, the signer changes, and Android will
-  **refuse to update a debug-signed install in place** (signature mismatch).
-  When that happens you must uninstall the old build first — which clears its
-  local data — before installing the release-signed one.
+## Who it's for
 
-## Overview
+Knotwork is built for the technically literate flagship-Android owner who
+values privacy as a practice rather than a slogan, enjoys *constructing* the way
+their tools behave, and is already at home in the world of Tasker, Obsidian,
+Home Assistant, or r/LocalLLaMA. If you want to know — and control — exactly
+what your agent does with your data, this is for you.
 
-The agent is an autonomous assistant for Android that takes a user request in
-natural language, decides what to do, and carries the work out across the
-device. Inference happens on-device via **LiteRT-LM** (the successor to
-TensorFlow Lite, part of Google Edge AI), so a typical conversation —
-including planning, tool invocations, and final replies — never leaves the
-phone.
+It is deliberately **not** a mass-market "ask a question, get an answer"
+assistant. For that, Gemini is free and built into the OS, and competing there
+is a losing bet regardless of code quality. Knotwork trades that convenience for
+control, transparency, and local-first data handling.
 
-Pipelines are first-class. Every chat session is processed by a graph of
-typed nodes (input, local LLM, optional cloud LLM, tool calls, routing,
-decomposition, evaluation, clarifications, output) that the user can edit
-either inside the app or in a standalone browser editor. Built-in prompt
-variables let system prompts pull live values (current time, active model,
-recent long-term memory) at render time without baking them into the
-template.
+## See it work
 
-Tools are wired through **AppFunctions Jetpack** for local actions and the
-**Model Context Protocol (MCP)** for external servers. Destructive or
-sensitive tool calls go through a human-in-the-loop gate so the agent
-cannot, for example, send a message or delete a file without the user
-seeing the request first. Cloud LLM providers are optional and bring-your-
-own-key; nothing is sent off-device unless the user has explicitly
-configured it.
+The **Share Handler** scenario is a good one-glance picture of the whole idea:
+share an article, a message, or a screenshot to Knotwork from any app, and an
+on-device model turns it into a clean, structured note in your inbox — pausing
+to ask before it writes the file. On-device inference, a real tool call, and the
+human-in-the-loop gate, all in one flow.
 
-## Key features
+First launch leads with *what the agent should do for you* rather than an empty
+canvas: pick a ready-made scenario and Knotwork materialises its pipeline as
+your default, wires any surface it uses, and downloads exactly the model that
+scenario needs — with size and live progress — before dropping you into a
+working chat. A **Start from scratch** path stays one tap away.
 
-- **Scenario onboarding** — first launch leads with *what the agent should do
-  for you*: pick a ready-made scenario (a styled on-device translator, a
-  share-to-capture handler, or a mood-aware companion) and the app materialises
-  its pipeline as your default, wires any surface it uses, and downloads exactly
-  the model that scenario needs — with size and live progress — before opening
-  it into a working chat. A **Start from scratch** path stays one tap away.
-- Local LLM inference through LiteRT-LM with optional NPU/GPU acceleration.
-- Optional cloud providers: OpenAI, Anthropic, Google (Gemini), DeepSeek,
-  Ollama — all opt-in, bring-your-own-key.
-- Model Context Protocol (MCP) client for connecting external tool servers.
-- AppFunctions Jetpack integration for on-device tool calls.
-- Knotwork **pipeline editor** with pan / pinch-zoom canvas, snap-to-grid
-  drag-and-drop, long-press radial node picker, Sugiyama auto-layout,
-  inline validation bar with focus-on-error, run-trace bar, undo / redo,
-  and per-type configuration sheets for all 14 node types.
-- Pipeline library with per-chat binding, plus rename / duplicate / delete.
-- Prompt variables (`$DATE`, `$TIME`, `$TOOLS`, `$MODEL`, `$MEMORY_SUMMARY`,
-  `$LANG`, `$LOCATION`, `$USER`, `$DEVICE`) rendered fresh on every
-  execution.
-- **Reliability layer** for long, autonomous runs: a validate-and-repair
-  gate that keeps structured nodes (routers, conditions, decomposition,
-  tool calls) producing well-formed output (on-device or against a cloud
-  engine), exponential-backoff retry for transient cloud failures, and
-  background chat-history compression that summarises older turns so a long
-  session never overflows the context window. All three are configurable and
-  surface their activity on the agent console.
-- **Image attachments** — attach one image per message from the system Photo
-  Picker (gallery / screenshots, no storage permission) or the camera. Images
-  are downscaled on-device (aspect-preserved) and re-encoded to JPEG in private
-  storage; the original is never kept. A removable composer preview, a bubble
-  thumbnail, and a tap-to-fullscreen viewer; attachment files are cleaned up
-  with their message and by a daily orphan sweep.
-- **On-device image understanding** — a vision-capable local model (e.g.
-  Gemma 4) reads the attached image entirely on-device. The image is handed to
-  the first on-device pipeline step alongside the prompt and **never sent to
-  cloud models**. Mark a model vision-capable with the **Image support** toggle
-  on the Models screen; a pre-flight check blocks (with a clear message) sending
-  an image to a text-only model or to a cloud-first pipeline before the run
-  starts. Pipelines can also **fork on whether a picture was sent** — an *If
-  Condition* node has a deterministic "branch on image" toggle and an *Intent
-  Router* is told when the message carries an image — while only the on-device
-  vision step ever sees the pixels.
-- **Voice input** — record a short clip (or pick an audio file) and a
-  multimodal local model **transcribes it to editable text before the pipeline
-  runs** — the audio never travels the graph. Canonical 16 kHz mono capture, a
-  live timer, and an auto-stop limit (default 30 s); mark a model audio-capable
-  with the **Audio support** toggle on the Models screen. A text-only model, a
-  denied mic permission, or a busy engine each surface a calm, non-blocking
-  notice. The clip is deleted after a successful transcription.
-- **Entry surfaces** — reach the agent from outside the app. A **share
-  target** runs your chosen pipeline over text or an image shared from any app
-  and opens the resulting chat; **launcher shortcuts** (long-press the icon)
-  offer New chat / Pipelines plus your recent chats; a **Quick Settings tile**
-  runs a duty pipeline in the background with one tap. Each surface stays inert
-  until you bind a pipeline to it (in *Settings → Background & triggers* or a
-  pipeline's library row menu) — a privacy-first default.
-- **Local usage statistics (privacy-preserving)** — a *Settings → Privacy →
-  Usage statistics* screen shows fully on-device counts of how you use the app:
-  runs per pipeline, run outcomes, trigger firings by kind, and active days.
-  **Nothing on this path ever leaves the device** (a build-time guard forbids
-  any network import on the telemetry surface); the figures live in the existing
-  encrypted database. Recording is on by default, framed as local-only, and can
-  be turned off or reset at any time, with a voluntary **Share as text** /
-  **Export JSON** for your own analysis.
-- **Settings as a searchable category hub** — a hub with a short *Basic*
-  block and a search field over eight focused category sub-screens
-  (Generation, Models, Memory, Pipelines & structured output, Tools &
-  workspace, Background & triggers, Privacy, About). Each sub-screen leads
-  with its everyday controls and tucks tuning parameters behind an in-category
-  *Advanced* disclosure. Search matches name, description, category and
-  synonyms, then deep-links to and flashes the matched row.
-- **Local model manager** with an inline Active card, HuggingFace
-  token + custom URL download fields, and preset rows showing live
-  download progress / on-disk status.
-- **Discover models** — browse and search the curated
-  [`litert-community`](https://huggingface.co/litert-community) organisation on
-  Hugging Face right inside the app (top-bar action on the Models screen). Each
-  card shows downloads, likes and licence; the detail screen lists a repo's
-  `.litertlm` files with sizes and an **Install** action that reuses the existing
-  download manager, gated behind an explicit **licence confirmation**. Models
-  already on disk are marked **Installed**. Access-gated repos show a lock badge
-  and an inline Hugging Face token field; a 401/403 refusal returns a clear
-  "accept the licence and add a token" hint. The list is read-only and only ever
-  calls the Hub in response to a user action, with a graceful retry on error.
-- **Model performance insights & benchmark** — a Performance card on the
-  Models screen showing the active model's rolling-average **time-to-first-token**,
-  **decode speed** (tok/s) and **peak memory** over its recent runs, plus a
-  **Run benchmark** action (fixed prompt, warm-up + measured run) that produces a
-  shareable one-shot report. Samples are recorded automatically from real runs;
-  peak memory is a process-wide native-heap figure, labelled **approximate**.
-- **Prompt library** — `ScrollableTabRow` of categories, per-card
-  edit / delete / duplicate actions, inline `$VAR` highlighting in
-  the body, and a `ModalBottomSheet` editor with `INSERT` chip row.
-- **Skill library** (More → Skill library) — reusable bundles of
-  *instruction + tool restriction + context configuration*. A
-  Bundled / Mine 2-tab list (bundled: Summarizer, Translator, Report
-  Writer), a full-screen editor with a monospace `$VAR`-aware
-  instruction field, a tri-state tool allowlist (**All tools** /
-  **Restrict** / **No tools** — an explicit empty allowlist is distinct
-  from unrestricted), and per-context-block toggles. Bundled skills are
-  read-only but can be duplicated into an editable copy. A **Skill** node
-  runs a skill as a pipeline step (on-device or cloud engine); its tool
-  allowlist is enforced at the executor level — a call outside the list is
-  refused rather than run, and allowed calls keep the normal confirmation
-  gate.
-- **Files** screen (More → Files) — a window over the agent's file
-  workspace: a path-sorted listing with a used / limit quota
-  indicator, read-only text preview (truncated for large files),
-  share / "Save as…" export, import-with-collision-handling, and
-  single or multi-select delete.
-- **Task monitor** — filterable list of WorkManager background tasks
-  and live chat sessions with swipe-to-cancel and a detail bottom
-  sheet on row tap.
-- **Live metrics** screen surfacing inference time, tokens-per-second,
-  total tokens, per-node-type breakdown, and recent system logs;
-  shows a power-saving banner when the system is throttling.
-- **More tab** with live counters per row (memory chunks, active
-  model, prompt categories, active task count + badge) and a footer
-  privacy pill (`on-device · no network calls in last N m`) driven
-  by a new `NetworkActivityTracker`.
-- **About** screen with brand mark, version / build / commit info,
-  hand-maintained acknowledgments list, and Open license / Read
-  privacy policy links.
-- Agent-initiated clarifications: the agent can ask the user a question
-  mid-pipeline and wait for the reply (human-in-the-loop).
-- Multi-session chats with a priority task queue and a redesigned chat
-  home built on the Knotwork design system, covering the documented
-  Empty / Idle / Generating / HITL / Clarification / Interrupted / Error /
-  Drawer / Console-expanded states deterministically. Drawer / overflow secondary
-  affordances — new chat with pipeline picker, rename, favorite, JSON
-  import / export, in-chat model picker, Settings deep-link — are wired
-  directly into chat home.
-- Background execution as an Android Foreground Service with explicit idle
-  and power-state management.
-- Scheduled tasks that report back: a task created with `schedule_task`
-  runs through the same pipeline as an interactive message, lands its
-  result in the conversation that scheduled it (or a fresh auto-named one
-  if that chat was deleted), and announces the outcome with a
-  "Task completed" / "Task failed" notification deep-linking into the
-  session.
-- Chat reattach: reopening a chat reconnects to a run still executing in
-  the background, restores pending approval / clarification cards from the
-  persistent run record, flags busy conversations with an in-progress
-  indicator in the thread drawer, and surfaces a Resume / Discard card for
-  runs interrupted by a process death.
-- Checkpoint resume: an interrupted run continues from its last completed
-  node — recorded node results (including routing decisions and the
-  retrieved memory context) replay from the persisted trace without
-  re-inference, while tool calls the run died on re-execute with a fresh
-  approval. Resume is guarded by a graph content hash (an edited pipeline
-  requires a restart) and a configurable freshness window.
-- Long-term memory with semantic retrieval (RAG) over past conversations,
-  including automatic extraction of durable facts from finished conversations
-  (toggleable in Settings → Memory), manual "Save to memory" from any chat
-  message, and a redesigned memory manager — provenance breakdown, category
-  filters, semantic search with relevance scores, inline edit + tags, manual
-  add, one-tap compaction with an estimate, and JSON export / import
-  (Merge or Replace, with background re-embedding when the source device used a
-  different embedding provider).
-- Standalone browser-based editor (`pipeline-editor.html`) for authoring
-  and exporting pipelines without launching the app.
-- Opt-in Firebase Crashlytics for anonymous crash reporting (`full` build only)
-  — off by default, never collects message content. The **`foss` build** ships
-  no Firebase/Google dependency at all and hides the toggle. See
-  [SECURITY.md](SECURITY.md).
-- **FOSS / F-Droid build available.** A `foss` product flavour with zero
-  proprietary dependencies and no crash reporting, suitable for F-Droid. See
-  [docs/release.md](docs/release.md) § *FOSS / F-Droid build*.
-- At-rest encryption: Room database is SQLCipher-encrypted, API keys are
-  encrypted with AES-GCM under a dedicated Android Keystore key.
+<!-- A 30-second on-device demo of the Share Handler flow will be embedded here. -->
+
+## Highlights
+
+- **Runs on your device.** On-device LLM inference through LiteRT-LM, with
+  optional NPU/GPU acceleration; CPU-only works too, just slower. Cloud
+  providers (OpenAI, Anthropic, Google Gemini, DeepSeek, Ollama) are optional,
+  opt-in, and bring-your-own-key — nothing leaves the device unless you
+  configure it to.
+- **You build the pipeline.** A drag-and-drop editor with pan / pinch-zoom,
+  snap-to-grid, a radial node picker, auto-layout, inline validation, run-trace
+  overlay, and per-type configuration for all 14 node types — plus a standalone
+  [browser editor](pipeline-editor.html) for authoring pipelines without
+  launching the app. Prompt variables (`$DATE`, `$TIME`, `$TOOLS`, `$MODEL`,
+  `$MEMORY_SUMMARY`, `$LANG`, `$LOCATION`, `$USER`, `$DEVICE`) render fresh on
+  every run.
+- **Tools, gated by you.** Local actions through AppFunctions Jetpack and
+  external servers through the Model Context Protocol (MCP), with reusable
+  **skills** (instruction + tool allowlist + context) as pipeline steps. Every
+  sensitive or destructive call stops for explicit confirmation — the allowlist
+  is enforced at the executor level, not merely suggested.
+- **Reaches you from outside the app.** A share target, launcher shortcuts, and
+  a Quick Settings tile run your chosen pipeline over shared text/images or in
+  the background. **Triggers** (time, charging, Wi-Fi, network) fire a pipeline
+  on their own and report back with a notification. Every entry surface stays
+  inert until you bind a pipeline to it — a privacy-first default.
+- **Local-first by construction.** The Room database is SQLCipher-encrypted and
+  API keys are sealed with AES-GCM under a dedicated Android Keystore key.
+  On-device usage statistics (a build-time guard forbids any network on that
+  path), attachment images that never reach cloud models, and voice input
+  transcribed on-device before the pipeline runs. A **FOSS build** ships with
+  zero proprietary dependencies for F-Droid.
+- **Reliable over long, autonomous runs.** A validate-and-repair gate keeps
+  structured nodes producing well-formed output, exponential-backoff retry
+  smooths transient cloud failures, and background history compression keeps a
+  long session from overflowing the context window. Interrupted runs resume from
+  their last completed node; reopening a chat reconnects to a run still
+  executing in the background.
+- **Remembers what matters.** Long-term memory with semantic retrieval (RAG)
+  over past conversations, automatic fact extraction, manual "Save to memory,"
+  and a memory manager with search, provenance, compaction, and JSON
+  export / import.
+
+The full feature tour lives in the [user guide](docs/user-guide.md).
 
 ## Screenshots
 
 Every image below is captured at 1080 × 2400 from a Roborazzi baseline
-(`./gradlew :catalog:recordRoborazziDebug --tests "*HeroSnapshotTest*"`),
-which means the README and the design-system regression suite are
-guaranteed to stay in sync. Hover over (or tap) an image to see the dark
-variant via your browser's `prefers-color-scheme`.
+(`./gradlew :catalog:recordRoborazziDebug --tests "*HeroSnapshotTest*"`), which
+keeps the README and the design-system regression suite in sync. Hover over (or
+tap) an image to see the dark variant via your browser's `prefers-color-scheme`.
 
 <table>
   <tr>
@@ -284,31 +153,53 @@ variant via your browser's `prefers-color-scheme`.
 
 ## Requirements
 
-- Android 16 or newer (API level 36+).
-- Approximately 2 GB of free RAM available for the LLM at runtime.
-- Optional: hardware acceleration via NPU or GPU for noticeably faster
-  inference. CPU-only operation is supported but slower.
+- **Android 16 or newer** (API level 36+).
+- Approximately **2 GB of free RAM** available for the LLM at runtime.
+- Optional: hardware acceleration via **NPU or GPU** for noticeably faster
+  inference. CPU-only operation works but is slower.
 - Optional: **location permission**, requested only if you scope a Wi-Fi
   trigger to specific network names (Android ties the Wi-Fi name to location).
   Nothing else uses it, and the name never leaves the device.
+- To build from source: **JDK 21** and the Android SDK (the Android Studio
+  bundled JBR already ships JDK 21). See [CONTRIBUTING.md](CONTRIBUTING.md) for
+  the full dev setup.
 
-## Quick start
+## Install
+
+### From a release build
+
+Grab the latest APK from the
+[**Releases**](https://github.com/alexeyw/PersonalAndroidAIAgent/releases) page
+and install it on an Android 16+ device. Two flavours are published:
+
+- **`full`** — the standard build, with opt-in Firebase Crashlytics for
+  anonymous crash reporting (off by default, never collects message content).
+- **`foss`** — zero proprietary dependencies and no crash reporting, suitable
+  for F-Droid. See [docs/release.md](docs/release.md) § *FOSS / F-Droid build*.
+
+> **Pre-release signing note:** builds up to and including `0.5.0` are signed
+> with the Android debug keystore. When a real release keystore is configured
+> the signer changes, and Android will refuse to update a debug-signed install
+> in place — you'll need to uninstall the old build first. See the full
+> pre-release notice below.
+
+### Build from source
 
 ```bash
 git clone https://github.com/alexeyw/PersonalAndroidAIAgent.git
 cd PersonalAndroidAIAgent
-./gradlew assembleDebug
-adb install app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleFullDebug
+adb install app/build/outputs/apk/full/debug/app-full-debug.apk
 ```
 
-After installing:
+### First run
 
-1. Launch the app.
-2. Open **Models** and download a LiteRT model through the built-in
-   download manager. A small instruction-tuned model such as Gemma 2B from
-   Hugging Face is a good starting point; you can also paste a custom URL.
-3. Once the model finishes loading, send a first message from the chat
-   screen to verify everything is wired up.
+Launch the app and let **scenario onboarding** guide you: pick a scenario and
+Knotwork sets up its pipeline and downloads exactly the model it needs, then
+opens into a working chat once the model has warmed. Prefer to wire things up
+yourself? Choose **Start from scratch**, then open **Models**, download a
+LiteRT model through the built-in manager (or paste a custom URL), and send your
+first message once it loads.
 
 ## Tech stack
 
@@ -349,7 +240,31 @@ After installing:
 - Security policy and threat model — [SECURITY.md](SECURITY.md).
 - Release notes and version history — [CHANGELOG.md](CHANGELOG.md).
 
+## Pre-release notice
+
+This project is currently at **version 0.5.0** and is published for review and
+experimentation. Expect rough edges:
+
+- There are no stability guarantees for the public surface (Kotlin APIs,
+  pipeline JSON schema, settings layout) between versions.
+- On-device storage formats (encrypted preferences, exported pipeline JSON)
+  may still change between versions.
+- **Upgrades preserve local data.** Every Room schema-version bump ships with
+  an explicit migration, so an in-place update keeps your chat history,
+  long-term memory, run traces, custom pipelines, and saved presets / prompt
+  templates. (Note: *downgrading* to an older build recreates the database
+  empty — forward migrations cannot be reversed — so export anything you want
+  to keep before installing an older version.)
+- **Signing identity will change before the first signed release.** Builds up
+  to and including `0.5.0` are signed with the Android debug keystore. Once a
+  real release keystore is configured, the signer changes, and Android will
+  **refuse to update a debug-signed install in place** (signature mismatch).
+  When that happens you must uninstall the old build first — which clears its
+  local data — before installing the release-signed one.
+
 ## License
 
 Released under the Apache License 2.0. See [LICENSE](LICENSE) for the full
 text.
+</content>
+</invoke>

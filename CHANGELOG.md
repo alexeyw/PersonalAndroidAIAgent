@@ -555,6 +555,12 @@ details.
 
 ### Changed
 
+- **README reworked as a value-first landing page.** The README now opens with
+  what Knotwork is and who it is for (local-first, user-built pipelines, gated
+  actions) ahead of an exhaustive feature list, leads with the Share Handler
+  scenario as its one-glance demo, condenses the feature dump into grouped
+  highlights (the full tour stays in the user guide), and replaces the outdated
+  manual-model quick start with the scenario-onboarding first-run path.
 - **On-device inference engine updated.** Bumped `com.google.ai.edge.litertlm`
   (LiteRT-LM) from `0.13.1` to `0.14.0`.
 - **Encrypted-storage library updated.** Bumped `net.zetetic:sqlcipher-android`
