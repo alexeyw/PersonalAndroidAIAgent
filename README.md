@@ -5,10 +5,10 @@
 ![Version](https://img.shields.io/badge/version-0.5.0-orange.svg)
 ![Android API](https://img.shields.io/badge/Android-API%2036%2B-3DDC84.svg?logo=android)
 
-> **Tasker for the LLM era.** A local-first Android agent whose behaviour you
-> build from explicit, verifiable blocks — and every risky action waits for
-> your confirmation. It plans and acts across your phone, and a typical
-> conversation never leaves the device.
+> **An AI agent you build, not just prompt.** A local-first Android agent whose
+> behaviour you assemble from explicit, verifiable blocks — and every risky
+> action waits for your confirmation. It plans and acts across your phone, and a
+> typical conversation never leaves the device.
 
 <!--
   Hero visual. Currently the static chat-home render; it will be replaced by a
