@@ -1,4 +1,4 @@
-@file:Suppress("MatchingDeclarationName") // Hosts OnboardingContent and its 4 step composables.
+@file:Suppress("MatchingDeclarationName", "TooManyFunctions") // Hosts OnboardingContent and its step composables.
 
 package app.knotwork.design.screens.onboarding
 
@@ -16,8 +16,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.outlined.Hub
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +31,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
@@ -56,13 +60,16 @@ private val RadioOuterSize = 22.dp
 /** Diameter of the filled inner dot rendered when a model row is selected. */
 private val RadioInnerSize = 10.dp
 
-/** Border width of the unselected radio circle / the recommended pill / pipeline-node chip. */
+/** Border width of the unselected radio circle / pills / pipeline-node chip. */
 private val OutlineBorderWidth = 1.dp
 
-/** Diameter of the cloud-provider row's leading key icon. */
-private val CloudIconSize = 20.dp
+/** Edge of the scenario illustration tile rendered on each value card. */
+private val ScenarioTileSize = 56.dp
 
-/** Height of the inline pipeline-node chip rendered in the step-4 recap. */
+/** Diameter of the arrow icon rendered between pipeline-node chips. */
+private val ArrowIconSize = 20.dp
+
+/** Height of the inline pipeline-node chip rendered in the ready recap. */
 private val PipelineChipHeight = 28.dp
 
 /** Multiplier turning a normalized download progress (`0f..1f`) into a percentage Int. */
@@ -70,32 +77,31 @@ private const val PERCENT_SCALE: Float = 100f
 
 /**
  * Maximum effective `fontScale` honoured by the onboarding headlines.
- * The headline visual on the onboarding pager is layout-critical, so above
- * the system "Largest" preset (2.0×) the type is clamped to 1.6× to keep the
- * four-step pager from clipping its CTA / progress segments off the bottom edge.
+ * The headline visual is layout-critical, so above the system "Largest" preset
+ * (2.0×) the type is clamped to 1.6× to keep the pager from clipping its CTA /
+ * progress segments off the bottom edge.
  */
 private const val HEADLINE_FONT_SCALE_CLAMP: Float = 1.6f
 
 /**
- * Threshold above which the reduced-motion fallback collapses the step-2
- * download bar to a static full-width fill instead of running the M3
- * `LinearProgressIndicator` stripe animation: under reduced motion, show a
- * static full bar at `>= 0.99f`.
+ * Threshold above which the reduced-motion fallback collapses the download bar
+ * to a static full-width fill instead of running the M3 `LinearProgressIndicator`
+ * stripe animation.
  */
 private const val PROGRESS_FULL_BAR_THRESHOLD: Float = 0.99f
 
 /**
  * Stateless Knotwork onboarding surface — renders one of four steps from
- * [OnboardingViewState.step]. The host (`:app/OnboardingScreen`) owns the
- * `HorizontalPager` if the swipe gesture is desired; the catalog stays
- * snapshot-deterministic by deriving the visible step from [state] alone.
+ * [OnboardingViewState.step]. The host (`:app/OnboardingScreen`) owns navigation;
+ * the catalog stays snapshot-deterministic by deriving the visible step from
+ * [state] alone.
  *
  * Layout:
  *  - Top bar: brand glyph + product title left, Skip link right.
  *  - Body: mono "0N · {label}" step indicator + headline + body + per-step
- *    content (welcome tiles / radio cards / cloud rows / pipeline preview).
- *  - Footer: 4 horizontal progress segments + a single full-width CTA
- *    whose label varies per step.
+ *    content (welcome tiles / scenario cards / motivated download / ready recap).
+ *  - Footer: 4 horizontal progress segments + a single full-width CTA whose
+ *    label varies per step.
  *
  * @param state immutable view-state snapshot.
  * @param callbacks bundle of one-shot event handlers; defaults to no-op.
@@ -122,8 +128,8 @@ fun OnboardingContent(
             ) {
                 when (state.step) {
                     OnboardingStep.Welcome -> WelcomeStep(state = state)
-                    OnboardingStep.LiteRtModel -> LiteRtModelStep(state = state, callbacks = callbacks)
-                    OnboardingStep.CloudKeys -> CloudKeysStep(state = state, callbacks = callbacks)
+                    OnboardingStep.ChooseScenario -> ChooseScenarioStep(state = state, callbacks = callbacks)
+                    OnboardingStep.Download -> DownloadStep(state = state, callbacks = callbacks)
                     OnboardingStep.Ready -> ReadyStep(state = state)
                 }
             }
@@ -153,7 +159,7 @@ private fun OnboardingTopBar(state: OnboardingViewState, callbacks: OnboardingCa
             modifier = Modifier.size(LogoIconSize),
         )
         Text(
-            text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_brand_title),
+            text = stringResource(R.string.knotwork_onboarding_brand_title),
             style = KnotworkTextStyles.TitleMd.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.weight(1f),
@@ -162,7 +168,7 @@ private fun OnboardingTopBar(state: OnboardingViewState, callbacks: OnboardingCa
         // primary CTA there, not by skipping.
         if (state.step != OnboardingStep.Ready) {
             KnotworkTextButton(
-                text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_skip),
+                text = stringResource(R.string.knotwork_onboarding_skip),
                 onClick = callbacks.onSkip,
             )
         }
@@ -182,27 +188,17 @@ private fun OnboardingFooter(state: OnboardingViewState, callbacks: OnboardingCa
     ) {
         ProgressSegments(currentStepIndex = state.step.pageIndex)
         val ctaLabel = when (state.step) {
-            OnboardingStep.Welcome -> androidx.compose.ui.res.stringResource(
-                R.string.knotwork_onboarding_continue,
-            )
-            OnboardingStep.LiteRtModel -> liteRtCtaLabel(state)
-            OnboardingStep.CloudKeys -> androidx.compose.ui.res.stringResource(
-                R.string.knotwork_onboarding_cloud_skip_cta,
-            )
-            OnboardingStep.Ready -> androidx.compose.ui.res.stringResource(
-                R.string.knotwork_onboarding_ready_cta,
-            )
+            OnboardingStep.Welcome -> stringResource(R.string.knotwork_onboarding_continue)
+            OnboardingStep.ChooseScenario -> scenarioCtaLabel(state)
+            OnboardingStep.Download -> liteRtCtaLabel(state)
+            OnboardingStep.Ready -> readyCtaLabel(state)
         }
-        val leadingIcon = if (state.step == OnboardingStep.Ready) {
-            AppIcons.ArrowR
-        } else {
-            null
-        }
-        // Step 2 launches the download via `onStartDownload`; once the picked
-        // model is installed the same button advances to step 3 via `onNext`.
+        val leadingIcon = if (state.step == OnboardingStep.Ready) AppIcons.ArrowR else null
         val ctaClick: () -> Unit = when {
+            state.isReadyWarmUpRetryable -> callbacks.onRetryWarmUp
             state.isFinalStep -> callbacks.onFinish
-            state.step == OnboardingStep.LiteRtModel && state.installedModelId == null ->
+            state.step == OnboardingStep.ChooseScenario -> callbacks.onSetUpScenario
+            state.step == OnboardingStep.Download && state.installedModelId == null ->
                 callbacks.onStartDownload
             else -> callbacks.onNext
         }
@@ -253,23 +249,9 @@ private fun StepIndicator(step: OnboardingStep) {
 
 @Composable
 private fun StepHeadline(text: String) {
-    // The onboarding headline visual is layout-critical;
-    // above 1.6× the layout starts pushing the CTA / progress
-    // segments past the bottom edge. We clamp the effective `fontScale` to
-    // 1.6× via an overridden [LocalDensity] for this subtree only — the
-    // user's preference still applies up to that ceiling and every other
-    // text in the flow keeps the unclamped value.
-    //
-    // Style choice: `TitleXl` (24sp) rather than `Display2xl` (30sp) so the
-    // headline + body block does not eat half the viewport on smaller
-    // phones. Targets ~28sp at the upper bound of the Knotwork title scale.
     val systemScale = KnotworkTheme.a11y.fontScale()
     val outer = LocalDensity.current
-    val clampedScale = if (systemScale > HEADLINE_FONT_SCALE_CLAMP) {
-        HEADLINE_FONT_SCALE_CLAMP
-    } else {
-        systemScale
-    }
+    val clampedScale = if (systemScale > HEADLINE_FONT_SCALE_CLAMP) HEADLINE_FONT_SCALE_CLAMP else systemScale
     CompositionLocalProvider(
         LocalDensity provides Density(density = outer.density, fontScale = clampedScale),
     ) {
@@ -299,20 +281,12 @@ private fun WelcomeStep(state: OnboardingViewState) {
         modifier = Modifier.fillMaxSize(),
     ) {
         StepIndicator(step = state.step)
-        StepHeadline(
-            text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_welcome_headline),
-        )
-        StepBody(text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_welcome_body))
+        StepHeadline(text = stringResource(R.string.knotwork_onboarding_welcome_headline))
+        StepBody(text = stringResource(R.string.knotwork_onboarding_welcome_body))
         Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp2))
-        FeatureTile(
-            label = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_welcome_tile_litert),
-        )
-        FeatureTile(
-            label = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_welcome_tile_appfunctions),
-        )
-        FeatureTile(
-            label = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_welcome_tile_storage),
-        )
+        FeatureTile(label = stringResource(R.string.knotwork_onboarding_welcome_tile_litert))
+        FeatureTile(label = stringResource(R.string.knotwork_onboarding_welcome_tile_appfunctions))
+        FeatureTile(label = stringResource(R.string.knotwork_onboarding_welcome_tile_storage))
     }
 }
 
@@ -325,10 +299,7 @@ private fun FeatureTile(label: String) {
             .fillMaxWidth()
             .clip(KnotworkTheme.shapes.md)
             .background(color = KnotworkTheme.extended.surface1)
-            .padding(
-                horizontal = KnotworkTheme.spacing.sp4,
-                vertical = KnotworkTheme.spacing.sp3,
-            ),
+            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3),
     ) {
         Box(
             modifier = Modifier
@@ -343,39 +314,228 @@ private fun FeatureTile(label: String) {
     }
 }
 
-// ----------------------- Step 2 · LiteRT model ----------------------------
+// ----------------------- Step 2 · Choose a scenario -----------------------
 
 @Composable
-private fun LiteRtModelStep(state: OnboardingViewState, callbacks: OnboardingCallbacks) {
+private fun ChooseScenarioStep(state: OnboardingViewState, callbacks: OnboardingCallbacks) {
     Column(
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
     ) {
         StepIndicator(step = state.step)
-        StepHeadline(
-            text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_models_headline),
-        )
-        StepBody(text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_models_body))
+        StepHeadline(text = stringResource(R.string.knotwork_onboarding_scenario_headline))
+        StepBody(text = stringResource(R.string.knotwork_onboarding_scenario_body))
         Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp2))
-        OnboardingLiteRtModel.entries.forEach { model ->
+        // While a set-up is materialising, the gallery stops taking input: a
+        // card tap would otherwise cancel the in-flight job and a second CTA
+        // tap could persist a duplicate pipeline.
+        val interactive = !state.isSettingUpScenario
+        OnboardingScenario.entries.forEach { scenario ->
+            ScenarioCard(
+                scenario = scenario,
+                selected = scenario == state.selectedScenario,
+                enabled = interactive,
+                onClick = { callbacks.onScenarioPick(scenario) },
+            )
+        }
+        StartFromScratchCard(enabled = interactive, onClick = callbacks.onStartFromScratch)
+    }
+}
+
+@Composable
+private fun ScenarioCard(scenario: OnboardingScenario, selected: Boolean, enabled: Boolean, onClick: () -> Unit) {
+    val containerColor = if (selected) {
+        MaterialTheme.colorScheme.primaryContainer
+    } else {
+        KnotworkTheme.extended.surface1
+    }
+    // Featured (Virtual Companion) keeps a 1 dp accent border even when
+    // unselected; selection uses the same accent so the two states rhyme.
+    val borderColor = when {
+        selected -> MaterialTheme.colorScheme.primary
+        scenario.featured -> MaterialTheme.colorScheme.primary
+        else -> Color.Transparent
+    }
+    Column(
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(KnotworkTheme.shapes.md)
+            .background(color = containerColor)
+            .border(width = OutlineBorderWidth, color = borderColor, shape = KnotworkTheme.shapes.md)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(KnotworkTheme.spacing.sp4),
+    ) {
+        if (scenario.featured) {
+            FeaturedBadge()
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3)) {
+            Icon(
+                painter = painterResource(scenarioTileRes(scenario)),
+                contentDescription = null,
+                tint = Color.Unspecified,
+                modifier = Modifier.size(ScenarioTileSize),
+            )
+            Column(
+                verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+                modifier = Modifier.weight(1f),
+            ) {
+                Text(
+                    text = scenarioTitle(scenario),
+                    style = KnotworkTextStyles.TitleMd.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text = scenarioValueLine(scenario),
+                    style = KnotworkTextStyles.BodySm,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
+                )
+            }
+            RadioCircle(selected = selected)
+        }
+        ScenarioMetaRow(scenario = scenario)
+    }
+}
+
+@Composable
+private fun ScenarioMetaRow(scenario: OnboardingScenario) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+    ) {
+        MetaChip(
+            text = stringResource(R.string.knotwork_onboarding_scenario_meta_model, scenario.requiredModel.sizeLabel),
+        )
+        scenarioMetaExtras(scenario).forEach { chip -> MetaChip(text = chip.text, sensitive = chip.sensitive) }
+    }
+}
+
+@Composable
+private fun MetaChip(text: String, sensitive: Boolean = false) {
+    val outline = if (sensitive) MaterialTheme.colorScheme.error else KnotworkTheme.extended.divider
+    val textColor = if (sensitive) MaterialTheme.colorScheme.error else KnotworkTheme.extended.onSurfaceMuted
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .clip(KnotworkTheme.shapes.sm)
+            .border(width = OutlineBorderWidth, color = outline, shape = KnotworkTheme.shapes.sm)
+            .padding(horizontal = KnotworkTheme.spacing.sp2, vertical = KnotworkTheme.spacing.sp1),
+    ) {
+        Text(text = text, style = KnotworkTextStyles.MonoSm, color = textColor)
+    }
+}
+
+@Composable
+private fun FeaturedBadge() {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .clip(KnotworkTheme.shapes.sm)
+            .background(color = MaterialTheme.colorScheme.primary)
+            .padding(horizontal = KnotworkTheme.spacing.sp2, vertical = KnotworkTheme.spacing.sp1),
+    ) {
+        Text(
+            text = stringResource(R.string.knotwork_onboarding_scenario_featured_badge),
+            style = KnotworkTextStyles.LabelSm.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onPrimary,
+        )
+    }
+}
+
+@Composable
+private fun StartFromScratchCard(enabled: Boolean, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(KnotworkTheme.shapes.md)
+            .border(width = OutlineBorderWidth, color = KnotworkTheme.extended.divider, shape = KnotworkTheme.shapes.md)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(KnotworkTheme.spacing.sp4),
+    ) {
+        Icon(
+            imageVector = AppIcons.Flow,
+            contentDescription = null,
+            tint = KnotworkTheme.extended.onSurfaceMuted,
+            modifier = Modifier.size(ArrowIconSize),
+        )
+        Column(
+            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+            modifier = Modifier.weight(1f),
+        ) {
+            Text(
+                text = stringResource(R.string.knotwork_onboarding_scenario_scratch_title),
+                style = KnotworkTextStyles.TitleMd.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(R.string.knotwork_onboarding_scenario_scratch_body),
+                style = KnotworkTextStyles.BodySm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+    }
+}
+
+// ----------------------- Step 3 · Motivated download ----------------------
+
+@Composable
+private fun DownloadStep(state: OnboardingViewState, callbacks: OnboardingCallbacks) {
+    val scenario = state.selectedScenario
+    // The scenario's model is shown first ("needs this"), but the headline / body
+    // follow the *currently selected* model so they stay consistent with the CTA
+    // and progress when the user overrides via "Or choose another".
+    val requiredModel = scenario?.requiredModel ?: state.liteRtModel
+    val selectedModel = state.liteRtModel
+    Column(
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
+    ) {
+        StepIndicator(step = state.step)
+        StepHeadline(text = downloadHeadline(state = state, scenario = scenario, selectedModel = selectedModel))
+        StepBody(text = downloadBody(state = state, selectedModel = selectedModel))
+        Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp2))
+
+        // Pre-selected "needs this" model first, then the alternatives.
+        LiteRtModelRow(
+            model = requiredModel,
+            selected = requiredModel == state.liteRtModel,
+            installed = state.installedModelId == requiredModel.id,
+            downloadProgress = state.downloadProgress.takeIf { requiredModel == state.liteRtModel },
+            pill = ModelRowPill.NeedsThis,
+            onClick = { callbacks.onLiteRtModelPick(requiredModel) },
+        )
+
+        Text(
+            text = stringResource(R.string.knotwork_onboarding_download_choose_another),
+            style = KnotworkTextStyles.MonoSm,
+            color = KnotworkTheme.extended.onSurfaceMuted,
+        )
+        OnboardingLiteRtModel.entries.filter { it != requiredModel }.forEach { model ->
             val isSelected = model == state.liteRtModel
             LiteRtModelRow(
                 model = model,
                 selected = isSelected,
                 installed = state.installedModelId == model.id,
                 downloadProgress = state.downloadProgress.takeIf { isSelected },
+                pill = if (state.installedModelId == model.id) ModelRowPill.Installed else ModelRowPill.None,
                 onClick = { callbacks.onLiteRtModelPick(model) },
             )
             if (isSelected && model == OnboardingLiteRtModel.CustomUrl) {
-                CustomUrlField(
-                    value = state.customDownloadUrl,
-                    onValueChange = callbacks.onCustomDownloadUrlChanged,
-                )
+                CustomUrlField(value = state.customDownloadUrl, onValueChange = callbacks.onCustomDownloadUrlChanged)
             }
         }
         state.downloadError?.let { ErrorBanner(message = it) }
     }
 }
+
+/** Trailing pill rendered on a model row. */
+private enum class ModelRowPill { None, NeedsThis, Installed }
 
 @Composable
 private fun LiteRtModelRow(
@@ -383,13 +543,9 @@ private fun LiteRtModelRow(
     selected: Boolean,
     installed: Boolean,
     downloadProgress: Float?,
+    pill: ModelRowPill,
     onClick: () -> Unit,
 ) {
-    // `Accent50` is a static palette colour that stays light in dark theme,
-    // which collapses contrast against the `onSurface` (light) text. Route
-    // through the theme-aware `primaryContainer` instead (Accent100 in
-    // light, dark brown in dark) so the selected row keeps WCAG-AA
-    // contrast in both themes.
     val containerColor = if (selected) {
         MaterialTheme.colorScheme.primaryContainer
     } else {
@@ -403,10 +559,7 @@ private fun LiteRtModelRow(
             .background(color = containerColor)
             .border(width = OutlineBorderWidth, color = borderColor, shape = KnotworkTheme.shapes.md)
             .clickable(onClick = onClick)
-            .padding(
-                horizontal = KnotworkTheme.spacing.sp4,
-                vertical = KnotworkTheme.spacing.sp3,
-            ),
+            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3),
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -430,7 +583,8 @@ private fun LiteRtModelRow(
             }
             when {
                 installed -> InstalledPill()
-                model.recommended -> RecommendedPill()
+                pill == ModelRowPill.NeedsThis -> NeedsThisPill()
+                else -> Unit
             }
         }
         if (downloadProgress != null) {
@@ -449,11 +603,6 @@ private fun DownloadProgressIndicator(progress: Float) {
             .fillMaxWidth()
             .padding(top = KnotworkTheme.spacing.sp2),
     ) {
-        // Under reduced-motion, M3's `LinearProgressIndicator` still draws
-        // its determinate stripe with a 250 ms tween between progress
-        // updates. The task brief requires a static full bar at `>= 0.99f`
-        // — we collapse the indicator to a plain primary-filled `Box` so
-        // the surface stops animating once the download completes.
         if (reducedMotion && clamped >= PROGRESS_FULL_BAR_THRESHOLD) {
             Box(
                 modifier = Modifier
@@ -471,7 +620,7 @@ private fun DownloadProgressIndicator(progress: Float) {
             )
         }
         Text(
-            text = androidx.compose.ui.res.stringResource(
+            text = stringResource(
                 R.string.knotwork_onboarding_models_progress,
                 (clamped * PERCENT_SCALE).toInt(),
             ),
@@ -487,16 +636,8 @@ private fun CustomUrlField(value: String, onValueChange: (String) -> Unit) {
         value = value,
         onValueChange = onValueChange,
         singleLine = true,
-        label = {
-            Text(text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_models_custom_url_label))
-        },
-        placeholder = {
-            Text(
-                text = androidx.compose.ui.res.stringResource(
-                    R.string.knotwork_onboarding_models_custom_url_placeholder,
-                ),
-            )
-        },
+        label = { Text(text = stringResource(R.string.knotwork_onboarding_models_custom_url_label)) },
+        placeholder = { Text(text = stringResource(R.string.knotwork_onboarding_models_custom_url_placeholder)) },
         modifier = Modifier
             .fillMaxWidth()
             .padding(top = KnotworkTheme.spacing.sp2),
@@ -510,10 +651,7 @@ private fun ErrorBanner(message: String) {
             .fillMaxWidth()
             .clip(KnotworkTheme.shapes.md)
             .background(color = MaterialTheme.colorScheme.errorContainer)
-            .padding(
-                horizontal = KnotworkTheme.spacing.sp4,
-                vertical = KnotworkTheme.spacing.sp3,
-            ),
+            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3),
     ) {
         Text(
             text = message,
@@ -557,13 +695,10 @@ private fun InstalledPill() {
                 shape = KnotworkTheme.shapes.sm,
             )
             .background(color = MaterialTheme.colorScheme.primary)
-            .padding(
-                horizontal = KnotworkTheme.spacing.sp2,
-                vertical = KnotworkTheme.spacing.sp1,
-            ),
+            .padding(horizontal = KnotworkTheme.spacing.sp2, vertical = KnotworkTheme.spacing.sp1),
     ) {
         Text(
-            text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_models_installed),
+            text = stringResource(R.string.knotwork_onboarding_models_installed),
             style = KnotworkTextStyles.LabelSm.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onPrimary,
         )
@@ -571,21 +706,7 @@ private fun InstalledPill() {
 }
 
 @Composable
-private fun liteRtCtaLabel(state: OnboardingViewState): String = when {
-    state.downloadProgress != null -> androidx.compose.ui.res.stringResource(
-        R.string.knotwork_onboarding_models_downloading_cta,
-    )
-    state.installedModelId != null -> androidx.compose.ui.res.stringResource(
-        R.string.knotwork_onboarding_models_continue_cta,
-    )
-    else -> androidx.compose.ui.res.stringResource(
-        R.string.knotwork_onboarding_models_download_cta,
-        state.liteRtModel.displayName,
-    )
-}
-
-@Composable
-private fun RecommendedPill() {
+private fun NeedsThisPill() {
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
@@ -595,114 +716,134 @@ private fun RecommendedPill() {
                 color = MaterialTheme.colorScheme.primary,
                 shape = KnotworkTheme.shapes.sm,
             )
-            .padding(
-                horizontal = KnotworkTheme.spacing.sp2,
-                vertical = KnotworkTheme.spacing.sp1,
-            ),
+            .padding(horizontal = KnotworkTheme.spacing.sp2, vertical = KnotworkTheme.spacing.sp1),
     ) {
         Text(
-            text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_models_recommended),
+            text = stringResource(R.string.knotwork_onboarding_download_needs_this),
             style = KnotworkTextStyles.LabelSm.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.primary,
         )
     }
 }
 
-// ----------------------- Step 3 · Cloud keys ------------------------------
-
+/**
+ * Download-step headline, framed around the **selected** model so it stays
+ * consistent with the CTA and progress when the user overrides the scenario's
+ * pre-selected model. Uses the "{scenario} needs {model}" copy only while the
+ * selection is still the scenario's own model.
+ */
 @Composable
-private fun CloudKeysStep(state: OnboardingViewState, callbacks: OnboardingCallbacks) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-        modifier = Modifier.fillMaxSize(),
-    ) {
-        StepIndicator(step = state.step)
-        StepHeadline(
-            text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_cloud_headline),
+private fun downloadHeadline(
+    state: OnboardingViewState,
+    scenario: OnboardingScenario?,
+    selectedModel: OnboardingLiteRtModel,
+): String = when {
+    state.installedModelId == selectedModel.id ->
+        stringResource(R.string.knotwork_onboarding_download_installed_headline, selectedModel.displayName)
+    selectedModel == OnboardingLiteRtModel.CustomUrl ->
+        stringResource(R.string.knotwork_onboarding_download_custom_headline)
+    scenario != null && selectedModel == scenario.requiredModel ->
+        stringResource(
+            R.string.knotwork_onboarding_download_headline,
+            scenarioTitle(scenario),
+            selectedModel.displayName,
         )
-        StepBody(text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_cloud_body))
-        Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp2))
-        OnboardingCloudProvider.entries.forEach { provider ->
-            CloudProviderRow(
-                provider = provider,
-                configured = provider.id in state.configuredCloudProviders,
-                onConfigure = { callbacks.onConfigureCloudProvider(provider) },
-            )
-        }
-    }
+    else ->
+        stringResource(R.string.knotwork_onboarding_download_generic_headline, selectedModel.displayName)
+}
+
+/** Download-step body, framed around the selected model (see [downloadHeadline]). */
+@Composable
+private fun downloadBody(state: OnboardingViewState, selectedModel: OnboardingLiteRtModel): String = when {
+    state.installedModelId == selectedModel.id ->
+        stringResource(R.string.knotwork_onboarding_download_installed_body)
+    selectedModel == OnboardingLiteRtModel.CustomUrl ->
+        stringResource(R.string.knotwork_onboarding_download_custom_body)
+    else ->
+        stringResource(R.string.knotwork_onboarding_download_body, selectedModel.sizeLabel)
 }
 
 @Composable
-private fun CloudProviderRow(provider: OnboardingCloudProvider, configured: Boolean, onConfigure: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(KnotworkTheme.shapes.md)
-            .background(color = KnotworkTheme.extended.surface1)
-            .clickable(onClick = onConfigure)
-            .padding(
-                horizontal = KnotworkTheme.spacing.sp4,
-                vertical = KnotworkTheme.spacing.sp3,
-            ),
-    ) {
-        Icon(
-            imageVector = AppIcons.Key,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(CloudIconSize),
-        )
-        Text(
-            text = provider.displayName,
-            style = KnotworkTextStyles.BodyBase.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f),
-        )
-        Text(
-            text = androidx.compose.ui.res.stringResource(
-                if (configured) {
-                    R.string.knotwork_onboarding_cloud_configured
-                } else {
-                    R.string.knotwork_onboarding_cloud_configure
-                },
-            ),
-            style = KnotworkTextStyles.LabelLg.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.primary,
-        )
-    }
+private fun liteRtCtaLabel(state: OnboardingViewState): String = when {
+    state.downloadProgress != null -> stringResource(R.string.knotwork_onboarding_models_downloading_cta)
+    state.installedModelId != null -> stringResource(R.string.knotwork_onboarding_models_continue_cta)
+    else -> stringResource(R.string.knotwork_onboarding_models_download_cta, state.liteRtModel.displayName)
+}
+
+@Composable
+private fun scenarioCtaLabel(state: OnboardingViewState): String = when {
+    state.isSettingUpScenario -> stringResource(R.string.knotwork_onboarding_scenario_cta_setting_up)
+    state.selectedScenario != null ->
+        stringResource(R.string.knotwork_onboarding_scenario_cta_setup, scenarioTitle(state.selectedScenario))
+    else -> stringResource(R.string.knotwork_onboarding_scenario_cta_empty)
+}
+
+@Composable
+private fun readyCtaLabel(state: OnboardingViewState): String = when {
+    state.isReadyWarmUpRetryable -> stringResource(R.string.knotwork_onboarding_ready_retry_cta)
+    !state.isModelWarmed -> stringResource(R.string.knotwork_onboarding_ready_preparing_cta)
+    state.selectedScenario != null ->
+        stringResource(R.string.knotwork_onboarding_ready_open_cta, scenarioTitle(state.selectedScenario))
+    else -> stringResource(R.string.knotwork_onboarding_ready_open_generic_cta)
 }
 
 // ----------------------- Step 4 · Ready -----------------------------------
 
 @Composable
 private fun ReadyStep(state: OnboardingViewState) {
+    val scenario = state.selectedScenario
     Column(
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState()),
     ) {
         StepIndicator(step = state.step)
         StepHeadline(
-            text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_ready_headline),
+            text =
+            scenario?.let {
+                stringResource(R.string.knotwork_onboarding_ready_scenario_headline, scenarioTitle(it))
+            }
+                ?: stringResource(R.string.knotwork_onboarding_ready_generic_headline),
         )
-        StepBody(text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_ready_body))
+        StepBody(text = stringResource(R.string.knotwork_onboarding_ready_scenario_body))
         Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp2))
         ActiveModelRow(state = state)
-        state.defaultPipelinePreview?.let { PipelinePreviewCard(preview = it) }
+        // A warm-up failure surfaces here (not just on the download step) so the
+        // user sees why the CTA turned into "Retry" instead of a silent dead-end.
+        state.downloadError?.let { ErrorBanner(message = it) }
+        state.scenarioPreview?.let { PipelinePreviewCard(preview = it) }
+        if (scenario?.bindsShareSurface == true) {
+            InfoRow(
+                label = stringResource(R.string.knotwork_onboarding_ready_surface_label),
+                value = stringResource(R.string.knotwork_onboarding_ready_surface_value),
+            )
+            InfoRow(
+                label = stringResource(R.string.knotwork_onboarding_ready_safety_label),
+                value = stringResource(R.string.knotwork_onboarding_ready_safety_value),
+            )
+        }
     }
 }
 
 @Composable
 private fun ActiveModelRow(state: OnboardingViewState) {
-    // The catalog projects `installedModelId` (a stable string id) back to the
-    // human-facing display name through the enum lookup; the host fills the
-    // pending state when warm-up hasn't completed yet.
     val installedDisplayName = state.installedModelId?.let { id ->
         OnboardingLiteRtModel.entries.firstOrNull { it.id == id }?.displayName
     }
-    val pendingLabel = androidx.compose.ui.res.stringResource(
-        R.string.knotwork_onboarding_ready_active_model_pending,
+    val value = if (installedDisplayName != null && state.isModelWarmed) {
+        stringResource(R.string.knotwork_onboarding_ready_active_model_value, installedDisplayName)
+    } else {
+        stringResource(R.string.knotwork_onboarding_ready_active_model_pending)
+    }
+    InfoRow(
+        label = stringResource(R.string.knotwork_onboarding_ready_active_model_label),
+        value = value,
     )
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
     Column(
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
         modifier = Modifier
@@ -711,13 +852,9 @@ private fun ActiveModelRow(state: OnboardingViewState) {
             .background(color = KnotworkTheme.extended.surface1)
             .padding(KnotworkTheme.spacing.sp4),
     ) {
+        Text(text = label, style = KnotworkTextStyles.MonoSm, color = KnotworkTheme.extended.onSurfaceMuted)
         Text(
-            text = androidx.compose.ui.res.stringResource(R.string.knotwork_onboarding_ready_active_model_label),
-            style = KnotworkTextStyles.MonoSm,
-            color = KnotworkTheme.extended.onSurfaceMuted,
-        )
-        Text(
-            text = installedDisplayName ?: pendingLabel,
+            text = value,
             style = KnotworkTextStyles.TitleMd.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface,
         )
@@ -747,14 +884,14 @@ private fun PipelinePreviewCard(preview: OnboardingDefaultPipelinePreview) {
                         contentDescription = null,
                         tint = KnotworkTheme.extended.onSurfaceMuted,
                         modifier = Modifier
-                            .size(CloudIconSize)
+                            .size(ArrowIconSize)
                             .padding(top = KnotworkTheme.spacing.sp1),
                     )
                 }
             }
         }
         Text(
-            text = androidx.compose.ui.res.pluralStringResource(
+            text = pluralStringResource(
                 R.plurals.knotwork_onboarding_ready_preview_caption,
                 preview.nodeCount,
                 preview.nodeCount,
@@ -775,10 +912,7 @@ private fun PipelineNodeChip(name: String, accent: Boolean) {
             .height(PipelineChipHeight)
             .clip(KnotworkTheme.shapes.sm)
             .border(width = OutlineBorderWidth, color = border, shape = KnotworkTheme.shapes.sm)
-            .padding(
-                horizontal = KnotworkTheme.spacing.sp2,
-                vertical = KnotworkTheme.spacing.sp1,
-            ),
+            .padding(horizontal = KnotworkTheme.spacing.sp2, vertical = KnotworkTheme.spacing.sp1),
     ) {
         Text(
             text = name,
@@ -786,4 +920,47 @@ private fun PipelineNodeChip(name: String, accent: Boolean) {
             color = border,
         )
     }
+}
+
+// ----------------------- Scenario copy mapping ----------------------------
+
+private fun scenarioTileRes(scenario: OnboardingScenario): Int = when (scenario) {
+    OnboardingScenario.StyledTranslation -> R.drawable.scenario_translate
+    OnboardingScenario.ShareHandler -> R.drawable.scenario_capture
+    OnboardingScenario.VirtualCompanion -> R.drawable.scenario_companion
+}
+
+@Composable
+private fun scenarioTitle(scenario: OnboardingScenario): String = stringResource(
+    when (scenario) {
+        OnboardingScenario.StyledTranslation -> R.string.knotwork_onboarding_scenario_translate_title
+        OnboardingScenario.ShareHandler -> R.string.knotwork_onboarding_scenario_capture_title
+        OnboardingScenario.VirtualCompanion -> R.string.knotwork_onboarding_scenario_companion_title
+    },
+)
+
+@Composable
+private fun scenarioValueLine(scenario: OnboardingScenario): String = stringResource(
+    when (scenario) {
+        OnboardingScenario.StyledTranslation -> R.string.knotwork_onboarding_scenario_translate_value
+        OnboardingScenario.ShareHandler -> R.string.knotwork_onboarding_scenario_capture_value
+        OnboardingScenario.VirtualCompanion -> R.string.knotwork_onboarding_scenario_companion_value
+    },
+)
+
+/** A meta chip label plus whether it carries the sensitive (HITL) tone. */
+private data class MetaChipLabel(val sensitive: Boolean, val text: String)
+
+@Composable
+private fun scenarioMetaExtras(scenario: OnboardingScenario): List<MetaChipLabel> = when (scenario) {
+    OnboardingScenario.StyledTranslation -> listOf(
+        MetaChipLabel(false, stringResource(R.string.knotwork_onboarding_scenario_meta_ondevice)),
+    )
+    OnboardingScenario.ShareHandler -> listOf(
+        MetaChipLabel(false, stringResource(R.string.knotwork_onboarding_scenario_meta_share)),
+        MetaChipLabel(true, stringResource(R.string.knotwork_onboarding_scenario_meta_hitl)),
+    )
+    OnboardingScenario.VirtualCompanion -> listOf(
+        MetaChipLabel(false, stringResource(R.string.knotwork_onboarding_scenario_meta_private)),
+    )
 }

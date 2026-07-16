@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Scenario tile for Virtual Companion (onboarding value gallery, featured card).
+  Multi-tone illustration: a mood core (radial gradient) inside an orbit ring
+  with drifting mood dots, reading as "a companion that senses your mood."
+  64dp tile.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+
+    <!-- Tile background + hairline border -->
+    <path
+        android:pathData="M14,0 L50,0 A14,14 0 0 1 64,14 L64,50 A14,14 0 0 1 50,64 L14,64 A14,14 0 0 1 0,50 L0,14 A14,14 0 0 1 14,0 Z"
+        android:fillColor="#E7DEF9"
+        android:strokeColor="#8C8E6BE0"
+        android:strokeWidth="1" />
+
+    <!-- Orbit ring -->
+    <path
+        android:pathData="M15,32 a17,17 0 1,0 34,0 a17,17 0 1,0 -34,0 Z"
+        android:strokeColor="#998E6BE0"
+        android:strokeWidth="1.6" />
+
+    <!-- Mood core -->
+    <path android:pathData="M22.5,32 a9.5,9.5 0 1,0 19,0 a9.5,9.5 0 1,0 -19,0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="32"
+                android:centerY="30"
+                android:gradientRadius="11">
+                <item android:offset="0" android:color="#9B7BEE" />
+                <item android:offset="0.55" android:color="#7C5CE0" />
+                <item android:offset="1" android:color="#5B8C6A" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Mood dots -->
+    <path
+        android:pathData="M43,20 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0 Z"
+        android:fillColor="#7C5CE0" />
+    <path
+        android:pathData="M15.6,22 a2.4,2.4 0 1,0 4.8,0 a2.4,2.4 0 1,0 -4.8,0 Z"
+        android:fillColor="#B37C5CE0" />
+    <path
+        android:pathData="M45.6,44 a2.4,2.4 0 1,0 4.8,0 a2.4,2.4 0 1,0 -4.8,0 Z"
+        android:fillColor="#D95B8C6A" />
+    <path
+        android:pathData="M17,45 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0 Z"
+        android:fillColor="#CCC79A4A" />
+</vector>

@@ -68,6 +68,12 @@ configured it.
 
 ## Key features
 
+- **Scenario onboarding** — first launch leads with *what the agent should do
+  for you*: pick a ready-made scenario (a styled on-device translator, a
+  share-to-capture handler, or a mood-aware companion) and the app materialises
+  its pipeline as your default, wires any surface it uses, and downloads exactly
+  the model that scenario needs — with size and live progress — before opening
+  it into a working chat. A **Start from scratch** path stays one tap away.
 - Local LLM inference through LiteRT-LM with optional NPU/GPU acceleration.
 - Optional cloud providers: OpenAI, Anthropic, Google (Gemini), DeepSeek,
   Ollama — all opt-in, bring-your-own-key.

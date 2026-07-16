@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Scenario tile for Styled Translation (onboarding value gallery).
+  Multi-tone illustration (fixed palette, not a currentColor glyph): two chat
+  bubbles — an outlined source message and a filled translated reply — with a
+  spark, reading as "translate while keeping the style." 64dp tile.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+
+    <!-- Tile background + hairline border -->
+    <path
+        android:pathData="M14,0 L50,0 A14,14 0 0 1 64,14 L64,50 A14,14 0 0 1 50,64 L14,64 A14,14 0 0 1 0,50 L0,14 A14,14 0 0 1 14,0 Z"
+        android:fillColor="#F3E7CE"
+        android:strokeColor="#80C79A4A"
+        android:strokeWidth="1" />
+
+    <!-- Source bubble (outlined) -->
+    <path
+        android:pathData="M13,16 h20 a3,3 0 0 1 3,3 v9 a3,3 0 0 1 -3,3 h-9 l-5,4 v-4 h-6 a3,3 0 0 1 -3,-3 v-9 a3,3 0 0 1 3,-3 z"
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#8A6A2E"
+        android:strokeWidth="1.4" />
+    <path
+        android:pathData="M18,22.5 L29,22.5"
+        android:strokeColor="#6B5220"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M18,26.5 L24,26.5"
+        android:strokeColor="#C79A4A"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round" />
+
+    <!-- Translated reply bubble (filled) -->
+    <path
+        android:pathData="M31,33 h20 a3,3 0 0 1 3,3 v9 a3,3 0 0 1 -3,3 h-6 v4 l-5,-4 h-9 a3,3 0 0 1 -3,-3 v-9 a3,3 0 0 1 3,-3 z"
+        android:fillColor="#B0791F" />
+    <path
+        android:pathData="M37,39.5 L49,39.5"
+        android:strokeColor="#FFF7E8"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M37,43.5 L44,43.5"
+        android:strokeColor="#F3E7CE"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round" />
+
+    <!-- Spark -->
+    <path
+        android:pathData="M47,12 l1.1,2.7 2.9,0.3 -2.2,1.9 0.7,2.9 -2.5,-1.8 -2.5,1.8 0.7,-2.9 -2.2,-1.9 2.9,-0.3 z"
+        android:fillColor="#E0A83B" />
+</vector>

@@ -26,8 +26,8 @@ import app.knotwork.design.screens.onboarding.OnboardingStep
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Onboarding entry point — 4-step pager (`Welcome → LiteRtModel →
- * CloudKeys → Ready`) backed by [OnboardingViewModel].
+ * Onboarding entry point — 4-step scenario pager (`Welcome → Choose a
+ * scenario → Download → Ready`) backed by [OnboardingViewModel].
  *
  * The visual surface lives in `:catalog` (`OnboardingContent`); this
  * screen threads the ViewModel state and forwards finish/skip into the
@@ -58,29 +58,18 @@ import kotlinx.coroutines.flow.Flow
  * collapse the cancel and commit paths into a single dispatch.
  *
  * @param onCompleted Pop onboarding off the back-stack and navigate to the
- * Chat tab. Invoked exactly once when the user taps `Open chat` on step 4
- * or `Skip` on steps 1-3.
- * @param onConfigureProvider Navigate to the per-provider API-key editor
- * for the supplied wire id. Wired by [AppNavGraph] to the
- * `settings/provider/{providerId}` route. The "Configured" pill on the
- * step-3 row that the user just tapped becomes truthful when the user
- * saves a key in the destination screen — the ViewModel observes
- * `ApiKeyRepository` and recomputes `configuredCloudProviders`
- * reactively, so no extra state-flip is needed on return.
+ * Chat tab. Invoked exactly once when the user taps `Open {scenario}` on step 4,
+ * `Skip` on steps 1-3, or `Start from scratch` on the gallery step.
  * @param viewModel Hilt-injected ViewModel; defaults to [hiltViewModel] so
  * tests can supply a fake.
  */
 @Composable
-fun OnboardingScreen(
-    onCompleted: () -> Unit,
-    onConfigureProvider: (providerId: String) -> Unit,
-    viewModel: OnboardingViewModel = hiltViewModel(),
-) {
+fun OnboardingScreen(onCompleted: () -> Unit, viewModel: OnboardingViewModel = hiltViewModel()) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val activity = LocalActivity.current
     var exitConfirmVisible by rememberSaveable { mutableStateOf(value = false) }
 
-    val callbacks = remember(viewModel, onConfigureProvider) {
+    val callbacks = remember(viewModel) {
         OnboardingCallbacks(
             onNext = viewModel::next,
             onBack = viewModel::back,
@@ -92,14 +81,14 @@ fun OnboardingScreen(
                 viewModel.finishOnboarding()
                 onCompleted()
             },
-            onLiteRtModelPick = viewModel::pickLiteRtModel,
-            onConfigureCloudProvider = { provider ->
-                // Drive the per-provider key editor. The VM observes
-                // ApiKeyRepository, so the "Configured" pill flips on
-                // its own once the user saves a key in the destination
-                // screen — no extra ViewModel call is needed on return.
-                onConfigureProvider(provider.id)
+            onScenarioPick = viewModel::pickScenario,
+            onSetUpScenario = viewModel::setUpScenario,
+            onStartFromScratch = {
+                viewModel.startFromScratch()
+                onCompleted()
             },
+            onLiteRtModelPick = viewModel::pickLiteRtModel,
+            onRetryWarmUp = viewModel::retryWarmUp,
             onStartDownload = viewModel::startDownload,
             onCustomDownloadUrlChanged = viewModel::onCustomDownloadUrlChanged,
         )

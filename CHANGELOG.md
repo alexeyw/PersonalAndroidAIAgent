@@ -15,6 +15,22 @@ details.
 
 ### Added
 
+- **Onboarding leads with value, not the machine — a scenario gallery.**
+  First-launch onboarding now opens with *"what should your agent do for
+  you?"* and a small gallery of ready-made scenarios — **Styled Translation**
+  (an on-device translator that keeps a message's tone, register and dialect),
+  **Share Handler** (share anything and it becomes a structured note in your
+  inbox, confirming before it writes), and a featured **Virtual Companion**
+  (a mood-aware chat). Picking one sets up everything it needs in a single tap:
+  the matching pipeline is materialised as your default, its entry surface is
+  wired where it uses one (Share Handler starts listening on the system Share
+  sheet), and **exactly the model that scenario needs** is downloaded — framed
+  with its size and live progress so the wait is a known one rather than a
+  frozen screen. The final step opens straight into a working chat only once
+  the model has warmed, so you never land in a cold session. A **Start from
+  scratch** card keeps the build-it-yourself path one tap away. The three
+  scenarios also join the bundled preset catalogue, so they are available from
+  the pipeline library's **From preset** picker at any time.
 - **Pipelines suggest their own starter prompts.** A pipeline can now carry a
   list of **sample prompts** shown as the quick-action cards on a new chat's
   empty state. Because the suggestions come from the pipeline that will actually

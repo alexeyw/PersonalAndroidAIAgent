@@ -610,47 +610,98 @@
     <!-- Step 1 capability tile 3. -->
     <string name="knotwork_onboarding_welcome_tile_storage">Encrypted storage (SQLCipher · Keystore)</string>
 
-    <!-- Step 2 headline. -->
-    <string name="knotwork_onboarding_models_headline">Choose a LiteRT model to start.</string>
+    <!-- Step 2 (value gallery) headline. -->
+    <string name="knotwork_onboarding_scenario_headline">What should your agent do for you?</string>
     <!-- Step 2 body copy. -->
-    <string name="knotwork_onboarding_models_body">A small instruction-tuned model (1–2 B parameters) is the fastest place to start. You can switch later from Settings → Models.</string>
-    <!-- Step 2 RECOMMENDED outline pill rendered next to the suggested model row. -->
-    <string name="knotwork_onboarding_models_recommended">RECOMMENDED</string>
-    <!-- Step 2 CTA template: "Download {model name}". -->
+    <string name="knotwork_onboarding_scenario_body">Pick something to start with — we\'ll set up everything it needs and download just the model that task requires.</string>
+    <!-- Step 2 CTA when nothing is picked yet (disabled). -->
+    <string name="knotwork_onboarding_scenario_cta_empty">Choose a scenario</string>
+    <!-- Step 2 CTA template once a scenario is picked: "Set up {scenario}". -->
+    <string name="knotwork_onboarding_scenario_cta_setup">Set up %1$s</string>
+    <!-- Step 2 CTA while the picked scenario is being materialised. -->
+    <string name="knotwork_onboarding_scenario_cta_setting_up">Setting up…</string>
+    <!-- Featured badge pinned to the highlighted scenario card. -->
+    <string name="knotwork_onboarding_scenario_featured_badge">Most popular</string>
+    <!-- Scenario meta chip template: "{size} model", e.g. "2.59 GB model". -->
+    <string name="knotwork_onboarding_scenario_meta_model">%1$s model</string>
+    <!-- Scenario meta chip: runs fully on-device. -->
+    <string name="knotwork_onboarding_scenario_meta_ondevice">Runs on-device</string>
+    <!-- Scenario meta chip: bound to the system Share sheet. -->
+    <string name="knotwork_onboarding_scenario_meta_share">System Share sheet</string>
+    <!-- Scenario meta chip (sensitive tone): asks before writing files (HITL). -->
+    <string name="knotwork_onboarding_scenario_meta_hitl">Asks before writing</string>
+    <!-- Scenario meta chip: fully private. -->
+    <string name="knotwork_onboarding_scenario_meta_private">Fully private</string>
+    <!-- Styled Translation card title. -->
+    <string name="knotwork_onboarding_scenario_translate_title">Styled Translation</string>
+    <!-- Styled Translation value line. -->
+    <string name="knotwork_onboarding_scenario_translate_value">Translate messages while keeping their tone, register and dialect — not just the words.</string>
+    <!-- Share Handler card title. -->
+    <string name="knotwork_onboarding_scenario_capture_title">Share Handler</string>
+    <!-- Share Handler value line. -->
+    <string name="knotwork_onboarding_scenario_capture_value">Share anything to the agent and it becomes a clean, structured note in your inbox.</string>
+    <!-- Virtual Companion card title. -->
+    <string name="knotwork_onboarding_scenario_companion_title">Virtual Companion</string>
+    <!-- Virtual Companion value line. -->
+    <string name="knotwork_onboarding_scenario_companion_value">A companion that senses your mood and shifts how it talks with you.</string>
+    <!-- Escape ("build my own") card title. -->
+    <string name="knotwork_onboarding_scenario_scratch_title">Start from scratch</string>
+    <!-- Escape card body copy. -->
+    <string name="knotwork_onboarding_scenario_scratch_body">Prefer to build it yourself? You\'ll land on an empty pipeline to wire up node by node.</string>
+
+    <!-- Step 3 (motivated download) headline template: "{scenario} needs {model}." -->
+    <string name="knotwork_onboarding_download_headline">%1$s needs %2$s.</string>
+    <!-- Step 3 body template: "About {size} — …". -->
+    <string name="knotwork_onboarding_download_body">About %1$s — it runs entirely on your device once it\'s here. Prefer a lighter model? Pick one below.</string>
+    <!-- Step 3 headline when the user overrides to a non-scenario model. -->
+    <string name="knotwork_onboarding_download_generic_headline">Download %1$s.</string>
+    <!-- Step 3 headline when the Custom URL row is selected. -->
+    <string name="knotwork_onboarding_download_custom_headline">Add a custom model.</string>
+    <!-- Step 3 body when the Custom URL row is selected. -->
+    <string name="knotwork_onboarding_download_custom_body">Paste a direct .task / .litertlm link below to use a model of your own.</string>
+    <!-- Step 3 headline when the needed model is already installed. -->
+    <string name="knotwork_onboarding_download_installed_headline">%1$s is already on your device.</string>
+    <!-- Step 3 body when the needed model is already installed. -->
+    <string name="knotwork_onboarding_download_installed_body">No download needed — the model this scenario uses is already installed. You can continue straight away.</string>
+    <!-- Step 3 "needs this" outline pill on the pre-selected model row. -->
+    <string name="knotwork_onboarding_download_needs_this">needs this</string>
+    <!-- Step 3 section label above the alternative models. -->
+    <string name="knotwork_onboarding_download_choose_another">Or choose another</string>
+    <!-- Step 3 CTA template: "Download {model name}". -->
     <string name="knotwork_onboarding_models_download_cta">Download %1$s</string>
-    <!-- Step 2 CTA shown while a download is in flight. -->
+    <!-- Step 3 CTA shown while a download is in flight. -->
     <string name="knotwork_onboarding_models_downloading_cta">Downloading…</string>
-    <!-- Step 2 CTA shown when the picked model is already installed locally. -->
+    <!-- Step 3 CTA shown when the picked model is already installed locally. -->
     <string name="knotwork_onboarding_models_continue_cta">Continue</string>
-    <!-- Step 2 INSTALLED outline pill rendered next to a model that is already on disk. -->
+    <!-- Step 3 INSTALLED outline pill rendered next to a model that is already on disk. -->
     <string name="knotwork_onboarding_models_installed">INSTALLED</string>
-    <!-- Step 2 progress label template under the active download row, e.g. "Downloading… 42%". -->
+    <!-- Step 3 progress label template under the active download row, e.g. "Downloading… 42%". -->
     <string name="knotwork_onboarding_models_progress">Downloading… %1$d%%</string>
-    <!-- Step 2 custom URL field placeholder. -->
+    <!-- Step 3 custom URL field placeholder. -->
     <string name="knotwork_onboarding_models_custom_url_placeholder">https://…/model.litertlm</string>
-    <!-- Step 2 custom URL field label. -->
+    <!-- Step 3 custom URL field label. -->
     <string name="knotwork_onboarding_models_custom_url_label">Model URL</string>
 
-    <!-- Step 3 headline. -->
-    <string name="knotwork_onboarding_cloud_headline">Add cloud keys later, or skip.</string>
-    <!-- Step 3 body copy. -->
-    <string name="knotwork_onboarding_cloud_body">Cloud providers are off by default. Keys are stored in Encrypted Shared Preferences backed by the Android Keystore.</string>
-    <!-- Step 3 trailing link label for an un-configured provider row. -->
-    <string name="knotwork_onboarding_cloud_configure">Configure</string>
-    <!-- Step 3 trailing label for a provider that's already configured. -->
-    <string name="knotwork_onboarding_cloud_configured">Configured</string>
-    <!-- Step 3 primary CTA label. -->
-    <string name="knotwork_onboarding_cloud_skip_cta">Skip for now</string>
-
-    <!-- Step 4 row caption above the installed-model name. -->
+    <!-- Step 4 row caption above the active-model name. -->
     <string name="knotwork_onboarding_ready_active_model_label">Active model</string>
-    <!-- Step 4 placeholder shown when the model name is unavailable. -->
+    <!-- Step 4 active-model value template: "{model} · on-device". -->
+    <string name="knotwork_onboarding_ready_active_model_value">%1$s · on-device</string>
+    <!-- Step 4 placeholder shown while the model is still warming. -->
     <string name="knotwork_onboarding_ready_active_model_pending">Loading model…</string>
-
-    <!-- Step 4 headline. -->
-    <string name="knotwork_onboarding_ready_headline">One default pipeline is bound to your first chat.</string>
+    <!-- Step 4 entry-surface row label (Share Handler only). -->
+    <string name="knotwork_onboarding_ready_surface_label">Entry surface</string>
+    <!-- Step 4 entry-surface row value (Share Handler only). -->
+    <string name="knotwork_onboarding_ready_surface_value">Listens on the system Share sheet</string>
+    <!-- Step 4 safety row label (Share Handler only). -->
+    <string name="knotwork_onboarding_ready_safety_label">Safety</string>
+    <!-- Step 4 safety row value (Share Handler only). -->
+    <string name="knotwork_onboarding_ready_safety_value">Confirms before every file write (HITL)</string>
+    <!-- Step 4 headline template: "{scenario} is ready.". -->
+    <string name="knotwork_onboarding_ready_scenario_headline">%1$s is ready.</string>
+    <!-- Step 4 headline fallback when no scenario was picked. -->
+    <string name="knotwork_onboarding_ready_generic_headline">You\'re ready.</string>
     <!-- Step 4 body copy. -->
-    <string name="knotwork_onboarding_ready_body">Pipelines are graphs of typed nodes. The default one is INPUT → PLANNER → TOOLS? → OUTPUT — edit it any time from Pipelines.</string>
+    <string name="knotwork_onboarding_ready_scenario_body">Here\'s what we set up for you — edit any of it later from Pipelines.</string>
     <!--
         Step 4 footer line under the pipeline preview:
         "// default · N nodes · M edges". Quantity tracks the node count; the
@@ -662,8 +713,14 @@
         <item quantity="one">// default · %1$d nodes · %2$d edges</item>
         <item quantity="other">// default · %1$d nodes · %2$d edges</item>
     </plurals>
-    <!-- Step 4 CTA label. -->
-    <string name="knotwork_onboarding_ready_cta">Open chat</string>
+    <!-- Step 4 CTA template once warmed: "Open {scenario}". -->
+    <string name="knotwork_onboarding_ready_open_cta">Open %1$s</string>
+    <!-- Step 4 CTA fallback when no scenario was picked. -->
+    <string name="knotwork_onboarding_ready_open_generic_cta">Open chat</string>
+    <!-- Step 4 CTA while the model is still warming. -->
+    <string name="knotwork_onboarding_ready_preparing_cta">Preparing…</string>
+    <!-- Step 4 CTA when warm-up failed — re-runs the model load. -->
+    <string name="knotwork_onboarding_ready_retry_cta">Retry</string>
 
     <!-- Step 1 system-back exit-confirm dialog title. -->
     <string name="knotwork_onboarding_exit_title">Quit setup?</string>

@@ -271,11 +271,19 @@ private fun PresetPickerRow(preset: PipelinePreset, selected: Boolean, onClick: 
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
             ) {
+                // `weight(fill = false)` is load-bearing: without it the title is
+                // measured first against the full row width, leaving the badge
+                // zero width — its label then wraps one character per line and
+                // renders as a tall vertical sliver. Weighting the title makes
+                // the badge keep its intrinsic width and the title ellipsize
+                // into whatever is left; `fill = false` keeps a short title
+                // snug against its badge instead of pushing it to the edge.
                 Text(
                     text = preset.name,
                     style = MaterialTheme.typography.titleSmall,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
                 PresetCategoryBadge(category = preset.category)
             }

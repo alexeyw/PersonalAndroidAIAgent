@@ -63,6 +63,9 @@ class PipelinePresetCatalogValidationTest {
         "subtask_lookup.json",
         "subtask_act.json",
         "subtask_process.json",
+        "styled_translation.json",
+        "share_handler.json",
+        "virtual_companion_mood_router.json",
     )
 
     /**

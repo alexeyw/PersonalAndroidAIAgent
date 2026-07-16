@@ -37,14 +37,14 @@ class OnboardingScreenDownloadGateTest {
     fun liteRtStep_noInstall_noDownload_downloadCtaEnabled_andStartsDownload() {
         val (vm, _) = mockOnboardingViewModel(
             initialState = OnboardingViewState(
-                step = OnboardingStep.LiteRtModel,
+                step = OnboardingStep.Download,
                 liteRtModel = OnboardingLiteRtModel.Gemma4E2B,
             ),
         )
 
         composeTestRule.setContent {
             MaterialTheme {
-                OnboardingScreen(onCompleted = {}, onConfigureProvider = {}, viewModel = vm)
+                OnboardingScreen(onCompleted = {}, viewModel = vm)
             }
         }
 
@@ -64,7 +64,7 @@ class OnboardingScreenDownloadGateTest {
     fun liteRtStep_downloadInProgress_ctaDisabledAndLabelChanges() {
         val (vm, _) = mockOnboardingViewModel(
             initialState = OnboardingViewState(
-                step = OnboardingStep.LiteRtModel,
+                step = OnboardingStep.Download,
                 liteRtModel = OnboardingLiteRtModel.Gemma4E2B,
                 downloadProgress = HALF_PROGRESS,
             ),
@@ -72,7 +72,7 @@ class OnboardingScreenDownloadGateTest {
 
         composeTestRule.setContent {
             MaterialTheme {
-                OnboardingScreen(onCompleted = {}, onConfigureProvider = {}, viewModel = vm)
+                OnboardingScreen(onCompleted = {}, viewModel = vm)
             }
         }
 
@@ -87,7 +87,7 @@ class OnboardingScreenDownloadGateTest {
     fun liteRtStep_modelInstalled_continueCtaEnabled_andAdvances() {
         val (vm, _) = mockOnboardingViewModel(
             initialState = OnboardingViewState(
-                step = OnboardingStep.LiteRtModel,
+                step = OnboardingStep.Download,
                 liteRtModel = OnboardingLiteRtModel.Gemma4E2B,
                 installedModelId = OnboardingLiteRtModel.Gemma4E2B.id,
             ),
@@ -95,7 +95,7 @@ class OnboardingScreenDownloadGateTest {
 
         composeTestRule.setContent {
             MaterialTheme {
-                OnboardingScreen(onCompleted = {}, onConfigureProvider = {}, viewModel = vm)
+                OnboardingScreen(onCompleted = {}, viewModel = vm)
             }
         }
 
@@ -120,12 +120,12 @@ class OnboardingScreenDownloadGateTest {
 
         composeTestRule.setContent {
             MaterialTheme {
-                OnboardingScreen(onCompleted = {}, onConfigureProvider = {}, viewModel = vm)
+                OnboardingScreen(onCompleted = {}, viewModel = vm)
             }
         }
 
         val ctx = InstrumentationRegistry.getInstrumentation().targetContext
-        val openChat = ctx.getString(KnotworkR.string.knotwork_onboarding_ready_cta)
+        val openChat = ctx.getString(KnotworkR.string.knotwork_onboarding_ready_preparing_cta)
 
         composeTestRule.onNodeWithText(text = openChat).assertIsNotEnabled()
     }
