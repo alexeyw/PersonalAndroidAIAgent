@@ -11,14 +11,15 @@
 > typical conversation never leaves the device.
 
 <!--
-  Hero visual. Currently the static chat-home render; it will be replaced by a
-  short on-device Share Handler demo loop (light/dark). Keep the <picture>
-  element so prefers-color-scheme keeps working.
+  Hero visual: an on-device Share Handler demo loop (light/dark). Keep the
+  <picture> element so prefers-color-scheme swaps the theme on GitHub.
 -->
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-chat-home-dark.png">
-  <img alt="Knotwork — on-device chat home" src="docs/images/hero-chat-home.png" width="540">
-</picture>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-share-handler-dark.gif">
+    <img alt="Sharing a page into Knotwork: the Share Handler pipeline runs on-device and captures it to the workspace inbox" src="docs/images/hero-share-handler.gif" width="300">
+  </picture>
+</p>
 
 ## What it is
 
@@ -64,7 +65,13 @@ your default, wires any surface it uses, and downloads exactly the model that
 scenario needs — with size and live progress — before dropping you into a
 working chat. A **Start from scratch** path stays one tap away.
 
-<!-- A 30-second on-device demo of the Share Handler flow will be embedded here. -->
+<!--
+  Optional: a longer on-device demo (scenario onboarding + the full Share
+  Handler flow). GitHub only plays videos hosted on its own CDN, so drop the
+  MP4 into the PR/issue comment box to get a user-attachments URL, then embed:
+  <video src="…" controls muted></video>
+-->
+> The hero above is a real on-device capture — no mockups.
 
 ## Highlights
 
