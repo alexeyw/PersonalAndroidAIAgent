@@ -652,4 +652,41 @@ class AppDatabaseMigrationTest {
             Converters().toSamplePrompts("[]"),
         )
     }
+
+    @Test
+    fun `MIGRATION_50_51 targets versions 50 to 51`() {
+        val migration = AppDatabase.MIGRATION_50_51
+
+        assertEquals(50, migration.startVersion)
+        assertEquals(51, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_50_51 creates the trigger_evaluations table with both indexes`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val sqlSlots = mutableListOf<String>()
+
+        AppDatabase.MIGRATION_50_51.migrate(db)
+
+        // One CREATE TABLE plus the two index creations.
+        verify(exactly = 3) { db.execSQL(capture(sqlSlots)) }
+        val joined = sqlSlots.joinToString("\n").uppercase()
+        assertTrue(
+            "Expected CREATE TABLE trigger_evaluations, got: $sqlSlots",
+            joined.contains("CREATE TABLE IF NOT EXISTS `TRIGGER_EVALUATIONS`"),
+        )
+        // Core columns and the primary key.
+        listOf("`ID`", "`TRIGGERID`", "`EVALUATEDAT`", "`SOURCE`", "`VERDICTKIND`", "PRIMARY KEY(`ID`)").forEach {
+            assertTrue("Expected column/PK $it in: $sqlSlots", joined.contains(it))
+        }
+        // The "by trigger, by time" composite index and the run-outcome index.
+        assertTrue(
+            "Expected (triggerId, evaluatedAt) index: $sqlSlots",
+            joined.contains("INDEX_TRIGGER_EVALUATIONS_TRIGGERID_EVALUATEDAT"),
+        )
+        assertTrue(
+            "Expected runId index: $sqlSlots",
+            joined.contains("INDEX_TRIGGER_EVALUATIONS_RUNID"),
+        )
+    }
 }

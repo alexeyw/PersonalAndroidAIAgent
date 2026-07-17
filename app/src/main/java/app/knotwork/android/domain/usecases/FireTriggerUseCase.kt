@@ -3,6 +3,7 @@ package app.knotwork.android.domain.usecases
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.Trigger
+import app.knotwork.android.domain.models.TriggerSkipReason
 import app.knotwork.android.domain.models.telemetryKind
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.NetworkStateRepository

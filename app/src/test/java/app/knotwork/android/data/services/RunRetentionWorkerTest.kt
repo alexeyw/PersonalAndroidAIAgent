@@ -6,6 +6,7 @@ import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import app.knotwork.android.domain.usecases.CleanupPipelineRunsUseCase
+import app.knotwork.android.domain.usecases.CleanupTriggerJournalUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -22,19 +23,21 @@ import org.robolectric.RuntimeEnvironment
  *
  * As with [MemoryCompactionWorkerTest], Hilt's assisted-inject machinery only
  * fires inside a real application runtime, so the test hands the mocked use
- * case to the worker through a manual [WorkerFactory] and drives `doWork()`
+ * cases to the worker through a manual [WorkerFactory] and drives `doWork()`
  * via [TestListenableWorkerBuilder].
  */
 @RunWith(RobolectricTestRunner::class)
 class RunRetentionWorkerTest {
 
     private lateinit var context: Context
-    private lateinit var useCase: CleanupPipelineRunsUseCase
+    private lateinit var runUseCase: CleanupPipelineRunsUseCase
+    private lateinit var journalUseCase: CleanupTriggerJournalUseCase
 
     @Before
     fun setup() {
         context = RuntimeEnvironment.getApplication()
-        useCase = mockk()
+        runUseCase = mockk()
+        journalUseCase = mockk()
     }
 
     private fun workerFactory(): WorkerFactory = object : WorkerFactory() {
@@ -42,7 +45,7 @@ class RunRetentionWorkerTest {
             appContext: Context,
             workerClassName: String,
             workerParameters: WorkerParameters,
-        ): ListenableWorker = RunRetentionWorker(appContext, workerParameters, useCase)
+        ): ListenableWorker = RunRetentionWorker(appContext, workerParameters, runUseCase, journalUseCase)
     }
 
     private fun buildWorker(): RunRetentionWorker = TestListenableWorkerBuilder<RunRetentionWorker>(context)
@@ -50,21 +53,36 @@ class RunRetentionWorkerTest {
         .build()
 
     @Test
-    fun `given pass completes when doWork runs then returns success`() = runTest {
-        coEvery { useCase() } returns CleanupPipelineRunsUseCase.Outcome(
+    fun `given both passes complete when doWork runs then returns success and runs both`() = runTest {
+        coEvery { runUseCase() } returns CleanupPipelineRunsUseCase.Outcome(
             deletedRuns = 3,
             deletedLegacyTraceRows = 1,
         )
+        coEvery { journalUseCase(any()) } returns 7
 
         val result = buildWorker().doWork()
 
         assertEquals(ListenableWorker.Result.success(), result)
-        coVerify(exactly = 1) { useCase() }
+        coVerify(exactly = 1) { runUseCase() }
+        coVerify(exactly = 1) { journalUseCase(any()) }
     }
 
     @Test
-    fun `given the use case throws when doWork runs then returns retry`() = runTest {
-        coEvery { useCase() } throws IllegalStateException("store unavailable")
+    fun `given the run pass throws when doWork runs then returns retry`() = runTest {
+        coEvery { runUseCase() } throws IllegalStateException("store unavailable")
+
+        val result = buildWorker().doWork()
+
+        assertEquals(ListenableWorker.Result.retry(), result)
+    }
+
+    @Test
+    fun `given the journal pass throws when doWork runs then returns retry`() = runTest {
+        coEvery { runUseCase() } returns CleanupPipelineRunsUseCase.Outcome(
+            deletedRuns = 0,
+            deletedLegacyTraceRows = 0,
+        )
+        coEvery { journalUseCase(any()) } throws IllegalStateException("journal store unavailable")
 
         val result = buildWorker().doWork()
 

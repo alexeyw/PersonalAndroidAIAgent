@@ -28,6 +28,7 @@ import app.knotwork.android.data.local.dao.PromptTemplateDao
 import app.knotwork.android.data.local.dao.SkillDao
 import app.knotwork.android.data.local.dao.TraceStepDao
 import app.knotwork.android.data.local.dao.TriggerDao
+import app.knotwork.android.data.local.dao.TriggerJournalDao
 import app.knotwork.android.data.local.dao.UsageTelemetryDao
 import app.knotwork.android.data.services.WorkManagerTaskScheduler
 import app.knotwork.android.data.tools.local.AppFunctionDataCodec
@@ -198,6 +199,7 @@ object AppModule {
                 AppDatabase.MIGRATION_47_48,
                 AppDatabase.MIGRATION_48_49,
                 AppDatabase.MIGRATION_49_50,
+                AppDatabase.MIGRATION_50_51,
             )
             // No destructive fallback on upgrade: every version bump must supply an explicit
             // migration above so user data survives. Destructive recreation is kept only for the
@@ -295,6 +297,13 @@ object AppModule {
      */
     @Provides
     fun provideTriggerDao(database: AppDatabase): TriggerDao = database.triggerDao()
+
+    /**
+     * Provides the [TriggerJournalDao] backing the trigger-evaluation journal
+     * (the `trigger_evaluations` table).
+     */
+    @Provides
+    fun provideTriggerJournalDao(database: AppDatabase): TriggerJournalDao = database.triggerJournalDao()
 
     /**
      * Provides the [UsageTelemetryDao] backing the privacy-preserving local
