@@ -116,7 +116,7 @@ keytool \
     -validity 36500 \
     -alias agent-release
 # Distinguished Name prompt:
-#   CN: On-Device AI Agent
+#   CN: Knotwork
 #   OU: Releases
 #   O: <your org or personal name>
 #   L / ST / C: as appropriate
@@ -170,7 +170,7 @@ apksigner verify --print-certs --verbose \
 ```
 
 Check the printed `Signer #1 certificate DN` matches the keystore's
-Distinguished Name (e.g. `CN=On-Device AI Agent`) and that the SHA-256
+Distinguished Name (e.g. `CN=Knotwork`) and that the SHA-256
 fingerprint matches the one Play Console registered for the app. The debug
 keystore prints `CN=Android Debug`, so this is the quickest way to catch an
 accidental fallback to debug signing.
@@ -202,6 +202,10 @@ include a one-line comment on the symptom that triggered the keep.
 
 ## 5. APK size breakdown — v0.4.0
 
+> The numbers below are a **point-in-time snapshot measured on v0.4.0** and
+> have not been re-measured since; treat them as indicative of the size
+> profile rather than the current byte counts.
+
 `app-release.apk` measures **59.6 MiB on disk** (62,465,437 bytes;
 ~59.9 MiB uncompressed inside the APK container). The 30 MB target from
 the original phase plan is **not achievable** with the current dependency
@@ -229,7 +233,7 @@ What we already did to keep this in check:
 - **R8 full mode + resource shrinking.** Saves ~2 MB on DEX vs. unminified.
 - **Strip Jansi non-Android natives.** `org/fusesource/jansi/internal/native/{Windows,Mac,Linux,FreeBSD}/**` and `META-INF/native-image/jansi/**` are dropped via the `android.packaging.resources` exclude list — Jansi ships through Koog's logger and only its ANSI-escape rendering runs on JVM hosts.
 
-Future wins (left out of scope for v0.4.0):
+Future wins (left out of scope for now):
 
 - **Move the universal-sentence-encoder model to a first-run download.** Wins ~6 MB; complicates first-run UX. Tracked separately.
 - **Per-ABI dynamic feature module for LiteRT GPU.** Only devices that actually use the GPU delegate would download `libLiteRtClGlAccelerator.so`. Wins ~2.6 MB; requires App Bundle delivery (already in place) plus split-install plumbing.

@@ -1,4 +1,4 @@
-# Knotwork — On-Device AI Agent for Android
+# Knotwork — on-device AI agent for Android
 
 [![Check](https://github.com/alexeyw/PersonalAndroidAIAgent/actions/workflows/check.yml/badge.svg)](https://github.com/alexeyw/PersonalAndroidAIAgent/actions/workflows/check.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
@@ -269,5 +269,3 @@ experimentation. Expect rough edges:
 
 Released under the Apache License 2.0. See [LICENSE](LICENSE) for the full
 text.
-</content>
-</invoke>

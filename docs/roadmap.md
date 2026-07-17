@@ -44,17 +44,26 @@ See [README.md](../README.md) for the full feature list and
 
 ## Near term
 
-### Agent tool-set expansion
+### Reliability and quality of what already exists
 
-The single biggest gap between "the agent can reason" and "the agent is
-useful" is the breadth of its built-in tool catalogue. A dedicated
-workstream will grow the set of local tools the agent can call out of the
-box — including evaluating file-oriented tools (reading, writing, and
-organising on-device documents) and further system integrations. The
-design space (which tools, which permission and HITL surfaces, which
-backing APIs) is intentionally **not** fixed yet; proposals and use-case
-reports in the issue tracker are welcome input while this is being
-scoped.
+The nearest-term focus is not new surface area but hardening the loop that
+already ships end-to-end. Concrete directions:
+
+- **Proven background execution.** Make a bound pipeline that runs on a
+  trigger a dependable, observable thing: a visible log of when triggers
+  fired and what each run did, and behaviour that survives Doze and long
+  idle stretches rather than silently missing.
+- **Time-to-first-value.** Measure the path from install to a working,
+  useful agent (the scenario-onboarding flow) and keep that measurement
+  repeatable, so regressions in the slowest step — model download — are
+  caught rather than discovered by users.
+- **Memory and preset quality.** Tighten the long-term memory subsystem
+  (retrieval relevance, extraction, compaction) and consolidate the
+  bundled pipeline presets — the presets are the product's first
+  impression in the scenario gallery, so their quality matters directly.
+- **Chat archive.** Heavy day-to-day use fills the chat list quickly;
+  archiving or collapsing old sessions keeps the primary surface usable as
+  the amount of history grows.
 
 ### First release-signed build
 
@@ -67,6 +76,18 @@ across releases. Note the one-time migration cost described in the
 install to a release-signed one requires a reinstall.
 
 ## Mid term
+
+### Agent tool-set expansion
+
+Once background-run reliability is locked in, the biggest lever on how
+useful the agent feels is the breadth of its built-in tool catalogue. A
+dedicated workstream will grow the set of local tools the agent can call
+out of the box — including evaluating file-oriented tools (reading,
+writing, and organising on-device documents) and further system
+integrations. The design space (which tools, which permission and HITL
+surfaces, which backing APIs) is intentionally **not** fixed yet;
+proposals and use-case reports in the issue tracker are welcome input
+while this is being scoped.
 
 ### On-device verification beyond the JVM gate
 

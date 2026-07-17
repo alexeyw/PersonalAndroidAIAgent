@@ -13,6 +13,23 @@ details.
 
 ## [Unreleased]
 
+### Changed
+
+- **Documentation hygiene pass across the public contour.** The product is
+  now referred to consistently as **Knotwork** (an on-device AI agent for
+  Android) throughout the docs, the near-term roadmap is realigned to lead
+  with reliability and quality of what already ships, a stray artifact at
+  the end of `README.md` was removed, several dangling references to
+  internal-only documents were inlined or dropped, and duplicated version
+  numbers were replaced with a single source of truth.
+
+### Added
+
+- **`verifyDocsHygiene` build guard.** A new pure-JVM Gradle verification
+  task (wired into `./gradlew check`, unit-tested in `buildSrc`) fails the
+  build if any public-contour Markdown file reintroduces an LLM tool-call
+  wrapper artifact or a reference to an internal-only planning document.
+
 ## [0.6.0] - 2026-07-16
 
 ### Added
