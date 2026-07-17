@@ -64,8 +64,10 @@ interface TriggerJournalRepository {
      * @param olderThanEpochMs Age cutoff, epoch-millis; rows with an earlier
      *   [TriggerEvaluation.evaluatedAt] are deleted.
      * @param maxRecords Hard cap on retained rows after the age pass; the newest
-     *   [maxRecords] survive, the rest are deleted.
+     *   [maxRecords] survive, the rest are deleted. Must be `> 0` — a non-positive
+     *   cap would wipe the whole journal, so it is rejected as a programming error.
      * @return The total number of rows deleted across both passes.
+     * @throws IllegalArgumentException if [maxRecords] is not positive.
      */
     suspend fun applyRetention(olderThanEpochMs: Long, maxRecords: Int): Int
 }

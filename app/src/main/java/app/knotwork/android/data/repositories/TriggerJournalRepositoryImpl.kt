@@ -67,10 +67,16 @@ class TriggerJournalRepositoryImpl @Inject constructor(private val dao: TriggerJ
         }
         .flowOn(dispatcher)
 
-    override suspend fun applyRetention(olderThanEpochMs: Long, maxRecords: Int): Int =
-        absorbingStoreFailure({ "Trigger-journal retention pass failed; ignored" }) {
+    override suspend fun applyRetention(olderThanEpochMs: Long, maxRecords: Int): Int {
+        // Fail fast on a misconfigured cap: `maxRecords <= 0` would make the
+        // enforce-cap DELETE keep zero rows and wipe the whole journal. This is a
+        // programming error, not a storage failure, so it is asserted rather than
+        // absorbed.
+        require(maxRecords > 0) { "maxRecords must be positive, was $maxRecords" }
+        return absorbingStoreFailure({ "Trigger-journal retention pass failed; ignored" }) {
             withContext(dispatcher) { dao.applyRetention(olderThanEpochMs, maxRecords) }
         } ?: 0
+    }
 
     /** Maps a domain [TriggerEvaluation] to its persisted row. */
     private fun TriggerEvaluation.toEntity(): TriggerEvaluationEntity {
@@ -140,11 +146,16 @@ class TriggerJournalRepositoryImpl @Inject constructor(private val dao: TriggerJ
 
     /**
      * Reconstitutes a run outcome from its columns. A `null` [kind] (or an
-     * unrecognised one) reads back as `null` — "no settled outcome yet".
+     * unrecognised one) reads back as `null` — "no settled outcome yet". A
+     * `FAILURE` kind whose [error] column is `null` is a corrupt half-written row
+     * (writes always pair `FAILURE` with a message, even an empty one), so it too
+     * reads back as `null` rather than being reported as a blank-reason failure —
+     * this keeps a genuinely empty message (`error == ""`) distinguishable from
+     * corruption.
      */
     private fun decodeOutcome(kind: String?, error: String?): TriggerRunOutcome? = when (kind) {
         OUTCOME_SUCCESS -> TriggerRunOutcome.Success
-        OUTCOME_FAILURE -> TriggerRunOutcome.Failure(error.orEmpty())
+        OUTCOME_FAILURE -> error?.let { TriggerRunOutcome.Failure(it) }
         OUTCOME_CANCELLED -> TriggerRunOutcome.CancelledBySystem
         OUTCOME_HITL_TIMEOUT -> TriggerRunOutcome.HitlTimeout
         else -> null

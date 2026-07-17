@@ -68,6 +68,26 @@ class RecordTriggerEvaluationUseCaseTest {
     }
 
     @Test
+    fun `given a fired verdict without a run id when invoked then the fire is still persisted`() = runTest {
+        val captured = slot<TriggerEvaluation>()
+
+        val returned = useCase(
+            triggerId = "trig-1",
+            source = TriggerEvaluationSource.POLL,
+            verdict = TriggerEvaluationVerdict.Fired,
+            runId = null,
+            evaluatedAt = 5_000L,
+            id = "eval-5",
+        )
+
+        // The contract violation is logged, not thrown: the fire is never lost.
+        coVerify(exactly = 1) { journal.recordEvaluation(capture(captured)) }
+        assertEquals(TriggerEvaluationVerdict.Fired, captured.captured.verdict)
+        assertNull(captured.captured.runId)
+        assertEquals(captured.captured, returned)
+    }
+
+    @Test
     fun `given a re-armed verdict when invoked then it is persisted with no run and no outcome`() = runTest {
         val captured = slot<TriggerEvaluation>()
 

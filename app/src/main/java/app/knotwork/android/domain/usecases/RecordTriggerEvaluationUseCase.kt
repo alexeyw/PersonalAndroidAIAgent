@@ -4,6 +4,7 @@ import app.knotwork.android.domain.models.TriggerEvaluation
 import app.knotwork.android.domain.models.TriggerEvaluationSource
 import app.knotwork.android.domain.models.TriggerEvaluationVerdict
 import app.knotwork.android.domain.repositories.TriggerJournalRepository
+import timber.log.Timber
 import java.util.UUID
 import javax.inject.Inject
 
@@ -20,6 +21,14 @@ import javax.inject.Inject
  * [runId] is meaningful only for a [TriggerEvaluationVerdict.Fired] verdict; for
  * any other verdict it is normalised to `null` so a caller can never accidentally
  * attach a run to a skip.
+ *
+ * **Fired ⇒ runId invariant.** A [TriggerEvaluationVerdict.Fired] verdict must
+ * carry a non-null [runId] — it is the key the later
+ * [RecordTriggerRunOutcomeUseCase] matches on. A fired verdict recorded without a
+ * run id would produce a row whose run outcome could never be attributed, so this
+ * case is logged as a contract violation (rather than thrown — the journal is a
+ * best-effort observer that must never abort the run it describes); the row is
+ * still persisted so the fire itself is not lost.
  *
  * @property journal The journal store the evaluation is written to.
  */
@@ -46,13 +55,20 @@ class RecordTriggerEvaluationUseCase @Inject constructor(private val journal: Tr
         evaluatedAt: Long = System.currentTimeMillis(),
         id: String = UUID.randomUUID().toString(),
     ): TriggerEvaluation {
+        val isFired = verdict is TriggerEvaluationVerdict.Fired
+        if (isFired && runId == null) {
+            Timber.w(
+                "Trigger %s recorded a Fired verdict without a runId; its run outcome will be unattributable.",
+                triggerId,
+            )
+        }
         val evaluation = TriggerEvaluation(
             id = id,
             triggerId = triggerId,
             evaluatedAt = evaluatedAt,
             source = source,
             verdict = verdict,
-            runId = if (verdict is TriggerEvaluationVerdict.Fired) runId else null,
+            runId = if (isFired) runId else null,
             outcome = null,
         )
         journal.recordEvaluation(evaluation)

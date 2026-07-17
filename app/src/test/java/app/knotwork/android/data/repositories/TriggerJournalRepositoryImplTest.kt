@@ -15,10 +15,12 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -242,4 +244,42 @@ class TriggerJournalRepositoryImplTest {
 
         assertNull(repo.observeByTrigger("trig-1").first().single().outcome)
     }
+
+    @Test
+    fun `given a non-positive cap when retention is applied then it rejects rather than wiping the table`() {
+        val repo = repository()
+
+        // `require` throws before any suspension point, so runBlocking surfaces it.
+        assertThrows(IllegalArgumentException::class.java) {
+            runBlocking { repo.applyRetention(olderThanEpochMs = 1, maxRecords = 0) }
+        }
+    }
+
+    @Test
+    fun `given a failure row with an empty message when read then it stays a failure, but a null message is dropped`() =
+        runTest {
+            val repo = repository()
+            // An empty message is a legitimate failure and must survive as such.
+            dao.insert(row(id = "empty", evaluatedAt = 2, outcomeKind = "FAILURE", outcomeError = ""))
+            // A FAILURE kind with a null message is corrupt and decodes to no outcome.
+            dao.insert(row(id = "corrupt", evaluatedAt = 1, outcomeKind = "FAILURE", outcomeError = null))
+
+            val byId = repo.observeByTrigger("trig-1").first().associateBy { it.id }
+            assertEquals(TriggerRunOutcome.Failure(""), byId.getValue("empty").outcome)
+            assertNull(byId.getValue("corrupt").outcome)
+        }
+
+    /** Builds a raw fired-row entity for the tolerant-decode tests. */
+    private fun row(id: String, evaluatedAt: Long, outcomeKind: String?, outcomeError: String?) =
+        TriggerEvaluationEntity(
+            id = id,
+            triggerId = "trig-1",
+            evaluatedAt = evaluatedAt,
+            source = "POLL",
+            verdictKind = "FIRED",
+            skipReason = null,
+            runId = "run-$id",
+            outcomeKind = outcomeKind,
+            outcomeError = outcomeError,
+        )
 }
