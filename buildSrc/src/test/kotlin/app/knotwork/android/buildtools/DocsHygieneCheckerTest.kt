@@ -41,9 +41,11 @@ class DocsHygieneCheckerTest {
         val violations = DocsHygieneChecker.scan(files)
 
         assertTrue(violations.all { it.category == Category.LLM_ARTIFACT })
+        // Assert the exact ordered list (not a Set) so a spurious extra or
+        // duplicated violation on an already-expected line cannot be masked.
         assertEquals(
-            setOf("a.md:2", "b.md:2", "c.md:1", "d.md:1"),
-            violations.map { "${it.file}:${it.line}" }.toSet(),
+            listOf("a.md:2", "b.md:2", "c.md:1", "d.md:1"),
+            violations.map { "${it.file}:${it.line}" },
         )
     }
 
@@ -71,10 +73,28 @@ class DocsHygieneCheckerTest {
     @Test
     fun `given near-miss filename when scanned then not flagged`() {
         val files = mapOf(
-            "index.md" to "The archive lives in PLAN-archive.md and DESCRIPTIONS.md.\n",
+            // Token embedded in a longer filename on either side, or a different
+            // extension, must not false-positive.
+            "index.md" to "See PLAN-archive.md, DESCRIPTIONS.md, OLDPLAN.md, " +
+                "my_TODO.md and PLAN.mdx — none are the internal docs.\n",
         )
 
         assertTrue(DocsHygieneChecker.scan(files).isEmpty())
+    }
+
+    @Test
+    fun `given genuine reference at a path or word boundary when scanned then flagged`() {
+        val files = mapOf(
+            "a.md" to "the log lives in decisions.md\n",
+            "b.md" to "see docs/PLAN.md\n",
+            "c.md" to "read [the vision](VISION.md).\n",
+            "d.md" to "PLAN.md at the very start of a line\n",
+        )
+
+        val violations = DocsHygieneChecker.scan(files)
+
+        assertEquals(4, violations.size)
+        assertTrue(violations.all { it.category == Category.PRIVATE_DOC_REFERENCE })
     }
 
     @Test

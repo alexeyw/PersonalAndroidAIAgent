@@ -217,11 +217,11 @@ catch: reintroducing a `domain -> data` import (or an `android.*` import in
 ## Public documentation hygiene guard (`verifyDocsHygiene`)
 
 `:app:verifyDocsHygiene` is a custom Gradle verification task, wired into
-`check`, that scans the tracked public-documentation contour — the root
-`README.md`, `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
-`NOTICE`, `FILE_MAP.md`, and everything under `docs/` — for two defect
+`check`, that scans the public-documentation contour — every top-level
+`*.md` file plus `NOTICE`, and everything under `docs/` — for two defect
 classes that are cheap to introduce and expensive once the repository is
-public:
+public. The root scope is a **glob**, not a hand-maintained allowlist, so a
+newly added top-level public doc is guarded automatically:
 
 1. **LLM tool-call wrapper artifacts** — stray fragments of an assistant's
    tool-call envelope (closing wrapper tags, or the opening of a markup /
@@ -233,10 +233,14 @@ public:
    or of the internal `project_docs` tree. External readers cannot see
    them, so such a reference is always dangling.
 
-`CHANGELOG.md` is deliberately **excluded**: it is a historical journal whose
-past entries legitimately name internal documents as they were called at the
-time, and rewriting history to satisfy a lint rule would be worse than the
-dangling reference.
+Two families are deliberately **excluded** from the root glob: `CHANGELOG.md`
+(a historical journal whose past entries legitimately name internal documents
+as they were called at the time — rewriting history to satisfy a lint rule
+would be worse than the dangling reference) and the untracked, internal
+`CLAUDE` agent-manifest family, which deliberately references the private
+planning docs. Internal-document filenames are matched only at a path/word
+boundary, so a longer name that merely contains one (for example an archive
+copy) does not trip the guard.
 
 The scanning logic is a pure `Map<path, content> -> List<Violation>`
 transform in `buildSrc`

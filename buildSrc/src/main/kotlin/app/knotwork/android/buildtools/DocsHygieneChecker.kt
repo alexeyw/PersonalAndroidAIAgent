@@ -71,19 +71,39 @@ object DocsHygieneChecker {
         "<" + "function_results",
     )
 
-    /**
-     * Forbidden tokens for [Category.PRIVATE_DOC_REFERENCE] — filenames of the
-     * internal planning documents and the internal docs tree prefix.
-     */
-    private val PRIVATE_DOC_TOKENS: List<String> = listOf(
+    /** Filenames of the internal planning documents (fragment-assembled; see [PRIVATE_DOC_REGEXES]). */
+    private val PRIVATE_DOC_FILENAMES: List<String> = listOf(
         "decisions" + ".md",
         "DESCRIPTION" + ".md",
         "PLAN" + ".md",
         "VISION" + ".md",
         "TODO" + ".md",
         "CLAUDE" + ".md",
-        "project_docs/",
     )
+
+    /** Prefix of the internal docs tree; a real path continues past the slash. */
+    private val PRIVATE_DOCS_DIR: String = "project_docs" + "/"
+
+    /** Matches a start-of-token boundary: not preceded by a filename-continuation character. */
+    private const val LEADING_BOUNDARY = "(?<![A-Za-z0-9_-])"
+
+    /** Matches an end-of-token boundary: not followed by an alphanumeric (so `PLAN.mdx` does not match `PLAN.md`). */
+    private const val TRAILING_BOUNDARY = "(?![A-Za-z0-9])"
+
+    /**
+     * Regexes for [Category.PRIVATE_DOC_REFERENCE].
+     *
+     * Filename tokens are anchored on both sides to a path/word boundary so a
+     * longer filename that merely *contains* a token — `OLDPLAN.md`,
+     * `PLAN-archive.md`, `DESCRIPTIONS.md`, `PLAN.mdx` — does not false-positive,
+     * while genuine references (`decisions.md`, `docs/PLAN.md`, `[x](VISION.md)`)
+     * still match. The directory token is anchored only on the left because a
+     * real path continues after the slash.
+     */
+    private val PRIVATE_DOC_REGEXES: List<Regex> =
+        PRIVATE_DOC_FILENAMES.map { name ->
+            Regex(LEADING_BOUNDARY + Regex.escape(name) + TRAILING_BOUNDARY)
+        } + Regex(LEADING_BOUNDARY + Regex.escape(PRIVATE_DOCS_DIR))
 
     /**
      * Scans the supplied documents for both defect classes.
@@ -104,9 +124,9 @@ object DocsHygieneChecker {
                         violations += Violation(path, lineNumber, token, Category.LLM_ARTIFACT)
                     }
                 }
-                PRIVATE_DOC_TOKENS.forEach { token ->
-                    if (line.contains(token)) {
-                        violations += Violation(path, lineNumber, token, Category.PRIVATE_DOC_REFERENCE)
+                PRIVATE_DOC_REGEXES.forEach { regex ->
+                    regex.find(line)?.let { match ->
+                        violations += Violation(path, lineNumber, match.value, Category.PRIVATE_DOC_REFERENCE)
                     }
                 }
             }

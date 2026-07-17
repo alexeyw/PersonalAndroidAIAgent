@@ -746,32 +746,44 @@ tasks.named("check") { dependsOn(verifyBrowserEditorConstants) }
 
 // Public documentation hygiene guard.
 //
-// Scans the tracked public-contour Markdown for two defect classes that are
-// cheap to introduce and expensive reputationally once the repo is announced:
-// leaked LLM tool-call wrapper artifacts, and references to internal-only
-// planning documents that external readers cannot see. The pure scanner lives
-// in `buildSrc` (`DocsHygieneChecker`) and is unit-tested there
-// (`./gradlew -p buildSrc test`). `CHANGELOG.md` is intentionally excluded — it
-// is a historical journal whose past entries may name internal documents as
-// they were called at the time.
-val docsHygieneRootFiles: Set<File> = setOf(
-    "README.md",
-    "SECURITY.md",
-    "CONTRIBUTING.md",
-    "CODE_OF_CONDUCT.md",
-    "NOTICE",
-    "FILE_MAP.md",
-).map { file("$rootDir/$it") }.filter { it.exists() }.toSet()
-val docsHygieneFiles: Set<File> =
-    docsHygieneRootFiles + fileTree("$rootDir/docs") { include("**/*.md") }.files
-
+// Scans the public-contour Markdown for two defect classes that are cheap to
+// introduce and expensive reputationally once the repo is announced: leaked LLM
+// tool-call wrapper artifacts, and references to internal-only planning
+// documents that external readers cannot see. The pure scanner lives in
+// `buildSrc` (`DocsHygieneChecker`) and is unit-tested there
+// (`./gradlew -p buildSrc test`).
+//
+// The root scope is a *glob* (`*.md`), not a hand-maintained allowlist, so a
+// newly added top-level public doc is guarded automatically. Two families are
+// excluded, both by design: `CHANGELOG.md` (a historical journal whose past
+// entries legitimately name internal documents as they were called at the
+// time) and the untracked, internal `CLAUDE.md` manifest family (which
+// deliberately references the private planning docs). `NOTICE` carries no `.md`
+// extension, so it is added explicitly when present.
+//
+// The file set and the root directory are resolved into *local* `val`s inside
+// the configuration block and captured by the task action as plain
+// `Set<File>` / `File` values, so the action never reaches back into the
+// `Project` or the build script object — keeping the task configuration-cache
+// compatible.
 val verifyDocsHygiene by tasks.registering {
     group = "verification"
     description =
         "Fails the build if public docs contain LLM tool-call artifacts or references to internal-only documents."
+    val rootDirForAction: File = rootDir
+    val docsHygieneFiles: Set<File> = buildSet {
+        addAll(
+            fileTree("$rootDir") {
+                include("*.md")
+                exclude("CHANGELOG.md", "CLAUDE.md", "CLAUDE.local.md")
+            }.files,
+        )
+        file("$rootDir/NOTICE").takeIf { it.exists() }?.let { add(it) }
+        addAll(fileTree("$rootDir/docs") { include("**/*.md") }.files)
+    }
     inputs.files(docsHygieneFiles)
     doLast {
-        val contents = docsHygieneFiles.associate { it.relativeTo(rootDir).path to it.readText() }
+        val contents = docsHygieneFiles.associate { it.relativeTo(rootDirForAction).path to it.readText() }
         val violations = DocsHygieneChecker.scan(contents)
         if (violations.isNotEmpty()) {
             throw GradleException(
