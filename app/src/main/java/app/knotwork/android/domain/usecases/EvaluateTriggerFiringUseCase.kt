@@ -5,6 +5,7 @@ import app.knotwork.android.domain.models.NetworkState
 import app.knotwork.android.domain.models.PowerState
 import app.knotwork.android.domain.models.Trigger
 import app.knotwork.android.domain.models.TriggerCondition
+import app.knotwork.android.domain.models.TriggerSkipReason
 import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -36,23 +37,6 @@ sealed interface TriggerFiringDecision {
      * @property reason Why it was skipped (for logging / tests).
      */
     data class Skip(val reason: TriggerSkipReason) : TriggerFiringDecision
-}
-
-/**
- * Why a trigger evaluation resulted in [TriggerFiringDecision.Skip].
- */
-enum class TriggerSkipReason {
-    /** The trigger is disabled. */
-    DISABLED,
-
-    /** The trigger has no bound pipeline (inert until bound). */
-    UNBOUND,
-
-    /** The condition is not currently satisfied (not charging, no network, or before the daily time). */
-    CONDITION_NOT_MET,
-
-    /** The condition is satisfied but the trigger already fired for it (interval window not elapsed, or still disarmed). */
-    ALREADY_FIRED,
 }
 
 /**

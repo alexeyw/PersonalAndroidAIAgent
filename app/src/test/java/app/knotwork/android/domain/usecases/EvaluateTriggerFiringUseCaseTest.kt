@@ -4,6 +4,7 @@ import app.knotwork.android.domain.models.NetworkState
 import app.knotwork.android.domain.models.PowerState
 import app.knotwork.android.domain.models.Trigger
 import app.knotwork.android.domain.models.TriggerCondition
+import app.knotwork.android.domain.models.TriggerSkipReason
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.time.Instant

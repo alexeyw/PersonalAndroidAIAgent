@@ -434,6 +434,45 @@ class AppDatabaseMigrationHelperTest {
         }
     }
 
+    @Test
+    fun migrate50to51_createsTriggerEvaluationsTableWithExpectedColumns() {
+        // The migration only adds a new table; the v50 contents are irrelevant,
+        // so seed a single trigger row just to have a populated starting DB.
+        helper.createDatabase(TEST_DB, 50).use { db ->
+            db.execSQL(
+                "INSERT INTO triggers(id, name, pipelineId, prompt, conditionJson, enabled, armed, createdAt) " +
+                    "VALUES('$TRIGGER_ID', 'Nightly', 'pipe-1', 'go', '{}', 1, 1, $CHUNK_TS)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 51, true, AppDatabase.MIGRATION_50_51).use { db ->
+            // Pre-existing trigger rows survive untouched.
+            db.query("SELECT name FROM triggers WHERE id = '$TRIGGER_ID'").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals("Nightly", c.getString(0))
+            }
+            // The new journal table round-trips a full fired-then-settled row.
+            db.execSQL(
+                "INSERT INTO trigger_evaluations(id, triggerId, evaluatedAt, source, verdictKind, " +
+                    "skipReason, runId, outcomeKind, outcomeError) " +
+                    "VALUES('ev-1', '$TRIGGER_ID', $CHUNK_TS, 'POLL', 'FIRED', NULL, 'run-1', 'FAILURE', 'boom')",
+            )
+            db.query(
+                "SELECT triggerId, source, verdictKind, skipReason, runId, outcomeKind, outcomeError " +
+                    "FROM trigger_evaluations WHERE id = 'ev-1'",
+            ).use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals(TRIGGER_ID, c.getString(0))
+                assertEquals("POLL", c.getString(1))
+                assertEquals("FIRED", c.getString(2))
+                assertTrue("skipReason is null for a fired verdict", c.isNull(3))
+                assertEquals("run-1", c.getString(4))
+                assertEquals("FAILURE", c.getString(5))
+                assertEquals("boom", c.getString(6))
+            }
+        }
+    }
+
     // ---------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------
@@ -474,5 +513,6 @@ class AppDatabaseMigrationHelperTest {
         const val CHUNK_EMBEDDING = "0.1,0.2,0.3"
         const val CHUNK_TS = 1_700_000_000_000L
         const val SESSION_ID = "session-mig"
+        const val TRIGGER_ID = "trigger-mig"
     }
 }

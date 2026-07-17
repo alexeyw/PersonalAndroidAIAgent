@@ -29,6 +29,13 @@ details.
   task (wired into `./gradlew check`, unit-tested in `buildSrc`) fails the
   build if any public-contour Markdown file reintroduces an LLM tool-call
   wrapper artifact or a reference to an internal-only planning document.
+- **Groundwork for a trigger-evaluation journal.** A new on-device,
+  SQLCipher-encrypted store records why each automation trigger did or did
+  not fire (fired / re-armed / a typed skip reason) and the eventual outcome
+  of every background run it started — the durable data behind upcoming
+  background-reliability diagnostics. Retained for 30 days (with a hard record
+  cap) and cleaned up in the existing daily maintenance window; nothing it
+  holds ever leaves the device.
 
 ## [0.6.0] - 2026-07-16
 

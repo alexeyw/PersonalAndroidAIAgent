@@ -7,6 +7,7 @@ import app.knotwork.android.domain.models.PowerState
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.Trigger
 import app.knotwork.android.domain.models.TriggerCondition
+import app.knotwork.android.domain.models.TriggerSkipReason
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.NetworkStateRepository
 import app.knotwork.android.domain.repositories.PipelineRepository

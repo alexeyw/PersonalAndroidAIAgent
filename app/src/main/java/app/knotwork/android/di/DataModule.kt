@@ -41,6 +41,7 @@ import app.knotwork.android.data.repositories.PromptRepositoryImpl
 import app.knotwork.android.data.repositories.RunTraceRepositoryImpl
 import app.knotwork.android.data.repositories.SkillRepositoryImpl
 import app.knotwork.android.data.repositories.ToolRepositoryImpl
+import app.knotwork.android.data.repositories.TriggerJournalRepositoryImpl
 import app.knotwork.android.data.repositories.TriggerRepositoryImpl
 import app.knotwork.android.data.repositories.UsageTelemetryRepositoryImpl
 import app.knotwork.android.data.services.LongRunningTaskNotifierImpl
@@ -73,6 +74,7 @@ import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.SkillRepository
 import app.knotwork.android.domain.repositories.ToolRepository
+import app.knotwork.android.domain.repositories.TriggerJournalRepository
 import app.knotwork.android.domain.repositories.TriggerRepository
 import app.knotwork.android.domain.repositories.UsageTelemetryRepository
 import app.knotwork.android.domain.services.AgentWorkspace
@@ -351,6 +353,14 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindTriggerRepository(repository: TriggerRepositoryImpl): TriggerRepository
+
+    /**
+     * Binds [TriggerJournalRepositoryImpl] to [TriggerJournalRepository] — the
+     * `trigger_evaluations` table backing the trigger-evaluation journal.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindTriggerJournalRepository(repository: TriggerJournalRepositoryImpl): TriggerJournalRepository
 
     /**
      * Binds the `WorkManager`-backed [WorkManagerTriggerScheduler] to the

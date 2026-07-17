@@ -7,9 +7,9 @@ import androidx.work.WorkerFactory
 import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import androidx.work.workDataOf
+import app.knotwork.android.domain.models.TriggerSkipReason
 import app.knotwork.android.domain.usecases.FireTriggerUseCase
 import app.knotwork.android.domain.usecases.TriggerFireOutcome
-import app.knotwork.android.domain.usecases.TriggerSkipReason
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
