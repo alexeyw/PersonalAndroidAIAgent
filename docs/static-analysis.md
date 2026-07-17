@@ -29,6 +29,8 @@ This invokes (transitively):
 | `:app:testFullDebugUnitTest`                      | JVM unit tests for the debug variant.                                   |
 | `:app:koverVerifyFullDebug`                       | Test-coverage threshold enforcement.                                    |
 | `:app:checkNoInternalFqn`                     | Custom rule: forbid `app.knotwork.android.*` FQN references in code body.   |
+| `:app:verifyBrowserEditorConstants`           | Fails if `pipeline-editor.html` `AUTO-GEN` blocks drift from the domain sources. |
+| `:app:verifyDocsHygiene`                      | Custom rule: guard the public docs against LLM tool-call artifacts and internal-document references (see below). |
 | `:app:testFullDebugUnitTest` (Konsist suite)      | Architecture guard: Clean-Architecture layer boundaries (see below).        |
 
 Pre-flight tip: run `./gradlew :app:ktlintFormat` first to auto-fix the
@@ -69,7 +71,7 @@ used.
 | `exceptions.TooGenericExceptionCaught` | disabled                     | LLM SDK / native / Android-IO call sites have an open exception surface.        |
 | `exceptions.SwallowedException`   | disabled                          | Catching → mapping to `Result.failure(domainError)` is the boundary contract.   |
 | `naming.FunctionNaming`           | `ignoreAnnotated: ['Composable']` | Compose convention is PascalCase.                                               |
-| `comments.UndocumentedPublic*`    | scoped to `domain/` and `data/repositories/` | Enforces the KDoc rule from `CLAUDE.md`.                                |
+| `comments.UndocumentedPublic*`    | scoped to `domain/` and `data/repositories/` | Enforces the project rule that public API in `domain/` and `data/repositories/` carries KDoc. |
 
 ### Adding an intentional suppression
 
@@ -209,6 +211,44 @@ The guard is regression-tested against the exact leak class it exists to
 catch: reintroducing a `domain -> data` import (or an `android.*` import in
 `domain`) turns both `LayerDependencyKonsistTest` and
 `DomainPurityKonsistTest` red — verified during the suite's introduction.
+
+---
+
+## Public documentation hygiene guard (`verifyDocsHygiene`)
+
+`:app:verifyDocsHygiene` is a custom Gradle verification task, wired into
+`check`, that scans the public-documentation contour — every top-level
+`*.md` file plus `NOTICE`, and everything under `docs/` — for two defect
+classes that are cheap to introduce and expensive once the repository is
+public. The root scope is a **glob**, not a hand-maintained allowlist, so a
+newly added top-level public doc is guarded automatically:
+
+1. **LLM tool-call wrapper artifacts** — stray fragments of an assistant's
+   tool-call envelope (closing wrapper tags, or the opening of a markup /
+   function-results block) that leak into a document when generated prose is
+   pasted verbatim. These are never valid Markdown.
+2. **References to internal-only documents** — links or mentions of the
+   project's private planning files (the roadmap plan, the full description,
+   the decision log, the phase backlog, the vision doc, the agent manifest)
+   or of the internal `project_docs` tree. External readers cannot see
+   them, so such a reference is always dangling.
+
+Two families are deliberately **excluded** from the root glob: `CHANGELOG.md`
+(a historical journal whose past entries legitimately name internal documents
+as they were called at the time — rewriting history to satisfy a lint rule
+would be worse than the dangling reference) and the untracked, internal
+`CLAUDE` agent-manifest family, which deliberately references the private
+planning docs. Internal-document filenames are matched only at a path/word
+boundary, so a longer name that merely contains one (for example an archive
+copy) does not trip the guard.
+
+The scanning logic is a pure `Map<path, content> -> List<Violation>`
+transform in `buildSrc`
+([`DocsHygieneChecker`](../buildSrc/src/main/kotlin/app/knotwork/android/buildtools/DocsHygieneChecker.kt)),
+so it is unit-tested there (`./gradlew -p buildSrc test`) with a fixture for
+every forbidden token and a clean-input case. The forbidden tokens are
+assembled from fragments at runtime so that neither the scanner's own source
+nor this document — which describes the tokens in prose — matches itself.
 
 ---
 

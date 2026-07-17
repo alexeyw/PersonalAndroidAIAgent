@@ -1,4 +1,5 @@
 import app.knotwork.android.buildtools.BrowserEditorConstantsGenerator
+import app.knotwork.android.buildtools.DocsHygieneChecker
 import dev.detekt.gradle.Detekt
 import java.util.Properties
 
@@ -742,6 +743,58 @@ val verifyBrowserEditorConstants by tasks.registering {
     }
 }
 tasks.named("check") { dependsOn(verifyBrowserEditorConstants) }
+
+// Public documentation hygiene guard.
+//
+// Scans the public-contour Markdown for two defect classes that are cheap to
+// introduce and expensive reputationally once the repo is announced: leaked LLM
+// tool-call wrapper artifacts, and references to internal-only planning
+// documents that external readers cannot see. The pure scanner lives in
+// `buildSrc` (`DocsHygieneChecker`) and is unit-tested there
+// (`./gradlew -p buildSrc test`).
+//
+// The root scope is a *glob* (`*.md`), not a hand-maintained allowlist, so a
+// newly added top-level public doc is guarded automatically. Two families are
+// excluded, both by design: `CHANGELOG.md` (a historical journal whose past
+// entries legitimately name internal documents as they were called at the
+// time) and the untracked, internal `CLAUDE.md` manifest family (which
+// deliberately references the private planning docs). `NOTICE` carries no `.md`
+// extension, so it is added explicitly when present.
+//
+// The file set and the root directory are resolved into *local* `val`s inside
+// the configuration block and captured by the task action as plain
+// `Set<File>` / `File` values, so the action never reaches back into the
+// `Project` or the build script object — keeping the task configuration-cache
+// compatible.
+val verifyDocsHygiene by tasks.registering {
+    group = "verification"
+    description =
+        "Fails the build if public docs contain LLM tool-call artifacts or references to internal-only documents."
+    val rootDirForAction: File = rootDir
+    val docsHygieneFiles: Set<File> = buildSet {
+        addAll(
+            fileTree("$rootDir") {
+                include("*.md")
+                exclude("CHANGELOG.md", "CLAUDE.md", "CLAUDE.local.md")
+            }.files,
+        )
+        file("$rootDir/NOTICE").takeIf { it.exists() }?.let { add(it) }
+        addAll(fileTree("$rootDir/docs") { include("**/*.md") }.files)
+    }
+    inputs.files(docsHygieneFiles)
+    doLast {
+        val contents = docsHygieneFiles.associate { it.relativeTo(rootDirForAction).path to it.readText() }
+        val violations = DocsHygieneChecker.scan(contents)
+        if (violations.isNotEmpty()) {
+            throw GradleException(
+                "Public documentation hygiene check failed " +
+                    "(${violations.size} violation(s)):\n" +
+                    violations.joinToString(separator = "\n") { it.format() },
+            )
+        }
+    }
+}
+tasks.named("check") { dependsOn(verifyDocsHygiene) }
 
 // Hilt/Dagger reads Kotlin metadata via `kotlin-metadata-jvm`, which is unshaded
 // since Dagger 2.57 and therefore resolved through Gradle. Each Kotlin bump raises

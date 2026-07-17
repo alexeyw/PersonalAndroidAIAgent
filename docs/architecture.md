@@ -1,7 +1,7 @@
 # Architecture
 
-This document is a developer-facing overview of the On-Device AI Agent for
-Android. It is intended for contributors and external readers who want to
+This document is a developer-facing overview of Knotwork, an on-device AI
+agent for Android. It is intended for contributors and external readers who want to
 understand the shape of the codebase without reading every file. For
 end-user guidance, see [`docs/user-guide.md`](user-guide.md); for recipes
 on adding new functionality, see [`docs/extending.md`](extending.md).
@@ -77,7 +77,8 @@ The presentation layer is hosted by a single `NavHost` declared in
   is `true`) → **Chat tab**. After onboarding, the flag is persisted as
   `false` so subsequent launches go straight to Chat.
 - Four top-level **tabs** rendered by `AppShellScaffold`'s Material3
-  `NavigationBar` (decisions.md §12): **Chat / Pipelines / Tools / More**.
+  `NavigationBar` — **Chat / Pipelines / Tools / More** — chosen over a
+  drawer so the primary destinations stay one tap away.
   Tab state — back-stack, scroll position, ViewModel state — is preserved
   across switches and rotations using the canonical
   `popUpTo(startDestination) { saveState = true } + restoreState = true`

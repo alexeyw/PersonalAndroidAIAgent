@@ -1,7 +1,8 @@
 # Testing
 
-This document describes the test strategy and tooling used across the
-project — what kinds of tests live where, how to run them, and what the
+This document describes the test strategy and tooling used across
+Knotwork, an on-device AI agent for Android — what kinds of tests live
+where, how to run them, and what the
 quality bar is. It covers both unit tests (`app/src/test/`) and Compose /
 instrumented tests (`app/src/androidTest/`).
 

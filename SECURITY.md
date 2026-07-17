@@ -1,7 +1,7 @@
 # Security Policy
 
-This document describes the security posture of the **On-Device AI Agent for
-Android** project: what data the app handles, how it is protected, what is sent
+This document describes the security posture of **Knotwork**, an on-device AI
+agent for Android: what data the app handles, how it is protected, what is sent
 off-device when the user opts in to crash reporting, and how to report a
 vulnerability you discover.
 

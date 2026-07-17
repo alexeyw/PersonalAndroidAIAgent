@@ -1,17 +1,18 @@
 # Contributing
 
-Thank you for taking an interest in the **On-Device AI Agent for Android**.
-This document covers everything you need to know to set up the project,
-make a change, and open a pull request.
+Thank you for taking an interest in **Knotwork**, an on-device AI agent for
+Android. This document covers everything you need to know to set up the
+project, make a change, and open a pull request.
 
 ## Pre-release notice
 
-The project is currently at version **0.4.0** and is published primarily
+The project is currently in pre-release and is published primarily
 for review and experimentation. Expect breaking changes between minor
 versions: the Kotlin public surface, pipeline JSON schema, on-device
 storage formats, and settings layout are **not** stability-guaranteed
 until `1.0.0`. See the *Pre-release notice* in [`README.md`](README.md) for
-details, and [`SECURITY.md`](SECURITY.md) for the security posture.
+the current version and details, and [`SECURITY.md`](SECURITY.md) for the
+security posture.
 
 ## Code of Conduct
 

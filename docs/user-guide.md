@@ -1,7 +1,7 @@
 # User Guide
 
-This guide is for people who installed the **On-Device AI Agent for
-Android** and want to learn how to use it. It walks through every
+This guide is for people who installed **Knotwork**, an on-device AI
+agent for Android, and want to learn how to use it. It walks through every
 screen the app provides and the user-facing flows that connect them.
 
 It is not a developer document. If you are looking for the internal
@@ -14,7 +14,7 @@ editor, pipeline library, tools, settings) live under
 [`docs/images/`](images/) and are rendered in the project README.
 Inline per-flow screenshots in this guide are placeholders pending a
 device-capture pass — the agent's surfaces are evolving fast enough
-between phases that hand-curated guide screenshots tend to go stale
+between releases that hand-curated guide screenshots tend to go stale
 before the next release ships.
 
 ---
