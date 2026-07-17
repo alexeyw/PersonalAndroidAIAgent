@@ -1,77 +1,100 @@
 package app.knotwork.design.screens.onboarding
 
 /**
- * Four-step pager state for the catalog `OnboardingContent` composable.
+ * Four-step scenario onboarding state for the catalog `OnboardingContent`
+ * composable. The flow leads with **value** ("choose what the agent will do for
+ * you") rather than the machine: the user picks a scenario, the app materialises
+ * the matching pipeline and downloads exactly the model that scenario needs.
  */
 enum class OnboardingStep(val pageIndex: Int, val indicatorLabel: String) {
     /** Welcome / brand pitch. Step 1. */
     Welcome(pageIndex = 0, indicatorLabel = "Welcome"),
 
-    /** Pick a LiteRT model to download — Gemma / Phi / Custom URL. Step 2. */
-    LiteRtModel(pageIndex = 1, indicatorLabel = "Pick a model"),
+    /** Value gallery — pick the scenario the agent should do for you. Step 2. */
+    ChooseScenario(pageIndex = 1, indicatorLabel = "Choose a scenario"),
 
-    /** Optional cloud provider keys. Step 3. */
-    CloudKeys(pageIndex = 2, indicatorLabel = "Optional cloud keys"),
+    /** Motivated download of the model the chosen scenario needs. Step 3. */
+    Download(pageIndex = 2, indicatorLabel = "Download"),
 
-    /** "You're ready" recap with the default pipeline preview. Step 4. */
-    Ready(pageIndex = 3, indicatorLabel = "You're ready"),
+    /** "Ready with your scenario" recap. Step 4. */
+    Ready(pageIndex = 3, indicatorLabel = "Ready"),
 }
 
 /**
- * LiteRT model offered on step 2. The id is the stable key the
- * `:app/OnboardingViewModel` persists to settings; the human-facing
- * label, size, and recommended flag come from the catalog so the row
- * presentation stays self-contained.
+ * A curated onboarding scenario rendered as a value card on the gallery step.
+ * The [id] is the stable key the `:app` layer resolves through
+ * `OnboardingScenarioCatalog` into a preset / entry-surface / model recipe; the
+ * copy (title, value line) is drawn from string resources in `OnboardingContent`
+ * so the design-system layer stays localisation-friendly.
+ *
+ * Rendering order is the enum order: Styled Translation leads (on-identity),
+ * Share Handler second, and the **featured** Virtual Companion is third — the
+ * featured treatment must never make it the first impression (VISION §2).
+ *
+ * @property id stable scenario id (matches the bundled preset filename stem and
+ *   the `:app` `OnboardingScenarioCatalog` id).
+ * @property requiredModel the LiteRT model the scenario needs; pre-selected on
+ *   the motivated-download step and framed as "needs this". Every curated
+ *   scenario targets Gemma 4 E4B — the smaller E2B stays reachable under
+ *   "Or choose another" as the genuinely lighter alternative.
+ * @property featured `true` for the highlighted card (accent border + "Most
+ *   popular" badge). Only Virtual Companion is featured.
+ * @property bindsShareSurface `true` when set-up binds the system Share sheet to
+ *   the materialised pipeline (Share Handler). Drives the card meta row and the
+ *   "Ready" entry-surface / safety rows.
  */
-enum class OnboardingLiteRtModel(
+enum class OnboardingScenario(
     val id: String,
-    val displayName: String,
-    val sizeLabel: String,
-    val recommended: Boolean,
+    val requiredModel: OnboardingLiteRtModel,
+    val featured: Boolean,
+    val bindsShareSurface: Boolean,
 ) {
-    /** Gemma 4 E2B — bundled starter, smallest footprint. */
-    Gemma4E2B(
-        id = "gemma_4_e2b",
-        displayName = "Gemma 4 E2B",
-        sizeLabel = "2.59 GB",
-        recommended = true,
+    /** On-device register/dialect-preserving translator. First / default card. */
+    StyledTranslation(
+        id = "styled_translation",
+        requiredModel = OnboardingLiteRtModel.Gemma4E4B,
+        featured = false,
+        bindsShareSurface = false,
     ),
 
-    /** Gemma 4 E4B — larger model with more headroom. */
-    Gemma4E4B(
-        id = "gemma_4_e4b",
-        displayName = "Gemma 4 E4B",
-        sizeLabel = "3.66 GB",
-        recommended = false,
+    /** Share-target capture → structured note in the inbox (HITL file write). */
+    ShareHandler(
+        id = "share_handler",
+        requiredModel = OnboardingLiteRtModel.Gemma4E4B,
+        featured = false,
+        bindsShareSurface = true,
     ),
 
-    /** User-supplied URL pointing at a `.litert` model bundle. */
-    CustomUrl(
-        id = "custom_url",
-        displayName = "Custom URL…",
-        sizeLabel = "paste",
-        recommended = false,
+    /** Mood-routing companion. Featured, but the third card (identity guardrail). */
+    VirtualCompanion(
+        id = "virtual_companion_mood_router",
+        requiredModel = OnboardingLiteRtModel.Gemma4E4B,
+        featured = true,
+        bindsShareSurface = false,
     ),
 }
 
 /**
- * Cloud provider surfaced on step 3. The id matches
- * `domain.models.CloudProvider.wireKey` so the onboarding pick flows
- * straight into the settings-repository slot.
+ * LiteRT model offered on the download step. The id is the stable key the
+ * `:app/OnboardingViewModel` persists to settings; the human-facing label and
+ * size come from the catalog so the row presentation stays self-contained.
  */
-enum class OnboardingCloudProvider(val id: String, val displayName: String) {
-    OpenAI(id = "openai", displayName = "OpenAI"),
-    Anthropic(id = "anthropic", displayName = "Anthropic"),
-    Google(id = "google", displayName = "Google"),
-    DeepSeek(id = "deepseek", displayName = "DeepSeek"),
-    Ollama(id = "ollama", displayName = "Ollama (local network)"),
+enum class OnboardingLiteRtModel(val id: String, val displayName: String, val sizeLabel: String) {
+    /** Gemma 4 E2B — smallest footprint; the lighter/faster alternative. */
+    Gemma4E2B(id = "gemma_4_e2b", displayName = "Gemma 4 E2B", sizeLabel = "2.59 GB"),
+
+    /** Gemma 4 E4B — the model every curated scenario targets. */
+    Gemma4E4B(id = "gemma_4_e4b", displayName = "Gemma 4 E4B", sizeLabel = "3.66 GB"),
+
+    /** User-supplied URL pointing at a `.litertlm` model bundle. */
+    CustomUrl(id = "custom_url", displayName = "Custom URL…", sizeLabel = "paste"),
 }
 
 /**
- * Compact projection of the default pipeline rendered on step 4. The
- * names render as monospace chips; [accentNodeName] gets the
- * `NodeIfCondition`-green outline to distinguish the routing node from
- * the rest of the flow.
+ * Compact projection of the materialised scenario pipeline rendered on the
+ * "Ready" step. The names render as monospace chips; [accentNodeName] gets the
+ * `NodeIfCondition`-green outline to distinguish a routing node from the rest of
+ * the flow.
  */
 data class OnboardingDefaultPipelinePreview(
     val nodes: List<String>,
@@ -84,35 +107,35 @@ data class OnboardingDefaultPipelinePreview(
  * Top-level immutable input to `OnboardingContent`.
  *
  * @property step current page index (0..3).
- * @property liteRtModel currently-selected model on step 2.
- * @property configuredCloudProviders ids of providers the user has
- * already configured (renders the "Configured" affordance instead of
- * "Configure").
- * @property defaultPipelinePreview compact recap of the bundled default
- * pipeline rendered on step 4. `null` is permitted for snapshot tests
- * that drive earlier steps.
- * @property downloadProgress current download progress on step 2.
- * `null` = idle (no download in flight), `0f..1f` = active download
- * (linear indicator overlays the picked row).
- * @property downloadError last download / load failure message, or
- * `null` when nothing has failed since the user last selected a model.
- * Rendered as an inline banner below the picker.
- * @property installedModelId stable catalog id of the model that is
- * already installed (either re-detected on entry or set after a
- * successful download). When non-`null` on step 2 the picked row shows
- * an "Installed" pill and the CTA becomes enabled.
+ * @property selectedScenario the scenario the user has picked on the gallery
+ * step, or `null` before a pick (the gallery CTA stays disabled until set).
+ * @property isSettingUpScenario `true` while the host materialises the picked
+ * scenario. Gallery interaction is suppressed and the CTA reads "Setting up…"
+ * so the wait is visible — an unresponsive-looking CTA is what drives users to
+ * tap again and again.
+ * @property liteRtModel currently-selected model on the download step. Defaults
+ * to the picked scenario's [OnboardingScenario.requiredModel]; the user can
+ * still switch to an alternative under "Or choose another".
+ * @property scenarioPreview compact recap of the materialised scenario pipeline
+ * rendered on the "Ready" step. `null` is permitted for snapshot tests driving
+ * earlier steps.
+ * @property downloadProgress current download progress on the download step.
+ * `null` = idle, `0f..1f` = active download.
+ * @property downloadError last download / load failure message, or `null`.
+ * @property installedModelId stable catalog id of the model already installed
+ * (re-detected on entry or set after a successful download). When non-`null` the
+ * download CTA becomes enabled.
  * @property customDownloadUrl user-supplied URL bound to the
- * `OnboardingLiteRtModel.CustomUrl` row; ignored for the bundled
- * presets.
- * @property isModelWarmed `true` once the host has loaded the model
- * into the inference engine. Gates the step-4 "Open chat" CTA so the
- * user cannot land in Chat with a cold handle.
+ * [OnboardingLiteRtModel.CustomUrl] row.
+ * @property isModelWarmed `true` once the host has loaded the model into the
+ * inference engine. Gates the "Ready" CTA so the user never lands in a cold chat.
  */
 data class OnboardingViewState(
     val step: OnboardingStep = OnboardingStep.Welcome,
-    val liteRtModel: OnboardingLiteRtModel = OnboardingLiteRtModel.Gemma4E2B,
-    val configuredCloudProviders: Set<String> = emptySet(),
-    val defaultPipelinePreview: OnboardingDefaultPipelinePreview? = null,
+    val selectedScenario: OnboardingScenario? = null,
+    val isSettingUpScenario: Boolean = false,
+    val liteRtModel: OnboardingLiteRtModel = OnboardingLiteRtModel.Gemma4E4B,
+    val scenarioPreview: OnboardingDefaultPipelinePreview? = null,
     val downloadProgress: Float? = null,
     val downloadError: String? = null,
     val installedModelId: String? = null,
@@ -120,34 +143,41 @@ data class OnboardingViewState(
     val isModelWarmed: Boolean = false,
 ) {
     /**
-     * Primary CTA enablement matrix. The step-2 CTA serves three roles
-     * depending on download state (the catalog renders distinct labels
-     * for each), so enablement has to follow the matching state:
-     *  - **Welcome / CloudKeys** — always enabled (cloud keys are
-     *    optional);
-     *  - **LiteRtModel — `Continue`** (model already on disk) — enabled
-     *    so the user can advance to step 3;
-     *  - **LiteRtModel — `Downloading…`** (download in flight) —
-     *    disabled, the CTA acts as a non-clickable status indicator and
-     *    re-tapping would be a no-op;
-     *  - **LiteRtModel — `Download {name}`** (no install yet, no
-     *    download in flight) — enabled for the bundled presets (the
-     *    URL is known); for the `CustomUrl` row it depends on whether
-     *    the user typed something in [customDownloadUrl];
-     *  - **Ready** — enabled only after the host has warmed the
-     *    inference handle, so chat will work on the first send.
+     * Primary CTA enablement matrix. The download-step CTA serves three roles
+     * depending on download state (the catalog renders distinct labels for
+     * each), so enablement has to follow the matching state:
+     *  - **Welcome** — always enabled (`Continue`);
+     *  - **ChooseScenario** — enabled once a scenario is picked (`Set up …`),
+     *    and disabled again while that set-up is in flight;
+     *  - **Download — `Continue`** (model already on disk) — enabled;
+     *  - **Download — `Downloading…`** (download in flight) — disabled;
+     *  - **Download — `Download {name}`** (no install, no download) — enabled
+     *    for the bundled presets; for the `CustomUrl` row it depends on
+     *    [customDownloadUrl];
+     *  - **Ready** — enabled once the host has warmed the inference handle
+     *    (so chat works on the first send), *or* when warm-up has failed
+     *    ([downloadError] set) so the CTA can offer a **Retry** instead of a
+     *    permanently-disabled "Preparing…".
      */
     val isPrimaryCtaEnabled: Boolean
         get() = when (step) {
-            OnboardingStep.Welcome, OnboardingStep.CloudKeys -> true
-            OnboardingStep.LiteRtModel -> when {
+            OnboardingStep.Welcome -> true
+            OnboardingStep.ChooseScenario -> selectedScenario != null && !isSettingUpScenario
+            OnboardingStep.Download -> when {
                 installedModelId != null -> true
                 downloadProgress != null -> false
                 liteRtModel == OnboardingLiteRtModel.CustomUrl -> customDownloadUrl.isNotBlank()
                 else -> true
             }
-            OnboardingStep.Ready -> isModelWarmed
+            OnboardingStep.Ready -> isModelWarmed || downloadError != null
         }
+
+    /**
+     * `true` on the "Ready" step when warm-up has failed — the CTA becomes an
+     * enabled **Retry** and the recap surfaces the error banner, so a failed
+     * warm never dead-ends the flow behind a disabled "Preparing…".
+     */
+    val isReadyWarmUpRetryable: Boolean get() = step == OnboardingStep.Ready && !isModelWarmed && downloadError != null
 
     /** Convenience: are we on the final step? */
     val isFinalStep: Boolean get() = step == OnboardingStep.Ready
@@ -162,18 +192,37 @@ class OnboardingCallbacks(
     val onBack: () -> Unit = {},
     val onSkip: () -> Unit = {},
     val onFinish: () -> Unit = {},
-    val onLiteRtModelPick: (OnboardingLiteRtModel) -> Unit = {},
-    val onConfigureCloudProvider: (OnboardingCloudProvider) -> Unit = {},
+    /** Invoked when the user selects a scenario card on the gallery step. */
+    val onScenarioPick: (OnboardingScenario) -> Unit = {},
     /**
-     * Invoked when the user taps the step-2 CTA to begin a model
-     * download. The host (`OnboardingViewModel`) resolves the picked
-     * model to its URL / filename and starts the download stream.
+     * Invoked by the gallery CTA ("Set up {Scenario}"). The host materialises
+     * the picked scenario's pipeline, binds its surface, and advances to the
+     * motivated-download step.
+     */
+    val onSetUpScenario: () -> Unit = {},
+    /**
+     * Invoked by the trailing "Start from scratch" escape card. The host
+     * completes onboarding without materialising a scenario and lands the user
+     * in the app to build their own pipeline.
+     */
+    val onStartFromScratch: () -> Unit = {},
+    val onLiteRtModelPick: (OnboardingLiteRtModel) -> Unit = {},
+    /**
+     * Invoked by the "Ready" CTA when warm-up has failed
+     * ([OnboardingViewState.isReadyWarmUpRetryable]) — the host clears the
+     * error and re-runs the model warm-up.
+     */
+    val onRetryWarmUp: () -> Unit = {},
+    /**
+     * Invoked when the user taps the download-step CTA to begin a model
+     * download. The host resolves the picked model to its URL / filename and
+     * starts the download stream.
      */
     val onStartDownload: () -> Unit = {},
     /**
-     * Invoked on every character change in the `Custom URL` input. The
-     * host stores the latest value in `customDownloadUrl` and uses it
-     * when [onStartDownload] fires for the `CustomUrl` row.
+     * Invoked on every character change in the `Custom URL` input. The host
+     * stores the latest value in `customDownloadUrl` and uses it when
+     * [onStartDownload] fires for the `CustomUrl` row.
      */
     val onCustomDownloadUrlChanged: (String) -> Unit = {},
 )

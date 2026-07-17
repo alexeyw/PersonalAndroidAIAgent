@@ -16,8 +16,8 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Roborazzi snapshot baseline for `OnboardingContent` across the 4 steps in
- * both themes.
+ * Roborazzi snapshot baseline for the scenario `OnboardingContent` across the
+ * value-gallery, motivated-download, and ready states, in both themes.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -27,83 +27,123 @@ class OnboardingContentSnapshotTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun onboarding_step1_welcome_light() = snapshot(name = "step1_welcome", dark = false) {
+    fun onboarding_welcome_light() = snapshot(name = "welcome", dark = false) {
         OnboardingContent(state = OnboardingPreview.welcome())
     }
 
     @Test
-    fun onboarding_step1_welcome_dark() = snapshot(name = "step1_welcome", dark = true) {
+    fun onboarding_welcome_dark() = snapshot(name = "welcome", dark = true) {
         OnboardingContent(state = OnboardingPreview.welcome())
     }
 
     @Test
-    fun onboarding_step2_lite_rt_light() = snapshot(name = "step2_lite_rt", dark = false) {
-        OnboardingContent(state = OnboardingPreview.liteRtModel())
+    fun onboarding_scenario_light() = snapshot(name = "scenario", dark = false) {
+        OnboardingContent(state = OnboardingPreview.chooseScenario())
     }
 
     @Test
-    fun onboarding_step2_lite_rt_dark() = snapshot(name = "step2_lite_rt", dark = true) {
-        OnboardingContent(state = OnboardingPreview.liteRtModel())
+    fun onboarding_scenario_dark() = snapshot(name = "scenario", dark = true) {
+        OnboardingContent(state = OnboardingPreview.chooseScenario())
     }
 
     @Test
-    fun onboarding_step3_cloud_keys_light() = snapshot(name = "step3_cloud_keys", dark = false) {
-        OnboardingContent(state = OnboardingPreview.cloudKeys())
+    fun onboarding_scenario_picked_light() = snapshot(name = "scenario_picked", dark = false) {
+        OnboardingContent(state = OnboardingPreview.chooseScenarioPicked())
     }
 
     @Test
-    fun onboarding_step3_cloud_keys_dark() = snapshot(name = "step3_cloud_keys", dark = true) {
-        OnboardingContent(state = OnboardingPreview.cloudKeys())
+    fun onboarding_scenario_picked_dark() = snapshot(name = "scenario_picked", dark = true) {
+        OnboardingContent(state = OnboardingPreview.chooseScenarioPicked())
     }
 
     @Test
-    fun onboarding_step4_ready_light() = snapshot(name = "step4_ready", dark = false) {
-        OnboardingContent(state = OnboardingPreview.ready())
+    fun onboarding_download_light() = snapshot(name = "download", dark = false) {
+        OnboardingContent(state = OnboardingPreview.download())
     }
 
     @Test
-    fun onboarding_step4_ready_dark() = snapshot(name = "step4_ready", dark = true) {
-        OnboardingContent(state = OnboardingPreview.ready())
+    fun onboarding_download_dark() = snapshot(name = "download", dark = true) {
+        OnboardingContent(state = OnboardingPreview.download())
     }
 
     @Test
-    fun onboarding_step2_downloading_light() = snapshot(name = "step2_downloading", dark = false) {
-        OnboardingContent(state = OnboardingPreview.liteRtDownloading())
+    fun onboarding_downloading_light() = snapshot(name = "downloading", dark = false) {
+        OnboardingContent(state = OnboardingPreview.downloading())
     }
 
     @Test
-    fun onboarding_step2_downloading_dark() = snapshot(name = "step2_downloading", dark = true) {
-        OnboardingContent(state = OnboardingPreview.liteRtDownloading())
+    fun onboarding_downloading_dark() = snapshot(name = "downloading", dark = true) {
+        OnboardingContent(state = OnboardingPreview.downloading())
     }
 
     @Test
-    fun onboarding_step2_download_error_light() = snapshot(name = "step2_download_error", dark = false) {
-        OnboardingContent(state = OnboardingPreview.liteRtDownloadError())
+    fun onboarding_download_error_light() = snapshot(name = "download_error", dark = false) {
+        OnboardingContent(state = OnboardingPreview.downloadError())
     }
 
     @Test
-    fun onboarding_step2_download_error_dark() = snapshot(name = "step2_download_error", dark = true) {
-        OnboardingContent(state = OnboardingPreview.liteRtDownloadError())
+    fun onboarding_download_error_dark() = snapshot(name = "download_error", dark = true) {
+        OnboardingContent(state = OnboardingPreview.downloadError())
     }
 
     @Test
-    fun onboarding_step2_custom_url_light() = snapshot(name = "step2_custom_url", dark = false) {
-        OnboardingContent(state = OnboardingPreview.liteRtCustomUrlInput())
+    fun onboarding_download_custom_url_light() = snapshot(name = "download_custom_url", dark = false) {
+        OnboardingContent(state = OnboardingPreview.downloadCustomUrl())
     }
 
     @Test
-    fun onboarding_step2_custom_url_dark() = snapshot(name = "step2_custom_url", dark = true) {
-        OnboardingContent(state = OnboardingPreview.liteRtCustomUrlInput())
+    fun onboarding_download_custom_url_dark() = snapshot(name = "download_custom_url", dark = true) {
+        OnboardingContent(state = OnboardingPreview.downloadCustomUrl())
     }
 
     @Test
-    fun onboarding_step4_model_ready_light() = snapshot(name = "step4_model_ready", dark = false) {
-        OnboardingContent(state = OnboardingPreview.readyModelReady())
+    fun onboarding_download_installed_light() = snapshot(name = "download_installed", dark = false) {
+        OnboardingContent(state = OnboardingPreview.downloadInstalled())
     }
 
     @Test
-    fun onboarding_step4_model_ready_dark() = snapshot(name = "step4_model_ready", dark = true) {
-        OnboardingContent(state = OnboardingPreview.readyModelReady())
+    fun onboarding_download_installed_dark() = snapshot(name = "download_installed", dark = true) {
+        OnboardingContent(state = OnboardingPreview.downloadInstalled())
+    }
+
+    @Test
+    fun onboarding_ready_warming_light() = snapshot(name = "ready_warming", dark = false) {
+        OnboardingContent(state = OnboardingPreview.readyWarming())
+    }
+
+    @Test
+    fun onboarding_ready_warming_dark() = snapshot(name = "ready_warming", dark = true) {
+        OnboardingContent(state = OnboardingPreview.readyWarming())
+    }
+
+    @Test
+    fun onboarding_ready_styled_light() = snapshot(name = "ready_styled", dark = false) {
+        OnboardingContent(state = OnboardingPreview.readyStyled())
+    }
+
+    @Test
+    fun onboarding_ready_styled_dark() = snapshot(name = "ready_styled", dark = true) {
+        OnboardingContent(state = OnboardingPreview.readyStyled())
+    }
+
+    @Test
+    fun onboarding_ready_share_light() = snapshot(name = "ready_share", dark = false) {
+        OnboardingContent(state = OnboardingPreview.readyShare())
+    }
+
+    @Test
+    fun onboarding_ready_share_dark() = snapshot(name = "ready_share", dark = true) {
+        OnboardingContent(state = OnboardingPreview.readyShare())
+    }
+
+    @Test
+    fun onboarding_ready_warm_error_light() = snapshot(name = "ready_warm_error", dark = false) {
+        OnboardingContent(state = OnboardingPreview.readyWarmError())
+    }
+
+    @Test
+    fun onboarding_ready_warm_error_dark() = snapshot(name = "ready_warm_error", dark = true) {
+        OnboardingContent(state = OnboardingPreview.readyWarmError())
     }
 
     private fun snapshot(name: String, dark: Boolean, content: @Composable () -> Unit) {
@@ -122,67 +162,99 @@ class OnboardingContentSnapshotTest {
 /** Internal preview fixtures backing the onboarding snapshot suite. */
 internal object OnboardingPreview {
 
-    fun welcome(): OnboardingViewState = OnboardingViewState(
-        step = OnboardingStep.Welcome,
-        defaultPipelinePreview = defaultPipelinePreview(),
+    fun welcome(): OnboardingViewState = OnboardingViewState(step = OnboardingStep.Welcome)
+
+    fun chooseScenario(): OnboardingViewState = OnboardingViewState(step = OnboardingStep.ChooseScenario)
+
+    fun chooseScenarioPicked(): OnboardingViewState = OnboardingViewState(
+        step = OnboardingStep.ChooseScenario,
+        selectedScenario = OnboardingScenario.StyledTranslation,
+        liteRtModel = OnboardingLiteRtModel.Gemma4E4B,
     )
 
-    fun liteRtModel(): OnboardingViewState = OnboardingViewState(
-        step = OnboardingStep.LiteRtModel,
-        liteRtModel = OnboardingLiteRtModel.Gemma4E2B,
-        defaultPipelinePreview = defaultPipelinePreview(),
+    fun download(): OnboardingViewState = OnboardingViewState(
+        step = OnboardingStep.Download,
+        selectedScenario = OnboardingScenario.StyledTranslation,
+        liteRtModel = OnboardingLiteRtModel.Gemma4E4B,
     )
 
-    fun cloudKeys(): OnboardingViewState = OnboardingViewState(
-        step = OnboardingStep.CloudKeys,
-        defaultPipelinePreview = defaultPipelinePreview(),
-    )
+    fun downloading(): OnboardingViewState = download().copy(downloadProgress = DOWNLOAD_PROGRESS_FIXTURE)
 
-    fun ready(): OnboardingViewState = OnboardingViewState(
-        step = OnboardingStep.Ready,
-        defaultPipelinePreview = defaultPipelinePreview(),
-    )
+    fun downloadError(): OnboardingViewState = download().copy(downloadError = DOWNLOAD_ERROR_FIXTURE)
 
-    /** Step 2 — active download (mid-progress) on the recommended row. */
-    fun liteRtDownloading(): OnboardingViewState = OnboardingViewState(
-        step = OnboardingStep.LiteRtModel,
-        liteRtModel = OnboardingLiteRtModel.Gemma4E2B,
-        downloadProgress = DOWNLOAD_PROGRESS_FIXTURE,
-        defaultPipelinePreview = defaultPipelinePreview(),
-    )
-
-    /** Step 2 — error banner surfaced beneath the picker. */
-    fun liteRtDownloadError(): OnboardingViewState = OnboardingViewState(
-        step = OnboardingStep.LiteRtModel,
-        liteRtModel = OnboardingLiteRtModel.Gemma4E2B,
-        downloadError = DOWNLOAD_ERROR_FIXTURE,
-        defaultPipelinePreview = defaultPipelinePreview(),
-    )
-
-    /** Step 2 — `Custom URL…` row expanded with a populated input field. */
-    fun liteRtCustomUrlInput(): OnboardingViewState = OnboardingViewState(
-        step = OnboardingStep.LiteRtModel,
+    fun downloadCustomUrl(): OnboardingViewState = download().copy(
         liteRtModel = OnboardingLiteRtModel.CustomUrl,
         customDownloadUrl = CUSTOM_URL_FIXTURE,
-        defaultPipelinePreview = defaultPipelinePreview(),
     )
 
-    /** Step 4 — recap with a freshly-installed and warmed model. */
-    fun readyModelReady(): OnboardingViewState = OnboardingViewState(
+    fun downloadInstalled(): OnboardingViewState = download().copy(
+        installedModelId = OnboardingLiteRtModel.Gemma4E4B.id,
+    )
+
+    /** Ready — Virtual Companion, model still warming. */
+    fun readyWarming(): OnboardingViewState = OnboardingViewState(
         step = OnboardingStep.Ready,
-        installedModelId = OnboardingLiteRtModel.Gemma4E2B.id,
+        selectedScenario = OnboardingScenario.VirtualCompanion,
+        liteRtModel = OnboardingLiteRtModel.Gemma4E4B,
+        scenarioPreview = companionPreview(),
+        installedModelId = OnboardingLiteRtModel.Gemma4E4B.id,
+        isModelWarmed = false,
+    )
+
+    /** Ready — Styled Translation, warmed. */
+    fun readyStyled(): OnboardingViewState = OnboardingViewState(
+        step = OnboardingStep.Ready,
+        selectedScenario = OnboardingScenario.StyledTranslation,
+        liteRtModel = OnboardingLiteRtModel.Gemma4E4B,
+        scenarioPreview = styledPreview(),
+        installedModelId = OnboardingLiteRtModel.Gemma4E4B.id,
         isModelWarmed = true,
-        defaultPipelinePreview = defaultPipelinePreview(),
+    )
+
+    /** Ready — Share Handler, warmed (shows the entry-surface + safety rows). */
+    fun readyShare(): OnboardingViewState = OnboardingViewState(
+        step = OnboardingStep.Ready,
+        selectedScenario = OnboardingScenario.ShareHandler,
+        liteRtModel = OnboardingLiteRtModel.Gemma4E4B,
+        scenarioPreview = sharePreview(),
+        installedModelId = OnboardingLiteRtModel.Gemma4E4B.id,
+        isModelWarmed = true,
+    )
+
+    /** Ready — warm-up failed: error banner + retry CTA, not a silent dead-end. */
+    fun readyWarmError(): OnboardingViewState = OnboardingViewState(
+        step = OnboardingStep.Ready,
+        selectedScenario = OnboardingScenario.StyledTranslation,
+        liteRtModel = OnboardingLiteRtModel.Gemma4E4B,
+        scenarioPreview = styledPreview(),
+        installedModelId = OnboardingLiteRtModel.Gemma4E4B.id,
+        isModelWarmed = false,
+        downloadError = "Couldn't load the model. Check storage and retry.",
     )
 
     private const val DOWNLOAD_PROGRESS_FIXTURE: Float = 0.42f
     private const val DOWNLOAD_ERROR_FIXTURE: String = "Connection lost. Retry?"
-    private const val CUSTOM_URL_FIXTURE: String = "https://huggingface.co/example/model.task"
+    private const val CUSTOM_URL_FIXTURE: String = "https://huggingface.co/example/model.litertlm"
 
-    private fun defaultPipelinePreview(): OnboardingDefaultPipelinePreview = OnboardingDefaultPipelinePreview(
-        nodes = listOf("INPUT", "LITE_RT", "IF", "TOOL", "LITE_RT", "OUTPUT"),
-        nodeCount = 6,
-        edgeCount = 7,
-        accentNodeName = "IF",
+    private fun styledPreview(): OnboardingDefaultPipelinePreview = OnboardingDefaultPipelinePreview(
+        nodes = listOf("INPUT", "LITE_RT", "OUTPUT"),
+        nodeCount = 3,
+        edgeCount = 2,
+    )
+
+    private fun sharePreview(): OnboardingDefaultPipelinePreview = OnboardingDefaultPipelinePreview(
+        nodes = listOf("INPUT", "LITE_RT", "TOOL", "OUTPUT"),
+        nodeCount = 4,
+        edgeCount = 3,
+    )
+
+    private fun companionPreview(): OnboardingDefaultPipelinePreview = OnboardingDefaultPipelinePreview(
+        nodes = listOf(
+            "INPUT", "LITE_RT", "INTENT_ROUTER",
+            "LITE_RT", "LITE_RT", "LITE_RT", "LITE_RT", "LITE_RT", "OUTPUT",
+        ),
+        nodeCount = 9,
+        edgeCount = 12,
+        accentNodeName = "INTENT_ROUTER",
     )
 }

@@ -75,7 +75,7 @@ class ChatHomeSendFlowTest {
 
         // Step 2 — flip to Generating; the loader bubble appears in the body
         // and the composer's trailing action morphs to the stop affordance.
-        handles.setVisual(ChatHomeUiState.Generating)
+        handles.setVisual(ChatHomeUiState.Generating())
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText(generatingLabel).assertIsDisplayed()
         val stopCd = ctx.getString(KnotworkR.string.knotwork_composer_stop)
@@ -85,7 +85,7 @@ class ChatHomeSendFlowTest {
     @Test
     fun stateFlipsGeneratingThenIdle_composerReturnsToSend() {
         val (viewModel, handles) = mockChatHomeViewModel(
-            initialState = ChatHomeUiState.Generating,
+            initialState = ChatHomeUiState.Generating(),
             initialComposerValue = "queued next turn",
         )
 
@@ -109,7 +109,7 @@ class ChatHomeSendFlowTest {
     @Test
     fun stopIcon_tap_invokesStopGeneration() {
         val (viewModel, _) = mockChatHomeViewModel(
-            initialState = ChatHomeUiState.Generating,
+            initialState = ChatHomeUiState.Generating(),
         )
 
         composeTestRule.setContent {

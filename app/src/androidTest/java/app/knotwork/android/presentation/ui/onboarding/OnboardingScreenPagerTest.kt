@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.platform.app.InstrumentationRegistry
+import app.knotwork.design.screens.onboarding.OnboardingScenario
 import app.knotwork.design.screens.onboarding.OnboardingStep
 import app.knotwork.design.screens.onboarding.OnboardingViewState
 import io.mockk.verify
@@ -32,7 +33,7 @@ class OnboardingScreenPagerTest {
 
         composeTestRule.setContent {
             MaterialTheme {
-                OnboardingScreen(onCompleted = {}, onConfigureProvider = {}, viewModel = vm)
+                OnboardingScreen(onCompleted = {}, viewModel = vm)
             }
         }
 
@@ -48,7 +49,7 @@ class OnboardingScreenPagerTest {
 
         composeTestRule.setContent {
             MaterialTheme {
-                OnboardingScreen(onCompleted = {}, onConfigureProvider = {}, viewModel = vm)
+                OnboardingScreen(onCompleted = {}, viewModel = vm)
             }
         }
 
@@ -69,7 +70,6 @@ class OnboardingScreenPagerTest {
             MaterialTheme {
                 OnboardingScreen(
                     onCompleted = { completed += 1 },
-                    onConfigureProvider = {},
                     viewModel = vm,
                 )
             }
@@ -101,7 +101,6 @@ class OnboardingScreenPagerTest {
             MaterialTheme {
                 OnboardingScreen(
                     onCompleted = { completed += 1 },
-                    onConfigureProvider = {},
                     viewModel = vm,
                 )
             }
@@ -109,7 +108,7 @@ class OnboardingScreenPagerTest {
 
         val ctx = InstrumentationRegistry.getInstrumentation().targetContext
         val skipLabel = ctx.getString(KnotworkR.string.knotwork_onboarding_skip)
-        val openChatLabel = ctx.getString(KnotworkR.string.knotwork_onboarding_ready_cta)
+        val openChatLabel = ctx.getString(KnotworkR.string.knotwork_onboarding_ready_open_generic_cta)
 
         // Skip is suppressed on the final step — committing happens via the
         // primary CTA only.
@@ -119,5 +118,36 @@ class OnboardingScreenPagerTest {
 
         verify(exactly = 1) { vm.finishOnboarding() }
         assertEquals("onCompleted should fire exactly once on finish", 1, completed)
+    }
+
+    @Test
+    fun scenarioStep_tapCard_picksScenario_andSetUpCtaMaterialises() {
+        val (vm, _) = mockOnboardingViewModel(
+            initialState = OnboardingViewState(
+                step = OnboardingStep.ChooseScenario,
+                selectedScenario = OnboardingScenario.StyledTranslation,
+            ),
+        )
+
+        composeTestRule.setContent {
+            MaterialTheme {
+                OnboardingScreen(onCompleted = {}, viewModel = vm)
+            }
+        }
+
+        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+        val companionTitle = ctx.getString(KnotworkR.string.knotwork_onboarding_scenario_companion_title)
+        val setUpCta = ctx.getString(
+            KnotworkR.string.knotwork_onboarding_scenario_cta_setup,
+            ctx.getString(KnotworkR.string.knotwork_onboarding_scenario_translate_title),
+        )
+
+        // Tapping a scenario card records the pick.
+        composeTestRule.onNodeWithText(text = companionTitle).performClick()
+        verify(exactly = 1) { vm.pickScenario(OnboardingScenario.VirtualCompanion) }
+
+        // The "Set up {scenario}" CTA materialises the picked scenario.
+        composeTestRule.onNodeWithText(text = setUpCta).performClick()
+        verify(exactly = 1) { vm.setUpScenario() }
     }
 }

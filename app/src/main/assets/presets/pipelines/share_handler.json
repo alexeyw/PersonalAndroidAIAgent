@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 1,
+  "id": "share_handler",
+  "name": "Share Handler",
+  "description": "Share anything to the agent and it becomes a clean, structured note in your inbox. Asks before writing files.",
+  "category": "tool",
+  "tags": ["capture", "share", "tools"],
+  "updatedAt": 1784040821000,
+  "nodes": [
+    {
+      "id": "node-1",
+      "type": "INPUT",
+      "position": { "x": 80.0, "y": 220.0 },
+      "label": "Shared content",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      }
+    },
+    {
+      "id": "node-2",
+      "type": "LITE_RT",
+      "position": { "x": 320.0, "y": 220.0 },
+      "label": "Structure",
+      "config": {
+        "systemPrompt": "You capture shared content into the user's workspace. Read the shared text in your input. Output STRICTLY one JSON object and nothing else, with exactly two string keys. The first key is path and its value is exactly inbox/captures.md. The second key is content: a Markdown block that begins with a newline, then a level-two heading with a short descriptive title for the item, then 3 to 6 concise bullet points capturing the key information, and if the text implies any tasks, a line with the bold text 'Action items:' followed by those tasks as bullets, then a trailing newline. Use only what the input actually says; never invent facts. Write in the user's language ($LANG). Output only the JSON object.",
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      }
+    },
+    {
+      "id": "node-3",
+      "type": "TOOL",
+      "position": { "x": 560.0, "y": 220.0 },
+      "label": "Save capture",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": "append_file",
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      }
+    },
+    {
+      "id": "node-4",
+      "type": "OUTPUT",
+      "position": { "x": 800.0, "y": 220.0 },
+      "label": "Confirm",
+      "config": {
+        "systemPrompt": "Your input confirms text was appended to a file, like: Appended N bytes to 'inbox/captures.md'. Reply with one short line telling the user the shared item was captured to their workspace inbox. If the input is instead an error message, relay it plainly in one sentence. Add nothing else.",
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      }
+    }
+  ],
+  "connections": [
+    { "id": "conn-1", "fromNodeId": "node-1", "toNodeId": "node-2", "label": null },
+    { "id": "conn-2", "fromNodeId": "node-2", "toNodeId": "node-3", "label": null },
+    { "id": "conn-3", "fromNodeId": "node-3", "toNodeId": "node-4", "label": null }
+  ]
+}

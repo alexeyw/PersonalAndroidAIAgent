@@ -39,8 +39,19 @@ before the next release ships.
 
 ## Getting started
 
-The first time you launch the app you go through a brief onboarding
-screen, then land on the Chat tab.
+The first time you launch the app you go through a short onboarding
+flow, then land on the Chat tab. Instead of asking you to assemble a
+pipeline up front, onboarding leads with **what the agent should do for
+you**: you pick one of a few ready-made scenarios — a styled translator,
+a share-to-capture handler, or a mood-aware companion — and the app sets
+up everything that scenario needs. It materialises the matching pipeline
+as your default, wires any surface it uses (the share handler starts
+listening on the system Share sheet), and downloads exactly the model
+that scenario requires, showing the size and live progress so the wait
+is a known one. When the model has finished warming, the final step
+opens your scenario straight into a working chat. Prefer to build your
+own? The gallery's **Start from scratch** card skips the scenario and
+drops you into the app to wire a pipeline node by node.
 
 The bottom of the screen always shows the four navigation tabs:
 
@@ -54,8 +65,12 @@ The Back gesture returns you up the inner stack of the current tab.
 While you are on the start screen of a tab, Back closes the app — it
 does not switch between tabs.
 
-The first time you open the app, there is no model loaded yet — you
-need to download one before you can talk to the agent.
+If you picked a scenario during onboarding, the model it needs is
+already downloading (or ready) and you can skip straight to chatting.
+This section covers the Models screen directly — use it when you chose
+**Start from scratch**, or any time you want to add, switch, or manage
+models. Talking to the agent always needs at least one model on the
+device.
 
 ### 1. Open the Models screen
 
@@ -765,9 +780,12 @@ device. The active pipeline is highlighted; sending a message uses
 whichever pipeline is bound to the current chat (or the default
 pipeline if the chat has no explicit binding).
 
-On the very first launch the app seeds one pipeline for you — a
-**showcase** graph materialised from the bundled `showcase_full_agent`
-preset and marked as the default. It triages each message into
+On the very first launch the app seeds a **showcase** graph into your
+library, materialised from the bundled `showcase_full_agent` preset. It
+is the default pipeline unless you pick a scenario during onboarding — in
+which case that scenario's pipeline is added and becomes the default
+instead, while the showcase stays in your library to explore. It triages
+each message into
 **chat**, **factual** or **task** and runs a tailored branch: a quick
 on-device reply for chat; a Wikipedia-grounded lookup for factual
 questions (with a complexity gate that can break hard questions into a

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Scenario tile for Share Handler (onboarding value gallery).
+  Multi-tone illustration: a note card with lines and an incoming "share" chip
+  dropping into it, reading as "incoming → structured note." 64dp tile.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+
+    <!-- Tile background + hairline border -->
+    <path
+        android:pathData="M14,0 L50,0 A14,14 0 0 1 64,14 L64,50 A14,14 0 0 1 50,64 L14,64 A14,14 0 0 1 0,50 L0,14 A14,14 0 0 1 14,0 Z"
+        android:fillColor="#DCEAF4"
+        android:strokeColor="#805C93BE"
+        android:strokeWidth="1" />
+
+    <!-- Note card -->
+    <path
+        android:pathData="M20,24 L44,24 A4,4 0 0 1 48,28 L48,48 A4,4 0 0 1 44,52 L20,52 A4,4 0 0 1 16,48 L16,28 A4,4 0 0 1 20,24 Z"
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#2F6E9C"
+        android:strokeWidth="1.4" />
+
+    <!-- Note lines -->
+    <path
+        android:pathData="M22.3,32.3 L35.7,32.3"
+        android:strokeColor="#3E7CB1"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M22.3,38.3 L42.3,38.3"
+        android:strokeColor="#AEC6DA"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M22.3,44.3 L33.7,44.3"
+        android:strokeColor="#AEC6DA"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round" />
+
+    <!-- Incoming share chip -->
+    <path
+        android:pathData="M26,10 L38,10 A3,3 0 0 1 41,13 L41,18 A3,3 0 0 1 38,21 L26,21 A3,3 0 0 1 23,18 L23,13 A3,3 0 0 1 26,10 Z"
+        android:fillColor="#3E7CB1" />
+    <path
+        android:pathData="M32,21 L32,25 M29,22.5 L32,25 L35,22.5"
+        android:strokeColor="#3E7CB1"
+        android:strokeWidth="1.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

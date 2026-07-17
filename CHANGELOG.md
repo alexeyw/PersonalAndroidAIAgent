@@ -13,8 +13,26 @@ details.
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-16
+
 ### Added
 
+- **Onboarding leads with value, not the machine — a scenario gallery.**
+  First-launch onboarding now opens with *"what should your agent do for
+  you?"* and a small gallery of ready-made scenarios — **Styled Translation**
+  (an on-device translator that keeps a message's tone, register and dialect),
+  **Share Handler** (share anything and it becomes a structured note in your
+  inbox, confirming before it writes), and a featured **Virtual Companion**
+  (a mood-aware chat). Picking one sets up everything it needs in a single tap:
+  the matching pipeline is materialised as your default, its entry surface is
+  wired where it uses one (Share Handler starts listening on the system Share
+  sheet), and **exactly the model that scenario needs** is downloaded — framed
+  with its size and live progress so the wait is a known one rather than a
+  frozen screen. The final step opens straight into a working chat only once
+  the model has warmed, so you never land in a cold session. A **Start from
+  scratch** card keeps the build-it-yourself path one tap away. The three
+  scenarios also join the bundled preset catalogue, so they are available from
+  the pipeline library's **From preset** picker at any time.
 - **Pipelines suggest their own starter prompts.** A pipeline can now carry a
   list of **sample prompts** shown as the quick-action cards on a new chat's
   empty state. Because the suggestions come from the pipeline that will actually
@@ -539,6 +557,20 @@ details.
 
 ### Changed
 
+- **README reworked as a value-first landing page.** The README now opens with
+  what Knotwork is and who it is for (local-first, user-built pipelines, gated
+  actions) ahead of an exhaustive feature list, leads with the Share Handler
+  scenario as its one-glance demo, condenses the feature dump into grouped
+  highlights (the full tour stays in the user guide), and replaces the outdated
+  manual-model quick start with the scenario-onboarding first-run path.
+- **Documentation refreshed for the current release line.** The roadmap's
+  version line and "where the project is today" snapshot are brought up to the
+  `0.5.x` surface (scenario-onboarding gallery, automation triggers and entry
+  surfaces, local usage statistics, the FOSS build flavour); the user guide
+  reconciles its first-run and default-pipeline description with scenario
+  onboarding; and the contributor guide's "Add a Settings section" recipe is
+  rewritten for the registry-driven settings hub, correcting stale source-file
+  links. No code change.
 - **On-device inference engine updated.** Bumped `com.google.ai.edge.litertlm`
   (LiteRT-LM) from `0.13.1` to `0.14.0`.
 - **Encrypted-storage library updated.** Bumped `net.zetetic:sqlcipher-android`
@@ -3805,7 +3837,8 @@ that produced the initial 0.1.0 snapshot.
 - **Master key**: `EncryptedSharedPreferences` is rooted in the Android
   Keystore, so the master key is hardware-backed where available.
 
-[Unreleased]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.2.0...v0.3.0

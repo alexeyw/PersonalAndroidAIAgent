@@ -8,15 +8,15 @@ import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.DownloadState
 import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.Result
-import app.knotwork.android.domain.repositories.ApiKeyRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.ModelDownloadManager
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.usecases.LoadModelUseCase
+import app.knotwork.android.domain.usecases.SetUpScenarioUseCase
 import app.knotwork.android.presentation.state.TransientMessageRelay
-import app.knotwork.design.screens.onboarding.OnboardingCloudProvider
 import app.knotwork.design.screens.onboarding.OnboardingDefaultPipelinePreview
 import app.knotwork.design.screens.onboarding.OnboardingLiteRtModel
+import app.knotwork.design.screens.onboarding.OnboardingScenario
 import app.knotwork.design.screens.onboarding.OnboardingStep
 import app.knotwork.design.screens.onboarding.OnboardingViewState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,54 +25,46 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import timber.log.Timber
 import javax.inject.Inject
 
 /**
- * ViewModel for the redesigned onboarding flow.
+ * ViewModel for the scenario onboarding flow.
  *
  * Drives the 4-step pager:
  *  - Step 1 / Welcome — pure presentation.
- *  - Step 2 / LiteRT model — the user picks a model id; the screen-level
- *    CTA either starts a download via [startDownload] or advances when
- *    the picked model is already installed. The CTA stays disabled until
- *    one of those conditions becomes true so the user can never skip
- *    past this step without an active model.
- *  - Step 3 / Cloud keys — list of providers; the real key-entry sheet
- *    lives in Settings, so this surface only records which providers the
- *    user opened.
- *  - Step 4 / Ready — recap with the default pipeline preview and the
- *    active-model name. Committing flips `hasCompletedOnboarding` and
- *    lets the host navigate to Chat.
+ *  - Step 2 / Choose a scenario — the value gallery. Picking a scenario
+ *    ([pickScenario]) pre-selects the model it needs and re-checks whether that
+ *    model is already installed. Tapping "Set up {scenario}" ([setUpScenario])
+ *    materialises the scenario's pipeline as the default, binds its entry
+ *    surface, and advances to the download step. "Start from scratch"
+ *    ([startFromScratch]) leaves the seeded default in place and completes.
+ *  - Step 3 / Download — the motivated download. The scenario pre-selects the
+ *    model; the user may switch to an alternative under "Or choose another".
+ *    The CTA either starts a download ([startDownload]) or advances when the
+ *    picked model is already installed.
+ *  - Step 4 / Ready — recap of what was materialised (scenario pipeline preview,
+ *    active model, and — for Share Handler — the bound surface / HITL safety
+ *    rows). Committing flips `hasCompletedOnboarding` and lets the host navigate.
  *
- * Warm-up. As soon as a model becomes installed (either re-detected on
- * entry or after a successful download), [warmUpInstalledModel] kicks
- * off `LoadModelUseCase` so the inference handle is ready by the time
- * the user reaches step 4 — preventing the "LiteRT handle released by
- * system" failure on the first `sendMessage` after onboarding.
+ * Warm-up. As soon as a model becomes installed (either re-detected on entry or
+ * after a successful download), [scheduleWarmUp] kicks off [LoadModelUseCase] so
+ * the inference handle is ready by the time the user reaches step 4 — preventing
+ * the "LiteRT handle released by system" failure on the first `sendMessage`.
  *
  * @property settingsRepository persists the `hasCompletedOnboarding` flag.
- * @property localModelRepository used to detect previously-installed
- * models and to persist freshly-downloaded ones.
+ * @property localModelRepository detects previously-installed models and persists
+ * freshly-downloaded ones.
  * @property downloadManager streams `DownloadState` updates folded into
  * `OnboardingViewState.downloadProgress` / `downloadError`.
- * @property loadModelUseCase warms the LiteRT inference handle as soon
- * as a model is available so chat works on the first send.
- * @property transientMessageRelay process-wide one-shot snackbar bus.
- * The skip-flow message has to outlive the `OnboardingScreen`'s
- * back-stack entry (which is popped the same frame `onCompleted` fires),
- * so we publish through this singleton; the activity-level host renders
- * the snackbar after navigation settles on Chat.
- * @property apiKeyRepository observed reactively to compute
- * `configuredCloudProviders` from the actual saved credentials — the
- * "Configured" pill on step 3 follows whichever providers have a
- * non-empty key (or, for Ollama, a non-empty base URL) instead of just
- * tracking which rows the user tapped.
+ * @property loadModelUseCase warms the LiteRT inference handle.
+ * @property setUpScenarioUseCase materialises a picked scenario (default pipeline
+ * + entry-surface binding) and returns its recap projection.
+ * @property transientMessageRelay process-wide one-shot snackbar bus; the
+ * skip/escape hint outlives the popped onboarding back-stack entry.
  */
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
@@ -80,13 +72,11 @@ class OnboardingViewModel @Inject constructor(
     private val localModelRepository: LocalModelRepository,
     private val downloadManager: ModelDownloadManager,
     private val loadModelUseCase: LoadModelUseCase,
+    private val setUpScenarioUseCase: SetUpScenarioUseCase,
     private val transientMessageRelay: TransientMessageRelay,
-    private val apiKeyRepository: ApiKeyRepository,
 ) : ViewModel() {
 
-    private val _state: MutableStateFlow<OnboardingViewState> = MutableStateFlow(
-        OnboardingViewState(defaultPipelinePreview = DEFAULT_PIPELINE_PREVIEW),
-    )
+    private val _state: MutableStateFlow<OnboardingViewState> = MutableStateFlow(OnboardingViewState())
 
     /** Externally-observable view state passed to `OnboardingContent`. */
     val state: StateFlow<OnboardingViewState> = _state.asStateFlow()
@@ -98,60 +88,29 @@ class OnboardingViewModel @Inject constructor(
     private var warmUpJob: Job? = null
 
     /**
-     * Active install-check job — cancelled by the next [pickLiteRtModel]
-     * so a slow `findByFileName` from a stale pick can never overwrite
-     * a newer selection's state. Without this guard, picking A → B
-     * quickly could resume A's check after B is set and incorrectly
-     * mark A as installed (bypassing the download gate).
+     * Active install-check job — cancelled by the next [pickLiteRtModel] /
+     * [pickScenario] so a slow `findByFileName` from a stale pick can never
+     * overwrite a newer selection's state.
      */
     private var installCheckJob: Job? = null
 
     /**
-     * Resolved absolute path of the currently installed model. Kept
-     * outside the catalog view-state because the design-system layer
-     * has no business with on-disk paths; the VM passes this into
-     * [LoadModelUseCase] in [finishOnboarding].
+     * Resolved absolute path of the currently installed model. Kept outside the
+     * catalog view-state because the design-system layer has no business with
+     * on-disk paths; the VM passes this into [LoadModelUseCase] on warm-up.
      */
     private var installedModelPath: String? = null
 
-    /** Initial pick on step 2 — detect re-installs immediately. */
-    init {
-        checkIfPickedModelAlreadyInstalled(_state.value.liteRtModel)
-        observeConfiguredCloudProviders()
-    }
+    /** Active scenario set-up job — guards against a double-tap materialising twice. */
+    private var setUpJob: Job? = null
 
     /**
-     * Streams the actual saved-key state for every cloud provider and
-     * folds it into [OnboardingViewState.configuredCloudProviders]. The
-     * "Configured" pill on step 3 is then a *truthful* signal — it
-     * reflects what's persisted in the encrypted key store, not
-     * which row the user happened to tap.
-     *
-     * Per provider:
-     *  - OpenAI / Anthropic / Google / DeepSeek — "configured" when the
-     *    API key flow is non-blank.
-     *  - Ollama — "configured" when the base URL is non-blank (Ollama
-     *    does not use an API key in the same sense).
+     * Id of the scenario whose pipeline has already been materialised in this
+     * session. Lets a re-tap of the *same* scenario re-advance to the download
+     * step without spawning a second pipeline (and overwriting the default);
+     * a different pick re-materialises deliberately.
      */
-    private fun observeConfiguredCloudProviders() {
-        combine(
-            apiKeyRepository.getOpenAIKey(),
-            apiKeyRepository.getAnthropicKey(),
-            apiKeyRepository.getGoogleKey(),
-            apiKeyRepository.getDeepSeekKey(),
-            apiKeyRepository.getOllamaBaseUrl(),
-        ) { openAi, anthropic, google, deepSeek, ollamaBaseUrl ->
-            buildSet {
-                if (!openAi.isNullOrBlank()) add(OnboardingCloudProvider.OpenAI.id)
-                if (!anthropic.isNullOrBlank()) add(OnboardingCloudProvider.Anthropic.id)
-                if (!google.isNullOrBlank()) add(OnboardingCloudProvider.Google.id)
-                if (!deepSeek.isNullOrBlank()) add(OnboardingCloudProvider.DeepSeek.id)
-                if (!ollamaBaseUrl.isNullOrBlank()) add(OnboardingCloudProvider.Ollama.id)
-            }
-        }
-            .onEach { configured -> _state.update { it.copy(configuredCloudProviders = configured) } }
-            .launchIn(viewModelScope)
-    }
+    private var materializedScenarioId: String? = null
 
     /** Advances to the next step. Idempotent at the final step. */
     fun next() {
@@ -170,13 +129,105 @@ class OnboardingViewModel @Inject constructor(
     }
 
     /**
-     * Records the user's LiteRT model pick on step 2 and synchronously
-     * re-checks whether the corresponding file is already installed.
+     * Records the user's scenario pick on the gallery step and pre-selects the
+     * model that scenario needs, re-checking whether that model is already
+     * installed. Cancels any in-flight download / warm-up / install-check that
+     * belonged to a previous pick so a rapid A → B → A switch cannot resurrect
+     * the previous selection's state.
+     */
+    fun pickScenario(scenario: OnboardingScenario) {
+        // Never interrupt an in-flight set-up: cancelling it after the preset
+        // has already been persisted would orphan that pipeline and leave
+        // `materializedScenarioId` unset, so the next "Set up" tap would
+        // persist a duplicate. The gallery is non-interactive while busy; this
+        // guard is the authoritative one.
+        if (setUpJob?.isActive == true) return
+        installCheckJob?.cancel()
+        downloadJob?.cancel()
+        warmUpJob?.cancel()
+        _state.update {
+            it.copy(
+                selectedScenario = scenario,
+                liteRtModel = scenario.requiredModel,
+                downloadProgress = null,
+                downloadError = null,
+                installedModelId = null,
+                isModelWarmed = false,
+            )
+        }
+        installedModelPath = null
+        checkIfPickedModelAlreadyInstalled(scenario.requiredModel)
+    }
+
+    /**
+     * Materialises the currently-picked scenario (default pipeline + entry
+     * surface) and advances to the download step. Stores the recap projection
+     * for the "Ready" step. No-op when no scenario is picked; surfaces a failure
+     * inline when materialisation fails so the user is not stranded.
      *
-     * Cancels any in-flight install-check / download / warm-up that
-     * belonged to the previous pick so a race between a slow database
-     * lookup and a rapid A → B → A user switch can never resurrect the
-     * previous selection's state on top of the current one.
+     * Guards against materialising more than once for the same intent: a
+     * double-tap while a set-up is in flight is ignored, and a re-tap of a
+     * scenario already materialised this session just re-advances to the
+     * download step instead of persisting a second pipeline and overwriting the
+     * default. Picking a *different* scenario ([pickScenario] cancels the job)
+     * re-materialises deliberately.
+     */
+    fun setUpScenario() {
+        val scenario = _state.value.selectedScenario ?: return
+        if (setUpJob?.isActive == true) return
+        if (materializedScenarioId == scenario.id && _state.value.scenarioPreview != null) {
+            _state.update { it.copy(step = OnboardingStep.Download) }
+            return
+        }
+        setUpJob = viewModelScope.launch {
+            // Surfacing the wait is what stops the user from tapping again:
+            // materialising reads the preset asset, parses it and writes to
+            // Room, which is not instant on a cold first launch.
+            _state.update { it.copy(isSettingUpScenario = true) }
+            try {
+                setUpScenarioUseCase(scenario.id)
+                    .onSuccess { setup ->
+                        materializedScenarioId = scenario.id
+                        _state.update {
+                            it.copy(scenarioPreview = setup.toPreview(), step = OnboardingStep.Download)
+                        }
+                    }
+                    .onFailure { error ->
+                        _state.update { it.copy(downloadError = error.message ?: GENERIC_SETUP_ERROR) }
+                    }
+            } finally {
+                // Runs on the cancellation path too, so a cancelled set-up can
+                // never strand the gallery in a permanently busy state.
+                _state.update { it.copy(isSettingUpScenario = false) }
+            }
+        }
+    }
+
+    /**
+     * Retries the model warm-up after a failure surfaced on the "Ready" step.
+     * Clears the error and re-runs [LoadModelUseCase] against the same installed
+     * model path, so a transient warm failure never dead-ends onboarding behind
+     * a disabled "Preparing…" CTA.
+     */
+    fun retryWarmUp() {
+        _state.update { it.copy(downloadError = null) }
+        scheduleWarmUp()
+    }
+
+    /**
+     * Escape hatch behind the "Start from scratch" card. Completes onboarding
+     * without materialising a scenario (the first-launch seed remains the
+     * default pipeline) and publishes the model hint through the
+     * [TransientMessageRelay] so the user knows where to install a model later.
+     */
+    fun startFromScratch() {
+        transientMessageRelay.post(SKIP_SNACKBAR_MESSAGE)
+        viewModelScope.launch { settingsRepository.setHasCompletedOnboarding(true) }
+    }
+
+    /**
+     * Records the user's LiteRT model override on the download step ("Or choose
+     * another") and synchronously re-checks whether that file is installed.
      */
     fun pickLiteRtModel(model: OnboardingLiteRtModel) {
         installCheckJob?.cancel()
@@ -202,9 +253,8 @@ class OnboardingViewModel @Inject constructor(
 
     /**
      * Starts a download for the currently-picked model and folds every
-     * `DownloadState` into [OnboardingViewState]. No-op when a download
-     * is already in flight (the catalog disables the CTA in that case,
-     * but the guard belongs here too).
+     * `DownloadState` into [OnboardingViewState]. No-op when a download is
+     * already in flight.
      */
     fun startDownload() {
         if (_state.value.downloadProgress != null) return
@@ -225,79 +275,29 @@ class OnboardingViewModel @Inject constructor(
     }
 
     /**
-     * Final-step action — persists the `hasCompletedOnboarding` flag.
-     *
-     * Warm-up is intentionally NOT re-triggered here. The catalog
-     * `isPrimaryCtaEnabled` only fires for step `Ready` when
-     * `isModelWarmed == true`, and the only path that flips that flag
-     * is a successful `scheduleWarmUp` (run on install / download
-     * completion). So by the time the user can tap "Open chat", the
-     * inference handle is already loaded with the picked model — a
-     * second `loadModelUseCase` call here would be a redundant no-op
-     * (the engine early-returns when `currentModelPath` matches).
+     * Final-step action — persists the `hasCompletedOnboarding` flag. Warm-up is
+     * intentionally NOT re-triggered here: the "Ready" CTA only enables once
+     * `isModelWarmed == true`, so the handle is already loaded by the time the
+     * user can tap it.
      */
     fun finishOnboarding() {
-        viewModelScope.launch {
-            settingsRepository.setHasCompletedOnboarding(true)
-        }
+        viewModelScope.launch { settingsRepository.setHasCompletedOnboarding(true) }
     }
 
     /**
-     * Skip button (visible on steps 1-3). Persists `hasCompletedOnboarding
-     * = true` and publishes a snackbar hint through the
-     * [TransientMessageRelay] — the message is rendered by the
-     * activity-level host *after* navigation pops onboarding off the
-     * back-stack, so the user sees the hint on top of the Chat surface
-     * they just landed on.
+     * Skip button (visible on steps 1-3). Persists `hasCompletedOnboarding` and
+     * publishes a snackbar hint through the [TransientMessageRelay].
      */
     fun skipOnboarding() {
-        // Publish the hint *before* the flag flip so the relay tryEmit
-        // happens regardless of how fast the host pops onboarding.
         transientMessageRelay.post(SKIP_SNACKBAR_MESSAGE)
-        viewModelScope.launch {
-            settingsRepository.setHasCompletedOnboarding(true)
-        }
-    }
-
-    /**
-     * Legacy helper preserved for binary compatibility with older
-     * call sites. The production tap path drives navigation via
-     * `OnboardingScreen.onConfigureProvider` and the
-     * `configuredCloudProviders` projection is computed reactively
-     * from [ApiKeyRepository] (see [observeConfiguredCloudProviders])
-     * — so this method intentionally NO LONGER mutates state. We keep
-     * the symbol so any stale-build call site that still references it
-     * compiles, but the state-flip is gone: the "Configured" pill on
-     * step 3 can only flip when a key is actually persisted.
-     */
-    fun markCloudProviderConfigured(provider: OnboardingCloudProvider) {
-        Timber.w(
-            "OnboardingViewModel.markCloudProviderConfigured(${provider.id}) called " +
-                "— this is a no-op. The configured pill " +
-                "is driven by ApiKeyRepository observation, not by tap.",
-        )
-    }
-
-    /** Legacy alias preserved so existing call sites keep compiling. */
-    fun completeOnboarding() {
         viewModelScope.launch { settingsRepository.setHasCompletedOnboarding(true) }
     }
 
     private fun checkIfPickedModelAlreadyInstalled(model: OnboardingLiteRtModel) {
         val entry = OnboardingModelCatalog.entryById(model.id) ?: return
         installCheckJob = viewModelScope.launch {
-            // Look up the LocalModel row by *filename* (not active-flag).
-            // The user's pick is orthogonal to whichever row currently has
-            // `isActive = 1`: picking model A while model B is active must
-            // still warm A's handle, not B's.
             val installed = localModelRepository.findByFileName(entry.fileName) ?: return@launch
-            // Re-verify the pick is still current. `pickLiteRtModel`
-            // cancels this job on every change, but cancellation is
-            // cooperative — a coroutine that just resumed from a
-            // suspending call hasn't yet hit its next cancellation point
-            // and could land here with stale `model` data. The
-            // `liteRtModel == model` guard short-circuits that case
-            // without depending on the cancellation timing.
+            // Re-verify the pick is still current (cooperative cancellation).
             if (_state.value.liteRtModel != model) return@launch
             installedModelPath = installed.path
             _state.update { it.copy(installedModelId = model.id) }
@@ -325,12 +325,6 @@ class OnboardingViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Pulls a user-facing message out of an [AppError] instance. The
-     * downloader emits `AndroidModelDownloadManager.DownloadError`,
-     * which carries a `message` field; for any other shape (e.g. a
-     * future provider) we fall back to a generic copy.
-     */
     private fun extractErrorMessage(error: AppError): String {
         val message = (error as? AndroidModelDownloadManager.DownloadError)?.message
         return message?.takeIf { it.isNotBlank() } ?: GENERIC_DOWNLOAD_ERROR
@@ -342,12 +336,7 @@ class OnboardingViewModel @Inject constructor(
         resolved: ResolvedDownloadTarget,
     ) {
         installedModelPath = downloadState.fileUri
-        _state.update {
-            it.copy(
-                downloadProgress = null,
-                installedModelId = picked.id,
-            )
-        }
+        _state.update { it.copy(downloadProgress = null, installedModelId = picked.id) }
         viewModelScope.launch {
             val insertedId = localModelRepository.insertModel(
                 LocalModel(
@@ -357,8 +346,6 @@ class OnboardingViewModel @Inject constructor(
                     isActive = false,
                 ),
             )
-            // Activate so `getActiveModel()` later picks this row and
-            // `LoadModelUseCase` can resolve the path on its own.
             localModelRepository.setActiveModel(insertedId)
             scheduleWarmUp()
         }
@@ -377,13 +364,6 @@ class OnboardingViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Resolves the picked model into a (URL, filename) pair. Returns
-     * `null` (and surfaces an inline error) when the custom URL row is
-     * picked without a usable URL — the catalog CTA stays disabled in
-     * that case via the empty-string default, but the guard is
-     * defensive.
-     */
     private fun resolveDownloadTarget(model: OnboardingLiteRtModel): ResolvedDownloadTarget? {
         val preset = OnboardingModelCatalog.entryById(model.id)
         if (preset != null) {
@@ -401,13 +381,26 @@ class OnboardingViewModel @Inject constructor(
     }
 
     /**
-     * Compact tuple bundling the inputs the data-layer download manager
-     * needs. Local to the VM — every call site reads both fields.
+     * Projects a [SetUpScenarioUseCase.ScenarioSetup] into the catalog preview
+     * shape, giving a routing node ([NodeType.INTENT_ROUTER] / `IF`) the green
+     * accent so the recap reads like the editor.
      */
+    private fun SetUpScenarioUseCase.ScenarioSetup.toPreview(): OnboardingDefaultPipelinePreview {
+        val accent = nodeTypeNames.firstOrNull { it == "INTENT_ROUTER" }
+            ?: nodeTypeNames.firstOrNull { it == "IF" }
+        return OnboardingDefaultPipelinePreview(
+            nodes = nodeTypeNames,
+            nodeCount = nodeCount,
+            edgeCount = edgeCount,
+            accentNodeName = accent,
+        )
+    }
+
+    /** Compact tuple bundling the inputs the data-layer download manager needs. */
     private data class ResolvedDownloadTarget(val url: String, val fileName: String)
 
     companion object {
-        /** Skip-flow snackbar copy — referenced by tests and `OnboardingScreen`. */
+        /** Skip / escape snackbar copy — referenced by tests and `OnboardingScreen`. */
         const val SKIP_SNACKBAR_MESSAGE: String = "You can install a model from Settings → Models"
 
         /** Fallback copy when an unknown exception breaks the download stream. */
@@ -416,23 +409,13 @@ class OnboardingViewModel @Inject constructor(
         /** Fallback copy when `LoadModelUseCase` returns a result without a message. */
         private const val GENERIC_LOAD_ERROR: String = "Failed to load the model."
 
+        /** Fallback copy when scenario set-up fails without a message. */
+        private const val GENERIC_SETUP_ERROR: String = "Couldn't set up this scenario."
+
         /** Surfaced when the user taps the CTA on the Custom URL row with an empty input. */
         private const val CUSTOM_URL_REQUIRED_MESSAGE: String = "Enter a model URL to download."
 
         /** Divisor turning a 0..100 Int progress into a 0f..1f float for `OnboardingViewState`. */
         private const val PERCENT_DIVISOR: Float = 100f
-
-        /**
-         * Hardcoded default-pipeline recap rendered on step 4. The catalog
-         * draws the chips from this projection; the actual default
-         * pipeline lives in `DefaultPipelineFactory`. Keep the labels in
-         * sync — six nodes, seven edges, IF picks up the green accent.
-         */
-        private val DEFAULT_PIPELINE_PREVIEW = OnboardingDefaultPipelinePreview(
-            nodes = listOf("INPUT", "LITE_RT", "IF", "TOOL", "LITE_RT", "OUTPUT"),
-            nodeCount = 6,
-            edgeCount = 7,
-            accentNodeName = "IF",
-        )
     }
 }
