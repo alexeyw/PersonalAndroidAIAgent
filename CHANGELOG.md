@@ -41,9 +41,11 @@ details.
   is written the moment the decision is made — fired, re-armed, or a typed skip
   reason — tagged with which background surface woke it. When a trigger fires,
   the entry is later completed with the run's terminal fate: success, a typed
-  failure, a system cancellation (kept distinct from a failure), or a
-  background-approval timeout. Recording is a pure observer: a journal write
-  failure is logged but never alters or aborts the run it describes.
+  failure, a platform kill (the hosting process was killed), a deliberate stop
+  (the user cancelled the run), or a background-approval timeout — each kept
+  distinct so a platform-reliability problem is never confused with a failure or
+  an intended stop. Recording is a pure observer: a journal write failure is
+  logged but never alters or aborts the run it describes.
 
 ## [0.6.0] - 2026-07-16
 

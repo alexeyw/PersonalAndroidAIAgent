@@ -268,14 +268,12 @@ class FireTriggerUseCase @Inject constructor(
             throw e
         }
 
-        // Persist the binding only once the run is really enqueued, so a
-        // scheduling failure cannot strand a trigger pointing at a session that
-        // never received a run.
-        if (session.isNewlyCreated) triggerRepository.setSessionId(trigger.id, session.id)
-
-        // Open the two-phase journal row now the run is really enqueued: Fired
-        // with the run id, outcome still unknown. The run's terminal fate is
-        // attributed back onto this row by its id when it settles.
+        // Open the two-phase journal row the instant the run is really enqueued —
+        // before any further work — so the window in which the run exists but its
+        // Fired row does not is as narrow as the DB write itself. Written after
+        // the enqueue (never before) so a failed enqueue leaves no phantom Fired
+        // row whose outcome could never settle. Outcome is filled in later, by run
+        // id, when the run reaches a terminal state.
         recordTriggerEvaluation(
             triggerId = trigger.id,
             source = source,
@@ -283,6 +281,11 @@ class FireTriggerUseCase @Inject constructor(
             runId = runId,
             evaluatedAt = nowMillis,
         )
+
+        // Persist the binding only once the run is really enqueued, so a
+        // scheduling failure cannot strand a trigger pointing at a session that
+        // never received a run.
+        if (session.isNewlyCreated) triggerRepository.setSessionId(trigger.id, session.id)
 
         notifyTriggerFired(session.id, trigger.name)
         // Tally the firing into the privacy-preserving local usage statistics

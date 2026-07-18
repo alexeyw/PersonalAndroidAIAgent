@@ -9,9 +9,10 @@ import org.junit.Test
 
 /**
  * Unit tests for [triggerRunOutcomeForTerminal] — the pure mapping from a run's
- * terminal state to the trigger-journal outcome vocabulary. The one behaviour
- * worth pinning is that a system cancellation and a background-HITL timeout are
- * each kept distinct from a genuine failure.
+ * terminal state to the trigger-journal outcome vocabulary. The behaviours worth
+ * pinning are that a platform kill ([TriggerRunOutcome.CancelledBySystem]), a
+ * deliberate stop ([TriggerRunOutcome.Cancelled]) and a background-HITL timeout
+ * are each kept distinct from one another and from a genuine failure.
  */
 class TriggerRunOutcomeMapperTest {
 
@@ -57,15 +58,19 @@ class TriggerRunOutcomeMapperTest {
     }
 
     @Test
-    fun `given CANCELLED then maps to CancelledBySystem`() {
+    fun `given CANCELLED then maps to a deliberate Cancelled, not a platform kill`() {
+        // CANCELLED is contractually "the user cancelled the run" — a deliberate
+        // stop, which must not be reported as a platform (system) kill.
         assertEquals(
-            TriggerRunOutcome.CancelledBySystem,
+            TriggerRunOutcome.Cancelled,
             triggerRunOutcomeForTerminal(PipelineRunStatus.CANCELLED, null),
         )
     }
 
     @Test
     fun `given INTERRUPTED then maps to CancelledBySystem`() {
+        // INTERRUPTED means the owning process died mid-run — the platform-kill
+        // signal, distinct from a deliberate CANCELLED.
         assertEquals(
             TriggerRunOutcome.CancelledBySystem,
             triggerRunOutcomeForTerminal(PipelineRunStatus.INTERRUPTED, "Owning process died"),

@@ -598,8 +598,9 @@ class PipelineRunRepositoryImplTest {
     }
 
     @Test
-    fun `given a completed run finishes then Success is attributed to its trigger-journal row`() = runTest {
+    fun `given a completed trigger run finishes then Success is attributed to its trigger-journal row`() = runTest {
         coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.TRIGGER.name
 
         repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
 
@@ -607,8 +608,9 @@ class PipelineRunRepositoryImplTest {
     }
 
     @Test
-    fun `given a failed run finishes then a typed Failure carrying the message is attributed`() = runTest {
+    fun `given a failed trigger run finishes then a typed Failure carrying the message is attributed`() = runTest {
         coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.TRIGGER.name
 
         repository.finishRun("run-1", PipelineRunStatus.FAILED, "boom")
 
@@ -616,17 +618,20 @@ class PipelineRunRepositoryImplTest {
     }
 
     @Test
-    fun `given a system-cancelled run finishes then CancelledBySystem is attributed, not a failure`() = runTest {
-        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+    fun `given a user-cancelled trigger run finishes then a deliberate Cancelled is attributed, not a platform kill`() =
+        runTest {
+            coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+            coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.TRIGGER.name
 
-        repository.finishRun("run-1", PipelineRunStatus.CANCELLED)
+            repository.finishRun("run-1", PipelineRunStatus.CANCELLED)
 
-        coVerify(exactly = 1) { triggerJournal.recordRunOutcome("run-1", TriggerRunOutcome.CancelledBySystem) }
-    }
+            coVerify(exactly = 1) { triggerJournal.recordRunOutcome("run-1", TriggerRunOutcome.Cancelled) }
+        }
 
     @Test
-    fun `given an orphaned run reaped as INTERRUPTED then CancelledBySystem is attributed`() = runTest {
+    fun `given an orphaned trigger run reaped as INTERRUPTED then CancelledBySystem is attributed`() = runTest {
         coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.TRIGGER.name
 
         repository.finishRun("run-1", PipelineRunStatus.INTERRUPTED, "Owning process died")
 
@@ -634,8 +639,9 @@ class PipelineRunRepositoryImplTest {
     }
 
     @Test
-    fun `given a run failed by an expired background approval then HitlTimeout is attributed`() = runTest {
+    fun `given a trigger run failed by an expired background approval then HitlTimeout is attributed`() = runTest {
         coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.TRIGGER.name
 
         // The exact reason the park-expiry settlement stamps on the run.
         repository.finishRun("run-1", PipelineRunStatus.FAILED, ParkedRunResumer.APPROVAL_WINDOW_EXPIRED_MESSAGE)
@@ -644,13 +650,26 @@ class PipelineRunRepositoryImplTest {
     }
 
     @Test
+    fun `given a non-trigger run finishes then the journal is never touched`() = runTest {
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.CHAT.name
+
+        repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
+
+        // Only trigger-origin runs have a journal row, so a chat run skips the write entirely.
+        coVerify(exactly = 0) { triggerJournal.recordRunOutcome(any(), any()) }
+    }
+
+    @Test
     fun `given a duplicate finishRun that transitions no row then no outcome is attributed`() = runTest {
         // Already terminal: the guarded UPDATE matches no row, so a racing write
-        // must never overwrite the outcome already on the journal entry.
+        // must never overwrite the outcome already on the journal entry — and the
+        // origin is not even read.
         coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 0
 
         repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
 
+        coVerify(exactly = 0) { pipelineRunDao.getRunOrigin(any()) }
         coVerify(exactly = 0) { triggerJournal.recordRunOutcome(any(), any()) }
     }
 }

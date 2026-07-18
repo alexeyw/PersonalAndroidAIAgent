@@ -132,22 +132,27 @@ class PipelineRunRepositoryImpl @Inject constructor(
 
     /**
      * Attributes this run's terminal fate back onto its trigger-evaluation
-     * journal row, if it has one — the second phase of the two-phase journal
-     * entry a firing trigger opened (see
-     * [app.knotwork.android.domain.models.TriggerEvaluation]).
+     * journal row — the second phase of the two-phase journal entry a firing
+     * trigger opened (see [app.knotwork.android.domain.models.TriggerEvaluation]).
      *
-     * A run started by any surface other than a trigger has no journal row, so
-     * the keyed write is a harmless no-op; there is deliberately no origin
-     * pre-check, mirroring the journal's own "invoke unconditionally on the
-     * generic completion path" contract. The mapping from run status to the
-     * journal's outcome vocabulary — in particular keeping a system cancellation
-     * distinct from a genuine failure — lives in the pure
-     * [triggerRunOutcomeForTerminal] mapper.
+     * Gated on the run being [RunOrigin.TRIGGER]: only a trigger fire ever opens a
+     * journal row, so for every other surface (interactive chat, the scheduler,
+     * the tile, a share, or a nested sub-pipeline child) the mapping and the keyed
+     * write would be pure waste on the hot completion path. The origin is read
+     * through a single-column projection rather than a full run load. The mapping
+     * from run status to the journal's outcome vocabulary — in particular keeping
+     * a platform kill distinct from a deliberate stop and from a genuine failure —
+     * lives in the pure [triggerRunOutcomeForTerminal] mapper.
      *
-     * The journal store absorbs its own storage failures, so this can never
-     * disturb the run it observes.
+     * Best-effort throughout: the origin read is absorbed and the journal store
+     * absorbs its own storage failures, so this can never disturb the run it
+     * observes.
      */
     private suspend fun recordTriggerRunOutcome(runId: String, status: PipelineRunStatus, errorMessage: String?) {
+        val origin = absorbing("getRunOrigin") {
+            withContext(Dispatchers.IO) { pipelineRunDao.getRunOrigin(runId) }
+        }
+        if (origin != RunOrigin.TRIGGER.name) return
         triggerJournal.recordRunOutcome(runId, triggerRunOutcomeForTerminal(status, errorMessage))
     }
 
