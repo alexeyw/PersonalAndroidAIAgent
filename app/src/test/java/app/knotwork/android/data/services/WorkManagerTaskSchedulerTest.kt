@@ -193,6 +193,34 @@ class WorkManagerTaskSchedulerTest {
     }
 
     @Test
+    fun `given a pre-minted run id when scheduleOneTime then carries it into input data`() {
+        val requestSlot = slot<OneTimeWorkRequest>()
+
+        scheduler.scheduleOneTime(
+            "evening journal",
+            delayMinutes = 0,
+            sessionId = "session-7",
+            constraints = constraints,
+            runId = "trigger-run-1",
+        )
+
+        verify { workManager.enqueue(capture(requestSlot)) }
+        // The id survives into input data so AgentWorker can reuse it verbatim as
+        // the run id the trigger's journal row already references.
+        assertEquals("trigger-run-1", requestSlot.captured.workSpec.input.getString(AgentWorker.KEY_RUN_ID))
+    }
+
+    @Test
+    fun `given no run id when scheduleOneTime then leaves the run-id key absent`() {
+        val requestSlot = slot<OneTimeWorkRequest>()
+
+        scheduler.scheduleOneTime("check emails once", delayMinutes = 0, sessionId = null, constraints = constraints)
+
+        verify { workManager.enqueue(capture(requestSlot)) }
+        assertNull(requestSlot.captured.workSpec.input.getString(AgentWorker.KEY_RUN_ID))
+    }
+
+    @Test
     fun `given battery-not-low constraint when scheduleOneTime then maps it onto the work constraints`() {
         val requestSlot = slot<OneTimeWorkRequest>()
 

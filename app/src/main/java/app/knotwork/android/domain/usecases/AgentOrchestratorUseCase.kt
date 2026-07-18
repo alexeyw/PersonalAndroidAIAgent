@@ -8,6 +8,7 @@ import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.TaskPriority
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -128,16 +129,23 @@ class AgentOrchestratorUseCase @Inject constructor(private val taskQueueManager:
      *   Settings tile passes the user's bound duty pipeline.
      * @param origin What triggered the run. Defaults to [RunOrigin.SCHEDULER];
      *   the tile passes [RunOrigin.QUICK_TILE].
+     * @param runId Pre-minted id for the enqueued task, used verbatim as its
+     *   [AgentTask.id] (and therefore its `PipelineRun` id). `null` — the
+     *   default — mints a fresh id. A trigger fire supplies the id it already
+     *   wrote onto its journal row so the run and the journal entry share
+     *   identity end-to-end.
      * @return Id of the enqueued task, equal to the id of its persistent
-     *   `PipelineRun` record.
+     *   `PipelineRun` record (the passed [runId] when non-null).
      */
     fun enqueueScheduled(
         sessionId: String,
         userPrompt: String,
         pipelineId: String? = null,
         origin: RunOrigin = RunOrigin.SCHEDULER,
+        runId: String? = null,
     ): String {
         val task = AgentTask(
+            id = runId ?: UUID.randomUUID().toString(),
             sessionId = sessionId,
             prompt = userPrompt,
             priority = TaskPriority.NORMAL,

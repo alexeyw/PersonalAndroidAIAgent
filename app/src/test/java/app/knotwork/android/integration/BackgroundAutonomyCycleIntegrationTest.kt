@@ -46,6 +46,7 @@ import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
+import app.knotwork.android.domain.repositories.TriggerJournalRepository
 import app.knotwork.android.domain.repositories.UsageTelemetryRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
@@ -311,7 +312,9 @@ class BackgroundAutonomyCycleIntegrationTest {
     private fun buildProcess(llmEngine: LlmInferenceEngine): ProcessHarness {
         val usageTelemetry = mockk<UsageTelemetryRepository>(relaxed = true)
         coEvery { usageTelemetry.isEnabled() } returns false
-        val runRepository = PipelineRunRepositoryImpl(database.pipelineRunDao(), usageTelemetry)
+        // No trigger runs in this cycle, so the journal observer is a relaxed no-op.
+        val triggerJournal = mockk<TriggerJournalRepository>(relaxed = true)
+        val runRepository = PipelineRunRepositoryImpl(database.pipelineRunDao(), usageTelemetry, triggerJournal)
         val traceRepository = RunTraceRepositoryImpl(database.traceStepDao())
             .apply { dispatcher = testDispatcher }
         val pendingRepository = PendingInteractionRepositoryImpl(database.pendingInteractionDao())

@@ -9,6 +9,7 @@ import app.knotwork.android.data.local.models.ChatSessionEntity
 import app.knotwork.android.data.repositories.PendingInteractionRepositoryImpl
 import app.knotwork.android.data.repositories.PipelineRunRepositoryImpl
 import app.knotwork.android.data.repositories.RunTraceRepositoryImpl
+import app.knotwork.android.data.repositories.TriggerJournalRepositoryImpl
 import app.knotwork.android.data.repositories.TriggerRepositoryImpl
 import app.knotwork.android.domain.engine.ChatHistoryWindowPlanner
 import app.knotwork.android.domain.engine.GraphExecutionEngine
@@ -46,6 +47,9 @@ import app.knotwork.android.domain.models.ToolApprovalPolicy
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.models.Trigger
 import app.knotwork.android.domain.models.TriggerCondition
+import app.knotwork.android.domain.models.TriggerEvaluationSource
+import app.knotwork.android.domain.models.TriggerEvaluationVerdict
+import app.knotwork.android.domain.models.TriggerRunOutcome
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.NetworkStateRepository
@@ -68,6 +72,7 @@ import app.knotwork.android.domain.usecases.FireTriggerUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.ParkedRunResumer
 import app.knotwork.android.domain.usecases.PendingSubmissionOutcome
+import app.knotwork.android.domain.usecases.RecordTriggerEvaluationUseCase
 import app.knotwork.android.domain.usecases.ResumePipelineRunUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
@@ -82,6 +87,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -272,7 +278,7 @@ class TriggerBackgroundRunIntegrationTest {
             val fireTrigger = buildFireTrigger(process)
 
             // ── Fire the trigger (the charging edge is satisfied + armed) ──
-            val outcome = fireTrigger(TRIGGER_ID, NOW)
+            val outcome = fireTrigger(TRIGGER_ID, TriggerEvaluationSource.POLL, NOW)
 
             assertEquals(TriggerFireOutcome.Fired(GRAPH_ID), outcome)
             // The run was enqueued through the scheduler path attributed to the trigger.
@@ -314,6 +320,16 @@ class TriggerBackgroundRunIntegrationTest {
             assertEquals(NOW, firedTrigger?.lastFiredAt)
             assertFalse("a fired event trigger is disarmed until its condition drops", firedTrigger?.armed ?: true)
 
+            // ── The journal completed the two-phase row: one Fired evaluation for
+            //    this run id, its outcome now attributed as Success end-to-end ──
+            val journal = process.triggerJournal.observeByTrigger(TRIGGER_ID).first()
+            assertEquals(1, journal.size)
+            val entry = journal.single()
+            assertEquals(TriggerEvaluationVerdict.Fired, entry.verdict)
+            assertEquals(TriggerEvaluationSource.POLL, entry.source)
+            assertEquals(runId, entry.runId)
+            assertEquals(TriggerRunOutcome.Success, entry.outcome)
+
             process.taskQueueManager.scope.cancel()
         }
 
@@ -326,7 +342,7 @@ class TriggerBackgroundRunIntegrationTest {
             val fireTrigger = buildFireTrigger(process)
 
             // ── Fire the trigger; the run reaches the SENSITIVE tool node ──
-            val outcome = fireTrigger(TRIGGER_ID, NOW)
+            val outcome = fireTrigger(TRIGGER_ID, TriggerEvaluationSource.POLL, NOW)
             assertEquals(TriggerFireOutcome.Fired(GRAPH_ID), outcome)
             assertNotNull("the bridge captured the enqueued run id", process.scheduler.lastRunId)
             val runId = process.scheduler.lastRunId!!
@@ -368,6 +384,14 @@ class TriggerBackgroundRunIntegrationTest {
                 },
             )
 
+            // ── The two-phase journal row survived the park and resume: still a
+            //    single Fired entry, its outcome now Success after the resumed run
+            //    completed (attributed on the resume path, not by the dead worker) ──
+            val entry = process.triggerJournal.observeByTrigger(TRIGGER_ID).first().single()
+            assertEquals(TriggerEvaluationVerdict.Fired, entry.verdict)
+            assertEquals(runId, entry.runId)
+            assertEquals(TriggerRunOutcome.Success, entry.outcome)
+
             process.taskQueueManager.scope.cancel()
         }
 
@@ -393,6 +417,7 @@ class TriggerBackgroundRunIntegrationTest {
         scheduledTaskNotifier = scheduledTaskNotifier,
         triggerScheduler = triggerScheduler,
         usageTelemetry = usageTelemetry,
+        recordTriggerEvaluation = RecordTriggerEvaluationUseCase(process.triggerJournal),
     )
 
     /**
@@ -404,7 +429,13 @@ class TriggerBackgroundRunIntegrationTest {
     private fun buildProcess(llmEngine: LlmInferenceEngine): ProcessHarness {
         val telemetry = mockk<UsageTelemetryRepository>(relaxed = true)
         coEvery { telemetry.isEnabled() } returns false
-        val runRepository = PipelineRunRepositoryImpl(database.pipelineRunDao(), telemetry)
+        // Real, Room-backed trigger journal shared by the fire path (which opens
+        // the Fired row) and the run store (which attributes the terminal outcome
+        // back onto it) — so the two-phase correlation is exercised end-to-end.
+        val triggerJournal = TriggerJournalRepositoryImpl(database.triggerJournalDao()).apply {
+            dispatcher = testDispatcher
+        }
+        val runRepository = PipelineRunRepositoryImpl(database.pipelineRunDao(), telemetry, triggerJournal)
         val traceRepository = RunTraceRepositoryImpl(database.traceStepDao())
             .apply { dispatcher = testDispatcher }
         val pendingRepository = PendingInteractionRepositoryImpl(database.pendingInteractionDao())
@@ -534,6 +565,7 @@ class TriggerBackgroundRunIntegrationTest {
             pendingRepository = pendingRepository,
             approvalNotifier = approvalNotifier,
             parkedRunResumer = parkedRunResumer,
+            triggerJournal = triggerJournal,
         )
     }
 
@@ -592,15 +624,19 @@ class TriggerBackgroundRunIntegrationTest {
             constraints: ScheduledTaskConstraints,
             pipelineId: String?,
             origin: RunOrigin,
+            runId: String?,
         ) {
             lastSessionId = sessionId
             lastPipelineId = pipelineId
             lastOrigin = origin
+            // Honour the pre-minted id exactly as `AgentWorker` does, so the run
+            // the queue creates shares identity with the trigger's journal row.
             lastRunId = orchestrator.enqueueScheduled(
                 sessionId = requireNotNull(sessionId) { "a trigger run always threads a bound session" },
                 userPrompt = prompt,
                 pipelineId = pipelineId,
                 origin = origin,
+                runId = runId,
             )
         }
 
@@ -621,6 +657,8 @@ class TriggerBackgroundRunIntegrationTest {
      * @property pendingRepository Persistent HITL park store.
      * @property approvalNotifier Captures the park notification.
      * @property parkedRunResumer Background-decision submission tail.
+     * @property triggerJournal Real trigger-evaluation journal, shared by the
+     *   fire path and the run store, so a test can read back the two-phase row.
      */
     private data class ProcessHarness(
         val scheduler: QueueBridgeScheduler,
@@ -629,6 +667,7 @@ class TriggerBackgroundRunIntegrationTest {
         val pendingRepository: PendingInteractionRepositoryImpl,
         val approvalNotifier: ApprovalNotifier,
         val parkedRunResumer: ParkedRunResumer,
+        val triggerJournal: TriggerJournalRepositoryImpl,
     )
 
     private companion object {

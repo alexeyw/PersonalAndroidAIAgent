@@ -6,7 +6,9 @@ import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.repositories.PipelineRunRepository
+import app.knotwork.android.domain.repositories.TriggerJournalRepository
 import app.knotwork.android.domain.repositories.UsageTelemetryRepository
+import app.knotwork.android.domain.usecases.triggerRunOutcomeForTerminal
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -44,6 +46,7 @@ import javax.inject.Singleton
 class PipelineRunRepositoryImpl @Inject constructor(
     private val pipelineRunDao: PipelineRunDao,
     private val usageTelemetry: UsageTelemetryRepository,
+    private val triggerJournal: TriggerJournalRepository,
 ) : PipelineRunRepository {
 
     /**
@@ -117,10 +120,35 @@ class PipelineRunRepositoryImpl @Inject constructor(
                 )
             }
         } ?: 0
-        // Only a genuine terminal transition feeds telemetry: a duplicate /
+        // Only a genuine terminal transition feeds the observers: a duplicate /
         // racing finishRun on an already-terminal run is a DB no-op (0 rows) and
-        // must not double-count the run in the usage statistics.
-        if (rowsTransitioned > 0) recordRunTelemetry(runId, status)
+        // must neither double-count the run in the usage statistics nor overwrite
+        // an outcome already attributed to its trigger-journal row.
+        if (rowsTransitioned > 0) {
+            recordRunTelemetry(runId, status)
+            recordTriggerRunOutcome(runId, status, errorMessage)
+        }
+    }
+
+    /**
+     * Attributes this run's terminal fate back onto its trigger-evaluation
+     * journal row, if it has one — the second phase of the two-phase journal
+     * entry a firing trigger opened (see
+     * [app.knotwork.android.domain.models.TriggerEvaluation]).
+     *
+     * A run started by any surface other than a trigger has no journal row, so
+     * the keyed write is a harmless no-op; there is deliberately no origin
+     * pre-check, mirroring the journal's own "invoke unconditionally on the
+     * generic completion path" contract. The mapping from run status to the
+     * journal's outcome vocabulary — in particular keeping a system cancellation
+     * distinct from a genuine failure — lives in the pure
+     * [triggerRunOutcomeForTerminal] mapper.
+     *
+     * The journal store absorbs its own storage failures, so this can never
+     * disturb the run it observes.
+     */
+    private suspend fun recordTriggerRunOutcome(runId: String, status: PipelineRunStatus, errorMessage: String?) {
+        triggerJournal.recordRunOutcome(runId, triggerRunOutcomeForTerminal(status, errorMessage))
     }
 
     /**

@@ -36,6 +36,14 @@ details.
   background-reliability diagnostics. Retained for 30 days (with a hard record
   cap) and cleaned up in the existing daily maintenance window; nothing it
   holds ever leaves the device.
+- **The trigger-evaluation journal now records at every decision point.** Each
+  time an automation trigger is evaluated in the background, exactly one entry
+  is written the moment the decision is made — fired, re-armed, or a typed skip
+  reason — tagged with which background surface woke it. When a trigger fires,
+  the entry is later completed with the run's terminal fate: success, a typed
+  failure, a system cancellation (kept distinct from a failure), or a
+  background-approval timeout. Recording is a pure observer: a journal write
+  failure is logged but never alters or aborts the run it describes.
 
 ## [0.6.0] - 2026-07-16
 
