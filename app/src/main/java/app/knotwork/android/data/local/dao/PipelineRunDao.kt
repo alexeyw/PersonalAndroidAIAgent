@@ -114,6 +114,18 @@ interface PipelineRunDao {
     suspend fun getRun(runId: String): PipelineRunEntity?
 
     /**
+     * Returns just the [PipelineRunEntity.origin] discriminator of [runId], or
+     * `null` when no such row exists. A single-column projection so a caller that
+     * only needs to know *which surface* started a run (e.g. the terminal-outcome
+     * observers, to skip work for non-trigger runs) avoids reading and mapping the
+     * whole row.
+     *
+     * @param runId Id of the run to inspect.
+     */
+    @Query("SELECT origin FROM pipeline_runs WHERE id = :runId")
+    suspend fun getRunOrigin(runId: String): String?
+
+    /**
      * Returns the direct child runs of [parentRunId] (the sub-pipeline runs a
      * `PIPELINE` node spawned), oldest first. Building the full run tree walks
      * this recursively in the repository — nesting is bounded by the runtime

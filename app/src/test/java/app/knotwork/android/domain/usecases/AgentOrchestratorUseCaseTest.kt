@@ -134,4 +134,29 @@ class AgentOrchestratorUseCaseTest {
         // touching the replaying flow here would reintroduce the stale-state race.
         verify(exactly = 0) { taskQueueManager.observeTaskState(any()) }
     }
+
+    @Test
+    fun `enqueueScheduled honours a pre-minted run id verbatim as the task id`() {
+        val enqueued = slot<AgentTask>()
+        every { taskQueueManager.enqueueTask(capture(enqueued)) } returns Unit
+
+        // A trigger fire pre-mints the id it already wrote onto its journal row,
+        // so the run and the journal entry must share identity end-to-end.
+        val runId = useCase.enqueueScheduled(sessionId, "evening journal", runId = "trigger-run-1")
+
+        assertEquals("trigger-run-1", runId)
+        assertEquals("trigger-run-1", enqueued.captured.id)
+    }
+
+    @Test
+    fun `enqueueScheduled mints a fresh id when none is supplied`() {
+        val enqueued = slot<AgentTask>()
+        every { taskQueueManager.enqueueTask(capture(enqueued)) } returns Unit
+
+        val runId = useCase.enqueueScheduled(sessionId, "morning summary")
+
+        // The default path (every non-trigger caller) still gets a fresh id.
+        assertTrue(runId.isNotBlank())
+        assertEquals(enqueued.captured.id, runId)
+    }
 }

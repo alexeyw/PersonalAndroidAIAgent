@@ -140,7 +140,8 @@ class TriggerJournalRepositoryImpl @Inject constructor(private val dao: TriggerJ
     private fun TriggerRunOutcome.encode(): Pair<String, String?> = when (this) {
         TriggerRunOutcome.Success -> OUTCOME_SUCCESS to null
         is TriggerRunOutcome.Failure -> OUTCOME_FAILURE to error
-        TriggerRunOutcome.CancelledBySystem -> OUTCOME_CANCELLED to null
+        TriggerRunOutcome.CancelledBySystem -> OUTCOME_CANCELLED_BY_SYSTEM to null
+        TriggerRunOutcome.Cancelled -> OUTCOME_CANCELLED to null
         TriggerRunOutcome.HitlTimeout -> OUTCOME_HITL_TIMEOUT to null
     }
 
@@ -156,7 +157,8 @@ class TriggerJournalRepositoryImpl @Inject constructor(private val dao: TriggerJ
     private fun decodeOutcome(kind: String?, error: String?): TriggerRunOutcome? = when (kind) {
         OUTCOME_SUCCESS -> TriggerRunOutcome.Success
         OUTCOME_FAILURE -> error?.let { TriggerRunOutcome.Failure(it) }
-        OUTCOME_CANCELLED -> TriggerRunOutcome.CancelledBySystem
+        OUTCOME_CANCELLED_BY_SYSTEM -> TriggerRunOutcome.CancelledBySystem
+        OUTCOME_CANCELLED -> TriggerRunOutcome.Cancelled
         OUTCOME_HITL_TIMEOUT -> TriggerRunOutcome.HitlTimeout
         else -> null
     }
@@ -170,7 +172,8 @@ class TriggerJournalRepositoryImpl @Inject constructor(private val dao: TriggerJ
 
         const val OUTCOME_SUCCESS = "SUCCESS"
         const val OUTCOME_FAILURE = "FAILURE"
-        const val OUTCOME_CANCELLED = "CANCELLED_BY_SYSTEM"
+        const val OUTCOME_CANCELLED_BY_SYSTEM = "CANCELLED_BY_SYSTEM"
+        const val OUTCOME_CANCELLED = "CANCELLED"
         const val OUTCOME_HITL_TIMEOUT = "HITL_TIMEOUT"
     }
 }

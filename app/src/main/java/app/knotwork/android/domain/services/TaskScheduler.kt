@@ -52,6 +52,12 @@ interface TaskScheduler {
      * @param origin What triggered the run, recorded on the persistent run
      *   record. Defaults to [RunOrigin.SCHEDULER] for the scheduler tool; the
      *   tile passes [RunOrigin.QUICK_TILE].
+     * @param runId Pre-minted id for the run this task starts (equal to the
+     *   eventual `PipelineRun` / `AgentTask` id). `null` — the default for every
+     *   caller that does not need to know the id up front — lets the runtime mint
+     *   a fresh one. A trigger fire supplies it so it can write the run id onto
+     *   its two-phase journal row **before** the run exists, then attribute the
+     *   run's terminal outcome back by the very same id.
      */
     fun scheduleOneTime(
         prompt: String,
@@ -60,6 +66,7 @@ interface TaskScheduler {
         constraints: ScheduledTaskConstraints,
         pipelineId: String? = null,
         origin: RunOrigin = RunOrigin.SCHEDULER,
+        runId: String? = null,
     )
 
     /**

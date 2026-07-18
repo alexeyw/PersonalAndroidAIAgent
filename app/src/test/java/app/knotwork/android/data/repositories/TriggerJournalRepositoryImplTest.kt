@@ -116,6 +116,7 @@ class TriggerJournalRepositoryImplTest {
         val cases = mapOf(
             "run-s" to TriggerRunOutcome.Success,
             "run-c" to TriggerRunOutcome.CancelledBySystem,
+            "run-u" to TriggerRunOutcome.Cancelled,
             "run-h" to TriggerRunOutcome.HitlTimeout,
         )
         cases.entries.forEachIndexed { index, (runId, _) ->

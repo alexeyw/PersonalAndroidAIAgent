@@ -5,6 +5,7 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import app.knotwork.android.domain.models.TriggerCondition
+import app.knotwork.android.domain.models.TriggerEvaluationSource
 import app.knotwork.android.domain.repositories.TriggerRepository
 import app.knotwork.android.domain.usecases.FireTriggerUseCase
 import dagger.assisted.Assisted
@@ -55,7 +56,7 @@ class ChargingTriggerSweepWorker @AssistedInject constructor(
         val chargingTriggers = triggerRepository.observeActiveTriggers().first()
             .filter { it.condition is TriggerCondition.Charging }
         chargingTriggers.forEach { trigger ->
-            val outcome = fireTriggerUseCase(trigger.id)
+            val outcome = fireTriggerUseCase(trigger.id, TriggerEvaluationSource.CHARGING_SWEEP)
             Timber.tag(TAG).d("Charging sweep handled trigger %s: %s", trigger.id, outcome)
         }
         Result.success()

@@ -33,9 +33,10 @@ class WorkManagerTaskScheduler @Inject constructor(private val workManager: Work
         constraints: ScheduledTaskConstraints,
         pipelineId: String?,
         origin: RunOrigin,
+        runId: String?,
     ) {
         val requestBuilder = OneTimeWorkRequestBuilder<AgentWorker>()
-            .setInputData(buildInputData(prompt, sessionId, pipelineId, origin))
+            .setInputData(buildInputData(prompt, sessionId, pipelineId, origin, runId))
             .setConstraints(constraints.toWorkConstraints())
 
         if (delayMinutes > 0) {
@@ -51,8 +52,9 @@ class WorkManagerTaskScheduler @Inject constructor(private val workManager: Work
         sessionId: String?,
         constraints: ScheduledTaskConstraints,
     ) {
+        val inputData = buildInputData(prompt, sessionId, pipelineId = null, origin = RunOrigin.SCHEDULER, runId = null)
         val request = PeriodicWorkRequestBuilder<AgentWorker>(intervalHours, TimeUnit.HOURS)
-            .setInputData(buildInputData(prompt, sessionId, pipelineId = null, origin = RunOrigin.SCHEDULER))
+            .setInputData(inputData)
             .setConstraints(constraints.toWorkConstraints())
             .build()
 
@@ -70,16 +72,22 @@ class WorkManagerTaskScheduler @Inject constructor(private val workManager: Work
 
     /**
      * Builds the worker input data carrying the prompt, the (optional) bound
-     * session id, the (optional) explicit pipeline binding and the run origin
-     * read by [AgentWorker].
+     * session id, the (optional) explicit pipeline binding, the run origin and
+     * the (optional) pre-minted run id read by [AgentWorker].
      */
-    private fun buildInputData(prompt: String, sessionId: String?, pipelineId: String?, origin: RunOrigin): Data =
-        Data.Builder()
-            .putString(AgentWorker.KEY_PROMPT, prompt)
-            .putString(AgentWorker.KEY_SESSION_ID, sessionId)
-            .putString(AgentWorker.KEY_PIPELINE_ID, pipelineId)
-            .putString(AgentWorker.KEY_ORIGIN, origin.name)
-            .build()
+    private fun buildInputData(
+        prompt: String,
+        sessionId: String?,
+        pipelineId: String?,
+        origin: RunOrigin,
+        runId: String?,
+    ): Data = Data.Builder()
+        .putString(AgentWorker.KEY_PROMPT, prompt)
+        .putString(AgentWorker.KEY_SESSION_ID, sessionId)
+        .putString(AgentWorker.KEY_PIPELINE_ID, pipelineId)
+        .putString(AgentWorker.KEY_ORIGIN, origin.name)
+        .putString(AgentWorker.KEY_RUN_ID, runId)
+        .build()
 
     /**
      * Maps the domain [ScheduledTaskConstraints] onto a `WorkManager`

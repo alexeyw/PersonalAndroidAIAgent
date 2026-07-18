@@ -5,6 +5,7 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import app.knotwork.android.domain.models.TriggerEvaluationSource
 import app.knotwork.android.domain.usecases.FireTriggerUseCase
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -55,7 +56,10 @@ class TriggerWatchWorker @AssistedInject constructor(
             return Result.failure()
         }
         return try {
-            val outcome = fireTriggerUseCase(triggerId)
+            // POLL-sourced: this per-trigger periodic watch *is* the poll
+            // heartbeat — a POLL row appearing for the trigger is itself the
+            // "the platform did wake the poll" signal.
+            val outcome = fireTriggerUseCase(triggerId, TriggerEvaluationSource.POLL)
             Timber.tag(TAG).d("Trigger %s handled: %s", triggerId, outcome)
             if (!outcome.watchStillWarranted) {
                 workManager.cancelUniqueWork(UNIQUE_NAME_PREFIX + triggerId)

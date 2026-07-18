@@ -172,6 +172,35 @@ class AgentWorkerTest {
     }
 
     @Test
+    fun `given pipeline, origin and run id in input data when doWork runs then threads them to enqueueScheduled`() =
+        runTest {
+            stubRunLifecycle(run(PipelineRunStatus.COMPLETED))
+            // Override the enqueue stub to accept the fully-specified call a trigger
+            // fire produces (bound pipeline, TRIGGER origin, pre-minted run id).
+            every { useCase.enqueueScheduled(any(), any(), any(), any(), any()) } returns RUN_ID
+            val data = Data.Builder()
+                .putString(AgentWorker.KEY_PROMPT, "hello")
+                .putString(AgentWorker.KEY_SESSION_ID, SESSION_ID)
+                .putString(AgentWorker.KEY_PIPELINE_ID, "pipe-9")
+                .putString(AgentWorker.KEY_ORIGIN, RunOrigin.TRIGGER.name)
+                .putString(AgentWorker.KEY_RUN_ID, RUN_ID)
+                .build()
+
+            val result = buildWorker(data).doWork()
+
+            assertEquals(ListenableWorker.Result.success(), result)
+            coVerify(exactly = 1) {
+                useCase.enqueueScheduled(
+                    sessionId = SESSION_ID,
+                    userPrompt = "hello",
+                    pipelineId = "pipe-9",
+                    origin = RunOrigin.TRIGGER,
+                    runId = RUN_ID,
+                )
+            }
+        }
+
+    @Test
     fun `given session was deleted when doWork runs then recreates it under the requested id and rebinds the run`() =
         runTest {
             coEvery { chatRepository.sessionExists(SESSION_ID) } returns false

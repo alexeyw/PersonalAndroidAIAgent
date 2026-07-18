@@ -6,7 +6,9 @@ import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.repositories.PipelineRunRepository
+import app.knotwork.android.domain.repositories.TriggerJournalRepository
 import app.knotwork.android.domain.repositories.UsageTelemetryRepository
+import app.knotwork.android.domain.usecases.triggerRunOutcomeForTerminal
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -44,6 +46,7 @@ import javax.inject.Singleton
 class PipelineRunRepositoryImpl @Inject constructor(
     private val pipelineRunDao: PipelineRunDao,
     private val usageTelemetry: UsageTelemetryRepository,
+    private val triggerJournal: TriggerJournalRepository,
 ) : PipelineRunRepository {
 
     /**
@@ -117,10 +120,40 @@ class PipelineRunRepositoryImpl @Inject constructor(
                 )
             }
         } ?: 0
-        // Only a genuine terminal transition feeds telemetry: a duplicate /
+        // Only a genuine terminal transition feeds the observers: a duplicate /
         // racing finishRun on an already-terminal run is a DB no-op (0 rows) and
-        // must not double-count the run in the usage statistics.
-        if (rowsTransitioned > 0) recordRunTelemetry(runId, status)
+        // must neither double-count the run in the usage statistics nor overwrite
+        // an outcome already attributed to its trigger-journal row.
+        if (rowsTransitioned > 0) {
+            recordRunTelemetry(runId, status)
+            recordTriggerRunOutcome(runId, status, errorMessage)
+        }
+    }
+
+    /**
+     * Attributes this run's terminal fate back onto its trigger-evaluation
+     * journal row — the second phase of the two-phase journal entry a firing
+     * trigger opened (see [app.knotwork.android.domain.models.TriggerEvaluation]).
+     *
+     * Gated on the run being [RunOrigin.TRIGGER]: only a trigger fire ever opens a
+     * journal row, so for every other surface (interactive chat, the scheduler,
+     * the tile, a share, or a nested sub-pipeline child) the mapping and the keyed
+     * write would be pure waste on the hot completion path. The origin is read
+     * through a single-column projection rather than a full run load. The mapping
+     * from run status to the journal's outcome vocabulary — in particular keeping
+     * a platform kill distinct from a deliberate stop and from a genuine failure —
+     * lives in the pure [triggerRunOutcomeForTerminal] mapper.
+     *
+     * Best-effort throughout: the origin read is absorbed and the journal store
+     * absorbs its own storage failures, so this can never disturb the run it
+     * observes.
+     */
+    private suspend fun recordTriggerRunOutcome(runId: String, status: PipelineRunStatus, errorMessage: String?) {
+        val origin = absorbing("getRunOrigin") {
+            withContext(Dispatchers.IO) { pipelineRunDao.getRunOrigin(runId) }
+        }
+        if (origin != RunOrigin.TRIGGER.name) return
+        triggerJournal.recordRunOutcome(runId, triggerRunOutcomeForTerminal(status, errorMessage))
     }
 
     /**
