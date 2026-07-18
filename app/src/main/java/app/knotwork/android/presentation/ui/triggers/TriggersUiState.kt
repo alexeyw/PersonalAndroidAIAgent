@@ -3,6 +3,8 @@ package app.knotwork.android.presentation.ui.triggers
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.Trigger
 import app.knotwork.android.domain.models.TriggerCondition
+import app.knotwork.android.domain.models.TriggerEvaluation
+import app.knotwork.android.domain.models.TriggerHealthInputs
 import app.knotwork.android.presentation.ui.common.UiText
 import app.knotwork.android.presentation.ui.triggers.TriggerConditionFormatter.MIN_INTERVAL_MINUTES
 import app.knotwork.design.screens.triggers.TRIGGER_INTERVAL_PRESETS
@@ -179,6 +181,15 @@ data class TriggerDeleteTarget(val id: String, val name: String)
  * @property triggers all triggers, newest first.
  * @property pipelines pipelines offered in the editor's binding picker.
  * @property openMenuTriggerId id of the row whose overflow menu is open.
+ * @property healthInputs latest journal-derived health facts per trigger id, used
+ *   to derive each list row's health badge; absent for a trigger with no journal
+ *   rows yet.
+ * @property detailTriggerId id of the trigger whose detail surface is open, or
+ *   `null` when the list (or editor) is showing. Rendered instead of the list,
+ *   the same way the editor is.
+ * @property detailJournal the open detail trigger's evaluation journal (newest
+ *   first), or `null` while it is still loading (distinct from a loaded-but-empty
+ *   `emptyList()`).
  * @property editor non-null when the full-screen editor is open.
  * @property deleteTarget non-null when the delete dialog is open.
  * @property loadError a fatal load error (drives the Error screen when there is
@@ -191,6 +202,9 @@ data class TriggersUiState(
     val triggers: List<Trigger> = emptyList(),
     val pipelines: List<PipelineGraph> = emptyList(),
     val openMenuTriggerId: String? = null,
+    val healthInputs: Map<String, TriggerHealthInputs> = emptyMap(),
+    val detailTriggerId: String? = null,
+    val detailJournal: List<TriggerEvaluation>? = null,
     val editor: TriggerEditorDraft? = null,
     val deleteTarget: TriggerDeleteTarget? = null,
     val loadError: UiText? = null,
@@ -198,4 +212,7 @@ data class TriggersUiState(
 ) {
     /** Number of triggers eligible to fire (enabled and bound). */
     val activeCount: Int get() = triggers.count { it.isActive }
+
+    /** The trigger whose detail is open, resolved against the current list. */
+    val detailTrigger: Trigger? get() = detailTriggerId?.let { id -> triggers.firstOrNull { it.id == id } }
 }

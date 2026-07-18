@@ -46,6 +46,19 @@ details.
   distinct so a platform-reliability problem is never confused with a failure or
   an intended stop. Recording is a pure observer: a journal write failure is
   logged but never alters or aborts the run it describes.
+- **See what your triggers are doing, without a cable.** Tapping a trigger now
+  opens a detail screen with its **evaluation journal** — a day-by-day timeline
+  of every time the trigger was checked in the background, written in plain
+  language: whether it fired, was re-armed, or was skipped (and why — e.g. "the
+  condition wasn't met at 07:15"), and for each run it started, how that run
+  ended (completed, failed with the reason, stopped by the system, you stopped
+  it, or timed out waiting for approval). Each trigger in the list also carries
+  an at-a-glance **health badge** — Healthy, Overdue (the phone hasn't checked it
+  in longer than expected — the tell-tale of aggressive battery savers), or Last
+  run failed — each shown with an icon and a label, never colour alone. An
+  overdue trigger's detail explains the likely cause in the header. This is the
+  window onto the background so a trigger that "just didn't happen" is never a
+  mystery.
 
 ## [0.6.0] - 2026-07-16
 

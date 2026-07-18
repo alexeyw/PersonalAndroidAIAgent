@@ -49,6 +49,40 @@ interface TriggerJournalDao {
     fun observeByTrigger(triggerId: String): Flow<List<TriggerEvaluationEntity>>
 
     /**
+     * Observes the newest evaluation row of **every** trigger — one row per
+     * `triggerId`, the one with the greatest `evaluatedAt`. Drives the list
+     * health-badge's staleness check (how long since each trigger was last
+     * evaluated). A rare `evaluatedAt` tie yields more than one row for a trigger;
+     * the caller keys by `triggerId` so the surplus row is harmlessly overwritten.
+     *
+     * @return A [Flow] emitting the latest row per trigger on every change.
+     */
+    @Query(
+        "SELECT t.* FROM trigger_evaluations t INNER JOIN (" +
+            "SELECT triggerId, MAX(evaluatedAt) AS maxAt FROM trigger_evaluations GROUP BY triggerId" +
+            ") m ON t.triggerId = m.triggerId AND t.evaluatedAt = m.maxAt",
+    )
+    fun observeLatestPerTrigger(): Flow<List<TriggerEvaluationEntity>>
+
+    /**
+     * Observes the newest **fired** evaluation row of every trigger that has ever
+     * fired — one row per `triggerId`, the fired one with the greatest
+     * `evaluatedAt`. Drives the health-badge's "last run failed" check: its
+     * settled outcome (or lack of one, when the latest fire is still pending) tells
+     * whether the most recent run of a trigger errored. Rows of other verdicts are
+     * excluded so a later skip / re-arm never masks the last fired outcome.
+     *
+     * @return A [Flow] emitting the latest fired row per trigger on every change.
+     */
+    @Query(
+        "SELECT t.* FROM trigger_evaluations t INNER JOIN (" +
+            "SELECT triggerId, MAX(evaluatedAt) AS maxAt FROM trigger_evaluations " +
+            "WHERE verdictKind = 'FIRED' GROUP BY triggerId" +
+            ") m ON t.triggerId = m.triggerId AND t.evaluatedAt = m.maxAt WHERE t.verdictKind = 'FIRED'",
+    )
+    fun observeLatestFiredPerTrigger(): Flow<List<TriggerEvaluationEntity>>
+
+    /**
      * Deletes every record older than [cutoff].
      *
      * @param cutoff Age cutoff, epoch-millis.

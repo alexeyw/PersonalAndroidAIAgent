@@ -15,14 +15,16 @@ object TriggersPreview {
             conditionType = TriggerConditionType.Charging,
             pipelineName = "Overnight summarizer",
             enabled = true,
+            health = TriggerHealthUi.Healthy,
         ),
         TriggerRowUi(
-            id = "morning",
-            name = "Morning briefing",
-            conditionLabel = "Every day at 08:00",
-            conditionType = TriggerConditionType.Daily,
-            pipelineName = "Daily briefing",
-            enabled = false,
+            id = "triage",
+            name = "Inbox triage",
+            conditionLabel = "Every 30 minutes",
+            conditionType = TriggerConditionType.Interval,
+            pipelineName = "Inbox triage",
+            enabled = true,
+            health = TriggerHealthUi.LastRunFailed,
         ),
         TriggerRowUi(
             id = "commute",
@@ -31,6 +33,16 @@ object TriggersPreview {
             conditionType = TriggerConditionType.Network,
             pipelineName = "News scanner",
             enabled = true,
+            health = TriggerHealthUi.Overdue,
+        ),
+        TriggerRowUi(
+            id = "morning",
+            name = "Morning briefing",
+            conditionLabel = "Every day at 08:00",
+            conditionType = TriggerConditionType.Daily,
+            pipelineName = "Daily briefing",
+            enabled = false,
+            health = null,
         ),
         TriggerRowUi(
             id = "backup",
@@ -39,6 +51,7 @@ object TriggersPreview {
             conditionType = TriggerConditionType.Interval,
             pipelineName = null,
             enabled = false,
+            health = null,
         ),
     )
 
@@ -48,7 +61,7 @@ object TriggersPreview {
         TriggerPipelineOptionUi("p3", "News scanner"),
     )
 
-    private const val SUBTITLE = "4 triggers · 2 active"
+    private const val SUBTITLE = "5 triggers · 3 active"
 
     // ── List states ────────────────────────────────────────────────────────
 
@@ -148,4 +161,135 @@ object TriggersPreview {
     // ── Delete dialog state ────────────────────────────────────────────────
 
     fun delete(): TriggerDeleteUi = TriggerDeleteUi(triggerName = "Morning briefing")
+
+    // ── Detail screen states ───────────────────────────────────────────────
+
+    /**
+     * A populated journal covering every legibility case: a pending fire, a
+     * settled success, the three distinct non-success outcomes, both skip
+     * sentences, and a re-arm — spread across three day groups.
+     */
+    private val DAY_GROUPS = listOf(
+        TriggerJournalDayGroupUi(
+            headerLabel = "Today",
+            entries = listOf(
+                TriggerJournalEntryUi(
+                    id = "e1",
+                    source = TriggerJournalSourceUi.Poll,
+                    verdict = TriggerJournalVerdictUi.Fired,
+                    outcome = TriggerJournalOutcomeUi.Pending,
+                    timestampLabel = "just now",
+                ),
+                TriggerJournalEntryUi(
+                    id = "e2",
+                    source = TriggerJournalSourceUi.Poll,
+                    verdict = TriggerJournalVerdictUi.Fired,
+                    outcome = TriggerJournalOutcomeUi.Success,
+                    timestampLabel = "08:15",
+                ),
+                TriggerJournalEntryUi(
+                    id = "e3",
+                    source = TriggerJournalSourceUi.Poll,
+                    verdict = TriggerJournalVerdictUi.Skipped,
+                    skipReason = TriggerJournalSkipReasonUi.ConditionNotMet,
+                    skipMomentLabel = "07:15",
+                    timestampLabel = "07:15",
+                ),
+            ),
+        ),
+        TriggerJournalDayGroupUi(
+            headerLabel = "Yesterday",
+            entries = listOf(
+                TriggerJournalEntryUi(
+                    id = "e4",
+                    source = TriggerJournalSourceUi.Charging,
+                    verdict = TriggerJournalVerdictUi.Fired,
+                    outcome = TriggerJournalOutcomeUi.CancelledBySystem,
+                    timestampLabel = "22:40",
+                ),
+                TriggerJournalEntryUi(
+                    id = "e5",
+                    source = TriggerJournalSourceUi.Event,
+                    verdict = TriggerJournalVerdictUi.Fired,
+                    outcome = TriggerJournalOutcomeUi.Failure,
+                    outcomeError = "model timed out",
+                    timestampLabel = "18:10",
+                ),
+                TriggerJournalEntryUi(
+                    id = "e6",
+                    source = TriggerJournalSourceUi.Poll,
+                    verdict = TriggerJournalVerdictUi.Skipped,
+                    skipReason = TriggerJournalSkipReasonUi.AlreadyFired,
+                    timestampLabel = "12:30",
+                ),
+                TriggerJournalEntryUi(
+                    id = "e7",
+                    source = TriggerJournalSourceUi.Event,
+                    verdict = TriggerJournalVerdictUi.ReArmed,
+                    timestampLabel = "08:15",
+                ),
+            ),
+        ),
+        TriggerJournalDayGroupUi(
+            headerLabel = "Mon 14 Jul",
+            entries = listOf(
+                TriggerJournalEntryUi(
+                    id = "e8",
+                    source = TriggerJournalSourceUi.Poll,
+                    verdict = TriggerJournalVerdictUi.Fired,
+                    outcome = TriggerJournalOutcomeUi.HitlTimeout,
+                    timestampLabel = "19:05",
+                ),
+                TriggerJournalEntryUi(
+                    id = "e9",
+                    source = TriggerJournalSourceUi.Event,
+                    verdict = TriggerJournalVerdictUi.Fired,
+                    outcome = TriggerJournalOutcomeUi.Cancelled,
+                    timestampLabel = "15:20",
+                ),
+                TriggerJournalEntryUi(
+                    id = "e10",
+                    source = TriggerJournalSourceUi.Poll,
+                    verdict = TriggerJournalVerdictUi.Skipped,
+                    skipReason = TriggerJournalSkipReasonUi.Disabled,
+                    timestampLabel = "08:15",
+                ),
+            ),
+        ),
+    )
+
+    private fun baseDetail(): TriggerDetailViewState = TriggerDetailViewState(
+        name = "Inbox triage",
+        conditionType = TriggerConditionType.Interval,
+        conditionLabel = "Every 30 minutes",
+        pipelineName = "Inbox triage",
+        enabled = true,
+    )
+
+    fun detailPopulated(): TriggerDetailViewState = baseDetail().copy(
+        journalState = TriggerJournalVisualState.Populated,
+        dayGroups = DAY_GROUPS,
+    )
+
+    fun detailStale(): TriggerDetailViewState = detailPopulated().copy(
+        showStaleBanner = true,
+        staleSinceLabel = "07:15",
+    )
+
+    fun detailEmpty(): TriggerDetailViewState = baseDetail().copy(
+        name = "Morning briefing",
+        conditionType = TriggerConditionType.Daily,
+        conditionLabel = "Every day at 08:00",
+        pipelineName = "Daily briefing",
+        journalState = TriggerJournalVisualState.Empty,
+    )
+
+    fun detailLoading(): TriggerDetailViewState = baseDetail().copy(journalState = TriggerJournalVisualState.Loading)
+
+    fun detailUnbound(): TriggerDetailViewState = baseDetail().copy(
+        name = "Photo backup notes",
+        pipelineName = null,
+        enabled = false,
+        journalState = TriggerJournalVisualState.Empty,
+    )
 }

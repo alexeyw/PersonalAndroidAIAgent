@@ -3,8 +3,15 @@ package app.knotwork.android.presentation.ui.triggers
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.Trigger
 import app.knotwork.android.domain.models.TriggerCondition
+import app.knotwork.android.domain.models.TriggerEvaluation
+import app.knotwork.android.domain.models.TriggerEvaluationSource
+import app.knotwork.android.domain.models.TriggerEvaluationVerdict
+import app.knotwork.android.domain.models.TriggerHealthInputs
+import app.knotwork.android.domain.models.TriggerRunOutcome
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.TriggerRepository
+import app.knotwork.android.domain.usecases.ObserveTriggerHealthInputsUseCase
+import app.knotwork.android.domain.usecases.ObserveTriggerJournalUseCase
 import app.knotwork.android.domain.usecases.SaveTriggerUseCase
 import app.knotwork.android.domain.usecases.SyncTriggersUseCase
 import app.knotwork.design.screens.triggers.TriggerConditionType
@@ -39,6 +46,8 @@ class TriggersViewModelTest {
     private lateinit var pipelineRepository: PipelineRepository
     private lateinit var saveTrigger: SaveTriggerUseCase
     private lateinit var syncTriggers: SyncTriggersUseCase
+    private lateinit var observeHealthInputs: ObserveTriggerHealthInputsUseCase
+    private lateinit var observeJournal: ObserveTriggerJournalUseCase
 
     private val daily = trigger(
         id = "morning",
@@ -78,6 +87,8 @@ class TriggersViewModelTest {
         // derivation (armed / createdAt) is exercised end-to-end.
         saveTrigger = SaveTriggerUseCase(triggerRepository, mockk(relaxed = true))
         syncTriggers = mockk(relaxed = true)
+        observeHealthInputs = mockk { every { this@mockk.invoke() } returns flowOf(emptyMap()) }
+        observeJournal = mockk { every { this@mockk.invoke(any()) } returns flowOf(emptyList()) }
     }
 
     @After
@@ -85,7 +96,14 @@ class TriggersViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel() = TriggersViewModel(triggerRepository, pipelineRepository, saveTrigger, syncTriggers)
+    private fun viewModel() = TriggersViewModel(
+        triggerRepository,
+        pipelineRepository,
+        saveTrigger,
+        syncTriggers,
+        observeHealthInputs,
+        observeJournal,
+    )
 
     @Test
     fun `given repositories when initialised then loads triggers and pipelines`() = runTest(testDispatcher) {
@@ -298,6 +316,21 @@ class TriggersViewModelTest {
     }
 
     @Test
+    fun `given the editor is open when its trigger is deleted then the editor closes so save cannot resurrect it`() =
+        runTest(testDispatcher) {
+            val vm = viewModel()
+            advanceUntilIdle()
+            vm.openEditTrigger("morning")
+
+            vm.requestDelete("morning")
+            vm.confirmDelete()
+            advanceUntilIdle()
+
+            assertNull(vm.uiState.value.editor)
+            coVerify(exactly = 1) { triggerRepository.deleteTrigger("morning") }
+        }
+
+    @Test
     fun `given a delete request when cancelled then nothing is deleted`() = runTest(testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
@@ -308,5 +341,94 @@ class TriggersViewModelTest {
 
         coVerify(exactly = 0) { triggerRepository.deleteTrigger(any()) }
         assertNull(vm.uiState.value.deleteTarget)
+    }
+
+    // ── Detail surface ───────────────────────────────────────────────────────
+
+    @Test
+    fun `given a row tap when clicked then opens the detail surface, not the editor`() = runTest(testDispatcher) {
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.onRowClick("morning")
+        advanceUntilIdle()
+
+        assertEquals("morning", vm.uiState.value.detailTriggerId)
+        assertEquals(daily, vm.uiState.value.detailTrigger)
+        assertNull(vm.uiState.value.editor)
+    }
+
+    @Test
+    fun `given a detail is open when its journal emits then the journal lands in state`() = runTest(testDispatcher) {
+        val journal = listOf(
+            TriggerEvaluation(
+                id = "e1",
+                triggerId = "morning",
+                evaluatedAt = 42L,
+                source = TriggerEvaluationSource.POLL,
+                verdict = TriggerEvaluationVerdict.Fired,
+                runId = "r1",
+                outcome = TriggerRunOutcome.Success,
+            ),
+        )
+        every { observeJournal("morning") } returns flowOf(journal)
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        vm.openDetail("morning")
+        advanceUntilIdle()
+
+        assertEquals(journal, vm.uiState.value.detailJournal)
+    }
+
+    @Test
+    fun `given a detail is open when edit is requested then opens the editor for that trigger`() =
+        runTest(testDispatcher) {
+            val vm = viewModel()
+            advanceUntilIdle()
+            vm.openDetail("morning")
+
+            vm.editFromDetail()
+
+            assertEquals("morning", vm.uiState.value.editor?.id)
+        }
+
+    @Test
+    fun `given a detail is open when closed then clears the detail and its journal`() = runTest(testDispatcher) {
+        val vm = viewModel()
+        advanceUntilIdle()
+        vm.openDetail("morning")
+        advanceUntilIdle()
+
+        vm.closeDetail()
+
+        assertNull(vm.uiState.value.detailTriggerId)
+        assertNull(vm.uiState.value.detailJournal)
+    }
+
+    @Test
+    fun `given the open detail trigger is deleted when confirmed then the detail closes`() = runTest(testDispatcher) {
+        val vm = viewModel()
+        advanceUntilIdle()
+        vm.openDetail("morning")
+        advanceUntilIdle()
+
+        vm.requestDelete("morning")
+        vm.confirmDelete()
+        advanceUntilIdle()
+
+        assertNull(vm.uiState.value.detailTriggerId)
+        assertNull(vm.uiState.value.detailJournal)
+        coVerify(exactly = 1) { triggerRepository.deleteTrigger("morning") }
+    }
+
+    @Test
+    fun `given health inputs when initialised then they land in state`() = runTest(testDispatcher) {
+        val inputs = mapOf("morning" to TriggerHealthInputs(latestEvaluatedAt = 99L))
+        every { observeHealthInputs() } returns flowOf(inputs)
+        val vm = viewModel()
+        advanceUntilIdle()
+
+        assertEquals(inputs, vm.uiState.value.healthInputs)
     }
 }

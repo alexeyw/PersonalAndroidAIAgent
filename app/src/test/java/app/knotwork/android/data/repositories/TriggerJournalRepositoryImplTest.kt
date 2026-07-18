@@ -270,6 +270,66 @@ class TriggerJournalRepositoryImplTest {
             assertNull(byId.getValue("corrupt").outcome)
         }
 
+    @Test
+    fun `given rows across triggers when observing health inputs then latest eval and fired outcome per trigger`() =
+        runTest {
+            val repo = repository()
+            // trig-1: fired+success at 20, then a later skip at 30 (the newest row).
+            repo.recordEvaluation(
+                evaluation("a", "trig-1", evaluatedAt = 20, runId = "r-a", outcome = TriggerRunOutcome.Success),
+            )
+            repo.recordEvaluation(
+                evaluation(
+                    "b",
+                    "trig-1",
+                    evaluatedAt = 30,
+                    verdict = TriggerEvaluationVerdict.Skipped(TriggerSkipReason.ALREADY_FIRED),
+                ),
+            )
+            // trig-2: a single fired+failure at 5.
+            repo.recordEvaluation(
+                evaluation("c", "trig-2", evaluatedAt = 5, runId = "r-c", outcome = TriggerRunOutcome.Failure("boom")),
+            )
+
+            val inputs = repo.observeHealthInputs().first()
+
+            // Latest evaluation is the newest row of ANY verdict; the fired outcome
+            // comes from the newest FIRED row even when a skip supersedes it.
+            assertEquals(30L, inputs.getValue("trig-1").latestEvaluatedAt)
+            assertEquals(TriggerRunOutcome.Success, inputs.getValue("trig-1").latestFiredOutcome)
+            assertEquals(5L, inputs.getValue("trig-2").latestEvaluatedAt)
+            assertEquals(TriggerRunOutcome.Failure("boom"), inputs.getValue("trig-2").latestFiredOutcome)
+        }
+
+    @Test
+    fun `given a trigger that only ever skipped when observing health inputs then no fired outcome`() = runTest {
+        val repo = repository()
+        repo.recordEvaluation(
+            evaluation(
+                "s",
+                "trig-1",
+                evaluatedAt = 10,
+                verdict = TriggerEvaluationVerdict.Skipped(TriggerSkipReason.DISABLED),
+            ),
+        )
+
+        val entry = repo.observeHealthInputs().first().getValue("trig-1")
+
+        assertEquals(10L, entry.latestEvaluatedAt)
+        assertNull(entry.latestFiredOutcome)
+    }
+
+    @Test
+    fun `given a fired run still pending when observing health inputs then no fired outcome yet`() = runTest {
+        val repo = repository()
+        repo.recordEvaluation(evaluation("p", "trig-1", evaluatedAt = 10, runId = "r-p", outcome = null))
+
+        val entry = repo.observeHealthInputs().first().getValue("trig-1")
+
+        assertEquals(10L, entry.latestEvaluatedAt)
+        assertNull(entry.latestFiredOutcome)
+    }
+
     /** Builds a raw fired-row entity for the tolerant-decode tests. */
     private fun row(id: String, evaluatedAt: Long, outcomeKind: String?, outcomeError: String?) =
         TriggerEvaluationEntity(

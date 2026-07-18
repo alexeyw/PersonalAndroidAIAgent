@@ -89,6 +89,11 @@ project — `:app` consumes it as an `implementation` dependency.
       colour family (`Queued`, `Idle`, `Running`, `Success`, `Warning`,
       `Error`, `Cancelled`); pulses the dot for `Running` (respects
       `KnotworkTheme.a11y.reducedMotion()`).
+    - `HealthBadge.kt` — trigger list-row health badge on `StatusPill`
+      geometry but a **glyph** (not the dot) + tinted fill, so state reads
+      by icon + label (`Healthy` / `Overdue` / `Last run failed`), never
+      colour alone; collapses to icon-only at font-scale ≥ 2.0 (label kept
+      for TalkBack).
     - `KnotworkChip.kt` — general-purpose pill chip with `Default /
       Tonal / Outline` styles, optional leading/trailing icons and a
       decorative (no-`onClick`) variant for tag rows; complements the
@@ -285,6 +290,21 @@ project — `:app` consumes it as an `implementation` dependency.
       MCP servers with expandable tool lists and connection states).
     - `ToolsViewState.kt` — visual-state enum + risk-tier / MCP
       connection enums + tool / server row models.
+  - `triggers/` — automation-trigger surfaces (`TriggersContent` list with
+    inline enable switch + health badge, `TriggerEditorContent`
+    full-screen editor, `TriggerDeleteDialogContent`, and the detail below).
+    - `TriggerDetailContent.kt` — trigger-detail surface: identity header
+      (When / Runs / State + enable switch), Edit / Delete, an optional
+      overdue stale banner, and the **evaluation journal** timeline (per-day
+      groups; each entry = verdict tile + source + timestamp, plus a settled
+      outcome line for fired rows or a human skip / re-arm sentence);
+      loading / empty / populated states, reduced-motion-aware pending dot.
+    - `TriggerDetailViewState.kt` — detail view-state + the journal
+      vocabulary mirrors (`TriggerHealthUi`, source / verdict / skip-reason /
+      outcome enums, entry / day-group models, `TriggerJournalVisualState`),
+      `TriggerDetailStrings` (final English copy defaults), callbacks.
+    - `TriggersViewState.kt` — list view-state (`TriggerRowUi` incl. the
+      optional `health` badge, editor / delete models, strings, callbacks).
 - `src/test/java/app/knotwork/design/tokens/KnotworkTokensTest.kt` —
   pure-JVM sanity tests for the token data classes (no Compose runtime).
 - `src/test/java/app/knotwork/design/theme/KnotworkThemeTest.kt` —
