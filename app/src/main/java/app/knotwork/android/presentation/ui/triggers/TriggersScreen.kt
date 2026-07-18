@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -63,6 +64,7 @@ import app.knotwork.design.screens.triggers.TriggersContent
 import app.knotwork.design.screens.triggers.TriggersStrings
 import app.knotwork.design.screens.triggers.TriggersViewState
 import app.knotwork.design.screens.triggers.TriggersVisualState
+import kotlinx.coroutines.delay
 import java.time.ZoneId
 
 /**
@@ -118,6 +120,11 @@ fun TriggersScreen(
         }
     }
 
+    // A slowly ticking clock so staleness badges and relative journal labels
+    // advance while the screen stays open, even when no trigger/journal flow emits
+    // (a trigger can silently cross its stale threshold otherwise).
+    val nowMillis = rememberTickingNowMillis()
+
     Box(modifier = modifier.fillMaxSize()) {
         val editor = uiState.editor
         val detailTrigger = uiState.detailTrigger
@@ -148,8 +155,9 @@ fun TriggersScreen(
                 uiState = uiState,
                 trigger = detailTrigger,
                 viewModel = viewModel,
+                nowMillis = nowMillis,
             )
-            else -> TriggersList(uiState = uiState, viewModel = viewModel, onBack = onBack)
+            else -> TriggersList(uiState = uiState, viewModel = viewModel, onBack = onBack, nowMillis = nowMillis)
         }
 
         // Shared delete dialog — surfaces over whichever surface (list or detail)
@@ -171,7 +179,7 @@ fun TriggersScreen(
 
 /** The list surface + its delete dialog, shown when the editor is closed. */
 @Composable
-private fun TriggersList(uiState: TriggersUiState, viewModel: TriggersViewModel, onBack: () -> Unit) {
+private fun TriggersList(uiState: TriggersUiState, viewModel: TriggersViewModel, onBack: () -> Unit, nowMillis: Long) {
     val resolvedError = uiState.loadError?.asString()
     val fallbackError = stringResource(R.string.triggers_error_body)
     TriggersContent(
@@ -185,7 +193,7 @@ private fun TriggersList(uiState: TriggersUiState, viewModel: TriggersViewModel,
             conditionLabels = uiState.conditionLabels(),
             resolvedError = resolvedError,
             fallbackError = fallbackError,
-            nowMillis = System.currentTimeMillis(),
+            nowMillis = nowMillis,
         ),
         strings = triggersStrings(),
         callbacks = TriggersCallbacks(
@@ -320,15 +328,41 @@ private fun TriggerCondition.toConditionType(): TriggerConditionType = when (thi
 private val triggerHealthEvaluator = TriggerHealthEvaluator()
 private val triggerJournalGrouper = TriggerJournalGrouper()
 
+/** Coarse tick period for [rememberTickingNowMillis] — the thresholds it feeds are minute-scale. */
+private const val NOW_TICK_MILLIS = 30_000L
+
+/**
+ * A composition-scoped clock that re-emits every [NOW_TICK_MILLIS] so time-derived
+ * UI — health staleness and relative journal timestamps — advances while the
+ * screen stays open, instead of freezing until an unrelated state change forces a
+ * recomposition. The tick is coarse, so its cost is negligible; it stops
+ * automatically when the composable leaves the composition.
+ */
+@Composable
+private fun rememberTickingNowMillis(): Long {
+    val now by produceState(initialValue = System.currentTimeMillis()) {
+        while (true) {
+            delay(NOW_TICK_MILLIS)
+            value = System.currentTimeMillis()
+        }
+    }
+    return now
+}
+
 /**
  * The trigger-detail surface: identity header + evaluation journal, reached by
  * tapping a list row. Edit / Delete / toggle reuse the list ViewModel's mutation
  * paths so there is no duplicated lifecycle logic.
  */
 @Composable
-private fun TriggerDetailSurface(uiState: TriggersUiState, trigger: Trigger, viewModel: TriggersViewModel) {
+private fun TriggerDetailSurface(
+    uiState: TriggersUiState,
+    trigger: Trigger,
+    viewModel: TriggersViewModel,
+    nowMillis: Long,
+) {
     TriggerDetailContent(
-        state = uiState.toDetailViewState(trigger = trigger, nowMillis = System.currentTimeMillis()),
+        state = uiState.toDetailViewState(trigger = trigger, nowMillis = nowMillis),
         strings = triggerDetailStrings(),
         callbacks = TriggerDetailCallbacks(
             onBack = viewModel::closeDetail,

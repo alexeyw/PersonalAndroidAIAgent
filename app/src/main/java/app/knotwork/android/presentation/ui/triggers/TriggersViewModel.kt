@@ -293,12 +293,17 @@ class TriggersViewModel @Inject constructor(
     /** Confirms the pending delete, removes the trigger, and re-syncs the runtime. */
     fun confirmDelete() {
         val target = _uiState.value.deleteTarget ?: return
-        // Close the detail surface if we are deleting the trigger it is showing —
-        // otherwise it would resolve to a now-missing trigger.
+        // Close any surface still pointing at the trigger being deleted — the
+        // detail (which would resolve to a now-missing trigger) and, critically,
+        // the editor: the shared delete dialog can be launched from the editor, and
+        // leaving its draft open would let a later Save re-upsert the same id and
+        // resurrect the trigger the user just deleted.
         _uiState.update {
             val closeDetail = it.detailTriggerId == target.id
+            val closeEditor = it.editor?.id == target.id
             it.copy(
                 deleteTarget = null,
+                editor = if (closeEditor) null else it.editor,
                 detailTriggerId = if (closeDetail) null else it.detailTriggerId,
                 detailJournal = if (closeDetail) null else it.detailJournal,
             )

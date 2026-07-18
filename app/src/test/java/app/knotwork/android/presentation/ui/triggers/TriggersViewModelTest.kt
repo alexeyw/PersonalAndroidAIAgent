@@ -316,6 +316,21 @@ class TriggersViewModelTest {
     }
 
     @Test
+    fun `given the editor is open when its trigger is deleted then the editor closes so save cannot resurrect it`() =
+        runTest(testDispatcher) {
+            val vm = viewModel()
+            advanceUntilIdle()
+            vm.openEditTrigger("morning")
+
+            vm.requestDelete("morning")
+            vm.confirmDelete()
+            advanceUntilIdle()
+
+            assertNull(vm.uiState.value.editor)
+            coVerify(exactly = 1) { triggerRepository.deleteTrigger("morning") }
+        }
+
+    @Test
     fun `given a delete request when cancelled then nothing is deleted`() = runTest(testDispatcher) {
         val vm = viewModel()
         advanceUntilIdle()
