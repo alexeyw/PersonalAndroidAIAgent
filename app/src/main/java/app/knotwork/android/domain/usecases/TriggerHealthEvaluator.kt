@@ -39,10 +39,8 @@ class TriggerHealthEvaluator @Inject constructor() {
      *
      * @param trigger The trigger to classify.
      * @param inputs The trigger's collapsed journal facts, or `null` when the
-     *   trigger has no journal rows at all (freshly created, or every row aged
-     *   out by retention). A bound trigger with no inputs is treated as
-     *   [TriggerHealthStatus.STALE] only once it is old enough to have been
-     *   evaluated — see [createdGraceElapsed].
+     *   trigger has no journal rows at all (never evaluated yet, or every row aged
+     *   out by retention).
      * @param nowMillis Current wall-clock time, epoch-millis.
      * @return The health state, or `null` when [trigger] is inactive (unbound or
      *   disabled) and therefore carries no health signal.
@@ -52,21 +50,24 @@ class TriggerHealthEvaluator @Inject constructor() {
         // background runtime, so they are never evaluated and have no health to show.
         if (!trigger.isActive) return null
 
+        // No journal history: staleness is deliberately NOT inferred here. A trigger
+        // reaches this state both when it was just made active (freshly bound or
+        // re-enabled, its first evaluation still pending — [Trigger.createdAt] is
+        // NOT the activation moment, so it cannot tell the two apart) and when it
+        // has genuinely never been polled. A false "Overdue" the instant a trigger
+        // goes active is the more damaging error — it erodes the badge's meaning —
+        // so a trigger with no evaluations reads HEALTHY; the detail screen's empty
+        // journal ("not checked yet") carries the never-evaluated state instead.
+        // Real staleness applies as soon as the first evaluation lands.
+        //
+        // Known limitation: a trigger re-enabled after a long disable keeps an old
+        // [TriggerHealthInputs.latestEvaluatedAt] and so may read STALE until its
+        // next scheduled poll writes a fresh row (bounded by the trigger's own
+        // interval — at most ~15 min for event/short-interval triggers). Closing
+        // that fully needs a persisted activation timestamp (a schema change).
+        if (inputs == null) return TriggerHealthStatus.HEALTHY
+
         val staleAfterMillis = staleThresholdMillis(trigger.condition)
-
-        if (inputs == null) {
-            // No journal rows yet. Immediately after creation this is normal (the
-            // first evaluation has not happened), so only report STALE once a full
-            // stale window has elapsed since creation without any evaluation
-            // landing — otherwise a healthy just-created trigger would flash a
-            // warning before its first poll.
-            return if (createdGraceElapsed(trigger.createdAt, nowMillis, staleAfterMillis)) {
-                TriggerHealthStatus.STALE
-            } else {
-                TriggerHealthStatus.HEALTHY
-            }
-        }
-
         val sinceLastEvaluation = nowMillis - inputs.latestEvaluatedAt
         if (sinceLastEvaluation > staleAfterMillis) return TriggerHealthStatus.STALE
 
@@ -76,10 +77,6 @@ class TriggerHealthEvaluator @Inject constructor() {
             TriggerHealthStatus.HEALTHY
         }
     }
-
-    /** Whether enough time has passed since creation to expect a first evaluation. */
-    private fun createdGraceElapsed(createdAt: Long, nowMillis: Long, staleAfterMillis: Long): Boolean =
-        nowMillis - createdAt > staleAfterMillis
 
     /**
      * The maximum silence, in millis, tolerated before a trigger is considered

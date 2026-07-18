@@ -13,8 +13,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.screens.triggers.TriggerHealthUi
@@ -52,7 +52,11 @@ fun HealthBadge(state: TriggerHealthUi, label: String, modifier: Modifier = Modi
         border = BorderStroke(width = 1.dp, color = color.copy(alpha = BORDER_ALPHA)),
         modifier = modifier
             .height(BadgeHeight)
-            .semantics { contentDescription = "Health: $label" },
+            // Replace the subtree's semantics with a single description so TalkBack
+            // announces "Health: <label>" once, not the glyph-less label a second
+            // time from the inner Text (and so the label survives the icon-only
+            // collapse at font-scale ≥ 2.0).
+            .clearAndSetSemantics { contentDescription = "Health: $label" },
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,

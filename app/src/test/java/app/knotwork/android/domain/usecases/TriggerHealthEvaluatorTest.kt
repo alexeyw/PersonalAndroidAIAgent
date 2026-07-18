@@ -61,10 +61,20 @@ class TriggerHealthEvaluatorTest {
     }
 
     @Test
-    fun `given no inputs and a long-created trigger when evaluated then stale`() {
-        // Interval 30m → threshold 60m; created 3h ago with no evaluation ever.
+    fun `given no inputs and a long-created trigger when evaluated then healthy not stale`() {
+        // A never-evaluated trigger reads HEALTHY regardless of age: createdAt is
+        // not the activation moment, so an old-but-just-bound trigger must not be
+        // mis-flagged as Overdue the instant it goes active.
         val result = evaluator.evaluate(trigger(createdAt = now - 180L * minute), null, now)
-        assertEquals(TriggerHealthStatus.STALE, result)
+        assertEquals(TriggerHealthStatus.HEALTHY, result)
+    }
+
+    @Test
+    fun `given a just-bound long-existing trigger with no evaluations when evaluated then healthy`() {
+        // The reported false-positive: bind a pipeline to a trigger created days
+        // ago → no journal rows yet → must be Healthy, never Overdue.
+        val t = trigger(createdAt = now - 10L * 24 * 60 * minute, pipelineId = "pipeline-1")
+        assertEquals(TriggerHealthStatus.HEALTHY, evaluator.evaluate(t, null, now))
     }
 
     // ── With journal inputs ──────────────────────────────────────────────────

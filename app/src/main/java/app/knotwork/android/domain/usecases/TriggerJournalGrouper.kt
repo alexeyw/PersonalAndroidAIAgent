@@ -8,8 +8,9 @@ import javax.inject.Inject
 
 /**
  * Time of day, `0..23` : `0..59`, extracted from an evaluation's timestamp for
- * display. Locale- and format-free so the presentation layer renders it with the
- * device's own 12-/24-hour convention.
+ * display. Format-free (the presentation layer renders it); the trigger surfaces
+ * render it in the **24-hour** convention used consistently across the feature
+ * (the editor's time field is labelled "24H", condition lines read "08:00").
  *
  * @property hour Hour of the day in the 24-hour clock.
  * @property minute Minute of the hour.

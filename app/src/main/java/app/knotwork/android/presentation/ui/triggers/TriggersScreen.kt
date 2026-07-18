@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -65,7 +66,9 @@ import app.knotwork.design.screens.triggers.TriggersStrings
 import app.knotwork.design.screens.triggers.TriggersViewState
 import app.knotwork.design.screens.triggers.TriggersVisualState
 import kotlinx.coroutines.delay
+import java.time.Instant
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /**
  * App-side Triggers mapper. Subscribes to [TriggersViewModel.uiState], folds it
@@ -378,12 +381,19 @@ private fun TriggerDetailSurface(
 @Composable
 private fun TriggersUiState.toDetailViewState(trigger: Trigger, nowMillis: Long): TriggerDetailViewState {
     val zone = remember { ZoneId.systemDefault() }
+    // Build the day formatter from the current config locale so headers follow a
+    // runtime language change (a static formatter would freeze the load-time locale).
+    val locale = LocalConfiguration.current.locales[0]
+    val dayFormatter = remember(locale) { DateTimeFormatter.ofPattern("EEE d MMM", locale) }
     val conditionLabel = conditionText(remember(trigger) { TriggerConditionFormatter.toLabel(trigger.condition) })
     val pipelineName = trigger.pipelineId?.let { id -> pipelines.firstOrNull { it.id == id }?.name }
 
     val health = triggerHealthEvaluator.evaluate(trigger, healthInputs[trigger.id], nowMillis)
     val stale = health == TriggerHealthStatus.STALE
-    val staleSince = healthInputs[trigger.id]?.latestEvaluatedAt?.let { clockLabel(it, zone) }
+    // Name the last-checked moment; qualify it with the date when it is not today
+    // so a multi-day-overdue trigger doesn't read as if it was checked this morning.
+    val staleSince = healthInputs[trigger.id]?.latestEvaluatedAt
+        ?.let { staleSinceLabel(it, nowMillis, zone, dayFormatter) }
 
     val journal = detailJournal
     val journalState = when {
@@ -400,7 +410,7 @@ private fun TriggersUiState.toDetailViewState(trigger: Trigger, nowMillis: Long)
         yesterday = stringResource(R.string.triggers_journal_day_yesterday),
     )
     val dayGroups = if (journalState == TriggerJournalVisualState.Populated) {
-        triggerJournalGrouper.group(journal.orEmpty(), nowMillis, zone).toDayGroupsUi(labels)
+        triggerJournalGrouper.group(journal.orEmpty(), nowMillis, zone).toDayGroupsUi(labels, dayFormatter)
     } else {
         emptyList()
     }
@@ -430,29 +440,31 @@ private data class JournalLabels(
 )
 
 /** Resolves the grouped journal view into localized catalog day groups. */
-private fun TriggerJournalView.toDayGroupsUi(labels: JournalLabels): List<TriggerJournalDayGroupUi> =
-    dayGroups.map { group ->
-        TriggerJournalDayGroupUi(
-            headerLabel = group.header.label(labels),
-            entries = group.entries.map { entry ->
-                val verdict = entry.evaluation.verdict
-                TriggerJournalEntryUi(
-                    id = entry.evaluation.id,
-                    source = entry.evaluation.source.toSourceUi(),
-                    verdict = verdict.toVerdictUi(),
-                    outcome = if (verdict is TriggerEvaluationVerdict.Fired) {
-                        entry.evaluation.outcome.toOutcomeUi()
-                    } else {
-                        null
-                    },
-                    outcomeError = (entry.evaluation.outcome as? TriggerRunOutcome.Failure)?.error,
-                    skipReason = (verdict as? TriggerEvaluationVerdict.Skipped)?.reason?.toSkipReasonUi(),
-                    skipMomentLabel = clockLabel(entry.momentTime),
-                    timestampLabel = entry.timestamp.label(labels),
-                )
-            },
-        )
-    }
+private fun TriggerJournalView.toDayGroupsUi(
+    labels: JournalLabels,
+    dayFormatter: DateTimeFormatter,
+): List<TriggerJournalDayGroupUi> = dayGroups.map { group ->
+    TriggerJournalDayGroupUi(
+        headerLabel = group.header.label(labels, dayFormatter),
+        entries = group.entries.map { entry ->
+            val verdict = entry.evaluation.verdict
+            TriggerJournalEntryUi(
+                id = entry.evaluation.id,
+                source = entry.evaluation.source.toSourceUi(),
+                verdict = verdict.toVerdictUi(),
+                outcome = if (verdict is TriggerEvaluationVerdict.Fired) {
+                    entry.evaluation.outcome.toOutcomeUi()
+                } else {
+                    null
+                },
+                outcomeError = (entry.evaluation.outcome as? TriggerRunOutcome.Failure)?.error,
+                skipReason = (verdict as? TriggerEvaluationVerdict.Skipped)?.reason?.toSkipReasonUi(),
+                skipMomentLabel = clockLabel(entry.momentTime),
+                timestampLabel = entry.timestamp.label(labels),
+            )
+        },
+    )
+}
 
 // ── Domain → catalog vocabulary maps ────────────────────────────────────────
 
@@ -494,10 +506,10 @@ private fun TriggerRunOutcome?.toOutcomeUi(): TriggerJournalOutcomeUi = when (th
 // ── Timestamp / day-header resolution ───────────────────────────────────────
 
 /** Resolves a structural day header to its localized label. */
-private fun JournalDayHeader.label(labels: JournalLabels): String = when (this) {
+private fun JournalDayHeader.label(labels: JournalLabels, dayFormatter: DateTimeFormatter): String = when (this) {
     JournalDayHeader.Today -> labels.today
     JournalDayHeader.Yesterday -> labels.yesterday
-    is JournalDayHeader.Date -> date.format(JOURNAL_DAY_FORMATTER)
+    is JournalDayHeader.Date -> date.format(dayFormatter)
 }
 
 /** Resolves a structural timestamp to its localized label. */
@@ -510,13 +522,18 @@ private fun JournalTimestamp.label(labels: JournalLabels): String = when (this) 
 /** Formats a [ClockTime] as a 24-hour `HH:mm` label. */
 private fun clockLabel(time: ClockTime): String = "%02d:%02d".format(time.hour, time.minute)
 
-/** Formats an epoch-millis moment as a 24-hour `HH:mm` label in [zone]. */
-private fun clockLabel(epochMillis: Long, zone: ZoneId): String {
-    val time = java.time.Instant.ofEpochMilli(epochMillis).atZone(zone)
-    return "%02d:%02d".format(time.hour, time.minute)
+/**
+ * Formats the stale banner's "last checked" moment. A same-day moment reads as a
+ * bare `HH:mm` ("07:15"); an earlier day is qualified with its date
+ * ("Mon 14 Jul, 07:15") so a multi-day-overdue trigger isn't misread as checked
+ * earlier today.
+ */
+private fun staleSinceLabel(epochMillis: Long, nowMillis: Long, zone: ZoneId, dayFormatter: DateTimeFormatter): String {
+    val moment = Instant.ofEpochMilli(epochMillis).atZone(zone)
+    val today = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
+    val time = "%02d:%02d".format(moment.hour, moment.minute)
+    return if (moment.toLocalDate() == today) time else "${moment.toLocalDate().format(dayFormatter)}, $time"
 }
-
-private val JOURNAL_DAY_FORMATTER = java.time.format.DateTimeFormatter.ofPattern("EEE d MMM")
 
 @Composable
 private fun triggerDetailStrings(): TriggerDetailStrings = TriggerDetailStrings(
