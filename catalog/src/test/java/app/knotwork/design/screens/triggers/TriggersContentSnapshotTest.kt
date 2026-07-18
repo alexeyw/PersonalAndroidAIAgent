@@ -119,6 +119,48 @@ class TriggersContentSnapshotTest {
         TriggerEditorContent(state = TriggersPreview.editorInvalid())
     }
 
+    // ── Detail screen ────────────────────────────────────────────────────
+
+    @Test
+    fun detail_populated_light() = snapshot(name = "detail_populated", dark = false) {
+        TriggerDetailContent(state = TriggersPreview.detailPopulated())
+    }
+
+    @Test
+    fun detail_populated_dark() = snapshot(name = "detail_populated", dark = true) {
+        TriggerDetailContent(state = TriggersPreview.detailPopulated())
+    }
+
+    @Test
+    fun detail_stale_light() = snapshot(name = "detail_stale", dark = false) {
+        TriggerDetailContent(state = TriggersPreview.detailStale())
+    }
+
+    @Test
+    fun detail_stale_dark() = snapshot(name = "detail_stale", dark = true) {
+        TriggerDetailContent(state = TriggersPreview.detailStale())
+    }
+
+    @Test
+    fun detail_empty_light() = snapshot(name = "detail_empty", dark = false) {
+        TriggerDetailContent(state = TriggersPreview.detailEmpty())
+    }
+
+    @Test
+    fun detail_empty_dark() = snapshot(name = "detail_empty", dark = true) {
+        TriggerDetailContent(state = TriggersPreview.detailEmpty())
+    }
+
+    @Test
+    fun detail_loading_light() = snapshot(name = "detail_loading", dark = false) {
+        TriggerDetailContent(state = TriggersPreview.detailLoading())
+    }
+
+    @Test
+    fun detail_unbound_light() = snapshot(name = "detail_unbound", dark = false) {
+        TriggerDetailContent(state = TriggersPreview.detailUnbound())
+    }
+
     // ── Delete dialog ────────────────────────────────────────────────────
 
     @Test

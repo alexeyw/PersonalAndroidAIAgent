@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import app.knotwork.android.R
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.TriggerRepository
+import app.knotwork.android.domain.usecases.ObserveTriggerHealthInputsUseCase
+import app.knotwork.android.domain.usecases.ObserveTriggerJournalUseCase
 import app.knotwork.android.domain.usecases.SaveTriggerUseCase
 import app.knotwork.android.domain.usecases.SyncTriggersUseCase
 import app.knotwork.android.domain.usecases.TriggerDraftIntent
@@ -12,12 +14,17 @@ import app.knotwork.android.presentation.ui.common.UiText
 import app.knotwork.design.screens.triggers.TriggerConditionType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -31,22 +38,28 @@ import javax.inject.Inject
  * start (see [SyncTriggersUseCase]).
  */
 @HiltViewModel
-@Suppress("TooManyFunctions") // List + editor combine many discrete callbacks; collapsing hides intent.
+@Suppress("TooManyFunctions") // List + detail + editor combine many discrete callbacks; collapsing hides intent.
 class TriggersViewModel @Inject constructor(
     private val triggerRepository: TriggerRepository,
     private val pipelineRepository: PipelineRepository,
     private val saveTrigger: SaveTriggerUseCase,
     private val syncTriggers: SyncTriggersUseCase,
+    private val observeTriggerHealthInputs: ObserveTriggerHealthInputsUseCase,
+    private val observeTriggerJournal: ObserveTriggerJournalUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TriggersUiState())
     val uiState: StateFlow<TriggersUiState> = _uiState.asStateFlow()
 
-    /** The single live collector of the trigger + pipeline flows; replaced on retry. */
+    /** The single live collector of the trigger + pipeline + health flows; replaced on retry. */
     private var observeJob: Job? = null
+
+    /** The live collector of the open detail trigger's journal; runs once for the VM's life. */
+    private var journalJob: Job? = null
 
     init {
         observe()
+        observeDetailJournal()
     }
 
     private fun observe() {
@@ -56,11 +69,45 @@ class TriggersViewModel @Inject constructor(
             combine(
                 triggerRepository.observeTriggers(),
                 pipelineRepository.getAllPipelines(),
-            ) { triggers, pipelines -> triggers to pipelines }
+                observeTriggerHealthInputs(),
+            ) { triggers, pipelines, healthInputs -> Triple(triggers, pipelines, healthInputs) }
                 .catch { e -> _uiState.update { it.copy(isLoading = false, loadError = e.toUiText()) } }
-                .collect { (triggers, pipelines) ->
+                .collect { (triggers, pipelines, healthInputs) ->
                     _uiState.update {
-                        it.copy(isLoading = false, triggers = triggers, pipelines = pipelines, loadError = null)
+                        it.copy(
+                            isLoading = false,
+                            triggers = triggers,
+                            pipelines = pipelines,
+                            healthInputs = healthInputs,
+                            loadError = null,
+                        )
+                    }
+                }
+        }
+    }
+
+    /**
+     * Follows the open detail trigger's journal. When [TriggersUiState.detailTriggerId]
+     * changes, switches to that trigger's evaluation stream (or emits `null` when
+     * the detail closes). A stale emission arriving after the detail changed is
+     * discarded by re-checking the id at merge time.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun observeDetailJournal() {
+        journalJob = viewModelScope.launch {
+            _uiState
+                .map { it.detailTriggerId }
+                .distinctUntilChanged()
+                .flatMapLatest { id ->
+                    if (id == null) flowOf(null) else observeTriggerJournal(id).map { journal -> id to journal }
+                }
+                .collect { emission ->
+                    _uiState.update { state ->
+                        when {
+                            emission == null -> state
+                            emission.first == state.detailTriggerId -> state.copy(detailJournal = emission.second)
+                            else -> state // stale emission for a since-changed detail
+                        }
                     }
                 }
         }
@@ -109,8 +156,25 @@ class TriggersViewModel @Inject constructor(
         _uiState.update { it.copy(openMenuTriggerId = null, editor = TriggerEditorDraft.fromTrigger(trigger)) }
     }
 
-    /** Whole-row tap opens the editor for that trigger. */
-    fun onRowClick(id: String) = openEditTrigger(id)
+    /**
+     * Whole-row tap opens the trigger's **detail** surface (identity + journal),
+     * from which the editor is reached via Edit. Resets the journal to its loading
+     * state until the first emission for this trigger arrives.
+     */
+    fun onRowClick(id: String) = openDetail(id)
+
+    /** Opens the detail surface for the trigger with [id]. */
+    fun openDetail(id: String) {
+        _uiState.update { it.copy(openMenuTriggerId = null, detailTriggerId = id, detailJournal = null) }
+    }
+
+    /** Closes the detail surface, returning to the list. */
+    fun closeDetail() = _uiState.update { it.copy(detailTriggerId = null, detailJournal = null) }
+
+    /** Opens the editor for the currently-open detail trigger (Edit action on detail). */
+    fun editFromDetail() {
+        _uiState.value.detailTriggerId?.let(::openEditTrigger)
+    }
 
     /** Closes the editor without persisting. */
     fun closeEditor() = _uiState.update { it.copy(editor = null) }
@@ -229,7 +293,16 @@ class TriggersViewModel @Inject constructor(
     /** Confirms the pending delete, removes the trigger, and re-syncs the runtime. */
     fun confirmDelete() {
         val target = _uiState.value.deleteTarget ?: return
-        _uiState.update { it.copy(deleteTarget = null) }
+        // Close the detail surface if we are deleting the trigger it is showing —
+        // otherwise it would resolve to a now-missing trigger.
+        _uiState.update {
+            val closeDetail = it.detailTriggerId == target.id
+            it.copy(
+                deleteTarget = null,
+                detailTriggerId = if (closeDetail) null else it.detailTriggerId,
+                detailJournal = if (closeDetail) null else it.detailJournal,
+            )
+        }
         viewModelScope.launch {
             try {
                 triggerRepository.deleteTrigger(target.id)

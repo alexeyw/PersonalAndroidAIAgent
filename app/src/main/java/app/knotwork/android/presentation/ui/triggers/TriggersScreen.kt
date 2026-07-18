@@ -2,6 +2,7 @@ package app.knotwork.android.presentation.ui.triggers
 
 import android.Manifest
 import android.content.pm.PackageManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
@@ -21,16 +22,40 @@ import androidx.compose.ui.window.Dialog
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import app.knotwork.android.R
+import app.knotwork.android.domain.models.Trigger
 import app.knotwork.android.domain.models.TriggerCondition
+import app.knotwork.android.domain.models.TriggerEvaluationSource
+import app.knotwork.android.domain.models.TriggerEvaluationVerdict
+import app.knotwork.android.domain.models.TriggerHealthStatus
+import app.knotwork.android.domain.models.TriggerRunOutcome
+import app.knotwork.android.domain.models.TriggerSkipReason
+import app.knotwork.android.domain.usecases.ClockTime
+import app.knotwork.android.domain.usecases.JournalDayHeader
+import app.knotwork.android.domain.usecases.JournalTimestamp
+import app.knotwork.android.domain.usecases.TriggerHealthEvaluator
+import app.knotwork.android.domain.usecases.TriggerJournalGrouper
+import app.knotwork.android.domain.usecases.TriggerJournalView
 import app.knotwork.android.presentation.ui.common.asString
 import app.knotwork.design.screens.triggers.TriggerConditionType
 import app.knotwork.design.screens.triggers.TriggerDeleteDialogContent
 import app.knotwork.design.screens.triggers.TriggerDeleteStrings
 import app.knotwork.design.screens.triggers.TriggerDeleteUi
+import app.knotwork.design.screens.triggers.TriggerDetailCallbacks
+import app.knotwork.design.screens.triggers.TriggerDetailContent
+import app.knotwork.design.screens.triggers.TriggerDetailStrings
+import app.knotwork.design.screens.triggers.TriggerDetailViewState
 import app.knotwork.design.screens.triggers.TriggerEditorCallbacks
 import app.knotwork.design.screens.triggers.TriggerEditorContent
 import app.knotwork.design.screens.triggers.TriggerEditorStrings
 import app.knotwork.design.screens.triggers.TriggerEditorUi
+import app.knotwork.design.screens.triggers.TriggerHealthUi
+import app.knotwork.design.screens.triggers.TriggerJournalDayGroupUi
+import app.knotwork.design.screens.triggers.TriggerJournalEntryUi
+import app.knotwork.design.screens.triggers.TriggerJournalOutcomeUi
+import app.knotwork.design.screens.triggers.TriggerJournalSkipReasonUi
+import app.knotwork.design.screens.triggers.TriggerJournalSourceUi
+import app.knotwork.design.screens.triggers.TriggerJournalVerdictUi
+import app.knotwork.design.screens.triggers.TriggerJournalVisualState
 import app.knotwork.design.screens.triggers.TriggerPipelineOptionUi
 import app.knotwork.design.screens.triggers.TriggerRowUi
 import app.knotwork.design.screens.triggers.TriggersCallbacks
@@ -38,6 +63,7 @@ import app.knotwork.design.screens.triggers.TriggersContent
 import app.knotwork.design.screens.triggers.TriggersStrings
 import app.knotwork.design.screens.triggers.TriggersViewState
 import app.knotwork.design.screens.triggers.TriggersVisualState
+import java.time.ZoneId
 
 /**
  * App-side Triggers mapper. Subscribes to [TriggersViewModel.uiState], folds it
@@ -84,10 +110,19 @@ fun TriggersScreen(
         viewModel.clearTransientError()
     }
 
+    // System back walks the inline stack editor → detail → list before exiting.
+    BackHandler(enabled = uiState.editor != null || uiState.detailTriggerId != null) {
+        when {
+            uiState.editor != null -> viewModel.closeEditor()
+            uiState.detailTriggerId != null -> viewModel.closeDetail()
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
         val editor = uiState.editor
-        if (editor != null) {
-            TriggerEditorContent(
+        val detailTrigger = uiState.detailTrigger
+        when {
+            editor != null -> TriggerEditorContent(
                 state = uiState.toEditorUi(editor),
                 strings = triggerEditorStrings(),
                 callbacks = TriggerEditorCallbacks(
@@ -109,8 +144,26 @@ fun TriggersScreen(
                     onDelete = { editor.id?.let(viewModel::requestDelete) },
                 ),
             )
-        } else {
-            TriggersList(uiState = uiState, viewModel = viewModel, onBack = onBack)
+            detailTrigger != null -> TriggerDetailSurface(
+                uiState = uiState,
+                trigger = detailTrigger,
+                viewModel = viewModel,
+            )
+            else -> TriggersList(uiState = uiState, viewModel = viewModel, onBack = onBack)
+        }
+
+        // Shared delete dialog — surfaces over whichever surface (list or detail)
+        // requested the delete.
+        val deleteTarget = uiState.deleteTarget
+        if (deleteTarget != null) {
+            Dialog(onDismissRequest = viewModel::cancelDelete) {
+                TriggerDeleteDialogContent(
+                    state = TriggerDeleteUi(triggerName = deleteTarget.name),
+                    strings = triggerDeleteStrings(),
+                    onConfirm = viewModel::confirmDelete,
+                    onCancel = viewModel::cancelDelete,
+                )
+            }
         }
         SnackbarHost(hostState = snackbarHostState)
     }
@@ -132,6 +185,7 @@ private fun TriggersList(uiState: TriggersUiState, viewModel: TriggersViewModel,
             conditionLabels = uiState.conditionLabels(),
             resolvedError = resolvedError,
             fallbackError = fallbackError,
+            nowMillis = System.currentTimeMillis(),
         ),
         strings = triggersStrings(),
         callbacks = TriggersCallbacks(
@@ -146,18 +200,6 @@ private fun TriggersList(uiState: TriggersUiState, viewModel: TriggersViewModel,
             onRetry = viewModel::retry,
         ),
     )
-
-    val deleteTarget = uiState.deleteTarget
-    if (deleteTarget != null) {
-        Dialog(onDismissRequest = viewModel::cancelDelete) {
-            TriggerDeleteDialogContent(
-                state = TriggerDeleteUi(triggerName = deleteTarget.name),
-                strings = triggerDeleteStrings(),
-                onConfirm = viewModel::confirmDelete,
-                onCancel = viewModel::cancelDelete,
-            )
-        }
-    }
 }
 
 /**
@@ -195,6 +237,7 @@ private fun TriggersUiState.toListViewState(
     conditionLabels: Map<String, String>,
     resolvedError: String?,
     fallbackError: String,
+    nowMillis: Long,
 ): TriggersViewState {
     val pipelineNames = pipelines.associate { it.id to it.name }
     val rows = triggers.map { trigger ->
@@ -205,6 +248,9 @@ private fun TriggersUiState.toListViewState(
             conditionType = trigger.condition.toConditionType(),
             pipelineName = trigger.pipelineId?.let { pipelineNames[it] },
             enabled = trigger.enabled,
+            health = triggerHealthEvaluator
+                .evaluate(trigger, healthInputs[trigger.id], nowMillis)
+                ?.toHealthUi(),
         )
     }
     val visualState = when {
@@ -268,6 +314,215 @@ private fun TriggerCondition.toConditionType(): TriggerConditionType = when (thi
     is TriggerCondition.NetworkConnected -> TriggerConditionType.Network
 }
 
+// ── Detail surface ──────────────────────────────────────────────────────────
+
+/** Stateless helpers reused across recompositions; both are pure and dependency-free. */
+private val triggerHealthEvaluator = TriggerHealthEvaluator()
+private val triggerJournalGrouper = TriggerJournalGrouper()
+
+/**
+ * The trigger-detail surface: identity header + evaluation journal, reached by
+ * tapping a list row. Edit / Delete / toggle reuse the list ViewModel's mutation
+ * paths so there is no duplicated lifecycle logic.
+ */
+@Composable
+private fun TriggerDetailSurface(uiState: TriggersUiState, trigger: Trigger, viewModel: TriggersViewModel) {
+    TriggerDetailContent(
+        state = uiState.toDetailViewState(trigger = trigger, nowMillis = System.currentTimeMillis()),
+        strings = triggerDetailStrings(),
+        callbacks = TriggerDetailCallbacks(
+            onBack = viewModel::closeDetail,
+            onEdit = viewModel::editFromDetail,
+            onDelete = { viewModel.requestDelete(trigger.id) },
+            onToggleEnabled = { viewModel.toggleEnabled(trigger.id) },
+            onBindPipeline = viewModel::editFromDetail,
+        ),
+    )
+}
+
+/** Maps the app state + the open [trigger] onto the catalog detail view state. */
+@Composable
+private fun TriggersUiState.toDetailViewState(trigger: Trigger, nowMillis: Long): TriggerDetailViewState {
+    val zone = remember { ZoneId.systemDefault() }
+    val conditionLabel = conditionText(remember(trigger) { TriggerConditionFormatter.toLabel(trigger.condition) })
+    val pipelineName = trigger.pipelineId?.let { id -> pipelines.firstOrNull { it.id == id }?.name }
+
+    val health = triggerHealthEvaluator.evaluate(trigger, healthInputs[trigger.id], nowMillis)
+    val stale = health == TriggerHealthStatus.STALE
+    val staleSince = healthInputs[trigger.id]?.latestEvaluatedAt?.let { clockLabel(it, zone) }
+
+    val journal = detailJournal
+    val journalState = when {
+        journal == null -> TriggerJournalVisualState.Loading
+        journal.isEmpty() -> TriggerJournalVisualState.Empty
+        else -> TriggerJournalVisualState.Populated
+    }
+    // Resolve the format-dependent labels once in composable context; the per-entry
+    // projection below is a plain function (no @Composable calls inside `map`).
+    val labels = JournalLabels(
+        justNow = stringResource(R.string.triggers_journal_time_just_now),
+        minutesAgoFormat = stringResource(R.string.triggers_journal_time_minutes_ago),
+        today = stringResource(R.string.triggers_journal_day_today),
+        yesterday = stringResource(R.string.triggers_journal_day_yesterday),
+    )
+    val dayGroups = if (journalState == TriggerJournalVisualState.Populated) {
+        triggerJournalGrouper.group(journal.orEmpty(), nowMillis, zone).toDayGroupsUi(labels)
+    } else {
+        emptyList()
+    }
+
+    return TriggerDetailViewState(
+        name = trigger.name,
+        conditionType = trigger.condition.toConditionType(),
+        conditionLabel = conditionLabel,
+        pipelineName = pipelineName,
+        enabled = trigger.enabled,
+        showStaleBanner = stale,
+        staleSinceLabel = if (stale) staleSince else null,
+        journalState = journalState,
+        dayGroups = dayGroups,
+    )
+}
+
+/**
+ * The format-dependent journal labels, pre-resolved once in composable context so
+ * the per-entry projection ([toDayGroupsUi]) can stay a plain function.
+ */
+private data class JournalLabels(
+    val justNow: String,
+    val minutesAgoFormat: String,
+    val today: String,
+    val yesterday: String,
+)
+
+/** Resolves the grouped journal view into localized catalog day groups. */
+private fun TriggerJournalView.toDayGroupsUi(labels: JournalLabels): List<TriggerJournalDayGroupUi> =
+    dayGroups.map { group ->
+        TriggerJournalDayGroupUi(
+            headerLabel = group.header.label(labels),
+            entries = group.entries.map { entry ->
+                val verdict = entry.evaluation.verdict
+                TriggerJournalEntryUi(
+                    id = entry.evaluation.id,
+                    source = entry.evaluation.source.toSourceUi(),
+                    verdict = verdict.toVerdictUi(),
+                    outcome = if (verdict is TriggerEvaluationVerdict.Fired) {
+                        entry.evaluation.outcome.toOutcomeUi()
+                    } else {
+                        null
+                    },
+                    outcomeError = (entry.evaluation.outcome as? TriggerRunOutcome.Failure)?.error,
+                    skipReason = (verdict as? TriggerEvaluationVerdict.Skipped)?.reason?.toSkipReasonUi(),
+                    skipMomentLabel = clockLabel(entry.momentTime),
+                    timestampLabel = entry.timestamp.label(labels),
+                )
+            },
+        )
+    }
+
+// ── Domain → catalog vocabulary maps ────────────────────────────────────────
+
+private fun TriggerHealthStatus.toHealthUi(): TriggerHealthUi = when (this) {
+    TriggerHealthStatus.HEALTHY -> TriggerHealthUi.Healthy
+    TriggerHealthStatus.STALE -> TriggerHealthUi.Overdue
+    TriggerHealthStatus.ERRORED -> TriggerHealthUi.LastRunFailed
+}
+
+private fun TriggerEvaluationSource.toSourceUi(): TriggerJournalSourceUi = when (this) {
+    TriggerEvaluationSource.POLL -> TriggerJournalSourceUi.Poll
+    TriggerEvaluationSource.EVENT -> TriggerJournalSourceUi.Event
+    TriggerEvaluationSource.CHARGING_SWEEP -> TriggerJournalSourceUi.Charging
+}
+
+private fun TriggerEvaluationVerdict.toVerdictUi(): TriggerJournalVerdictUi = when (this) {
+    TriggerEvaluationVerdict.Fired -> TriggerJournalVerdictUi.Fired
+    TriggerEvaluationVerdict.ReArmed -> TriggerJournalVerdictUi.ReArmed
+    is TriggerEvaluationVerdict.Skipped -> TriggerJournalVerdictUi.Skipped
+}
+
+private fun TriggerSkipReason.toSkipReasonUi(): TriggerJournalSkipReasonUi = when (this) {
+    TriggerSkipReason.DISABLED -> TriggerJournalSkipReasonUi.Disabled
+    TriggerSkipReason.UNBOUND -> TriggerJournalSkipReasonUi.Unbound
+    TriggerSkipReason.CONDITION_NOT_MET -> TriggerJournalSkipReasonUi.ConditionNotMet
+    TriggerSkipReason.ALREADY_FIRED -> TriggerJournalSkipReasonUi.AlreadyFired
+}
+
+/** Maps the settled (or absent → pending) run outcome to the catalog enum. */
+private fun TriggerRunOutcome?.toOutcomeUi(): TriggerJournalOutcomeUi = when (this) {
+    null -> TriggerJournalOutcomeUi.Pending
+    TriggerRunOutcome.Success -> TriggerJournalOutcomeUi.Success
+    is TriggerRunOutcome.Failure -> TriggerJournalOutcomeUi.Failure
+    TriggerRunOutcome.CancelledBySystem -> TriggerJournalOutcomeUi.CancelledBySystem
+    TriggerRunOutcome.Cancelled -> TriggerJournalOutcomeUi.Cancelled
+    TriggerRunOutcome.HitlTimeout -> TriggerJournalOutcomeUi.HitlTimeout
+}
+
+// ── Timestamp / day-header resolution ───────────────────────────────────────
+
+/** Resolves a structural day header to its localized label. */
+private fun JournalDayHeader.label(labels: JournalLabels): String = when (this) {
+    JournalDayHeader.Today -> labels.today
+    JournalDayHeader.Yesterday -> labels.yesterday
+    is JournalDayHeader.Date -> date.format(JOURNAL_DAY_FORMATTER)
+}
+
+/** Resolves a structural timestamp to its localized label. */
+private fun JournalTimestamp.label(labels: JournalLabels): String = when (this) {
+    JournalTimestamp.JustNow -> labels.justNow
+    is JournalTimestamp.MinutesAgo -> labels.minutesAgoFormat.format(minutes)
+    is JournalTimestamp.AbsoluteTime -> clockLabel(time)
+}
+
+/** Formats a [ClockTime] as a 24-hour `HH:mm` label. */
+private fun clockLabel(time: ClockTime): String = "%02d:%02d".format(time.hour, time.minute)
+
+/** Formats an epoch-millis moment as a 24-hour `HH:mm` label in [zone]. */
+private fun clockLabel(epochMillis: Long, zone: ZoneId): String {
+    val time = java.time.Instant.ofEpochMilli(epochMillis).atZone(zone)
+    return "%02d:%02d".format(time.hour, time.minute)
+}
+
+private val JOURNAL_DAY_FORMATTER = java.time.format.DateTimeFormatter.ofPattern("EEE d MMM")
+
+@Composable
+private fun triggerDetailStrings(): TriggerDetailStrings = TriggerDetailStrings(
+    backCd = stringResource(R.string.triggers_back_cd),
+    subtitle = stringResource(R.string.triggers_detail_subtitle),
+    whenLabel = stringResource(R.string.triggers_detail_when),
+    runsLabel = stringResource(R.string.triggers_detail_runs),
+    stateLabel = stringResource(R.string.triggers_detail_state),
+    stateEnabled = stringResource(R.string.triggers_detail_state_enabled),
+    stateDisabled = stringResource(R.string.triggers_detail_state_disabled),
+    unboundHint = stringResource(R.string.triggers_unbound_hint),
+    edit = stringResource(R.string.triggers_detail_edit),
+    delete = stringResource(R.string.triggers_detail_delete),
+    staleBannerTitleFormat = stringResource(R.string.triggers_detail_stale_title_format),
+    staleBannerTitleNoTime = stringResource(R.string.triggers_detail_stale_title_no_time),
+    staleBannerBody = stringResource(R.string.triggers_detail_stale_body),
+    journalSectionLabel = stringResource(R.string.triggers_journal_section),
+    journalWindowLabel = stringResource(R.string.triggers_journal_window),
+    retentionFooter = stringResource(R.string.triggers_journal_retention),
+    emptyTitle = stringResource(R.string.triggers_journal_empty_title),
+    emptyBody = stringResource(R.string.triggers_journal_empty_body),
+    sourcePoll = stringResource(R.string.triggers_journal_source_poll),
+    sourceEvent = stringResource(R.string.triggers_journal_source_event),
+    sourceCharging = stringResource(R.string.triggers_journal_source_charging),
+    verdictFired = stringResource(R.string.triggers_journal_verdict_fired),
+    verdictReArmed = stringResource(R.string.triggers_journal_verdict_rearmed),
+    verdictSkipped = stringResource(R.string.triggers_journal_verdict_skipped),
+    reArmNote = stringResource(R.string.triggers_journal_rearm_note),
+    skipDisabled = stringResource(R.string.triggers_journal_skip_disabled),
+    skipUnbound = stringResource(R.string.triggers_journal_skip_unbound),
+    skipConditionNotMetFormat = stringResource(R.string.triggers_journal_skip_condition_not_met_format),
+    skipAlreadyFired = stringResource(R.string.triggers_journal_skip_already_fired),
+    outcomePending = stringResource(R.string.triggers_journal_outcome_pending),
+    outcomeSuccess = stringResource(R.string.triggers_journal_outcome_success),
+    outcomeFailure = stringResource(R.string.triggers_journal_outcome_failure),
+    outcomeCancelledBySystem = stringResource(R.string.triggers_journal_outcome_cancelled_by_system),
+    outcomeCancelled = stringResource(R.string.triggers_journal_outcome_cancelled),
+    outcomeHitlTimeout = stringResource(R.string.triggers_journal_outcome_hitl_timeout),
+)
+
 @Composable
 private fun triggersStrings(): TriggersStrings = TriggersStrings(
     title = stringResource(R.string.triggers_screen_title),
@@ -285,6 +540,9 @@ private fun triggersStrings(): TriggersStrings = TriggersStrings(
     emptyStepResult = stringResource(R.string.triggers_empty_step_result),
     errorTitle = stringResource(R.string.triggers_error_title),
     errorRetry = stringResource(R.string.common_retry),
+    healthHealthy = stringResource(R.string.triggers_health_healthy),
+    healthOverdue = stringResource(R.string.triggers_health_overdue),
+    healthLastRunFailed = stringResource(R.string.triggers_health_last_run_failed),
 )
 
 @Composable

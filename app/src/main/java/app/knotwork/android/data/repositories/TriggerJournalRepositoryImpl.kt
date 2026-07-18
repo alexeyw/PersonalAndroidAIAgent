@@ -6,6 +6,7 @@ import app.knotwork.android.data.local.models.TriggerEvaluationEntity
 import app.knotwork.android.domain.models.TriggerEvaluation
 import app.knotwork.android.domain.models.TriggerEvaluationSource
 import app.knotwork.android.domain.models.TriggerEvaluationVerdict
+import app.knotwork.android.domain.models.TriggerHealthInputs
 import app.knotwork.android.domain.models.TriggerRunOutcome
 import app.knotwork.android.domain.models.TriggerSkipReason
 import app.knotwork.android.domain.repositories.TriggerJournalRepository
@@ -13,6 +14,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -64,6 +66,31 @@ class TriggerJournalRepositoryImpl @Inject constructor(private val dao: TriggerJ
         .catch { e ->
             Timber.tag(TAG).w(e, "Trigger-journal read failed for %s; emitting empty.", triggerId)
             emit(emptyList())
+        }
+        .flowOn(dispatcher)
+
+    override fun observeHealthInputs(): Flow<Map<String, TriggerHealthInputs>> = combine(
+        dao.observeLatestPerTrigger(),
+        dao.observeLatestFiredPerTrigger(),
+    ) { latest, fired ->
+        // The latest fired outcome per trigger — a `null` (never fired, still
+        // pending, or an undecodable outcome) is a legitimate "no error yet".
+        val firedOutcomeByTrigger: Map<String, TriggerRunOutcome?> =
+            fired.associate { it.triggerId to decodeOutcome(it.outcomeKind, it.outcomeError) }
+        // Staleness reads the raw row (triggerId + evaluatedAt), never the decoded
+        // verdict, so an unknown-future verdict still counts as "was evaluated".
+        latest.associate { row ->
+            row.triggerId to TriggerHealthInputs(
+                latestEvaluatedAt = row.evaluatedAt,
+                latestFiredOutcome = firedOutcomeByTrigger[row.triggerId],
+            )
+        }
+    }
+        // Degrade to no health data on a DAO/SQLCipher read error rather than
+        // letting the exception cancel the list's collector.
+        .catch { e ->
+            Timber.tag(TAG).w(e, "Trigger-journal health-inputs read failed; emitting empty.")
+            emit(emptyMap())
         }
         .flowOn(dispatcher)
 

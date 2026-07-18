@@ -1,6 +1,7 @@
 package app.knotwork.android.domain.repositories
 
 import app.knotwork.android.domain.models.TriggerEvaluation
+import app.knotwork.android.domain.models.TriggerHealthInputs
 import app.knotwork.android.domain.models.TriggerRunOutcome
 import kotlinx.coroutines.flow.Flow
 
@@ -54,6 +55,20 @@ interface TriggerJournalRepository {
      * @return A hot [Flow] emitting the trigger's evaluation list on every change.
      */
     fun observeByTrigger(triggerId: String): Flow<List<TriggerEvaluation>>
+
+    /**
+     * Observes the health-relevant journal facts of **every** trigger at once,
+     * collapsed to one [TriggerHealthInputs] per trigger id. Backs the list's
+     * health-badge, which must classify every row from a single reactive source
+     * rather than opening one journal stream per trigger.
+     *
+     * A trigger with no journal rows is simply absent from the map (the caller
+     * treats an absent entry as "not evaluated yet"). The map re-emits whenever a
+     * new evaluation is recorded or a pending run outcome settles.
+     *
+     * @return A hot [Flow] of `triggerId → latest health inputs`.
+     */
+    fun observeHealthInputs(): Flow<Map<String, TriggerHealthInputs>>
 
     /**
      * Applies the journal retention policy in one bounded pass: deletes every
