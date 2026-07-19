@@ -208,6 +208,52 @@ class TriggerJournalRepositoryImplTest {
         assertEquals(listOf("new-3", "new-2"), repo.observeByTrigger("trig-1").first().map { it.id })
     }
 
+    @Test
+    fun `given rows across triggers when readAll then it returns every row newest-first`() = runTest {
+        val repo = repository()
+        repo.recordEvaluation(evaluation("a", "trig-1", evaluatedAt = 10))
+        repo.recordEvaluation(evaluation("b", "trig-2", evaluatedAt = 30))
+        repo.recordEvaluation(
+            evaluation("c", "trig-1", evaluatedAt = 20, verdict = TriggerEvaluationVerdict.ReArmed),
+        )
+
+        val snapshot = repo.readAll()
+
+        // Every trigger's rows, one flat list, newest evaluatedAt first.
+        assertEquals(listOf("b", "c", "a"), snapshot.map { it.id })
+        assertEquals(setOf("trig-1", "trig-2"), snapshot.map { it.triggerId }.toSet())
+    }
+
+    @Test
+    fun `given a corrupt row when readAll then it is dropped like the reactive reads`() = runTest {
+        val repo = repository()
+        dao.insert(row(id = "ok", evaluatedAt = 1, outcomeKind = null, outcomeError = null))
+        dao.insert(
+            TriggerEvaluationEntity(
+                id = "bad",
+                triggerId = "trig-1",
+                evaluatedAt = 2,
+                source = "FROM_THE_FUTURE",
+                verdictKind = "FIRED",
+                skipReason = null,
+                runId = null,
+                outcomeKind = null,
+                outcomeError = null,
+            ),
+        )
+
+        assertEquals(listOf("ok"), repo.readAll().map { it.id })
+    }
+
+    @Test
+    fun `given the dao read fails when readAll then it degrades to an empty snapshot`() = runTest {
+        val failingDao = mockk<TriggerJournalDao>()
+        coEvery { failingDao.getAllOrderedByEvaluatedAt() } throws IllegalStateException("snapshot boom")
+        val repo = repository(failingDao)
+
+        assertTrue(repo.readAll().isEmpty())
+    }
+
     // --- Best-effort contract (mocked DAO) --------------------------------
 
     @Test

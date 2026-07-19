@@ -59,6 +59,12 @@ details.
   overdue trigger's detail explains the likely cause in the header. This is the
   window onto the background so a trigger that "just didn't happen" is never a
   mystery.
+- **Debug-only trigger-journal dump for background-reliability soak testing.** A
+  developer diagnostic — present only in debug builds, never shipped — writes the
+  full trigger-evaluation journal to a plain-JSON file that `adb pull` can
+  retrieve, so a multi-day background soak can be analysed offline without opening
+  the app or decrypting the on-device database. Nothing it produces leaves the
+  device.
 
 ## [0.6.0] - 2026-07-16
 

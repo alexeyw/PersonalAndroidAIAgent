@@ -71,6 +71,22 @@ interface TriggerJournalRepository {
     fun observeHealthInputs(): Flow<Map<String, TriggerHealthInputs>>
 
     /**
+     * Reads the entire journal as a one-shot snapshot, newest evaluation first.
+     *
+     * Unlike the reactive observers this is a plain suspend read returning a
+     * stable point-in-time copy of every trigger's rows at once — it backs the
+     * diagnostic journal export a soak run pulls off the device for offline
+     * analysis, where the closed-app protocol rules out reading the in-app UI.
+     * Per the best-effort observer contract it degrades to an **empty list** on
+     * any storage error (the failure is logged, never thrown), so a dump can
+     * never take down the caller; `CancellationException` is still re-thrown.
+     *
+     * @return Every stored [TriggerEvaluation], newest first; empty on a read
+     *   failure or an empty journal.
+     */
+    suspend fun readAll(): List<TriggerEvaluation>
+
+    /**
      * Applies the journal retention policy in one bounded pass: deletes every
      * record older than [olderThanEpochMs] and then trims the table to its newest
      * [maxRecords] rows, so the journal can never grow without bound even under a
