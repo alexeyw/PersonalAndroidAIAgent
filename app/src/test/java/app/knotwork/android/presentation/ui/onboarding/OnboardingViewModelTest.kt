@@ -265,6 +265,24 @@ class OnboardingViewModelTest {
     }
 
     @Test
+    fun `given a download in flight when skipping then the hint says it keeps running`() = runTest {
+        val viewModel = newViewModel()
+        every { downloadManager.downloadModel(any(), any(), any()) } returns kotlinx.coroutines.flow.flow {
+            emit(DownloadState.Downloading(progress = 30))
+            kotlinx.coroutines.awaitCancellation()
+        }
+        viewModel.startDownload()
+        advanceUntilIdle()
+
+        viewModel.skipOnboarding()
+        advanceUntilIdle()
+
+        // Skipping no longer kills the transfer, so pointing the user at
+        // Settings to install a model would be actively wrong.
+        verify { transientMessageRelay.post(OnboardingViewModel.DOWNLOAD_CONTINUES_MESSAGE) }
+    }
+
+    @Test
     fun `warm-up shows the acceleration check while it runs and clears it afterwards`() = runTest {
         val e4bFileName = OnboardingModelCatalog.entryById(OnboardingLiteRtModel.Gemma4E4B.id)!!.fileName
         coEvery { localModelRepository.findByFileName(e4bFileName) } returns LocalModel(
@@ -335,12 +353,21 @@ class OnboardingViewModelTest {
 
     @Test
     fun `startDownload propagates progress from DownloadManager`() = runTest {
+        val e4bFileName = OnboardingModelCatalog.entryById(OnboardingLiteRtModel.Gemma4E4B.id)!!.fileName
         val viewModel = newViewModel()
         advanceUntilIdle()
         every { downloadManager.downloadModel(any(), any(), any()) } returns flowOf(
             DownloadState.Pending,
             DownloadState.Downloading(progress = 50),
             DownloadState.Success(fileUri = "/tmp/gemma-4-E4B-it.litertlm"),
+        )
+        // The download worker registers the file; the VM finds that row.
+        coEvery { localModelRepository.findByFileName(e4bFileName) } returns LocalModel(
+            id = 11L,
+            name = e4bFileName,
+            path = "/tmp/gemma-4-E4B-it.litertlm",
+            size = 0L,
+            isActive = false,
         )
 
         viewModel.startDownload()
@@ -350,7 +377,10 @@ class OnboardingViewModelTest {
         assertNull(finalState.downloadProgress)
         // The flow defaults to E4B — the model every curated scenario targets.
         assertEquals(OnboardingLiteRtModel.Gemma4E4B.id, finalState.installedModelId)
-        coVerify(exactly = 1) { localModelRepository.insertModel(any()) }
+        // Registration belongs to the worker now (the download outlives this VM);
+        // activating the freshly downloaded model stays a decision of this journey.
+        coVerify(exactly = 0) { localModelRepository.insertModel(any()) }
+        coVerify(exactly = 1) { localModelRepository.setActiveModel(11L) }
         coVerify(exactly = 1) { prepareInferenceBackendUseCase.invoke("/tmp/gemma-4-E4B-it.litertlm", any()) }
     }
 

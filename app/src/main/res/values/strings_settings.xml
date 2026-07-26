@@ -149,6 +149,9 @@
     <string name="notifications_agent_foreground_title">Knotwork agent</string>
     <string name="notifications_scheduled_running_title">Scheduled task</string>
     <string name="notifications_scheduled_running_body">Agent is working in the background…</string>
+    <string name="notifications_model_download_channel_name">Model downloads</string>
+    <string name="notifications_model_download_title">Downloading model</string>
+    <string name="notifications_model_download_cancel">Cancel</string>
     <string name="notifications_task_results_channel_name">Scheduled task results</string>
     <string name="notifications_task_results_channel_description">Outcome of scheduled background tasks.</string>
     <string name="notifications_trigger_fired_title">Trigger fired</string>

@@ -6,7 +6,6 @@ import app.knotwork.android.data.network.AndroidModelDownloadManager
 import app.knotwork.android.domain.constants.OnboardingModelCatalog
 import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.DownloadState
-import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.OnboardingMilestone
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.ModelDownloadManager
@@ -310,9 +309,18 @@ class OnboardingViewModel @Inject constructor(
     /**
      * Skip button (visible on steps 1-3). Persists `hasCompletedOnboarding` and
      * publishes a snackbar hint through the [TransientMessageRelay].
+     *
+     * Skipping mid-download no longer stops the transfer — it runs as background
+     * work — so the hint says so instead of pointing at Settings for a model
+     * that is already on its way.
      */
     fun skipOnboarding() {
-        transientMessageRelay.post(SKIP_SNACKBAR_MESSAGE)
+        val message = if (_state.value.downloadProgress != null) {
+            DOWNLOAD_CONTINUES_MESSAGE
+        } else {
+            SKIP_SNACKBAR_MESSAGE
+        }
+        transientMessageRelay.post(message)
         viewModelScope.launch { settingsRepository.setHasCompletedOnboarding(true) }
     }
 
@@ -362,15 +370,14 @@ class OnboardingViewModel @Inject constructor(
         _state.update { it.copy(downloadProgress = null, installedModelId = picked.id) }
         markMilestone(OnboardingMilestone.MODEL_DOWNLOAD_FINISHED)
         viewModelScope.launch {
-            val insertedId = localModelRepository.insertModel(
-                LocalModel(
-                    name = resolved.fileName,
-                    path = downloadState.fileUri,
-                    size = 0L,
-                    isActive = false,
-                ),
-            )
-            localModelRepository.setActiveModel(insertedId)
+            // The download worker owns registration (it has to — the transfer
+            // outlives this ViewModel), so the row already exists. Activating it
+            // stays here: it is a choice about *this* journey, and a download
+            // the user walked away from should not silently swap their model.
+            val registered = localModelRepository.findByFileName(resolved.fileName)
+            if (registered != null) {
+                localModelRepository.setActiveModel(registered.id)
+            }
             scheduleWarmUp()
         }
     }
@@ -472,6 +479,9 @@ class OnboardingViewModel @Inject constructor(
     companion object {
         /** Skip / escape snackbar copy — referenced by tests and `OnboardingScreen`. */
         const val SKIP_SNACKBAR_MESSAGE: String = "You can install a model from Settings → Models"
+
+        /** Skip copy while a download is in flight — it keeps running without the screen. */
+        const val DOWNLOAD_CONTINUES_MESSAGE: String = "Download continues in the background"
 
         /** Fallback copy when an unknown exception breaks the download stream. */
         private const val GENERIC_DOWNLOAD_ERROR: String = "Download failed."

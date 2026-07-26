@@ -2,8 +2,6 @@ package app.knotwork.android.domain.usecases
 
 import app.knotwork.android.domain.models.DiscoverableModelFile
 import app.knotwork.android.domain.models.DownloadState
-import app.knotwork.android.domain.models.LocalModel
-import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.ModelDownloadManager
 import app.knotwork.android.domain.repositories.SettingsRepository
 import kotlinx.coroutines.flow.Flow
@@ -26,18 +24,19 @@ import javax.inject.Inject
  * installed model is **not** auto-activated — the user activates it from the
  * Models screen, matching the onboarding/custom-URL behaviour.
  *
- * @property downloadManager streaming downloader (raw OkHttp under the hood).
- * @property localModelRepository local model registry written on success.
+ * @property downloadManager background downloader observed through its state stream.
+ * @property registerDownloadedModel local model registry write, shared with the
+ *   download worker (which registers the file even when nobody is observing).
  * @property settingsRepository source of the stored Hugging Face token.
  */
 class InstallDiscoveredModelUseCase @Inject constructor(
     private val downloadManager: ModelDownloadManager,
-    private val localModelRepository: LocalModelRepository,
+    private val registerDownloadedModel: RegisterDownloadedModelUseCase,
     private val settingsRepository: SettingsRepository,
 ) {
 
     /**
-     * Streams the download of [file] and inserts a [LocalModel] row when the
+     * Streams the download of [file] and refreshes its local model row when the
      * download completes successfully.
      *
      * @param file the `.litertlm` file to install (its resolve URL, on-disk
@@ -47,12 +46,22 @@ class InstallDiscoveredModelUseCase @Inject constructor(
      *   row has been registered.
      */
     operator fun invoke(file: DiscoverableModelFile): Flow<DownloadState> = flow {
-        val token = settingsRepository.huggingFaceAuthToken.first()
+        // Only the *presence* of a token decides whether to authenticate — the
+        // value itself is read by the downloader from the encrypted store, so it
+        // never travels through background-work input.
+        val useStoredAuth = !settingsRepository.huggingFaceAuthToken.first().isNullOrBlank()
         emitAll(
-            downloadManager.downloadModel(url = file.resolveUrl, fileName = file.fileName, authToken = token)
+            downloadManager.downloadModel(
+                url = file.resolveUrl,
+                fileName = file.fileName,
+                useStoredAuth = useStoredAuth,
+            )
                 .onEach { state ->
                     if (state is DownloadState.Success) {
-                        registerInstalledModel(
+                        // The worker has already registered the file by its
+                        // on-disk length; refresh it with the size the Hub
+                        // reported, which is the authoritative figure.
+                        registerDownloadedModel(
                             fileName = file.fileName,
                             path = state.fileUri,
                             sizeBytes = file.sizeBytes,
@@ -60,24 +69,5 @@ class InstallDiscoveredModelUseCase @Inject constructor(
                     }
                 },
         )
-    }
-
-    /**
-     * Records the freshly-downloaded file in the local model store. Updates the
-     * existing row in place when a model with the same on-disk name is already
-     * registered (the `local_models` table has no unique index on `name`, so a
-     * blind insert would create a duplicate row); otherwise inserts a new row.
-     * The active flag is left untouched — installing never changes the active
-     * model.
-     */
-    private suspend fun registerInstalledModel(fileName: String, path: String, sizeBytes: Long) {
-        val existing = localModelRepository.findByFileName(fileName)
-        if (existing != null) {
-            localModelRepository.updateModel(existing.copy(path = path, size = sizeBytes))
-        } else {
-            localModelRepository.insertModel(
-                LocalModel(name = fileName, path = path, size = sizeBytes, isActive = false),
-            )
-        }
     }
 }

@@ -1186,6 +1186,7 @@ idle. Three components coordinate that lifecycle:
 | `PendingInteractionMaintenanceWorker` | Periodic (6 h) expiry pass: fails runs whose parked approval / clarification outlived the approval window. |
 | `RunRetentionWorker`       | Daily (charging + idle) retention pass over `pipeline_runs` / `trace_steps` — see *Run retention* below. |
 | `MemoryCompactionWorker`   | Daily (charging + idle) long-term-memory compaction (see the memory lifecycle section).        |
+| `ModelDownloadWorker`      | Unique-per-file model download promoted to a `dataSync` foreground service, so a multi-gigabyte transfer survives leaving the screen or the app. Resumes a partial file over HTTP `Range` (`ResumableFileDownloader`), retries transport failures, and registers the finished file itself — the observing ViewModel may be long gone by then. |
 
 A scheduled task is not a separate execution path: `AgentWorker`
 enqueues the stored prompt through the same `TaskQueueManager` →

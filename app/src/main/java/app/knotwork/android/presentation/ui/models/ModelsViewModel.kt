@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import app.knotwork.android.data.network.AndroidModelDownloadManager
 import app.knotwork.android.domain.engine.TaskQueueManager
 import app.knotwork.android.domain.models.DownloadState
-import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.isBusy
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.ModelDownloadManager
@@ -187,7 +186,7 @@ class ModelsViewModel @Inject constructor(
     fun startDownload(url: String, fileName: String) {
         if (_uiState.value.isDownloading) return
 
-        val authToken = _uiState.value.authTokenInput.takeIf { it.isNotBlank() }
+        val useStoredAuth = _uiState.value.authTokenInput.isNotBlank()
 
         // Defence-in-depth: even though `isDownloading` blocks the second
         // entry above, any stale `downloadJob` from a finished collection
@@ -207,7 +206,7 @@ class ModelsViewModel @Inject constructor(
             )
         }
 
-        downloadJob = downloadManager.downloadModel(url, fileName, authToken)
+        downloadJob = downloadManager.downloadModel(url, fileName, useStoredAuth)
             .onEach { state ->
                 when (state) {
                     is DownloadState.Pending -> {
@@ -224,17 +223,9 @@ class ModelsViewModel @Inject constructor(
                                 activeDownloadFileName = null,
                             )
                         }
-                        // Save the downloaded model metadata to the local database
-                        viewModelScope.launch {
-                            val newModel = LocalModel(
-                                name = fileName,
-                                path = state.fileUri,
-                                // Size is not provided by OkHttp DownloadManager currently.
-                                size = 0L,
-                                isActive = false,
-                            )
-                            localModelRepository.insertModel(newModel)
-                        }
+                        // The download worker registers the file itself — it has
+                        // to, since the transfer outlives this screen — so there
+                        // is nothing to insert here.
                     }
                     is DownloadState.Error -> {
                         _uiState.update {
@@ -308,12 +299,15 @@ class ModelsViewModel @Inject constructor(
     }
 
     /**
-     * Cancels the currently in-flight download (if any). The download manager
-     * has no native cancellation API, so the collection job is interrupted
-     * instead — partial files are not cleaned up, but the UI returns to the
-     * idle state immediately.
+     * Cancels the currently in-flight download (if any).
+     *
+     * The download runs as background work, so stopping the observing job is
+     * no longer enough — it would leave the transfer running with no UI. The
+     * work itself is cancelled by target file name; the bytes already fetched
+     * stay on disk, so re-downloading the same file resumes.
      */
     fun cancelDownload() {
+        _uiState.value.activeDownloadFileName?.let(downloadManager::cancelDownload)
         downloadJob?.cancel()
         downloadJob = null
         _uiState.update {
