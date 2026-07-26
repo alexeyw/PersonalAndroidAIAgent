@@ -24,7 +24,9 @@ details.
   after a dropped connection. Unfinished bytes are held in a temporary file
   until the transfer completes, so a half-downloaded model can no longer look
   like an installed one, and the finished file registers itself even if you are
-  no longer watching.
+  no longer watching. Returning to the Models screen or to setup reconnects to
+  the running transfer instead of showing an idle screen next to a ticking
+  notification.
 
 - **Setup now picks the fastest inference backend your device can actually
   run.** New installs used to start on the CPU backend, which made the very

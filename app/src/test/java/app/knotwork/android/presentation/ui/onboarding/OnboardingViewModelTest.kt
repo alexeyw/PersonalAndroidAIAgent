@@ -6,6 +6,7 @@ import app.knotwork.android.domain.models.DownloadState
 import app.knotwork.android.domain.models.LocalBackend
 import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.OnboardingMilestone
+import app.knotwork.android.domain.repositories.ActiveDownload
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.ModelDownloadManager
 import app.knotwork.android.domain.repositories.SettingsRepository
@@ -77,6 +78,7 @@ class OnboardingViewModelTest {
         coEvery { localModelRepository.setActiveModel(any()) } returns Unit
         downloadManager = mockk(relaxed = true)
         every { downloadManager.downloadModel(any(), any(), any()) } returns flowOf()
+        every { downloadManager.observeActiveDownload() } returns flowOf(null)
         prepareInferenceBackendUseCase = mockk(relaxed = true)
         coEvery { prepareInferenceBackendUseCase.invoke(any(), any()) } returns
             PrepareInferenceBackendUseCase.Outcome.Warmed(LocalBackend.CPU)
@@ -278,6 +280,28 @@ class OnboardingViewModelTest {
 
         assertNull(viewModel.state.value.downloadProgress)
         assertTrue(viewModel.state.value.isPrimaryCtaEnabled)
+    }
+
+    @Test
+    fun `given a download already running when onboarding reopens then it re-attaches without enqueueing`() = runTest {
+        val e4bFileName = OnboardingModelCatalog.entryById(OnboardingLiteRtModel.Gemma4E4B.id)!!.fileName
+        every { downloadManager.observeActiveDownload() } returns flowOf(
+            ActiveDownload(fileName = e4bFileName, state = DownloadState.Downloading(55)),
+        )
+        every { downloadManager.observeDownload(e4bFileName) } returns kotlinx.coroutines.flow.flow {
+            emit(DownloadState.Downloading(55))
+            kotlinx.coroutines.awaitCancellation()
+        }
+
+        val reopened = newViewModel()
+        advanceUntilIdle()
+
+        // Coming back to onboarding mid-download must show the live transfer,
+        // not an idle step next to a ticking notification.
+        assertEquals(0.55f, reopened.state.value.downloadProgress)
+        assertEquals(OnboardingLiteRtModel.Gemma4E4B, reopened.state.value.liteRtModel)
+        // Re-entering a screen is never a request to download something.
+        verify(exactly = 0) { downloadManager.downloadModel(any(), any(), any()) }
     }
 
     @Test

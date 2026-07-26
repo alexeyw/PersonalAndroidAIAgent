@@ -6,6 +6,7 @@ import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.DownloadState
 import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.ModelPerformanceSummary
+import app.knotwork.android.domain.repositories.ActiveDownload
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.ModelDownloadManager
 import app.knotwork.android.domain.repositories.SettingsRepository
@@ -67,6 +68,7 @@ class ModelsViewModelTest {
         every { localModelRepository.getAllModels() } returns flowOf(emptyList())
         every { getModelPerformanceUseCase(any()) } returns flowOf(null)
         every { taskQueueManager.globalState } returns MutableStateFlow(AgentOrchestratorState.Idle)
+        every { downloadManager.observeActiveDownload() } returns flowOf(null)
 
         viewModel = createViewModel()
     }
@@ -181,6 +183,30 @@ class ModelsViewModelTest {
         val state = viewModel.uiState.value
         assertEquals(false, state.isDownloading)
         assertEquals(error, state.downloadError)
+    }
+
+    @Test
+    fun `given a download already running when the screen opens then it re-attaches`() = runTest {
+        // The transfer outlives the ViewModel, so a screen that was not around
+        // when it started still has to find it — otherwise the shade shows
+        // progress while the screen looks idle.
+        every { downloadManager.observeActiveDownload() } returns flowOf(
+            ActiveDownload(fileName = "model.bin", state = DownloadState.Downloading(64)),
+        )
+        every { downloadManager.observeDownload("model.bin") } returns kotlinx.coroutines.flow.flow {
+            emit(DownloadState.Downloading(64))
+            emit(DownloadState.Downloading(70))
+            kotlinx.coroutines.awaitCancellation()
+        }
+
+        val reopened = createViewModel()
+        advanceUntilIdle()
+
+        assertEquals("model.bin", reopened.uiState.value.activeDownloadFileName)
+        assertEquals(70, reopened.uiState.value.downloadProgress)
+        // Re-attaching must never enqueue: opening a screen is not a request to
+        // download anything.
+        verify(exactly = 0) { downloadManager.downloadModel(any(), any(), any()) }
     }
 
     @Test

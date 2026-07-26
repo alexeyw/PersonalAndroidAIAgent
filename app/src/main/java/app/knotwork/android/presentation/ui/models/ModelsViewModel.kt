@@ -16,6 +16,7 @@ import app.knotwork.android.domain.usecases.RunBenchmarkUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -101,6 +102,7 @@ class ModelsViewModel @Inject constructor(
         observeBackend()
         observeActiveModelPerformance()
         observeEngineBusy()
+        observeRunningDownload()
     }
 
     /**
@@ -207,7 +209,42 @@ class ModelsViewModel @Inject constructor(
             )
         }
 
-        downloadJob = downloadManager.downloadModel(url, fileName, useStoredAuth)
+        collectDownload(downloadManager.downloadModel(url, fileName, useStoredAuth))
+    }
+
+    /**
+     * Attaches to a download already running in the background.
+     *
+     * The transfer outlives this ViewModel, so returning to the screen must find
+     * it again — otherwise the shade shows a download in progress while the
+     * screen that owns it looks idle.
+     */
+    private fun observeRunningDownload() {
+        downloadManager.observeActiveDownload()
+            .onEach { active ->
+                if (active == null) return@onEach
+                if (_uiState.value.activeDownloadFileName == active.fileName) return@onEach
+                _uiState.update {
+                    it.copy(
+                        isDownloading = true,
+                        downloadProgress = (active.state as? DownloadState.Downloading)?.progress ?: 0,
+                        downloadError = null,
+                        activeDownloadFileName = active.fileName,
+                    )
+                }
+                collectDownload(downloadManager.observeDownload(active.fileName))
+            }
+            .launchIn(viewModelScope)
+    }
+
+    /**
+     * Folds a download state stream into the UI state. Shared by the "start one"
+     * and "re-attach to one" paths so both behave identically once the bytes are
+     * moving.
+     */
+    private fun collectDownload(states: Flow<DownloadState>) {
+        downloadJob?.cancel()
+        downloadJob = states
             .onEach { state ->
                 when (state) {
                     is DownloadState.Pending -> {

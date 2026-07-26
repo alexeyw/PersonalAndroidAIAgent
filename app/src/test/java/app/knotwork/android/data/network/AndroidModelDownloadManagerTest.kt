@@ -182,6 +182,74 @@ class AndroidModelDownloadManagerTest {
     }
 
     @Test
+    fun `given nothing running when observing only then the stream ends without enqueueing`() = runTest {
+        stubWorkInfos(
+            workInfo(
+                WorkInfo.State.SUCCEEDED,
+                output = workDataOf(
+                    ModelDownloadWorker.KEY_OUTPUT_PATH to "/models/m.bin",
+                ),
+            ),
+        )
+
+        val states = manager.observeDownload("m.bin").toList()
+
+        // Restoring a screen must not resurrect a download that already ended…
+        assertEquals(emptyList<DownloadState>(), states)
+        // …nor start one.
+        verify(exactly = 0) {
+            workManager.enqueueUniqueWork(any<String>(), any<ExistingWorkPolicy>(), any<OneTimeWorkRequest>())
+        }
+    }
+
+    @Test
+    fun `given a live download when observing only then it is followed to its terminal state`() = runTest {
+        stubWorkInfos(
+            workInfo(WorkInfo.State.RUNNING, progress = workDataOf(ModelDownloadWorker.KEY_PROGRESS to 64)),
+            workInfo(
+                WorkInfo.State.SUCCEEDED,
+                output = workDataOf(ModelDownloadWorker.KEY_OUTPUT_PATH to "/models/m.bin"),
+            ),
+        )
+
+        val states = manager.observeDownload("m.bin").toList()
+
+        assertEquals(
+            listOf(DownloadState.Downloading(64), DownloadState.Success("/models/m.bin")),
+            states,
+        )
+    }
+
+    @Test
+    fun `given a tagged live download when enumerating then its file name comes back`() = runTest {
+        every { workManager.getWorkInfosByTagFlow(any()) } returns flowOf(
+            listOf(
+                workInfo(
+                    WorkInfo.State.RUNNING,
+                    progress = workDataOf(ModelDownloadWorker.KEY_PROGRESS to 12),
+                    tags = setOf("model-download", "model-download-file:m.bin"),
+                ),
+            ),
+        )
+
+        val active = manager.observeActiveDownload().toList().single()
+
+        // The file name is what a returning screen cannot know on its own, and
+        // WorkInfo exposes tags but not input data — hence the tag.
+        assertEquals("m.bin", active?.fileName)
+        assertEquals(DownloadState.Downloading(12), active?.state)
+    }
+
+    @Test
+    fun `given only finished work when enumerating then nothing is reported as active`() = runTest {
+        every { workManager.getWorkInfosByTagFlow(any()) } returns flowOf(
+            listOf(workInfo(WorkInfo.State.SUCCEEDED, tags = setOf("model-download-file:m.bin"))),
+        )
+
+        assertEquals(listOf(null), manager.observeActiveDownload().toList())
+    }
+
+    @Test
     fun `given a cancel request when issued then the unique work is cancelled by file name`() {
         manager.cancelDownload("m.bin")
 
@@ -208,10 +276,15 @@ class AndroidModelDownloadManagerTest {
         every { workManager.getWorkInfosForUniqueWorkFlow(any()) } returns flowOf(*frames)
     }
 
-    private fun workInfo(state: WorkInfo.State, progress: Data = Data.EMPTY, output: Data = Data.EMPTY): WorkInfo =
-        mockk {
-            every { this@mockk.state } returns state
-            every { this@mockk.progress } returns progress
-            every { outputData } returns output
-        }
+    private fun workInfo(
+        state: WorkInfo.State,
+        progress: Data = Data.EMPTY,
+        output: Data = Data.EMPTY,
+        tags: Set<String> = emptySet(),
+    ): WorkInfo = mockk {
+        every { this@mockk.state } returns state
+        every { this@mockk.progress } returns progress
+        every { outputData } returns output
+        every { this@mockk.tags } returns tags
+    }
 }

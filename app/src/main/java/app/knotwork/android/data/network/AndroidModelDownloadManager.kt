@@ -10,11 +10,13 @@ import androidx.work.workDataOf
 import app.knotwork.android.data.services.ModelDownloadWorker
 import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.DownloadState
+import app.knotwork.android.domain.repositories.ActiveDownload
 import app.knotwork.android.domain.repositories.ModelDownloadManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.transformWhile
 import javax.inject.Inject
 
@@ -38,7 +40,6 @@ import javax.inject.Inject
 class AndroidModelDownloadManager @Inject constructor(private val workManager: WorkManager) : ModelDownloadManager {
 
     override fun downloadModel(url: String, fileName: String, useStoredAuth: Boolean): Flow<DownloadState> = flow {
-        val uniqueName = uniqueWorkName(fileName)
         val request = OneTimeWorkRequestBuilder<ModelDownloadWorker>()
             .setInputData(
                 workDataOf(
@@ -50,23 +51,66 @@ class AndroidModelDownloadManager @Inject constructor(private val workManager: W
             // Retries resume rather than restart, so waiting for any connection
             // is strictly better than failing on a momentary drop.
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            // Tagged so a screen that was not around when the download started
+            // can still find it — the file name rides along, because `WorkInfo`
+            // exposes tags but not input data.
+            .addTag(TAG_MODEL_DOWNLOAD)
+            .addTag(fileNameTag(fileName))
             .build()
-        workManager.enqueueUniqueWork(uniqueName, ExistingWorkPolicy.KEEP, request)
+        workManager.enqueueUniqueWork(uniqueWorkName(fileName), ExistingWorkPolicy.KEEP, request)
 
+        emitAll(observeUniqueWork(fileName, requireLive = false))
+    }
+
+    override fun observeDownload(fileName: String): Flow<DownloadState> =
+        observeUniqueWork(fileName, requireLive = true)
+
+    override fun observeActiveDownload(): Flow<ActiveDownload?> {
+        var reachedPercent = 0
+        return workManager.getWorkInfosByTagFlow(TAG_MODEL_DOWNLOAD)
+            .map { infos ->
+                val live = infos.firstOrNull { !it.state.isFinished } ?: return@map null
+                val fileName = live.fileNameFromTags() ?: return@map null
+                val state = live.toDownloadState(reachedPercent) ?: return@map null
+                if (state is DownloadState.Downloading) reachedPercent = state.progress
+                ActiveDownload(fileName = fileName, state = state)
+            }
+            .distinctUntilChanged()
+    }
+
+    override fun cancelDownload(fileName: String) {
+        workManager.cancelUniqueWork(uniqueWorkName(fileName))
+    }
+
+    /**
+     * Streams the state of the work registered under [fileName].
+     *
+     * @param requireLive `true` for the observe-only entry points: if no
+     *   unfinished work exists at subscription time the flow completes without
+     *   emitting, so restoring a screen never resurrects a download that already
+     *   ended — and never invents one that never started.
+     */
+    private fun observeUniqueWork(fileName: String, requireLive: Boolean): Flow<DownloadState> = flow {
         // Highest percent seen so far. WorkManager clears a worker's progress
         // every time it stops it — losing the network does exactly that — and the
         // bytes are still on disk waiting to be resumed, so rewinding the bar to
         // zero would report a loss that did not happen.
         var reachedPercent = 0
+        var attached = !requireLive
 
         emitAll(
-            workManager.getWorkInfosForUniqueWorkFlow(uniqueName)
+            workManager.getWorkInfosForUniqueWorkFlow(uniqueWorkName(fileName))
                 .transformWhile { infos ->
                     // A live run wins over any finished one still attached to
                     // the name: the list order is unspecified, and reading a
                     // previous download's Success would end this stream on the
                     // spot with the wrong answer.
-                    val info = infos.firstOrNull { !it.state.isFinished } ?: infos.lastOrNull()
+                    val live = infos.firstOrNull { !it.state.isFinished }
+                    if (!attached) {
+                        if (live == null) return@transformWhile false
+                        attached = true
+                    }
+                    val info = live ?: infos.lastOrNull()
                     val state = info?.toDownloadState(reachedPercent)
                     if (state is DownloadState.Downloading) reachedPercent = state.progress
                     state?.let { emit(it) }
@@ -78,9 +122,10 @@ class AndroidModelDownloadManager @Inject constructor(private val workManager: W
         )
     }
 
-    override fun cancelDownload(fileName: String) {
-        workManager.cancelUniqueWork(uniqueWorkName(fileName))
-    }
+    /** Recovers the download's target file name from the tag it was given. */
+    private fun WorkInfo.fileNameFromTags(): String? = tags
+        .firstOrNull { it.startsWith(FILE_NAME_TAG_PREFIX) }
+        ?.removePrefix(FILE_NAME_TAG_PREFIX)
 
     /**
      * Projects a [WorkInfo] onto the download state the UI speaks.
@@ -130,10 +175,19 @@ class AndroidModelDownloadManager @Inject constructor(private val workManager: W
 
     private companion object {
 
+        /** Tag every model download carries, so live ones can be enumerated. */
+        const val TAG_MODEL_DOWNLOAD = "model-download"
+
+        /** Prefix of the tag carrying the target file name. */
+        const val FILE_NAME_TAG_PREFIX = "model-download-file:"
+
         /**
          * Unique-work name for a target file. Derived from the file name (not
          * the URL) because the file is what a second request would collide on.
          */
         fun uniqueWorkName(fileName: String): String = "model-download-$fileName"
+
+        /** Tag carrying [fileName] through to `WorkInfo`, which drops input data. */
+        fun fileNameTag(fileName: String): String = "$FILE_NAME_TAG_PREFIX$fileName"
     }
 }

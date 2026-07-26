@@ -32,6 +32,33 @@ interface ModelDownloadManager {
     fun downloadModel(url: String, fileName: String, useStoredAuth: Boolean = false): Flow<DownloadState>
 
     /**
+     * Attaches to the download already running for [fileName], without ever
+     * starting one.
+     *
+     * Opening a screen must not begin a transfer, so this is deliberately not
+     * [downloadModel] with a flag: a screen restoring its state after the user
+     * navigated away needs to *find* the download, and find nothing when there
+     * is none.
+     *
+     * @param fileName The local filename the download was started with.
+     * @return A [Flow] mirroring the running download through to its terminal
+     *   state, or an empty flow when nothing is running for that file.
+     */
+    fun observeDownload(fileName: String): Flow<DownloadState>
+
+    /**
+     * Reports the model download currently in flight, if any.
+     *
+     * The file name is the part a returning screen cannot know on its own —
+     * without it there is no way to re-attach after the ViewModel that started
+     * the download is gone.
+     *
+     * @return A [Flow] emitting the live download (file name + latest state), or
+     *   `null` whenever none is running.
+     */
+    fun observeActiveDownload(): Flow<ActiveDownload?>
+
+    /**
      * Cancels the download running for [fileName], if any.
      *
      * Bytes already fetched are kept on disk: re-requesting the same file from
@@ -41,3 +68,12 @@ interface ModelDownloadManager {
      */
     fun cancelDownload(fileName: String)
 }
+
+/**
+ * A model download currently in flight.
+ *
+ * @property fileName Local file name the download was started with — the key a
+ *   screen needs to re-attach.
+ * @property state Latest state of that download.
+ */
+data class ActiveDownload(val fileName: String, val state: DownloadState)

@@ -21,10 +21,12 @@ import app.knotwork.design.screens.onboarding.OnboardingStep
 import app.knotwork.design.screens.onboarding.OnboardingViewState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
@@ -128,6 +130,7 @@ class OnboardingViewModel @Inject constructor(
         // Declared after the state properties so the block can never run before
         // the fields a future marker might read are initialised.
         markMilestone(OnboardingMilestone.ONBOARDING_STARTED)
+        attachToRunningDownload()
     }
 
     /** Advances to the next step. Idempotent at the final step. */
@@ -287,7 +290,48 @@ class OnboardingViewModel @Inject constructor(
         _state.update { it.copy(downloadProgress = 0f, downloadError = null) }
         markMilestone(OnboardingMilestone.MODEL_DOWNLOAD_STARTED)
 
-        downloadJob = downloadManager.downloadModel(resolved.url, resolved.fileName)
+        collectDownload(downloadManager.downloadModel(resolved.url, resolved.fileName), picked, resolved)
+    }
+
+    /**
+     * Re-attaches to a download that is already running, so re-entering
+     * onboarding (the flow the user lands back in until they finish it) shows
+     * the live transfer instead of an idle step while the shade ticks along.
+     *
+     * Never starts anything: if nothing is running, this is a no-op.
+     */
+    private fun attachToRunningDownload() {
+        viewModelScope.launch {
+            // `firstOrNull`, not `first`: an empty stream is a perfectly
+            // ordinary "nothing is downloading", and an exception here would
+            // take the onboarding ViewModel down on construction.
+            val active = downloadManager.observeActiveDownload().firstOrNull() ?: return@launch
+            // A download the user started here in this session already has a
+            // collector; attaching twice would double-report every frame.
+            if (_state.value.downloadProgress != null) return@launch
+
+            val preset = OnboardingModelCatalog.PRESETS.firstOrNull { it.fileName == active.fileName }
+            val picked = OnboardingLiteRtModel.entries.firstOrNull { it.id == preset?.id }
+                ?: OnboardingLiteRtModel.CustomUrl
+            val resolved = ResolvedDownloadTarget(
+                url = preset?.downloadUrl.orEmpty(),
+                fileName = active.fileName,
+            )
+            _state.update { it.copy(liteRtModel = picked, downloadError = null) }
+            collectDownload(downloadManager.observeDownload(active.fileName), picked, resolved)
+        }
+    }
+
+    /**
+     * Folds a download state stream into the view state. Shared by the "start
+     * one" and "re-attach to one" paths so both behave identically.
+     */
+    private fun collectDownload(
+        states: Flow<DownloadState>,
+        picked: OnboardingLiteRtModel,
+        resolved: ResolvedDownloadTarget,
+    ) {
+        downloadJob = states
             .onEach { downloadState -> handleDownloadEmission(downloadState, picked, resolved) }
             .catch { e ->
                 _state.update {
