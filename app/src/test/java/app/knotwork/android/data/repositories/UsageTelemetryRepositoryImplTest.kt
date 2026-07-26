@@ -3,6 +3,7 @@ package app.knotwork.android.data.repositories
 import androidx.room.Room
 import app.knotwork.android.data.local.AppDatabase
 import app.knotwork.android.data.local.dao.UsageTelemetryDao
+import app.knotwork.android.domain.models.OnboardingMilestone
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.repositories.SettingsRepository
 import io.mockk.every
@@ -28,7 +29,8 @@ import java.time.ZoneId
 /**
  * Verifies the on-device [UsageTelemetryRepositoryImpl] against a real in-memory
  * Room database: opt-in gating, per-pipeline / per-outcome / per-kind tallies,
- * the daily-active set, and reset.
+ * the daily-active set, the write-once onboarding markers with their first-value
+ * attribution rules, and reset.
  */
 @RunWith(RobolectricTestRunner::class)
 class UsageTelemetryRepositoryImplTest {
@@ -144,10 +146,114 @@ class UsageTelemetryRepositoryImplTest {
         val repository = repository()
         repository.recordPipelineRunOutcome("pipe-1", PipelineRunStatus.COMPLETED, day1)
         repository.recordTriggerFired("CHARGING", day1)
+        repository.recordOnboardingMilestone(OnboardingMilestone.ONBOARDING_STARTED, day1)
 
         repository.reset()
 
-        assertTrue(repository.summary.first().isEmpty)
+        val summary = repository.summary.first()
+        assertTrue(summary.isEmpty)
+        assertTrue(summary.onboarding.isEmpty)
+    }
+
+    @Test
+    fun `given onboarding markers when recorded then the journey aggregates them with its pipeline scope`() = runTest {
+        val repository = repository()
+
+        repository.recordOnboardingMilestone(OnboardingMilestone.ONBOARDING_STARTED, day1)
+        repository.recordOnboardingMilestone(OnboardingMilestone.SCENARIO_CHOSEN, day1 + 5_000L, detail = "pipe-1")
+        repository.recordOnboardingMilestone(OnboardingMilestone.MODEL_DOWNLOAD_STARTED, day1 + 10_000L)
+        repository.recordOnboardingMilestone(OnboardingMilestone.MODEL_DOWNLOAD_FINISHED, day1 + 70_000L)
+        repository.recordOnboardingFirstValue("pipe-1", day1 + 90_000L)
+
+        val journey = repository.summary.first().onboarding
+        assertEquals("pipe-1", journey.scenarioPipelineId)
+        assertEquals(90_000L, journey.totalToValueMillis)
+        assertEquals(60_000L, journey.modelDownloadMillis)
+        assertEquals(30_000L, journey.productToValueMillis)
+    }
+
+    @Test
+    fun `given only onboarding markers when read then the statistics still count as empty`() = runTest {
+        // Opening onboarding must not swap the screen's "nothing recorded yet"
+        // copy for a dashboard of zeros; markers alone are not usage.
+        val repository = repository()
+
+        repository.recordOnboardingMilestone(OnboardingMilestone.ONBOARDING_STARTED, day1)
+
+        val summary = repository.summary.first()
+        assertTrue(summary.isEmpty)
+        assertFalse(summary.onboarding.isEmpty)
+    }
+
+    @Test
+    fun `given a marker already recorded when recorded again then the first occurrence is kept`() = runTest {
+        val repository = repository()
+
+        repository.recordOnboardingMilestone(OnboardingMilestone.ONBOARDING_STARTED, day1)
+        // A second pass through onboarding must not move the measured start.
+        repository.recordOnboardingMilestone(OnboardingMilestone.ONBOARDING_STARTED, day2)
+
+        val journey = repository.summary.first().onboarding
+        assertEquals(day1, journey.startedAtMillis)
+    }
+
+    @Test
+    fun `given recording disabled when onboarding markers are recorded then nothing is stored`() = runTest {
+        every { settingsRepository.usageTelemetryEnabled } returns flowOf(false)
+        val repository = repository()
+
+        repository.recordOnboardingMilestone(OnboardingMilestone.ONBOARDING_STARTED, day1)
+        repository.recordOnboardingFirstValue("pipe-1", day1 + 1_000L)
+
+        assertTrue(repository.summary.first().onboarding.isEmpty)
+    }
+
+    @Test
+    fun `given a scenario journey when another pipeline completes then first value is not recorded`() = runTest {
+        val repository = repository()
+        repository.recordOnboardingMilestone(OnboardingMilestone.ONBOARDING_STARTED, day1)
+        repository.recordOnboardingMilestone(OnboardingMilestone.SCENARIO_CHOSEN, day1 + 5_000L, detail = "pipe-1")
+
+        repository.recordOnboardingFirstValue("pipe-2", day1 + 20_000L)
+
+        val journey = repository.summary.first().onboarding
+        assertNull(journey.firstValueAtMillis)
+        // …and the scenario's own run still closes the metric afterwards.
+        repository.recordOnboardingFirstValue("pipe-1", day1 + 30_000L)
+        assertEquals(day1 + 30_000L, repository.summary.first().onboarding.firstValueAtMillis)
+    }
+
+    @Test
+    fun `given first value already recorded when a later run completes then the first one stands`() = runTest {
+        val repository = repository()
+        repository.recordOnboardingMilestone(OnboardingMilestone.ONBOARDING_STARTED, day1)
+
+        repository.recordOnboardingFirstValue("pipe-1", day1 + 20_000L)
+        repository.recordOnboardingFirstValue("pipe-1", day1 + 60_000L)
+
+        assertEquals(day1 + 20_000L, repository.summary.first().onboarding.firstValueAtMillis)
+    }
+
+    @Test
+    fun `given onboarding never started when a run completes then no first value is recorded`() = runTest {
+        // Installs that upgraded into the markers have no measurable journey.
+        val repository = repository()
+
+        repository.recordOnboardingFirstValue("pipe-1", day1)
+
+        assertTrue(repository.summary.first().onboarding.isEmpty)
+    }
+
+    @Test
+    fun `given an unknown marker key in the store when aggregated then it is ignored`() = runTest {
+        val repository = repository()
+        repository.recordOnboardingMilestone(OnboardingMilestone.ONBOARDING_STARTED, day1)
+        // A marker written by a future release must not break this one's screen.
+        dao.recordMilestone("FUTURE_MARKER", day2, detail = null)
+
+        val journey = repository.summary.first().onboarding
+        assertEquals(1, journey.milestones.size)
+        assertEquals(day1, journey.startedAtMillis)
     }
 
     @Test

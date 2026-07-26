@@ -15,6 +15,14 @@ details.
 
 ### Changed
 
+- **Cloud model line-up follows the upstream client.** With the Koog client
+  updated to 1.1.1, Google's `gemini-3-pro-preview` is no longer offered — the
+  upstream catalogue replaced it with `gemini-3.1-pro-preview`, which now takes
+  its place in the model picker. If a provider was pinned to the removed model,
+  pick the new entry: an unrecognised saved model falls back to the default
+  Gemini flash model. Also bumps the Android Gradle plugin, `org.json` and
+  Roborazzi to their current releases.
+
 - **Documentation hygiene pass across the public contour.** The product is
   now referred to consistently as **Knotwork** (an on-device AI agent for
   Android) throughout the docs, the near-term roadmap is realigned to lead
@@ -59,6 +67,14 @@ details.
   overdue trigger's detail explains the likely cause in the header. This is the
   window onto the background so a trigger that "just didn't happen" is never a
   mystery.
+- **Setup timing on the Usage statistics screen.** The on-device statistics now
+  include how long the path from opening onboarding to your first successful run
+  actually took, split into the model download and the time without it — the
+  download is bound by your connection, not by the app, so the two are judged
+  separately. The markers behind it are recorded once per install (a repeated
+  pass through onboarding never moves them), are opt-in-gated like every other
+  local count, and travel in the voluntary text/JSON export. Nothing here leaves
+  the device.
 - **Debug-only trigger-journal dump for background-reliability soak testing.** A
   developer diagnostic — present only in debug builds, never shipped — writes the
   full trigger-evaluation journal to a plain-JSON file that `adb pull` can

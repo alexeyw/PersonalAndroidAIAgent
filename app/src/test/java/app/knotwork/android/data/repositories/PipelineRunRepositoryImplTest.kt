@@ -551,6 +551,45 @@ class PipelineRunRepositoryImplTest {
     }
 
     @Test
+    fun `given a root run completes then the onboarding first-value marker is offered`() = runTest {
+        coEvery { usageTelemetry.isEnabled() } returns true
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRun("run-1") } returns
+            sampleEntity.copy(id = "run-1", pipelineId = "pipe-1", parentRunId = null)
+
+        repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
+
+        // The repository owns the attribution rules; the chokepoint only reports
+        // a completed, root, pipeline-bound run.
+        coVerify(exactly = 1) { usageTelemetry.recordOnboardingFirstValue("pipe-1", any()) }
+    }
+
+    @Test
+    fun `given a root run fails then no onboarding first-value marker is offered`() = runTest {
+        coEvery { usageTelemetry.isEnabled() } returns true
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRun("run-1") } returns
+            sampleEntity.copy(id = "run-1", pipelineId = "pipe-1", parentRunId = null)
+
+        repository.finishRun("run-1", PipelineRunStatus.FAILED, errorMessage = "boom")
+
+        // A failed run is not "first value" — only COMPLETED closes the metric.
+        coVerify(exactly = 0) { usageTelemetry.recordOnboardingFirstValue(any(), any()) }
+    }
+
+    @Test
+    fun `given a nested sub-pipeline run completes then no onboarding first-value marker is offered`() = runTest {
+        coEvery { usageTelemetry.isEnabled() } returns true
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRun("child-1") } returns
+            sampleEntity.copy(id = "child-1", pipelineId = "pipe-1", parentRunId = "root-1")
+
+        repository.finishRun("child-1", PipelineRunStatus.COMPLETED)
+
+        coVerify(exactly = 0) { usageTelemetry.recordOnboardingFirstValue(any(), any()) }
+    }
+
+    @Test
     fun `given a nested sub-pipeline run finishes then it is not recorded`() = runTest {
         coEvery { usageTelemetry.isEnabled() } returns true
         coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1

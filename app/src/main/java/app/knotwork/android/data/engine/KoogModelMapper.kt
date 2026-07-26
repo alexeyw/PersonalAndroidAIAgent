@@ -89,7 +89,7 @@ object KoogModelMapper {
         GoogleModels.Gemini2_5Flash.id,
         GoogleModels.Gemini2_5FlashLite.id,
         GoogleModels.Gemini3_Flash_Preview.id,
-        GoogleModels.Gemini3_Pro_Preview.id,
+        GoogleModels.Gemini3_1Pro_Preview.id,
     )
 
     fun getGoogleModel(name: String): LLModel = when (name) {
@@ -97,7 +97,7 @@ object KoogModelMapper {
         GoogleModels.Gemini2_5Flash.id -> GoogleModels.Gemini2_5Flash
         GoogleModels.Gemini2_5FlashLite.id -> GoogleModels.Gemini2_5FlashLite
         GoogleModels.Gemini3_Flash_Preview.id -> GoogleModels.Gemini3_Flash_Preview
-        GoogleModels.Gemini3_Pro_Preview.id -> GoogleModels.Gemini3_Pro_Preview
+        GoogleModels.Gemini3_1Pro_Preview.id -> GoogleModels.Gemini3_1Pro_Preview
         else -> GoogleModels.Gemini3_Flash_Preview
     }
 

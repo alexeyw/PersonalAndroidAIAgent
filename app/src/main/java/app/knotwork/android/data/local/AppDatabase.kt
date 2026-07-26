@@ -29,6 +29,7 @@ import app.knotwork.android.data.local.models.LocalModelEntity
 import app.knotwork.android.data.local.models.MemoryChunkEntity
 import app.knotwork.android.data.local.models.ModelPerformanceSampleEntity
 import app.knotwork.android.data.local.models.NodeEntity
+import app.knotwork.android.data.local.models.OnboardingMilestoneEntity
 import app.knotwork.android.data.local.models.PendingInteractionEntity
 import app.knotwork.android.data.local.models.PipelineEntity
 import app.knotwork.android.data.local.models.PipelinePresetEntity
@@ -76,8 +77,9 @@ import app.knotwork.android.data.local.models.UsageCounterEntity
         TriggerEvaluationEntity::class,
         UsageCounterEntity::class,
         UsageActiveDayEntity::class,
+        OnboardingMilestoneEntity::class,
     ],
-    version = 51,
+    version = 52,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -1223,6 +1225,36 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL(
                     "CREATE INDEX IF NOT EXISTS `index_trigger_evaluations_runId` " +
                         "ON `trigger_evaluations` (`runId`)",
+                )
+            }
+        }
+
+        /**
+         * v51 → v52: adds the `onboarding_milestone` table holding the write-once
+         * markers of the install → first-value path (onboarding opened, scenario
+         * chosen, model download started/finished, first value), which turn the
+         * "< 10 minutes to first value" metric into a repeatable measurement
+         * instead of a stopwatch reading.
+         *
+         * Purely additive: no existing table is touched, so upgrading installs
+         * simply start with an empty marker set (their journey happened before
+         * the markers existed and is therefore not measurable — by design, the
+         * metric is taken on a clean install). The marker key is the primary key,
+         * which is what backs the `INSERT OR IGNORE` write-once semantics. The
+         * table lives in the SQLCipher-encrypted database and nothing it holds
+         * ever leaves the device.
+         */
+        val MIGRATION_51_52 = object : Migration(51, 52) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `onboarding_milestone` (
+                        `milestoneKey` TEXT NOT NULL,
+                        `atMillis` INTEGER NOT NULL,
+                        `detail` TEXT,
+                        PRIMARY KEY(`milestoneKey`)
+                    )
+                    """.trimIndent(),
                 )
             }
         }

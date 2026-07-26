@@ -468,6 +468,7 @@
     <string name="knotwork_usage_section_pipelines">Runs by pipeline</string>
     <string name="knotwork_usage_section_triggers">Trigger firings</string>
     <string name="knotwork_usage_section_active_days">Active days</string>
+    <string name="knotwork_usage_section_onboarding">Setup</string>
     <string name="knotwork_usage_none">None</string>
     <string name="knotwork_usage_action_share">Share as text</string>
     <string name="knotwork_usage_action_export">Export JSON</string>
