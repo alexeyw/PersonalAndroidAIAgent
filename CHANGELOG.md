@@ -13,6 +13,18 @@ details.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Release builds crashed on the first message that touched long-term
+  memory.** In a minified (release) build, initialising the on-device text
+  embedder threw `ExceptionInInitializerError` and killed the app process, so a
+  fresh install could send a message but never receive the reply. The cause was
+  code shrinking renaming a logging library that identifies its own call frames
+  by name; the affected package is now pinned, and a new release-build check
+  fails the build if that protection is ever lost again. Debug builds were never
+  affected, which is why this survived undetected — anyone running a release
+  build of `0.6.0` should update.
+
 ### Changed
 
 - **Cloud model line-up follows the upstream client.** With the Koog client

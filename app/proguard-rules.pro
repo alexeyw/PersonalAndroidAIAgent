@@ -52,6 +52,24 @@
 -keep class * implements com.google.gson.JsonDeserializer
 -dontwarn com.google.gson.**
 
+# ─── Flogger (MediaPipe's logging backend) ───────────────────────────────────
+# MediaPipe's `tasks-text` pulls in `com.google.flogger:flogger`, whose
+# `FluentLogger.forEnclosingClass()` resolves the log site by **walking the call
+# stack** for a frame belonging to flogger itself and taking the frame after it.
+# R8 is free to inline those tiny methods away, and the frame then never appears
+# — flogger throws `IllegalStateException: no caller found on the stack for: …`
+# from `Graph.<clinit>`, which surfaces as `ExceptionInInitializerError` the
+# first time `TextEmbedder.createFromOptions` runs. That is the on-device
+# embedding path, so in a minified build every message that touches long-term
+# memory killed the process. Debug builds never see it (no R8), which is exactly
+# why it survived dogfooding.
+#
+# Pinning the flogger classes keeps their names and stops R8 from inlining them
+# away, so the stack walk finds its anchor frame again. Upstream bug (still
+# open): https://github.com/google-ai-edge/mediapipe/issues/6138
+-keep class com.google.common.flogger.** { *; }
+-dontwarn com.google.common.flogger.**
+
 # ─── MediaPipe + LiteRT (native + reflection) ────────────────────────────────
 # JNI bindings reach into Java classes by name; R8 cannot follow native frame.
 -keep class com.google.mediapipe.** { *; }

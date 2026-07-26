@@ -1,5 +1,7 @@
 import app.knotwork.android.buildtools.BrowserEditorConstantsGenerator
 import app.knotwork.android.buildtools.DocsHygieneChecker
+import app.knotwork.android.buildtools.R8MappingChecker
+import com.android.build.api.artifact.SingleArtifact
 import dev.detekt.gradle.Detekt
 import java.util.Properties
 
@@ -971,3 +973,64 @@ val probeInstallHostTasks = setOf(
 )
 tasks.matching { it.name in probeInstallHostTasks }
     .configureEach { dependsOn(toolsProbeInstall) }
+
+// ─── R8 keep-rule guard (release builds) ─────────────────────────────────────
+// Some keep rules protect code whose failure mode is invisible to every test the
+// JVM gate can run: `com.google.common.flogger` (pulled in by MediaPipe's
+// `tasks-text`) resolves a log site by walking the call stack for a frame of its
+// own, so when R8 renames or inlines those frames the first
+// `TextEmbedder.createFromOptions` call dies with
+// `IllegalStateException: no caller found on the stack for: …` — the on-device
+// embedding path, i.e. any message that touches long-term memory. Debug builds
+// are not minified, so unit and instrumented tests cannot see the regression.
+//
+// The mapping R8 emits is the one durable artefact that can: a live keep rule
+// leaves the package identity-mapped. This task asserts exactly that after every
+// release packaging task — APK and AAB alike — so a dropped rule fails the build
+// rather than the user's first message.
+val r8ProtectedPackages: List<String> = listOf("com.google.common.flogger.")
+androidComponents {
+    onVariants { variant ->
+        if (variant.buildType != "release") return@onVariants
+        val mappingFile = variant.artifacts.get(SingleArtifact.OBFUSCATION_MAPPING_FILE)
+        val variantName = variant.name.replaceFirstChar { it.uppercaseChar() }
+        val verifyKeepRules = tasks.register("verify${variantName}KeepRules") {
+            group = "verification"
+            description = "Fails the release build if an R8 keep rule stopped pinning a protected package."
+            inputs.files(mappingFile).optional().withPropertyName("r8Mapping")
+            val protectedPackages = r8ProtectedPackages
+            val checkedVariant = variant.name
+            doLast {
+                val mapping = mappingFile.orNull?.asFile
+                // A release variant with no mapping is itself the regression:
+                // either minification was switched off for a shipping build, or
+                // this guard lost its grip on the artefact. Skipping silently
+                // here would be the same vacuous pass the checker refuses.
+                if (mapping == null || !mapping.exists()) {
+                    throw GradleException(
+                        "R8 keep-rule check cannot run for `$checkedVariant`: no obfuscation mapping was produced. " +
+                            "Either minification is disabled for a release build, or the mapping artefact moved.",
+                    )
+                }
+                val contents = mapping.readText()
+                val violations = protectedPackages.flatMap { prefix ->
+                    R8MappingChecker.verifyIdentityMapping(contents, prefix)
+                }
+                if (violations.isNotEmpty()) {
+                    throw GradleException(
+                        "R8 keep-rule check failed (${violations.size} violation(s)):\n" +
+                            violations.joinToString(separator = "\n") { it.format() },
+                    )
+                }
+            }
+        }
+        // Both packaging paths, not just the APK: the distribution artefact for
+        // Play is the AAB, and a guard that only watches `assemble` would wave
+        // through exactly the build that ships.
+        //
+        // `tasks.matching`, not `tasks.named`: AGP registers these tasks after
+        // this `onVariants` callback runs, so eager lookup fails here.
+        val packagingTasks = setOf("assemble$variantName", "bundle$variantName")
+        tasks.matching { it.name in packagingTasks }.configureEach { finalizedBy(verifyKeepRules) }
+    }
+}
