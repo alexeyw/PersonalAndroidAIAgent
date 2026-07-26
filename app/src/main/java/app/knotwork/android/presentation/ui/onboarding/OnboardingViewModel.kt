@@ -8,12 +8,11 @@ import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.DownloadState
 import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.OnboardingMilestone
-import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.ModelDownloadManager
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.UsageTelemetryRepository
-import app.knotwork.android.domain.usecases.LoadModelUseCase
+import app.knotwork.android.domain.usecases.PrepareInferenceBackendUseCase
 import app.knotwork.android.domain.usecases.SetUpScenarioUseCase
 import app.knotwork.android.presentation.state.TransientMessageRelay
 import app.knotwork.design.screens.onboarding.OnboardingDefaultPipelinePreview
@@ -53,16 +52,20 @@ import javax.inject.Inject
  *    rows). Committing flips `hasCompletedOnboarding` and lets the host navigate.
  *
  * Warm-up. As soon as a model becomes installed (either re-detected on entry or
- * after a successful download), [scheduleWarmUp] kicks off [LoadModelUseCase] so
- * the inference handle is ready by the time the user reaches step 4 — preventing
- * the "LiteRT handle released by system" failure on the first `sendMessage`.
+ * after a successful download), [scheduleWarmUp] kicks off
+ * [PrepareInferenceBackendUseCase] so the inference handle is ready by the time
+ * the user reaches step 4 — preventing the "LiteRT handle released by system"
+ * failure on the first `sendMessage`. On a first-time install the same step also
+ * settles which execution backend the device will use.
  *
  * @property settingsRepository persists the `hasCompletedOnboarding` flag.
  * @property localModelRepository detects previously-installed models and persists
  * freshly-downloaded ones.
  * @property downloadManager streams `DownloadState` updates folded into
  * `OnboardingViewState.downloadProgress` / `downloadError`.
- * @property loadModelUseCase warms the LiteRT inference handle.
+ * @property prepareInferenceBackendUseCase resolves the execution backend on a
+ * first-time install (GPU when the device plausibly supports it and a real
+ * generation confirms it, CPU otherwise) and warms the LiteRT inference handle.
  * @property setUpScenarioUseCase materialises a picked scenario (default pipeline
  * + entry-surface binding) and returns its recap projection.
  * @property transientMessageRelay process-wide one-shot snackbar bus; the
@@ -77,7 +80,7 @@ class OnboardingViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val localModelRepository: LocalModelRepository,
     private val downloadManager: ModelDownloadManager,
-    private val loadModelUseCase: LoadModelUseCase,
+    private val prepareInferenceBackendUseCase: PrepareInferenceBackendUseCase,
     private val setUpScenarioUseCase: SetUpScenarioUseCase,
     private val transientMessageRelay: TransientMessageRelay,
     private val usageTelemetry: UsageTelemetryRepository,
@@ -372,15 +375,39 @@ class OnboardingViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Warms the inference handle for the installed model — and, on a first-time
+     * install that has never had a backend chosen, lets
+     * [PrepareInferenceBackendUseCase] pick one first (see its KDoc for the
+     * probe-then-verify-then-fall-back contract).
+     *
+     * Both call sites of this method — a finished download and a re-detected
+     * install — funnel through here, so the acceleration decision is made
+     * exactly once per journey regardless of which path reached the model.
+     *
+     * The `isCheckingAcceleration` flag is cleared in a `finally` so a failure
+     * or a cancelled job can never strand the "Checking acceleration…" copy on
+     * the Ready step.
+     */
     private fun scheduleWarmUp() {
         warmUpJob?.cancel()
         val path = installedModelPath ?: return
         warmUpJob = viewModelScope.launch {
-            when (val result = loadModelUseCase(path)) {
-                is Result.Success -> _state.update { it.copy(isModelWarmed = true) }
-                is Result.Error -> _state.update {
-                    it.copy(downloadError = result.message ?: GENERIC_LOAD_ERROR)
+            try {
+                val outcome = prepareInferenceBackendUseCase(
+                    modelPath = path,
+                    onAccelerationCheckStarted = { _state.update { it.copy(isCheckingAcceleration = true) } },
+                )
+                when (outcome) {
+                    is PrepareInferenceBackendUseCase.Outcome.Warmed ->
+                        _state.update { it.copy(isModelWarmed = true) }
+
+                    is PrepareInferenceBackendUseCase.Outcome.Failed -> _state.update {
+                        it.copy(downloadError = outcome.message ?: GENERIC_LOAD_ERROR)
+                    }
                 }
+            } finally {
+                _state.update { it.copy(isCheckingAcceleration = false) }
             }
         }
     }

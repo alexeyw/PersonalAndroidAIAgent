@@ -720,6 +720,8 @@
     <string name="knotwork_onboarding_ready_open_generic_cta">Open chat</string>
     <!-- Step 4 CTA while the model is still warming. -->
     <string name="knotwork_onboarding_ready_preparing_cta">Preparing…</string>
+    <!-- Step 4 CTA while the host verifies this device's hardware acceleration. -->
+    <string name="knotwork_onboarding_ready_checking_acceleration_cta">Checking acceleration…</string>
     <!-- Step 4 CTA when warm-up failed — re-runs the model load. -->
     <string name="knotwork_onboarding_ready_retry_cta">Retry</string>
 

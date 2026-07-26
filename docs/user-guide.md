@@ -1550,7 +1550,12 @@ The active on-device model, its backend, and external cloud providers.
   download date, with an **Active** badge.
 - **Inference backend** *(Basic)* — drop-down picking the engine (NPU preferred,
   falling back to GPU then CPU). Changing it surfaces a restart banner — tap
-  **Restart** to apply immediately.
+  **Restart** to apply immediately. On a fresh install the app picks this for
+  you once, during setup: if the device looks capable of GPU inference it briefly
+  shows **Checking acceleration…** while verifying that the GPU really runs the
+  model, and quietly settles on CPU if it does not. The result is written into
+  this row, so you can always see — and override — what was chosen. Once you pick
+  a backend yourself, the app never changes it again.
 - **Test backend** — runs a fixed prompt-probe and persists the measurement
   (`Last probe · N tok in T s · K tok/s`) so the row keeps the metric across
   navigation.
