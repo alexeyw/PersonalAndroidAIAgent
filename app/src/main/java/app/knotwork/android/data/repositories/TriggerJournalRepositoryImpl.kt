@@ -94,6 +94,12 @@ class TriggerJournalRepositoryImpl @Inject constructor(private val dao: TriggerJ
         }
         .flowOn(dispatcher)
 
+    override suspend fun readAll(): List<TriggerEvaluation> = absorbingStoreFailure(
+        { "Trigger-journal readAll failed; returning empty snapshot" },
+    ) {
+        withContext(dispatcher) { dao.getAllOrderedByEvaluatedAt().mapNotNull { it.toDomainOrNull() } }
+    } ?: emptyList()
+
     override suspend fun applyRetention(olderThanEpochMs: Long, maxRecords: Int): Int {
         // Fail fast on a misconfigured cap: `maxRecords <= 0` would make the
         // enforce-cap DELETE keep zero rows and wipe the whole journal. This is a

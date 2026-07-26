@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Debug-only manifest overlay. Everything declared here is merged into the
+  `debug` build type only and never reaches a release build.
+
+  It registers TriggerJournalDumpReceiver: an adb-triggerable diagnostic that
+  dumps the trigger-evaluation journal to an app-private JSON file for the
+  background-reliability soak protocol (project_docs/metrics.md). It is exported
+  so `adb shell am broadcast` (shell uid) can reach it; this is acceptable only
+  because the receiver exists exclusively in debuggable builds.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <!--
+          Intentionally exported so `adb shell am broadcast` (shell uid) can reach
+          it. Safe because this receiver is compiled only into debuggable builds
+          and merged only by this debug-only manifest overlay.
+        -->
+        <receiver
+            android:name=".debug.TriggerJournalDumpReceiver"
+            android:enabled="true"
+            android:exported="true"
+            tools:ignore="ExportedReceiver">
+            <intent-filter>
+                <action android:name="app.knotwork.android.debug.DUMP_TRIGGER_JOURNAL" />
+            </intent-filter>
+        </receiver>
+    </application>
+
+</manifest>

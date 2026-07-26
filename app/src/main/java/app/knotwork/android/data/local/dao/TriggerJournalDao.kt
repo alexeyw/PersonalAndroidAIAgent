@@ -83,6 +83,19 @@ interface TriggerJournalDao {
     fun observeLatestFiredPerTrigger(): Flow<List<TriggerEvaluationEntity>>
 
     /**
+     * Reads the **entire** journal as a one-shot snapshot, newest evaluation
+     * first. Unlike the reactive observers this returns a plain list, so the
+     * caller gets a stable point-in-time copy — used by the debug journal dump
+     * that a soak run pulls off the device for offline analysis. The whole table
+     * is bounded by the retention pass, so an unfiltered read stays modest.
+     *
+     * @return Every stored row, ordered by [TriggerEvaluationEntity.evaluatedAt]
+     *   descending (ties broken by `id` for a deterministic order).
+     */
+    @Query("SELECT * FROM trigger_evaluations ORDER BY evaluatedAt DESC, id ASC")
+    suspend fun getAllOrderedByEvaluatedAt(): List<TriggerEvaluationEntity>
+
+    /**
      * Deletes every record older than [cutoff].
      *
      * @param cutoff Age cutoff, epoch-millis.
