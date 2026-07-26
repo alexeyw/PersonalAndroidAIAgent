@@ -91,12 +91,18 @@ class OpenClAccelerationProbe(private val loadLibrary: (String) -> Unit, private
          * only when the linker could not resolve the canonical soname. 64-bit
          * paths lead because every device this app supports is 64-bit; the
          * 32-bit twins are kept for vendor images that only populate `lib/`.
+         *
+         * Every entry is an OpenCL library proper. Graphics drivers that merely
+         * *tend* to ship OpenCL (`libGLES_mali.so` and friends) are deliberately
+         * excluded: a false positive here is not free — it buys a real GPU init
+         * attempt, and that is precisely the thing that can abort the process.
          */
         val VENDOR_OPENCL_PATHS = listOf(
             "/vendor/lib64/libOpenCL.so",
             "/system/vendor/lib64/libOpenCL.so",
             "/system/lib64/libOpenCL.so",
-            "/vendor/lib64/egl/libGLES_mali.so",
+            "/vendor/lib64/libOpenCL-pixel.so",
+            "/vendor/lib64/libPVROCL.so",
             "/system/vendor/lib64/libPVROCL.so",
             "/vendor/lib/libOpenCL.so",
             "/system/vendor/lib/libOpenCL.so",

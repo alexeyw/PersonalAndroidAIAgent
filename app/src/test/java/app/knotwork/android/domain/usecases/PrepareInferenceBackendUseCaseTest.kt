@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
+import java.io.IOException
 
 /**
  * Covers the first-install backend decision: who may change it, what evidence
@@ -138,6 +139,20 @@ class PrepareInferenceBackendUseCaseTest {
             llmInferenceEngine.unload()
             loadModelUseCase.invoke(modelPath, any(), any())
         }
+    }
+
+    @Test
+    fun `given a settings write that fails when preparing then the handle is still warmed on CPU`() = runTest {
+        every { accelerationProbe.isGpuAvailable() } returns true
+        coEvery { settingsRepository.setLocalModelBackend(any()) } throws IOException("no space left on device")
+
+        val outcome = useCase(modelPath)
+
+        // Failing to record the decision must not cost the user a working
+        // handle — this runs inside onboarding, where an escaping exception
+        // would break the first run entirely.
+        assertEquals(PrepareInferenceBackendUseCase.Outcome.Warmed(LocalBackend.CPU), outcome)
+        coVerify(exactly = 1) { loadModelUseCase.invoke(modelPath, any(), any()) }
     }
 
     @Test

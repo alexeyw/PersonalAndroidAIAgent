@@ -5,6 +5,7 @@ import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.LocalBackend
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.repositories.SettingsRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -97,35 +98,77 @@ class PrepareInferenceBackendUseCase @Inject constructor(
      */
     suspend operator fun invoke(modelPath: String, onAccelerationCheckStarted: () -> Unit = {}): Outcome =
         withContext(Dispatchers.IO) {
-            val stored = settingsRepository.localModelBackendPreference.first()
-            if (stored != null) {
-                return@withContext warmUp(modelPath, LocalBackend.fromKey(stored) ?: LocalBackend.CPU)
+            try {
+                resolveAndWarmUp(modelPath, onAccelerationCheckStarted)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Deciding must never end worse than not deciding at all. The
+                // decision path writes to settings, which can fail on its own
+                // (a full or unwritable data dir) — and this runs inside the
+                // onboarding warm-up, where an escaping exception would take
+                // the user's very first run down with it.
+                Timber.w(e, "Backend preparation failed — falling back to CPU.")
+                fallBackToCpu(modelPath)
             }
-
-            if (!accelerationProbe.isGpuAvailable()) {
-                settingsRepository.setLocalModelBackend(LocalBackend.CPU.key)
-                return@withContext warmUp(modelPath, LocalBackend.CPU)
-            }
-
-            onAccelerationCheckStarted()
-            settingsRepository.setLocalModelBackend(LocalBackend.GPU.key)
-            val probe = testBackendUseCase(modelPath)
-            if (probe.success) {
-                Timber.i(
-                    "GPU backend verified in %d ms (%d tokens) — keeping it as the default.",
-                    probe.durationMs,
-                    probe.tokensGenerated,
-                )
-                return@withContext Outcome.Warmed(LocalBackend.GPU)
-            }
-
-            Timber.w("GPU backend verification failed (%s) — falling back to CPU.", probe.errorMessage)
-            settingsRepository.setLocalModelBackend(LocalBackend.CPU.key)
-            // The engine may hold a live GPU handle for this exact model; its reuse
-            // check ignores the backend, so only a teardown forces the CPU rebuild.
-            llmInferenceEngine.unload()
-            warmUp(modelPath, LocalBackend.CPU)
         }
+
+    private suspend fun resolveAndWarmUp(modelPath: String, onAccelerationCheckStarted: () -> Unit): Outcome {
+        val stored = settingsRepository.localModelBackendPreference.first()
+        if (stored != null) {
+            return warmUp(modelPath, LocalBackend.fromKey(stored) ?: LocalBackend.CPU)
+        }
+
+        if (!accelerationProbe.isGpuAvailable()) {
+            settingsRepository.setLocalModelBackend(LocalBackend.CPU.key)
+            return warmUp(modelPath, LocalBackend.CPU)
+        }
+
+        onAccelerationCheckStarted()
+        settingsRepository.setLocalModelBackend(LocalBackend.GPU.key)
+        val probe = testBackendUseCase(modelPath)
+        if (probe.success) {
+            Timber.i(
+                "GPU backend verified in %d ms (%d tokens) — keeping it as the default.",
+                probe.durationMs,
+                probe.tokensGenerated,
+            )
+            return Outcome.Warmed(LocalBackend.GPU)
+        }
+
+        Timber.w("GPU backend verification failed (%s) — falling back to CPU.", probe.errorMessage)
+        return fallBackToCpu(modelPath)
+    }
+
+    /**
+     * Records CPU, drops any live handle, and warms up again.
+     *
+     * The teardown is load-bearing: the engine may hold a handle built on the
+     * backend that just failed, and its reuse check compares model path and
+     * modalities but not the backend — so without it the reload would be a
+     * no-op and leave the run exactly where it broke.
+     */
+    private suspend fun fallBackToCpu(modelPath: String): Outcome {
+        persistBackendQuietly(LocalBackend.CPU)
+        llmInferenceEngine.unload()
+        return warmUp(modelPath, LocalBackend.CPU)
+    }
+
+    /**
+     * Records the resolved backend, absorbing a storage failure: by this point
+     * the fallback is already happening, and failing to *write down* the safe
+     * choice is no reason to deny the user a working handle. The cost of the
+     * lost write is one repeated probe on the next journey.
+     */
+    private suspend fun persistBackendQuietly(backend: LocalBackend) {
+        try {
+            settingsRepository.setLocalModelBackend(backend.key)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Timber.w(e, "Could not persist the resolved backend.")
+        }
+    }
 
     private suspend fun warmUp(modelPath: String, backend: LocalBackend): Outcome =
         when (val result = loadModelUseCase(modelPath)) {
