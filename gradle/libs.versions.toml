@@ -1,5 +1,5 @@
 [versions]
-agp = "9.3.0"
+agp = "9.3.1"
 coreKtx = "1.19.0"
 junit = "4.13.2"
 junitVersion = "1.3.0"
@@ -21,19 +21,19 @@ mediapipe = "0.10.35"
 navigationCompose = "2.9.8"
 hiltNavigationCompose = "1.4.0"
 okhttp = "5.4.0"
-koog = "1.0.0"
+koog = "1.1.1"
 # Google / DeepSeek prompt-executor clients and the MCP server module have
-# not promoted past `1.0.0-beta` on Maven Central yet (the rest of
-# Koog 1.0.0 is stable). Pin them separately so a single `koog` bump doesn't
+# not promoted past `1.1.1-beta` on Maven Central yet (the rest of
+# Koog 1.1.1 is stable). Pin them separately so a single `koog` bump doesn't
 # fail to resolve. Re-collapse onto `koog` once these three artifacts ship
-# their stable 1.0.0 release.
-koog-preview = "1.0.0-beta"
+# their stable release.
+koog-preview = "1.1.1-beta"
 appfunctions = "1.0.0-alpha09"
 markdown-renderer = "0.43.0"
 work = "2.11.2"
 hiltWork = "1.4.0"
 gson = "2.14.0"
-json = "20260522"
+json = "20260719"
 sqlcipher = "4.17.0"
 detekt = "2.0.0-alpha.5"
 ktlint = "14.2.0"
@@ -42,7 +42,7 @@ firebaseBom = "34.16.0"
 googleServices = "4.5.0"
 crashlyticsPlugin = "3.0.7"
 coreSplashscreen = "1.2.0"
-roborazzi = "1.69.0"
+roborazzi = "1.70.0"
 robolectric = "4.16.1"
 processPhoenix = "3.0.0"
 coil = "3.5.0"
