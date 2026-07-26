@@ -986,8 +986,8 @@ tasks.matching { it.name in probeInstallHostTasks }
 //
 // The mapping R8 emits is the one durable artefact that can: a live keep rule
 // leaves the package identity-mapped. This task asserts exactly that after every
-// release assemble, so a dropped rule fails the build rather than the user's
-// first message.
+// release packaging task — APK and AAB alike — so a dropped rule fails the build
+// rather than the user's first message.
 val r8ProtectedPackages: List<String> = listOf("com.google.common.flogger.")
 androidComponents {
     onVariants { variant ->
@@ -999,10 +999,19 @@ androidComponents {
             description = "Fails the release build if an R8 keep rule stopped pinning a protected package."
             inputs.files(mappingFile).optional().withPropertyName("r8Mapping")
             val protectedPackages = r8ProtectedPackages
+            val checkedVariant = variant.name
             doLast {
-                val mapping = mappingFile.get().asFile
-                // Minification off for this variant: nothing to verify.
-                if (!mapping.exists()) return@doLast
+                val mapping = mappingFile.orNull?.asFile
+                // A release variant with no mapping is itself the regression:
+                // either minification was switched off for a shipping build, or
+                // this guard lost its grip on the artefact. Skipping silently
+                // here would be the same vacuous pass the checker refuses.
+                if (mapping == null || !mapping.exists()) {
+                    throw GradleException(
+                        "R8 keep-rule check cannot run for `$checkedVariant`: no obfuscation mapping was produced. " +
+                            "Either minification is disabled for a release build, or the mapping artefact moved.",
+                    )
+                }
                 val contents = mapping.readText()
                 val violations = protectedPackages.flatMap { prefix ->
                     R8MappingChecker.verifyIdentityMapping(contents, prefix)
@@ -1015,8 +1024,13 @@ androidComponents {
                 }
             }
         }
-        // `tasks.matching`, not `tasks.named`: AGP registers the assemble tasks
-        // after this `onVariants` callback runs, so eager lookup fails here.
-        tasks.matching { it.name == "assemble$variantName" }.configureEach { finalizedBy(verifyKeepRules) }
+        // Both packaging paths, not just the APK: the distribution artefact for
+        // Play is the AAB, and a guard that only watches `assemble` would wave
+        // through exactly the build that ships.
+        //
+        // `tasks.matching`, not `tasks.named`: AGP registers these tasks after
+        // this `onVariants` callback runs, so eager lookup fails here.
+        val packagingTasks = setOf("assemble$variantName", "bundle$variantName")
+        tasks.matching { it.name in packagingTasks }.configureEach { finalizedBy(verifyKeepRules) }
     }
 }
