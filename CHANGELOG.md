@@ -13,6 +13,19 @@ details.
 
 ## [Unreleased]
 
+### Added
+
+- **Setup now picks the fastest inference backend your device can actually
+  run.** New installs used to start on the CPU backend, which made the very
+  first answer — right after the model download — take the slowest path
+  available. Setup now checks once whether the device supports GPU inference
+  and, if it does, verifies it by really generating with the model
+  (**Checking acceleration…** on the last setup step) before keeping it. On the
+  reference device this is around five times faster on decode. Anything less
+  than a clean success falls back to CPU silently, and the outcome is written
+  into **Settings → Models → Inference backend**, so it is both visible and
+  overridable. An explicitly chosen backend is never overridden.
+
 ### Fixed
 
 - **Release builds crashed on the first message that touched long-term

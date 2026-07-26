@@ -411,6 +411,20 @@ interface SettingsRepository {
     val localModelBackend: Flow<String>
 
     /**
+     * The **raw** stored backend preference: the persisted wire key, or `null`
+     * when the user (and the app) has never written one.
+     *
+     * [localModelBackend] folds the absent case into
+     * [app.knotwork.android.domain.models.LocalBackend.CPU], which is exactly
+     * what every inference call site wants — but it makes "never chosen"
+     * indistinguishable from "deliberately CPU". The one-shot onboarding
+     * acceleration decision needs that distinction: it may pick a default only
+     * while nothing has been chosen, and must never override an explicit
+     * selection.
+     */
+    val localModelBackendPreference: Flow<String?>
+
+    /**
      * Updates the selected backend for the local model.
      *
      * @param backend The new backend wire key; use

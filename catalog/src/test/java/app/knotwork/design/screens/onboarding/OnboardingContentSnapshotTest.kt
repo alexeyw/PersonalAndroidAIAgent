@@ -117,6 +117,16 @@ class OnboardingContentSnapshotTest {
     }
 
     @Test
+    fun onboarding_ready_checking_light() = snapshot(name = "ready_checking_acceleration", dark = false) {
+        OnboardingContent(state = OnboardingPreview.readyCheckingAcceleration())
+    }
+
+    @Test
+    fun onboarding_ready_checking_dark() = snapshot(name = "ready_checking_acceleration", dark = true) {
+        OnboardingContent(state = OnboardingPreview.readyCheckingAcceleration())
+    }
+
+    @Test
     fun onboarding_ready_styled_light() = snapshot(name = "ready_styled", dark = false) {
         OnboardingContent(state = OnboardingPreview.readyStyled())
     }
@@ -199,6 +209,11 @@ internal object OnboardingPreview {
         scenarioPreview = companionPreview(),
         installedModelId = OnboardingLiteRtModel.Gemma4E4B.id,
         isModelWarmed = false,
+    )
+
+    /** Ready — the host is verifying this device's hardware acceleration. */
+    fun readyCheckingAcceleration(): OnboardingViewState = readyWarming().copy(
+        isCheckingAcceleration = true,
     )
 
     /** Ready — Styled Translation, warmed. */

@@ -129,6 +129,11 @@ data class OnboardingDefaultPipelinePreview(
  * [OnboardingLiteRtModel.CustomUrl] row.
  * @property isModelWarmed `true` once the host has loaded the model into the
  * inference engine. Gates the "Ready" CTA so the user never lands in a cold chat.
+ * @property isCheckingAcceleration `true` while the host verifies that this
+ * device's hardware acceleration actually runs the model, before falling back to
+ * the safe path if it does not. Purely a copy change on the still-disabled
+ * "Ready" CTA: the check costs about a second, and naming it beats a generic
+ * "Preparing…" that looks like the app is stuck.
  */
 data class OnboardingViewState(
     val step: OnboardingStep = OnboardingStep.Welcome,
@@ -141,6 +146,7 @@ data class OnboardingViewState(
     val installedModelId: String? = null,
     val customDownloadUrl: String = "",
     val isModelWarmed: Boolean = false,
+    val isCheckingAcceleration: Boolean = false,
 ) {
     /**
      * Primary CTA enablement matrix. The download-step CTA serves three roles

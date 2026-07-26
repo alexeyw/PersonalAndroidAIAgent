@@ -4,6 +4,7 @@ import app.knotwork.android.data.audio.AudioRecorderImpl
 import app.knotwork.android.data.engine.DefaultTextEmbedderFactory
 import app.knotwork.android.data.engine.LiteRTLlmEngine
 import app.knotwork.android.data.engine.MediaPipeTextEmbeddingEngine
+import app.knotwork.android.data.engine.OpenClAccelerationProbe
 import app.knotwork.android.data.engine.TaskQueueManagerImpl
 import app.knotwork.android.data.engine.TextEmbedderFactory
 import app.knotwork.android.data.local.AgentWorkspaceImpl
@@ -47,6 +48,7 @@ import app.knotwork.android.data.repositories.UsageTelemetryRepositoryImpl
 import app.knotwork.android.data.services.LongRunningTaskNotifierImpl
 import app.knotwork.android.data.services.WorkManagerMemoryReembedScheduler
 import app.knotwork.android.data.services.WorkManagerTriggerScheduler
+import app.knotwork.android.domain.engine.HardwareAccelerationProbe
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.engine.TaskQueueManager
 import app.knotwork.android.domain.engine.TextEmbeddingEngine
@@ -147,6 +149,14 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindLlmInferenceEngine(engine: LiteRTLlmEngine): LlmInferenceEngine
+
+    /**
+     * Binds the OpenCL-backed [HardwareAccelerationProbe] used to decide whether
+     * a first-time install may default to the GPU backend.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindHardwareAccelerationProbe(probe: OpenClAccelerationProbe): HardwareAccelerationProbe
 
     /**
      * Binds the [MediaPipeTextEmbeddingEngine] implementation to the [TextEmbeddingEngine] interface.

@@ -2,16 +2,15 @@ package app.knotwork.android.presentation.ui.onboarding
 
 import app.knotwork.android.data.network.AndroidModelDownloadManager
 import app.knotwork.android.domain.constants.OnboardingModelCatalog
-import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.DownloadState
+import app.knotwork.android.domain.models.LocalBackend
 import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.OnboardingMilestone
-import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.ModelDownloadManager
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.UsageTelemetryRepository
-import app.knotwork.android.domain.usecases.LoadModelUseCase
+import app.knotwork.android.domain.usecases.PrepareInferenceBackendUseCase
 import app.knotwork.android.domain.usecases.SetUpScenarioUseCase
 import app.knotwork.android.presentation.state.TransientMessageRelay
 import app.knotwork.design.screens.onboarding.OnboardingLiteRtModel
@@ -48,7 +47,7 @@ import org.junit.Test
  *  2. Picking a scenario pre-selects its model and warms an already-installed one;
  *  3. `setUpScenario` materialises the scenario and advances to the download step;
  *  4. The download CTA gate matches the download state;
- *  5. Downloaded models are persisted and their path fed to `LoadModelUseCase`;
+ *  5. Downloaded models are persisted and their path fed to `PrepareInferenceBackendUseCase`;
  *  6. Errors surface in `downloadError` instead of crashing the coroutine.
  *
  * The class covers the VM contract, not the catalog rendering (Roborazzi does that).
@@ -60,7 +59,7 @@ class OnboardingViewModelTest {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var localModelRepository: LocalModelRepository
     private lateinit var downloadManager: ModelDownloadManager
-    private lateinit var loadModelUseCase: LoadModelUseCase
+    private lateinit var prepareInferenceBackendUseCase: PrepareInferenceBackendUseCase
     private lateinit var setUpScenarioUseCase: SetUpScenarioUseCase
     private lateinit var transientMessageRelay: TransientMessageRelay
     private lateinit var usageTelemetry: UsageTelemetryRepository
@@ -78,8 +77,9 @@ class OnboardingViewModelTest {
         coEvery { localModelRepository.setActiveModel(any()) } returns Unit
         downloadManager = mockk(relaxed = true)
         every { downloadManager.downloadModel(any(), any(), any()) } returns flowOf()
-        loadModelUseCase = mockk(relaxed = true)
-        coEvery { loadModelUseCase.invoke(any()) } returns Result.Success(Unit)
+        prepareInferenceBackendUseCase = mockk(relaxed = true)
+        coEvery { prepareInferenceBackendUseCase.invoke(any(), any()) } returns
+            PrepareInferenceBackendUseCase.Outcome.Warmed(LocalBackend.CPU)
         setUpScenarioUseCase = mockk(relaxed = true)
         coEvery { setUpScenarioUseCase(any()) } returns kotlin.Result.success(
             SetUpScenarioUseCase.ScenarioSetup(
@@ -103,7 +103,7 @@ class OnboardingViewModelTest {
         settingsRepository = settingsRepository,
         localModelRepository = localModelRepository,
         downloadManager = downloadManager,
-        loadModelUseCase = loadModelUseCase,
+        prepareInferenceBackendUseCase = prepareInferenceBackendUseCase,
         setUpScenarioUseCase = setUpScenarioUseCase,
         transientMessageRelay = transientMessageRelay,
         usageTelemetry = usageTelemetry,
@@ -157,7 +157,7 @@ class OnboardingViewModelTest {
         val state = viewModel.state.value
         assertEquals(OnboardingLiteRtModel.Gemma4E4B, state.liteRtModel)
         assertEquals(OnboardingLiteRtModel.Gemma4E4B.id, state.installedModelId)
-        coVerify(atLeast = 1) { loadModelUseCase.invoke("/data/e4b.litertlm") }
+        coVerify(atLeast = 1) { prepareInferenceBackendUseCase.invoke("/data/e4b.litertlm", any()) }
     }
 
     @Test
@@ -247,9 +247,9 @@ class OnboardingViewModelTest {
             isActive = true,
         )
         // First warm-up fails; the retry succeeds.
-        coEvery { loadModelUseCase.invoke("/data/model.litertlm") } returnsMany listOf(
-            Result.Error(error = object : AppError.System {}, message = "warm failed"),
-            Result.Success(Unit),
+        coEvery { prepareInferenceBackendUseCase.invoke("/data/model.litertlm", any()) } returnsMany listOf(
+            PrepareInferenceBackendUseCase.Outcome.Failed(message = "warm failed"),
+            PrepareInferenceBackendUseCase.Outcome.Warmed(LocalBackend.CPU),
         )
         val viewModel = newViewModel()
         viewModel.pickScenario(OnboardingScenario.StyledTranslation)
@@ -262,6 +262,58 @@ class OnboardingViewModelTest {
 
         assertNull(viewModel.state.value.downloadError)
         assertTrue(viewModel.state.value.isModelWarmed)
+    }
+
+    @Test
+    fun `warm-up shows the acceleration check while it runs and clears it afterwards`() = runTest {
+        val e4bFileName = OnboardingModelCatalog.entryById(OnboardingLiteRtModel.Gemma4E4B.id)!!.fileName
+        coEvery { localModelRepository.findByFileName(e4bFileName) } returns LocalModel(
+            id = 7L,
+            name = e4bFileName,
+            path = "/data/model.litertlm",
+            size = 0L,
+            isActive = true,
+        )
+        lateinit var viewModel: OnboardingViewModel
+        var flagDuringCheck: Boolean? = null
+        coEvery { prepareInferenceBackendUseCase.invoke("/data/model.litertlm", any()) } coAnswers {
+            secondArg<() -> Unit>().invoke()
+            flagDuringCheck = viewModel.state.value.isCheckingAcceleration
+            PrepareInferenceBackendUseCase.Outcome.Warmed(LocalBackend.GPU)
+        }
+
+        viewModel = newViewModel()
+        viewModel.pickScenario(OnboardingScenario.StyledTranslation)
+        advanceUntilIdle()
+
+        // Visible while the verification generation runs…
+        assertEquals(true, flagDuringCheck)
+        // …and never left behind once the outcome is in.
+        assertFalse(viewModel.state.value.isCheckingAcceleration)
+        assertTrue(viewModel.state.value.isModelWarmed)
+    }
+
+    @Test
+    fun `a failed warm-up still clears the acceleration check flag`() = runTest {
+        val e4bFileName = OnboardingModelCatalog.entryById(OnboardingLiteRtModel.Gemma4E4B.id)!!.fileName
+        coEvery { localModelRepository.findByFileName(e4bFileName) } returns LocalModel(
+            id = 7L,
+            name = e4bFileName,
+            path = "/data/model.litertlm",
+            size = 0L,
+            isActive = true,
+        )
+        coEvery { prepareInferenceBackendUseCase.invoke("/data/model.litertlm", any()) } coAnswers {
+            secondArg<() -> Unit>().invoke()
+            PrepareInferenceBackendUseCase.Outcome.Failed(message = "warm failed")
+        }
+
+        val viewModel = newViewModel()
+        viewModel.pickScenario(OnboardingScenario.StyledTranslation)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.isCheckingAcceleration)
+        assertEquals("warm failed", viewModel.state.value.downloadError)
     }
 
     @Test
@@ -299,7 +351,7 @@ class OnboardingViewModelTest {
         // The flow defaults to E4B — the model every curated scenario targets.
         assertEquals(OnboardingLiteRtModel.Gemma4E4B.id, finalState.installedModelId)
         coVerify(exactly = 1) { localModelRepository.insertModel(any()) }
-        coVerify(exactly = 1) { loadModelUseCase.invoke("/tmp/gemma-4-E4B-it.litertlm") }
+        coVerify(exactly = 1) { prepareInferenceBackendUseCase.invoke("/tmp/gemma-4-E4B-it.litertlm", any()) }
     }
 
     @Test
@@ -316,7 +368,7 @@ class OnboardingViewModelTest {
         // Styled Translation needs E4B; picking it warms the installed handle once.
         viewModel.pickScenario(OnboardingScenario.StyledTranslation)
         advanceUntilIdle()
-        coVerify(exactly = 1) { loadModelUseCase.invoke("/data/model.litertlm") }
+        coVerify(exactly = 1) { prepareInferenceBackendUseCase.invoke("/data/model.litertlm", any()) }
 
         viewModel.finishOnboarding()
         advanceUntilIdle()
@@ -324,7 +376,7 @@ class OnboardingViewModelTest {
         coVerify(exactly = 1) { settingsRepository.setHasCompletedOnboarding(true) }
         // No second warm-up: the Ready CTA only enables after the first one flips
         // `isModelWarmed`, so `finishOnboarding` never re-loads the model.
-        coVerify(exactly = 1) { loadModelUseCase.invoke("/data/model.litertlm") }
+        coVerify(exactly = 1) { prepareInferenceBackendUseCase.invoke("/data/model.litertlm", any()) }
     }
 
     @Test
@@ -368,7 +420,7 @@ class OnboardingViewModelTest {
         val state = viewModel.state.value
         assertEquals(OnboardingLiteRtModel.Gemma4E4B.id, state.installedModelId)
         coVerify(exactly = 0) { downloadManager.downloadModel(any(), any(), any()) }
-        coVerify(atLeast = 1) { loadModelUseCase.invoke("/data/e4b.litertlm") }
+        coVerify(atLeast = 1) { prepareInferenceBackendUseCase.invoke("/data/e4b.litertlm", any()) }
     }
 
     @Test
@@ -395,8 +447,8 @@ class OnboardingViewModelTest {
         viewModel.pickLiteRtModel(OnboardingLiteRtModel.Gemma4E4B)
         advanceUntilIdle()
 
-        coVerify(atLeast = 1) { loadModelUseCase.invoke("/data/e4b.litertlm") }
-        coVerify(exactly = 0) { loadModelUseCase.invoke("/data/e2b.litertlm") }
+        coVerify(atLeast = 1) { prepareInferenceBackendUseCase.invoke("/data/e4b.litertlm", any()) }
+        coVerify(exactly = 0) { prepareInferenceBackendUseCase.invoke("/data/e2b.litertlm", any()) }
     }
 
     @Test
@@ -461,7 +513,7 @@ class OnboardingViewModelTest {
         val state = viewModel.state.value
         assertEquals(OnboardingLiteRtModel.Gemma4E4B, state.liteRtModel)
         assertNull(state.installedModelId)
-        coVerify(exactly = 0) { loadModelUseCase.invoke("/data/e2b.litertlm") }
+        coVerify(exactly = 0) { prepareInferenceBackendUseCase.invoke("/data/e2b.litertlm", any()) }
     }
 
     @Test

@@ -17,9 +17,10 @@ import javax.inject.Inject
  * throughput numbers across navigation.
  *
  * Sequence:
- *  1. Resolve the active [app.knotwork.android.domain.models.LocalModel] via
- *     [LocalModelRepository.getActiveModel]. If `null`, persist a failure
- *     result and return it.
+ *  1. Resolve the model to probe: the caller-supplied path when given,
+ *     otherwise the active [app.knotwork.android.domain.models.LocalModel] via
+ *     [LocalModelRepository.getActiveModel]. If neither resolves, persist a
+ *     failure result and return it.
  *  2. Load the model via [LoadModelUseCase]; on error persist + return.
  *  3. Stream the fixed probe prompt through [LlmInferenceEngine],
  *     counting tokens and wall-clock duration.
@@ -40,11 +41,17 @@ class TestBackendUseCase @Inject constructor(
      * Runs the probe end-to-end and persists the result. Caller may
      * observe [SettingsRepository.lastTestProbeResult] for the live row
      * subtitle.
+     *
+     * @param modelPath Absolute path of the model to probe. `null` — the
+     *   Settings row's own usage — probes whichever model is currently active.
+     *   An explicit path is what the onboarding acceleration check passes: the
+     *   model it just installed is not necessarily the active one yet, and
+     *   probing a *different* model there would measure the wrong thing.
      */
-    suspend operator fun invoke(): TestProbeResult {
+    suspend operator fun invoke(modelPath: String? = null): TestProbeResult {
         val started = System.currentTimeMillis()
-        val activeModel = localModelRepository.getActiveModel()
-        if (activeModel == null) {
+        val pathToProbe = modelPath ?: localModelRepository.getActiveModel()?.path
+        if (pathToProbe == null) {
             return persistAndReturn(
                 TestProbeResult(
                     tokensGenerated = 0,
@@ -56,7 +63,7 @@ class TestBackendUseCase @Inject constructor(
             )
         }
 
-        val loadResult = loadModelUseCase(activeModel.path)
+        val loadResult = loadModelUseCase(pathToProbe)
         if (loadResult is Result.Error) {
             return persistAndReturn(
                 TestProbeResult(
