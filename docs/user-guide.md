@@ -737,13 +737,21 @@ delete the bound pipeline, the trigger is disabled automatically.
 ### How soon a trigger fires
 
 **Charging** triggers are event-driven — plugging in fires the run within
-seconds, even if the app is closed. **Interval**, **Daily** and **Network**
-triggers are checked on a background poll the system runs roughly every
-**15 minutes** (the platform minimum), so they fire at the next check after
-their condition is met, not the instant it changes. When the device is idle
-or under aggressive battery optimisation the system may defer that poll
-further; keeping the app excluded from battery optimisation makes background
-runs more punctual.
+seconds, even if the app is closed. Every other trigger is checked on a
+background schedule of its own, so it fires at the next check after its
+condition is met, not the instant it changes:
+
+- **Interval** triggers are checked on their own interval (never more often
+  than every **15 minutes** — the platform minimum for background work).
+- **Daily** triggers wake once a day, timed to the hour you picked.
+- **Network** triggers are checked on a **15-minute** poll, so a connection
+  that comes and goes between two checks can pass unnoticed.
+
+When the device is idle or under aggressive battery optimisation the system
+may defer any of these further; keeping the app excluded from battery
+optimisation makes background runs more punctual. The evaluation journal on
+each trigger records every check, so a late or missing run is diagnosable
+after the fact — see below.
 
 ### Results and notifications
 
@@ -776,14 +784,17 @@ surfaces make it legible.
 **Health at a glance.** In the trigger list, every trigger that is enabled
 *and* bound to a pipeline carries a badge:
 
-- **Healthy** — it is being checked on schedule and the last run it started
-  finished cleanly.
+- **Healthy** — nothing is wrong: it is being checked on schedule and the last
+  run it started finished cleanly. A trigger you have just created also reads
+  Healthy, because nothing is overdue until its first check falls due.
 - **Overdue** — the phone has not checked this trigger for noticeably longer
   than its own schedule implies (more than twice the cadence it should be
   checked at). This is the tell-tale of an aggressive battery saver or a deep
   idle state — the trigger is fine, the phone simply isn't waking the app.
-- **Last run failed** — the most recent run this trigger started ended in a
-  failure.
+- **Last run failed** — the most recent run this trigger started ended as
+  anything other than a clean success: a failure, a run the system killed, a
+  run you stopped, or one that timed out waiting for your approval. The
+  journal entry says which.
 
 Each badge is an icon plus a word, never colour alone, and at very large font
 sizes it collapses to the icon while screen readers still announce the full
@@ -2087,10 +2098,10 @@ always there, and which of two shapes it takes decides what to do next:
   **Overdue**. The app was never woken to check. This is a platform-side
   problem: exclude the app from battery optimisation, and on phones with an
   extra vendor layer (Samsung, Xiaomi, OnePlus and others) also take it out
-  of any "sleeping"/"deep sleeping" app list. Note that **Interval**,
-  **Daily** and **Network** triggers ride a poll that the system schedules
-  roughly every 15 minutes and may defer further when idle — a fire arriving
-  late is normal; hours of silence is not.
+  of any "sleeping"/"deep sleeping" app list. Note that every non-charging
+  trigger runs on a deferrable background schedule (see [How soon a trigger
+  fires](#how-soon-a-trigger-fires)) — a check arriving late is normal; a
+  gap of many times the trigger's own cadence is not.
 
 A trigger that has never been evaluated at all shows *"No evaluations yet"* —
 expected right after you create one, since the first check is up to the next

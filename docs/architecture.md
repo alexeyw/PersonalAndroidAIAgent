@@ -1379,8 +1379,12 @@ a session named after the trigger, minted on first fire and persisted
 Recurring fires accumulate in that one session; a deleted session is
 re-created on the next fire.
 
-**Firing latency.** Time and network triggers ride a periodic
-(~15-minute) `TriggerWatchWorker` poll. Charging triggers additionally
+**Firing latency.** Every trigger gets its own periodic `TriggerWatchWorker`
+registration, and the period depends on the condition: an interval trigger
+uses its own interval (floored at the 15-minute platform minimum, with flex),
+a daily trigger a 24-hour period with an initial delay to the next occurrence
+of its time, and network / charging triggers the shared 15-minute poll.
+Charging triggers additionally
 register a charging-constrained one-shot (`ChargingTriggerSweepWorker`
 via `setRequiresCharging`) that the OS wakes the instant the device is
 plugged in — even with the app closed — so a charging trigger fires
@@ -1394,10 +1398,12 @@ undiagnosable, so every evaluation is persisted. The governing invariant is
 **no silent skips**: each time a trigger is evaluated, *exactly one*
 `TriggerEvaluation` row is written at the moment the decision is taken —
 `Fired` / `ReArmed` / `Skipped(reason)` — tagged with the surface that woke
-it (`POLL` / `EVENT` / `CHARGING_SWEEP`). The consequence is what makes the
-journal useful: a trigger that did not run is either explained by a row, or
-has no row at all, and that absence is itself evidence — the platform never
-woke the app.
+it (`POLL` / `EVENT` / `CHARGING_SWEEP`). The one wakeup that writes nothing
+is a trigger deleted between the wakeup and its handling — there is no longer
+anything to attribute a row to. The consequence is what makes the journal
+useful: a trigger that did not run is either explained by a row, or has no
+row at all, and that absence is itself evidence — the platform never woke the
+app.
 
 The record is completed in two phases, written at two seams:
 
@@ -1405,7 +1411,9 @@ The record is completed in two phases, written at two seams:
    `RecordTriggerEvaluationUseCase`. On *fire* the row carries the
    **pre-minted `runId`** that is then handed to
    `TaskScheduler.scheduleOneTime(...)`, so the correlation exists before the
-   run does and a worker retry cannot double-fire.
+   run does. (The fire itself is made idempotent separately, by writing
+   `markFired` and the disarm *before* the enqueue, so a retried wakeup cannot
+   fire twice.)
 2. `PipelineRunRepositoryImpl.finishRun` — the single choke point every run
    passes through on its way to a terminal state — attributes the outcome
    back onto that row by run id, gated on the transition actually happening
@@ -1426,9 +1434,13 @@ Two derived reads sit on top, both pure and both migration-free:
 `TriggerHealthEvaluator` folds the latest evaluation and the latest fired
 outcome per trigger (`observeHealthInputs`, two `MAX(evaluatedAt) GROUP BY
 triggerId` queries) into `HEALTHY` / `STALE` / `ERRORED` — `null` for an
-inactive trigger, staleness winning over an error, the stale threshold being
+inactive trigger, no journal data at all reading `HEALTHY` (a freshly bound
+trigger is not overdue; staleness is inferred from evaluations, never from
+`createdAt`), staleness winning over an error, and the stale threshold being
 the condition's expected cadence × 2 floored at the 15-minute background
-cadence; and `TriggerJournalGrouper` projects a trigger's rows into
+cadence. `ERRORED` covers any settled outcome that is not `Success`, so a
+platform kill or a user stop shows up as loudly as a failure. And
+`TriggerJournalGrouper` projects a trigger's rows into
 day-grouped, relative-timestamped entries for the detail screen. Neither
 touches strings or locale — the presentation layer resolves those.
 
