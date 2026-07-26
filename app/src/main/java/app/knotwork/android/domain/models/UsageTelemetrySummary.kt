@@ -46,9 +46,17 @@ data class UsageTelemetrySummary(
     /** Total number of background trigger firings across every kind. */
     val totalTriggerFires: Int get() = triggerFiresByKind.values.sum()
 
-    /** Whether any usage has been recorded at all (used to drive the empty state). */
+    /**
+     * Whether any usage has been recorded at all (used to drive the empty state).
+     *
+     * Deliberately counter-only: onboarding markers appear the moment the flow is
+     * opened, long before there is anything to show, and letting them settle the
+     * screen would replace the "nothing recorded yet" copy with a dashboard of
+     * zeros. A *measured* journey always implies a completed run, so it is never
+     * hidden by this.
+     */
     val isEmpty: Boolean
-        get() = totalRuns == 0 && totalTriggerFires == 0 && activeDays == 0 && onboarding.isEmpty
+        get() = totalRuns == 0 && totalTriggerFires == 0 && activeDays == 0
 
     /** Constants for [UsageTelemetrySummary]. */
     companion object {

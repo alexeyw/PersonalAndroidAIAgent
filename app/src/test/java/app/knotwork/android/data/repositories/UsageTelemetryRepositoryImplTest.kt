@@ -173,6 +173,19 @@ class UsageTelemetryRepositoryImplTest {
     }
 
     @Test
+    fun `given only onboarding markers when read then the statistics still count as empty`() = runTest {
+        // Opening onboarding must not swap the screen's "nothing recorded yet"
+        // copy for a dashboard of zeros; markers alone are not usage.
+        val repository = repository()
+
+        repository.recordOnboardingMilestone(OnboardingMilestone.ONBOARDING_STARTED, day1)
+
+        val summary = repository.summary.first()
+        assertTrue(summary.isEmpty)
+        assertFalse(summary.onboarding.isEmpty)
+    }
+
+    @Test
     fun `given a marker already recorded when recorded again then the first occurrence is kept`() = runTest {
         val repository = repository()
 

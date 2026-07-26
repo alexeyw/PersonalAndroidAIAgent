@@ -88,10 +88,18 @@ data class OnboardingJourney(val milestones: Map<OnboardingMilestone, Long>, val
     /**
      * Time to first value **excluding** the model download — the product-owned
      * half of the metric, insulated from the user's network speed. `null` until
-     * [totalToValueMillis] is known.
+     * [totalToValueMillis] is known, and also `null` on a journey whose download
+     * started but never finished: the time that dangling attempt burned is
+     * unknown, and silently charging it to the product would overstate the
+     * figure this metric exists to protect.
      */
     val productToValueMillis: Long?
-        get() = totalToValueMillis?.let { total -> (total - (modelDownloadMillis ?: 0L)).coerceAtLeast(0L) }
+        get() {
+            val total = totalToValueMillis ?: return null
+            val download = modelDownloadMillis
+                ?: return if (OnboardingMilestone.MODEL_DOWNLOAD_STARTED in milestones) null else total
+            return (total - download).coerceAtLeast(0L)
+        }
 
     /** Whether nothing has been recorded yet (drives the empty state). */
     val isEmpty: Boolean get() = milestones.isEmpty()

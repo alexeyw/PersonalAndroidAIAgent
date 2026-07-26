@@ -1716,10 +1716,10 @@ anywhere on this path (a build-time guard enforces that). The screen shows:
   onboarding to your first successful run, how much of that was the model
   download, and the two subtracted (`mm:ss`). The download depends on your
   connection rather than on the app, so separating it is what makes the figure
-  comparable between installs. The block appears only if the journey was
-  recorded — it is measured once per install, from the first time onboarding
-  opens, and a later pass through onboarding never overwrites it. Journeys where
-  the model was already installed show no download time.
+  comparable between installs. The block appears once that first run has
+  happened; the timing is measured a single time per install, from the first time
+  onboarding opens, and a later pass through onboarding never overwrites it.
+  Journeys where the model was already installed show no download time.
 
 Controls:
 

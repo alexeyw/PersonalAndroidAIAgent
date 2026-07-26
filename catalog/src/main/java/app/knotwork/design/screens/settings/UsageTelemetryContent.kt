@@ -46,7 +46,7 @@ data class UsageStatRow(val label: String, val value: String)
  * @property triggers Per-kind trigger-firing rows; may be empty.
  * @property activeDays Active-day rows (count, first, last).
  * @property onboarding Install → first-value rows (total, model download, total
- *   excluding the download). Empty when the journey was never recorded — the
+ *   excluding the download). Empty until the journey reached first value — the
  *   section is then omitted entirely rather than rendered as a row of dashes.
  */
 data class UsageTelemetryViewState(

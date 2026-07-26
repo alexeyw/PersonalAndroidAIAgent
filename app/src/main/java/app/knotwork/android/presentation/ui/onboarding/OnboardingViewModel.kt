@@ -83,12 +83,6 @@ class OnboardingViewModel @Inject constructor(
     private val usageTelemetry: UsageTelemetryRepository,
 ) : ViewModel() {
 
-    init {
-        // Reaching the onboarding flow is the start of the measured journey.
-        // Write-once, so re-entering onboarding later never moves the start.
-        markMilestone(OnboardingMilestone.ONBOARDING_STARTED)
-    }
-
     private val _state: MutableStateFlow<OnboardingViewState> = MutableStateFlow(OnboardingViewState())
 
     /** Externally-observable view state passed to `OnboardingContent`. */
@@ -124,6 +118,14 @@ class OnboardingViewModel @Inject constructor(
      * a different pick re-materialises deliberately.
      */
     private var materializedScenarioId: String? = null
+
+    init {
+        // Reaching the onboarding flow is the start of the measured journey.
+        // Write-once, so re-entering onboarding later never moves the start.
+        // Declared after the state properties so the block can never run before
+        // the fields a future marker might read are initialised.
+        markMilestone(OnboardingMilestone.ONBOARDING_STARTED)
+    }
 
     /** Advances to the next step. Idempotent at the final step. */
     fun next() {

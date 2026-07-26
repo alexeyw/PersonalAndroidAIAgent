@@ -49,6 +49,22 @@ class OnboardingJourneyTest {
     }
 
     @Test
+    fun `given a download that started but never finished when reading product time then it is unmeasured`() {
+        // A failed / abandoned download burned an unknown amount of the total.
+        // Charging that time to the product figure would overstate the very
+        // number the metric exists to protect, so it reads as unmeasured.
+        val subject = journey(
+            OnboardingMilestone.ONBOARDING_STARTED to start,
+            OnboardingMilestone.MODEL_DOWNLOAD_STARTED to start + 10_000L,
+            OnboardingMilestone.FIRST_VALUE to start + 300_000L,
+        )
+
+        assertEquals(300_000L, subject.totalToValueMillis)
+        assertNull(subject.modelDownloadMillis)
+        assertNull(subject.productToValueMillis)
+    }
+
+    @Test
     fun `given an unfinished journey when reading durations then they are unmeasured not zero`() {
         val subject = journey(
             OnboardingMilestone.ONBOARDING_STARTED to start,

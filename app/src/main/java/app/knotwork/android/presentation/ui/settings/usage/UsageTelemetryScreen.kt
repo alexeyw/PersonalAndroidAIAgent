@@ -132,12 +132,16 @@ private fun buildUsageViewState(uiState: UsageTelemetryUiState): UsageTelemetryV
 /**
  * Builds the install → first-value rows: the full figure, the model-download
  * interval it is dominated by, and the download-free remainder (the product-owned
- * half of the metric). Returns an empty list when nothing was recorded, so the
- * section disappears instead of showing three dashes.
+ * half of the metric).
+ *
+ * Returns an empty list until the journey actually reached first value, so a
+ * half-recorded funnel (onboarding opened, nothing run yet) leaves the section
+ * out entirely rather than showing a row of dashes. The raw markers of a partial
+ * journey still travel in the export, which is the diagnostic surface.
  */
 @Composable
 private fun buildOnboardingRows(journey: OnboardingJourney): List<UsageStatRow> {
-    if (journey.isEmpty) return emptyList()
+    if (journey.totalToValueMillis == null) return emptyList()
     val none = stringResource(R.string.settings_usage_duration_none)
     return listOf(
         R.string.settings_usage_onboarding_total to journey.totalToValueMillis,

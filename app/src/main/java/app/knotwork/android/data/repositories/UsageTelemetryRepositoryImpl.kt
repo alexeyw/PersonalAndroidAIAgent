@@ -34,10 +34,10 @@ import javax.inject.Singleton
  * Aggregates the three on-device tables (`usage_counter`, `usage_active_day`,
  * `onboarding_milestone`) into a live [UsageTelemetrySummary] and records terminal
  * run outcomes / trigger firings / onboarding markers behind the opt-in flag.
- * **No method here ever
- * touches the network** — the whole class reads and writes only the local
- * (SQLCipher-encrypted) database, which is the privacy guarantee the feature is
- * built around (enforced structurally by `UsageTelemetryNoNetworkKonsistTest`).
+ * **No method here ever touches the network** — the whole class reads and writes
+ * only the local (SQLCipher-encrypted) database, which is the privacy guarantee
+ * the feature is built around (enforced structurally by
+ * `UsageTelemetryNoNetworkKonsistTest`).
  *
  * **Best-effort contract.** Recording absorbs storage failures (logged, no-op)
  * via the shared [absorbingStoreFailure] wrapper, so it can never take down the
