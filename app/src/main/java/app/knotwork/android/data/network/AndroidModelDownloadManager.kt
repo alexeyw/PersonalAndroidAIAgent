@@ -56,7 +56,11 @@ class AndroidModelDownloadManager @Inject constructor(private val workManager: W
         emitAll(
             workManager.getWorkInfosForUniqueWorkFlow(uniqueName)
                 .transformWhile { infos ->
-                    val info = infos.lastOrNull()
+                    // A live run wins over any finished one still attached to
+                    // the name: the list order is unspecified, and reading a
+                    // previous download's Success would end this stream on the
+                    // spot with the wrong answer.
+                    val info = infos.firstOrNull { !it.state.isFinished } ?: infos.lastOrNull()
                     info?.toDownloadState()?.let { emit(it) }
                     // A missing WorkInfo means the observation raced the enqueue;
                     // keep listening rather than reporting a finished download.

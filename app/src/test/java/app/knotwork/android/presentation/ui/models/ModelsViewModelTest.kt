@@ -17,6 +17,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -180,6 +181,41 @@ class ModelsViewModelTest {
         val state = viewModel.uiState.value
         assertEquals(false, state.isDownloading)
         assertEquals(error, state.downloadError)
+    }
+
+    @Test
+    fun `cancelDownload stops the background work, not just the observation`() = runTest {
+        every { downloadManager.downloadModel(any(), any(), any()) } returns kotlinx.coroutines.flow.flow {
+            emit(DownloadState.Downloading(20))
+            kotlinx.coroutines.awaitCancellation()
+        }
+        viewModel.startDownload("http://example.com/model.bin", "model.bin")
+        advanceUntilIdle()
+
+        viewModel.cancelDownload()
+        advanceUntilIdle()
+
+        // The transfer outlives this screen now — dropping the collection alone
+        // would leave it running with nothing showing it.
+        verify { downloadManager.cancelDownload("model.bin") }
+        assertEquals(false, viewModel.uiState.value.isDownloading)
+    }
+
+    @Test
+    fun `a download cancelled elsewhere releases the in-flight state`() = runTest {
+        // The notification's Cancel action ends the stream with no terminal
+        // state; the screen must not keep showing a download that is gone.
+        every { downloadManager.downloadModel(any(), any(), any()) } returns flowOf(
+            DownloadState.Downloading(20),
+        )
+
+        viewModel.startDownload("http://example.com/model.bin", "model.bin")
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(false, state.isDownloading)
+        assertEquals(null, state.downloadProgress)
+        assertEquals(null, state.activeDownloadFileName)
     }
 
     @Test

@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -249,6 +250,14 @@ class ModelsViewModel @Inject constructor(
                         ),
                         activeDownloadFileName = null,
                     )
+                }
+            }
+            // A download cancelled elsewhere — the notification's Cancel action —
+            // ends the stream with no terminal state, so the screen has to clear
+            // its own in-flight flags or it would show a download that is gone.
+            .onCompletion {
+                _uiState.update {
+                    it.copy(isDownloading = false, downloadProgress = null, activeDownloadFileName = null)
                 }
             }
             .launchIn(viewModelScope)

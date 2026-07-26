@@ -265,6 +265,22 @@ class OnboardingViewModelTest {
     }
 
     @Test
+    fun `given a download cancelled elsewhere when the stream ends then the progress bar is released`() = runTest {
+        val viewModel = newViewModel()
+        // A download stopped from the notification ends the stream with no
+        // terminal state — the step must not stay stuck on "Downloading…".
+        every { downloadManager.downloadModel(any(), any(), any()) } returns flowOf(
+            DownloadState.Downloading(progress = 40),
+        )
+
+        viewModel.startDownload()
+        advanceUntilIdle()
+
+        assertNull(viewModel.state.value.downloadProgress)
+        assertTrue(viewModel.state.value.isPrimaryCtaEnabled)
+    }
+
+    @Test
     fun `given a download in flight when skipping then the hint says it keeps running`() = runTest {
         val viewModel = newViewModel()
         every { downloadManager.downloadModel(any(), any(), any()) } returns kotlinx.coroutines.flow.flow {
