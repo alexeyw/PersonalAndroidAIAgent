@@ -95,6 +95,28 @@ class AndroidModelDownloadManagerTest {
     }
 
     @Test
+    fun `given the network drops mid-download when the worker is re-queued then the percent holds`() = runTest {
+        stubWorkInfos(
+            workInfo(WorkInfo.State.RUNNING, progress = workDataOf(ModelDownloadWorker.KEY_PROGRESS to 26)),
+            // Losing the network stops the worker; WorkManager clears its
+            // progress and re-queues it behind the network constraint.
+            workInfo(WorkInfo.State.ENQUEUED),
+            // It comes back and resumes — briefly before the first percent tick.
+            workInfo(WorkInfo.State.RUNNING),
+            workInfo(WorkInfo.State.RUNNING, progress = workDataOf(ModelDownloadWorker.KEY_PROGRESS to 31)),
+        )
+
+        val states = manager.downloadModel("http://example.com/m.bin", "m.bin").toList()
+
+        // The bytes never left the disk, so the figure must not fall back to
+        // zero and tell the user they lost 26 % of a multi-gigabyte download.
+        assertEquals(
+            listOf(DownloadState.Downloading(26), DownloadState.Downloading(31)),
+            states,
+        )
+    }
+
+    @Test
     fun `given a failed worker when observed then the message and HTTP status survive`() = runTest {
         stubWorkInfos(
             workInfo(

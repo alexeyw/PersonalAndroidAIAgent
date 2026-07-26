@@ -108,13 +108,17 @@ class ModelDownloadWorker @AssistedInject constructor(
      * Decides between another attempt and giving up.
      *
      * Only transport failures are retried: an HTTP status is the server's
-     * considered answer and will not change on its own. The attempt budget is
-     * small because every retry resumes rather than restarts — if three
-     * resumed attempts cannot get through, the network is not going to be
-     * fixed by a fourth.
+     * considered answer and will not change on its own.
+     *
+     * An attempt that moved bytes always earns another one, regardless of the
+     * attempt count. The count is not a reliable measure of trouble here — the
+     * system re-runs this worker whenever the network constraint lapses, so a
+     * user riding a train can burn the budget on a transfer that is visibly
+     * progressing. The rule still terminates: a genuinely stalled download
+     * transfers nothing, and those attempts are counted.
      */
     private fun failOrRetry(failure: ResumableFileDownloader.Outcome.Failure): Result {
-        val exhausted = runAttemptCount >= MAX_ATTEMPTS - 1
+        val exhausted = runAttemptCount >= MAX_ATTEMPTS - 1 && failure.bytesTransferred == 0L
         return if (failure.httpCode != null || exhausted) {
             Timber.w("Model download failed permanently: %s", failure.message)
             Result.failure(
@@ -230,7 +234,10 @@ class ModelDownloadWorker @AssistedInject constructor(
         /** Notification id of the ongoing download status. */
         private const val NOTIFICATION_ID = 4711
 
-        /** Attempts (including the first) before a transport failure is final. */
+        /**
+         * Attempts (including the first) before a transport failure that moved
+         * no bytes is final.
+         */
         private const val MAX_ATTEMPTS = 3
 
         private const val PERCENT_MAX = 100

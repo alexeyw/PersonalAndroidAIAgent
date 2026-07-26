@@ -117,7 +117,7 @@ class ModelDownloadWorkerTest {
     @Test
     fun `given the attempt budget is spent when a transport failure repeats then it fails for good`() = runTest {
         coEvery { downloader.download(any(), any(), any(), any()) } returns
-            ResumableFileDownloader.Outcome.Failure("Network timeout", httpCode = null)
+            ResumableFileDownloader.Outcome.Failure("Network timeout", httpCode = null, bytesTransferred = 0L)
 
         val result = worker(runAttemptCount = 2).doWork()
 
@@ -126,6 +126,29 @@ class ModelDownloadWorkerTest {
             ModelDownloadWorker.NO_HTTP_CODE,
             failure.outputData.getInt(ModelDownloadWorker.KEY_ERROR_CODE, 0),
         )
+    }
+
+    @Test
+    fun `given a stalled transfer past the budget when it fails then it stops retrying`() = runTest {
+        coEvery { downloader.download(any(), any(), any(), any()) } returns
+            ResumableFileDownloader.Outcome.Failure("Network timeout", httpCode = null, bytesTransferred = 0L)
+
+        val result = worker(runAttemptCount = 2).doWork()
+
+        assertTrue(result is ListenableWorker.Result.Failure)
+    }
+
+    @Test
+    fun `given a failing attempt that moved bytes when the budget is spent then it still retries`() = runTest {
+        coEvery { downloader.download(any(), any(), any(), any()) } returns
+            ResumableFileDownloader.Outcome.Failure("Network timeout", httpCode = null, bytesTransferred = 4_096L)
+
+        val result = worker(runAttemptCount = 5).doWork()
+
+        // The system re-runs this worker every time the network constraint
+        // lapses, so the attempt count is not evidence of trouble — a file that
+        // keeps growing is evidence of the opposite.
+        assertTrue(result is ListenableWorker.Result.Retry)
     }
 
     @Test

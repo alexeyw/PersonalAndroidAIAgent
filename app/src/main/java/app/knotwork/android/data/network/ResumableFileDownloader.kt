@@ -63,8 +63,13 @@ class ResumableFileDownloader @Inject constructor(
          *   or `null` for transport/IO failures. Callers use the distinction to
          *   decide whether retrying can possibly help: a `404` or `401` will
          *   fail again, a dropped connection will not.
+         * @property bytesTransferred Bytes this attempt added to the partial
+         *   file. An attempt that moved bytes is evidence the transfer is alive
+         *   and resuming is working, which callers weigh against their retry
+         *   budget — a flaky connection should not exhaust it while the file is
+         *   visibly growing.
          */
-        data class Failure(val message: String, val httpCode: Int? = null) : Outcome
+        data class Failure(val message: String, val httpCode: Int? = null, val bytesTransferred: Long = 0L) : Outcome
     }
 
     /**
@@ -88,14 +93,15 @@ class ResumableFileDownloader @Inject constructor(
             ?: return@withContext Outcome.Failure("Invalid model file name: $fileName")
         val part = File(target.parentFile, "${target.name}.${urlKey(url)}$PART_SUFFIX")
         discardStaleParts(target, part)
+        val transferred = TransferCounter()
 
         try {
-            attempt(url, target, part, authToken, onProgress, allowResume = true)
+            attempt(url, target, part, authToken, onProgress, transferred, allowResume = true)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            Timber.w(e, "Model download failed")
-            Outcome.Failure(e.message ?: "Unknown download error")
+            Timber.w(e, "Model download failed after %d byte(s)", transferred.bytes)
+            Outcome.Failure(e.message ?: "Unknown download error", bytesTransferred = transferred.bytes)
         }
     }
 
@@ -112,6 +118,7 @@ class ResumableFileDownloader @Inject constructor(
         part: File,
         authToken: String?,
         onProgress: suspend (Int) -> Unit,
+        transferred: TransferCounter,
         allowResume: Boolean,
     ): Outcome {
         val alreadyOnDisk = if (allowResume && part.exists()) part.length() else 0L
@@ -131,11 +138,14 @@ class ResumableFileDownloader @Inject constructor(
                     // The partial file is at least as long as the resource the
                     // server is offering — it is stale or corrupt, not a prefix.
                     Timber.w("Server rejected the resume range; restarting the download from zero.")
-                    return attempt(url, target, part, authToken, onProgress, allowResume = false)
+                    return attempt(url, target, part, authToken, onProgress, transferred, allowResume = false)
                 }
 
-                !response.isSuccessful ->
-                    return Outcome.Failure("Server returned code: ${response.code}", httpCode = response.code)
+                !response.isSuccessful -> return Outcome.Failure(
+                    message = "Server returned code: ${response.code}",
+                    httpCode = response.code,
+                    bytesTransferred = transferred.bytes,
+                )
             }
 
             // A 200 to a ranged request means the server ignored the range and
@@ -147,7 +157,15 @@ class ResumableFileDownloader @Inject constructor(
 
             val body = response.body
             val totalBytes = body.contentLength().takeIf { it > 0 }?.plus(startOffset) ?: UNKNOWN_LENGTH
-            streamToPart(body.source(), part, append = resumed, startOffset = startOffset, totalBytes, onProgress)
+            streamToPart(
+                source = body.source(),
+                part = part,
+                append = resumed,
+                startOffset = startOffset,
+                totalBytes = totalBytes,
+                transferred = transferred,
+                onProgress = onProgress,
+            )
         }
 
         if (!part.renameTo(target)) {
@@ -172,6 +190,7 @@ class ResumableFileDownloader @Inject constructor(
         append: Boolean,
         startOffset: Long,
         totalBytes: Long,
+        transferred: TransferCounter,
         onProgress: suspend (Int) -> Unit,
     ) {
         val sink = part.sink(append = append).buffer()
@@ -187,6 +206,7 @@ class ResumableFileDownloader @Inject constructor(
                 currentCoroutineContext().ensureActive()
                 sink.write(buffer, read)
                 written += read
+                transferred.bytes += read
                 lastPercent = reportProgress(written, totalBytes, lastPercent, onProgress)
             }
             sink.flush()
@@ -256,6 +276,13 @@ class ResumableFileDownloader @Inject constructor(
         val dirPrefix = dir.canonicalPath + File.separator
         return target.takeIf { it.canonicalPath.startsWith(dirPrefix) }
     }
+
+    /**
+     * Bytes written during the current attempt. A plain counter rather than a
+     * return value because the interesting case is the *failed* attempt, where
+     * the count leaves via an exception path.
+     */
+    private class TransferCounter(var bytes: Long = 0L)
 
     /** Stable, filename-safe fingerprint of the source URL. */
     private fun urlKey(url: String): String = Integer.toHexString(url.hashCode())

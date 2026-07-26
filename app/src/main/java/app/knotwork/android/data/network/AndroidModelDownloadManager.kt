@@ -53,6 +53,12 @@ class AndroidModelDownloadManager @Inject constructor(private val workManager: W
             .build()
         workManager.enqueueUniqueWork(uniqueName, ExistingWorkPolicy.KEEP, request)
 
+        // Highest percent seen so far. WorkManager clears a worker's progress
+        // every time it stops it — losing the network does exactly that — and the
+        // bytes are still on disk waiting to be resumed, so rewinding the bar to
+        // zero would report a loss that did not happen.
+        var reachedPercent = 0
+
         emitAll(
             workManager.getWorkInfosForUniqueWorkFlow(uniqueName)
                 .transformWhile { infos ->
@@ -61,7 +67,9 @@ class AndroidModelDownloadManager @Inject constructor(private val workManager: W
                     // previous download's Success would end this stream on the
                     // spot with the wrong answer.
                     val info = infos.firstOrNull { !it.state.isFinished } ?: infos.lastOrNull()
-                    info?.toDownloadState()?.let { emit(it) }
+                    val state = info?.toDownloadState(reachedPercent)
+                    if (state is DownloadState.Downloading) reachedPercent = state.progress
+                    state?.let { emit(it) }
                     // A missing WorkInfo means the observation raced the enqueue;
                     // keep listening rather than reporting a finished download.
                     info == null || !info.state.isFinished
@@ -77,14 +85,24 @@ class AndroidModelDownloadManager @Inject constructor(private val workManager: W
     /**
      * Projects a [WorkInfo] onto the download state the UI speaks.
      *
-     * A cancelled download maps to `null` — the collector simply stops, because
-     * the user who cancelled needs neither an error nor a success.
+     * @param reachedPercent Highest percent reported so far for this download.
+     *   It is what a re-queued or freshly restarted worker is measured against:
+     *   a transfer that lost the network keeps its bytes, so the figure the user
+     *   sees must not fall back while the work waits or reconnects.
+     * @return The state to emit, or `null` for a cancelled download — the
+     *   collector simply stops, because the user who cancelled needs neither an
+     *   error nor a success.
      */
-    private fun WorkInfo.toDownloadState(): DownloadState? = when (state) {
-        WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED -> DownloadState.Pending
-        // A running worker that has not reported a percent yet is still
-        // connecting; reporting 0 % keeps the progress monotonic.
-        WorkInfo.State.RUNNING -> DownloadState.Downloading(progress.getInt(ModelDownloadWorker.KEY_PROGRESS, 0))
+    private fun WorkInfo.toDownloadState(reachedPercent: Int): DownloadState? = when (state) {
+        // Enqueued *after* progress exists is a retry waiting on its network
+        // constraint, not a download about to start from nothing.
+        WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED ->
+            if (reachedPercent > 0) DownloadState.Downloading(reachedPercent) else DownloadState.Pending
+        // A running worker that has not reported a percent yet is either
+        // connecting or resuming; either way the bar holds where it was.
+        WorkInfo.State.RUNNING -> DownloadState.Downloading(
+            maxOf(progress.getInt(ModelDownloadWorker.KEY_PROGRESS, 0), reachedPercent),
+        )
         WorkInfo.State.SUCCEEDED -> outputData.getString(ModelDownloadWorker.KEY_OUTPUT_PATH)
             ?.let { DownloadState.Success(it) }
             ?: DownloadState.Error(DownloadError("Download finished without a file path."))
