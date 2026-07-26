@@ -85,7 +85,7 @@ For the broader layering rationale, see
   coroutine keeps running, or surfaces a false error to the user). Use the
   `try`/`catch` shape above instead. Both rules are enforced by the
   coroutine-cancellation detekt gate — see
-  [`static-analysis.md`](static-analysis.md#coroutine-cancellation-gate-detektdebug);
+  [`static-analysis.md`](static-analysis.md#coroutine-cancellation-gate-detektfulldebug--detektfossdebug);
   note the gate's blind spot for `try`/`catch` inside non-suspend inline
   lambdas (e.g. `forEach`), which reviewers must still check manually.
   Cleanup that must also run on the cancellation path belongs in `finally`

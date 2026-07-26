@@ -767,6 +767,68 @@ pauses for approval of a sensitive or destructive tool, you get the usual
 **approval notification** with **Approve / Deny** actions, so you can let a
 background trigger run proceed (or stop it) without opening the app.
 
+### Checking what a trigger has been doing
+
+Background automation is invisible by nature: it either happens or it
+doesn't, and when it doesn't there is normally nothing to look at. Two
+surfaces make it legible.
+
+**Health at a glance.** In the trigger list, every trigger that is enabled
+*and* bound to a pipeline carries a badge:
+
+- **Healthy** — it is being checked on schedule and the last run it started
+  finished cleanly.
+- **Overdue** — the phone has not checked this trigger for noticeably longer
+  than its own schedule implies (more than twice the cadence it should be
+  checked at). This is the tell-tale of an aggressive battery saver or a deep
+  idle state — the trigger is fine, the phone simply isn't waking the app.
+- **Last run failed** — the most recent run this trigger started ended in a
+  failure.
+
+Each badge is an icon plus a word, never colour alone, and at very large font
+sizes it collapses to the icon while screen readers still announce the full
+label. Disabled and unbound triggers carry no badge — they are not supposed
+to be doing anything.
+
+**The evaluation journal.** Tapping a trigger opens its detail screen: the
+identity header (**When** / **Runs** / **State** with the enable switch),
+**Edit** and **Delete**, and the **Evaluation journal** — every occasion this
+trigger was evaluated in the background, newest first, grouped by day
+(*Today*, *Yesterday*, then the date). Each entry names the surface that woke
+it (**Scheduled check**, **Device event** or **Charging check**), the time,
+and the verdict:
+
+- **Fired** — a run started. The entry is completed later with how that run
+  ended: **Completed**, **Failed**, **Stopped by the system** (the app's
+  process was killed mid-run), **You stopped it**, or **Timed out waiting for
+  approval**. Until the run settles it reads **Running…**.
+- **Didn't run** — with the reason in plain language: *"The condition wasn't
+  met at 07:15."*, *"It had already fired for this window."*, *"The trigger
+  was turned off."*, or *"No pipeline is bound."*
+- **Re-armed** — an event condition (charging, network) fell away again, so
+  the one-shot latch reset and the trigger is ready for the next edge. No run.
+
+If the trigger looks overdue, the detail screen leads with a banner naming
+the moment it was last checked and the likely cause.
+
+Entries are kept for **30 days** (with a ceiling on the total number) and age
+out in the same nightly maintenance pass as run history. Like everything else
+on this screen, they are stored in the encrypted on-device database and never
+leave the phone.
+
+**Why this is worth trusting.** Every evaluation writes exactly one entry at
+the moment the decision is taken, before anything else happens — so a trigger
+that didn't run is either explained by an entry, or there is no entry at all,
+and that gap is itself the answer: the system never woke the app to check.
+Distinguishing the two is the whole point, and **Overdue** exists to flag the
+second case. Journal writing can never disturb the automation it describes: a
+failure to record is logged and dropped, never allowed to abort a run.
+
+One gap worth knowing about: when a background run pauses for approval and
+you **grant** it from the notification, the journal records only how the run
+finally ended — an approved run therefore looks exactly like one that never
+needed approval. Only an approval that *timed out* is called out explicitly.
+
 This first wave covers only **low-sensitivity** conditions (time,
 charging, network) that need no dangerous permission; notification,
 location and SMS triggers are intentionally deferred.
@@ -1592,7 +1654,7 @@ agent console as a muted line such as `Cloud retry 1/2 for openai`.
 ### Memory
 
 Long-term memory extraction, chat-history compression, retrieval tuning and data
-actions (behaviour unchanged — see [Long-term memory](#long-term-memory) for the
+actions (behaviour unchanged — see [Memory](#memory) for the
 full feature).
 
 Basic:
@@ -2001,6 +2063,38 @@ show a stop event with the step count. If you legitimately need
 more iterations, raise the ceiling in **Settings → Pipelines & structured
 output → Cap autonomous steps**. If the run is looping unproductively, lower it
 instead.
+
+### A trigger didn't fire
+
+Open the trigger and read its **Evaluation journal** (see
+[Triggers](#checking-what-a-trigger-has-been-doing)) — the answer is almost
+always there, and which of two shapes it takes decides what to do next:
+
+- **There is an entry for the moment you expected, saying it didn't run.**
+  The reason is stated: the condition wasn't met, it had already fired for
+  that window, the trigger was off, or no pipeline is bound. Nothing is
+  broken — either the condition is not what you thought, or the trigger needs
+  binding or enabling.
+- **There is an entry, and it fired but ended badly.** *Failed* points at the
+  pipeline (open the run in the trigger's chat and read the console);
+  *Stopped by the system* means the process was killed mid-run, which is a
+  battery / memory-pressure problem, not a pipeline one; *Timed out waiting
+  for approval* means the run parked on a sensitive tool and the approval
+  window expired before you answered — either respond sooner, widen
+  **Settings → Background & triggers → Approval window**, or use a pipeline
+  whose tools don't need approval.
+- **There is no entry at all around that time,** and the list shows
+  **Overdue**. The app was never woken to check. This is a platform-side
+  problem: exclude the app from battery optimisation, and on phones with an
+  extra vendor layer (Samsung, Xiaomi, OnePlus and others) also take it out
+  of any "sleeping"/"deep sleeping" app list. Note that **Interval**,
+  **Daily** and **Network** triggers ride a poll that the system schedules
+  roughly every 15 minutes and may defer further when idle — a fire arriving
+  late is normal; hours of silence is not.
+
+A trigger that has never been evaluated at all shows *"No evaluations yet"* —
+expected right after you create one, since the first check is up to the next
+poll.
 
 ### Memory search isn't finding an obvious entry
 

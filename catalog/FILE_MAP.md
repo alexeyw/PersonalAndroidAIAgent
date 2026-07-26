@@ -264,11 +264,45 @@ project — `:app` consumes it as an `implementation` dependency.
       editor state + category / variable tracking.
     - `PromptPresetPickerSheet.kt` — modal preset picker by `NodeType`
       (Bundled / Mine tabs, searchable rows, tag filter).
-  - `settings/`
-    - `SettingsContent.kt` — full settings stack (identity / system
-      instructions / restrictions / LLM params / local model / providers
-      / memory / privacy cards).
-    - `SettingsViewState.kt` — visual-state enum + per-card data slices.
+  - `settings/` — the settings hub plus one content composable per
+    category sub-screen (the flat single-screen `SettingsContent` was
+    split into this stack).
+    - `SettingsHubContent.kt` — category hub: search field with live
+      result rows, category cards, and the entry points into every
+      sub-screen below.
+    - `GenerationSettingsContent.kt` — system instructions, restrictions
+      and the LLM generation parameters.
+    - `ModelsSettingsContent.kt` — local model + inference backend and
+      the cloud-provider list.
+    - `MemorySettingsContent.kt` — long-term-memory controls
+      (extraction, retrieval thresholds, re-embed).
+    - `PipelinesSettingsContent.kt` — pipeline / structured-output
+      controls.
+    - `ToolsSettingsContent.kt` — tool-calling and approval controls.
+    - `BackgroundSettingsContent.kt` — background work, triggers,
+      notifications and entry-surface bindings.
+    - `PrivacySettingsContent.kt` — privacy, retention and telemetry
+      controls (links out to the usage-statistics surface).
+    - `AboutSettingsContent.kt` — identity card, build info, licenses
+      and the reset actions.
+    - `UsageTelemetryContent.kt` — on-device usage-statistics surface
+      (recording toggle, run / pipeline / trigger / active-day stat
+      sections, the **Setup** install-to-first-value section, export and
+      reset actions) plus its own `UsageTelemetryViewState` /
+      `UsageTelemetryCallbacks` / `UsageStatRow` models and empty state.
+    - `SettingsViewStates.kt` — per-screen view states (hub, generation,
+      models, memory, pipelines, tools, …).
+    - `SettingsModels.kt` — shared settings models and enums (category
+      ids, hub search rows, slider rows, identity / system-instruction
+      card states).
+    - `SettingsCallbacks.kt` — the single typed callback bundle shared by
+      the hub and every sub-screen.
+    - `SettingsRowAnchors.kt` — stable deep-link anchor constants
+      mirroring the app-side `SettingsRegistry` (app-side test asserts the
+      subset relation, so a registry rename can't orphan a highlight).
+    - `SettingsCommon.kt` — the shared building blocks of the stack
+      (category scaffold, section labels, advanced disclosure, toggle /
+      nav / provider rows).
     - `KnotworkMonoTextArea.kt` — multi-line monospace textarea (brand
       outline) for system instructions.
     - `KnotworkParamSlider.kt` — labelled numeric-parameter slider with

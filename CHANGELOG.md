@@ -27,7 +27,6 @@ details.
   no longer watching. Returning to the Models screen or to setup reconnects to
   the running transfer instead of showing an idle screen next to a ticking
   notification.
-
 - **Setup now picks the fastest inference backend your device can actually
   run.** New installs used to start on the CPU backend, which made the very
   first answer — right after the model download — take the slowest path
@@ -38,39 +37,6 @@ details.
   than a clean success falls back to CPU silently, and the outcome is written
   into **Settings → Models → Inference backend**, so it is both visible and
   overridable. An explicitly chosen backend is never overridden.
-
-### Fixed
-
-- **Release builds crashed on the first message that touched long-term
-  memory.** In a minified (release) build, initialising the on-device text
-  embedder threw `ExceptionInInitializerError` and killed the app process, so a
-  fresh install could send a message but never receive the reply. The cause was
-  code shrinking renaming a logging library that identifies its own call frames
-  by name; the affected package is now pinned, and a new release-build check
-  fails the build if that protection is ever lost again. Debug builds were never
-  affected, which is why this survived undetected — anyone running a release
-  build of `0.6.0` should update.
-
-### Changed
-
-- **Cloud model line-up follows the upstream client.** With the Koog client
-  updated to 1.1.1, Google's `gemini-3-pro-preview` is no longer offered — the
-  upstream catalogue replaced it with `gemini-3.1-pro-preview`, which now takes
-  its place in the model picker. If a provider was pinned to the removed model,
-  pick the new entry: an unrecognised saved model falls back to the default
-  Gemini flash model. Also bumps the Android Gradle plugin, `org.json` and
-  Roborazzi to their current releases.
-
-- **Documentation hygiene pass across the public contour.** The product is
-  now referred to consistently as **Knotwork** (an on-device AI agent for
-  Android) throughout the docs, the near-term roadmap is realigned to lead
-  with reliability and quality of what already ships, a stray artifact at
-  the end of `README.md` was removed, several dangling references to
-  internal-only documents were inlined or dropped, and duplicated version
-  numbers were replaced with a single source of truth.
-
-### Added
-
 - **`verifyDocsHygiene` build guard.** A new pure-JVM Gradle verification
   task (wired into `./gradlew check`, unit-tested in `buildSrc`) fails the
   build if any public-contour Markdown file reintroduces an LLM tool-call
@@ -119,6 +85,43 @@ details.
   retrieve, so a multi-day background soak can be analysed offline without opening
   the app or decrypting the on-device database. Nothing it produces leaves the
   device.
+
+### Fixed
+
+- **Release builds crashed on the first message that touched long-term
+  memory.** In a minified (release) build, initialising the on-device text
+  embedder threw `ExceptionInInitializerError` and killed the app process, so a
+  fresh install could send a message but never receive the reply. The cause was
+  code shrinking renaming a logging library that identifies its own call frames
+  by name; the affected package is now pinned, and a new release-build check
+  fails the build if that protection is ever lost again. Debug builds were never
+  affected, which is why this survived undetected — anyone running a release
+  build of `0.6.0` should update.
+
+### Changed
+
+- **Cloud model line-up follows the upstream client.** With the Koog client
+  updated to 1.1.1, Google's `gemini-3-pro-preview` is no longer offered — the
+  upstream catalogue replaced it with `gemini-3.1-pro-preview`, which now takes
+  its place in the model picker. If a provider was pinned to the removed model,
+  pick the new entry: an unrecognised saved model falls back to the default
+  Gemini flash model. Also bumps the Android Gradle plugin, `org.json` and
+  Roborazzi to their current releases.
+- **Trigger observability is documented end to end.** The user guide now
+  explains the health badges and the evaluation journal in the terms the
+  screens actually use, adds a *"A trigger didn't fire"* troubleshooting path
+  that separates "the journal explains it" from "there is no entry, so the
+  phone never woke the app", and states plainly the one gap that remains: an
+  approval you grant in the background leaves no distinct trace, only a
+  timeout does. The architecture guide gains the journal's write points,
+  invariants and retention bounds alongside the trigger flow diagram.
+- **Documentation hygiene pass across the public contour.** The product is
+  now referred to consistently as **Knotwork** (an on-device AI agent for
+  Android) throughout the docs, the near-term roadmap is realigned to lead
+  with reliability and quality of what already ships, a stray artifact at
+  the end of `README.md` was removed, several dangling references to
+  internal-only documents were inlined or dropped, and duplicated version
+  numbers were replaced with a single source of truth.
 
 ## [0.6.0] - 2026-07-16
 
