@@ -1,5 +1,7 @@
 package app.knotwork.android.domain.repositories
 
+import app.knotwork.android.domain.models.OnboardingJourney
+import app.knotwork.android.domain.models.OnboardingMilestone
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.UsageTelemetrySummary
 import kotlinx.coroutines.flow.Flow
@@ -9,16 +11,19 @@ import kotlinx.coroutines.flow.Flow
  * local telemetry feature.
  *
  * Records a small set of counters — terminal run outcomes (per pipeline and per
- * status), background trigger firings (per kind), and distinct active days — so
- * the Settings → Privacy → Usage statistics screen can show how the app is used
- * during dogfooding **without any data ever leaving the device**. There is no
+ * status), background trigger firings (per kind), and distinct active days — plus
+ * the write-once [OnboardingMilestone] markers of the install → first-value
+ * journey, so the Settings → Privacy → Usage statistics screen can show how the
+ * app is used during dogfooding **without any data ever leaving the device**.
+ * The onboarding markers are what makes the "< 10 minutes to first value"
+ * measurement repeatable: they replace a stopwatch with recorded data. There is no
  * network dependency anywhere on this path; every figure is read straight back
  * out of the local (SQLCipher-encrypted) store.
  *
  * **Opt-in gating.** Recording is gated by the
  * [SettingsRepository.usageTelemetryEnabled] flag. When the user has turned
- * local statistics off, [recordPipelineRunOutcome] and [recordTriggerFired] are
- * silent no-ops (implementations check the flag), so no counters advance.
+ * local statistics off, every `record…` method — counters and onboarding markers
+ * alike — is a silent no-op (implementations check the flag), so nothing advances.
  * [reset] and [summary] are not gated — the user can always inspect or clear
  * whatever has already accumulated.
  *
@@ -73,9 +78,36 @@ interface UsageTelemetryRepository {
     suspend fun recordTriggerFired(kind: String, atMillis: Long)
 
     /**
-     * Clears every recorded counter, returning the statistics to the empty
-     * state. Not gated by the opt-in flag — the user may clear accumulated data
-     * regardless of the current toggle state.
+     * Records one write-once [OnboardingMilestone] on the install → first-value
+     * path. A no-op when recording is disabled **or when the marker already
+     * exists** — the store keeps the first occurrence, so re-entering onboarding
+     * never moves an already-measured journey.
+     *
+     * @param milestone The marker being reached.
+     * @param atMillis Wall-clock time of the marker, epoch-millis. Injectable for
+     *   tests.
+     * @param detail Optional payload carried by the marker — the materialised
+     *   pipeline id for [OnboardingMilestone.SCENARIO_CHOSEN], `null` otherwise.
+     */
+    suspend fun recordOnboardingMilestone(milestone: OnboardingMilestone, atMillis: Long, detail: String? = null)
+
+    /**
+     * Records [OnboardingMilestone.FIRST_VALUE] for a run of [pipelineId] that
+     * just reached `COMPLETED`, provided that run terminates the measured
+     * journey (see [OnboardingJourney.acceptsFirstValueFrom]). A no-op when
+     * recording is disabled, when onboarding was never started, when first value
+     * is already recorded, or when a scenario was set up and [pipelineId] is not
+     * its pipeline.
+     *
+     * @param pipelineId Id of the pipeline whose root run completed.
+     * @param atMillis Wall-clock time of the terminal transition, epoch-millis.
+     */
+    suspend fun recordOnboardingFirstValue(pipelineId: String, atMillis: Long)
+
+    /**
+     * Clears every recorded counter and onboarding marker, returning the
+     * statistics to the empty state. Not gated by the opt-in flag — the user may
+     * clear accumulated data regardless of the current toggle state.
      */
     suspend fun reset()
 }

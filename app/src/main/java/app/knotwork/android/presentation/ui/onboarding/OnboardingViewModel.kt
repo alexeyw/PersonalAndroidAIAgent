@@ -7,10 +7,12 @@ import app.knotwork.android.domain.constants.OnboardingModelCatalog
 import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.DownloadState
 import app.knotwork.android.domain.models.LocalModel
+import app.knotwork.android.domain.models.OnboardingMilestone
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.ModelDownloadManager
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.repositories.UsageTelemetryRepository
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.SetUpScenarioUseCase
 import app.knotwork.android.presentation.state.TransientMessageRelay
@@ -65,6 +67,10 @@ import javax.inject.Inject
  * + entry-surface binding) and returns its recap projection.
  * @property transientMessageRelay process-wide one-shot snackbar bus; the
  * skip/escape hint outlives the popped onboarding back-stack entry.
+ * @property usageTelemetry records the write-once onboarding markers (opened,
+ * scenario chosen, download started/finished) backing the repeatable
+ * "time to first value" measurement. Recording is opt-in-gated, best-effort and
+ * fully on-device.
  */
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
@@ -74,7 +80,14 @@ class OnboardingViewModel @Inject constructor(
     private val loadModelUseCase: LoadModelUseCase,
     private val setUpScenarioUseCase: SetUpScenarioUseCase,
     private val transientMessageRelay: TransientMessageRelay,
+    private val usageTelemetry: UsageTelemetryRepository,
 ) : ViewModel() {
+
+    init {
+        // Reaching the onboarding flow is the start of the measured journey.
+        // Write-once, so re-entering onboarding later never moves the start.
+        markMilestone(OnboardingMilestone.ONBOARDING_STARTED)
+    }
 
     private val _state: MutableStateFlow<OnboardingViewState> = MutableStateFlow(OnboardingViewState())
 
@@ -188,6 +201,10 @@ class OnboardingViewModel @Inject constructor(
                 setUpScenarioUseCase(scenario.id)
                     .onSuccess { setup ->
                         materializedScenarioId = scenario.id
+                        // The marker carries the materialised pipeline id: it is
+                        // what scopes "first value" to the scenario the user was
+                        // promised, rather than to any run that happens next.
+                        markMilestone(OnboardingMilestone.SCENARIO_CHOSEN, detail = setup.pipelineId)
                         _state.update {
                             it.copy(scenarioPreview = setup.toPreview(), step = OnboardingStep.Download)
                         }
@@ -263,6 +280,7 @@ class OnboardingViewModel @Inject constructor(
         val resolved = resolveDownloadTarget(picked) ?: return
 
         _state.update { it.copy(downloadProgress = 0f, downloadError = null) }
+        markMilestone(OnboardingMilestone.MODEL_DOWNLOAD_STARTED)
 
         downloadJob = downloadManager.downloadModel(resolved.url, resolved.fileName)
             .onEach { downloadState -> handleDownloadEmission(downloadState, picked, resolved) }
@@ -337,6 +355,7 @@ class OnboardingViewModel @Inject constructor(
     ) {
         installedModelPath = downloadState.fileUri
         _state.update { it.copy(downloadProgress = null, installedModelId = picked.id) }
+        markMilestone(OnboardingMilestone.MODEL_DOWNLOAD_FINISHED)
         viewModelScope.launch {
             val insertedId = localModelRepository.insertModel(
                 LocalModel(
@@ -362,6 +381,28 @@ class OnboardingViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Records one write-once onboarding marker, fire-and-forget.
+     *
+     * The timestamp is taken **here**, not inside the coroutine, so the recorded
+     * value is when the event happened rather than when the dispatcher got to it.
+     * Recording is opt-in-gated and absorbs its own storage failures downstream,
+     * so a marker can never break the flow it observes.
+     *
+     * Two deliberate consequences of the write-once contract: a retried download
+     * keeps the *first* attempt's start marker (the measurement is wall-clock
+     * honest, retries included), and a journey where the model was already
+     * installed records no download markers at all — its download interval is
+     * then unknown, and time-to-value excluding the download equals the total.
+     *
+     * @param milestone The marker reached.
+     * @param detail Optional marker payload (the scenario's pipeline id), or `null`.
+     */
+    private fun markMilestone(milestone: OnboardingMilestone, detail: String? = null) {
+        val atMillis = System.currentTimeMillis()
+        viewModelScope.launch { usageTelemetry.recordOnboardingMilestone(milestone, atMillis, detail) }
     }
 
     private fun resolveDownloadTarget(model: OnboardingLiteRtModel): ResolvedDownloadTarget? {

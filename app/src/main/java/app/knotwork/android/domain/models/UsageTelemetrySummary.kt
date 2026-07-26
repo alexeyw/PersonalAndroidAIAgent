@@ -27,6 +27,9 @@ package app.knotwork.android.domain.models
  *   string, or `null` when nothing has been recorded yet.
  * @property lastActiveDay Latest recorded active day as an ISO `yyyy-MM-dd`
  *   string, or `null` when nothing has been recorded yet.
+ * @property onboarding The recorded install → first-value journey backing the
+ *   repeatable "< 10 minutes to first value" measurement;
+ *   [OnboardingJourney.EMPTY] until the first marker is recorded.
  */
 data class UsageTelemetrySummary(
     val runsByPipeline: List<PipelineRunTally>,
@@ -35,6 +38,7 @@ data class UsageTelemetrySummary(
     val activeDays: Int,
     val firstActiveDay: String?,
     val lastActiveDay: String?,
+    val onboarding: OnboardingJourney,
 ) {
     /** Total number of terminal root runs across every outcome. */
     val totalRuns: Int get() = runsByOutcome.values.sum()
@@ -44,7 +48,7 @@ data class UsageTelemetrySummary(
 
     /** Whether any usage has been recorded at all (used to drive the empty state). */
     val isEmpty: Boolean
-        get() = totalRuns == 0 && totalTriggerFires == 0 && activeDays == 0
+        get() = totalRuns == 0 && totalTriggerFires == 0 && activeDays == 0 && onboarding.isEmpty
 
     /** Constants for [UsageTelemetrySummary]. */
     companion object {
@@ -56,6 +60,7 @@ data class UsageTelemetrySummary(
             activeDays = 0,
             firstActiveDay = null,
             lastActiveDay = null,
+            onboarding = OnboardingJourney.EMPTY,
         )
     }
 }

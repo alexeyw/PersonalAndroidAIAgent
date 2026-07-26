@@ -1,5 +1,7 @@
 package app.knotwork.android.domain.usecases
 
+import app.knotwork.android.domain.models.OnboardingJourney
+import app.knotwork.android.domain.models.OnboardingMilestone
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.UsageTelemetrySummary
 import kotlinx.serialization.json.Json
@@ -106,7 +108,31 @@ class BuildUsageTelemetryExportUseCase @Inject constructor() {
 
         appendLine("Active days: ${summary.activeDays}")
         appendLine("  First: ${summary.firstActiveDay ?: "—"}")
-        append("  Last: ${summary.lastActiveDay ?: "—"}")
+        appendLine("  Last: ${summary.lastActiveDay ?: "—"}")
+        appendLine()
+
+        appendLine("Onboarding (install → first value):")
+        val journey = summary.onboarding
+        if (journey.isEmpty) {
+            append("  (not recorded)")
+        } else {
+            appendLine("  Time to first value: ${durationLabel(journey.totalToValueMillis)}")
+            appendLine("  Model download: ${durationLabel(journey.modelDownloadMillis)}")
+            append("  Time to first value excluding download: ${durationLabel(journey.productToValueMillis)}")
+        }
+    }
+
+    /**
+     * Renders a duration as `12m 34s` (or `34s` under a minute); an unrecorded
+     * duration renders as an em-dash so a partial journey reads honestly instead
+     * of as a zero.
+     */
+    private fun durationLabel(millis: Long?): String {
+        if (millis == null) return "—"
+        val totalSeconds = millis / MILLIS_PER_SECOND
+        val minutes = totalSeconds / SECONDS_PER_MINUTE
+        val seconds = totalSeconds % SECONDS_PER_MINUTE
+        return if (minutes > 0) "${minutes}m ${seconds}s" else "${seconds}s"
     }
 
     /** Renders the machine-readable JSON document. */
@@ -125,8 +151,29 @@ class BuildUsageTelemetryExportUseCase @Inject constructor() {
             put("activeDays", summary.activeDays)
             put("firstActiveDay", summary.firstActiveDay)
             put("lastActiveDay", summary.lastActiveDay)
+            put("onboarding", onboardingJson(summary.onboarding))
         }
         return PRETTY_JSON.encodeToString(JsonObject.serializer(), document)
+    }
+
+    /**
+     * The onboarding journey block: the three durations in milliseconds (`null`
+     * when not measurable) plus the raw markers, so an external analysis can
+     * re-derive the figures instead of trusting these.
+     */
+    private fun onboardingJson(journey: OnboardingJourney): JsonObject = buildJsonObject {
+        put("recorded", !journey.isEmpty)
+        put("totalToValueMillis", journey.totalToValueMillis)
+        put("modelDownloadMillis", journey.modelDownloadMillis)
+        put("productToValueMillis", journey.productToValueMillis)
+        put(
+            "milestones",
+            buildJsonObject {
+                for (milestone in OnboardingMilestone.entries) {
+                    put(milestone.name, journey.milestones[milestone])
+                }
+            },
+        )
     }
 
     /** `{ COMPLETED: n, FAILED: n, … }` over the terminal statuses (always all four). */
@@ -164,6 +211,12 @@ class BuildUsageTelemetryExportUseCase @Inject constructor() {
 
         /** Percentage scale. */
         const val PERCENT = 100
+
+        /** Milliseconds in a second, for the duration labels. */
+        const val MILLIS_PER_SECOND = 1_000L
+
+        /** Seconds in a minute, for the duration labels. */
+        const val SECONDS_PER_MINUTE = 60L
 
         /** Shared pretty-printing JSON configuration for the export document. */
         val PRETTY_JSON = Json {

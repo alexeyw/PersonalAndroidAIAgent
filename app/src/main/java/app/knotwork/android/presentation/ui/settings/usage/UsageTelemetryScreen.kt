@@ -17,6 +17,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.knotwork.android.R
+import app.knotwork.android.domain.models.OnboardingJourney
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.UsageTelemetrySummary
 import app.knotwork.design.screens.settings.UsageStatRow
@@ -124,6 +125,38 @@ private fun buildUsageViewState(uiState: UsageTelemetryUiState): UsageTelemetryV
             UsageStatRow(label = triggerKindLabel(kind), value = count.toString())
         },
         activeDays = buildActiveDayRows(summary),
+        onboarding = buildOnboardingRows(summary.onboarding),
+    )
+}
+
+/**
+ * Builds the install → first-value rows: the full figure, the model-download
+ * interval it is dominated by, and the download-free remainder (the product-owned
+ * half of the metric). Returns an empty list when nothing was recorded, so the
+ * section disappears instead of showing three dashes.
+ */
+@Composable
+private fun buildOnboardingRows(journey: OnboardingJourney): List<UsageStatRow> {
+    if (journey.isEmpty) return emptyList()
+    val none = stringResource(R.string.settings_usage_duration_none)
+    return listOf(
+        R.string.settings_usage_onboarding_total to journey.totalToValueMillis,
+        R.string.settings_usage_onboarding_download to journey.modelDownloadMillis,
+        R.string.settings_usage_onboarding_product to journey.productToValueMillis,
+    ).map { (labelRes, millis) ->
+        UsageStatRow(label = stringResource(labelRes), value = durationLabel(millis) ?: none)
+    }
+}
+
+/** Formats a duration as `mm:ss`, or `null` when it was never measured. */
+@Composable
+private fun durationLabel(millis: Long?): String? {
+    if (millis == null) return null
+    val totalSeconds = millis / MILLIS_PER_SECOND
+    return stringResource(
+        R.string.settings_usage_duration,
+        totalSeconds / SECONDS_PER_MINUTE,
+        totalSeconds % SECONDS_PER_MINUTE,
     )
 }
 
@@ -169,3 +202,9 @@ private fun triggerKindLabel(kind: String): String = when (kind) {
 
 /** Percentage scale for the outcome share. */
 private const val PERCENT = 100
+
+/** Milliseconds in a second, for the onboarding duration labels. */
+private const val MILLIS_PER_SECOND = 1_000L
+
+/** Seconds in a minute, for the onboarding duration labels. */
+private const val SECONDS_PER_MINUTE = 60L

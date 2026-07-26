@@ -1,13 +1,17 @@
 package app.knotwork.android.domain.usecases
 
+import app.knotwork.android.domain.models.OnboardingJourney
+import app.knotwork.android.domain.models.OnboardingMilestone
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.PipelineRunTally
 import app.knotwork.android.domain.models.UsageTelemetrySummary
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -34,6 +38,17 @@ class BuildUsageTelemetryExportUseCaseTest {
         activeDays = 4,
         firstActiveDay = "2026-06-20",
         lastActiveDay = "2026-06-25",
+        onboarding = OnboardingJourney(
+            milestones = mapOf(
+                // 09:00:00 → 09:07:24 total; the download spans 09:01:00 → 09:06:00
+                // (5 min), leaving 2 min 24 s of product time.
+                OnboardingMilestone.ONBOARDING_STARTED to 1_750_000_000_000L,
+                OnboardingMilestone.MODEL_DOWNLOAD_STARTED to 1_750_000_060_000L,
+                OnboardingMilestone.MODEL_DOWNLOAD_FINISHED to 1_750_000_360_000L,
+                OnboardingMilestone.FIRST_VALUE to 1_750_000_444_000L,
+            ),
+            scenarioPipelineId = "pipe-1",
+        ),
     )
 
     @Test
@@ -78,11 +93,58 @@ class BuildUsageTelemetryExportUseCaseTest {
             activeDays = 1,
             firstActiveDay = "2026-06-25",
             lastActiveDay = "2026-06-25",
+            onboarding = OnboardingJourney.EMPTY,
         )
 
         val export = useCase(summary, emptyMap(), "25 Jun 2026 14:30")
 
         assertTrue(export.text.contains("COMPLETED: 1 (13%)"))
+    }
+
+    @Test
+    fun `given a recorded onboarding journey when rendered to text then all three durations appear`() {
+        val export = useCase(populated, emptyMap(), "25 Jun 2026 14:30")
+
+        assertTrue(export.text.contains("Time to first value: 7m 24s"))
+        assertTrue(export.text.contains("Model download: 5m 0s"))
+        assertTrue(export.text.contains("Time to first value excluding download: 2m 24s"))
+    }
+
+    @Test
+    fun `given a recorded onboarding journey when rendered to JSON then durations and raw markers are exported`() {
+        val export = useCase(populated, emptyMap(), "25 Jun 2026 14:30")
+
+        val onboarding = Json.parseToJsonElement(export.json).jsonObject["onboarding"]!!.jsonObject
+        assertEquals(true, onboarding["recorded"]!!.jsonPrimitive.content.toBoolean())
+        assertEquals(444_000L, onboarding["totalToValueMillis"]!!.jsonPrimitive.long)
+        assertEquals(300_000L, onboarding["modelDownloadMillis"]!!.jsonPrimitive.long)
+        assertEquals(144_000L, onboarding["productToValueMillis"]!!.jsonPrimitive.long)
+        // Raw markers travel too, so an external analysis can re-derive the figures.
+        val milestones = onboarding["milestones"]!!.jsonObject
+        assertEquals(1_750_000_000_000L, milestones["ONBOARDING_STARTED"]!!.jsonPrimitive.long)
+        // A marker that was never reached is exported as an explicit null.
+        assertTrue(milestones["SCENARIO_CHOSEN"] is JsonNull)
+    }
+
+    @Test
+    fun `given a journey without a download when rendered then the download reads as unmeasured`() {
+        val summary = populated.copy(
+            onboarding = OnboardingJourney(
+                milestones = mapOf(
+                    OnboardingMilestone.ONBOARDING_STARTED to 1_750_000_000_000L,
+                    OnboardingMilestone.FIRST_VALUE to 1_750_000_045_000L,
+                ),
+                scenarioPipelineId = null,
+            ),
+        )
+
+        val export = useCase(summary, emptyMap(), "25 Jun 2026 14:30")
+
+        // Under a minute renders without a minutes part; the absent download is an
+        // em-dash, not a zero, and the product figure equals the total.
+        assertTrue(export.text.contains("Time to first value: 45s"))
+        assertTrue(export.text.contains("Model download: —"))
+        assertTrue(export.text.contains("Time to first value excluding download: 45s"))
     }
 
     @Test

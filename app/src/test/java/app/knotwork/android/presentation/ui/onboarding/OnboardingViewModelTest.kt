@@ -5,10 +5,12 @@ import app.knotwork.android.domain.constants.OnboardingModelCatalog
 import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.DownloadState
 import app.knotwork.android.domain.models.LocalModel
+import app.knotwork.android.domain.models.OnboardingMilestone
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.ModelDownloadManager
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.repositories.UsageTelemetryRepository
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.SetUpScenarioUseCase
 import app.knotwork.android.presentation.state.TransientMessageRelay
@@ -17,6 +19,7 @@ import app.knotwork.design.screens.onboarding.OnboardingScenario
 import app.knotwork.design.screens.onboarding.OnboardingStep
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -60,6 +63,7 @@ class OnboardingViewModelTest {
     private lateinit var loadModelUseCase: LoadModelUseCase
     private lateinit var setUpScenarioUseCase: SetUpScenarioUseCase
     private lateinit var transientMessageRelay: TransientMessageRelay
+    private lateinit var usageTelemetry: UsageTelemetryRepository
 
     @Before
     fun setUp() {
@@ -87,6 +91,7 @@ class OnboardingViewModelTest {
             ),
         )
         transientMessageRelay = mockk(relaxed = true)
+        usageTelemetry = mockk(relaxed = true)
     }
 
     @After
@@ -101,6 +106,7 @@ class OnboardingViewModelTest {
         loadModelUseCase = loadModelUseCase,
         setUpScenarioUseCase = setUpScenarioUseCase,
         transientMessageRelay = transientMessageRelay,
+        usageTelemetry = usageTelemetry,
     )
 
     @Test
@@ -456,6 +462,88 @@ class OnboardingViewModelTest {
         assertEquals(OnboardingLiteRtModel.Gemma4E4B, state.liteRtModel)
         assertNull(state.installedModelId)
         coVerify(exactly = 0) { loadModelUseCase.invoke("/data/e2b.litertlm") }
+    }
+
+    @Test
+    fun `entering onboarding records the journey start marker`() = runTest {
+        newViewModel()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            usageTelemetry.recordOnboardingMilestone(OnboardingMilestone.ONBOARDING_STARTED, any(), any())
+        }
+    }
+
+    @Test
+    fun `a full pass through onboarding records every marker in order`() = runTest {
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        every { downloadManager.downloadModel(any(), any(), any()) } returns flowOf(
+            DownloadState.Downloading(progress = 50),
+            DownloadState.Success(fileUri = "/tmp/gemma-4-E4B-it.litertlm"),
+        )
+
+        viewModel.pickScenario(OnboardingScenario.StyledTranslation)
+        viewModel.setUpScenario()
+        advanceUntilIdle()
+        viewModel.startDownload()
+        advanceUntilIdle()
+
+        coVerifyOrder {
+            usageTelemetry.recordOnboardingMilestone(OnboardingMilestone.ONBOARDING_STARTED, any(), any())
+            // The scenario marker carries the materialised pipeline id, which is
+            // what scopes the later first-value attribution.
+            usageTelemetry.recordOnboardingMilestone(OnboardingMilestone.SCENARIO_CHOSEN, any(), "pipe-1")
+            usageTelemetry.recordOnboardingMilestone(OnboardingMilestone.MODEL_DOWNLOAD_STARTED, any(), any())
+            usageTelemetry.recordOnboardingMilestone(OnboardingMilestone.MODEL_DOWNLOAD_FINISHED, any(), any())
+        }
+    }
+
+    @Test
+    fun `a repeated onboarding pass records the start marker again for the store to ignore`() = runTest {
+        // Idempotency is a store property (INSERT OR IGNORE), not a VM property:
+        // the VM must keep reporting the event, and the store keeps the first one.
+        newViewModel()
+        newViewModel()
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) {
+            usageTelemetry.recordOnboardingMilestone(OnboardingMilestone.ONBOARDING_STARTED, any(), any())
+        }
+    }
+
+    @Test
+    fun `a failed scenario set-up records no scenario marker`() = runTest {
+        coEvery { setUpScenarioUseCase(any()) } returns kotlin.Result.failure(IllegalStateException("boom"))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        viewModel.pickScenario(OnboardingScenario.StyledTranslation)
+        viewModel.setUpScenario()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) {
+            usageTelemetry.recordOnboardingMilestone(OnboardingMilestone.SCENARIO_CHOSEN, any(), any())
+        }
+    }
+
+    @Test
+    fun `a failed download records the start marker but not the finish marker`() = runTest {
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        every { downloadManager.downloadModel(any(), any(), any()) } returns flowOf(
+            DownloadState.Error(AndroidModelDownloadManager.DownloadError("offline")),
+        )
+
+        viewModel.startDownload()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            usageTelemetry.recordOnboardingMilestone(OnboardingMilestone.MODEL_DOWNLOAD_STARTED, any(), any())
+        }
+        coVerify(exactly = 0) {
+            usageTelemetry.recordOnboardingMilestone(OnboardingMilestone.MODEL_DOWNLOAD_FINISHED, any(), any())
+        }
     }
 
     @Test

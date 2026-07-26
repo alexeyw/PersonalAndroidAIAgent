@@ -1,5 +1,6 @@
 package app.knotwork.android.presentation.ui.settings.usage
 
+import app.knotwork.android.domain.models.OnboardingJourney
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.PipelineRunTally
 import app.knotwork.android.domain.models.UsageTelemetrySummary
@@ -44,6 +45,7 @@ class UsageTelemetryViewModelTest {
         activeDays = 1,
         firstActiveDay = "2026-06-25",
         lastActiveDay = "2026-06-25",
+        onboarding = OnboardingJourney.EMPTY,
     )
 
     @Before

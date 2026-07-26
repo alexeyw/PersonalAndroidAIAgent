@@ -689,4 +689,37 @@ class AppDatabaseMigrationTest {
             joined.contains("INDEX_TRIGGER_EVALUATIONS_RUNID"),
         )
     }
+
+    @Test
+    fun `MIGRATION_51_52 targets versions 51 to 52`() {
+        val migration = AppDatabase.MIGRATION_51_52
+
+        assertEquals(51, migration.startVersion)
+        assertEquals(52, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_51_52 creates the onboarding_milestone table keyed by the marker`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val sqlSlot = slot<String>()
+
+        AppDatabase.MIGRATION_51_52.migrate(db)
+
+        // Purely additive: one CREATE TABLE, no existing table touched.
+        verify(exactly = 1) { db.execSQL(capture(sqlSlot)) }
+        val sql = sqlSlot.captured.uppercase()
+        assertTrue(
+            "Expected CREATE TABLE onboarding_milestone, got: ${sqlSlot.captured}",
+            sql.contains("CREATE TABLE IF NOT EXISTS `ONBOARDING_MILESTONE`"),
+        )
+        // The marker key is the primary key — that is what backs the write-once
+        // (INSERT OR IGNORE) semantics of the journey markers.
+        assertTrue(
+            "Marker key must be the primary key: ${sqlSlot.captured}",
+            sql.contains("PRIMARY KEY(`MILESTONEKEY`)"),
+        )
+        assertTrue("Expected atMillis column: ${sqlSlot.captured}", sql.contains("`ATMILLIS` INTEGER NOT NULL"))
+        // The payload is nullable: only SCENARIO_CHOSEN carries one.
+        assertTrue("Expected nullable detail column: ${sqlSlot.captured}", sql.contains("`DETAIL` TEXT"))
+    }
 }
