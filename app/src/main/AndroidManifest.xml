@@ -16,6 +16,9 @@
     <uses-permission android:name="android.permission.EXECUTE_APP_FUNCTIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Granted to ModelDownloadWorker so a multi-gigabyte model download keeps
+         running (and stays visible) while the user leaves the app. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
@@ -188,11 +191,17 @@
             the service entry to declare the foreground type the promotion uses —
             merged here as `specialUse` with the same subtype the app's own
             AgentForegroundService is declared for.
+
+            `dataSync` is declared alongside it for ModelDownloadWorker: a model
+            bundle is several gigabytes, and the platform type for "the user asked
+            for a transfer and is waiting on it" is dataSync, not specialUse. Both
+            types live on the one merged service entry because WorkManager routes
+            every promotion through it; each worker picks its own type at runtime.
         -->
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:exported="false"
-            android:foregroundServiceType="specialUse"
+            android:foregroundServiceType="specialUse|dataSync"
             tools:node="merge">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"

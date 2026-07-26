@@ -64,4 +64,13 @@ object NotificationChannels {
      * independently.
      */
     const val AGENT_CLARIFICATION: String = "AgentClarificationChannel"
+
+    /**
+     * Low-importance channel for the ongoing model-download notification. Kept
+     * separate from the agent's own foreground channel so a user who silences
+     * "the agent is working" status does not also lose sight of a multi-gigabyte
+     * transfer — the one background job whose progress they may genuinely need
+     * to watch, and whose notification is what keeps it running at all.
+     */
+    const val MODEL_DOWNLOAD: String = "ModelDownloadChannel"
 }

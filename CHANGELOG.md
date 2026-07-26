@@ -15,6 +15,19 @@ details.
 
 ### Added
 
+- **Model downloads survive leaving the app, and resume instead of restarting.**
+  A download used to live and die with the screen that started it: switching
+  away froze the transfer, and finishing setup cancelled it outright — on a slow
+  connection that meant gigabytes fetched and thrown away. Downloads now run as
+  background work with a progress notification (including a **Cancel** action),
+  keep going while you use the rest of the app, and pick up where they stopped
+  after a dropped connection. Unfinished bytes are held in a temporary file
+  until the transfer completes, so a half-downloaded model can no longer look
+  like an installed one, and the finished file registers itself even if you are
+  no longer watching. Returning to the Models screen or to setup reconnects to
+  the running transfer instead of showing an idle screen next to a ticking
+  notification.
+
 - **Setup now picks the fastest inference backend your device can actually
   run.** New installs used to start on the CPU backend, which made the very
   first answer — right after the model download — take the slowest path

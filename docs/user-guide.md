@@ -98,8 +98,19 @@ input. The field is masked and is used only for the download request.
 - To download a custom file, paste the URL into **Custom Model URL**
   and tap **Download Custom Model**.
 
-A progress bar appears with a percentage. You can leave the screen
-while the download runs in the background.
+A progress bar appears with a percentage, and a notification shows the
+same progress with a **Cancel** action. The transfer is a real background
+job: you can leave the screen, leave the app, or finish setup, and it
+keeps going — the model registers itself when it lands.
+
+Coming back to the Models screen (or to setup) while a download is
+running reconnects to it — the progress you see is the live one, not a
+new transfer.
+
+If the connection drops (or you cancel and start the same file again),
+the download **resumes from where it stopped** rather than starting over.
+Until it completes, the bytes live in a temporary `.part` file, so an
+unfinished download never masquerades as an installed model.
 
 ### 3. Activate the model
 

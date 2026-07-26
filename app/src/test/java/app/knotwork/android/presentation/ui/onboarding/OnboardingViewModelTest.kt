@@ -6,6 +6,7 @@ import app.knotwork.android.domain.models.DownloadState
 import app.knotwork.android.domain.models.LocalBackend
 import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.OnboardingMilestone
+import app.knotwork.android.domain.repositories.ActiveDownload
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.ModelDownloadManager
 import app.knotwork.android.domain.repositories.SettingsRepository
@@ -77,6 +78,7 @@ class OnboardingViewModelTest {
         coEvery { localModelRepository.setActiveModel(any()) } returns Unit
         downloadManager = mockk(relaxed = true)
         every { downloadManager.downloadModel(any(), any(), any()) } returns flowOf()
+        every { downloadManager.observeActiveDownload() } returns flowOf(null)
         prepareInferenceBackendUseCase = mockk(relaxed = true)
         coEvery { prepareInferenceBackendUseCase.invoke(any(), any()) } returns
             PrepareInferenceBackendUseCase.Outcome.Warmed(LocalBackend.CPU)
@@ -265,6 +267,62 @@ class OnboardingViewModelTest {
     }
 
     @Test
+    fun `given a download cancelled elsewhere when the stream ends then the progress bar is released`() = runTest {
+        val viewModel = newViewModel()
+        // A download stopped from the notification ends the stream with no
+        // terminal state — the step must not stay stuck on "Downloading…".
+        every { downloadManager.downloadModel(any(), any(), any()) } returns flowOf(
+            DownloadState.Downloading(progress = 40),
+        )
+
+        viewModel.startDownload()
+        advanceUntilIdle()
+
+        assertNull(viewModel.state.value.downloadProgress)
+        assertTrue(viewModel.state.value.isPrimaryCtaEnabled)
+    }
+
+    @Test
+    fun `given a download already running when onboarding reopens then it re-attaches without enqueueing`() = runTest {
+        val e4bFileName = OnboardingModelCatalog.entryById(OnboardingLiteRtModel.Gemma4E4B.id)!!.fileName
+        every { downloadManager.observeActiveDownload() } returns flowOf(
+            ActiveDownload(fileName = e4bFileName, state = DownloadState.Downloading(55)),
+        )
+        every { downloadManager.observeDownload(e4bFileName) } returns kotlinx.coroutines.flow.flow {
+            emit(DownloadState.Downloading(55))
+            kotlinx.coroutines.awaitCancellation()
+        }
+
+        val reopened = newViewModel()
+        advanceUntilIdle()
+
+        // Coming back to onboarding mid-download must show the live transfer,
+        // not an idle step next to a ticking notification.
+        assertEquals(0.55f, reopened.state.value.downloadProgress)
+        assertEquals(OnboardingLiteRtModel.Gemma4E4B, reopened.state.value.liteRtModel)
+        // Re-entering a screen is never a request to download something.
+        verify(exactly = 0) { downloadManager.downloadModel(any(), any(), any()) }
+    }
+
+    @Test
+    fun `given a download in flight when skipping then the hint says it keeps running`() = runTest {
+        val viewModel = newViewModel()
+        every { downloadManager.downloadModel(any(), any(), any()) } returns kotlinx.coroutines.flow.flow {
+            emit(DownloadState.Downloading(progress = 30))
+            kotlinx.coroutines.awaitCancellation()
+        }
+        viewModel.startDownload()
+        advanceUntilIdle()
+
+        viewModel.skipOnboarding()
+        advanceUntilIdle()
+
+        // Skipping no longer kills the transfer, so pointing the user at
+        // Settings to install a model would be actively wrong.
+        verify { transientMessageRelay.post(OnboardingViewModel.DOWNLOAD_CONTINUES_MESSAGE) }
+    }
+
+    @Test
     fun `warm-up shows the acceleration check while it runs and clears it afterwards`() = runTest {
         val e4bFileName = OnboardingModelCatalog.entryById(OnboardingLiteRtModel.Gemma4E4B.id)!!.fileName
         coEvery { localModelRepository.findByFileName(e4bFileName) } returns LocalModel(
@@ -335,12 +393,21 @@ class OnboardingViewModelTest {
 
     @Test
     fun `startDownload propagates progress from DownloadManager`() = runTest {
+        val e4bFileName = OnboardingModelCatalog.entryById(OnboardingLiteRtModel.Gemma4E4B.id)!!.fileName
         val viewModel = newViewModel()
         advanceUntilIdle()
         every { downloadManager.downloadModel(any(), any(), any()) } returns flowOf(
             DownloadState.Pending,
             DownloadState.Downloading(progress = 50),
             DownloadState.Success(fileUri = "/tmp/gemma-4-E4B-it.litertlm"),
+        )
+        // The download worker registers the file; the VM finds that row.
+        coEvery { localModelRepository.findByFileName(e4bFileName) } returns LocalModel(
+            id = 11L,
+            name = e4bFileName,
+            path = "/tmp/gemma-4-E4B-it.litertlm",
+            size = 0L,
+            isActive = false,
         )
 
         viewModel.startDownload()
@@ -350,7 +417,10 @@ class OnboardingViewModelTest {
         assertNull(finalState.downloadProgress)
         // The flow defaults to E4B — the model every curated scenario targets.
         assertEquals(OnboardingLiteRtModel.Gemma4E4B.id, finalState.installedModelId)
-        coVerify(exactly = 1) { localModelRepository.insertModel(any()) }
+        // Registration belongs to the worker now (the download outlives this VM);
+        // activating the freshly downloaded model stays a decision of this journey.
+        coVerify(exactly = 0) { localModelRepository.insertModel(any()) }
+        coVerify(exactly = 1) { localModelRepository.setActiveModel(11L) }
         coVerify(exactly = 1) { prepareInferenceBackendUseCase.invoke("/tmp/gemma-4-E4B-it.litertlm", any()) }
     }
 
