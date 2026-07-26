@@ -252,6 +252,38 @@ nor this document — which describes the tokens in prose — matches itself.
 
 ---
 
+## R8 keep-rule guard (`verify<Variant>KeepRules`)
+
+Some keep rules protect code whose failure mode **no test in this gate can
+see**, because the gate is JVM-only and debug builds are not minified. The
+motivating case: MediaPipe's `tasks-text` pulls in
+`com.google.common.flogger`, which resolves a log site by *walking the call
+stack* for a frame belonging to flogger itself. When R8 renames or inlines
+those frames away, the first `TextEmbedder.createFromOptions` call fails with
+`IllegalStateException: no caller found on the stack for: …` — that is the
+on-device embedding path, so in a minified build every message that touches
+long-term memory kills the process, while every debug build stays green.
+
+The one durable artefact that *can* see it is the mapping R8 emits: a live
+`-keep class … { *; }` rule leaves the package **identity-mapped**
+(`a.b.C -> a.b.C`). `:app:verify<Variant>KeepRules` asserts exactly that for
+every protected package after each `release` assemble (it is wired with
+`finalizedBy`, so it runs as part of the release build, not of `check` —
+`check` never produces a mapping). A package that comes back renamed **or
+missing entirely** fails the build; the missing case is treated as a failure
+on purpose, since "all zero classes are identity-mapped" would be a vacuous
+pass hiding a dropped dependency.
+
+The parsing is a pure `String -> List<Violation>` transform in `buildSrc`
+([`R8MappingChecker`](../buildSrc/src/main/kotlin/app/knotwork/android/buildtools/R8MappingChecker.kt)),
+unit-tested there (`./gradlew -p buildSrc test`) against an identity-mapped
+fixture, an obfuscated one, an absent-package one, and a member-line shape
+that must not be misparsed as a class. Protected packages are listed in
+`r8ProtectedPackages` in `app/build.gradle.kts`; add to that list whenever a
+new keep rule exists to satisfy a stack-walking or name-reflecting library.
+
+---
+
 ## Kover — coverage measurement & threshold
 
 Plugin: `org.jetbrains.kotlinx.kover` `0.9.8`. Strict mode: a single
@@ -321,6 +353,8 @@ same branch.
 
 - It does not yet collect instrumented (androidTest / Compose UI test)
   coverage — `*Screen.kt` Composables remain outside the Kover scope.
-- It does not run the `release` variant — lint and tests target `debug`.
+- It does not run the `release` variant — lint and tests target `debug`. R8
+  regressions are therefore invisible here; the release-only guard above
+  (`verify<Variant>KeepRules`) runs as part of the release assemble instead.
 - It does not perform dependency-vulnerability scanning — that is a
   separate workstream.

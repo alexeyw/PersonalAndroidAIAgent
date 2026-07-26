@@ -1,5 +1,7 @@
 import app.knotwork.android.buildtools.BrowserEditorConstantsGenerator
 import app.knotwork.android.buildtools.DocsHygieneChecker
+import app.knotwork.android.buildtools.R8MappingChecker
+import com.android.build.api.artifact.SingleArtifact
 import dev.detekt.gradle.Detekt
 import java.util.Properties
 
@@ -971,3 +973,50 @@ val probeInstallHostTasks = setOf(
 )
 tasks.matching { it.name in probeInstallHostTasks }
     .configureEach { dependsOn(toolsProbeInstall) }
+
+// ─── R8 keep-rule guard (release builds) ─────────────────────────────────────
+// Some keep rules protect code whose failure mode is invisible to every test the
+// JVM gate can run: `com.google.common.flogger` (pulled in by MediaPipe's
+// `tasks-text`) resolves a log site by walking the call stack for a frame of its
+// own, so when R8 renames or inlines those frames the first
+// `TextEmbedder.createFromOptions` call dies with
+// `IllegalStateException: no caller found on the stack for: …` — the on-device
+// embedding path, i.e. any message that touches long-term memory. Debug builds
+// are not minified, so unit and instrumented tests cannot see the regression.
+//
+// The mapping R8 emits is the one durable artefact that can: a live keep rule
+// leaves the package identity-mapped. This task asserts exactly that after every
+// release assemble, so a dropped rule fails the build rather than the user's
+// first message.
+val r8ProtectedPackages: List<String> = listOf("com.google.common.flogger.")
+androidComponents {
+    onVariants { variant ->
+        if (variant.buildType != "release") return@onVariants
+        val mappingFile = variant.artifacts.get(SingleArtifact.OBFUSCATION_MAPPING_FILE)
+        val variantName = variant.name.replaceFirstChar { it.uppercaseChar() }
+        val verifyKeepRules = tasks.register("verify${variantName}KeepRules") {
+            group = "verification"
+            description = "Fails the release build if an R8 keep rule stopped pinning a protected package."
+            inputs.files(mappingFile).optional().withPropertyName("r8Mapping")
+            val protectedPackages = r8ProtectedPackages
+            doLast {
+                val mapping = mappingFile.get().asFile
+                // Minification off for this variant: nothing to verify.
+                if (!mapping.exists()) return@doLast
+                val contents = mapping.readText()
+                val violations = protectedPackages.flatMap { prefix ->
+                    R8MappingChecker.verifyIdentityMapping(contents, prefix)
+                }
+                if (violations.isNotEmpty()) {
+                    throw GradleException(
+                        "R8 keep-rule check failed (${violations.size} violation(s)):\n" +
+                            violations.joinToString(separator = "\n") { it.format() },
+                    )
+                }
+            }
+        }
+        // `tasks.matching`, not `tasks.named`: AGP registers the assemble tasks
+        // after this `onVariants` callback runs, so eager lookup fails here.
+        tasks.matching { it.name == "assemble$variantName" }.configureEach { finalizedBy(verifyKeepRules) }
+    }
+}
