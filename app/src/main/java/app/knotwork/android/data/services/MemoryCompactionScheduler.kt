@@ -132,7 +132,8 @@ class MemoryCompactionScheduler @Inject constructor(
      * while within it), de-duplicated with [distinctUntilChanged]. This re-arms
      * the trigger on every distinct over-limit count, not just the first rising
      * edge: if an immediate run cannot drop the table below the ceiling (too few
-     * old candidates, model unavailable, …) a later insert that bumps the count
+     * old candidates, model unavailable, a summary that failed the coverage
+     * gate, …) a later insert that bumps the count
      * still enqueues another pass, so the hard ceiling is not left unenforced
      * until the much-more-constrained daily job happens to run. It still avoids a
      * tight loop — an unchanged over-limit count emits nothing new, and

@@ -13,7 +13,7 @@ import kotlin.math.pow
  * Pure cosine similarity is a blunt instrument: a stale chunk can outrank a
  * fresh one purely on lexical overlap, restatements of one fact clutter the
  * limited context budget, and user-pinned facts are treated no differently from
- * noise. This service layers four deterministic rules on top of the raw scores
+ * noise. This service layers five deterministic rules on top of the raw scores
  * to fix that, each of which is independently unit-testable:
  *
  *  1. **Additive scoring** — `final = similarity + recencyBonus + pinnedBoost`.
@@ -135,6 +135,13 @@ class MemoryReranker @Inject constructor() {
      * Pinned summaries are exempt. Pinning is an explicit user statement that
      * this exact entry must always surface, and no automatic rule may quietly
      * overrule it.
+     *
+     * Accepted cost: the surviving source is judged retrievable, not
+     * guaranteed *returned* — if it happens to rank below the top-K while the
+     * summary ranked inside it, this query surfaces neither. Preferring the
+     * verbatim wording is worth that occasional miss, and the alternative
+     * (substituting the source into the summary's slot) buys it by making the
+     * kept set depend on where the two chunks fell relative to the cut-off.
      *
      * @param ranked Threshold survivors, already ordered best-first.
      * @return The same list minus the superseded summaries (order preserved).
