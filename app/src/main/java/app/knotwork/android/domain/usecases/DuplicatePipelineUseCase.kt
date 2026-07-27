@@ -79,6 +79,9 @@ class DuplicatePipelineUseCase @Inject constructor(private val pipelineRepositor
                 connections = duplicatedConnections,
                 updatedAt = System.currentTimeMillis(),
                 samplePrompts = source.samplePrompts,
+                // A copy must behave like its source on background runs too, so
+                // the declared memory-retrieval key travels with it.
+                memoryRetrievalQuery = source.memoryRetrievalQuery,
             )
 
             pipelineRepository.savePipeline(duplicate)

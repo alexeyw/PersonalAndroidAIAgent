@@ -42,7 +42,8 @@
         html[data-theme="light"] .palette-item:hover { background: #eceff4; }
         html[data-theme="light"] #toolbar button { background: #ffffff; }
         html[data-theme="light"] #toolbar button:hover:not(:disabled) { background: #eceff4; }
-        html[data-theme="light"] #toolbar input[type="text"]#pipeline-name { background: #ffffff; }
+        html[data-theme="light"] #toolbar input[type="text"]#pipeline-name,
+        html[data-theme="light"] #toolbar input[type="text"]#pipeline-memory-query { background: #ffffff; }
         html[data-theme="light"] dialog#node-config input[type="text"],
         html[data-theme="light"] dialog#node-config input[type="number"],
         html[data-theme="light"] dialog#node-config select,
@@ -144,7 +145,8 @@
         #toolbar .spacer { flex: 1; }
         #toolbar .hint { color: var(--text-dim); font-size: 12px; }
 
-        #toolbar input[type="text"]#pipeline-name {
+        #toolbar input[type="text"]#pipeline-name,
+        #toolbar input[type="text"]#pipeline-memory-query {
             background: #2e313a;
             color: var(--text);
             border: 1px solid var(--border);
@@ -155,7 +157,9 @@
             outline: none;
             min-width: 180px;
         }
-        #toolbar input[type="text"]#pipeline-name:focus { border-color: var(--accent); }
+        #toolbar input[type="text"]#pipeline-memory-query { min-width: 150px; }
+        #toolbar input[type="text"]#pipeline-name:focus,
+        #toolbar input[type="text"]#pipeline-memory-query:focus { border-color: var(--accent); }
         #toolbar .name-label {
             font-size: 11px;
             color: var(--text-dim);
@@ -1081,6 +1085,10 @@
             <input id="file-import-bundle" type="file" accept="application/json,.json" hidden>
             <span class="name-label">Name</span>
             <input id="pipeline-name" type="text" placeholder="Untitled pipeline">
+            <span class="name-label">Memory key</span>
+            <input id="pipeline-memory-query" type="text"
+                   placeholder="optional · background runs"
+                   title="Long-term-memory search key for background runs (trigger / scheduled / tile). Their prompt is fixed by you and describes no particular firing, so it makes a poor search key. Supports $DATE and the other prompt variables. Leave empty for interactive-only pipelines.">
             <span class="spacer"></span>
             <span class="hint">Drag a node from the left. Double-click a connection to label it.</span>
             <button id="btn-theme" type="button" title="Toggle theme">🌙</button>
@@ -6550,6 +6558,10 @@
 
             currentPipelineId = generateUuid();
             nameInput.value = 'Example pipeline';
+            // The example is a brand-new pipeline: clear any memory key left
+            // over from a previously imported document instead of silently
+            // carrying it onto an unrelated graph.
+            memoryQueryInput.value = '';
         } finally {
             suppressAutoLabel = false;
         }
@@ -6714,6 +6726,7 @@
     const importBtn = document.getElementById('btn-import');
     const fileImportInput = document.getElementById('file-import');
     const nameInput = document.getElementById('pipeline-name');
+    const memoryQueryInput = document.getElementById('pipeline-memory-query');
 
     /** Pipeline-level identity. Stable across exports until import replaces it. */
     let currentPipelineId = generateUuid();
@@ -6790,7 +6803,7 @@
             });
         });
 
-        return {
+        const doc = {
             schemaVersion: CURRENT_SCHEMA_VERSION,
             id: currentPipelineId,
             name: (nameInput.value || '').trim() || 'Untitled pipeline',
@@ -6798,6 +6811,12 @@
             nodes: jsonNodes,
             connections: jsonConnections,
         };
+        // Optional pipeline-level field: the long-term-memory search key used by
+        // background runs (trigger / scheduled / tile). Omitted entirely when
+        // empty, so pipelines that do not declare one export exactly as before.
+        const memoryQuery = (memoryQueryInput.value || '').trim();
+        if (memoryQuery) doc.memoryRetrievalQuery = memoryQuery;
+        return doc;
     }
 
     /** Today's date as YYYY-MM-DD, used in default download filenames. */
@@ -6980,6 +6999,9 @@
             // Restore pipeline-level identity & name from the file.
             currentPipelineId = doc.id || generateUuid();
             nameInput.value = doc.name || '';
+            memoryQueryInput.value = typeof doc.memoryRetrievalQuery === 'string'
+                ? doc.memoryRetrievalQuery
+                : '';
         } finally {
             suppressAutoLabel = false;
         }
@@ -7407,7 +7429,7 @@
 
     /** Reduces any document to the pure single-pipeline shape used in a bundle. */
     function toPurePipelineDoc(doc) {
-        return {
+        const pure = {
             schemaVersion: doc.schemaVersion || CURRENT_SCHEMA_VERSION,
             id: doc.id,
             name: doc.name || 'Untitled pipeline',
@@ -7415,6 +7437,17 @@
             nodes: doc.nodes || [],
             connections: doc.connections || [],
         };
+        // Optional pipeline-level fields are carried, not rebuilt away: this
+        // function is the bundle's normalizer, and anything it forgets is
+        // silently lost for every pipeline in the closure — including the
+        // imported preset documents that supply `samplePrompts`.
+        if (typeof doc.memoryRetrievalQuery === 'string' && doc.memoryRetrievalQuery.trim()) {
+            pure.memoryRetrievalQuery = doc.memoryRetrievalQuery;
+        }
+        if (Array.isArray(doc.samplePrompts) && doc.samplePrompts.length > 0) {
+            pure.samplePrompts = doc.samplePrompts;
+        }
+        return pure;
     }
 
     /** Collects the PIPELINE `targetPipelineId`s referenced by a document's nodes. */

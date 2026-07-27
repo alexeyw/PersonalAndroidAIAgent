@@ -21,6 +21,7 @@ import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.ResumeContext
 import app.knotwork.android.domain.models.RunGeneratingModel
 import app.knotwork.android.domain.models.RunImageDelivery
+import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.RunStepBudget
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.ToolInvocationResult
@@ -164,6 +165,14 @@ class GraphExecutionEngine @Inject constructor(
      *   from [imageDelivery] instead. Threaded into [ExecutionScope.imagePresent] so a
      *   live-executed IF/router node past the resume point can still branch on "the user
      *   sent a picture" even though the image itself is never re-delivered on resume.
+     * @param origin What started this run. Interactive origins ([RunOrigin.CHAT],
+     *   [RunOrigin.SHARE]) key long-term-memory retrieval off [userPrompt] as before;
+     *   background ones (trigger / scheduler / tile) prefer the pipeline's declared
+     *   `memoryRetrievalQuery`, then the first memory-aware node's input — see
+     *   [MemoryRetrievalQueryResolver] and `DESCRIPTION.md` §6.10.1. Defaults to
+     *   [RunOrigin.CHAT] (the interactive, unchanged behaviour) so editor test runs and
+     *   any caller that does not care keep the old semantics. A sub-pipeline invocation
+     *   receives the parent's origin via [ExecutionScope.runOrigin].
      * @return A cold flow of orchestrator states describing the run.
      */
     // Reason: this is the agent's core orchestrator. It is a long single
@@ -185,6 +194,7 @@ class GraphExecutionEngine @Inject constructor(
         imageDelivery: RunImageDelivery? = null,
         runHadImage: Boolean = false,
         generatingModel: RunGeneratingModel? = null,
+        origin: RunOrigin = RunOrigin.CHAT,
     ): Flow<AgentOrchestratorState> = flow {
         // Buffer of console events accumulated for this run. The engine emits a
         // fresh `ConsoleLog` snapshot on every append so the UI reactively
@@ -340,21 +350,39 @@ class GraphExecutionEngine @Inject constructor(
         val queueResults = mutableListOf<String>()
         val traceSteps = mutableListOf<AgentOrchestratorState.TraceStep>()
 
-        // Long-term memory is retrieved lazily and at most once per run, keyed
-        // off the immutable userPrompt. Only the first *executed* node that
-        // actually opts into the `--- Long-Term Memory ---` block
-        // (`contextConfig.longTermMemory`) triggers the query embedding. A
-        // graph where no executed node requests memory never embeds the prompt
-        // at all — sparing avoidable embedding-provider latency/cost and not
-        // shipping the prompt to a cloud embedding backend the user did not ask
-        // memory for. A resumed run is seeded from the interrupted run's
-        // persisted snapshot, so it neither re-runs retrieval (the context
-        // must be identical to the interrupted one) nor re-counts usage.
+        // Long-term memory is retrieved lazily and at most once per run. Only
+        // the first *executed* node that actually opts into the
+        // `--- Long-Term Memory ---` block (`contextConfig.longTermMemory`)
+        // triggers the query embedding — and that same node decides the
+        // retrieval key (see [MemoryRetrievalQueryResolver]): an interactive run
+        // keys off the immutable userPrompt as it always has, a background run
+        // prefers the pipeline's declared query, then the node's own input,
+        // because a trigger's prompt is authored once and describes no
+        // particular firing. A graph where no executed node requests memory
+        // never embeds anything at all — sparing avoidable embedding-provider
+        // latency/cost and not shipping the prompt to a cloud embedding backend
+        // the user did not ask memory for. A resumed run is seeded from the
+        // interrupted run's persisted snapshot, so it neither re-runs retrieval
+        // (the context must be identical to the interrupted one) nor re-counts
+        // usage.
         var memoizedMemories: List<MemoryChunk>? = resume?.memorySnapshot
-        suspend fun resolveMemoriesOnce(): List<MemoryChunk> {
+        suspend fun resolveMemoriesOnce(nodeInput: String): List<MemoryChunk> {
             memoizedMemories?.let { return it }
+            // The declared query is a prompt template like any other, so `$DATE`
+            // and friends resolve per run instead of being frozen at authoring
+            // time. Rendering happens only when a declared query exists and only
+            // on the one node that triggers retrieval.
+            val declaredQuery = graph.memoryRetrievalQuery
+                ?.takeIf { it.isNotBlank() }
+                ?.let { promptTemplateEngine.render(it, promptVariableProviders.toList()) }
+            val query = MemoryRetrievalQueryResolver.resolve(
+                origin = origin,
+                declaredQuery = declaredQuery,
+                nodeInput = nodeInput,
+                userPrompt = userPrompt,
+            )
             val scored: List<Pair<MemoryChunk, Float>> = try {
-                retrieveRelevantMemoryUseCase.retrieveScored(userPrompt)
+                retrieveRelevantMemoryUseCase.retrieveScored(query.text)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 // Memory retrieval suspends (embedding + DB lookup). Swallowing
                 // cancellation here would let the parent flow keep running after
@@ -367,7 +395,12 @@ class GraphExecutionEngine @Inject constructor(
             val verbose = settingsRepository.verboseMemoryLoggingEnabled.first()
             pushConsole(
                 ConsoleEventType.MemoryAccess,
-                MemoryAccessLogFormatter.format(query = userPrompt, hits = scored, verbose = verbose),
+                MemoryAccessLogFormatter.format(
+                    query = query.text,
+                    source = query.source,
+                    hits = scored,
+                    verbose = verbose,
+                ),
             )
             val hits = scored.map { it.first }
             // Record that these chunks were injected into this run so the
@@ -603,7 +636,11 @@ class GraphExecutionEngine @Inject constructor(
                     // memory block; otherwise pass an empty list so retrieval is
                     // never triggered on its behalf.
                     val memoryEntries = if (currentNode.contextConfig.longTermMemory) {
-                        resolveMemoriesOnce()
+                        // `currentInputText` is what this node actually executes
+                        // on (the upstream node's output, or the run prompt for a
+                        // node right behind INPUT) — the background run's
+                        // second-choice retrieval key.
+                        resolveMemoriesOnce(currentInputText)
                     } else {
                         emptyList()
                     }
@@ -690,6 +727,7 @@ class GraphExecutionEngine @Inject constructor(
                             imageDelivery = delivery,
                             imagePresent = imagePresent,
                             generatingModel = genModel,
+                            runOrigin = origin,
                         ),
                     )
                         .collect { output ->

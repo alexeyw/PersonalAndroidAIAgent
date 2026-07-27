@@ -15,6 +15,17 @@ import java.security.MessageDigest
  *   suggests on the new-chat empty state. Display-only metadata — deliberately
  *   excluded from [contentHash] (like [name]) so editing the suggestions never
  *   invalidates a resumable run.
+ * @property memoryRetrievalQuery Long-term-memory search key this pipeline
+ *   declares for its **background** runs (trigger / scheduled / tile), or `null`
+ *   when it declares none. A background run's prompt is fixed by the pipeline
+ *   author and says nothing about the current firing, so keying retrieval off it
+ *   is semantically blind; a declared query fixes that. Rendered through
+ *   `PromptTemplateEngine` on every run (so `$DATE` and friends resolve fresh)
+ *   and consumed by
+ *   [MemoryRetrievalQueryResolver][app.knotwork.android.domain.engine.MemoryRetrievalQueryResolver].
+ *   Interactive runs ignore it. Excluded from [contentHash]: memory is
+ *   snapshotted into the run trace, so a resumed run never re-queries and the
+ *   field cannot affect replay fidelity.
  */
 data class PipelineGraph(
     val id: String,
@@ -23,6 +34,7 @@ data class PipelineGraph(
     val connections: List<ConnectionModel> = emptyList(),
     val updatedAt: Long = System.currentTimeMillis(),
     val samplePrompts: List<PipelineSamplePrompt> = emptyList(),
+    val memoryRetrievalQuery: String? = null,
 ) {
     /**
      * Validates if the current graph is a valid Directed Acyclic Graph (DAG).

@@ -300,7 +300,8 @@ flowchart TB
     end
 
     subgraph Retrieval["Retrieval (next session, longTermMemory node)"]
-        Engine[GraphExecutionEngine<br/>resolveMemoriesOnce userPrompt] --> Retrieve[RetrieveRelevantMemoryUseCase]
+        Engine[GraphExecutionEngine<br/>resolveMemoriesOnce · once per run] --> Key[MemoryRetrievalQueryResolver<br/>interactive → userPrompt<br/>background → declared query<br/>→ node input → userPrompt]
+        Key --> Retrieve[RetrieveRelevantMemoryUseCase]
         Retrieve --> Search[findSimilarMemories<br/>cosine over the full table]
         Store --> Search
         Search --> Rerank[MemoryReranker<br/>dedup · recency decay<br/>pinned boost · threshold]
@@ -393,7 +394,12 @@ which subset is enabled:
    memory chunks. A vector search ranks chunks by cosine similarity;
    `MemoryReranker` then re-scores the pool (recency decay, a pinned
    boost, near-duplicate collapse, and a final-score threshold) before
-   the top-K hits are injected.
+   the top-K hits are injected. The search key comes from
+   `MemoryRetrievalQueryResolver`: the run prompt for interactive runs,
+   and for background ones (trigger / schedule / tile) the pipeline's
+   declared `memoryRetrievalQuery`, then this node's own input, then the
+   prompt. Retrieval still runs at most once per run — the first
+   memory-enabled node fixes the key for the rest of the run tree.
 4. `--- Tool Results ---` — outputs of every tool invocation made
    during the current run.
 5. `--- Previous Node Output ---` — the text produced by the

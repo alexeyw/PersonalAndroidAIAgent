@@ -722,4 +722,38 @@ class AppDatabaseMigrationTest {
         // The payload is nullable: only SCENARIO_CHOSEN carries one.
         assertTrue("Expected nullable detail column: ${sqlSlot.captured}", sql.contains("`DETAIL` TEXT"))
     }
+
+    @Test
+    fun `MIGRATION_52_53 targets versions 52 to 53`() {
+        val migration = AppDatabase.MIGRATION_52_53
+
+        assertEquals(52, migration.startVersion)
+        assertEquals(53, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_52_53 adds a nullable memoryRetrievalQuery column to pipelines`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val sqlSlot = slot<String>()
+
+        AppDatabase.MIGRATION_52_53.migrate(db)
+
+        // Purely additive: one ALTER TABLE, no data rewrite.
+        verify(exactly = 1) { db.execSQL(capture(sqlSlot)) }
+        val sql = sqlSlot.captured.uppercase()
+        assertTrue(
+            "Expected ALTER TABLE on pipelines, got: ${sqlSlot.captured}",
+            sql.contains("ALTER TABLE") && sql.contains("`PIPELINES`"),
+        )
+        assertTrue(
+            "Expected new memoryRetrievalQuery column, got: ${sqlSlot.captured}",
+            sql.contains("`MEMORYRETRIEVALQUERY` TEXT"),
+        )
+        // Nullable on purpose: "never declared" must stay distinguishable from
+        // "declared blank", and existing pipelines upgrade to "declares nothing".
+        assertTrue(
+            "Column must stay nullable so existing rows mean 'not declared': ${sqlSlot.captured}",
+            !sql.contains("NOT NULL"),
+        )
+    }
 }

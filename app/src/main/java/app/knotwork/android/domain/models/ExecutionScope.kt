@@ -63,6 +63,12 @@ package app.knotwork.android.domain.models
  *   sub-pipeline; the answering `LITE_RT`/`CLOUD` node writes it and the root
  *   `OUTPUT` node reads it to attribute the persisted message. See
  *   [RunGeneratingModel].
+ * @property runOrigin What started the run tree. Constant across the whole tree:
+ *   `PipelineNodeExecutor` forwards it verbatim into every sub-pipeline
+ *   invocation, so a nested run classifies its retrieval key exactly as its
+ *   parent does. Consumed by the engine's long-term-memory retrieval (see
+ *   [MemoryRetrievalQueryResolver][app.knotwork.android.domain.engine.MemoryRetrievalQueryResolver]);
+ *   node executors other than `PIPELINE` ignore it.
  */
 data class ExecutionScope(
     val depth: Int = 0,
@@ -73,4 +79,5 @@ data class ExecutionScope(
     val imageDelivery: RunImageDelivery? = null,
     val imagePresent: Boolean = false,
     val generatingModel: RunGeneratingModel? = null,
+    val runOrigin: RunOrigin = RunOrigin.CHAT,
 )

@@ -79,6 +79,29 @@ class DuplicatePipelineUseCaseTest {
     }
 
     @Test
+    fun `given source declares a memory retrieval query when invoke then the copy keeps it`() = runTest {
+        // Pipeline-level behavioural metadata must travel with a copy; dropping
+        // it would silently change how the duplicate searches memory.
+        val source = PipelineGraph(
+            id = "src",
+            name = "Source",
+            nodes = listOf(
+                NodeModel("n1", NodeType.INPUT, 0f, 0f),
+                NodeModel("n2", NodeType.OUTPUT, 10f, 10f),
+            ),
+            memoryRetrievalQuery = "evening journal entries",
+        )
+        coEvery { pipelineRepository.getPipelineById("src") } returns source
+        val saved = slot<PipelineGraph>()
+        coEvery { pipelineRepository.savePipeline(capture(saved)) } returns Unit
+
+        val result = useCase("src")
+
+        assertTrue(result.isSuccess)
+        assertEquals("evening journal entries", saved.captured.memoryRetrievalQuery)
+    }
+
+    @Test
     fun `given save failure when invoke then propagates failure`() = runTest {
         val source = PipelineGraph(
             id = "src",

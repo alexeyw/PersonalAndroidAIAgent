@@ -177,6 +177,50 @@ class PipelineJsonSerializerTest {
     }
 
     @Test
+    fun `serialize then parse round-trips the declared memory retrieval query`() {
+        val graph = sampleGraph.copy(memoryRetrievalQuery = "evening journal entries around \$DATE")
+
+        val outcome = PipelineJsonSerializer.parse(PipelineJsonSerializer.serialize(graph))
+
+        assertTrue(outcome is PipelineImportOutcome.Success)
+        assertEquals(
+            "evening journal entries around \$DATE",
+            (outcome as PipelineImportOutcome.Success).graph.memoryRetrievalQuery,
+        )
+    }
+
+    @Test
+    fun `serialize omits the memory retrieval query key when the pipeline declares none`() {
+        // Absent rather than null: a pipeline that does not use the field must
+        // produce the same document it produced before the field existed.
+        val json = PipelineJsonSerializer.serialize(sampleGraph)
+
+        assertFalse(JSONObject(json).has("memoryRetrievalQuery"))
+    }
+
+    @Test
+    fun `serialize omits the memory retrieval query key when it is blank`() {
+        // Blank is "not declared" everywhere else (resolver, validator), so the
+        // document must not claim a declaration the runtime will ignore.
+        val json = PipelineJsonSerializer.serialize(sampleGraph.copy(memoryRetrievalQuery = "   "))
+
+        assertFalse(JSONObject(json).has("memoryRetrievalQuery"))
+    }
+
+    @Test
+    fun `parse tolerates a document without a memory retrieval query key by yielding null`() {
+        // Backward compatibility: pre-field documents decode to "declares
+        // nothing", which is exactly their previous runtime behaviour.
+        val json = PipelineJsonSerializer.serialize(sampleGraph.copy(memoryRetrievalQuery = "x"))
+        val stripped = JSONObject(json).apply { remove("memoryRetrievalQuery") }.toString()
+
+        val outcome = PipelineJsonSerializer.parse(stripped)
+
+        assertTrue(outcome is PipelineImportOutcome.Success)
+        assertNull((outcome as PipelineImportOutcome.Success).graph.memoryRetrievalQuery)
+    }
+
+    @Test
     fun `serialize then parse round-trips PIPELINE and SKILL reference ids in the flat config block`() {
         // PIPELINE / SKILL nodes carry their references in the flat `config`
         // block (read by the runtime executors). A bare graph proves the ids

@@ -15,6 +15,19 @@ details.
 
 ### Added
 
+- **Scheduled and triggered runs can say what they should remember.** A run you
+  start yourself searches long-term memory with your own message. A run started
+  by an automation trigger, a schedule, or the Quick Settings tile had no such
+  message — it searched with the pipeline's built-in prompt ("write the evening
+  journal entry"), which is identical on every firing and describes none of
+  them, so the recalled entries were largely arbitrary. Such a run now uses, in
+  order: a search key the pipeline declares (`memoryRetrievalQuery`, a new
+  optional field in the pipeline JSON and in the browser editor's **Memory key**
+  box, prompt variables included), otherwise the text arriving at the first step
+  that uses memory, otherwise the prompt as before. Interactive runs are
+  unchanged, the search still happens at most once per run, and the console's
+  MEMORY line now names which rule supplied the key.
+
 - **Model downloads survive leaving the app, and resume instead of restarting.**
   A download used to live and die with the screen that started it: switching
   away froze the transfer, and finishing setup cancelled it outright — on a slow

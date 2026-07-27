@@ -1502,6 +1502,25 @@ the list is re-ranked by relevance — each result shows a 0–1 score, so a
 search for "berlin" surfaces the timezone note even though it never
 contains that word.
 
+### What the agent recalls in a background run
+
+When you talk to the agent, it searches memory with your own message. A
+run started by an automation trigger, a schedule, or the Quick Settings
+tile has no such message — it runs the prompt the pipeline was built
+with, which is the same every time and rarely describes what today's run
+is about. Such a run therefore searches with, in order: the search key
+the pipeline declares for background runs, otherwise the text arriving at
+the first step that uses long-term memory, otherwise the pipeline's
+prompt.
+
+You can see which one was used: open the run's console and read the
+**MEMORY** line — it names the key and tags it `[pipeline-declared]`,
+`[node input]`, or `[user prompt]`. If a scheduled pipeline keeps
+recalling the wrong things, declaring a search key for it is the fix;
+that key is part of the pipeline document (see the pipeline JSON schema
+in the extension guide) and is set in the browser editor's **Memory key**
+field or in the file you import.
+
 ### Viewing and editing an entry
 
 Tap a row to open its detail sheet. It shows the full text, an
