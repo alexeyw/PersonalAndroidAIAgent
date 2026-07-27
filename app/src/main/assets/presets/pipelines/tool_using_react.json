@@ -4,23 +4,46 @@
   "name": "Tool-using agent",
   "description": "Local model reasons about which tool to call, the tool runs (auto-selected from the registry), and a summariser folds the tool output back into a final answer. Good template for action-oriented tasks.",
   "category": "tool",
-  "tags": ["tools", "agent"],
+  "tags": [
+    "tools",
+    "agent"
+  ],
   "updatedAt": 1748304000000,
+  "samplePrompts": [
+    {
+      "title": "Look up the population of Chile",
+      "toolsHint": "search_tool"
+    },
+    {
+      "title": "When was the Eiffel Tower opened?",
+      "toolsHint": "search_tool"
+    },
+    {
+      "title": "Who was Ada Lovelace?",
+      "toolsHint": "search_tool"
+    }
+  ],
   "nodes": [
     {
       "id": "input",
       "type": "INPUT",
-      "position": { "x": 80.0, "y": 200.0 },
+      "position": {
+        "x": 80,
+        "y": 200
+      },
       "label": "Input",
       "config": {
         "systemPrompt": null,
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -28,22 +51,34 @@
         "nodeInput": true,
         "longTermMemory": false,
         "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "INPUT",
+        "title": "Input",
+        "inputName": "user.message"
       }
     },
     {
       "id": "lite_rt",
       "type": "LITE_RT",
-      "position": { "x": 320.0, "y": 200.0 },
+      "position": {
+        "x": 320,
+        "y": 200
+      },
       "label": "Reasoner",
       "config": {
         "systemPrompt": "You are a reasoning agent deciding whether a tool is needed to answer the user. Today is $DATE. Available tools:\n$TOOLS\n\nThink step by step. If a tool can produce more reliable or fresher information than your own knowledge, output a single short sentence describing what you want the tool to do. Otherwise produce a direct answer. Keep the output under three sentences.",
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -51,22 +86,39 @@
         "nodeInput": true,
         "longTermMemory": false,
         "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "LITE_RT",
+        "title": "Reasoner",
+        "modelId": "",
+        "systemPrompt": "You are a reasoning agent deciding whether a tool is needed to answer the user. Today is $DATE. Available tools:\n$TOOLS\n\nThink step by step. If a tool can produce more reliable or fresher information than your own knowledge, output a single short sentence describing what you want the tool to do. Otherwise produce a direct answer. Keep the output under three sentences.",
+        "temperature": 0.7,
+        "topP": 0.9,
+        "maxNewTokens": 2048,
+        "stopTokens": []
       }
     },
     {
       "id": "tool",
       "type": "TOOL",
-      "position": { "x": 560.0, "y": 200.0 },
+      "position": {
+        "x": 560,
+        "y": 200
+      },
       "label": "Tool",
       "config": {
         "systemPrompt": null,
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -74,22 +126,35 @@
         "nodeInput": true,
         "longTermMemory": false,
         "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "TOOL",
+        "title": "Tool",
+        "toolId": "",
+        "argumentMapping": []
       }
     },
     {
       "id": "summary",
       "type": "SUMMARY",
-      "position": { "x": 800.0, "y": 200.0 },
+      "position": {
+        "x": 800,
+        "y": 200
+      },
       "label": "Summariser",
       "config": {
         "systemPrompt": "You synthesise the result of a tool invocation into a final reply for the user. Quote the concrete facts the tool returned and answer the user's original question directly. If the tool failed or returned nothing useful, say so plainly.",
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -97,22 +162,36 @@
         "nodeInput": true,
         "longTermMemory": false,
         "toolResults": true
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "SUMMARY",
+        "title": "Summariser",
+        "format": "CUSTOM",
+        "customPrompt": "You synthesise the result of a tool invocation into a final reply for the user. Quote the concrete facts the tool returned and answer the user's original question directly. If the tool failed or returned nothing useful, say so plainly.",
+        "targetLengthChars": 2000
       }
     },
     {
       "id": "output",
       "type": "OUTPUT",
-      "position": { "x": 1040.0, "y": 200.0 },
+      "position": {
+        "x": 1040,
+        "y": 200
+      },
       "label": "Reply",
       "config": {
         "systemPrompt": null,
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": true,
@@ -120,13 +199,40 @@
         "nodeInput": true,
         "longTermMemory": true,
         "toolResults": true
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "OUTPUT",
+        "title": "Reply",
+        "format": "PLAIN_TEXT",
+        "systemPrompt": ""
       }
     }
   ],
   "connections": [
-    { "id": "c1", "fromNodeId": "input", "toNodeId": "lite_rt", "label": null },
-    { "id": "c2", "fromNodeId": "lite_rt", "toNodeId": "tool", "label": null },
-    { "id": "c3", "fromNodeId": "tool", "toNodeId": "summary", "label": null },
-    { "id": "c4", "fromNodeId": "summary", "toNodeId": "output", "label": null }
+    {
+      "id": "c1",
+      "fromNodeId": "input",
+      "toNodeId": "lite_rt",
+      "label": null
+    },
+    {
+      "id": "c2",
+      "fromNodeId": "lite_rt",
+      "toNodeId": "tool",
+      "label": null
+    },
+    {
+      "id": "c3",
+      "fromNodeId": "tool",
+      "toNodeId": "summary",
+      "label": null
+    },
+    {
+      "id": "c4",
+      "fromNodeId": "summary",
+      "toNodeId": "output",
+      "label": null
+    }
   ]
 }

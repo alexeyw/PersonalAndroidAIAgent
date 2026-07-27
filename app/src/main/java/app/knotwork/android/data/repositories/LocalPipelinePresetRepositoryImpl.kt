@@ -53,7 +53,11 @@ class LocalPipelinePresetRepositoryImpl @Inject constructor(
     private var bundledCache: List<PipelinePreset>? = null
 
     override fun getBundledPresets(): Flow<List<PipelinePreset>> = flow {
-        emit(loadBundledOnce())
+        // Internal presets are building blocks of a composed preset, not
+        // catalogue entries — they are filtered out of the observable
+        // catalogue here and *only* here, so getPresetById still resolves
+        // them for LoadPipelineFromPresetUseCase's dependency seeding.
+        emit(loadBundledOnce().filterNot { it.isInternal })
     }
 
     override fun getUserPresets(): Flow<List<PipelinePreset>> =

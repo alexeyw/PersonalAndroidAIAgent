@@ -6,6 +6,7 @@ import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelinePresetImportOutcome
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -21,19 +22,25 @@ import java.io.File
  * Why a catalogue-level test exists separately from
  * [PipelinePresetJsonSerializerTest]: the serializer test pins the
  * round-trip contract using synthetic fixtures, while this test pins the
- * *shipped* artefacts — seven curated presets that the user sees the first
- * time they open the library (including the comprehensive
- * `showcase_full_agent`, which doubles as the first-launch seed). A broken
- * preset would otherwise only surface at runtime on a real device.
+ * *shipped* artefacts — the curated presets the user sees the first time they
+ * open the library (including the comprehensive `showcase_full_agent`, which
+ * doubles as the first-launch seed) plus the four internal sub-pipelines it
+ * composes. A broken preset would otherwise only surface at runtime on a real
+ * device.
  *
- * The four assertions per file are intentionally narrow:
+ * The assertions per file are intentionally narrow:
  * - the filename set is the promised one (catches typos /
  *   accidental deletion);
  * - every file parses to [PipelinePresetImportOutcome.Success] with
  *   `isBundled == true`;
  * - every embedded graph passes [PipelineGraph.validate] with zero errors;
  * - every `$VARIABLE` token used in any `systemPrompt` is one of the
- *   registered runtime providers from `di/PromptTemplateModule.kt`.
+ *   registered runtime providers from `di/PromptTemplateModule.kt`;
+ * - exactly the composed sub-pipelines are flagged `internal`, and every
+ *   user-facing preset declares starter prompts;
+ * - every node carries a `nodeConfig` envelope agreeing with its flat type,
+ *   every `INTENT_ROUTER`'s declared classes match its outgoing edge labels,
+ *   and every `PIPELINE` target resolves to a preset in this same catalogue.
  *
  * The final test (`validate detects a broken preset`) is a regression
  * guard: it parses an intentionally-broken in-memory document and asserts
@@ -84,6 +91,19 @@ class PipelinePresetCatalogValidationTest {
         "LOCATION",
         "USER",
         "DEVICE",
+    )
+
+    /**
+     * Preset ids that are building blocks of a composed preset rather than
+     * catalogue entries. They are hidden from the picker
+     * (`PipelinePresetRepository.getBundledPresets`) but must stay resolvable
+     * by id, because `showcase_full_agent`'s `PIPELINE` nodes target them.
+     */
+    private val expectedInternalIds: Set<String> = setOf(
+        "subtask_clarify",
+        "subtask_lookup",
+        "subtask_act",
+        "subtask_process",
     )
 
     private val catalogDir: File = File("src/main/assets/presets/pipelines")
@@ -153,6 +173,109 @@ class PipelinePresetCatalogValidationTest {
                     unknown.isEmpty(),
                 )
             }
+        }
+    }
+
+    @Test
+    fun `exactly the composed sub-pipelines are flagged internal`() {
+        val actual = mutableSetOf<String>()
+        forEachBundledFile { file ->
+            if (parseAsSuccess(file).preset.isInternal) actual += file.nameWithoutExtension
+        }
+        assertEquals(
+            "The internal flag hides a preset from the picker — it belongs only on " +
+                "sub-pipelines another preset composes.",
+            expectedInternalIds,
+            actual,
+        )
+    }
+
+    @Test
+    fun `every user-facing preset declares starter prompts`() {
+        forEachBundledFile { file ->
+            val preset = parseAsSuccess(file).preset
+            if (preset.isInternal) return@forEachBundledFile
+            assertTrue(
+                "Bundled preset ${file.name} declares no samplePrompts — a preset-spawned " +
+                    "pipeline would show an empty quick-action row on the new-chat empty state.",
+                preset.graph.samplePrompts.isNotEmpty(),
+            )
+        }
+    }
+
+    @Test
+    fun `every node carries a nodeConfig envelope matching its type`() {
+        forEachBundledFile { file ->
+            val preset = parseAsSuccess(file).preset
+            preset.graph.nodes.forEach { node ->
+                val raw = node.configJson
+                assertTrue(
+                    "Bundled preset ${file.name} node \"${node.id}\" has no nodeConfig envelope — " +
+                        "the editor would fall back to legacy derivation and lose editor-only fields.",
+                    !raw.isNullOrBlank(),
+                )
+                val envelope = JSONObject(raw)
+                assertEquals(
+                    "nodeConfig type disagrees with the node type in ${file.name} node \"${node.id}\"",
+                    node.type.name,
+                    envelope.optString("type"),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `every INTENT_ROUTER declares classes matching its outgoing edge labels`() {
+        forEachBundledFile { file ->
+            val preset = parseAsSuccess(file).preset
+            preset.graph.nodes
+                .filter { it.type == NodeType.INTENT_ROUTER }
+                .forEach { node ->
+                    // The runtime constrains the model to the labels of the node's
+                    // own outgoing edges and falls back to the FIRST edge when
+                    // nothing matches, so the editor-facing declaration has to
+                    // agree with the wiring on both counts.
+                    val edgeLabels = preset.graph.connections
+                        .filter { it.sourceNodeId == node.id }
+                        .mapNotNull { it.label }
+                    val envelope = JSONObject(node.configJson.orEmpty())
+                    val declared = envelope.optJSONArray("classes")
+                        ?.let { array -> (0 until array.length()).map { array.getJSONObject(it).optString("name") } }
+                        .orEmpty()
+                    assertEquals(
+                        "INTENT_ROUTER \"${node.id}\" in ${file.name} declares classes that do not " +
+                            "match its outgoing edge labels",
+                        edgeLabels,
+                        declared,
+                    )
+                    assertEquals(
+                        "INTENT_ROUTER \"${node.id}\" in ${file.name} must declare its first outgoing " +
+                            "edge as the fallback class — that is the branch the runtime takes",
+                        edgeLabels.firstOrNull(),
+                        envelope.optString("fallbackClass").takeIf { it.isNotBlank() },
+                    )
+                }
+        }
+    }
+
+    @Test
+    fun `every PIPELINE target resolves to a preset in this catalogue`() {
+        val availableIds = mutableSetOf<String>()
+        val targets = mutableListOf<Pair<String, String>>()
+        forEachBundledFile { file ->
+            val preset = parseAsSuccess(file).preset
+            availableIds += preset.id
+            preset.graph.nodes
+                .filter { it.type == NodeType.PIPELINE }
+                .mapNotNull { it.targetPipelineId?.takeIf(String::isNotBlank) }
+                .forEach { targets += file.name to it }
+        }
+        targets.forEach { (fileName, targetId) ->
+            assertTrue(
+                "Preset $fileName composes \"$targetId\", which is not a bundled preset — the " +
+                    "composition would materialise with a dangling PIPELINE target.",
+                targetId in availableIds,
+            )
         }
     }
 

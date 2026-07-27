@@ -31,11 +31,16 @@ import org.json.JSONObject
  *   "description": "INPUT → LITE_RT → OUTPUT, no network",
  *   "category": "local",
  *   "tags": ["offline", "qa"],
+ *   "internal": false,
  *   "updatedAt": 1730000000000,
  *   "nodes": [ ... ],
  *   "connections": [ ... ]
  * }
  * ```
+ *
+ * `internal` is optional and defaults to `false`; it is emitted only when
+ * actually set, so the shipped user-facing files stay free of the flag. See
+ * [PipelinePreset.isInternal] for what it hides.
  *
  * Uses `org.json` per the project's API conventions.
  */
@@ -71,6 +76,10 @@ object PipelinePresetJsonSerializer {
         val tagsJson = JSONArray()
         preset.tags.forEach { tagsJson.put(it) }
         root.put("tags", tagsJson)
+
+        // Emitted only when set: `internal` is a bundled-catalogue concern, and
+        // every user-facing export would otherwise carry a always-false flag.
+        if (preset.isInternal) root.put("internal", true)
 
         return root.toString()
     }
@@ -137,6 +146,13 @@ object PipelinePresetJsonSerializer {
             }
         } ?: emptyList()
 
+        // `internal` is honoured only for the bundled catalogue. An imported
+        // document could otherwise hide itself from the user's own "Mine"
+        // list with no way to get it back — a footgun with no legitimate use,
+        // since only a bundled preset can be the composition target of
+        // another bundled preset.
+        val isInternal = isBundled && root.optBoolean("internal", false)
+
         return PipelinePreset(
             id = presetId,
             name = name,
@@ -145,6 +161,7 @@ object PipelinePresetJsonSerializer {
             graph = graph,
             tags = tags,
             isBundled = isBundled,
+            isInternal = isInternal,
         )
     }
 }

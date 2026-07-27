@@ -10,6 +10,7 @@ import app.knotwork.android.domain.models.PipelinePresetImportOutcome
 import app.knotwork.android.domain.models.PresetCategory
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -116,6 +117,37 @@ class PipelinePresetJsonSerializerTest {
         assertTrue(outcome is PipelinePresetImportOutcome.Success)
         val parsed = (outcome as PipelinePresetImportOutcome.Success).preset
         assertEquals(false, parsed.isBundled)
+    }
+
+    @Test
+    fun `given non-internal preset when serialize then the internal key is omitted`() {
+        val json = JSONObject(PipelinePresetJsonSerializer.serialize(samplePreset))
+
+        assertFalse("internal must not be emitted for a user-facing preset", json.has("internal"))
+    }
+
+    @Test
+    fun `given internal bundled preset round-tripped then the flag survives`() {
+        val json = PipelinePresetJsonSerializer.serialize(samplePreset.copy(isInternal = true))
+        assertTrue("internal must be emitted when set", JSONObject(json).getBoolean("internal"))
+
+        val outcome = PipelinePresetJsonSerializer.parse(json, isBundled = true)
+
+        assertTrue(outcome is PipelinePresetImportOutcome.Success)
+        assertTrue((outcome as PipelinePresetImportOutcome.Success).preset.isInternal)
+    }
+
+    @Test
+    fun `given internal flag on an imported document then it is ignored for a user preset`() {
+        // Honouring `internal` outside the bundled catalogue would let an
+        // imported document hide itself from the user's own "Mine" list with
+        // no way to get it back.
+        val json = PipelinePresetJsonSerializer.serialize(samplePreset.copy(isInternal = true))
+
+        val outcome = PipelinePresetJsonSerializer.parse(json, isBundled = false)
+
+        assertTrue(outcome is PipelinePresetImportOutcome.Success)
+        assertFalse((outcome as PipelinePresetImportOutcome.Success).preset.isInternal)
     }
 
     @Test

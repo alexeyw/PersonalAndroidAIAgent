@@ -10,6 +10,7 @@
     "tools",
     "composition"
   ],
+  "internal": true,
   "updatedAt": 1748304000000,
   "nodes": [
     {
@@ -25,10 +26,13 @@
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -57,10 +61,13 @@
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -90,10 +97,13 @@
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,

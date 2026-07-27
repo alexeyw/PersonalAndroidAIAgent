@@ -4,13 +4,31 @@
   "name": "Styled Translation",
   "description": "Translate messages while keeping their tone, register and dialect — not just the words. Runs entirely on-device.",
   "category": "local",
-  "tags": ["translation", "on-device", "starter"],
+  "tags": [
+    "translation",
+    "on-device",
+    "starter"
+  ],
   "updatedAt": 1784040821000,
+  "samplePrompts": [
+    {
+      "title": "Hi, are we still meeting tomorrow?"
+    },
+    {
+      "title": "Thank you for your help, I really appreciate it"
+    },
+    {
+      "title": "Could you send me the documents before Friday?"
+    }
+  ],
   "nodes": [
     {
       "id": "node-1",
       "type": "INPUT",
-      "position": { "x": 80.0, "y": 200.0 },
+      "position": {
+        "x": 80,
+        "y": 200
+      },
       "label": "Text",
       "config": {
         "systemPrompt": null,
@@ -31,12 +49,21 @@
         "nodeInput": true,
         "longTermMemory": false,
         "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "INPUT",
+        "title": "Text",
+        "inputName": "user.message"
       }
     },
     {
       "id": "node-2",
       "type": "LITE_RT",
-      "position": { "x": 320.0, "y": 200.0 },
+      "position": {
+        "x": 320,
+        "y": 200
+      },
       "label": "Translate",
       "config": {
         "systemPrompt": "You translate the user's input text. TARGET: translate into Chilean Spanish (Spanish as actually spoken in Chile). REGISTER: use the everyday, casual register — natural, colloquial Chilean speech. To translate formally instead, replace the previous sentence with: use the official, formal register. To translate into a different language, change the TARGET line. Preserve the meaning, tone and politeness level of the original; keep names, numbers and line breaks. Do not add notes, alternatives or explanations. Output only the translated text.",
@@ -57,12 +84,26 @@
         "nodeInput": true,
         "longTermMemory": false,
         "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "LITE_RT",
+        "title": "Translate",
+        "modelId": "",
+        "systemPrompt": "You translate the user's input text. TARGET: translate into Chilean Spanish (Spanish as actually spoken in Chile). REGISTER: use the everyday, casual register — natural, colloquial Chilean speech. To translate formally instead, replace the previous sentence with: use the official, formal register. To translate into a different language, change the TARGET line. Preserve the meaning, tone and politeness level of the original; keep names, numbers and line breaks. Do not add notes, alternatives or explanations. Output only the translated text.",
+        "temperature": 0.7,
+        "topP": 0.9,
+        "maxNewTokens": 2048,
+        "stopTokens": []
       }
     },
     {
       "id": "node-3",
       "type": "OUTPUT",
-      "position": { "x": 560.0, "y": 200.0 },
+      "position": {
+        "x": 560,
+        "y": 200
+      },
       "label": "Translation",
       "config": {
         "systemPrompt": null,
@@ -83,11 +124,28 @@
         "nodeInput": true,
         "longTermMemory": false,
         "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "OUTPUT",
+        "title": "Translation",
+        "format": "PLAIN_TEXT",
+        "systemPrompt": ""
       }
     }
   ],
   "connections": [
-    { "id": "conn-1", "fromNodeId": "node-1", "toNodeId": "node-2", "label": null },
-    { "id": "conn-2", "fromNodeId": "node-2", "toNodeId": "node-3", "label": null }
+    {
+      "id": "conn-1",
+      "fromNodeId": "node-1",
+      "toNodeId": "node-2",
+      "label": null
+    },
+    {
+      "id": "conn-2",
+      "fromNodeId": "node-2",
+      "toNodeId": "node-3",
+      "label": null
+    }
   ]
 }

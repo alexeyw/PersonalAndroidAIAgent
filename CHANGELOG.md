@@ -101,6 +101,33 @@ details.
 
 ### Fixed
 
+- **The bundled preset gallery showed four templates nobody was meant to pick.**
+  The four *Subtask —* entries are building blocks the showcase agent runs
+  internally, not starting points — their own descriptions said so. They no
+  longer appear in **+ From preset**, in **More → Library**, or in the browser
+  editor's preset list, while the showcase that composes them keeps working
+  exactly as before.
+- **Every bundled preset now opens with its own quick actions.** A pipeline
+  spawned from a preset — including the one created on first launch and the
+  three offered during setup — showed the generic starter cards, because no
+  bundled preset declared any of its own. Each now suggests three prompts that
+  fit what it actually does, naming the tools it really wires.
+- **A router in a bundled preset could not be edited.** Opening the *Router*
+  step of **Routed local + cloud** showed an empty list of categories and an
+  error that blocked saving, because the preset shipped without the editor-side
+  configuration and the fallback could not reconstruct the categories from the
+  wiring. Every bundled preset now carries the full editor configuration on
+  every step, so each one opens ready to edit.
+- **The pass/fail judge template could never return a verdict.** The bundled
+  *Pass/fail* evaluation prompt still asked for the JSON shape used before
+  evaluation steps switched to routing on a `Pass` / `Retry` / `Fail` verdict,
+  so the step always failed its check, retried, and fell through to its default
+  branch. Both evaluation templates now lead with the verdict, and the scored
+  one reports its score below it.
+- **The browser editor's preset list was missing the scenarios from setup.**
+  Styled translation, share handler and virtual companion ship with the app but
+  had never been mirrored into `pipeline-editor.html`. The editor now carries
+  the same catalogue as the app, scenarios first.
 - **Memory compaction could quietly replace a fact with a wrong summary of it.**
   The background pass handed a group of stored facts to the on-device model,
   took whatever came back as their replacement, and deleted the originals — the

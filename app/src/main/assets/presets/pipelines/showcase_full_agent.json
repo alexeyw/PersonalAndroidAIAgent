@@ -14,6 +14,19 @@
     "hitl"
   ],
   "updatedAt": 1748304000000,
+  "samplePrompts": [
+    {
+      "title": "What is the tallest mountain in South America?",
+      "toolsHint": "search_tool"
+    },
+    {
+      "title": "Compare two programming languages for a beginner",
+      "toolsHint": "search_tool"
+    },
+    {
+      "title": "Plan a three-day trip to Valparaíso"
+    }
+  ],
   "nodes": [
     {
       "id": "node-1",
@@ -28,10 +41,13 @@
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -60,10 +76,13 @@
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -97,10 +116,13 @@
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -130,10 +152,13 @@
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": true,
@@ -180,10 +205,13 @@
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": true,
@@ -217,10 +245,13 @@
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": "You are a complexity classifier inside a factual-question pipeline. The input is a question the user wants answered with facts. Your only job: decide whether answering it well requires splitting the question into several separate lookups, or whether a single search can cover it.\n\nAnswer \"true\" if the question is COMPLEX and should be broken into multiple sub-queries. Signs of complexity:\n- It compares or contrasts several entities, or asks about multiple distinct things at once.\n- Answering one part depends on first answering another (multi-step or multi-hop).\n- It bundles several independent facts that are best looked up separately.\n\nAnswer \"false\" if the question is SIMPLE and a single lookup can answer it:\n- One fact, definition, date, number, or a single entity's property.\n- No comparison, no multiple sub-parts, no chained reasoning.\n\nWhen genuinely unsure, answer \"false\" — mark it complex only when splitting would clearly help.\n\nOutput exactly one word — true or false — in lowercase, with no punctuation, quotation marks, or explanation.",
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -251,10 +282,13 @@
         "cloudProvider": null,
         "modelPath": null,
         "toolName": "search_tool",
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -284,10 +318,13 @@
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -321,10 +358,13 @@
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -358,10 +398,13 @@
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -391,10 +434,13 @@
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -426,10 +472,13 @@
         "cloudProvider": null,
         "modelPath": null,
         "toolName": "search_tool",
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -459,10 +508,13 @@
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -493,10 +545,13 @@
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -526,10 +581,13 @@
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -561,10 +619,13 @@
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -599,7 +660,8 @@
             "examples": []
           }
         ],
-        "classifierPrompt": "You are a Subtask Router inside a task-execution loop. The input contains ONE subtask from a larger plan. Decide how this single subtask should be handled.\n\nOutput EXACTLY ONE of these keywords on a single line — nothing else. No punctuation, no quotation marks, no explanation:\n\n- Clarify — the subtask cannot proceed without information or a decision that only the user can give (a missing detail, a preference, a choice, a confirmation). Anything phrased as obtaining something from the user belongs here.\n- Lookup — the subtask only needs external facts or reference information that should be searched for. Nothing is changed in the outside world.\n- Act — the subtask requires performing an action through a tool: scheduling, sending, delegating, creating, or otherwise changing something or interacting with an external system.\n- Process — the subtask is reasoning, writing, transforming, calculating or composing that the model can do on its own from what is already available, without asking the user, searching, or using a tool.\n\nDecision rules, applied in order:\n1. If the subtask depends on input only the user can supply — output Clarify.\n2. Else if it performs or triggers an action that changes something or uses an external service — output Act.\n3. Else if it only needs facts to be looked up — output Lookup.\n4. Otherwise — output Process.\n\nClassify only the subtask itself; ignore any surrounding workflow instructions.\n\nOutput the single keyword only."
+        "classifierPrompt": "You are a Subtask Router inside a task-execution loop. The input contains ONE subtask from a larger plan. Decide how this single subtask should be handled.\n\nOutput EXACTLY ONE of these keywords on a single line — nothing else. No punctuation, no quotation marks, no explanation:\n\n- Clarify — the subtask cannot proceed without information or a decision that only the user can give (a missing detail, a preference, a choice, a confirmation). Anything phrased as obtaining something from the user belongs here.\n- Lookup — the subtask only needs external facts or reference information that should be searched for. Nothing is changed in the outside world.\n- Act — the subtask requires performing an action through a tool: scheduling, sending, delegating, creating, or otherwise changing something or interacting with an external system.\n- Process — the subtask is reasoning, writing, transforming, calculating or composing that the model can do on its own from what is already available, without asking the user, searching, or using a tool.\n\nDecision rules, applied in order:\n1. If the subtask depends on input only the user can supply — output Clarify.\n2. Else if it performs or triggers an action that changes something or uses an external service — output Act.\n3. Else if it only needs facts to be looked up — output Lookup.\n4. Otherwise — output Process.\n\nClassify only the subtask itself; ignore any surrounding workflow instructions.\n\nOutput the single keyword only.",
+        "fallbackClass": "Clarify"
       }
     },
     {
@@ -615,10 +677,13 @@
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -650,10 +715,12 @@
         "modelPath": null,
         "toolName": null,
         "targetPipelineId": "subtask_clarify",
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -683,10 +750,12 @@
         "modelPath": null,
         "toolName": null,
         "targetPipelineId": "subtask_lookup",
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -716,10 +785,12 @@
         "modelPath": null,
         "toolName": null,
         "targetPipelineId": "subtask_act",
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -749,10 +820,12 @@
         "modelPath": null,
         "toolName": null,
         "targetPipelineId": "subtask_process",
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -781,10 +854,13 @@
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
