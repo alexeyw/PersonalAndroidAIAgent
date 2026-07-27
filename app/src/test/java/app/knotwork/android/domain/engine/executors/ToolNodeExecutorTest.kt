@@ -577,6 +577,35 @@ class ToolNodeExecutorTest {
     }
 
     @Test
+    fun `given a run parking on the gate when the durable record is written then the live gate is already gone`() =
+        runTest {
+            // The two states must never be observable at the same time. While
+            // both exist, a notification approval takes SubmitApprovalDecision's
+            // live short-circuit and resolves a deferred whose withTimeout has
+            // already expired — the user's decision is swallowed and the run
+            // stays parked. Asserting at the moment of the durable save (rather
+            // than after the flow ends) is what pins the ordering: checking
+            // afterwards would pass even with the `finally`-only cleanup.
+            armSensitiveGate()
+            val liveGateAtParkTime = mutableListOf<Any?>()
+            coEvery { pendingInteractionRepository.save(any()) } answers {
+                liveGateAtParkTime += executor.pendingApprovalFor("session-1")
+                true
+            }
+            val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = "MyTool")
+
+            val job = launch {
+                executor.execute(node, "Do", "session-1", "", runId = "run-1").collect { }
+            }
+            advanceTimeBy(200L)
+            advanceUntilIdle()
+
+            assertEquals("the durable park must have happened", 1, liveGateAtParkTime.size)
+            assertNull("live gate must be retired before the durable record exists", liveGateAtParkTime.single())
+            job.cancel()
+        }
+
+    @Test
     fun `given a DESTRUCTIVE delete_file on a persisted run when live timeout then parks for background approval`() =
         runTest {
             // The workspace write tools carry no bespoke HITL code — they flow through
