@@ -242,6 +242,18 @@ class ToolInvocationGate @Inject constructor(
                     withTimeout(timeoutMs) { deferred.await() }
                 } catch (e: TimeoutCancellationException) {
                     Timber.tag("PipelineDebug").w("Live approval phase timed out for session: $sessionId")
+                    // Retire the live gate BEFORE parking, not in the `finally`
+                    // below. `parkRun` suspends on storage, and while the durable
+                    // record already exists but the holder is still registered the
+                    // two states disagree: a notification approval arriving in that
+                    // window takes `SubmitApprovalDecisionUseCase`'s live
+                    // short-circuit and completes a deferred whose `withTimeout`
+                    // has already given up — the decision is silently swallowed and
+                    // the run stays parked. Removing first makes the transition
+                    // atomic from an observer's point of view: the gate is either
+                    // live or durable, never both. The `finally` remove stays for
+                    // every other exit path (it is a no-op once removed here).
+                    activeApprovalDeferreds.remove(sessionId, holder)
                     if (runId != null && parkRun(runId, sessionId, resolvedToolName, resolvedToolArgs, risk)) {
                         // Two-phase wait, second phase: the run parks on its
                         // durable pending record instead of failing. No

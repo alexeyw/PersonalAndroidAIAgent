@@ -348,9 +348,16 @@ class TriggerBackgroundRunIntegrationTest {
             val runId = process.scheduler.lastRunId!!
 
             // ── No UI answers: the live wait times out and the run parks ──
-            awaitUntil("run parked WAITING_APPROVAL") {
+            // The live gate is part of the condition, not an afterthought: the
+            // approval below must take the durable path, and it only does so
+            // once `pendingApproval` is gone. `ToolInvocationGate` retires the
+            // holder before writing the durable record, so waiting for all
+            // three is waiting for one consistent state — asserting only the
+            // record would race that ordering.
+            awaitUntil("run parked WAITING_APPROVAL with the live gate retired") {
                 process.runRepository.getRun(runId)?.status == PipelineRunStatus.WAITING_APPROVAL &&
-                    process.pendingRepository.getForRun(runId) != null
+                    process.pendingRepository.getForRun(runId) != null &&
+                    process.taskQueueManager.pendingApproval(SESSION_ID) == null
             }
             verify(atLeast = 1) {
                 process.approvalNotifier.sendApprovalRequest(any(), any(), any(), any())

@@ -88,6 +88,15 @@ details.
 
 ### Fixed
 
+- **An approval tapped at the exact moment a background run gave up waiting
+  could be ignored.** When nobody answers a tool-confirmation prompt in time,
+  the run stops waiting live and parks so it can be approved later from the
+  notification. For a brief moment both states existed at once, and an approval
+  arriving in that window was applied to the wait that had already ended — the
+  notification reported success while the run stayed parked, waiting for a
+  decision that had in fact been made. The live wait is now retired before the
+  run parks, so an approval always reaches whichever of the two is actually in
+  effect.
 - **Release builds crashed on the first message that touched long-term
   memory.** In a minified (release) build, initialising the on-device text
   embedder threw `ExceptionInInitializerError` and killed the app process, so a
