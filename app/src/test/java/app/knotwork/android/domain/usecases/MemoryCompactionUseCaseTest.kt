@@ -4,11 +4,11 @@ import app.knotwork.android.domain.constants.TimeAndIdConstants
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.MemoryChunk
-import app.knotwork.android.domain.models.MemorySource
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
 import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.services.CompactionCoverageVerifier
 import app.knotwork.android.domain.services.EmbeddingProvider
 import app.knotwork.android.domain.services.EmbeddingProviderResolver
 import app.knotwork.android.domain.services.KMeansClusterer
@@ -21,6 +21,9 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 
 /**
  * Unit tests for [MemoryCompactionUseCase].
@@ -43,8 +46,19 @@ class MemoryCompactionUseCaseTest {
 
     private val now = 1_000_000_000_000L
 
-    private fun chunk(id: Long, text: String) =
-        MemoryChunk(id = id, text = text, embedding = floatArrayOf(1f, 0f), timestamp = 1L)
+    /**
+     * A unit vector at [degrees] in two dimensions, so a fixture's similarity to
+     * the summary (and to its cluster's centroid) is exact — the coverage gate
+     * is judged on real geometry rather than on a placeholder vector. One
+     * dimension would make every chunk cosine `1.0` and hide the gate entirely.
+     */
+    private fun unit(degrees: Double): FloatArray {
+        val radians = degrees * PI / 180.0
+        return floatArrayOf(cos(radians).toFloat(), sin(radians).toFloat())
+    }
+
+    private fun chunk(id: Long, text: String, degrees: Double = 0.0) =
+        MemoryChunk(id = id, text = text, embedding = unit(degrees), timestamp = 1L)
 
     @Before
     fun setup() {
@@ -62,8 +76,11 @@ class MemoryCompactionUseCaseTest {
         coEvery { loadModelUseCase.invoke(any()) } returns Result.Success(Unit)
         coEvery { promptTemplateEngine.render(any(), any()) } answers { firstArg() }
         coEvery { embeddingProviderResolver.resolve() } returns embeddingProvider
-        coEvery { embeddingProvider.embed(any<String>()) } returns floatArrayOf(0.5f, 0.5f)
+        // The default summary sits exactly where the default cluster does, so
+        // the coverage gate passes unless a test moves one of them.
+        coEvery { embeddingProvider.embed(any<String>()) } returns unit(0.0)
         coEvery { memoryRepository.saveMemory(any(), any(), any(), any()) } returns 99L
+        coEvery { memoryRepository.replaceWithConsolidated(any(), any(), any()) } returns 99L
         coEvery { memoryRepository.deleteMemory(any()) } returns Unit
         coEvery { settingsRepository.setMemoryLastCompactedAt(any()) } returns Unit
         every { llmInferenceEngine.generateResponseStream(any()) } returns flowOf("Merged fact")
@@ -77,6 +94,9 @@ class MemoryCompactionUseCaseTest {
             memoryRepository = memoryRepository,
             settingsRepository = settingsRepository,
             kMeansClusterer = kMeansClusterer,
+            // The verifier is pure arithmetic: exercising the real one keeps
+            // these tests honest about what actually gets deleted.
+            coverageVerifier = CompactionCoverageVerifier(),
         )
     }
 
@@ -88,7 +108,7 @@ class MemoryCompactionUseCaseTest {
 
         assertEquals(MemoryCompactionUseCase.MemoryCompactionOutcome.EMPTY, outcome)
         coVerify(exactly = 0) { kMeansClusterer.cluster(any()) }
-        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { memoryRepository.replaceWithConsolidated(any(), any(), any()) }
     }
 
     @Test
@@ -102,18 +122,72 @@ class MemoryCompactionUseCaseTest {
         assertEquals(1, outcome.clustersProcessed)
         assertEquals(3, outcome.chunksConsolidated)
         assertEquals(1, outcome.chunksCreated)
+        assertEquals(0, outcome.clustersRejected)
+        assertEquals(0, outcome.chunksKeptUnverified)
+        // The summary and the deletions land in one atomic call — never a save
+        // followed by separable deletes.
         coVerify(exactly = 1) {
-            memoryRepository.saveMemory(
-                "Merged fact",
-                any(),
-                MemorySource.Compaction(originalChunkIds = listOf(1L, 2L, 3L)),
-            )
+            memoryRepository.replaceWithConsolidated("Merged fact", any(), listOf(1L, 2L, 3L))
         }
-        coVerify(exactly = 1) { memoryRepository.deleteMemory(1L) }
-        coVerify(exactly = 1) { memoryRepository.deleteMemory(2L) }
-        coVerify(exactly = 1) { memoryRepository.deleteMemory(3L) }
+        coVerify(exactly = 0) { memoryRepository.deleteMemory(any()) }
+        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
         // A real consolidation stamps the last-compacted time.
         coVerify(exactly = 1) { settingsRepository.setMemoryLastCompactedAt(now) }
+    }
+
+    @Test
+    fun `given a summary covering only part of a cluster when invoke then the rest survives verbatim`() = runTest {
+        // Chunk 3 sits 90 degrees away: the summary written at 0 degrees cannot
+        // be shown to represent it, so it must not be deleted.
+        val candidates = listOf(chunk(1, "a"), chunk(2, "b"), chunk(3, "c", degrees = 90.0))
+        coEvery { memoryRepository.getCompactionCandidates(any()) } returns candidates
+        every { kMeansClusterer.cluster(any()) } returns listOf(listOf(0, 1, 2))
+
+        val outcome = useCase(now)
+
+        assertEquals(1, outcome.clustersProcessed)
+        assertEquals(2, outcome.chunksConsolidated)
+        assertEquals(1, outcome.chunksKeptUnverified)
+        coVerify(exactly = 1) {
+            memoryRepository.replaceWithConsolidated("Merged fact", any(), listOf(1L, 2L))
+        }
+    }
+
+    @Test
+    fun `given a summary that covers nothing when invoke then the cluster is rejected entirely`() = runTest {
+        val candidates = listOf(chunk(1, "a"), chunk(2, "b"), chunk(3, "c"))
+        coEvery { memoryRepository.getCompactionCandidates(any()) } returns candidates
+        every { kMeansClusterer.cluster(any()) } returns listOf(listOf(0, 1, 2))
+        // The model answered about something else entirely.
+        coEvery { embeddingProvider.embed(any<String>()) } returns unit(90.0)
+
+        val outcome = useCase(now)
+
+        assertEquals(0, outcome.clustersProcessed)
+        assertEquals(1, outcome.clustersRejected)
+        assertEquals(0, outcome.chunksConsolidated)
+        // Nothing is written either: an unverified summary is discarded, not stored.
+        coVerify(exactly = 0) { memoryRepository.replaceWithConsolidated(any(), any(), any()) }
+        coVerify(exactly = 0) { settingsRepository.setMemoryLastCompactedAt(any()) }
+    }
+
+    @Test
+    fun `given a summary covering a single fact when invoke then the cluster is rejected`() = runTest {
+        // Replacing one fact with a paraphrase of it removes no redundancy and
+        // only adds the risk the paraphrase is wrong.
+        val candidates = listOf(
+            chunk(1, "a"),
+            chunk(2, "b", degrees = 80.0),
+            chunk(3, "c", degrees = 100.0),
+        )
+        coEvery { memoryRepository.getCompactionCandidates(any()) } returns candidates
+        every { kMeansClusterer.cluster(any()) } returns listOf(listOf(0, 1, 2))
+
+        val outcome = useCase(now)
+
+        assertEquals(0, outcome.clustersProcessed)
+        assertEquals(1, outcome.clustersRejected)
+        coVerify(exactly = 0) { memoryRepository.replaceWithConsolidated(any(), any(), any()) }
     }
 
     @Test
@@ -129,11 +203,7 @@ class MemoryCompactionUseCaseTest {
         assertEquals(1, outcome.clustersProcessed)
         assertEquals(3, outcome.chunksConsolidated)
         coVerify(exactly = 1) {
-            memoryRepository.saveMemory(
-                "Merged fact",
-                any(),
-                MemorySource.Compaction(originalChunkIds = listOf(1L, 2L, 3L)),
-            )
+            memoryRepository.replaceWithConsolidated("Merged fact", any(), listOf(1L, 2L, 3L))
         }
     }
 
@@ -146,8 +216,7 @@ class MemoryCompactionUseCaseTest {
         val outcome = useCase(now)
 
         assertEquals(0, outcome.clustersProcessed)
-        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
-        coVerify(exactly = 0) { memoryRepository.deleteMemory(any()) }
+        coVerify(exactly = 0) { memoryRepository.replaceWithConsolidated(any(), any(), any()) }
         coVerify(exactly = 0) { settingsRepository.setMemoryLastCompactedAt(any()) }
     }
 
@@ -161,8 +230,7 @@ class MemoryCompactionUseCaseTest {
         val outcome = useCase(now)
 
         assertEquals(0, outcome.clustersProcessed)
-        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
-        coVerify(exactly = 0) { memoryRepository.deleteMemory(any()) }
+        coVerify(exactly = 0) { memoryRepository.replaceWithConsolidated(any(), any(), any()) }
         coVerify(exactly = 0) { settingsRepository.setMemoryLastCompactedAt(any()) }
     }
 
@@ -176,8 +244,7 @@ class MemoryCompactionUseCaseTest {
         val outcome = useCase(now)
 
         assertEquals(0, outcome.clustersProcessed)
-        coVerify(exactly = 0) { memoryRepository.saveMemory(any(), any(), any(), any()) }
-        coVerify(exactly = 0) { memoryRepository.deleteMemory(any()) }
+        coVerify(exactly = 0) { memoryRepository.replaceWithConsolidated(any(), any(), any()) }
         coVerify(exactly = 0) { settingsRepository.setMemoryLastCompactedAt(any()) }
     }
 

@@ -171,6 +171,41 @@ interface MemoryDao {
     suspend fun deleteOldestMemories(keepLimit: Int)
 
     /**
+     * Deletes a batch of memory chunks by id in one statement.
+     *
+     * Backs the atomic consolidation step ([replaceWithConsolidated]); a
+     * per-id loop there could fail partway and leave a summary coexisting with
+     * some of the very chunks it replaced.
+     *
+     * @param ids Identifiers of the chunks to delete. An empty list is a no-op.
+     */
+    @Query("DELETE FROM memory_chunks WHERE id IN (:ids)")
+    suspend fun deleteMemoriesByIds(ids: List<Long>)
+
+    /**
+     * Writes a consolidation summary and removes the chunks it replaces in a
+     * single transaction.
+     *
+     * Compaction is the one path that *destroys* user data, so the write and
+     * the deletions must not be separable: a crash (or a failing statement)
+     * between them would either duplicate the facts (summary saved, originals
+     * kept) or lose them outright (originals deleted, summary missing). Room's
+     * transaction gives the all-or-nothing guarantee the compaction contract
+     * advertises.
+     *
+     * @param summary The summary row to insert.
+     * @param originalIds Ids of the chunks the summary replaces — exactly the
+     *   members the coverage gate approved, never the whole cluster.
+     * @return The row id of the inserted summary.
+     */
+    @Transaction
+    suspend fun replaceWithConsolidated(summary: MemoryChunkEntity, originalIds: List<Long>): Long {
+        val insertedId = insertMemory(summary)
+        deleteMemoriesByIds(originalIds)
+        return insertedId
+    }
+
+    /**
      * Retrieves the non-pinned memory chunks older than a given timestamp —
      * the candidate set for background compaction.
      *

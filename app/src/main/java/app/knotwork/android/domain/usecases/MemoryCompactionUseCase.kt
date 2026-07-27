@@ -10,6 +10,7 @@ import app.knotwork.android.domain.prompt.PromptTemplateEngine
 import app.knotwork.android.domain.prompt.PromptVariableProvider
 import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.services.CompactionCoverageVerifier
 import app.knotwork.android.domain.services.EmbeddingProviderResolver
 import app.knotwork.android.domain.services.KMeansClusterer
 import kotlinx.coroutines.CancellationException
@@ -36,16 +37,32 @@ import javax.inject.Inject
  *  4. Cluster the candidates by embedding similarity ([KMeansClusterer]).
  *  5. For every cluster with at least [MIN_CLUSTER_SIZE] members, run the
  *     consolidation prompt ([DefaultPrompts.MemoryCompaction.SYSTEM_FALLBACK])
- *     once to fold the members into a single fact, embed that summary with the
- *     **active** provider, save it tagged [MemorySource.Compaction] (carrying
- *     the merged ids), and delete the originals. Clusters below the size floor
- *     are left as-is.
+ *     once to fold the members into a single fact and embed that summary with
+ *     the **active** provider.
+ *  6. **Verify before deleting anything.** [CompactionCoverageVerifier] reports
+ *     which members the summary actually represents. Only those are replaced —
+ *     atomically, via [MemoryRepository.replaceWithConsolidated], which writes
+ *     the summary tagged [MemorySource.Compaction] (carrying exactly the merged
+ *     ids) and removes the originals in one transaction. Members the summary
+ *     failed to cover stay stored verbatim, and a cluster whose summary covers
+ *     fewer than [MIN_COVERED_TO_CONSOLIDATE] members is rejected outright —
+ *     saving it would add a chunk without removing enough, i.e. grow the table
+ *     while diluting it.
+ *
+ * **Why the gate exists.** A 4B on-device model asked to merge several facts
+ * can quietly drop one of them, and the originals were the only copy. The
+ * verification step is what keeps "compaction" from meaning "the model's word
+ * against data the user can never get back"; the residual risk it cannot see —
+ * a detail distorted inside an otherwise faithful sentence — is contained on
+ * the read side, where
+ * [app.knotwork.android.domain.services.MemoryReranker] never lets a summary
+ * displace a verbatim chunk that restates it.
  *
  * The pass is best-effort and resilient: a blank model reply, an embedding
- * failure, or a save error on one cluster skips **only that cluster** (its
- * originals are kept), and the use case never throws except to propagate
- * [CancellationException]. This mirrors [MemoryExtractionUseCase] so background
- * maintenance can never corrupt or lose memory.
+ * failure, a failed verification, or a save error on one cluster skips **only
+ * that cluster** (its originals are kept), and the use case never throws except
+ * to propagate [CancellationException]. This mirrors [MemoryExtractionUseCase]
+ * so background maintenance can never corrupt or lose memory.
  *
  * The feature toggle (`memoryCompactionEnabled`) is intentionally **not** read
  * here — the worker that schedules this use case owns that gate, leaving the
@@ -59,6 +76,8 @@ import javax.inject.Inject
  * @property memoryRepository Candidate loading, persistence, and deletion.
  * @property settingsRepository Source of the compaction age window.
  * @property kMeansClusterer Groups candidate chunks by embedding similarity.
+ * @property coverageVerifier Decides which cluster members a generated summary
+ *   is allowed to replace.
  */
 class MemoryCompactionUseCase @Inject constructor(
     private val llmInferenceEngine: LlmInferenceEngine,
@@ -69,6 +88,7 @@ class MemoryCompactionUseCase @Inject constructor(
     private val memoryRepository: MemoryRepository,
     private val settingsRepository: SettingsRepository,
     private val kMeansClusterer: KMeansClusterer,
+    private val coverageVerifier: CompactionCoverageVerifier,
 ) {
 
     /**
@@ -103,16 +123,22 @@ class MemoryCompactionUseCase @Inject constructor(
             )
 
             var clustersProcessed = 0
+            var clustersRejected = 0
             var chunksConsolidated = 0
             var chunksCreated = 0
+            var chunksKeptUnverified = 0
 
             for (cluster in clusters) {
                 if (cluster.size < MIN_CLUSTER_SIZE) continue
                 val members = cluster.map { candidates[it] }
-                if (consolidateCluster(systemPrompt, members, verboseLogging)) {
+                val consolidation = consolidateCluster(systemPrompt, members, verboseLogging)
+                if (consolidation == null) {
+                    clustersRejected++
+                } else {
                     clustersProcessed++
-                    chunksConsolidated += members.size
+                    chunksConsolidated += consolidation.mergedCount
                     chunksCreated++
+                    chunksKeptUnverified += consolidation.keptCount
                 }
             }
 
@@ -128,57 +154,83 @@ class MemoryCompactionUseCase @Inject constructor(
                 clustersProcessed = clustersProcessed,
                 chunksConsolidated = chunksConsolidated,
                 chunksCreated = chunksCreated,
+                clustersRejected = clustersRejected,
+                chunksKeptUnverified = chunksKeptUnverified,
             )
         }
 
     /**
      * Consolidates a single cluster: runs the summary prompt, embeds the result,
-     * saves it as a [MemorySource.Compaction] chunk, and deletes the originals.
+     * verifies which members the summary really covers, and atomically replaces
+     * exactly those with a [MemorySource.Compaction] chunk.
      *
-     * Skips (returns `false`, keeping the originals) on a blank model reply or
-     * any embedding/persistence failure, so a problematic cluster never costs
-     * the user their data.
+     * Rejects the cluster (returns `null`, keeping **every** original) on a
+     * blank model reply, an embedding or persistence failure, or a summary that
+     * covers fewer than [MIN_COVERED_TO_CONSOLIDATE] members — in the last case
+     * the summary is not saved at all, because a chunk that replaces one or zero
+     * facts grows the table instead of compacting it.
      *
      * @param systemPrompt Pre-rendered consolidation system prompt.
      * @param members The chunks in this cluster (size already validated ≥ floor).
      * @param verboseLogging When `true`, logs the cluster membership (the merged
-     *   chunk ids) of every successful consolidation for observability. Gated on
+     *   chunk ids, and any member the summary failed to cover) of every
+     *   successful consolidation for observability. Gated on
      *   `SettingsRepository.verboseMemoryLoggingEnabled` so the logcat stays quiet
      *   by default.
-     * @return `true` if the cluster was consolidated and its originals removed.
+     * @return What the consolidation changed, or `null` if the cluster was left
+     *   untouched.
      */
     private suspend fun consolidateCluster(
         systemPrompt: String,
         members: List<MemoryChunk>,
         verboseLogging: Boolean,
-    ): Boolean {
+    ): ClusterConsolidation? {
         val summary = runInference(systemPrompt, members).trim()
-        if (summary.isEmpty()) return false
+        if (summary.isEmpty()) return null
 
         return try {
             val embedding = embeddingProviderResolver.resolve().embed(summary)
-            val originalIds = members.map { it.id }
-            memoryRepository.saveMemory(
-                text = summary,
-                embedding = embedding,
-                source = MemorySource.Compaction(originalChunkIds = originalIds),
-            )
-            originalIds.forEach { memoryRepository.deleteMemory(it) }
-            if (verboseLogging) {
-                Timber.tag(TAG).d(
-                    "Compaction cluster: merged ids %s (%d chunks) → 1 summary",
-                    originalIds,
+            val verdict = coverageVerifier.verify(members, embedding)
+            if (verdict.covered.size < MIN_COVERED_TO_CONSOLIDATE) {
+                Timber.tag(TAG).w(
+                    "Consolidation summary covered only %d of %d facts; discarding it and keeping the originals",
+                    verdict.covered.size,
                     members.size,
                 )
+                return null
             }
-            true
+
+            val mergedIds = verdict.covered.map { it.id }
+            memoryRepository.replaceWithConsolidated(
+                text = summary,
+                embedding = embedding,
+                originalIds = mergedIds,
+            )
+            if (verboseLogging) {
+                Timber.tag(TAG).d(
+                    "Compaction cluster: merged ids %s → 1 summary; kept unverified ids %s",
+                    mergedIds,
+                    verdict.uncovered.map { it.id },
+                )
+            }
+            ClusterConsolidation(mergedCount = mergedIds.size, keptCount = verdict.uncovered.size)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             Timber.tag(TAG).w(e, "Failed to consolidate a memory cluster; keeping its originals")
-            false
+            null
         }
     }
+
+    /**
+     * What one successful cluster consolidation changed.
+     *
+     * @property mergedCount Members the summary covered, and which were
+     *   therefore deleted.
+     * @property keptCount Members the summary failed to cover, left stored
+     *   verbatim.
+     */
+    private data class ClusterConsolidation(val mergedCount: Int, val keptCount: Int)
 
     /**
      * Builds the consolidation prompt from the rendered system prompt and the
@@ -219,6 +271,17 @@ class MemoryCompactionUseCase @Inject constructor(
          * redundancy and risks losing nuance.
          */
         const val MIN_CLUSTER_SIZE = 3
+
+        /**
+         * Minimum number of cluster members a summary must be verified to cover
+         * for the consolidation to be worth committing.
+         *
+         * Below this the trade collapses: replacing a single fact with a
+         * model's paraphrase of it removes no redundancy while adding the risk
+         * the paraphrase is wrong, and covering none of them means the reply was
+         * not a summary of this cluster at all.
+         */
+        const val MIN_COVERED_TO_CONSOLIDATE = 2
     }
 
     /**
@@ -229,11 +292,20 @@ class MemoryCompactionUseCase @Inject constructor(
      *   deleted) across all processed clusters.
      * @property chunksCreated Number of new summary chunks written (equals
      *   [clustersProcessed]; tracked separately for observability clarity).
+     * @property clustersRejected Number of eligible clusters left untouched
+     *   because their summary was blank, failed to persist, or did not cover
+     *   enough of the cluster to be trusted. A non-zero value is the signal
+     *   that the local model is producing summaries worth distrusting.
+     * @property chunksKeptUnverified Number of chunks that belonged to a
+     *   consolidated cluster but were **not** represented by its summary, and so
+     *   were kept verbatim instead of being deleted.
      */
     data class MemoryCompactionOutcome(
         val clustersProcessed: Int,
         val chunksConsolidated: Int,
         val chunksCreated: Int,
+        val clustersRejected: Int = 0,
+        val chunksKeptUnverified: Int = 0,
     ) {
         /** Shared constants for [MemoryCompactionOutcome]. */
         companion object {

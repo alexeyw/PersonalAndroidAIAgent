@@ -33,6 +33,42 @@ object MemoryVectorSimilarity {
     const val NEAR_DUPLICATE_THRESHOLD: Float = 0.92f
 
     /**
+     * Computes the component-wise mean of [vectors] — the centroid of the group
+     * they form in the embedding space.
+     *
+     * Used as the reference point a consolidation summary is judged against
+     * (see [CompactionCoverageVerifier]): the centroid is, by construction, the
+     * single vector closest to the group as a whole, so it is the natural
+     * yardstick for "how central should a faithful summary of this group be".
+     *
+     * Vectors are averaged only when they share the dimensionality of the first
+     * usable vector; differently-sized ones (chunks embedded by another
+     * provider and awaiting the background re-embed) are skipped rather than
+     * silently truncated or padded, both of which would corrupt the mean.
+     *
+     * @param vectors The group whose centroid is wanted.
+     * @return The mean vector, or an empty array when [vectors] contains no
+     *   usable vector at all. An empty result compares as `0f` through
+     *   [cosine], so callers degrade to "cannot be judged" instead of throwing.
+     */
+    fun centroid(vectors: List<FloatArray>): FloatArray {
+        val reference = vectors.firstOrNull { it.isNotEmpty() } ?: return FloatArray(0)
+        val sum = FloatArray(reference.size)
+        var counted = 0
+        for (vector in vectors) {
+            if (vector.size != reference.size) continue
+            for (i in vector.indices) {
+                sum[i] += vector[i]
+            }
+            counted++
+        }
+        for (i in sum.indices) {
+            sum[i] /= counted
+        }
+        return sum
+    }
+
+    /**
      * Computes the cosine similarity of two embedding vectors.
      *
      * @param a First vector.

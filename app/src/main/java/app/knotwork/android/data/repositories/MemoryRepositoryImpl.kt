@@ -45,6 +45,20 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
         memoryDao.insertMemory(entity)
     }
 
+    override suspend fun replaceWithConsolidated(text: String, embedding: FloatArray, originalIds: List<Long>): Long =
+        withContext(Dispatchers.IO) {
+            val embeddingBlob = converters.fromFloatArray(embedding)
+                ?: throw IllegalArgumentException("Failed to serialize embedding")
+
+            val summary = MemoryChunkEntity(
+                text = text,
+                embedding = embeddingBlob,
+                timestamp = System.currentTimeMillis(),
+                source = MemorySource.Compaction(originalChunkIds = originalIds),
+            )
+            memoryDao.replaceWithConsolidated(summary = summary, originalIds = originalIds)
+        }
+
     override suspend fun getAllMemories(): List<MemoryChunk> = withContext(Dispatchers.IO) {
         memoryDao.getAllMemories().mapNotNull { entity -> entity.toMemoryChunkOrNull() }
     }

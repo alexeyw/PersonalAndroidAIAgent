@@ -219,6 +219,33 @@ class MemoryRepositoryImplTest {
     }
 
     @Test
+    fun `replaceWithConsolidated writes the summary and its originals in one dao transaction`() =
+        kotlinx.coroutines.test.runTest {
+            val embedding = floatArrayOf(0.5f, 0.5f)
+            val summarySlot = io.mockk.slot<MemoryChunkEntity>()
+            io.mockk.coEvery {
+                memoryDao.replaceWithConsolidated(capture(summarySlot), any())
+            } returns 77L
+
+            val id = repository.replaceWithConsolidated(
+                text = "merged fact",
+                embedding = embedding,
+                originalIds = listOf(1L, 2L, 3L),
+            )
+
+            assertEquals(77L, id)
+            // Provenance records exactly the chunks the transaction removes, so
+            // the ids stay a usable link rather than a historical note.
+            assertEquals(MemorySource.Compaction(originalChunkIds = listOf(1L, 2L, 3L)), summarySlot.captured.source)
+            assertEquals("merged fact", summarySlot.captured.text)
+            assertArrayEquals(embedding, converters.toFloatArray(summarySlot.captured.embedding), 1e-6f)
+            io.mockk.coVerify(exactly = 1) { memoryDao.replaceWithConsolidated(any(), listOf(1L, 2L, 3L)) }
+            // Never the separable save-then-delete pair it replaces.
+            io.mockk.coVerify(exactly = 0) { memoryDao.insertMemory(any()) }
+            io.mockk.coVerify(exactly = 0) { memoryDao.deleteMemoryById(any()) }
+        }
+
+    @Test
     fun `setMemoryPinned forwards pinned true to dao`() = kotlinx.coroutines.test.runTest {
         repository.setMemoryPinned(id = 7L, pinned = true)
         io.mockk.coVerify(exactly = 1) { memoryDao.setMemoryPinned(id = 7L, isPinned = true) }

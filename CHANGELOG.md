@@ -101,6 +101,23 @@ details.
 
 ### Fixed
 
+- **Memory compaction could quietly replace a fact with a wrong summary of it.**
+  The background pass handed a group of stored facts to the on-device model,
+  took whatever came back as their replacement, and deleted the originals — the
+  only copy. Nothing checked that the summary actually said what the facts said,
+  so a model that dropped one of them, or answered about something else, cost
+  you that memory with no way to notice or recover. A summary now has to be
+  shown to represent an entry before that entry can be removed: entries it
+  skipped stay stored word-for-word, and a summary that represents fewer than
+  two of them is discarded with the whole group left intact. The write and the
+  deletions also became a single transaction, so a failure part-way can no
+  longer leave a summary sitting next to the very entries it replaced. Where a
+  summary and the original wording of one of its facts are both present — after
+  importing an older backup, say — retrieval now shows the agent the original,
+  which previously lost out because the summary was newer and counted as
+  fresher. The compaction preview is correspondingly an upper bound: a run can
+  free less than it estimated, never more.
+
 - **Long-term memory stopped recalling anything more than a few weeks old.**
   A memory entry's relevance score was multiplied by a weight that fell to
   zero as it aged, and the resulting product was what the similarity threshold
