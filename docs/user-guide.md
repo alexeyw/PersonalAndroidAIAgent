@@ -1498,9 +1498,11 @@ away.
 ### Searching memory
 
 Tap the search icon to open semantic search. Your query is embedded and
-the list is re-ranked by relevance — each result shows a 0–1 score, so a
-search for "berlin" surfaces the timezone note even though it never
-contains that word.
+the list is re-ranked by relevance, so a search for "berlin" surfaces the
+timezone note even though it never contains that word. Each result shows
+its ranking score: how well the entry matches, plus the small bonuses a
+recent or pinned entry earns — which is why a strong match can read
+slightly above 1.00.
 
 ### What the agent recalls in a background run
 

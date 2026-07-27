@@ -26,8 +26,10 @@ import kotlin.math.pow
  *     of every non-pinned chunk, and are **exempt from the threshold filter**,
  *     so a deliberately curated fact is always surfaced ("always at the top").
  *  4. **Threshold filter, then near-duplicate collapse** — non-pinned chunks
- *     below the caller's threshold are dropped, and among the survivors any
- *     chunk whose embedding is within
+ *     whose **raw similarity** (not their bonused score — a bonus must never
+ *     buy admission) falls below the caller's threshold are dropped before
+ *     anything else, and among the survivors any chunk whose embedding is
+ *     within
  *     [MemoryVectorSimilarity.NEAR_DUPLICATE_THRESHOLD] of an already-kept,
  *     better-ranked chunk is collapsed into it.
  *
