@@ -7429,7 +7429,7 @@
 
     /** Reduces any document to the pure single-pipeline shape used in a bundle. */
     function toPurePipelineDoc(doc) {
-        return {
+        const pure = {
             schemaVersion: doc.schemaVersion || CURRENT_SCHEMA_VERSION,
             id: doc.id,
             name: doc.name || 'Untitled pipeline',
@@ -7437,6 +7437,17 @@
             nodes: doc.nodes || [],
             connections: doc.connections || [],
         };
+        // Optional pipeline-level fields are carried, not rebuilt away: this
+        // function is the bundle's normalizer, and anything it forgets is
+        // silently lost for every pipeline in the closure — including the
+        // imported preset documents that supply `samplePrompts`.
+        if (typeof doc.memoryRetrievalQuery === 'string' && doc.memoryRetrievalQuery.trim()) {
+            pure.memoryRetrievalQuery = doc.memoryRetrievalQuery;
+        }
+        if (Array.isArray(doc.samplePrompts) && doc.samplePrompts.length > 0) {
+            pure.samplePrompts = doc.samplePrompts;
+        }
+        return pure;
     }
 
     /** Collects the PIPELINE `targetPipelineId`s referenced by a document's nodes. */

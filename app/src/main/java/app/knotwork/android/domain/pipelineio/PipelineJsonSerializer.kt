@@ -55,9 +55,10 @@ import org.json.JSONObject
  * ```
  *
  * `samplePrompts` and `memoryRetrievalQuery` are optional pipeline-level
- * fields; both are omitted when unset and both decode to their defaults when
- * absent, so documents written before they existed parse unchanged and
- * `schemaVersion` stays `1`.
+ * fields. Both decode to their defaults when absent, so documents written
+ * before they existed parse unchanged and `schemaVersion` stays `1`.
+ * `samplePrompts` is always emitted (as `[]` when there are none);
+ * `memoryRetrievalQuery` is emitted only when actually declared.
  *
  * ### Rich per-node config (`nodeConfig`)
  *
@@ -120,10 +121,14 @@ object PipelineJsonSerializer {
 
         root.put("samplePrompts", PipelineSamplePromptJson.encodeToArray(graph.samplePrompts))
 
-        // Optional pipeline-level field: emitted only when declared, so a
-        // pipeline that does not use it produces byte-identical output to
-        // pre-field builds (and hand-written documents stay minimal).
-        graph.memoryRetrievalQuery?.let { root.put("memoryRetrievalQuery", it) }
+        // Optional pipeline-level field: emitted only when actually declared, so
+        // a pipeline that does not use it produces byte-identical output to
+        // pre-field builds (and hand-written documents stay minimal). Blank is
+        // skipped too — it round-trips to null anyway (`optStringOrNull`), and
+        // writing an empty key would suggest a declaration that does not exist.
+        graph.memoryRetrievalQuery
+            ?.takeIf { it.isNotBlank() }
+            ?.let { root.put("memoryRetrievalQuery", it) }
 
         return root.toString()
     }

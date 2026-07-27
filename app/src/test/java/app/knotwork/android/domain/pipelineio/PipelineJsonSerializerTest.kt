@@ -199,6 +199,15 @@ class PipelineJsonSerializerTest {
     }
 
     @Test
+    fun `serialize omits the memory retrieval query key when it is blank`() {
+        // Blank is "not declared" everywhere else (resolver, validator), so the
+        // document must not claim a declaration the runtime will ignore.
+        val json = PipelineJsonSerializer.serialize(sampleGraph.copy(memoryRetrievalQuery = "   "))
+
+        assertFalse(JSONObject(json).has("memoryRetrievalQuery"))
+    }
+
+    @Test
     fun `parse tolerates a document without a memory retrieval query key by yielding null`() {
         // Backward compatibility: pre-field documents decode to "declares
         // nothing", which is exactly their previous runtime behaviour.
