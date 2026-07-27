@@ -1,6 +1,7 @@
 package app.knotwork.android.domain.services
 
 import app.knotwork.android.domain.models.MemoryChunk
+import app.knotwork.android.domain.models.MemorySource
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -41,12 +42,14 @@ class MemoryRerankerTest {
         timestamp: Long = now,
         isPinned: Boolean = false,
         embedding: FloatArray = unit(id * DISTINCT_ANGLE_DEGREES),
+        source: MemorySource = MemorySource.Manual,
     ): MemoryChunk = MemoryChunk(
         id = id,
         text = text,
         embedding = embedding,
         timestamp = timestamp,
         isPinned = isPinned,
+        source = source,
     )
 
     // region recency bonus
@@ -306,6 +309,129 @@ class MemoryRerankerTest {
         )
 
         assertEquals(listOf(1L, 2L), result.map { it.first.id })
+    }
+
+    // endregion
+
+    // region verbatim beats derived summaries
+
+    @Test
+    fun `given a summary whose source chunk is in the pool when reranked then the summary is dropped`() {
+        // The summary is fresher and scores higher, but chunk 1 is the verbatim
+        // fact it was distilled from — the source must win regardless.
+        val original = chunk(id = 1, timestamp = now - 90 * DAY)
+        val summary = chunk(
+            id = 7,
+            timestamp = now,
+            embedding = unit(90.0),
+            source = MemorySource.Compaction(originalChunkIds = listOf(1L, 2L)),
+        )
+
+        val result = reranker.rerank(
+            candidates = listOf(summary to 0.9f, original to 0.8f),
+            nowMillis = now,
+            halfLifeDays = 30,
+            threshold = 0f,
+            limit = 5,
+        )
+
+        assertEquals(listOf(1L), result.map { it.first.id })
+    }
+
+    @Test
+    fun `given a summary restating a verbatim chunk when reranked then the verbatim chunk survives`() {
+        // No provenance link (the sources were deleted long ago), but an
+        // equivalent fact was learned again since: 2 degrees apart is well above
+        // the near-duplicate threshold.
+        val verbatim = chunk(id = 1, timestamp = now - 90 * DAY, embedding = unit(0.0))
+        val summary = chunk(
+            id = 7,
+            timestamp = now,
+            embedding = unit(2.0),
+            source = MemorySource.Compaction(originalChunkIds = listOf(41L, 42L)),
+        )
+
+        val result = reranker.rerank(
+            candidates = listOf(summary to 0.9f, verbatim to 0.9f),
+            nowMillis = now,
+            halfLifeDays = 30,
+            threshold = 0f,
+            limit = 5,
+        )
+
+        assertEquals(listOf(1L), result.map { it.first.id })
+    }
+
+    @Test
+    fun `given a pinned summary whose source is in the pool when reranked then the summary is kept`() {
+        // Pinning is an explicit user statement; no automatic rule overrules it.
+        val original = chunk(id = 1, timestamp = now - 90 * DAY)
+        val summary = chunk(
+            id = 7,
+            timestamp = now,
+            isPinned = true,
+            embedding = unit(90.0),
+            source = MemorySource.Compaction(originalChunkIds = listOf(1L)),
+        )
+
+        val result = reranker.rerank(
+            candidates = listOf(summary to 0.9f, original to 0.8f),
+            nowMillis = now,
+            halfLifeDays = 30,
+            threshold = 0f,
+            limit = 5,
+        )
+
+        assertEquals(listOf(7L, 1L), result.map { it.first.id })
+    }
+
+    @Test
+    fun `given a summary whose sources are gone when reranked then it is retained`() {
+        // The normal case after a compaction pass: the summary is the only copy
+        // of those facts, so suppressing it would lose them.
+        val unrelated = chunk(id = 1, timestamp = now - 90 * DAY, embedding = unit(0.0))
+        val summary = chunk(
+            id = 7,
+            timestamp = now,
+            embedding = unit(90.0),
+            source = MemorySource.Compaction(originalChunkIds = listOf(41L, 42L)),
+        )
+
+        val result = reranker.rerank(
+            candidates = listOf(summary to 0.9f, unrelated to 0.8f),
+            nowMillis = now,
+            halfLifeDays = 30,
+            threshold = 0f,
+            limit = 5,
+        )
+
+        assertEquals(listOf(7L, 1L), result.map { it.first.id })
+    }
+
+    @Test
+    fun `given only summaries in the pool when reranked then none is suppressed`() {
+        // Two summaries that happen to share provenance ids must not cannibalise
+        // each other — the rule prefers verbatim sources, not older summaries.
+        val first = chunk(
+            id = 7,
+            embedding = unit(0.0),
+            source = MemorySource.Compaction(originalChunkIds = listOf(1L)),
+        )
+        val second = chunk(
+            id = 8,
+            embedding = unit(90.0),
+            source = MemorySource.Compaction(originalChunkIds = listOf(7L)),
+        )
+
+        val result = reranker.rerank(
+            candidates = listOf(first to 0.9f, second to 0.8f),
+            nowMillis = now,
+            halfLifeDays = 30,
+            threshold = 0f,
+            limit = 5,
+        )
+
+        assertEquals(listOf(7L, 8L), result.map { it.first.id })
     }
 
     // endregion

@@ -304,7 +304,7 @@ flowchart TB
         Key --> Retrieve[RetrieveRelevantMemoryUseCase]
         Retrieve --> Search[findSimilarMemories<br/>cosine over the full table]
         Store --> Search
-        Search --> Rerank[MemoryReranker<br/>threshold · recency bonus<br/>pinned boost · near-duplicate collapse]
+        Search --> Rerank[MemoryReranker<br/>threshold · recency bonus · pinned boost<br/>verbatim over summaries · near-duplicate collapse]
         Rerank --> Console[ConsoleEvent.MemoryAccess<br/>+ recordUsage]
         Console --> Block[NodeContextBuilder<br/>--- Long-Term Memory ---]
         Block --> LLM[Node executor → LLM]
@@ -314,8 +314,10 @@ flowchart TB
         Worker[MemoryCompactionWorker<br/>daily · or maxMemoryChunks watch] --> Compact[MemoryCompactionUseCase]
         Store --> Compact
         Compact --> Cluster[KMeansClusterer<br/>k = √N / 2]
-        Cluster --> Consolidate[LLM consolidates clusters ≥ 3<br/>→ MemorySource.Compaction<br/>pinned chunks exempt]
-        Consolidate --> Store
+        Cluster --> Consolidate[LLM consolidates clusters ≥ 3<br/>pinned chunks exempt]
+        Consolidate --> Verify[CompactionCoverageVerifier<br/>summary vs cluster centroid]
+        Verify --> Replace[replaceWithConsolidated<br/>→ MemorySource.Compaction<br/>only verified originals deleted]
+        Replace --> Store
     end
 ```
 
@@ -340,7 +342,16 @@ Key invariants:
    same full-pool rule applies to the extraction dedup check. The pool stays
    bounded by the compaction hard-limit (`maxMemoryChunks`), which is the
    explicit performance cap.
-5. **One similarity metric.** Search, extraction dedup, retrieval-side
+5. **A summary never silently replaces a fact.** Compaction deletes only the
+   cluster members its generated summary is *verified* to cover
+   (`CompactionCoverageVerifier`: at least as close to each member as the
+   cluster's own centroid, within a small margin), and writes the summary plus
+   those deletions in a single transaction. Members the summary failed to cover
+   stay stored verbatim; a summary covering fewer than two members is discarded
+   entirely. On the read side the same contract holds in reverse — a summary is
+   dropped from the results whenever the source it was distilled from, or a
+   verbatim restatement of it, is retrievable.
+6. **One similarity metric.** Search, extraction dedup, retrieval-side
    near-duplicate collapse and compaction clustering all go through
    `MemoryVectorSimilarity`, which also owns the near-duplicate threshold —
    so no stage can treat as novel what another stage treats as a duplicate.

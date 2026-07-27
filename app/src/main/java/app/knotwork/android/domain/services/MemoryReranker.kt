@@ -1,6 +1,7 @@
 package app.knotwork.android.domain.services
 
 import app.knotwork.android.domain.models.MemoryChunk
+import app.knotwork.android.domain.models.MemorySource
 import javax.inject.Inject
 import kotlin.math.pow
 
@@ -12,7 +13,7 @@ import kotlin.math.pow
  * Pure cosine similarity is a blunt instrument: a stale chunk can outrank a
  * fresh one purely on lexical overlap, restatements of one fact clutter the
  * limited context budget, and user-pinned facts are treated no differently from
- * noise. This service layers four deterministic rules on top of the raw scores
+ * noise. This service layers five deterministic rules on top of the raw scores
  * to fix that, each of which is independently unit-testable:
  *
  *  1. **Additive scoring** — `final = similarity + recencyBonus + pinnedBoost`.
@@ -25,7 +26,12 @@ import kotlin.math.pow
  *  3. **Pinned boost** — pinned chunks receive a flat [PINNED_BOOST], sort ahead
  *     of every non-pinned chunk, and are **exempt from the threshold filter**,
  *     so a deliberately curated fact is always surfaced ("always at the top").
- *  4. **Threshold filter, then near-duplicate collapse** — non-pinned chunks
+ *  4. **Verbatim beats derived** — a consolidation summary
+ *     ([MemorySource.Compaction]) is dropped when the memory it was distilled
+ *     from is itself in the pool, either by provenance (one of its
+ *     `originalChunkIds` is present) or by meaning (a non-derived chunk
+ *     restates it). The source outranks the paraphrase regardless of score.
+ *  5. **Threshold filter, then near-duplicate collapse** — non-pinned chunks
  *     whose **raw similarity** (not their bonused score — a bonus must never
  *     buy admission) falls below the caller's threshold are dropped before
  *     anything else, and among the survivors any chunk whose embedding is
@@ -41,6 +47,17 @@ import kotlin.math.pow
  * the additive model the threshold judges relevance alone, so an old but
  * genuinely relevant chunk stays retrievable indefinitely, while a fresh chunk
  * of equal relevance still wins the ordering.
+ *
+ * **Why a summary must never outrank its source.** Compaction summaries are
+ * written by a small on-device model at consolidation time, so they are always
+ * *newer* than the facts they replace and would win the recency bonus against
+ * them. Left alone, a paraphrase — the one kind of chunk that can be subtly
+ * wrong — would displace the verbatim wording whenever both are retrievable.
+ * The compaction pass already refuses to delete facts its summary cannot be
+ * shown to cover
+ * ([app.knotwork.android.domain.services.CompactionCoverageVerifier]); this
+ * rule is the read-side half of the same contract, and the one that also covers
+ * summaries whose sources came back through an import.
  *
  * **Why duplicates are detected by embedding, not by text prefix.** Collapsing
  * chunks that share their first N characters both over- and under-merges:
@@ -92,7 +109,61 @@ class MemoryReranker @Inject constructor() {
                     .thenByDescending { it.second },
             )
 
-        return collapseNearDuplicates(ranked, limit)
+        return collapseNearDuplicates(suppressSupersededSummaries(ranked), limit)
+    }
+
+    /**
+     * Drops every consolidation summary whose own source material is present in
+     * [ranked], so the verbatim fact — not the model's rewrite of it — is what
+     * reaches the prompt.
+     *
+     * A summary counts as superseded when either link holds:
+     *  - **provenance** — one of its [MemorySource.Compaction.originalChunkIds]
+     *    is among the candidates, which is what makes those ids a live link
+     *    rather than a historical note; or
+     *  - **meaning** — some non-derived candidate restates it (embedding cosine
+     *    at or above [MemoryVectorSimilarity.NEAR_DUPLICATE_THRESHOLD]), which
+     *    catches the common case where the summary's sources are long deleted
+     *    but an equivalent fact was learned again since.
+     *
+     * Running this *before* the collapse rather than inside it is deliberate:
+     * the collapse is a greedy top-K walk, so resolving the conflict there
+     * would depend on where the two chunks happened to land relative to the
+     * cut-off. Here the decision is made over the full threshold-survivor list
+     * and neither the ordering nor the collapse's early exit is disturbed.
+     *
+     * Pinned summaries are exempt. Pinning is an explicit user statement that
+     * this exact entry must always surface, and no automatic rule may quietly
+     * overrule it.
+     *
+     * Accepted cost: the surviving source is judged retrievable, not
+     * guaranteed *returned* — if it happens to rank below the top-K while the
+     * summary ranked inside it, this query surfaces neither. Preferring the
+     * verbatim wording is worth that occasional miss, and the alternative
+     * (substituting the source into the summary's slot) buys it by making the
+     * kept set depend on where the two chunks fell relative to the cut-off.
+     *
+     * @param ranked Threshold survivors, already ordered best-first.
+     * @return The same list minus the superseded summaries (order preserved).
+     */
+    private fun suppressSupersededSummaries(ranked: List<Pair<MemoryChunk, Float>>): List<Pair<MemoryChunk, Float>> {
+        val verbatim = ranked.filter { it.first.source !is MemorySource.Compaction }
+        // Nothing derived to drop, or nothing verbatim to prefer over it.
+        if (verbatim.isEmpty() || verbatim.size == ranked.size) return ranked
+
+        val verbatimIds = verbatim.mapTo(HashSet()) { it.first.id }
+        return ranked.filterNot { (chunk, _) ->
+            val source = chunk.source
+            source is MemorySource.Compaction &&
+                !chunk.isPinned &&
+                (
+                    source.originalChunkIds.any { it in verbatimIds } ||
+                        verbatim.any { (candidate, _) ->
+                            MemoryVectorSimilarity.cosine(chunk.embedding, candidate.embedding) >=
+                                MemoryVectorSimilarity.NEAR_DUPLICATE_THRESHOLD
+                        }
+                    )
+        }
     }
 
     /**
