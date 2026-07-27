@@ -235,9 +235,17 @@ class PipelinePresetCatalogValidationTest {
                     // own outgoing edges and falls back to the FIRST edge when
                     // nothing matches, so the editor-facing declaration has to
                     // agree with the wiring on both counts.
-                    val edgeLabels = preset.graph.connections
-                        .filter { it.sourceNodeId == node.id }
-                        .mapNotNull { it.label }
+                    val edges = preset.graph.connections.filter { it.sourceNodeId == node.id }
+                    // Every branch must be labelled first: the runtime's fallback is
+                    // the first *edge*, not the first labelled one, so an unlabelled
+                    // branch would make the fallback assertion below claim something
+                    // that is not true of the wiring.
+                    assertTrue(
+                        "INTENT_ROUTER \"${node.id}\" in ${file.name} has an unlabelled outgoing edge — " +
+                            "the model cannot be constrained to a branch that has no label.",
+                        edges.all { !it.label.isNullOrBlank() },
+                    )
+                    val edgeLabels = edges.mapNotNull { it.label }
                     val envelope = JSONObject(node.configJson.orEmpty())
                     val declared = envelope.optJSONArray("classes")
                         ?.let { array -> (0 until array.length()).map { array.getJSONObject(it).optString("name") } }
