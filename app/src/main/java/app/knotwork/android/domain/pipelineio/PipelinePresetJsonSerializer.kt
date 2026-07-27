@@ -78,7 +78,7 @@ object PipelinePresetJsonSerializer {
         root.put("tags", tagsJson)
 
         // Emitted only when set: `internal` is a bundled-catalogue concern, and
-        // every user-facing export would otherwise carry a always-false flag.
+        // every user-facing export would otherwise carry an always-false flag.
         if (preset.isInternal) root.put("internal", true)
 
         return root.toString()
