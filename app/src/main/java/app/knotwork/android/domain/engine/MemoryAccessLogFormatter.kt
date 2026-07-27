@@ -38,19 +38,31 @@ object MemoryAccessLogFormatter {
     /**
      * Builds the console message for one memory retrieval.
      *
-     * @param query The original user prompt the memory was retrieved for. Newlines
-     *   are collapsed to spaces and the result is truncated to [QUERY_MAX_LENGTH].
+     * @param query The text the memory was actually retrieved for — not necessarily
+     *   the user prompt, see [source]. Newlines are collapsed to spaces and the
+     *   result is truncated to [QUERY_MAX_LENGTH].
+     * @param source Which rule produced [query] (`DESCRIPTION.md` §6.10.1). Always
+     *   rendered, including for the interactive default: a background run that
+     *   searched the wrong thing is only debuggable if the line says where its key
+     *   came from, and one unconditional format keeps the console parseable.
      * @param hits The scored hits returned by the retrieval, in result order
      *   (best first). Each pair is the chunk and its final post-rerank score.
      * @param verbose When `true`, append one indented snippet line per hit.
      * @return A single (possibly multi-line) message ready to drop into a
      *   `ConsoleEvent`.
      */
-    fun format(query: String, hits: List<Pair<MemoryChunk, Float>>, verbose: Boolean): String {
+    fun format(
+        query: String,
+        source: RetrievalQuerySource,
+        hits: List<Pair<MemoryChunk, Float>>,
+        verbose: Boolean,
+    ): String {
         val header = buildString {
             append("Memory: query='")
             append(truncate(collapseWhitespace(query), QUERY_MAX_LENGTH))
-            append("' → ")
+            append("' [")
+            append(label(source))
+            append("] → ")
             append(hits.size)
             append(" hits")
             if (hits.isNotEmpty()) {
@@ -67,6 +79,13 @@ object MemoryAccessLogFormatter {
         }.joinToString("\n")
 
         return "$header\n$detail"
+    }
+
+    /** Human-readable tag for the rule that chose the retrieval key. */
+    private fun label(source: RetrievalQuerySource): String = when (source) {
+        RetrievalQuerySource.DECLARED -> "pipeline-declared"
+        RetrievalQuerySource.NODE_INPUT -> "node input"
+        RetrievalQuerySource.USER_PROMPT -> "user prompt"
     }
 
     /** Formats a similarity score to two fixed decimals with a dot separator. */

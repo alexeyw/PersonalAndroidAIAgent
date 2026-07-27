@@ -334,6 +334,11 @@ class TaskQueueManagerImpl @Inject constructor(
                 resume,
                 imageInput = imageInput,
                 runHadImage = runHadImage,
+                // Carries the surface that started the run into the engine so a
+                // background run can pick a meaningful long-term-memory
+                // retrieval key instead of its generic authored prompt
+                // (DESCRIPTION.md §6.10.1).
+                origin = task.origin,
             )
                 .collect { state ->
                     // Terminal engine states are mirrored into the persistent run

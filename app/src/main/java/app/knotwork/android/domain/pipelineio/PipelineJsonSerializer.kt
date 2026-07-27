@@ -48,9 +48,16 @@ import org.json.JSONObject
  *   ],
  *   "connections": [
  *     { "id": "conn-1", "fromNodeId": "node-1", "toNodeId": "node-2", "label": "" }
- *   ]
+ *   ],
+ *   "samplePrompts": [ … ],
+ *   "memoryRetrievalQuery": "journal entries around $DATE"
  * }
  * ```
+ *
+ * `samplePrompts` and `memoryRetrievalQuery` are optional pipeline-level
+ * fields; both are omitted when unset and both decode to their defaults when
+ * absent, so documents written before they existed parse unchanged and
+ * `schemaVersion` stays `1`.
  *
  * ### Rich per-node config (`nodeConfig`)
  *
@@ -112,6 +119,11 @@ object PipelineJsonSerializer {
         root.put("connections", connectionsJson)
 
         root.put("samplePrompts", PipelineSamplePromptJson.encodeToArray(graph.samplePrompts))
+
+        // Optional pipeline-level field: emitted only when declared, so a
+        // pipeline that does not use it produces byte-identical output to
+        // pre-field builds (and hand-written documents stay minimal).
+        graph.memoryRetrievalQuery?.let { root.put("memoryRetrievalQuery", it) }
 
         return root.toString()
     }
@@ -243,6 +255,11 @@ object PipelineJsonSerializer {
         // schema-version-1 forward-compatibility contract.
         val samplePrompts = PipelineSamplePromptJson.decodeFromArray(root.optJSONArray("samplePrompts"))
 
+        // Same additive contract: an absent key means "declares no background
+        // retrieval query", which is exactly how every pre-field document
+        // behaves at runtime.
+        val memoryRetrievalQuery = root.optStringOrNull("memoryRetrievalQuery")
+
         return PipelineGraph(
             id = id,
             name = name,
@@ -250,6 +267,7 @@ object PipelineJsonSerializer {
             connections = connections,
             updatedAt = updatedAt,
             samplePrompts = samplePrompts,
+            memoryRetrievalQuery = memoryRetrievalQuery,
         )
     }
 

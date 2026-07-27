@@ -43,6 +43,7 @@ import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.ResumeContext
 import app.knotwork.android.domain.models.Role
+import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.ToolApprovalPolicy
 import app.knotwork.android.domain.models.ToolRisk
@@ -119,6 +120,12 @@ class GraphExecutionEngineTest {
     private lateinit var pipelineRepository: PipelineRepository
 
     private lateinit var engine: GraphExecutionEngine
+
+    // Retained from setup() so a test that needs a differently-wired engine
+    // (e.g. with prompt-variable providers) can rebuild just the engine instead
+    // of re-assembling the whole executor factory.
+    private lateinit var nodeExecutorFactory: NodeExecutorFactory
+    private lateinit var toolNodeExecutor: ToolNodeExecutor
     private lateinit var promptTemplateEngine: PromptTemplateEngine
     private var promptVariableProviders: Set<PromptVariableProvider> = emptySet()
 
@@ -175,7 +182,7 @@ class GraphExecutionEngineTest {
         val ifConditionNodeExecutor = IfConditionNodeExecutor(evaluateIfConditionUseCase)
         val queueProcessorNodeExecutor = QueueProcessorNodeExecutor()
 
-        val toolNodeExecutor = ToolNodeExecutor(
+        toolNodeExecutor = ToolNodeExecutor(
             llmEngine,
             loadModelUseCase,
             toolRepository,
@@ -248,7 +255,7 @@ class GraphExecutionEngineTest {
 
         skillNodeExecutor = mockk(relaxed = true)
 
-        val nodeExecutorFactory = NodeExecutorFactory(
+        nodeExecutorFactory = NodeExecutorFactory(
             inputNodeExecutor, outputNodeExecutor, ifConditionNodeExecutor,
             toolNodeExecutor, liteRtNodeExecutor, cloudLlmNodeExecutor,
             systemNodeExecutor, queueProcessorNodeExecutor, summaryNodeExecutor,
@@ -2310,7 +2317,7 @@ class GraphExecutionEngineTest {
 
         // Terse format (verbose off): single line with query echo, hit count and scores.
         assertEquals(
-            "Memory: query='what is my UI preference' → 2 hits (0.90, 0.40)",
+            "Memory: query='what is my UI preference' [user prompt] → 2 hits (0.90, 0.40)",
             memEvent.message,
         )
     }
@@ -2346,7 +2353,7 @@ class GraphExecutionEngineTest {
 
         assertTrue(
             "Missing header line: ${memEvent.message}",
-            memEvent.message.startsWith("Memory: query='prefs' → 1 hits (0.90)"),
+            memEvent.message.startsWith("Memory: query='prefs' [user prompt] → 1 hits (0.90)"),
         )
         assertTrue(
             "Missing per-hit snippet: ${memEvent.message}",
@@ -3069,6 +3076,228 @@ class GraphExecutionEngineTest {
             )
         }
     }
+
+    // region Long-term-memory retrieval key (RunOrigin contract, DESCRIPTION.md 6.10.1)
+    //
+    // An interactive run keys retrieval off the user's message, as it always
+    // has. A background run's prompt is authored once and describes no
+    // particular firing, so it prefers the pipeline's declared query and then
+    // the first memory-aware node's own input.
+
+    /** Graph shape: INPUT -> LITE_RT(memory) -> OUTPUT, optionally declaring a retrieval query. */
+    private fun memoryAwareGraph(id: String, declaredQuery: String? = null): PipelineGraph = PipelineGraph(
+        id = id,
+        name = "Memory Key",
+        nodes = listOf(
+            NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+            NodeModel(
+                id = "llm_1",
+                type = NodeType.LITE_RT,
+                x = 10f,
+                y = 0f,
+                contextConfig = NodeContextConfig(
+                    chatHistory = false,
+                    originalTask = false,
+                    nodeInput = false,
+                    longTermMemory = true,
+                    toolResults = false,
+                ),
+            ),
+            NodeModel("output_1", NodeType.OUTPUT, 20f, 0f, systemPrompt = null),
+        ),
+        connections = listOf(
+            ConnectionModel("c1", "input_1", "llm_1"),
+            ConnectionModel("c2", "llm_1", "output_1"),
+        ),
+        memoryRetrievalQuery = declaredQuery,
+    )
+
+    @Test
+    fun `given an interactive run when memory is resolved then it keys off the user prompt`() = runTest {
+        // Regression guard: the interactive path must be byte-for-byte what it
+        // was before the origin-aware key existed, declared query or not.
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("ok")
+        val graph = memoryAwareGraph("g-interactive", declaredQuery = "journal entries")
+
+        engine(sessionId, "what did I say about Berlin?", graph).toList()
+
+        coVerify(exactly = 1) { retrieveRelevantMemoryUseCase.retrieveScored("what did I say about Berlin?") }
+    }
+
+    @Test
+    fun `given a trigger run with a declared query when memory is resolved then it keys off the declaration`() =
+        runTest {
+            every { llmEngine.generateResponseStream(any()) } returns flowOf("ok")
+            val graph = memoryAwareGraph("g-trigger", declaredQuery = "evening journal entries, mood")
+
+            engine(
+                sessionId,
+                "write the evening journal entry",
+                graph,
+                origin = RunOrigin.TRIGGER,
+            ).toList()
+
+            coVerify(exactly = 1) {
+                retrieveRelevantMemoryUseCase.retrieveScored("evening journal entries, mood")
+            }
+            coVerify(exactly = 0) {
+                retrieveRelevantMemoryUseCase.retrieveScored("write the evening journal entry")
+            }
+        }
+
+    @Test
+    fun `given a trigger run without a declared query when memory is resolved then it keys off the node input`() =
+        runTest {
+            // The memory-aware node sits behind another LITE_RT, so its input is
+            // that node's output — richer than the generic authored prompt.
+            every { llmEngine.generateResponseStream(any()) } returns flowOf("today: shipped the journal, ran 8 km")
+            val graph = PipelineGraph(
+                id = "g-node-input",
+                name = "Node Input Key",
+                nodes = listOf(
+                    NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                    // Explicitly memory-free: NodeModel defaults to ALL_ENABLED,
+                    // which would make *this* node the first memory-aware one.
+                    NodeModel(
+                        id = "llm_a",
+                        type = NodeType.LITE_RT,
+                        x = 10f,
+                        y = 0f,
+                        contextConfig = NodeContextConfig(
+                            chatHistory = false,
+                            originalTask = false,
+                            nodeInput = true,
+                            longTermMemory = false,
+                            toolResults = false,
+                        ),
+                    ),
+                    NodeModel(
+                        id = "llm_b",
+                        type = NodeType.LITE_RT,
+                        x = 20f,
+                        y = 0f,
+                        contextConfig = NodeContextConfig(
+                            chatHistory = false,
+                            originalTask = false,
+                            nodeInput = false,
+                            longTermMemory = true,
+                            toolResults = false,
+                        ),
+                    ),
+                    NodeModel("output_1", NodeType.OUTPUT, 30f, 0f, systemPrompt = null),
+                ),
+                connections = listOf(
+                    ConnectionModel("c1", "input_1", "llm_a"),
+                    ConnectionModel("c2", "llm_a", "llm_b"),
+                    ConnectionModel("c3", "llm_b", "output_1"),
+                ),
+            )
+
+            engine(sessionId, "write the evening journal entry", graph, origin = RunOrigin.TRIGGER).toList()
+
+            coVerify(exactly = 1) {
+                retrieveRelevantMemoryUseCase.retrieveScored("today: shipped the journal, ran 8 km")
+            }
+        }
+
+    @Test
+    fun `given a trigger run with two memory-aware nodes when executed then retrieval still runs exactly once`() =
+        runTest {
+            // The cost guarantee: the origin-aware key is resolved inside the
+            // existing memoization, so a run never pays for a second embedding.
+            every { llmEngine.generateResponseStream(any()) } returns flowOf("ok")
+            val memoryContext = NodeContextConfig(
+                chatHistory = false,
+                originalTask = false,
+                nodeInput = false,
+                longTermMemory = true,
+                toolResults = false,
+            )
+            val graph = PipelineGraph(
+                id = "g-once",
+                name = "Once",
+                nodes = listOf(
+                    NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                    NodeModel("llm_a", NodeType.LITE_RT, 10f, 0f, contextConfig = memoryContext),
+                    NodeModel("llm_b", NodeType.LITE_RT, 20f, 0f, contextConfig = memoryContext),
+                    NodeModel("output_1", NodeType.OUTPUT, 30f, 0f, systemPrompt = null),
+                ),
+                connections = listOf(
+                    ConnectionModel("c1", "input_1", "llm_a"),
+                    ConnectionModel("c2", "llm_a", "llm_b"),
+                    ConnectionModel("c3", "llm_b", "output_1"),
+                ),
+                memoryRetrievalQuery = "evening journal entries",
+            )
+
+            engine(sessionId, "write the entry", graph, origin = RunOrigin.TRIGGER).toList()
+
+            coVerify(exactly = 1) { retrieveRelevantMemoryUseCase.retrieveScored(any()) }
+        }
+
+    @Test
+    fun `given a declared query with a placeholder when a trigger run resolves memory then it is rendered`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("ok")
+        val dateProvider = mockk<PromptVariableProvider>()
+        every { dateProvider.key() } returns "DATE"
+        coEvery { dateProvider.resolve() } returns "01 May 2026"
+        // Same collaborators, only the provider set differs — the declared
+        // query is a prompt template like any other.
+        val engineWithProviders = GraphExecutionEngine(
+            nodeExecutorFactory,
+            toolNodeExecutor,
+            chatRepository,
+            settingsRepository,
+            metricsRepository,
+            PromptTemplateEngine(),
+            setOf(dateProvider),
+            NodeContextBuilder(),
+            ChatHistoryWindowPlanner(),
+            retrieveRelevantMemoryUseCase,
+            crashReportingRepository,
+            localModelRepository,
+            memoryRepository,
+            pipelineRunRepository,
+            runTraceRepository,
+        )
+        val graph = memoryAwareGraph("g-placeholder", declaredQuery = "journal entries around \$DATE")
+
+        engineWithProviders(sessionId, "write the entry", graph, origin = RunOrigin.TRIGGER).toList()
+
+        coVerify(exactly = 1) {
+            retrieveRelevantMemoryUseCase.retrieveScored("journal entries around 01 May 2026")
+        }
+    }
+
+    @Test
+    fun `given a trigger run with a sub-pipeline when the nested node resolves memory then origin is inherited`() =
+        runTest {
+            every { llmEngine.generateResponseStream(any()) } returns flowOf("ok")
+            // The memory-aware node and the declared query both live in the child.
+            val subGraph = memoryAwareGraph("sub-memory", declaredQuery = "nested declared query")
+            coEvery { pipelineRepository.getPipelineById("sub-memory") } returns subGraph
+            val mainGraph = PipelineGraph(
+                id = "main-memory",
+                name = "MainMemory",
+                nodes = listOf(
+                    NodeModel("main_in", NodeType.INPUT, 0f, 0f),
+                    NodeModel("pipe", NodeType.PIPELINE, 10f, 0f, targetPipelineId = "sub-memory"),
+                    NodeModel("main_out", NodeType.OUTPUT, 20f, 0f, systemPrompt = null),
+                ),
+                connections = listOf(
+                    ConnectionModel("mc1", "main_in", "pipe"),
+                    ConnectionModel("mc2", "pipe", "main_out"),
+                ),
+            )
+
+            engine(sessionId, "write the entry", mainGraph, origin = RunOrigin.TRIGGER).toList()
+
+            // Had the sub-run defaulted to CHAT, it would have keyed off the prompt.
+            coVerify(exactly = 1) { retrieveRelevantMemoryUseCase.retrieveScored("nested declared query") }
+        }
+
+    // endregion
 
     // region Multimodal image delivery (end-to-end pipeline contract)
     //

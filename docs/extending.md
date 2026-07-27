@@ -843,6 +843,34 @@ resumable run), documents without it import fine (they decode to no
 suggestions), and a pipeline that declares none falls back to a generic,
 tool-agnostic card set on the empty state.
 
+A pipeline may also declare an optional top-level `memoryRetrievalQuery`
+string — the long-term-memory search key used by its **background** runs
+(automation trigger, schedule, Quick Settings tile):
+
+```json
+"memoryRetrievalQuery": "evening journal entries, mood and highlights around $DATE"
+```
+
+An interactive run searches memory with the user's own message, which is
+also the best possible search key. A background run has no such message:
+its prompt was written once by the pipeline author ("write the evening
+journal entry") and describes no particular firing, so searching for it
+returns whatever happens to sit near that generic sentence. The declared
+query replaces it. Write it as the *topic to recall*, not as an
+instruction; it is rendered through the prompt-variable engine, so `$DATE`
+and the other tokens from §5.2 work.
+
+Resolution order for a background run: declared query → the input of the
+first node that opts into long-term memory → the run's prompt. Interactive
+runs ignore the field entirely. Retrieval still happens **at most once per
+run**, so declaring a query costs nothing extra, and the console's
+`MEMORY` line names the rule that was applied (`[pipeline-declared]`,
+`[node input]`, `[user prompt]`). The field is additive: documents without
+it import fine, and it is excluded from `PipelineGraph.contentHash()`
+because a resumed run replays its persisted memory snapshot instead of
+searching again. Omit it for interactive-only pipelines and for pipelines
+whose nodes all have `longTermMemory: false`.
+
 Each node may also carry an optional `nodeConfig` object alongside `config`
 and `contextConfig` — the rich `NodeConfig` payload (the
 `NodeConfigCodec` envelope: `{ "v": 1, "type", "title", ...type-specific

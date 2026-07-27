@@ -119,6 +119,21 @@ class LoadPipelineFromPresetUseCaseTest {
     }
 
     @Test
+    fun `given preset with a declared memory query when invoke then the materialized pipeline keeps it`() = runTest {
+        // A materialized preset must behave like its template on background
+        // runs too — the declared retrieval key is not template-only metadata.
+        coEvery { presetRepository.getPresetById("local_only_qa") } returns
+            preset(graph = validGraph().copy(memoryRetrievalQuery = "evening journal entries"))
+        val saved = slot<PipelineGraph>()
+        coEvery { pipelineRepository.savePipeline(capture(saved)) } returns Unit
+
+        val result = useCase("local_only_qa")
+
+        assertTrue(result.isSuccess)
+        assertEquals("evening journal entries", saved.captured.memoryRetrievalQuery)
+    }
+
+    @Test
     fun `given preset with orphan connections when invoke then drops orphans and keeps the rest`() = runTest {
         val orphanedGraph = validGraph().copy(
             connections = listOf(

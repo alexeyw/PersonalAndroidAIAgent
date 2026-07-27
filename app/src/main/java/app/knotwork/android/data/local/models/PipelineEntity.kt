@@ -13,6 +13,10 @@ import app.knotwork.android.domain.models.PipelineSamplePrompt
  * @property samplePrompts Starter ("quick action") prompts this pipeline
  *   suggests on the new-chat empty state. Persisted as a JSON string via the
  *   `Converters` type converter; defaults to an empty list.
+ * @property memoryRetrievalQuery Long-term-memory search key declared for this
+ *   pipeline's background runs, or `null` when none is declared. Nullable rather
+ *   than empty-defaulted so "never declared" and "declared as empty" stay the
+ *   same state; see `PipelineGraph.memoryRetrievalQuery`.
  */
 @Entity(tableName = "pipelines")
 data class PipelineEntity(
@@ -21,4 +25,5 @@ data class PipelineEntity(
     val name: String,
     val updatedAt: Long = System.currentTimeMillis(),
     val samplePrompts: List<PipelineSamplePrompt> = emptyList(),
+    val memoryRetrievalQuery: String? = null,
 )
