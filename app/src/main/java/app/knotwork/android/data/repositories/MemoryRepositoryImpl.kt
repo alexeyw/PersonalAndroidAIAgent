@@ -9,6 +9,7 @@ import app.knotwork.android.domain.models.MemorySource
 import app.knotwork.android.domain.models.MemoryStats
 import app.knotwork.android.domain.models.MemorySummary
 import app.knotwork.android.domain.repositories.MemoryRepository
+import app.knotwork.android.domain.services.MemoryVectorSimilarity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -16,7 +17,6 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.sqrt
 
 /**
  * Implementation of [MemoryRepository] that uses Room as a local storage and performs
@@ -254,30 +254,17 @@ class MemoryRepositoryImpl @Inject constructor(private val memoryDao: MemoryDao,
     /**
      * Calculates the cosine similarity between two vectors.
      *
+     * Delegates to the domain-level [MemoryVectorSimilarity.cosine] so the
+     * search, extraction, re-ranking and compaction stages cannot drift onto
+     * subtly different metrics.
+     *
      * @param vectorA The first vector.
      * @param vectorB The second vector.
      * @return The cosine similarity score, ranging from -1.0 (opposite) to 1.0 (identical).
      *         Returns 0.0 if either vector has a magnitude of 0 or if their sizes don't match.
      */
-    internal fun cosineSimilarity(vectorA: FloatArray, vectorB: FloatArray): Float {
-        if (vectorA.size != vectorB.size || vectorA.isEmpty()) return 0f
-
-        var dotProduct = 0f
-        var normA = 0f
-        var normB = 0f
-
-        for (i in vectorA.indices) {
-            val a = vectorA[i]
-            val b = vectorB[i]
-            dotProduct += a * b
-            normA += a * a
-            normB += b * b
-        }
-
-        if (normA == 0f || normB == 0f) return 0f
-
-        return dotProduct / (sqrt(normA) * sqrt(normB))
-    }
+    internal fun cosineSimilarity(vectorA: FloatArray, vectorB: FloatArray): Float =
+        MemoryVectorSimilarity.cosine(vectorA, vectorB)
 
     private companion object {
         /**

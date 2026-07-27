@@ -304,7 +304,7 @@ flowchart TB
         Key --> Retrieve[RetrieveRelevantMemoryUseCase]
         Retrieve --> Search[findSimilarMemories<br/>cosine over the full table]
         Store --> Search
-        Search --> Rerank[MemoryReranker<br/>dedup · recency decay<br/>pinned boost · threshold]
+        Search --> Rerank[MemoryReranker<br/>threshold · recency bonus<br/>pinned boost · near-duplicate collapse]
         Rerank --> Console[ConsoleEvent.MemoryAccess<br/>+ recordUsage]
         Console --> Block[NodeContextBuilder<br/>--- Long-Term Memory ---]
         Block --> LLM[Node executor → LLM]
@@ -329,15 +329,21 @@ Key invariants:
    embedded with whatever produced the stored vectors; a mismatch (e.g. a
    chunk imported under a different provider) scores ~0 until re-embedded
    (see §2.1).
-3. **Pinned is sacred.** Pinned chunks bypass the recency decay and
-   threshold filter on retrieval and are never compaction candidates — the
-   one mechanism a user has to guarantee a fact stays findable.
+3. **Pinned is sacred.** Pinned chunks carry an extra boost, bypass the
+   threshold filter on retrieval, win any near-duplicate collapse they take
+   part in, and are never compaction candidates — the one mechanism a user
+   has to guarantee a fact stays findable.
 4. **Age never hides a fact.** `findSimilarMemories` scans the *entire*
    `memory_chunks` table on every query — there is no recency window on
-   visibility. Recency only *weights* candidates inside `MemoryReranker`'s
-   half-life decay, and the same full-pool rule applies to the extraction
-   dedup check. The pool stays bounded by the compaction hard-limit
-   (`maxMemoryChunks`), which is the explicit performance cap.
+   visibility — and `MemoryReranker` scores age as an **additive** bonus, so
+   no chunk can be pushed below the relevance threshold by getting old. The
+   same full-pool rule applies to the extraction dedup check. The pool stays
+   bounded by the compaction hard-limit (`maxMemoryChunks`), which is the
+   explicit performance cap.
+5. **One similarity metric.** Search, extraction dedup, retrieval-side
+   near-duplicate collapse and compaction clustering all go through
+   `MemoryVectorSimilarity`, which also owns the near-duplicate threshold —
+   so no stage can treat as novel what another stage treats as a duplicate.
 
 The on-device write path is covered end-to-end by the instrumented
 `MemoryLifecycleIntegrationTest` (extract → retrieve into the context block
@@ -392,9 +398,9 @@ which subset is enabled:
    `USER`/`AGENT` roles.
 3. `--- Long-Term Memory ---` — semantic-retrieval hits over past
    memory chunks. A vector search ranks chunks by cosine similarity;
-   `MemoryReranker` then re-scores the pool (recency decay, a pinned
-   boost, near-duplicate collapse, and a final-score threshold) before
-   the top-K hits are injected. The search key comes from
+   `MemoryReranker` then filters the pool by that similarity and re-scores
+   the survivors (an additive freshness bonus plus a pinned boost),
+   collapsing near-duplicates before the top-K hits are injected. The search key comes from
    `MemoryRetrievalQueryResolver`: the run prompt for interactive runs,
    and for background ones (trigger / schedule / tile) the pipeline's
    declared `memoryRetrievalQuery`, then this node's own input, then the

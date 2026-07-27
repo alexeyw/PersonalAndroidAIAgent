@@ -168,23 +168,12 @@ class KMeansClusterer @Inject constructor() {
     private fun cosineDistance(a: FloatArray, b: FloatArray): Float = 1f - cosineSimilarity(a, b)
 
     /**
-     * Cosine similarity between two equal-length vectors. Returns `0` for
-     * mismatched, empty, or zero-magnitude operands — mirroring the metric used
-     * across the rest of the memory subsystem.
+     * Cosine similarity between two equal-length vectors, delegated to
+     * [MemoryVectorSimilarity.cosine] — the single metric shared by every stage
+     * of the memory subsystem. Returns `0` for mismatched, empty, or
+     * zero-magnitude operands.
      */
-    private fun cosineSimilarity(a: FloatArray, b: FloatArray): Float {
-        if (a.size != b.size || a.isEmpty()) return 0f
-        var dot = 0f
-        var normA = 0f
-        var normB = 0f
-        for (i in a.indices) {
-            dot += a[i] * b[i]
-            normA += a[i] * a[i]
-            normB += b[i] * b[i]
-        }
-        if (normA == 0f || normB == 0f) return 0f
-        return dot / (sqrt(normA) * sqrt(normB))
-    }
+    private fun cosineSimilarity(a: FloatArray, b: FloatArray): Float = MemoryVectorSimilarity.cosine(a, b)
 
     private companion object {
         /**
