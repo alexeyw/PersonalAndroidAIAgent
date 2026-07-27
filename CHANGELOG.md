@@ -101,6 +101,30 @@ details.
 
 ### Fixed
 
+- **Long-term memory stopped recalling anything more than a few weeks old.**
+  A memory entry's relevance score was multiplied by a weight that fell to
+  zero as it aged, and the resulting product was what the similarity threshold
+  judged — so age worked as an expiry date rather than a preference. At the
+  default settings a perfectly on-topic entry was already scored out after one
+  half-life (30 days) and, past two, could not be recalled at any relevance,
+  even though the entry was still listed on the Memory screen and still
+  matched the query. Freshness is now a bonus added on top of relevance
+  instead of a multiplier applied to it: the threshold judges how well an
+  entry matches, nothing else, so an old but genuinely relevant entry stays
+  recallable indefinitely, while a fresher entry still wins when two match
+  equally well. The **Recency half-life** setting keeps its meaning — it is
+  how quickly that freshness bonus fades — and pinned entries are unaffected.
+- **Near-duplicate memory entries were detected by comparing their opening
+  characters.** Retrieval collapsed entries that shared their first 80
+  characters, which both merged and missed the wrong things: pipelines that
+  write with a fixed preamble (an evening journal, a translation log)
+  produced unrelated facts with identical openings and only one of them ever
+  reached the model, while the same fact saved twice in different words kept
+  two of the limited recall slots. Duplicates are now recognised by meaning,
+  using the same measure that already stops a duplicate from being stored in
+  the first place. A pinned entry always survives a merge, and an entry
+  waiting to be re-embedded is never merged into another.
+
 - **An approval tapped at the exact moment a background run gave up waiting
   could be ignored.** When nobody answers a tool-confirmation prompt in time,
   the run stops waiting live and parks so it can be approved later from the

@@ -21,8 +21,10 @@ import org.junit.Test
  *
  * A real [MemoryReranker] is used (it is a pure, dependency-free service) so
  * these double as integration coverage of the embed → search → re-rank → top-K
- * pipeline. Chunks are timestamped at "now" so recency decay leaves their
- * scores intact and the threshold assertions stay deterministic.
+ * pipeline. Chunks are timestamped at "now", so every one of them carries the
+ * full [FULL_RECENCY_BONUS] and the assertions stay deterministic; their
+ * embeddings are kept mutually dissimilar so the near-duplicate collapse only
+ * fires in the test that targets it.
  */
 class RetrieveRelevantMemoryUseCaseTest {
 
@@ -149,17 +151,18 @@ class RetrieveRelevantMemoryUseCaseTest {
         coEvery { provider.embed(query) } returns queryEmbedding
 
         val first = chunk(1, "user lives in Berlin", floatArrayOf(1f, 0f, 0f))
-        val second = chunk(2, "user moved from Munich", floatArrayOf(0.9f, 0.1f, 0f))
+        val second = chunk(2, "user plays the cello", floatArrayOf(0f, 1f, 0f))
         coEvery {
             memoryRepository.findSimilarMemories(queryEmbedding, limit = null)
         } returns listOf(first to 0.95f, second to 0.80f)
 
         val scored = useCase.retrieveScored(query)
 
-        // The scored variant keeps the (chunk, score) pairs best-first.
+        // The scored variant keeps the (chunk, score) pairs best-first, with the
+        // freshness bonus folded into the final score.
         assertEquals(listOf(first, second), scored.map { it.first })
-        assertEquals(0.95f, scored[0].second, 1e-4f)
-        assertEquals(0.80f, scored[1].second, 1e-4f)
+        assertEquals(0.95f + FULL_RECENCY_BONUS, scored[0].second, 1e-4f)
+        assertEquals(0.80f + FULL_RECENCY_BONUS, scored[1].second, 1e-4f)
         // The score-free façade returns the same chunks in the same order.
         assertEquals(listOf(first, second), useCase(query))
     }
@@ -170,8 +173,8 @@ class RetrieveRelevantMemoryUseCaseTest {
         val queryEmbedding = floatArrayOf(0.5f)
         coEvery { provider.embed(query) } returns queryEmbedding
 
-        val pinned = chunk(1, "pinned fact", floatArrayOf(0.5f), isPinned = true)
-        val strong = chunk(2, "strong but unpinned", floatArrayOf(0.5f))
+        val pinned = chunk(1, "pinned fact", floatArrayOf(1f, 0f), isPinned = true)
+        val strong = chunk(2, "strong but unpinned", floatArrayOf(0f, 1f))
         coEvery {
             memoryRepository.findSimilarMemories(queryEmbedding, limit = null)
         } returns listOf(strong to 0.90f, pinned to 0.30f)
@@ -189,8 +192,8 @@ class RetrieveRelevantMemoryUseCaseTest {
         val queryEmbedding = floatArrayOf(0.5f)
         coEvery { provider.embed(query) } returns queryEmbedding
 
-        val first = chunk(1, "fact", floatArrayOf(0.5f))
-        val second = chunk(2, "other", floatArrayOf(0.4f))
+        val first = chunk(1, "fact", floatArrayOf(1f, 0f))
+        val second = chunk(2, "other", floatArrayOf(0f, 1f))
         coEvery {
             memoryRepository.findSimilarMemories(queryEmbedding, limit = null)
         } returns listOf(first to 0.90f, second to 0.20f)
@@ -199,5 +202,33 @@ class RetrieveRelevantMemoryUseCaseTest {
 
         // Raw (pre-rerank) scores feed the AVG SCORE stat, best-first.
         coVerify(exactly = 1) { memorySearchStatsTracker.record(listOf(0.90f, 0.20f)) }
+    }
+
+    @Test
+    fun `given a restatement in the pool when invoked then the freed top-K slot goes to a distinct fact`() = runTest {
+        val query = "what is she allergic to?"
+        val queryEmbedding = floatArrayOf(1f, 0f)
+        coEvery { provider.embed(query) } returns queryEmbedding
+
+        val fact = chunk(1, "daughter is allergic to penicillin", floatArrayOf(1f, 0f))
+        // Near-identical vector, unrelated wording: only the embedding check
+        // catches this one.
+        val restatement = chunk(2, "penicillin triggers the daughter's allergy", floatArrayOf(0.99f, 0.14f))
+        val distinct = chunk(3, "she plays the cello on Tuesdays", floatArrayOf(0f, 1f))
+        coEvery {
+            memoryRepository.findSimilarMemories(queryEmbedding, limit = null)
+        } returns listOf(fact to 0.93f, restatement to 0.90f, distinct to 0.60f)
+
+        val result = useCase(query, limit = 2)
+
+        assertEquals(listOf(fact, distinct), result)
+    }
+
+    private companion object {
+        /**
+         * Recency bonus a chunk created "now" earns — the re-ranker's maximum,
+         * folded into every final score these tests assert on.
+         */
+        const val FULL_RECENCY_BONUS: Float = 0.15f
     }
 }

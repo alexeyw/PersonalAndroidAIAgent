@@ -14,9 +14,9 @@ import javax.inject.Inject
 /**
  * Use case for retrieving the most relevant long-term memories for a given user
  * query. It embeds the query into a vector, runs a cosine-similarity search
- * against the stored memory chunks, re-ranks the full scored pool through
- * [MemoryReranker] (recency weighting, pinned boost, deduplication, threshold
- * filtering), and returns the top-K survivors.
+ * against the stored memory chunks, and re-ranks the full scored pool through
+ * [MemoryReranker] (threshold filtering, recency bonus, pinned boost,
+ * near-duplicate collapse), which returns the top-K survivors.
  *
  * This is the query-string façade over the lower-level vector search
  * ([MemoryRepository.findSimilarMemories], which takes a raw embedding). It is
@@ -62,9 +62,10 @@ class RetrieveRelevantMemoryUseCase @Inject constructor(
      * @param limit Maximum number of memories to return. When `null` (the
      *   default), `SettingsRepository.memorySearchTopK` is used. Provided as an
      *   explicit override mainly for tests.
-     * @param threshold Minimum final (post-rerank) score a memory must reach to
-     *   be kept. Pinned chunks bypass this filter. When `null` (the default),
-     *   `SettingsRepository.memorySearchThreshold` is used.
+     * @param threshold Minimum raw similarity a memory must reach to be kept —
+     *   the recency and pinned bonuses reorder the survivors but never buy a
+     *   chunk past this gate. Pinned chunks bypass the filter. When `null` (the
+     *   default), `SettingsRepository.memorySearchThreshold` is used.
      * @return Relevant [MemoryChunk]s ordered best-first (pinned chunks first,
      *   then by descending final score), capped at the effective top-K.
      */
@@ -84,9 +85,10 @@ class RetrieveRelevantMemoryUseCase @Inject constructor(
      * @param query The text query (e.g. the user's message) to find context for.
      * @param limit Maximum number of memories to return. When `null` (the
      *   default), `SettingsRepository.memorySearchTopK` is used.
-     * @param threshold Minimum final (post-rerank) score a memory must reach to
-     *   be kept. Pinned chunks bypass this filter. When `null` (the default),
-     *   `SettingsRepository.memorySearchThreshold` is used.
+     * @param threshold Minimum raw similarity a memory must reach to be kept —
+     *   the recency and pinned bonuses reorder the survivors but never buy a
+     *   chunk past this gate. Pinned chunks bypass the filter. When `null` (the
+     *   default), `SettingsRepository.memorySearchThreshold` is used.
      * @return Relevant `(chunk, finalScore)` pairs ordered best-first (pinned
      *   chunks first, then by descending final score), capped at the effective
      *   top-K.
@@ -112,7 +114,7 @@ class RetrieveRelevantMemoryUseCase @Inject constructor(
 
         // Pull the full scored pool (not just the raw-cosine top-K) so the
         // re-ranker can promote a pinned or fresh chunk that the raw search
-        // would have left just outside the top-K. Top-K is applied last.
+        // would have left just outside the top-K.
         memoryRepository.findSimilarMemories(queryEmbedding)
             .also { candidates ->
                 // Pre-trim to the tracker's sample size: the pool can hold
@@ -123,13 +125,16 @@ class RetrieveRelevantMemoryUseCase @Inject constructor(
                 )
             }
             .let { candidates ->
+                // Top-K is applied by the re-ranker itself: the near-duplicate
+                // collapse has to see the full pool but only needs to run until
+                // K chunks survive, so the cap and the collapse are one step.
                 memoryReranker.rerank(
                     candidates = candidates,
                     nowMillis = System.currentTimeMillis(),
                     halfLifeDays = halfLifeDays,
                     threshold = effectiveThreshold,
+                    limit = effectiveLimit,
                 )
             }
-            .take(effectiveLimit)
     }
 }

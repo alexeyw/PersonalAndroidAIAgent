@@ -1498,9 +1498,11 @@ away.
 ### Searching memory
 
 Tap the search icon to open semantic search. Your query is embedded and
-the list is re-ranked by relevance — each result shows a 0–1 score, so a
-search for "berlin" surfaces the timezone note even though it never
-contains that word.
+the list is re-ranked by relevance, so a search for "berlin" surfaces the
+timezone note even though it never contains that word. Each result shows
+its ranking score: how well the entry matches, plus the small bonuses a
+recent or pinned entry earns — which is why a strong match can read
+slightly above 1.00.
 
 ### What the agent recalls in a background run
 
@@ -2140,9 +2142,16 @@ screen's search), work down this list:
   Similarity threshold** drops loosely-related chunks before they reach
   the prompt. Lower it (or pin the entry — pinned chunks bypass the
   threshold entirely and always sort to the top).
-- **Recency decay buried it.** Old, non-pinned chunks lose score with
-  age. If a months-old fact stops surfacing, raise **Recency half-life**
-  or pin it.
+- **Fresher entries won the slots.** Age never disqualifies an entry —
+  a chunk that clears the similarity threshold stays retrievable however
+  old it is — but freshness is a tie-breaker, so when more entries clear
+  the threshold than **Search results (top-K)** allows, newer ones win
+  the slots. Raise top-K, raise **Recency half-life** (it widens the
+  window in which freshness still counts for much), or pin the entry.
+- **Another entry said the same thing.** Entries whose meaning nearly
+  matches a better-ranked one are collapsed into it, so a reworded
+  duplicate does not spend a second slot. The surviving copy is the
+  pinned one if there is one, otherwise the best-ranked.
 - **The entry is queued for re-embedding.** A chunk imported under a
   different embedding provider can't be matched until the background
   re-embed finishes (it scores ~0 in the meantime). Give it a moment, or

@@ -7,6 +7,7 @@ import app.knotwork.android.data.local.models.MemoryChunkEntity
 import app.knotwork.android.domain.models.MemoryChunk
 import app.knotwork.android.domain.models.MemorySource
 import app.knotwork.android.domain.models.MemorySummary
+import app.knotwork.android.domain.services.MemoryVectorSimilarity
 import io.mockk.mockk
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
@@ -33,56 +34,25 @@ class MemoryRepositoryImplTest {
     private fun emb(vararg values: Float): ByteArray = EmbeddingBlobCodec.encode(floatArrayOf(*values))
 
     @Test
-    fun `cosineSimilarity calculates correct similarity for identical vectors`() {
-        val vectorA = floatArrayOf(1f, 2f, 3f)
-        val vectorB = floatArrayOf(1f, 2f, 3f)
+    fun `given any vector pair when cosineSimilarity then it matches the shared memory metric`() {
+        // The search hot path must not drift onto its own metric: the exhaustive
+        // cases live in MemoryVectorSimilarityTest, this pins the delegation.
+        val pairs = listOf(
+            floatArrayOf(1f, 2f, 3f) to floatArrayOf(1f, 2f, 3f),
+            floatArrayOf(1f, 0f, 0f) to floatArrayOf(0f, 1f, 0f),
+            floatArrayOf(1f, 1f) to floatArrayOf(-1f, -1f),
+            floatArrayOf() to floatArrayOf(),
+            floatArrayOf(0f, 0f) to floatArrayOf(0f, 0f),
+            floatArrayOf(1f, 0f) to floatArrayOf(1f, 0f, 0f),
+        )
 
-        val similarity = repository.cosineSimilarity(vectorA, vectorB)
-
-        // Should be exactly 1.0 (with slight float precision allowance)
-        assertEquals(1.0f, similarity, 0.0001f)
-    }
-
-    @Test
-    fun `cosineSimilarity calculates correct similarity for orthogonal vectors`() {
-        val vectorA = floatArrayOf(1f, 0f, 0f)
-        val vectorB = floatArrayOf(0f, 1f, 0f)
-
-        val similarity = repository.cosineSimilarity(vectorA, vectorB)
-
-        // Should be 0.0
-        assertEquals(0.0f, similarity, 0.0001f)
-    }
-
-    @Test
-    fun `cosineSimilarity calculates correct similarity for opposite vectors`() {
-        val vectorA = floatArrayOf(1f, 1f)
-        val vectorB = floatArrayOf(-1f, -1f)
-
-        val similarity = repository.cosineSimilarity(vectorA, vectorB)
-
-        // Should be -1.0
-        assertEquals(-1.0f, similarity, 0.0001f)
-    }
-
-    @Test
-    fun `cosineSimilarity returns 0 for empty vectors`() {
-        val vectorA = floatArrayOf()
-        val vectorB = floatArrayOf()
-
-        val similarity = repository.cosineSimilarity(vectorA, vectorB)
-
-        assertEquals(0.0f, similarity, 0.0f)
-    }
-
-    @Test
-    fun `cosineSimilarity returns 0 for zero vectors`() {
-        val vectorA = floatArrayOf(0f, 0f)
-        val vectorB = floatArrayOf(0f, 0f)
-
-        val similarity = repository.cosineSimilarity(vectorA, vectorB)
-
-        assertEquals(0.0f, similarity, 0.0f)
+        pairs.forEach { (vectorA, vectorB) ->
+            assertEquals(
+                MemoryVectorSimilarity.cosine(vectorA, vectorB),
+                repository.cosineSimilarity(vectorA, vectorB),
+                0f,
+            )
+        }
     }
 
     @Test
