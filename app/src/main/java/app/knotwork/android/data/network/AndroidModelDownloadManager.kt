@@ -1,101 +1,166 @@
 package app.knotwork.android.data.network
 
-import android.content.Context
+import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
+import androidx.work.workDataOf
+import app.knotwork.android.data.services.ModelDownloadWorker
 import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.DownloadState
+import app.knotwork.android.domain.repositories.ActiveDownload
 import app.knotwork.android.domain.repositories.ModelDownloadManager
-import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOn
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.ResponseBody
-import okio.buffer
-import okio.sink
-import java.io.File
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.transformWhile
 import javax.inject.Inject
 
 /**
- * Implementation of [ModelDownloadManager] that uses [OkHttp]
- * to handle large file downloads efficiently. This bypasses the Android system's
- * [android.app.DownloadManager] cache limits (which frequently cause ERROR_INSUFFICIENT_SPACE
- * for gigabyte-sized LLMs on emulators) by streaming data directly to external storage.
+ * [ModelDownloadManager] that hands the transfer to [ModelDownloadWorker] and
+ * reports its progress back as a [DownloadState] stream.
  *
- * @property context The application context used to access external files directory.
- * @property client The injected OkHttpClient for making network requests.
+ * The indirection is the point. A model bundle takes minutes to fetch, and the
+ * user will leave the screen — to finish onboarding, to look around the app, or
+ * simply because the phone locked. Running the transfer inside the collecting
+ * coroutine tied its life to a ViewModel; running it as background work tied to
+ * a foreground service does not.
+ *
+ * Work is keyed uniquely per target file with [ExistingWorkPolicy.KEEP], so
+ * calling this again for a download already in flight **attaches** to it rather
+ * than starting a second copy — which is exactly what re-entering the screen
+ * should do.
+ *
+ * @property workManager Schedules and observes the download work.
  */
-class AndroidModelDownloadManager @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val client: OkHttpClient,
-) : ModelDownloadManager {
+class AndroidModelDownloadManager @Inject constructor(private val workManager: WorkManager) : ModelDownloadManager {
 
-    override fun downloadModel(url: String, fileName: String, authToken: String?): Flow<DownloadState> = flow {
-        emit(DownloadState.Pending)
+    override fun downloadModel(url: String, fileName: String, useStoredAuth: Boolean): Flow<DownloadState> = flow {
+        val request = OneTimeWorkRequestBuilder<ModelDownloadWorker>()
+            .setInputData(
+                workDataOf(
+                    ModelDownloadWorker.KEY_URL to url,
+                    ModelDownloadWorker.KEY_FILE_NAME to fileName,
+                    ModelDownloadWorker.KEY_USE_STORED_AUTH to useStoredAuth,
+                ),
+            )
+            // Retries resume rather than restart, so waiting for any connection
+            // is strictly better than failing on a momentary drop.
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            // Tagged so a screen that was not around when the download started
+            // can still find it — the file name rides along, because `WorkInfo`
+            // exposes tags but not input data.
+            .addTag(TAG_MODEL_DOWNLOAD)
+            .addTag(fileNameTag(fileName))
+            .build()
+        workManager.enqueueUniqueWork(uniqueWorkName(fileName), ExistingWorkPolicy.KEEP, request)
 
-        try {
-            val requestBuilder = Request.Builder().url(url)
-            if (!authToken.isNullOrBlank()) {
-                requestBuilder.addHeader("Authorization", "Bearer $authToken")
+        emitAll(observeUniqueWork(fileName, requireLive = false))
+    }
+
+    override fun observeDownload(fileName: String): Flow<DownloadState> =
+        observeUniqueWork(fileName, requireLive = true)
+
+    override fun observeActiveDownload(): Flow<ActiveDownload?> {
+        var reachedPercent = 0
+        return workManager.getWorkInfosByTagFlow(TAG_MODEL_DOWNLOAD)
+            .map { infos ->
+                val live = infos.firstOrNull { !it.state.isFinished } ?: return@map null
+                val fileName = live.fileNameFromTags() ?: return@map null
+                val state = live.toDownloadState(reachedPercent) ?: return@map null
+                if (state is DownloadState.Downloading) reachedPercent = state.progress
+                ActiveDownload(fileName = fileName, state = state)
             }
+            .distinctUntilChanged()
+    }
 
-            val request = requestBuilder.build()
-            val response = client.newCall(request).execute()
+    override fun cancelDownload(fileName: String) {
+        workManager.cancelUniqueWork(uniqueWorkName(fileName))
+    }
 
-            if (!response.isSuccessful) {
-                emit(DownloadState.Error(DownloadError("Server returned code: ${response.code}", code = response.code)))
-                return@flow
-            }
+    /**
+     * Streams the state of the work registered under [fileName].
+     *
+     * @param requireLive `true` for the observe-only entry points: if no
+     *   unfinished work exists at subscription time the flow completes without
+     *   emitting, so restoring a screen never resurrects a download that already
+     *   ended — and never invents one that never started.
+     */
+    private fun observeUniqueWork(fileName: String, requireLive: Boolean): Flow<DownloadState> = flow {
+        // Highest percent seen so far. WorkManager clears a worker's progress
+        // every time it stops it — losing the network does exactly that — and the
+        // bytes are still on disk waiting to be resumed, so rewinding the bar to
+        // zero would report a loss that did not happen.
+        var reachedPercent = 0
+        var attached = !requireLive
 
-            val body = response.body
-            if (body == ResponseBody.EMPTY) {
-                emit(DownloadState.Error(DownloadError("Empty response body from server")))
-                return@flow
-            }
-
-            val targetFile = resolveSafeTarget(fileName) ?: run {
-                emit(DownloadState.Error(DownloadError("Invalid model file name: $fileName")))
-                return@flow
-            }
-            val contentLength = body.contentLength()
-
-            body.source().use { source ->
-                targetFile.sink().buffer().use { sink ->
-                    var totalBytesRead = 0L
-                    var lastProgressEmit = -1
-                    val buffer = okio.Buffer()
-                    val bufferSize = DOWNLOAD_BUFFER_BYTES
-
-                    var bytesRead: Long
-                    while (source.read(buffer, bufferSize).also { bytesRead = it } != -1L) {
-                        sink.write(buffer, bytesRead)
-                        totalBytesRead += bytesRead
-
-                        if (contentLength > 0) {
-                            val progress = ((totalBytesRead * 100) / contentLength).toInt()
-                            if (progress != lastProgressEmit) {
-                                emit(DownloadState.Downloading(progress))
-                                lastProgressEmit = progress
-                            }
-                        } else {
-                            // If total size is unknown, just emit 0 or indeterminate
-                            emit(DownloadState.Downloading(0))
-                        }
+        emitAll(
+            workManager.getWorkInfosForUniqueWorkFlow(uniqueWorkName(fileName))
+                .transformWhile { infos ->
+                    // A live run wins over any finished one still attached to
+                    // the name: the list order is unspecified, and reading a
+                    // previous download's Success would end this stream on the
+                    // spot with the wrong answer.
+                    val live = infos.firstOrNull { !it.state.isFinished }
+                    if (!attached) {
+                        if (live == null) return@transformWhile false
+                        attached = true
                     }
-                    sink.flush()
+                    val info = live ?: infos.lastOrNull()
+                    val state = info?.toDownloadState(reachedPercent)
+                    if (state is DownloadState.Downloading) reachedPercent = state.progress
+                    state?.let { emit(it) }
+                    // A missing WorkInfo means the observation raced the enqueue;
+                    // keep listening rather than reporting a finished download.
+                    info == null || !info.state.isFinished
                 }
-            }
+                .distinctUntilChanged(),
+        )
+    }
 
-            emit(DownloadState.Success(targetFile.absolutePath))
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            emit(DownloadState.Error(DownloadError(e.message ?: "Unknown download error")))
-        }
-    }.distinctUntilChanged().flowOn(Dispatchers.IO)
+    /** Recovers the download's target file name from the tag it was given. */
+    private fun WorkInfo.fileNameFromTags(): String? = tags
+        .firstOrNull { it.startsWith(FILE_NAME_TAG_PREFIX) }
+        ?.removePrefix(FILE_NAME_TAG_PREFIX)
+
+    /**
+     * Projects a [WorkInfo] onto the download state the UI speaks.
+     *
+     * @param reachedPercent Highest percent reported so far for this download.
+     *   It is what a re-queued or freshly restarted worker is measured against:
+     *   a transfer that lost the network keeps its bytes, so the figure the user
+     *   sees must not fall back while the work waits or reconnects.
+     * @return The state to emit, or `null` for a cancelled download — the
+     *   collector simply stops, because the user who cancelled needs neither an
+     *   error nor a success.
+     */
+    private fun WorkInfo.toDownloadState(reachedPercent: Int): DownloadState? = when (state) {
+        // Enqueued *after* progress exists is a retry waiting on its network
+        // constraint, not a download about to start from nothing.
+        WorkInfo.State.ENQUEUED, WorkInfo.State.BLOCKED ->
+            if (reachedPercent > 0) DownloadState.Downloading(reachedPercent) else DownloadState.Pending
+        // A running worker that has not reported a percent yet is either
+        // connecting or resuming; either way the bar holds where it was.
+        WorkInfo.State.RUNNING -> DownloadState.Downloading(
+            maxOf(progress.getInt(ModelDownloadWorker.KEY_PROGRESS, 0), reachedPercent),
+        )
+        WorkInfo.State.SUCCEEDED -> outputData.getString(ModelDownloadWorker.KEY_OUTPUT_PATH)
+            ?.let { DownloadState.Success(it) }
+            ?: DownloadState.Error(DownloadError("Download finished without a file path."))
+        WorkInfo.State.FAILED -> DownloadState.Error(
+            DownloadError(
+                message = outputData.getString(ModelDownloadWorker.KEY_ERROR) ?: "Unknown download error",
+                code = outputData
+                    .getInt(ModelDownloadWorker.KEY_ERROR_CODE, ModelDownloadWorker.NO_HTTP_CODE)
+                    .takeIf { it != ModelDownloadWorker.NO_HTTP_CODE },
+            ),
+        )
+        WorkInfo.State.CANCELLED -> null
+    }
 
     /**
      * A simple implementation of [AppError.Network] for download failures.
@@ -108,36 +173,21 @@ class AndroidModelDownloadManager @Inject constructor(
      */
     data class DownloadError(val message: String, val code: Int? = null) : AppError.Network
 
-    /**
-     * Resolves [fileName] to a download target strictly inside the models
-     * directory, or `null` when the name is unsafe. The Discover/install flow
-     * passes the Hugging Face `rfilename` verbatim (only filtered by extension),
-     * so a hostile listing could contain `../` segments aimed at the SQLCipher
-     * DB or other app files.
-     *
-     * Path separators are **flattened into a single safe file name** rather than
-     * dropped to the last segment: collapsing to the basename would make
-     * `q4/model.litertlm` and `q8/model.litertlm` resolve to the same target and
-     * silently overwrite each other, even though they register as distinct
-     * models. Replacing every `/`/`\` with `_` keeps the file inside the models
-     * directory (no traversal) while preserving uniqueness across sub-directory
-     * variants. The result is still rejected when it degenerates to `.`/`..`/blank,
-     * and containment is double-checked via the canonical path.
-     *
-     * @param fileName The requested file name (possibly attacker-influenced).
-     * @return The safe target [File], or `null` if [fileName] is rejected.
-     */
-    private fun resolveSafeTarget(fileName: String): File? {
-        val safeName = fileName.replace('/', '_').replace('\\', '_')
-        if (safeName.isBlank() || safeName == "." || safeName == "..") return null
-        val dir = context.getExternalFilesDir(null) ?: return null
-        val target = File(dir, safeName)
-        val dirPrefix = dir.canonicalPath + File.separator
-        return target.takeIf { it.canonicalPath.startsWith(dirPrefix) }
-    }
-
     private companion object {
-        /** Size, in bytes, of the chunk read from the network and flushed to disk on each loop. */
-        const val DOWNLOAD_BUFFER_BYTES: Long = 8_192L
+
+        /** Tag every model download carries, so live ones can be enumerated. */
+        const val TAG_MODEL_DOWNLOAD = "model-download"
+
+        /** Prefix of the tag carrying the target file name. */
+        const val FILE_NAME_TAG_PREFIX = "model-download-file:"
+
+        /**
+         * Unique-work name for a target file. Derived from the file name (not
+         * the URL) because the file is what a second request would collide on.
+         */
+        fun uniqueWorkName(fileName: String): String = "model-download-$fileName"
+
+        /** Tag carrying [fileName] through to `WorkInfo`, which drops input data. */
+        fun fileNameTag(fileName: String): String = "$FILE_NAME_TAG_PREFIX$fileName"
     }
 }

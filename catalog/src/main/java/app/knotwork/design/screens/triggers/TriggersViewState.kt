@@ -50,6 +50,8 @@ enum class TriggerConditionType {
  *   disabled switch.
  * @property enabled current on/off state; ignored visually when unbound (an
  *   unbound trigger is always inert).
+ * @property health background-reliability badge, or `null` when the trigger is
+ *   unbound (inert, never evaluated) and therefore carries no health signal.
  */
 data class TriggerRowUi(
     val id: String,
@@ -58,6 +60,7 @@ data class TriggerRowUi(
     val conditionType: TriggerConditionType,
     val pipelineName: String?,
     val enabled: Boolean,
+    val health: TriggerHealthUi? = null,
 ) {
     /** Whether the trigger is bound to a pipeline (and therefore can fire). */
     val isBound: Boolean get() = pipelineName != null

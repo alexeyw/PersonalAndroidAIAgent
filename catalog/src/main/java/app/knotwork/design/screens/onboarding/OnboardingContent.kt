@@ -781,6 +781,7 @@ private fun scenarioCtaLabel(state: OnboardingViewState): String = when {
 @Composable
 private fun readyCtaLabel(state: OnboardingViewState): String = when {
     state.isReadyWarmUpRetryable -> stringResource(R.string.knotwork_onboarding_ready_retry_cta)
+    state.isCheckingAcceleration -> stringResource(R.string.knotwork_onboarding_ready_checking_acceleration_cta)
     !state.isModelWarmed -> stringResource(R.string.knotwork_onboarding_ready_preparing_cta)
     state.selectedScenario != null ->
         stringResource(R.string.knotwork_onboarding_ready_open_cta, scenarioTitle(state.selectedScenario))

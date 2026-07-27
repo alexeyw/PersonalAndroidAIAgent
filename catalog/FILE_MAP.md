@@ -54,8 +54,7 @@ project — `:app` consumes it as an `implementation` dependency.
     page in both themes.
   - `imagevector/` — one file per custom `ImageVector` (brand mark,
     wordmark, flow, 12 node glyphs, auto-layout, brain).
-- `src/main/java/app/knotwork/design/components/` — atomic components
- .
+- `src/main/java/app/knotwork/design/components/` — atomic components.
   - `ComponentsCatalogPage.kt` — single-scroll page composing every
     component category (Buttons, Chips & pills, List rows, Misc, Chat,
     Console).
@@ -68,6 +67,10 @@ project — `:app` consumes it as an `implementation` dependency.
       configurable sizes plus the plated app-icon tile variant.
   - `buttons/` — `KnotworkPrimaryButton` / `KnotworkSecondaryButton` /
     `KnotworkTextButton` / `KnotworkIconButton` + previews.
+    - `KnotworkButtonDefaults.kt` — `KnotworkButtonSize` tier enum
+      (`Sm` / `Md` / `Lg`) and the height / padding / text-style lookup
+      behind it: the single source of truth every button composable in
+      `:catalog` resolves its geometry through.
   - `chips/` — chip family per `inputs-and-chips.md` §6.
     - `KnotworkChipDefaults.kt` — `KnotworkChipSize` enum + shared size /
       padding / motion constants.
@@ -89,6 +92,11 @@ project — `:app` consumes it as an `implementation` dependency.
       colour family (`Queued`, `Idle`, `Running`, `Success`, `Warning`,
       `Error`, `Cancelled`); pulses the dot for `Running` (respects
       `KnotworkTheme.a11y.reducedMotion()`).
+    - `HealthBadge.kt` — trigger list-row health badge on `StatusPill`
+      geometry but a **glyph** (not the dot) + tinted fill, so state reads
+      by icon + label (`Healthy` / `Overdue` / `Last run failed`), never
+      colour alone; collapses to icon-only at font-scale ≥ 2.0 (label kept
+      for TalkBack).
     - `KnotworkChip.kt` — general-purpose pill chip with `Default /
       Tonal / Outline` styles, optional leading/trailing icons and a
       decorative (no-`onClick`) variant for tag rows; complements the
@@ -110,6 +118,10 @@ project — `:app` consumes it as an `implementation` dependency.
       `KnotworkTextField`.
     - `KnotworkCompactSlider.kt` — 4×18 dp pill thumb + 4 dp track.
     - `KnotworkSegmentedControl.kt` — segmented row of filter chips.
+    - `LabeledSwitchRow.kt` — settings-style toggle row (label + muted
+      description, trailing `Switch` scaled down to sit beside the 14 sp
+      title). The whole row is the tap target — the switch itself is
+      non-interactive — so the 48 dp floor holds wherever it is reused.
   - `dialogs/` — dialog components.
     - `TypedConfirmDialog.kt` — canonical destructive typed-confirm dialog
       (`TypedConfirmDialogState` payload + `typedConfirmMatches` keyword
@@ -146,6 +158,33 @@ project — `:app` consumes it as an `implementation` dependency.
       and free-form field; collapses to a one-line summary when answered.
     - `ChatComposer.kt` — multiline composer with `Idle | Generating |
       Error` state machine and send ↔ stop morph.
+    - `InterruptedRunCardModel.kt` — immutable payload of the
+      interrupted-run status card (already-resolved node label — mapping a
+      node id to a display name is a presentation concern).
+    - `InterruptedRunCard.kt` — inline status card shown in the chat
+      stream when the session's last run died with the process (Doze, OOM
+      kill, swipe from recents) instead of finishing: `surface1` tile with
+      a muted outline, so it reads as system status rather than an agent
+      message, a question, or a permission gate.
+    - `ImageThumbnail.kt` — Coil-backed attachment image (thumbnail or
+      full-bleed) with its own **loading** and **missing-file** fallbacks —
+      the latter is the state an attachment reaches once retention has
+      swept the stored file.
+    - `ImageViewer.kt` — full-screen viewer opened from a thumbnail:
+      full-bleed image on an always-dark scrim (photo viewing reads the
+      same in both themes), file name + dimensions in the top bar, an
+      optional share action; no pinch-zoom.
+    - `SourceChooserSheet.kt` — two-option image-source chooser
+      (photo library / camera) as a `ModalBottomSheet`, plus the bare
+      `SourceChooserSheetContent` rows so the body can be snapshot-tested
+      without sheet chrome. Stateless: the caller owns visibility.
+    - `AudioSourceChooserSheet.kt` — the voice-input counterpart (record /
+      pick an audio file), same 56 dp row vocabulary, with the recording
+      limit rendered as `m:ss` in the record subtitle.
+    - `ImageAttachmentCatalogContent.kt` — harness exercising the
+      attachment components together (thumbnail states, image bubble with
+      and without caption, composer attachment affordance, chooser rows)
+      with deterministic images for the Roborazzi baseline.
     - `ChatCatalogContent.kt` — single-column harness covering every
       chat variant + theme previews (used by the Roborazzi baseline).
   - `console/` — agent console components.
@@ -217,6 +256,40 @@ project — `:app` consumes it as an `implementation` dependency.
       cards).
     - `ChatHomeContentPreview.kt` — Android Studio `@Preview` group for
       the chat variants in both themes.
+  - `discover/` — model discovery over the curated Hugging Face
+    organisation (list → detail → install).
+    - `DiscoverContent.kt` — list surface: sticky search field
+      (submits on the IME action), pull-to-refresh repository list with a
+      host-formatted stats line, optional "N files" hint and a gated lock
+      badge, plus the loading / empty / error branches.
+    - `DiscoverViewState.kt` — `DiscoverVisualState` (Loading /
+      Populated / Empty / Error) + `DiscoverModelRow`. Stats arrive
+      pre-formatted and the file count stays a raw `Int`, so the catalog
+      neither formats numbers nor resolves plurals.
+    - `DiscoverDetailContent.kt` — detail surface for one repository:
+      header, access-gated notice with an inline token field, the
+      installable `.litertlm` file list, a "View on Hugging Face" link,
+      and the license-confirmation dialog that precedes any download.
+    - `DiscoverDetailViewState.kt` — detail visual-state enum, sealed
+      `DiscoverFileStatus` per-file state, `DiscoverFileRow`, and the
+      detail callback bundle.
+    - `DiscoverPreview.kt` — deterministic fixtures shared by both
+      surfaces' `@Preview`s and the Roborazzi matrix; `internal`, so
+      `:app` cannot reach them.
+  - `files/` — the workspace-sandbox browser.
+    - `FilesContent.kt` — Files surface: quota header, file list,
+      multi-select bar, detail bottom sheet, and the empty / error
+      states. Deliberately reuses the `MemoryContent` vocabulary rather
+      than introducing new components; all I/O and SAF launching stay in
+      the host.
+    - `FilesDialogs.kt` — the screen's two confirmations, split out to
+      keep the composable count per file manageable: the destructive
+      delete (single or bulk) and the import name-collision chooser
+      (keep both / replace / cancel).
+    - `FilesViewState.kt` — `FilesVisualState` body state plus the
+      separate overlay/selection fields (preview sheet, dialogs), file
+      kind / quota tone enums, and the row / quota / preview / dialog
+      models, so opening a preview never changes the body branch.
   - `memory/`
     - `MemoryContent.kt` — Memory Manager surface (stats header,
       category chips, semantic search, provenance breakdown, entry
@@ -230,6 +303,15 @@ project — `:app` consumes it as an `implementation` dependency.
       Face auth, preset rows with download progress).
     - `ModelsViewState.kt` — visual-state enum + active-card / preset-row
       models with download status.
+    - `PerformanceCard.kt` — the Performance card below the active-model
+      card: rolling-average TTFT / decode speed / peak memory for the
+      active model, and the controlled benchmark with its segmented
+      progress track.
+    - `PerformanceCardState.kt` — sealed card state (no active model /
+      idle with figures / running) + `BenchmarkPhase`, strings and
+      callbacks. Every number arrives **pre-formatted** (`"420 ms"`,
+      `"12.4 tok/s"`, `"1.8 GB"`) — units and localisation live in the
+      host.
   - `monitoring/`
     - `MonitoringContent.kt` — Monitoring surface (metrics grid,
       per-node-type breakdown, system log lines).
@@ -259,17 +341,68 @@ project — `:app` consumes it as an `implementation` dependency.
       editor state + category / variable tracking.
     - `PromptPresetPickerSheet.kt` — modal preset picker by `NodeType`
       (Bundled / Mine tabs, searchable rows, tag filter).
-  - `settings/`
-    - `SettingsContent.kt` — full settings stack (identity / system
-      instructions / restrictions / LLM params / local model / providers
-      / memory / privacy cards).
-    - `SettingsViewState.kt` — visual-state enum + per-card data slices.
+  - `settings/` — the settings hub plus one content composable per
+    category sub-screen (the flat single-screen `SettingsContent` was
+    split into this stack).
+    - `SettingsHubContent.kt` — category hub: search field with live
+      result rows, category cards, and the entry points into every
+      sub-screen below.
+    - `GenerationSettingsContent.kt` — system instructions, restrictions
+      and the LLM generation parameters.
+    - `ModelsSettingsContent.kt` — local model + inference backend and
+      the cloud-provider list.
+    - `MemorySettingsContent.kt` — long-term-memory controls
+      (extraction, retrieval thresholds, re-embed).
+    - `PipelinesSettingsContent.kt` — pipeline / structured-output
+      controls.
+    - `ToolsSettingsContent.kt` — tool-calling and approval controls.
+    - `BackgroundSettingsContent.kt` — background work, triggers,
+      notifications and entry-surface bindings.
+    - `PrivacySettingsContent.kt` — privacy, retention and telemetry
+      controls (links out to the usage-statistics surface).
+    - `AboutSettingsContent.kt` — identity card, build info, licenses
+      and the reset actions.
+    - `UsageTelemetryContent.kt` — on-device usage-statistics surface
+      (recording toggle, run / pipeline / trigger / active-day stat
+      sections, the **Setup** install-to-first-value section, export and
+      reset actions) plus its own `UsageTelemetryViewState` /
+      `UsageTelemetryCallbacks` / `UsageStatRow` models and empty state.
+    - `SettingsViewStates.kt` — per-screen view states (hub, generation,
+      models, memory, pipelines, tools, …).
+    - `SettingsModels.kt` — shared settings models and enums (category
+      ids, hub search rows, slider rows, identity / system-instruction
+      card states).
+    - `SettingsCallbacks.kt` — the single typed callback bundle shared by
+      the hub and every sub-screen.
+    - `SettingsRowAnchors.kt` — stable deep-link anchor constants
+      mirroring the app-side `SettingsRegistry` (app-side test asserts the
+      subset relation, so a registry rename can't orphan a highlight).
+    - `SettingsCommon.kt` — the shared building blocks of the stack
+      (category scaffold, section labels, advanced disclosure, toggle /
+      nav / provider rows).
     - `KnotworkMonoTextArea.kt` — multi-line monospace textarea (brand
       outline) for system instructions.
     - `KnotworkParamSlider.kt` — labelled numeric-parameter slider with
       value label and optional validation error.
     - `KnotworkProviderRow.kt` — cloud-provider row with optional
       Ollama-specific fields (base URL, model) and validation.
+  - `skills/` — reusable-skill surfaces (a skill = instruction + tool
+    allowlist + context flags).
+    - `SkillLibraryContent.kt` — library list: Bundled / Mine tabs,
+      per-row overflow actions and a "New skill" FAB, over the
+      loader / list / empty / error branches.
+    - `SkillEditorContent.kt` — full-screen create-or-edit surface for a
+      skill's name, description, instruction, tri-state tool allowlist
+      and context flags.
+    - `SkillDeleteDialog.kt` — delete-confirmation body (the host
+      supplies the dialog container) with three branches keyed off the
+      dependent pipelines: none, one, or an N-dependent "will break"
+      list.
+    - `SkillLibraryViewState.kt` — visual-state and tab enums, the
+      tool-indicator / tool-mode enums behind the tri-state allowlist,
+      and the row / tool-option / context-flag / editor / delete models.
+    - `SkillLibraryPreview.kt` — canonical sample states shared by the
+      `@Preview`s and the Roborazzi baselines, so the two cannot drift.
   - `splash/`
     - `SplashContent.kt` — splash surface (brand logo, app name,
       determinate progress or error + Retry CTA).
@@ -285,6 +418,36 @@ project — `:app` consumes it as an `implementation` dependency.
       MCP servers with expandable tool lists and connection states).
     - `ToolsViewState.kt` — visual-state enum + risk-tier / MCP
       connection enums + tool / server row models.
+    - `AllowedDomainsContent.kt` — pushed editor for the `http_request`
+      host allowlist — the gesture that opts the device into outbound
+      HTTP. Empty state (globe hero, the tool-is-off explanation, an
+      amber risk note) and populated state (explainer + host list with
+      per-row removal), mirroring the MCP-server editor's structure.
+    - `AllowedDomainsViewState.kt` — screen state plus the sealed
+      `AddHostState` feedback for the add-a-host field (`Idle` /
+      `NormalizedPreview` / `Duplicate` / `Invalid`); only
+      `NormalizedPreview` enables **Add**. Normalisation itself is the
+      host's (`HttpRequestPolicy`) job.
+  - `triggers/` — automation-trigger surfaces (`TriggersContent` list with
+    inline enable switch + health badge, `TriggerEditorContent`
+    full-screen editor, `TriggerDeleteDialogContent`, and the detail below).
+    - `TriggerDetailContent.kt` — trigger-detail surface: identity header
+      (When / Runs / State + enable switch), Edit / Delete, an optional
+      overdue stale banner, and the **evaluation journal** timeline (per-day
+      groups; each entry = verdict tile + source + timestamp, plus a settled
+      outcome line for fired rows or a human skip / re-arm sentence);
+      loading / empty / populated states, reduced-motion-aware pending dot.
+    - `TriggerDetailViewState.kt` — detail view-state + the journal
+      vocabulary mirrors (`TriggerHealthUi`, source / verdict / skip-reason /
+      outcome enums, entry / day-group models, `TriggerJournalVisualState`),
+      `TriggerDetailStrings` (final English copy defaults), callbacks.
+    - `TriggersViewState.kt` — list view-state (`TriggerRowUi` incl. the
+      optional `health` badge, editor / delete models, strings, callbacks).
+    - `TriggerDeleteDialog.kt` — `TriggerDeleteDialogContent`, the
+      destructive delete-confirmation body (the host owns the dialog
+      container).
+    - `TriggersPreview.kt` — deterministic fixtures behind the triggers
+      `@Preview`s and the Roborazzi baselines (list, editor, detail).
 - `src/test/java/app/knotwork/design/tokens/KnotworkTokensTest.kt` —
   pure-JVM sanity tests for the token data classes (no Compose runtime).
 - `src/test/java/app/knotwork/design/theme/KnotworkThemeTest.kt` —

@@ -222,6 +222,11 @@ internal object SettingsPreview {
             UsageStatRow("First", "2026-06-20"),
             UsageStatRow("Last", "2026-06-25"),
         ),
+        onboarding = listOf(
+            UsageStatRow("Time to first value", "7:24"),
+            UsageStatRow("Model download", "5:00"),
+            UsageStatRow("Excluding model download", "2:24"),
+        ),
     )
 
     /** Empty Usage statistics state (recording on, nothing recorded yet). */

@@ -111,4 +111,63 @@
     <string name="triggers_delete_title">Delete this trigger?</string>
     <string name="triggers_delete_body_format">\"%1$s\" and its background schedule will be removed. The bound pipeline isn\'t affected. This can\'t be undone.</string>
     <string name="triggers_delete_confirm">Delete</string>
+
+    <!-- List health badge -->
+    <string name="triggers_health_healthy">Healthy</string>
+    <string name="triggers_health_overdue">Overdue</string>
+    <string name="triggers_health_last_run_failed">Last run failed</string>
+
+    <!-- Detail screen chrome -->
+    <string name="triggers_detail_subtitle">Trigger detail</string>
+    <string name="triggers_detail_when">When</string>
+    <string name="triggers_detail_runs">Runs</string>
+    <string name="triggers_detail_state">State</string>
+    <string name="triggers_detail_state_enabled">Enabled</string>
+    <string name="triggers_detail_state_disabled">Disabled</string>
+    <string name="triggers_detail_edit">Edit</string>
+    <string name="triggers_detail_delete">Delete</string>
+
+    <!-- Stale banner -->
+    <string name="triggers_detail_stale_title_format">Not checked since %1$s</string>
+    <string name="triggers_detail_stale_title_no_time">Background checks look overdue</string>
+    <string name="triggers_detail_stale_body">Background checks look overdue. Some phones pause background work to save battery — this trigger may be affected.</string>
+
+    <!-- Journal section -->
+    <string name="triggers_journal_section">Evaluation journal</string>
+    <string name="triggers_journal_window">last 30 days</string>
+    <string name="triggers_journal_retention">Records kept for 30 days · older entries age out</string>
+    <string name="triggers_journal_empty_title">No evaluations yet</string>
+    <string name="triggers_journal_empty_body">This trigger hasn\'t been checked yet. Each time it\'s evaluated — whether it runs or not — you\'ll see it here.</string>
+
+    <!-- Journal: evaluation sources -->
+    <string name="triggers_journal_source_poll">Scheduled check</string>
+    <string name="triggers_journal_source_event">Device event</string>
+    <string name="triggers_journal_source_charging">Charging check</string>
+
+    <!-- Journal: verdicts -->
+    <string name="triggers_journal_verdict_fired">Fired</string>
+    <string name="triggers_journal_verdict_rearmed">Re-armed</string>
+    <string name="triggers_journal_verdict_skipped">Didn\'t run</string>
+    <string name="triggers_journal_rearm_note">Condition dropped while disarmed — edge latch reset. No run.</string>
+
+    <!-- Journal: skip-reason sentences (%1$s names the moment for condition-not-met) -->
+    <string name="triggers_journal_skip_disabled">The trigger was turned off.</string>
+    <string name="triggers_journal_skip_unbound">No pipeline is bound.</string>
+    <string name="triggers_journal_skip_condition_not_met_format">The condition wasn\'t met at %1$s.</string>
+    <string name="triggers_journal_skip_already_fired">It had already fired for this window.</string>
+
+    <!-- Journal: run outcomes -->
+    <string name="triggers_journal_outcome_pending">Running…</string>
+    <string name="triggers_journal_outcome_success">Completed</string>
+    <string name="triggers_journal_outcome_failure">Failed</string>
+    <string name="triggers_journal_outcome_cancelled_by_system">Stopped by the system</string>
+    <string name="triggers_journal_outcome_cancelled">You stopped it</string>
+    <string name="triggers_journal_outcome_hitl_timeout">Timed out waiting for approval</string>
+
+    <!-- Journal: timestamps and day headers. The abbreviated "m ago" reads the
+         same for every count, so it is a plain format string, not a plural. -->
+    <string name="triggers_journal_time_just_now">just now</string>
+    <string name="triggers_journal_time_minutes_ago">%1$dm ago</string>
+    <string name="triggers_journal_day_today">Today</string>
+    <string name="triggers_journal_day_yesterday">Yesterday</string>
 </resources>

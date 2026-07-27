@@ -3,6 +3,9 @@ package app.knotwork.android.domain.usecases
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.Trigger
+import app.knotwork.android.domain.models.TriggerEvaluationSource
+import app.knotwork.android.domain.models.TriggerEvaluationVerdict
+import app.knotwork.android.domain.models.TriggerSkipReason
 import app.knotwork.android.domain.models.telemetryKind
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.NetworkStateRepository
@@ -16,6 +19,7 @@ import app.knotwork.android.domain.services.TaskScheduler
 import app.knotwork.android.domain.services.TriggerScheduler
 import kotlinx.coroutines.CancellationException
 import timber.log.Timber
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -109,6 +113,19 @@ sealed interface TriggerFireOutcome {
  *   transition into the satisfied state; the disarm here plus the
  *   [TriggerFiringDecision.ReArm] path implement that latch.
  * - **Deleted bound pipeline.** Auto-disabled rather than firing into nothing.
+ *
+ * **Journal — no silent skips.** Every evaluated trigger writes exactly one
+ * [app.knotwork.android.domain.models.TriggerEvaluation] recording its verdict,
+ * atomically with the decision, via [recordTriggerEvaluation]. A skip records
+ * [TriggerEvaluationVerdict.Skipped] with the reason, a re-arm records
+ * [TriggerEvaluationVerdict.ReArmed] (making the consumed-on-fire → re-arm window
+ * visible rather than a mystery), and a fire records [TriggerEvaluationVerdict.Fired]
+ * with the run id **before** the run exists — so the run's terminal outcome is later
+ * attributed straight back onto this row (see [triggerRunOutcomeForTerminal]). The
+ * only evaluation that writes no row is [TriggerFireOutcome.NotFound]: the trigger
+ * was deleted, so there is nothing to attribute a row to. Recording is best-effort
+ * (the journal store absorbs and logs its own failures) and never alters or aborts
+ * the fire it observes.
  */
 @Singleton
 class FireTriggerUseCase @Inject constructor(
@@ -122,18 +139,27 @@ class FireTriggerUseCase @Inject constructor(
     private val scheduledTaskNotifier: ScheduledTaskNotifier,
     private val triggerScheduler: TriggerScheduler,
     private val usageTelemetry: UsageTelemetryRepository,
+    private val recordTriggerEvaluation: RecordTriggerEvaluationUseCase,
 ) {
 
     /**
      * Evaluates and, if warranted, fires the trigger identified by [triggerId].
      *
      * @param triggerId The id of the trigger that woke the background runtime.
+     * @param source Where this evaluation originated (which background surface
+     *   woke the runtime), stamped on the journal row so a gap in one source is
+     *   distinguishable from a gap in another.
      * @param nowMillis Current wall-clock time, epoch-millis (injectable for tests).
      * @return The [TriggerFireOutcome] describing what happened.
      */
-    suspend operator fun invoke(triggerId: String, nowMillis: Long = System.currentTimeMillis()): TriggerFireOutcome {
+    suspend operator fun invoke(
+        triggerId: String,
+        source: TriggerEvaluationSource,
+        nowMillis: Long = System.currentTimeMillis(),
+    ): TriggerFireOutcome {
         val trigger = triggerRepository.getTriggerById(triggerId)
         if (trigger == null) {
+            // No trigger row to attribute a journal entry to — nothing to record.
             Timber.tag(TAG).d("Trigger %s no longer exists; nothing to fire.", triggerId)
             return TriggerFireOutcome.NotFound
         }
@@ -147,6 +173,12 @@ class FireTriggerUseCase @Inject constructor(
 
         return when (decision) {
             is TriggerFiringDecision.Skip -> {
+                recordTriggerEvaluation(
+                    triggerId = triggerId,
+                    source = source,
+                    verdict = TriggerEvaluationVerdict.Skipped(decision.reason),
+                    evaluatedAt = nowMillis,
+                )
                 Timber.tag(TAG).d("Trigger %s skipped: %s", triggerId, decision.reason)
                 TriggerFireOutcome.Skipped(decision.reason)
             }
@@ -157,11 +189,17 @@ class FireTriggerUseCase @Inject constructor(
                 // Re-register so the consumed charging one-shot watch is recreated,
                 // ready to fire instantly on the next charge edge.
                 triggerScheduler.register(trigger)
+                recordTriggerEvaluation(
+                    triggerId = triggerId,
+                    source = source,
+                    verdict = TriggerEvaluationVerdict.ReArmed,
+                    evaluatedAt = nowMillis,
+                )
                 Timber.tag(TAG).d("Trigger %s re-armed.", triggerId)
                 TriggerFireOutcome.ReArmed
             }
 
-            is TriggerFiringDecision.Fire -> fire(trigger, decision, nowMillis)
+            is TriggerFiringDecision.Fire -> fire(trigger, decision, source, nowMillis)
         }
     }
 
@@ -173,10 +211,19 @@ class FireTriggerUseCase @Inject constructor(
     private suspend fun fire(
         trigger: Trigger,
         decision: TriggerFiringDecision.Fire,
+        source: TriggerEvaluationSource,
         nowMillis: Long,
     ): TriggerFireOutcome {
         if (pipelineRepository.getPipelineById(decision.pipelineId) == null) {
             triggerRepository.setEnabled(trigger.id, false)
+            // No run is enqueued, so the journal records this as a skip: the
+            // bound pipeline is gone, which reads as UNBOUND after the fact.
+            recordTriggerEvaluation(
+                triggerId = trigger.id,
+                source = source,
+                verdict = TriggerEvaluationVerdict.Skipped(TriggerSkipReason.UNBOUND),
+                evaluatedAt = nowMillis,
+            )
             Timber.tag(TAG).w("Trigger %s bound pipeline %s missing; auto-disabled.", trigger.id, decision.pipelineId)
             return TriggerFireOutcome.Disabled(decision.pipelineId)
         }
@@ -184,6 +231,11 @@ class FireTriggerUseCase @Inject constructor(
         // Resolve the bound session before any suppression write: a failure to
         // create it must re-evaluate and fire fresh, not burn the cycle.
         val session = resolveBoundSession(trigger, nowMillis)
+
+        // Mint the run id up front so the journal row (written after a successful
+        // enqueue, below) carries the exact id the eventual `PipelineRun` will
+        // have — the key the run's terminal outcome is later attributed back by.
+        val runId = UUID.randomUUID().toString()
 
         // Record the suppression state first: if the enqueue or process dies
         // after this point, the next wake re-evaluates against the recorded
@@ -201,16 +253,34 @@ class FireTriggerUseCase @Inject constructor(
                 constraints = ScheduledTaskConstraints(requiresBatteryNotLow = true),
                 pipelineId = decision.pipelineId,
                 origin = RunOrigin.TRIGGER,
+                runId = runId,
             )
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             // The enqueue failed. Drop a freshly-minted session so a failed fire
             // never leaves an empty orphan chat behind; the binding has not been
-            // persisted yet, so nothing dangles. Re-throw so the worker retries.
+            // persisted yet, so nothing dangles. No journal row is written for a
+            // fire that never enqueued a run — the worker retry re-evaluates and
+            // records the resulting verdict (an ALREADY_FIRED skip, since the fire
+            // state was already stamped). Re-throw so the worker retries.
             if (session.isNewlyCreated) chatRepository.deleteSession(session.id)
             throw e
         }
+
+        // Open the two-phase journal row the instant the run is really enqueued —
+        // before any further work — so the window in which the run exists but its
+        // Fired row does not is as narrow as the DB write itself. Written after
+        // the enqueue (never before) so a failed enqueue leaves no phantom Fired
+        // row whose outcome could never settle. Outcome is filled in later, by run
+        // id, when the run reaches a terminal state.
+        recordTriggerEvaluation(
+            triggerId = trigger.id,
+            source = source,
+            verdict = TriggerEvaluationVerdict.Fired,
+            runId = runId,
+            evaluatedAt = nowMillis,
+        )
 
         // Persist the binding only once the run is really enqueued, so a
         // scheduling failure cannot strand a trigger pointing at a session that

@@ -3,6 +3,7 @@ package app.knotwork.android.data.local.dao
 import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Transaction
+import app.knotwork.android.data.local.models.OnboardingMilestoneEntity
 import app.knotwork.android.data.local.models.UsageCounterEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -32,13 +33,15 @@ object UsageTelemetryCategories {
 
 /**
  * Data Access Object for the local usage-telemetry tables (`usage_counter`,
- * `usage_active_day`).
+ * `usage_active_day`, `onboarding_milestone`).
  *
  * Counters are advanced through atomic SQLite `UPSERT` statements so concurrent
  * recorders cannot lose an increment, and active days are recorded with
- * `INSERT OR IGNORE` so the table stays a pure set. Every read is exposed as a
- * [Flow] so the Usage statistics screen updates live. No method here touches the
- * network — the whole surface is on-device.
+ * `INSERT OR IGNORE` so the table stays a pure set. Onboarding markers use the
+ * same `INSERT OR IGNORE`, which is what gives them their write-once (first
+ * occurrence wins) semantics. Every read is exposed as a [Flow] so the Usage
+ * statistics screen updates live. No method here touches the network — the whole
+ * surface is on-device.
  */
 @Dao
 interface UsageTelemetryDao {
@@ -111,6 +114,38 @@ interface UsageTelemetryDao {
     @Query("SELECT COUNT(*) AS dayCount, MIN(day) AS firstDay, MAX(day) AS lastDay FROM usage_active_day")
     fun observeActiveDayStats(): Flow<ActiveDayStats>
 
+    /**
+     * Records an onboarding marker, keeping the **first** occurrence:
+     * `INSERT OR IGNORE` makes a repeat on an already-recorded marker a no-op, so
+     * a second pass through onboarding cannot move a measured journey.
+     *
+     * @param milestoneKey Stable `OnboardingMilestone.name`.
+     * @param atMillis Wall-clock time of the marker, epoch-millis.
+     * @param detail Optional marker payload (the scenario's pipeline id), or `null`.
+     */
+    @Query(
+        "INSERT OR IGNORE INTO onboarding_milestone (milestoneKey, atMillis, detail) " +
+            "VALUES (:milestoneKey, :atMillis, :detail)",
+    )
+    suspend fun recordMilestone(milestoneKey: String, atMillis: Long, detail: String?)
+
+    /**
+     * Live projection of every recorded onboarding marker.
+     *
+     * @return A [Flow] emitting the full marker list on every change.
+     */
+    @Query("SELECT * FROM onboarding_milestone")
+    fun observeMilestones(): Flow<List<OnboardingMilestoneEntity>>
+
+    /**
+     * One-shot snapshot of the recorded onboarding markers, for the read-then-write
+     * first-value attribution decision.
+     *
+     * @return Every marker row currently stored; empty when nothing was recorded.
+     */
+    @Query("SELECT * FROM onboarding_milestone")
+    suspend fun getMilestones(): List<OnboardingMilestoneEntity>
+
     /** Deletes every counter row. */
     @Query("DELETE FROM usage_counter")
     suspend fun clearCounters()
@@ -119,14 +154,19 @@ interface UsageTelemetryDao {
     @Query("DELETE FROM usage_active_day")
     suspend fun clearActiveDays()
 
+    /** Deletes every onboarding marker row. */
+    @Query("DELETE FROM onboarding_milestone")
+    suspend fun clearMilestones()
+
     /**
-     * Clears all telemetry — counters and active days — in one transaction so a
-     * reset can never leave a half-cleared store.
+     * Clears all telemetry — counters, active days and onboarding markers — in one
+     * transaction so a reset can never leave a half-cleared store.
      */
     @Transaction
     suspend fun clearAll() {
         clearCounters()
         clearActiveDays()
+        clearMilestones()
     }
 }
 

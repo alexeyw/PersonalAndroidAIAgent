@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.components.chips.HealthBadge
 import app.knotwork.design.components.misc.EmptyState
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
@@ -311,13 +312,23 @@ private fun TriggerRow(row: TriggerRowUi, strings: TriggersStrings, menuOpen: Bo
 @Composable
 private fun TriggerRowText(row: TriggerRowUi, strings: TriggersStrings, modifier: Modifier = Modifier) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
-        Text(
-            text = row.name,
-            style = KnotworkTextStyles.BodyBase.copy(fontWeight = FontWeight.SemiBold),
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        // Name + health badge. The name is weighted `fill = false` so a long name
+        // ellipsises *before* it can squeeze the fixed-size badge off the row
+        // (see reference_compose_row_badge_squeeze).
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        ) {
+            Text(
+                text = row.name,
+                style = KnotworkTextStyles.BodyBase.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            row.health?.let { HealthBadge(state = it, label = it.label(strings)) }
+        }
         // Condition line.
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -474,4 +485,14 @@ data class TriggersStrings(
     val emptyStepResult: String = "Result",
     val errorTitle: String = "Couldn't load triggers",
     val errorRetry: String = "Retry",
+    val healthHealthy: String = "Healthy",
+    val healthOverdue: String = "Overdue",
+    val healthLastRunFailed: String = "Last run failed",
 )
+
+/** Resolves the localised health-badge label for a row's health state. */
+internal fun TriggerHealthUi.label(strings: TriggersStrings): String = when (this) {
+    TriggerHealthUi.Healthy -> strings.healthHealthy
+    TriggerHealthUi.Overdue -> strings.healthOverdue
+    TriggerHealthUi.LastRunFailed -> strings.healthLastRunFailed
+}

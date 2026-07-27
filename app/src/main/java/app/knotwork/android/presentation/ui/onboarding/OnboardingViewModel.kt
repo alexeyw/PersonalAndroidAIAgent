@@ -6,12 +6,12 @@ import app.knotwork.android.data.network.AndroidModelDownloadManager
 import app.knotwork.android.domain.constants.OnboardingModelCatalog
 import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.DownloadState
-import app.knotwork.android.domain.models.LocalModel
-import app.knotwork.android.domain.models.Result
+import app.knotwork.android.domain.models.OnboardingMilestone
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.ModelDownloadManager
 import app.knotwork.android.domain.repositories.SettingsRepository
-import app.knotwork.android.domain.usecases.LoadModelUseCase
+import app.knotwork.android.domain.repositories.UsageTelemetryRepository
+import app.knotwork.android.domain.usecases.PrepareInferenceBackendUseCase
 import app.knotwork.android.domain.usecases.SetUpScenarioUseCase
 import app.knotwork.android.presentation.state.TransientMessageRelay
 import app.knotwork.design.screens.onboarding.OnboardingDefaultPipelinePreview
@@ -21,11 +21,14 @@ import app.knotwork.design.screens.onboarding.OnboardingStep
 import app.knotwork.design.screens.onboarding.OnboardingViewState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -51,29 +54,38 @@ import javax.inject.Inject
  *    rows). Committing flips `hasCompletedOnboarding` and lets the host navigate.
  *
  * Warm-up. As soon as a model becomes installed (either re-detected on entry or
- * after a successful download), [scheduleWarmUp] kicks off [LoadModelUseCase] so
- * the inference handle is ready by the time the user reaches step 4 — preventing
- * the "LiteRT handle released by system" failure on the first `sendMessage`.
+ * after a successful download), [scheduleWarmUp] kicks off
+ * [PrepareInferenceBackendUseCase] so the inference handle is ready by the time
+ * the user reaches step 4 — preventing the "LiteRT handle released by system"
+ * failure on the first `sendMessage`. On a first-time install the same step also
+ * settles which execution backend the device will use.
  *
  * @property settingsRepository persists the `hasCompletedOnboarding` flag.
  * @property localModelRepository detects previously-installed models and persists
  * freshly-downloaded ones.
  * @property downloadManager streams `DownloadState` updates folded into
  * `OnboardingViewState.downloadProgress` / `downloadError`.
- * @property loadModelUseCase warms the LiteRT inference handle.
+ * @property prepareInferenceBackendUseCase resolves the execution backend on a
+ * first-time install (GPU when the device plausibly supports it and a real
+ * generation confirms it, CPU otherwise) and warms the LiteRT inference handle.
  * @property setUpScenarioUseCase materialises a picked scenario (default pipeline
  * + entry-surface binding) and returns its recap projection.
  * @property transientMessageRelay process-wide one-shot snackbar bus; the
  * skip/escape hint outlives the popped onboarding back-stack entry.
+ * @property usageTelemetry records the write-once onboarding markers (opened,
+ * scenario chosen, download started/finished) backing the repeatable
+ * "time to first value" measurement. Recording is opt-in-gated, best-effort and
+ * fully on-device.
  */
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val localModelRepository: LocalModelRepository,
     private val downloadManager: ModelDownloadManager,
-    private val loadModelUseCase: LoadModelUseCase,
+    private val prepareInferenceBackendUseCase: PrepareInferenceBackendUseCase,
     private val setUpScenarioUseCase: SetUpScenarioUseCase,
     private val transientMessageRelay: TransientMessageRelay,
+    private val usageTelemetry: UsageTelemetryRepository,
 ) : ViewModel() {
 
     private val _state: MutableStateFlow<OnboardingViewState> = MutableStateFlow(OnboardingViewState())
@@ -111,6 +123,15 @@ class OnboardingViewModel @Inject constructor(
      * a different pick re-materialises deliberately.
      */
     private var materializedScenarioId: String? = null
+
+    init {
+        // Reaching the onboarding flow is the start of the measured journey.
+        // Write-once, so re-entering onboarding later never moves the start.
+        // Declared after the state properties so the block can never run before
+        // the fields a future marker might read are initialised.
+        markMilestone(OnboardingMilestone.ONBOARDING_STARTED)
+        attachToRunningDownload()
+    }
 
     /** Advances to the next step. Idempotent at the final step. */
     fun next() {
@@ -188,6 +209,10 @@ class OnboardingViewModel @Inject constructor(
                 setUpScenarioUseCase(scenario.id)
                     .onSuccess { setup ->
                         materializedScenarioId = scenario.id
+                        // The marker carries the materialised pipeline id: it is
+                        // what scopes "first value" to the scenario the user was
+                        // promised, rather than to any run that happens next.
+                        markMilestone(OnboardingMilestone.SCENARIO_CHOSEN, detail = setup.pipelineId)
                         _state.update {
                             it.copy(scenarioPreview = setup.toPreview(), step = OnboardingStep.Download)
                         }
@@ -263,14 +288,60 @@ class OnboardingViewModel @Inject constructor(
         val resolved = resolveDownloadTarget(picked) ?: return
 
         _state.update { it.copy(downloadProgress = 0f, downloadError = null) }
+        markMilestone(OnboardingMilestone.MODEL_DOWNLOAD_STARTED)
 
-        downloadJob = downloadManager.downloadModel(resolved.url, resolved.fileName)
+        collectDownload(downloadManager.downloadModel(resolved.url, resolved.fileName), picked, resolved)
+    }
+
+    /**
+     * Re-attaches to a download that is already running, so re-entering
+     * onboarding (the flow the user lands back in until they finish it) shows
+     * the live transfer instead of an idle step while the shade ticks along.
+     *
+     * Never starts anything: if nothing is running, this is a no-op.
+     */
+    private fun attachToRunningDownload() {
+        viewModelScope.launch {
+            // `firstOrNull`, not `first`: an empty stream is a perfectly
+            // ordinary "nothing is downloading", and an exception here would
+            // take the onboarding ViewModel down on construction.
+            val active = downloadManager.observeActiveDownload().firstOrNull() ?: return@launch
+            // A download the user started here in this session already has a
+            // collector; attaching twice would double-report every frame.
+            if (_state.value.downloadProgress != null) return@launch
+
+            val preset = OnboardingModelCatalog.PRESETS.firstOrNull { it.fileName == active.fileName }
+            val picked = OnboardingLiteRtModel.entries.firstOrNull { it.id == preset?.id }
+                ?: OnboardingLiteRtModel.CustomUrl
+            val resolved = ResolvedDownloadTarget(
+                url = preset?.downloadUrl.orEmpty(),
+                fileName = active.fileName,
+            )
+            _state.update { it.copy(liteRtModel = picked, downloadError = null) }
+            collectDownload(downloadManager.observeDownload(active.fileName), picked, resolved)
+        }
+    }
+
+    /**
+     * Folds a download state stream into the view state. Shared by the "start
+     * one" and "re-attach to one" paths so both behave identically.
+     */
+    private fun collectDownload(
+        states: Flow<DownloadState>,
+        picked: OnboardingLiteRtModel,
+        resolved: ResolvedDownloadTarget,
+    ) {
+        downloadJob = states
             .onEach { downloadState -> handleDownloadEmission(downloadState, picked, resolved) }
             .catch { e ->
                 _state.update {
                     it.copy(downloadProgress = null, downloadError = e.message ?: GENERIC_DOWNLOAD_ERROR)
                 }
             }
+            // A download cancelled elsewhere — the notification's Cancel action —
+            // ends the stream with no terminal state. Without this the step would
+            // sit on a frozen progress bar behind a disabled CTA forever.
+            .onCompletion { _state.update { it.copy(downloadProgress = null) } }
             .launchIn(viewModelScope)
     }
 
@@ -287,9 +358,18 @@ class OnboardingViewModel @Inject constructor(
     /**
      * Skip button (visible on steps 1-3). Persists `hasCompletedOnboarding` and
      * publishes a snackbar hint through the [TransientMessageRelay].
+     *
+     * Skipping mid-download no longer stops the transfer — it runs as background
+     * work — so the hint says so instead of pointing at Settings for a model
+     * that is already on its way.
      */
     fun skipOnboarding() {
-        transientMessageRelay.post(SKIP_SNACKBAR_MESSAGE)
+        val message = if (_state.value.downloadProgress != null) {
+            DOWNLOAD_CONTINUES_MESSAGE
+        } else {
+            SKIP_SNACKBAR_MESSAGE
+        }
+        transientMessageRelay.post(message)
         viewModelScope.launch { settingsRepository.setHasCompletedOnboarding(true) }
     }
 
@@ -337,31 +417,77 @@ class OnboardingViewModel @Inject constructor(
     ) {
         installedModelPath = downloadState.fileUri
         _state.update { it.copy(downloadProgress = null, installedModelId = picked.id) }
+        markMilestone(OnboardingMilestone.MODEL_DOWNLOAD_FINISHED)
         viewModelScope.launch {
-            val insertedId = localModelRepository.insertModel(
-                LocalModel(
-                    name = resolved.fileName,
-                    path = downloadState.fileUri,
-                    size = 0L,
-                    isActive = false,
-                ),
-            )
-            localModelRepository.setActiveModel(insertedId)
+            // The download worker owns registration (it has to — the transfer
+            // outlives this ViewModel), so the row already exists. Activating it
+            // stays here: it is a choice about *this* journey, and a download
+            // the user walked away from should not silently swap their model.
+            val registered = localModelRepository.findByFileName(resolved.fileName)
+            if (registered != null) {
+                localModelRepository.setActiveModel(registered.id)
+            }
             scheduleWarmUp()
         }
     }
 
+    /**
+     * Warms the inference handle for the installed model — and, on a first-time
+     * install that has never had a backend chosen, lets
+     * [PrepareInferenceBackendUseCase] pick one first (see its KDoc for the
+     * probe-then-verify-then-fall-back contract).
+     *
+     * Both call sites of this method — a finished download and a re-detected
+     * install — funnel through here, so the acceleration decision is made
+     * exactly once per journey regardless of which path reached the model.
+     *
+     * The `isCheckingAcceleration` flag is cleared in a `finally` so a failure
+     * or a cancelled job can never strand the "Checking acceleration…" copy on
+     * the Ready step.
+     */
     private fun scheduleWarmUp() {
         warmUpJob?.cancel()
         val path = installedModelPath ?: return
         warmUpJob = viewModelScope.launch {
-            when (val result = loadModelUseCase(path)) {
-                is Result.Success -> _state.update { it.copy(isModelWarmed = true) }
-                is Result.Error -> _state.update {
-                    it.copy(downloadError = result.message ?: GENERIC_LOAD_ERROR)
+            try {
+                val outcome = prepareInferenceBackendUseCase(
+                    modelPath = path,
+                    onAccelerationCheckStarted = { _state.update { it.copy(isCheckingAcceleration = true) } },
+                )
+                when (outcome) {
+                    is PrepareInferenceBackendUseCase.Outcome.Warmed ->
+                        _state.update { it.copy(isModelWarmed = true) }
+
+                    is PrepareInferenceBackendUseCase.Outcome.Failed -> _state.update {
+                        it.copy(downloadError = outcome.message ?: GENERIC_LOAD_ERROR)
+                    }
                 }
+            } finally {
+                _state.update { it.copy(isCheckingAcceleration = false) }
             }
         }
+    }
+
+    /**
+     * Records one write-once onboarding marker, fire-and-forget.
+     *
+     * The timestamp is taken **here**, not inside the coroutine, so the recorded
+     * value is when the event happened rather than when the dispatcher got to it.
+     * Recording is opt-in-gated and absorbs its own storage failures downstream,
+     * so a marker can never break the flow it observes.
+     *
+     * Two deliberate consequences of the write-once contract: a retried download
+     * keeps the *first* attempt's start marker (the measurement is wall-clock
+     * honest, retries included), and a journey where the model was already
+     * installed records no download markers at all — its download interval is
+     * then unknown, and time-to-value excluding the download equals the total.
+     *
+     * @param milestone The marker reached.
+     * @param detail Optional marker payload (the scenario's pipeline id), or `null`.
+     */
+    private fun markMilestone(milestone: OnboardingMilestone, detail: String? = null) {
+        val atMillis = System.currentTimeMillis()
+        viewModelScope.launch { usageTelemetry.recordOnboardingMilestone(milestone, atMillis, detail) }
     }
 
     private fun resolveDownloadTarget(model: OnboardingLiteRtModel): ResolvedDownloadTarget? {
@@ -402,6 +528,9 @@ class OnboardingViewModel @Inject constructor(
     companion object {
         /** Skip / escape snackbar copy — referenced by tests and `OnboardingScreen`. */
         const val SKIP_SNACKBAR_MESSAGE: String = "You can install a model from Settings → Models"
+
+        /** Skip copy while a download is in flight — it keeps running without the screen. */
+        const val DOWNLOAD_CONTINUES_MESSAGE: String = "Download continues in the background"
 
         /** Fallback copy when an unknown exception breaks the download stream. */
         private const val GENERIC_DOWNLOAD_ERROR: String = "Download failed."

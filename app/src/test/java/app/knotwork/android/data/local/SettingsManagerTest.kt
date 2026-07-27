@@ -12,6 +12,7 @@ import app.knotwork.android.data.local.crypto.FakeAeadCipher
 import app.knotwork.android.data.local.crypto.InMemorySharedPreferences
 import app.knotwork.android.data.local.crypto.KeystoreBackedPrefsStore
 import app.knotwork.android.domain.constants.SettingsDefaults
+import app.knotwork.android.domain.models.LocalBackend
 import app.knotwork.android.domain.models.McpAuth
 import app.knotwork.android.domain.models.McpServerConfig
 import app.knotwork.android.domain.models.McpTransport
@@ -211,6 +212,25 @@ class SettingsManagerTest {
         // `false`: READ_ONLY tools run silently out of the box; the typed
         // ToolApprovalPolicy (not this superseded flag) governs real prompts.
         assertEquals(SettingsDefaults.REQUIRES_USER_CONFIRMATION_DEFAULT, result)
+    }
+
+    @Test
+    fun `localModelBackendPreference distinguishes never-chosen from an explicit CPU choice`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            // Nothing stored: the folded reader still answers CPU (every
+            // inference call site needs a backend), but the raw preference must
+            // report "never chosen" so the onboarding probe may pick a default.
+            assertNull(manager.localModelBackendPreference.first())
+            assertEquals(LocalBackend.CPU.key, manager.localModelBackend.first())
+
+            manager.setLocalModelBackend(LocalBackend.CPU.key)
+
+            // Same folded value, different meaning: the choice has been made.
+            assertEquals(LocalBackend.CPU.key, manager.localModelBackendPreference.first())
+        } finally {
+            scope.cancel()
+        }
     }
 
     @Test

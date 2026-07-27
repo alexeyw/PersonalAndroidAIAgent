@@ -652,4 +652,74 @@ class AppDatabaseMigrationTest {
             Converters().toSamplePrompts("[]"),
         )
     }
+
+    @Test
+    fun `MIGRATION_50_51 targets versions 50 to 51`() {
+        val migration = AppDatabase.MIGRATION_50_51
+
+        assertEquals(50, migration.startVersion)
+        assertEquals(51, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_50_51 creates the trigger_evaluations table with both indexes`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val sqlSlots = mutableListOf<String>()
+
+        AppDatabase.MIGRATION_50_51.migrate(db)
+
+        // One CREATE TABLE plus the two index creations.
+        verify(exactly = 3) { db.execSQL(capture(sqlSlots)) }
+        val joined = sqlSlots.joinToString("\n").uppercase()
+        assertTrue(
+            "Expected CREATE TABLE trigger_evaluations, got: $sqlSlots",
+            joined.contains("CREATE TABLE IF NOT EXISTS `TRIGGER_EVALUATIONS`"),
+        )
+        // Core columns and the primary key.
+        listOf("`ID`", "`TRIGGERID`", "`EVALUATEDAT`", "`SOURCE`", "`VERDICTKIND`", "PRIMARY KEY(`ID`)").forEach {
+            assertTrue("Expected column/PK $it in: $sqlSlots", joined.contains(it))
+        }
+        // The "by trigger, by time" composite index and the run-outcome index.
+        assertTrue(
+            "Expected (triggerId, evaluatedAt) index: $sqlSlots",
+            joined.contains("INDEX_TRIGGER_EVALUATIONS_TRIGGERID_EVALUATEDAT"),
+        )
+        assertTrue(
+            "Expected runId index: $sqlSlots",
+            joined.contains("INDEX_TRIGGER_EVALUATIONS_RUNID"),
+        )
+    }
+
+    @Test
+    fun `MIGRATION_51_52 targets versions 51 to 52`() {
+        val migration = AppDatabase.MIGRATION_51_52
+
+        assertEquals(51, migration.startVersion)
+        assertEquals(52, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_51_52 creates the onboarding_milestone table keyed by the marker`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val sqlSlot = slot<String>()
+
+        AppDatabase.MIGRATION_51_52.migrate(db)
+
+        // Purely additive: one CREATE TABLE, no existing table touched.
+        verify(exactly = 1) { db.execSQL(capture(sqlSlot)) }
+        val sql = sqlSlot.captured.uppercase()
+        assertTrue(
+            "Expected CREATE TABLE onboarding_milestone, got: ${sqlSlot.captured}",
+            sql.contains("CREATE TABLE IF NOT EXISTS `ONBOARDING_MILESTONE`"),
+        )
+        // The marker key is the primary key — that is what backs the write-once
+        // (INSERT OR IGNORE) semantics of the journey markers.
+        assertTrue(
+            "Marker key must be the primary key: ${sqlSlot.captured}",
+            sql.contains("PRIMARY KEY(`MILESTONEKEY`)"),
+        )
+        assertTrue("Expected atMillis column: ${sqlSlot.captured}", sql.contains("`ATMILLIS` INTEGER NOT NULL"))
+        // The payload is nullable: only SCENARIO_CHOSEN carries one.
+        assertTrue("Expected nullable detail column: ${sqlSlot.captured}", sql.contains("`DETAIL` TEXT"))
+    }
 }

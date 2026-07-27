@@ -90,6 +90,15 @@ class AgentWorker @AssistedInject constructor(
          */
         const val KEY_ORIGIN = "agent_origin"
 
+        /**
+         * Input-data key carrying a pre-minted run id for the enqueued run.
+         * Optional: when absent the orchestrator mints a fresh id. A trigger
+         * fire supplies it so its trigger-evaluation journal row (written the
+         * moment the trigger fires, before this worker even starts) already
+         * carries the id the run's terminal outcome is later attributed back by.
+         */
+        const val KEY_RUN_ID = "agent_run_id"
+
         /** Progress key exposing the node currently executing (or the run status). */
         const val KEY_CURRENT_STAGE = "current_stage"
 
@@ -121,6 +130,7 @@ class AgentWorker @AssistedInject constructor(
                 userPrompt = prompt,
                 pipelineId = inputData.getString(KEY_PIPELINE_ID),
                 origin = parseOrigin(inputData.getString(KEY_ORIGIN)),
+                runId = inputData.getString(KEY_RUN_ID),
             )
             Timber.d("AgentWorker enqueued background run %s into session %s", runId, sessionId)
         } catch (e: CancellationException) {

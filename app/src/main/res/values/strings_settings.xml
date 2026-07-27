@@ -149,6 +149,9 @@
     <string name="notifications_agent_foreground_title">Knotwork agent</string>
     <string name="notifications_scheduled_running_title">Scheduled task</string>
     <string name="notifications_scheduled_running_body">Agent is working in the background…</string>
+    <string name="notifications_model_download_channel_name">Model downloads</string>
+    <string name="notifications_model_download_title">Downloading model</string>
+    <string name="notifications_model_download_cancel">Cancel</string>
     <string name="notifications_task_results_channel_name">Scheduled task results</string>
     <string name="notifications_task_results_channel_description">Outcome of scheduled background tasks.</string>
     <string name="notifications_trigger_fired_title">Trigger fired</string>
@@ -198,6 +201,12 @@
     <string name="settings_usage_active_days_first">First</string>
     <string name="settings_usage_active_days_last">Last</string>
     <string name="settings_usage_active_days_none">—</string>
+    <string name="settings_usage_onboarding_total">Time to first value</string>
+    <string name="settings_usage_onboarding_download">Model download</string>
+    <string name="settings_usage_onboarding_product">Excluding model download</string>
+    <!-- Duration as mm:ss (minutes are not capped at 60, so a long download reads as e.g. 84:07). -->
+    <string name="settings_usage_duration">%1$d:%2$02d</string>
+    <string name="settings_usage_duration_none">—</string>
     <string name="settings_usage_export_filename">knotwork-usage.json</string>
     <string name="settings_usage_share_title">Knotwork usage statistics</string>
     <string name="settings_usage_reset_title">Reset usage statistics?</string>

@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import app.knotwork.android.data.network.AndroidModelDownloadManager
 import app.knotwork.android.domain.engine.TaskQueueManager
 import app.knotwork.android.domain.models.DownloadState
-import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.isBusy
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.ModelDownloadManager
@@ -17,6 +16,7 @@ import app.knotwork.android.domain.usecases.RunBenchmarkUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -101,6 +102,7 @@ class ModelsViewModel @Inject constructor(
         observeBackend()
         observeActiveModelPerformance()
         observeEngineBusy()
+        observeRunningDownload()
     }
 
     /**
@@ -187,7 +189,7 @@ class ModelsViewModel @Inject constructor(
     fun startDownload(url: String, fileName: String) {
         if (_uiState.value.isDownloading) return
 
-        val authToken = _uiState.value.authTokenInput.takeIf { it.isNotBlank() }
+        val useStoredAuth = _uiState.value.authTokenInput.isNotBlank()
 
         // Defence-in-depth: even though `isDownloading` blocks the second
         // entry above, any stale `downloadJob` from a finished collection
@@ -207,7 +209,42 @@ class ModelsViewModel @Inject constructor(
             )
         }
 
-        downloadJob = downloadManager.downloadModel(url, fileName, authToken)
+        collectDownload(downloadManager.downloadModel(url, fileName, useStoredAuth))
+    }
+
+    /**
+     * Attaches to a download already running in the background.
+     *
+     * The transfer outlives this ViewModel, so returning to the screen must find
+     * it again — otherwise the shade shows a download in progress while the
+     * screen that owns it looks idle.
+     */
+    private fun observeRunningDownload() {
+        downloadManager.observeActiveDownload()
+            .onEach { active ->
+                if (active == null) return@onEach
+                if (_uiState.value.activeDownloadFileName == active.fileName) return@onEach
+                _uiState.update {
+                    it.copy(
+                        isDownloading = true,
+                        downloadProgress = (active.state as? DownloadState.Downloading)?.progress ?: 0,
+                        downloadError = null,
+                        activeDownloadFileName = active.fileName,
+                    )
+                }
+                collectDownload(downloadManager.observeDownload(active.fileName))
+            }
+            .launchIn(viewModelScope)
+    }
+
+    /**
+     * Folds a download state stream into the UI state. Shared by the "start one"
+     * and "re-attach to one" paths so both behave identically once the bytes are
+     * moving.
+     */
+    private fun collectDownload(states: Flow<DownloadState>) {
+        downloadJob?.cancel()
+        downloadJob = states
             .onEach { state ->
                 when (state) {
                     is DownloadState.Pending -> {
@@ -224,17 +261,9 @@ class ModelsViewModel @Inject constructor(
                                 activeDownloadFileName = null,
                             )
                         }
-                        // Save the downloaded model metadata to the local database
-                        viewModelScope.launch {
-                            val newModel = LocalModel(
-                                name = fileName,
-                                path = state.fileUri,
-                                // Size is not provided by OkHttp DownloadManager currently.
-                                size = 0L,
-                                isActive = false,
-                            )
-                            localModelRepository.insertModel(newModel)
-                        }
+                        // The download worker registers the file itself — it has
+                        // to, since the transfer outlives this screen — so there
+                        // is nothing to insert here.
                     }
                     is DownloadState.Error -> {
                         _uiState.update {
@@ -258,6 +287,14 @@ class ModelsViewModel @Inject constructor(
                         ),
                         activeDownloadFileName = null,
                     )
+                }
+            }
+            // A download cancelled elsewhere — the notification's Cancel action —
+            // ends the stream with no terminal state, so the screen has to clear
+            // its own in-flight flags or it would show a download that is gone.
+            .onCompletion {
+                _uiState.update {
+                    it.copy(isDownloading = false, downloadProgress = null, activeDownloadFileName = null)
                 }
             }
             .launchIn(viewModelScope)
@@ -308,12 +345,15 @@ class ModelsViewModel @Inject constructor(
     }
 
     /**
-     * Cancels the currently in-flight download (if any). The download manager
-     * has no native cancellation API, so the collection job is interrupted
-     * instead — partial files are not cleaned up, but the UI returns to the
-     * idle state immediately.
+     * Cancels the currently in-flight download (if any).
+     *
+     * The download runs as background work, so stopping the observing job is
+     * no longer enough — it would leave the transfer running with no UI. The
+     * work itself is cancelled by target file name; the bytes already fetched
+     * stay on disk, so re-downloading the same file resumes.
      */
     fun cancelDownload() {
+        _uiState.value.activeDownloadFileName?.let(downloadManager::cancelDownload)
         downloadJob?.cancel()
         downloadJob = null
         _uiState.update {

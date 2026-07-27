@@ -13,8 +13,108 @@ details.
 
 ## [Unreleased]
 
+### Added
+
+- **Model downloads survive leaving the app, and resume instead of restarting.**
+  A download used to live and die with the screen that started it: switching
+  away froze the transfer, and finishing setup cancelled it outright — on a slow
+  connection that meant gigabytes fetched and thrown away. Downloads now run as
+  background work with a progress notification (including a **Cancel** action),
+  keep going while you use the rest of the app, and pick up where they stopped
+  after a dropped connection. Unfinished bytes are held in a temporary file
+  until the transfer completes, so a half-downloaded model can no longer look
+  like an installed one, and the finished file registers itself even if you are
+  no longer watching. Returning to the Models screen or to setup reconnects to
+  the running transfer instead of showing an idle screen next to a ticking
+  notification.
+- **Setup now picks the fastest inference backend your device can actually
+  run.** New installs used to start on the CPU backend, which made the very
+  first answer — right after the model download — take the slowest path
+  available. Setup now checks once whether the device supports GPU inference
+  and, if it does, verifies it by really generating with the model
+  (**Checking acceleration…** on the last setup step) before keeping it. On the
+  reference device this is around five times faster on decode. Anything less
+  than a clean success falls back to CPU silently, and the outcome is written
+  into **Settings → Models → Inference backend**, so it is both visible and
+  overridable. An explicitly chosen backend is never overridden.
+- **`verifyDocsHygiene` build guard.** A new pure-JVM Gradle verification
+  task (wired into `./gradlew check`, unit-tested in `buildSrc`) fails the
+  build if any public-contour Markdown file reintroduces an LLM tool-call
+  wrapper artifact or a reference to an internal-only planning document.
+- **Groundwork for a trigger-evaluation journal.** A new on-device,
+  SQLCipher-encrypted store records why each automation trigger did or did
+  not fire (fired / re-armed / a typed skip reason) and the eventual outcome
+  of every background run it started — the durable data behind upcoming
+  background-reliability diagnostics. Retained for 30 days (with a hard record
+  cap) and cleaned up in the existing daily maintenance window; nothing it
+  holds ever leaves the device.
+- **The trigger-evaluation journal now records at every decision point.** Each
+  time an automation trigger is evaluated in the background, exactly one entry
+  is written the moment the decision is made — fired, re-armed, or a typed skip
+  reason — tagged with which background surface woke it. When a trigger fires,
+  the entry is later completed with the run's terminal fate: success, a typed
+  failure, a platform kill (the hosting process was killed), a deliberate stop
+  (the user cancelled the run), or a background-approval timeout — each kept
+  distinct so a platform-reliability problem is never confused with a failure or
+  an intended stop. Recording is a pure observer: a journal write failure is
+  logged but never alters or aborts the run it describes.
+- **See what your triggers are doing, without a cable.** Tapping a trigger now
+  opens a detail screen with its **evaluation journal** — a day-by-day timeline
+  of every time the trigger was checked in the background, written in plain
+  language: whether it fired, was re-armed, or was skipped (and why — e.g. "the
+  condition wasn't met at 07:15"), and for each run it started, how that run
+  ended (completed, failed with the reason, stopped by the system, you stopped
+  it, or timed out waiting for approval). Each trigger in the list also carries
+  an at-a-glance **health badge** — Healthy, Overdue (the phone hasn't checked it
+  in longer than expected — the tell-tale of aggressive battery savers), or Last
+  run failed — each shown with an icon and a label, never colour alone. An
+  overdue trigger's detail explains the likely cause in the header. This is the
+  window onto the background so a trigger that "just didn't happen" is never a
+  mystery.
+- **Setup timing on the Usage statistics screen.** The on-device statistics now
+  include how long the path from opening onboarding to your first successful run
+  actually took, split into the model download and the time without it — the
+  download is bound by your connection, not by the app, so the two are judged
+  separately. The markers behind it are recorded once per install (a repeated
+  pass through onboarding never moves them), are opt-in-gated like every other
+  local count, and travel in the voluntary text/JSON export. Nothing here leaves
+  the device.
+- **Debug-only trigger-journal dump for background-reliability soak testing.** A
+  developer diagnostic — present only in debug builds, never shipped — writes the
+  full trigger-evaluation journal to a plain-JSON file that `adb pull` can
+  retrieve, so a multi-day background soak can be analysed offline without opening
+  the app or decrypting the on-device database. Nothing it produces leaves the
+  device.
+
+### Fixed
+
+- **Release builds crashed on the first message that touched long-term
+  memory.** In a minified (release) build, initialising the on-device text
+  embedder threw `ExceptionInInitializerError` and killed the app process, so a
+  fresh install could send a message but never receive the reply. The cause was
+  code shrinking renaming a logging library that identifies its own call frames
+  by name; the affected package is now pinned, and a new release-build check
+  fails the build if that protection is ever lost again. Debug builds were never
+  affected, which is why this survived undetected — anyone running a release
+  build of `0.6.0` should update.
+
 ### Changed
 
+- **Cloud model line-up follows the upstream client.** With the Koog client
+  updated to 1.1.1, Google's `gemini-3-pro-preview` is no longer offered — the
+  upstream catalogue replaced it with `gemini-3.1-pro-preview`, which now takes
+  its place in the model picker. If a provider was pinned to the removed model,
+  pick the new entry: an unrecognised saved model falls back to the default
+  Gemini flash model. Also bumps the Android Gradle plugin, `org.json` and
+  Roborazzi to their current releases.
+- **Trigger observability is documented end to end.** The user guide now
+  explains the health badges and the evaluation journal in the terms the
+  screens actually use, adds a *"A trigger didn't fire"* troubleshooting path
+  that separates "the journal explains it" from "there is no entry, so the
+  phone never woke the app", and states plainly the one gap that remains: an
+  approval you grant in the background leaves no distinct trace, only a
+  timeout does. The architecture guide gains the journal's write points,
+  invariants and retention bounds alongside the trigger flow diagram.
 - **Documentation hygiene pass across the public contour.** The product is
   now referred to consistently as **Knotwork** (an on-device AI agent for
   Android) throughout the docs, the near-term roadmap is realigned to lead
@@ -22,13 +122,6 @@ details.
   the end of `README.md` was removed, several dangling references to
   internal-only documents were inlined or dropped, and duplicated version
   numbers were replaced with a single source of truth.
-
-### Added
-
-- **`verifyDocsHygiene` build guard.** A new pure-JVM Gradle verification
-  task (wired into `./gradlew check`, unit-tested in `buildSrc`) fails the
-  build if any public-contour Markdown file reintroduces an LLM tool-call
-  wrapper artifact or a reference to an internal-only planning document.
 
 ## [0.6.0] - 2026-07-16
 

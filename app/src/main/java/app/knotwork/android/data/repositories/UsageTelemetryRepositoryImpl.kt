@@ -4,7 +4,10 @@ import androidx.annotation.VisibleForTesting
 import app.knotwork.android.data.local.dao.ActiveDayStats
 import app.knotwork.android.data.local.dao.UsageTelemetryCategories
 import app.knotwork.android.data.local.dao.UsageTelemetryDao
+import app.knotwork.android.data.local.models.OnboardingMilestoneEntity
 import app.knotwork.android.data.local.models.UsageCounterEntity
+import app.knotwork.android.domain.models.OnboardingJourney
+import app.knotwork.android.domain.models.OnboardingMilestone
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.PipelineRunTally
 import app.knotwork.android.domain.models.UsageTelemetrySummary
@@ -28,12 +31,13 @@ import javax.inject.Singleton
 /**
  * Room-backed implementation of [UsageTelemetryRepository].
  *
- * Aggregates the two on-device counter tables (`usage_counter`,
- * `usage_active_day`) into a live [UsageTelemetrySummary] and records terminal
- * run outcomes / trigger firings behind the opt-in flag. **No method here ever
- * touches the network** — the whole class reads and writes only the local
- * (SQLCipher-encrypted) database, which is the privacy guarantee the feature is
- * built around (enforced structurally by `UsageTelemetryNoNetworkKonsistTest`).
+ * Aggregates the three on-device tables (`usage_counter`, `usage_active_day`,
+ * `onboarding_milestone`) into a live [UsageTelemetrySummary] and records terminal
+ * run outcomes / trigger firings / onboarding markers behind the opt-in flag.
+ * **No method here ever touches the network** — the whole class reads and writes
+ * only the local (SQLCipher-encrypted) database, which is the privacy guarantee
+ * the feature is built around (enforced structurally by
+ * `UsageTelemetryNoNetworkKonsistTest`).
  *
  * **Best-effort contract.** Recording absorbs storage failures (logged, no-op)
  * via the shared [absorbingStoreFailure] wrapper, so it can never take down the
@@ -76,7 +80,8 @@ class UsageTelemetryRepositoryImpl internal constructor(
         get() = combine(
             dao.observeCounters(),
             dao.observeActiveDayStats(),
-        ) { counters, dayStats -> aggregate(counters, dayStats) }
+            dao.observeMilestones(),
+        ) { counters, dayStats, milestones -> aggregate(counters, dayStats, journey(milestones)) }
             // Degrade to EMPTY on a DAO/SQLCipher read error rather than letting
             // the exception cancel the screen's collector (best-effort read).
             .catch { e ->
@@ -106,14 +111,62 @@ class UsageTelemetryRepositoryImpl internal constructor(
         }
     }
 
+    override suspend fun recordOnboardingMilestone(milestone: OnboardingMilestone, atMillis: Long, detail: String?) {
+        if (!isEnabled()) return
+        absorbingStoreFailure({ "Usage-telemetry recordOnboardingMilestone failed; ignored" }) {
+            // INSERT OR IGNORE: the first occurrence of a marker wins, so a
+            // second pass through onboarding never moves a measured journey.
+            withContext(dispatcher) { dao.recordMilestone(milestone.name, atMillis, detail) }
+        }
+    }
+
+    override suspend fun recordOnboardingFirstValue(pipelineId: String, atMillis: Long) {
+        if (!isEnabled()) return
+        absorbingStoreFailure({ "Usage-telemetry recordOnboardingFirstValue failed; ignored" }) {
+            withContext(dispatcher) {
+                // Read-then-write rather than a blind INSERT OR IGNORE: the
+                // decision needs the scenario's pipeline id, which lives in
+                // another marker's payload. A lost race between two runs
+                // completing at once is harmless — the INSERT OR IGNORE below
+                // keeps whichever landed first, which is the earlier first value.
+                if (!journey(dao.getMilestones()).acceptsFirstValueFrom(pipelineId)) return@withContext
+                dao.recordMilestone(OnboardingMilestone.FIRST_VALUE.name, atMillis, detail = null)
+            }
+        }
+    }
+
     override suspend fun reset() {
         absorbingStoreFailure({ "Usage-telemetry reset failed; ignored" }) {
             withContext(dispatcher) { dao.clearAll() }
         }
     }
 
-    /** Folds the raw counter rows + active-day aggregate into the domain summary. */
-    private fun aggregate(counters: List<UsageCounterEntity>, dayStats: ActiveDayStats): UsageTelemetrySummary {
+    /**
+     * Folds the raw marker rows into the domain journey, dropping any row whose
+     * key no longer maps to a known [OnboardingMilestone] (a marker retired by a
+     * future release must not crash the screen of an install that recorded it).
+     */
+    private fun journey(milestones: List<OnboardingMilestoneEntity>): OnboardingJourney {
+        val recorded = milestones.mapNotNull { row ->
+            milestoneOrNull(row.milestoneKey)?.let { it to row.atMillis }
+        }.toMap()
+        val scenarioPipelineId = milestones
+            .firstOrNull { it.milestoneKey == OnboardingMilestone.SCENARIO_CHOSEN.name }
+            ?.detail
+            ?.takeIf { it.isNotBlank() }
+        return OnboardingJourney(milestones = recorded, scenarioPipelineId = scenarioPipelineId)
+    }
+
+    /** Resolves a stored marker key to its [OnboardingMilestone], or `null` if unrecognised. */
+    private fun milestoneOrNull(key: String): OnboardingMilestone? =
+        OnboardingMilestone.entries.firstOrNull { it.name == key }
+
+    /** Folds the raw counter rows + active-day aggregate + markers into the domain summary. */
+    private fun aggregate(
+        counters: List<UsageCounterEntity>,
+        dayStats: ActiveDayStats,
+        onboarding: OnboardingJourney,
+    ): UsageTelemetrySummary {
         val runsByPipeline = counters
             .filter { it.category == UsageTelemetryCategories.PIPELINE_RUN }
             .sortedByDescending { it.count }
@@ -137,6 +190,7 @@ class UsageTelemetryRepositoryImpl internal constructor(
             activeDays = dayStats.dayCount,
             firstActiveDay = dayStats.firstDay,
             lastActiveDay = dayStats.lastDay,
+            onboarding = onboarding,
         )
     }
 

@@ -1184,8 +1184,9 @@ idle. Three components coordinate that lifecycle:
 | `ChargingTriggerSweepWorker` | Charging-constrained one-shot (`setRequiresCharging`) that the OS wakes the instant the device is plugged in, firing charging triggers without waiting for the poll. |
 | `WorkManagerTriggerScheduler` | `TriggerScheduler` impl: registers / cancels the per-condition watches as triggers are created, edited, enabled or deleted, so changes take effect immediately. |
 | `PendingInteractionMaintenanceWorker` | Periodic (6 h) expiry pass: fails runs whose parked approval / clarification outlived the approval window. |
-| `RunRetentionWorker`       | Daily (charging + idle) retention pass over `pipeline_runs` / `trace_steps` — see *Run retention* below. |
+| `RunRetentionWorker`       | Daily (charging + idle) retention pass over `pipeline_runs` / `trace_steps` **and** the trigger-evaluation journal (age window + hard cap) — see *Run retention* below. |
 | `MemoryCompactionWorker`   | Daily (charging + idle) long-term-memory compaction (see the memory lifecycle section).        |
+| `ModelDownloadWorker`      | Unique-per-file model download promoted to a `dataSync` foreground service, so a multi-gigabyte transfer survives leaving the screen or the app. Resumes a partial file over HTTP `Range` (`ResumableFileDownloader`), retries transport failures, and registers the finished file itself — the observing ViewModel may be long gone by then. |
 
 A scheduled task is not a separate execution path: `AgentWorker`
 enqueues the stored prompt through the same `TaskQueueManager` →
@@ -1332,6 +1333,12 @@ runs per chat, 30 days). Non-terminal runs — including parked
 `WAITING_*` runs — are never retention candidates; their lifetime is
 bounded by the approval window instead (see above).
 
+The same worker runs `CleanupTriggerJournalUseCase` over the
+trigger-evaluation journal (§6.4). Its bounds are domain constants rather
+than settings — a 30-day window plus a 2000-row hard cap — because the
+journal is diagnostic data the user never tunes, and the cap is what keeps a
+misbehaving poll from growing the table without limit between age cutoffs.
+
 ### 6.4. Triggers and entry surfaces → background runs
 
 A run no longer needs an interactive prompt to start. Two product
@@ -1372,8 +1379,12 @@ a session named after the trigger, minted on first fire and persisted
 Recurring fires accumulate in that one session; a deleted session is
 re-created on the next fire.
 
-**Firing latency.** Time and network triggers ride a periodic
-(~15-minute) `TriggerWatchWorker` poll. Charging triggers additionally
+**Firing latency.** Every trigger gets its own periodic `TriggerWatchWorker`
+registration, and the period depends on the condition: an interval trigger
+uses its own interval (floored at the 15-minute platform minimum, with flex),
+a daily trigger a 24-hour period with an initial delay to the next occurrence
+of its time, and network / charging triggers the shared 15-minute poll.
+Charging triggers additionally
 register a charging-constrained one-shot (`ChargingTriggerSweepWorker`
 via `setRequiresCharging`) that the OS wakes the instant the device is
 plugged in — even with the app closed — so a charging trigger fires
@@ -1382,12 +1393,64 @@ backstop and the unplug edge re-arms the one-shot. Event triggers fire on
 the *edge* into the satisfied state (an `armed` latch), so a sustained
 state (e.g. an overnight charge) fires exactly once.
 
+**Trigger-evaluation journal.** Background work that leaves no record is
+undiagnosable, so every evaluation is persisted. The governing invariant is
+**no silent skips**: each time a trigger is evaluated, *exactly one*
+`TriggerEvaluation` row is written at the moment the decision is taken —
+`Fired` / `ReArmed` / `Skipped(reason)` — tagged with the surface that woke
+it (`POLL` / `EVENT` / `CHARGING_SWEEP`). The one wakeup that writes nothing
+is a trigger deleted between the wakeup and its handling — there is no longer
+anything to attribute a row to. The consequence is what makes the journal
+useful: a trigger that did not run is either explained by a row, or has no
+row at all, and that absence is itself evidence — the platform never woke the
+app.
+
+The record is completed in two phases, written at two seams:
+
+1. `FireTriggerUseCase` writes the verdict through
+   `RecordTriggerEvaluationUseCase`. On *fire* the row carries the
+   **pre-minted `runId`** that is then handed to
+   `TaskScheduler.scheduleOneTime(...)`, so the correlation exists before the
+   run does. (The fire itself is made idempotent separately, by writing
+   `markFired` and the disarm *before* the enqueue, so a retried wakeup cannot
+   fire twice.)
+2. `PipelineRunRepositoryImpl.finishRun` — the single choke point every run
+   passes through on its way to a terminal state — attributes the outcome
+   back onto that row by run id, gated on the transition actually happening
+   and on `origin == TRIGGER`. `Success` / `Failure` / `CancelledBySystem`
+   (the hosting process was killed) / `Cancelled` (the user stopped it) /
+   `HitlTimeout` stay distinct, so a platform-reliability problem is never
+   read as a pipeline failure.
+
+The journal is a **pure observer**: `TriggerJournalRepositoryImpl` absorbs
+storage failures on write and degrades to an empty result on read, so a
+journal defect can never alter or abort the run it describes. The table
+(`trigger_evaluations`) deliberately carries **no foreign key** on
+`triggerId` — a diagnostic record must outlive the trigger it explains — and
+its growth is bounded instead by retention (30-day window plus a hard row
+cap) in `RunRetentionWorker`.
+
+Two derived reads sit on top, both pure and both migration-free:
+`TriggerHealthEvaluator` folds the latest evaluation and the latest fired
+outcome per trigger (`observeHealthInputs`, two `MAX(evaluatedAt) GROUP BY
+triggerId` queries) into `HEALTHY` / `STALE` / `ERRORED` — `null` for an
+inactive trigger, no journal data at all reading `HEALTHY` (a freshly bound
+trigger is not overdue; staleness is inferred from evaluations, never from
+`createdAt`), staleness winning over an error, and the stale threshold being
+the condition's expected cadence × 2 floored at the 15-minute background
+cadence. `ERRORED` covers any settled outcome that is not `Success`, so a
+platform kill or a user stop shows up as loudly as a failure. And
+`TriggerJournalGrouper` projects a trigger's rows into
+day-grouped, relative-timestamped entries for the detail screen. Neither
+touches strings or locale — the presentation layer resolves those.
+
 ```mermaid
 flowchart TD
     Cond["Condition met<br/>(charge edge / poll / tile / share)"] --> Fire[FireTriggerUseCase]
     Fire --> Eval{EvaluateTriggerFiringUseCase}
     Eval -- skip / re-arm --> Done([No run])
     Eval -- fire --> Bound[Resolve bound session<br/>+ record fired/disarm]
+    Fire -.->|"one row per evaluation<br/>(fired carries the pre-minted runId)"| Journal[("trigger_evaluations")]
     Bound --> Sched["TaskScheduler.scheduleOneTime<br/>(origin = TRIGGER)"]
     Sched --> Worker[AgentWorker]
     Worker --> Queue["TaskQueueManager → GraphExecutionEngine<br/>(same path as a scheduled task)"]
@@ -1397,6 +1460,9 @@ flowchart TD
     Park -- approve from notification --> Queue
     Hitl -- no --> Result[Final answer in the bound chat]
     Queue --> Result
+    Queue --> Finish["PipelineRunRepositoryImpl.finishRun<br/>(terminal transition)"]
+    Finish -.->|"outcome by runId<br/>(origin = TRIGGER only)"| Journal
+    Journal --> Health["TriggerHealthEvaluator / TriggerJournalGrouper<br/>→ health badge + detail journal"]
 ```
 
 ---

@@ -1144,6 +1144,17 @@ class SettingsManager @Inject constructor(
             preferences[PreferencesKeys.LOCAL_MODEL_BACKEND] ?: LocalBackend.CPU.key
         }
 
+    override val localModelBackendPreference: Flow<String?> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences -> preferences[PreferencesKeys.LOCAL_MODEL_BACKEND] }
+
     override suspend fun setLocalModelBackend(backend: String) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.LOCAL_MODEL_BACKEND] = backend

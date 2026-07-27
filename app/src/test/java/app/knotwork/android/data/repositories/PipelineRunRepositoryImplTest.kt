@@ -5,7 +5,10 @@ import app.knotwork.android.data.local.models.PipelineRunEntity
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.RunOrigin
+import app.knotwork.android.domain.models.TriggerRunOutcome
+import app.knotwork.android.domain.repositories.TriggerJournalRepository
 import app.knotwork.android.domain.repositories.UsageTelemetryRepository
+import app.knotwork.android.domain.usecases.ParkedRunResumer
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -32,6 +35,7 @@ class PipelineRunRepositoryImplTest {
 
     private lateinit var pipelineRunDao: PipelineRunDao
     private lateinit var usageTelemetry: UsageTelemetryRepository
+    private lateinit var triggerJournal: TriggerJournalRepository
     private lateinit var repository: PipelineRunRepositoryImpl
 
     private val terminalNames = listOf("COMPLETED", "FAILED", "CANCELLED", "INTERRUPTED")
@@ -70,7 +74,10 @@ class PipelineRunRepositoryImplTest {
         // the dedicated recordRunTelemetry tests flip it on explicitly.
         usageTelemetry = mockk(relaxed = true)
         coEvery { usageTelemetry.isEnabled() } returns false
-        repository = PipelineRunRepositoryImpl(pipelineRunDao, usageTelemetry)
+        // The trigger journal is a best-effort observer: relaxed so the outcome
+        // write is a no-op for the runs the pre-existing tests finish.
+        triggerJournal = mockk(relaxed = true)
+        repository = PipelineRunRepositoryImpl(pipelineRunDao, usageTelemetry, triggerJournal)
     }
 
     @Test
@@ -544,6 +551,45 @@ class PipelineRunRepositoryImplTest {
     }
 
     @Test
+    fun `given a root run completes then the onboarding first-value marker is offered`() = runTest {
+        coEvery { usageTelemetry.isEnabled() } returns true
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRun("run-1") } returns
+            sampleEntity.copy(id = "run-1", pipelineId = "pipe-1", parentRunId = null)
+
+        repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
+
+        // The repository owns the attribution rules; the chokepoint only reports
+        // a completed, root, pipeline-bound run.
+        coVerify(exactly = 1) { usageTelemetry.recordOnboardingFirstValue("pipe-1", any()) }
+    }
+
+    @Test
+    fun `given a root run fails then no onboarding first-value marker is offered`() = runTest {
+        coEvery { usageTelemetry.isEnabled() } returns true
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRun("run-1") } returns
+            sampleEntity.copy(id = "run-1", pipelineId = "pipe-1", parentRunId = null)
+
+        repository.finishRun("run-1", PipelineRunStatus.FAILED, errorMessage = "boom")
+
+        // A failed run is not "first value" — only COMPLETED closes the metric.
+        coVerify(exactly = 0) { usageTelemetry.recordOnboardingFirstValue(any(), any()) }
+    }
+
+    @Test
+    fun `given a nested sub-pipeline run completes then no onboarding first-value marker is offered`() = runTest {
+        coEvery { usageTelemetry.isEnabled() } returns true
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRun("child-1") } returns
+            sampleEntity.copy(id = "child-1", pipelineId = "pipe-1", parentRunId = "root-1")
+
+        repository.finishRun("child-1", PipelineRunStatus.COMPLETED)
+
+        coVerify(exactly = 0) { usageTelemetry.recordOnboardingFirstValue(any(), any()) }
+    }
+
+    @Test
     fun `given a nested sub-pipeline run finishes then it is not recorded`() = runTest {
         coEvery { usageTelemetry.isEnabled() } returns true
         coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
@@ -588,5 +634,81 @@ class PipelineRunRepositoryImplTest {
 
         coVerify(exactly = 0) { pipelineRunDao.getRun(any()) }
         coVerify(exactly = 0) { usageTelemetry.recordPipelineRunOutcome(any(), any(), any()) }
+    }
+
+    @Test
+    fun `given a completed trigger run finishes then Success is attributed to its trigger-journal row`() = runTest {
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.TRIGGER.name
+
+        repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
+
+        coVerify(exactly = 1) { triggerJournal.recordRunOutcome("run-1", TriggerRunOutcome.Success) }
+    }
+
+    @Test
+    fun `given a failed trigger run finishes then a typed Failure carrying the message is attributed`() = runTest {
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.TRIGGER.name
+
+        repository.finishRun("run-1", PipelineRunStatus.FAILED, "boom")
+
+        coVerify(exactly = 1) { triggerJournal.recordRunOutcome("run-1", TriggerRunOutcome.Failure("boom")) }
+    }
+
+    @Test
+    fun `given a user-cancelled trigger run finishes then a deliberate Cancelled is attributed, not a platform kill`() =
+        runTest {
+            coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+            coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.TRIGGER.name
+
+            repository.finishRun("run-1", PipelineRunStatus.CANCELLED)
+
+            coVerify(exactly = 1) { triggerJournal.recordRunOutcome("run-1", TriggerRunOutcome.Cancelled) }
+        }
+
+    @Test
+    fun `given an orphaned trigger run reaped as INTERRUPTED then CancelledBySystem is attributed`() = runTest {
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.TRIGGER.name
+
+        repository.finishRun("run-1", PipelineRunStatus.INTERRUPTED, "Owning process died")
+
+        coVerify(exactly = 1) { triggerJournal.recordRunOutcome("run-1", TriggerRunOutcome.CancelledBySystem) }
+    }
+
+    @Test
+    fun `given a trigger run failed by an expired background approval then HitlTimeout is attributed`() = runTest {
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.TRIGGER.name
+
+        // The exact reason the park-expiry settlement stamps on the run.
+        repository.finishRun("run-1", PipelineRunStatus.FAILED, ParkedRunResumer.APPROVAL_WINDOW_EXPIRED_MESSAGE)
+
+        coVerify(exactly = 1) { triggerJournal.recordRunOutcome("run-1", TriggerRunOutcome.HitlTimeout) }
+    }
+
+    @Test
+    fun `given a non-trigger run finishes then the journal is never touched`() = runTest {
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.CHAT.name
+
+        repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
+
+        // Only trigger-origin runs have a journal row, so a chat run skips the write entirely.
+        coVerify(exactly = 0) { triggerJournal.recordRunOutcome(any(), any()) }
+    }
+
+    @Test
+    fun `given a duplicate finishRun that transitions no row then no outcome is attributed`() = runTest {
+        // Already terminal: the guarded UPDATE matches no row, so a racing write
+        // must never overwrite the outcome already on the journal entry — and the
+        // origin is not even read.
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 0
+
+        repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
+
+        coVerify(exactly = 0) { pipelineRunDao.getRunOrigin(any()) }
+        coVerify(exactly = 0) { triggerJournal.recordRunOutcome(any(), any()) }
     }
 }

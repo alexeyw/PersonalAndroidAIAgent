@@ -7,6 +7,7 @@ import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import app.knotwork.android.domain.models.Trigger
 import app.knotwork.android.domain.models.TriggerCondition
+import app.knotwork.android.domain.models.TriggerEvaluationSource
 import app.knotwork.android.domain.repositories.TriggerRepository
 import app.knotwork.android.domain.usecases.FireTriggerUseCase
 import io.mockk.coVerify
@@ -84,11 +85,12 @@ class ChargingTriggerSweepWorkerTest {
         val result = buildWorker().doWork()
 
         assertEquals(ListenableWorker.Result.success(), result)
-        // Default-arg nowMillis means the stub must match (id, any()).
-        coVerify(exactly = 1) { fireTriggerUseCase("c1", any()) }
-        coVerify(exactly = 1) { fireTriggerUseCase("c2", any()) }
-        coVerify(exactly = 0) { fireTriggerUseCase("n1", any()) }
-        coVerify(exactly = 0) { fireTriggerUseCase("i1", any()) }
+        // Charging triggers are evaluated as the CHARGING_SWEEP source; the
+        // default-arg nowMillis means the stub must match (id, source, any()).
+        coVerify(exactly = 1) { fireTriggerUseCase("c1", TriggerEvaluationSource.CHARGING_SWEEP, any()) }
+        coVerify(exactly = 1) { fireTriggerUseCase("c2", TriggerEvaluationSource.CHARGING_SWEEP, any()) }
+        coVerify(exactly = 0) { fireTriggerUseCase("n1", any(), any()) }
+        coVerify(exactly = 0) { fireTriggerUseCase("i1", any(), any()) }
     }
 
     @Test
@@ -100,7 +102,7 @@ class ChargingTriggerSweepWorkerTest {
         val result = buildWorker().doWork()
 
         assertEquals(ListenableWorker.Result.success(), result)
-        coVerify(exactly = 0) { fireTriggerUseCase(any(), any()) }
+        coVerify(exactly = 0) { fireTriggerUseCase(any(), any(), any()) }
     }
 
     @Test

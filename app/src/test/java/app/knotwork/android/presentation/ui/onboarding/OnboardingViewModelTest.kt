@@ -2,14 +2,16 @@ package app.knotwork.android.presentation.ui.onboarding
 
 import app.knotwork.android.data.network.AndroidModelDownloadManager
 import app.knotwork.android.domain.constants.OnboardingModelCatalog
-import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.DownloadState
+import app.knotwork.android.domain.models.LocalBackend
 import app.knotwork.android.domain.models.LocalModel
-import app.knotwork.android.domain.models.Result
+import app.knotwork.android.domain.models.OnboardingMilestone
+import app.knotwork.android.domain.repositories.ActiveDownload
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.ModelDownloadManager
 import app.knotwork.android.domain.repositories.SettingsRepository
-import app.knotwork.android.domain.usecases.LoadModelUseCase
+import app.knotwork.android.domain.repositories.UsageTelemetryRepository
+import app.knotwork.android.domain.usecases.PrepareInferenceBackendUseCase
 import app.knotwork.android.domain.usecases.SetUpScenarioUseCase
 import app.knotwork.android.presentation.state.TransientMessageRelay
 import app.knotwork.design.screens.onboarding.OnboardingLiteRtModel
@@ -17,6 +19,7 @@ import app.knotwork.design.screens.onboarding.OnboardingScenario
 import app.knotwork.design.screens.onboarding.OnboardingStep
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -45,7 +48,7 @@ import org.junit.Test
  *  2. Picking a scenario pre-selects its model and warms an already-installed one;
  *  3. `setUpScenario` materialises the scenario and advances to the download step;
  *  4. The download CTA gate matches the download state;
- *  5. Downloaded models are persisted and their path fed to `LoadModelUseCase`;
+ *  5. Downloaded models are persisted and their path fed to `PrepareInferenceBackendUseCase`;
  *  6. Errors surface in `downloadError` instead of crashing the coroutine.
  *
  * The class covers the VM contract, not the catalog rendering (Roborazzi does that).
@@ -57,9 +60,10 @@ class OnboardingViewModelTest {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var localModelRepository: LocalModelRepository
     private lateinit var downloadManager: ModelDownloadManager
-    private lateinit var loadModelUseCase: LoadModelUseCase
+    private lateinit var prepareInferenceBackendUseCase: PrepareInferenceBackendUseCase
     private lateinit var setUpScenarioUseCase: SetUpScenarioUseCase
     private lateinit var transientMessageRelay: TransientMessageRelay
+    private lateinit var usageTelemetry: UsageTelemetryRepository
 
     @Before
     fun setUp() {
@@ -74,8 +78,10 @@ class OnboardingViewModelTest {
         coEvery { localModelRepository.setActiveModel(any()) } returns Unit
         downloadManager = mockk(relaxed = true)
         every { downloadManager.downloadModel(any(), any(), any()) } returns flowOf()
-        loadModelUseCase = mockk(relaxed = true)
-        coEvery { loadModelUseCase.invoke(any()) } returns Result.Success(Unit)
+        every { downloadManager.observeActiveDownload() } returns flowOf(null)
+        prepareInferenceBackendUseCase = mockk(relaxed = true)
+        coEvery { prepareInferenceBackendUseCase.invoke(any(), any()) } returns
+            PrepareInferenceBackendUseCase.Outcome.Warmed(LocalBackend.CPU)
         setUpScenarioUseCase = mockk(relaxed = true)
         coEvery { setUpScenarioUseCase(any()) } returns kotlin.Result.success(
             SetUpScenarioUseCase.ScenarioSetup(
@@ -87,6 +93,7 @@ class OnboardingViewModelTest {
             ),
         )
         transientMessageRelay = mockk(relaxed = true)
+        usageTelemetry = mockk(relaxed = true)
     }
 
     @After
@@ -98,9 +105,10 @@ class OnboardingViewModelTest {
         settingsRepository = settingsRepository,
         localModelRepository = localModelRepository,
         downloadManager = downloadManager,
-        loadModelUseCase = loadModelUseCase,
+        prepareInferenceBackendUseCase = prepareInferenceBackendUseCase,
         setUpScenarioUseCase = setUpScenarioUseCase,
         transientMessageRelay = transientMessageRelay,
+        usageTelemetry = usageTelemetry,
     )
 
     @Test
@@ -151,7 +159,7 @@ class OnboardingViewModelTest {
         val state = viewModel.state.value
         assertEquals(OnboardingLiteRtModel.Gemma4E4B, state.liteRtModel)
         assertEquals(OnboardingLiteRtModel.Gemma4E4B.id, state.installedModelId)
-        coVerify(atLeast = 1) { loadModelUseCase.invoke("/data/e4b.litertlm") }
+        coVerify(atLeast = 1) { prepareInferenceBackendUseCase.invoke("/data/e4b.litertlm", any()) }
     }
 
     @Test
@@ -241,9 +249,9 @@ class OnboardingViewModelTest {
             isActive = true,
         )
         // First warm-up fails; the retry succeeds.
-        coEvery { loadModelUseCase.invoke("/data/model.litertlm") } returnsMany listOf(
-            Result.Error(error = object : AppError.System {}, message = "warm failed"),
-            Result.Success(Unit),
+        coEvery { prepareInferenceBackendUseCase.invoke("/data/model.litertlm", any()) } returnsMany listOf(
+            PrepareInferenceBackendUseCase.Outcome.Failed(message = "warm failed"),
+            PrepareInferenceBackendUseCase.Outcome.Warmed(LocalBackend.CPU),
         )
         val viewModel = newViewModel()
         viewModel.pickScenario(OnboardingScenario.StyledTranslation)
@@ -256,6 +264,114 @@ class OnboardingViewModelTest {
 
         assertNull(viewModel.state.value.downloadError)
         assertTrue(viewModel.state.value.isModelWarmed)
+    }
+
+    @Test
+    fun `given a download cancelled elsewhere when the stream ends then the progress bar is released`() = runTest {
+        val viewModel = newViewModel()
+        // A download stopped from the notification ends the stream with no
+        // terminal state — the step must not stay stuck on "Downloading…".
+        every { downloadManager.downloadModel(any(), any(), any()) } returns flowOf(
+            DownloadState.Downloading(progress = 40),
+        )
+
+        viewModel.startDownload()
+        advanceUntilIdle()
+
+        assertNull(viewModel.state.value.downloadProgress)
+        assertTrue(viewModel.state.value.isPrimaryCtaEnabled)
+    }
+
+    @Test
+    fun `given a download already running when onboarding reopens then it re-attaches without enqueueing`() = runTest {
+        val e4bFileName = OnboardingModelCatalog.entryById(OnboardingLiteRtModel.Gemma4E4B.id)!!.fileName
+        every { downloadManager.observeActiveDownload() } returns flowOf(
+            ActiveDownload(fileName = e4bFileName, state = DownloadState.Downloading(55)),
+        )
+        every { downloadManager.observeDownload(e4bFileName) } returns kotlinx.coroutines.flow.flow {
+            emit(DownloadState.Downloading(55))
+            kotlinx.coroutines.awaitCancellation()
+        }
+
+        val reopened = newViewModel()
+        advanceUntilIdle()
+
+        // Coming back to onboarding mid-download must show the live transfer,
+        // not an idle step next to a ticking notification.
+        assertEquals(0.55f, reopened.state.value.downloadProgress)
+        assertEquals(OnboardingLiteRtModel.Gemma4E4B, reopened.state.value.liteRtModel)
+        // Re-entering a screen is never a request to download something.
+        verify(exactly = 0) { downloadManager.downloadModel(any(), any(), any()) }
+    }
+
+    @Test
+    fun `given a download in flight when skipping then the hint says it keeps running`() = runTest {
+        val viewModel = newViewModel()
+        every { downloadManager.downloadModel(any(), any(), any()) } returns kotlinx.coroutines.flow.flow {
+            emit(DownloadState.Downloading(progress = 30))
+            kotlinx.coroutines.awaitCancellation()
+        }
+        viewModel.startDownload()
+        advanceUntilIdle()
+
+        viewModel.skipOnboarding()
+        advanceUntilIdle()
+
+        // Skipping no longer kills the transfer, so pointing the user at
+        // Settings to install a model would be actively wrong.
+        verify { transientMessageRelay.post(OnboardingViewModel.DOWNLOAD_CONTINUES_MESSAGE) }
+    }
+
+    @Test
+    fun `warm-up shows the acceleration check while it runs and clears it afterwards`() = runTest {
+        val e4bFileName = OnboardingModelCatalog.entryById(OnboardingLiteRtModel.Gemma4E4B.id)!!.fileName
+        coEvery { localModelRepository.findByFileName(e4bFileName) } returns LocalModel(
+            id = 7L,
+            name = e4bFileName,
+            path = "/data/model.litertlm",
+            size = 0L,
+            isActive = true,
+        )
+        lateinit var viewModel: OnboardingViewModel
+        var flagDuringCheck: Boolean? = null
+        coEvery { prepareInferenceBackendUseCase.invoke("/data/model.litertlm", any()) } coAnswers {
+            secondArg<() -> Unit>().invoke()
+            flagDuringCheck = viewModel.state.value.isCheckingAcceleration
+            PrepareInferenceBackendUseCase.Outcome.Warmed(LocalBackend.GPU)
+        }
+
+        viewModel = newViewModel()
+        viewModel.pickScenario(OnboardingScenario.StyledTranslation)
+        advanceUntilIdle()
+
+        // Visible while the verification generation runs…
+        assertEquals(true, flagDuringCheck)
+        // …and never left behind once the outcome is in.
+        assertFalse(viewModel.state.value.isCheckingAcceleration)
+        assertTrue(viewModel.state.value.isModelWarmed)
+    }
+
+    @Test
+    fun `a failed warm-up still clears the acceleration check flag`() = runTest {
+        val e4bFileName = OnboardingModelCatalog.entryById(OnboardingLiteRtModel.Gemma4E4B.id)!!.fileName
+        coEvery { localModelRepository.findByFileName(e4bFileName) } returns LocalModel(
+            id = 7L,
+            name = e4bFileName,
+            path = "/data/model.litertlm",
+            size = 0L,
+            isActive = true,
+        )
+        coEvery { prepareInferenceBackendUseCase.invoke("/data/model.litertlm", any()) } coAnswers {
+            secondArg<() -> Unit>().invoke()
+            PrepareInferenceBackendUseCase.Outcome.Failed(message = "warm failed")
+        }
+
+        val viewModel = newViewModel()
+        viewModel.pickScenario(OnboardingScenario.StyledTranslation)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.isCheckingAcceleration)
+        assertEquals("warm failed", viewModel.state.value.downloadError)
     }
 
     @Test
@@ -277,12 +393,21 @@ class OnboardingViewModelTest {
 
     @Test
     fun `startDownload propagates progress from DownloadManager`() = runTest {
+        val e4bFileName = OnboardingModelCatalog.entryById(OnboardingLiteRtModel.Gemma4E4B.id)!!.fileName
         val viewModel = newViewModel()
         advanceUntilIdle()
         every { downloadManager.downloadModel(any(), any(), any()) } returns flowOf(
             DownloadState.Pending,
             DownloadState.Downloading(progress = 50),
             DownloadState.Success(fileUri = "/tmp/gemma-4-E4B-it.litertlm"),
+        )
+        // The download worker registers the file; the VM finds that row.
+        coEvery { localModelRepository.findByFileName(e4bFileName) } returns LocalModel(
+            id = 11L,
+            name = e4bFileName,
+            path = "/tmp/gemma-4-E4B-it.litertlm",
+            size = 0L,
+            isActive = false,
         )
 
         viewModel.startDownload()
@@ -292,8 +417,11 @@ class OnboardingViewModelTest {
         assertNull(finalState.downloadProgress)
         // The flow defaults to E4B — the model every curated scenario targets.
         assertEquals(OnboardingLiteRtModel.Gemma4E4B.id, finalState.installedModelId)
-        coVerify(exactly = 1) { localModelRepository.insertModel(any()) }
-        coVerify(exactly = 1) { loadModelUseCase.invoke("/tmp/gemma-4-E4B-it.litertlm") }
+        // Registration belongs to the worker now (the download outlives this VM);
+        // activating the freshly downloaded model stays a decision of this journey.
+        coVerify(exactly = 0) { localModelRepository.insertModel(any()) }
+        coVerify(exactly = 1) { localModelRepository.setActiveModel(11L) }
+        coVerify(exactly = 1) { prepareInferenceBackendUseCase.invoke("/tmp/gemma-4-E4B-it.litertlm", any()) }
     }
 
     @Test
@@ -310,7 +438,7 @@ class OnboardingViewModelTest {
         // Styled Translation needs E4B; picking it warms the installed handle once.
         viewModel.pickScenario(OnboardingScenario.StyledTranslation)
         advanceUntilIdle()
-        coVerify(exactly = 1) { loadModelUseCase.invoke("/data/model.litertlm") }
+        coVerify(exactly = 1) { prepareInferenceBackendUseCase.invoke("/data/model.litertlm", any()) }
 
         viewModel.finishOnboarding()
         advanceUntilIdle()
@@ -318,7 +446,7 @@ class OnboardingViewModelTest {
         coVerify(exactly = 1) { settingsRepository.setHasCompletedOnboarding(true) }
         // No second warm-up: the Ready CTA only enables after the first one flips
         // `isModelWarmed`, so `finishOnboarding` never re-loads the model.
-        coVerify(exactly = 1) { loadModelUseCase.invoke("/data/model.litertlm") }
+        coVerify(exactly = 1) { prepareInferenceBackendUseCase.invoke("/data/model.litertlm", any()) }
     }
 
     @Test
@@ -362,7 +490,7 @@ class OnboardingViewModelTest {
         val state = viewModel.state.value
         assertEquals(OnboardingLiteRtModel.Gemma4E4B.id, state.installedModelId)
         coVerify(exactly = 0) { downloadManager.downloadModel(any(), any(), any()) }
-        coVerify(atLeast = 1) { loadModelUseCase.invoke("/data/e4b.litertlm") }
+        coVerify(atLeast = 1) { prepareInferenceBackendUseCase.invoke("/data/e4b.litertlm", any()) }
     }
 
     @Test
@@ -389,8 +517,8 @@ class OnboardingViewModelTest {
         viewModel.pickLiteRtModel(OnboardingLiteRtModel.Gemma4E4B)
         advanceUntilIdle()
 
-        coVerify(atLeast = 1) { loadModelUseCase.invoke("/data/e4b.litertlm") }
-        coVerify(exactly = 0) { loadModelUseCase.invoke("/data/e2b.litertlm") }
+        coVerify(atLeast = 1) { prepareInferenceBackendUseCase.invoke("/data/e4b.litertlm", any()) }
+        coVerify(exactly = 0) { prepareInferenceBackendUseCase.invoke("/data/e2b.litertlm", any()) }
     }
 
     @Test
@@ -455,7 +583,89 @@ class OnboardingViewModelTest {
         val state = viewModel.state.value
         assertEquals(OnboardingLiteRtModel.Gemma4E4B, state.liteRtModel)
         assertNull(state.installedModelId)
-        coVerify(exactly = 0) { loadModelUseCase.invoke("/data/e2b.litertlm") }
+        coVerify(exactly = 0) { prepareInferenceBackendUseCase.invoke("/data/e2b.litertlm", any()) }
+    }
+
+    @Test
+    fun `entering onboarding records the journey start marker`() = runTest {
+        newViewModel()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            usageTelemetry.recordOnboardingMilestone(OnboardingMilestone.ONBOARDING_STARTED, any(), any())
+        }
+    }
+
+    @Test
+    fun `a full pass through onboarding records every marker in order`() = runTest {
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        every { downloadManager.downloadModel(any(), any(), any()) } returns flowOf(
+            DownloadState.Downloading(progress = 50),
+            DownloadState.Success(fileUri = "/tmp/gemma-4-E4B-it.litertlm"),
+        )
+
+        viewModel.pickScenario(OnboardingScenario.StyledTranslation)
+        viewModel.setUpScenario()
+        advanceUntilIdle()
+        viewModel.startDownload()
+        advanceUntilIdle()
+
+        coVerifyOrder {
+            usageTelemetry.recordOnboardingMilestone(OnboardingMilestone.ONBOARDING_STARTED, any(), any())
+            // The scenario marker carries the materialised pipeline id, which is
+            // what scopes the later first-value attribution.
+            usageTelemetry.recordOnboardingMilestone(OnboardingMilestone.SCENARIO_CHOSEN, any(), "pipe-1")
+            usageTelemetry.recordOnboardingMilestone(OnboardingMilestone.MODEL_DOWNLOAD_STARTED, any(), any())
+            usageTelemetry.recordOnboardingMilestone(OnboardingMilestone.MODEL_DOWNLOAD_FINISHED, any(), any())
+        }
+    }
+
+    @Test
+    fun `a repeated onboarding pass records the start marker again for the store to ignore`() = runTest {
+        // Idempotency is a store property (INSERT OR IGNORE), not a VM property:
+        // the VM must keep reporting the event, and the store keeps the first one.
+        newViewModel()
+        newViewModel()
+        advanceUntilIdle()
+
+        coVerify(exactly = 2) {
+            usageTelemetry.recordOnboardingMilestone(OnboardingMilestone.ONBOARDING_STARTED, any(), any())
+        }
+    }
+
+    @Test
+    fun `a failed scenario set-up records no scenario marker`() = runTest {
+        coEvery { setUpScenarioUseCase(any()) } returns kotlin.Result.failure(IllegalStateException("boom"))
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+
+        viewModel.pickScenario(OnboardingScenario.StyledTranslation)
+        viewModel.setUpScenario()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) {
+            usageTelemetry.recordOnboardingMilestone(OnboardingMilestone.SCENARIO_CHOSEN, any(), any())
+        }
+    }
+
+    @Test
+    fun `a failed download records the start marker but not the finish marker`() = runTest {
+        val viewModel = newViewModel()
+        advanceUntilIdle()
+        every { downloadManager.downloadModel(any(), any(), any()) } returns flowOf(
+            DownloadState.Error(AndroidModelDownloadManager.DownloadError("offline")),
+        )
+
+        viewModel.startDownload()
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            usageTelemetry.recordOnboardingMilestone(OnboardingMilestone.MODEL_DOWNLOAD_STARTED, any(), any())
+        }
+        coVerify(exactly = 0) {
+            usageTelemetry.recordOnboardingMilestone(OnboardingMilestone.MODEL_DOWNLOAD_FINISHED, any(), any())
+        }
     }
 
     @Test
