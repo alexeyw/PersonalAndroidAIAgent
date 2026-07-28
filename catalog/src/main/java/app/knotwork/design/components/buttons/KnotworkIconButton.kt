@@ -2,7 +2,6 @@ package app.knotwork.design.components.buttons
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
@@ -19,12 +18,10 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.knotwork.design.a11y.MinTouchTarget
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkIconSizes
 import app.knotwork.design.tokens.KnotworkTextStyles
-
-/** Visual size of the icon-button target (touch target stays 48 dp via Material's default). */
-private val IconButtonVisualSize = 40.dp
 
 /** Glyph diameter inside the icon-button (22 dp). */
 private val IconGlyphSize = KnotworkIconSizes.AppBar
@@ -36,11 +33,12 @@ private val BadgeDiameter = 14.dp
 private const val BADGE_OVERFLOW_THRESHOLD = 9
 
 /**
- * Knotwork icon button — square 40 dp visual with an optional badge.
+ * Knotwork icon button — square 48 dp with an optional badge.
  *
  * Visual contract:
- *  - 40 dp square visual; touch target stays 48 × 48 via Material's default
- *    `IconButton` minimum interactive size.
+ *  - 48 × 48 dp square, which is both the visual and the touch target. This
+ *    Material line lays `IconButton` out at 40 dp and applies no minimum
+ *    interactive size of its own, so the size is pinned here explicitly.
  *  - Badge is rendered top-right when [badge] is non-null and `> 0`. Background
  *    `primary`, label Inter 700 10 px in `onPrimary`. Values
  *    above [BADGE_OVERFLOW_THRESHOLD] render as `"9+"`.
@@ -73,9 +71,15 @@ fun KnotworkIconButton(
                 contentColor = MaterialTheme.colorScheme.onSurface,
                 disabledContentColor = KnotworkTheme.extended.onSurfaceDim,
             ),
-            modifier = Modifier
-                .defaultMinSize(minWidth = IconButtonVisualSize, minHeight = IconButtonVisualSize)
-                .size(IconButtonVisualSize),
+            // Pinned to the floor. This used to be `.size(40.dp)` while the
+            // KDoc promised "touch target stays 48 dp via Material's default" —
+            // but this Material line lays `IconButton` out at 40 dp and applies
+            // no minimum of its own, so the promise was never kept.
+            //
+            // The same is true of every *bare* `IconButton` in the catalog: 40
+            // dp, 8 dp short, and not fixed here because that is a design-system
+            // decision about which component screens should reach for.
+            modifier = Modifier.size(MinTouchTarget),
         ) {
             Icon(
                 imageVector = icon,

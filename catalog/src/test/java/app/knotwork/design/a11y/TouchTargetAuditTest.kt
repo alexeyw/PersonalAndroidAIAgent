@@ -7,6 +7,8 @@ import androidx.compose.ui.test.assertWidthIsAtLeast
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import app.knotwork.design.components.buttons.KnotworkIconButton
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.screens.memory.MemoryContent
 import app.knotwork.design.screens.memory.MemoryPreview
 import app.knotwork.design.screens.skills.SkillLibraryContent
@@ -55,11 +57,34 @@ class TouchTargetAuditTest {
         assertEveryTargetMeetsTheFloor("More actions")
     }
 
+    /**
+     * The shared `KnotworkIconButton` — the top-bar button on most screens.
+     * Its KDoc promised a 48 dp target while an explicit `.size(40.dp)` removed
+     * it, so every icon button in the app was 8 dp short.
+     */
+    @Test
+    fun sharedIconButton_meetsTheFloor() {
+        render {
+            KnotworkIconButton(
+                onClick = {},
+                contentDescription = SHARED_BUTTON_CD,
+                icon = AppIcons.More,
+            )
+        }
+
+        assertEveryTargetMeetsTheFloor(SHARED_BUTTON_CD)
+    }
+
     @Test
     fun memoryRow_pinToggleMeetsTheFloor() {
         render { MemoryContent(state = MemoryPreview.populated()) }
 
         assertEveryTargetMeetsTheFloor("Pin")
+    }
+
+    private companion object {
+        /** Label used to find the shared icon button under test. */
+        const val SHARED_BUTTON_CD = "Shared icon button"
     }
 
     private fun render(content: @Composable () -> Unit) {
