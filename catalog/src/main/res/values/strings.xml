@@ -899,8 +899,28 @@
     <string name="knotwork_chat_home_drawer_sessions_header">SESSIONS</string>
     <!-- Drawer pill action: start a new chat. -->
     <string name="knotwork_chat_home_drawer_new_thread">New chat</string>
-    <!-- Drawer per-row edit/rename icon contentDescription. -->
-    <string name="knotwork_chat_home_drawer_edit_cd">Rename thread</string>
+    <!-- Drawer per-row overflow icon contentDescription (replaced the rename pencil). -->
+    <string name="knotwork_chat_home_drawer_menu_cd">More actions</string>
+    <!-- Drawer per-row overflow item: rename the chat. -->
+    <string name="knotwork_chat_home_drawer_menu_rename">Rename</string>
+    <!-- Drawer per-row overflow item: delete the chat (destructive). -->
+    <string name="knotwork_chat_home_drawer_menu_delete">Delete chat</string>
+    <!-- Drawer per-row archive action: swipe strip label and overflow item. -->
+    <string name="knotwork_chat_home_drawer_archive_action">Archive</string>
+    <!-- Drawer per-row archive action spoken by TalkBack as a custom action. -->
+    <string name="knotwork_chat_home_drawer_archive_a11y">Archive chat</string>
+    <!-- Drawer footer entry into the archive; shown only when something is archived. -->
+    <string name="knotwork_chat_home_drawer_archive_title">Archived chats</string>
+    <plurals name="knotwork_chat_home_drawer_archive_subtitle">
+        <item quantity="one">%1$d chat</item>
+        <item quantity="other">%1$d chats</item>
+    </plurals>
+    <!-- Top-bar subtitle shown instead of pipeline/token counts on an archived thread. -->
+    <string name="knotwork_chat_home_archived_subtitle">Archived · read-only</string>
+    <!-- Bar replacing the composer on an archived thread. -->
+    <string name="knotwork_chat_home_archived_bar_title">This chat is archived</string>
+    <string name="knotwork_chat_home_archived_bar_body">Restore it to your list to keep chatting.</string>
+    <string name="knotwork_chat_home_archived_bar_restore">Restore</string>
     <!-- Drawer per-row starred glyph contentDescription. -->
     <string name="knotwork_chat_home_drawer_starred_cd">Starred</string>
     <!-- Content description of the trailing in-progress indicator on a thread row with an active background run. -->

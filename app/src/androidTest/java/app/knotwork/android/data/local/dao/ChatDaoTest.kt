@@ -309,7 +309,7 @@ class ChatDaoTest {
             ChatSessionEntity(id = "s", name = "n", updatedAt = 1L, pipelineId = "p", isStarred = true),
         )
 
-        chatDao.setSessionArchived(sessionId = "s", archived = true)
+        chatDao.setSessionArchived(sessionId = "s", archived = true, archivedAt = 50L)
         val archived = chatDao.getSessionById("s")
         assertTrue(archived?.isArchived == true)
         assertEquals("n", archived?.name)
@@ -317,7 +317,7 @@ class ChatDaoTest {
         assertEquals("p", archived?.pipelineId)
         assertTrue(archived?.isStarred == true)
 
-        chatDao.setSessionArchived(sessionId = "s", archived = false)
+        chatDao.setSessionArchived(sessionId = "s", archived = false, archivedAt = null)
         assertFalse(chatDao.getSessionById("s")?.isArchived == true)
     }
 
@@ -325,7 +325,7 @@ class ChatDaoTest {
     fun setSessionArchived_isNoOpForUnknownSession() = runBlocking {
         chatDao.insertSession(ChatSessionEntity(id = "s", name = "Stay", updatedAt = 1L))
 
-        chatDao.setSessionArchived(sessionId = "missing", archived = true)
+        chatDao.setSessionArchived(sessionId = "missing", archived = true, archivedAt = 50L)
 
         assertFalse(chatDao.getSessionById("s")?.isArchived == true)
     }
@@ -334,7 +334,7 @@ class ChatDaoTest {
     fun getSessionsFlow_excludesArchivedUnlessRequested() = runBlocking {
         chatDao.insertSession(ChatSessionEntity(id = "active", name = "Active", updatedAt = 200L))
         chatDao.insertSession(ChatSessionEntity(id = "archived", name = "Archived", updatedAt = 300L))
-        chatDao.setSessionArchived(sessionId = "archived", archived = true)
+        chatDao.setSessionArchived(sessionId = "archived", archived = true, archivedAt = 50L)
 
         assertEquals(
             listOf("active"),
@@ -348,17 +348,52 @@ class ChatDaoTest {
     }
 
     @Test
-    fun getArchivedSessionsFlow_returnsOnlyArchivedOrderedByUpdatedAtDesc() = runBlocking {
+    fun getArchivedSessionsFlow_returnsOnlyArchivedOrderedByArchivedAtDesc() = runBlocking {
         chatDao.insertSession(ChatSessionEntity(id = "active", name = "Active", updatedAt = 400L))
         chatDao.insertSession(ChatSessionEntity(id = "old", name = "Old", updatedAt = 100L))
         chatDao.insertSession(ChatSessionEntity(id = "new", name = "New", updatedAt = 300L))
-        chatDao.setSessionArchived(sessionId = "old", archived = true)
-        chatDao.setSessionArchived(sessionId = "new", archived = true)
+        // Archived in the opposite order to updatedAt: the archive is ordered by
+        // when the user put a chat away, not by when it was last written to.
+        chatDao.setSessionArchived(sessionId = "new", archived = true, archivedAt = 10L)
+        chatDao.setSessionArchived(sessionId = "old", archived = true, archivedAt = 20L)
 
         assertEquals(
-            listOf("new", "old"),
+            listOf("old", "new"),
             chatDao.getArchivedSessionsFlow().first().map { it.id },
         )
+    }
+
+    /**
+     * A row archived before `archivedAt` existed (`NULL`) must still sort
+     * sensibly instead of sinking below everything — the query COALESCEs to
+     * `updatedAt` for exactly that case.
+     */
+    @Test
+    fun getArchivedSessionsFlow_ordersLegacyRowsByUpdatedAt() = runBlocking {
+        chatDao.insertSession(ChatSessionEntity(id = "legacy", name = "Legacy", updatedAt = 500L))
+        chatDao.insertSession(ChatSessionEntity(id = "recent", name = "Recent", updatedAt = 100L))
+        chatDao.setSessionArchived(sessionId = "legacy", archived = true, archivedAt = null)
+        chatDao.setSessionArchived(sessionId = "recent", archived = true, archivedAt = 200L)
+
+        assertEquals(
+            listOf("legacy", "recent"),
+            chatDao.getArchivedSessionsFlow().first().map { it.id },
+        )
+    }
+
+    /**
+     * Restoring must clear the archive instant, so `isArchived` and `archivedAt`
+     * can never disagree about whether a chat is put away.
+     */
+    @Test
+    fun setSessionArchived_clearsTheArchiveInstantOnRestore() = runBlocking {
+        chatDao.insertSession(ChatSessionEntity(id = "s", name = "n", updatedAt = 1L))
+
+        chatDao.setSessionArchived(sessionId = "s", archived = true, archivedAt = 50L)
+        assertEquals(50L, chatDao.getSessionById("s")?.archivedAt)
+
+        chatDao.setSessionArchived(sessionId = "s", archived = false, archivedAt = null)
+        assertEquals(null, chatDao.getSessionById("s")?.archivedAt)
     }
 
     @Test
@@ -380,7 +415,7 @@ class ChatDaoTest {
             ChatMessageEntity(sessionId = "s", role = "USER", content = "hello", timestamp = 1L, isFinal = true),
         )
 
-        chatDao.setSessionArchived(sessionId = "s", archived = true)
+        chatDao.setSessionArchived(sessionId = "s", archived = true, archivedAt = 50L)
 
         val messages = chatDao.getMessagesBySessionId("s").first()
         assertEquals(1, messages.size)

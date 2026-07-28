@@ -144,6 +144,44 @@ class ChatHomeContentSnapshotTest {
     }
 
     @Test
+    fun chat_home_drawer_row_menu_light() = snapshot(name = "drawer_row_menu", dark = false) {
+        ChatHomeContent(state = ChatHomePreview.drawerRowMenu())
+    }
+
+    @Test
+    fun chat_home_drawer_swipe_open_light() = snapshot(name = "drawer_swipe_open", dark = false) {
+        ChatHomeContent(state = ChatHomePreview.drawerSwipeOpen())
+    }
+
+    @Test
+    fun chat_home_drawer_swipe_open_dark() = snapshot(name = "drawer_swipe_open", dark = true) {
+        ChatHomeContent(state = ChatHomePreview.drawerSwipeOpen())
+    }
+
+    @Test
+    fun chat_home_drawer_with_archive_light() = snapshot(name = "drawer_with_archive", dark = false) {
+        ChatHomeContent(state = ChatHomePreview.drawerWithArchive())
+    }
+
+    @Test
+    fun chat_home_archived_read_only_light() = snapshot(name = "archived_read_only", dark = false) {
+        ChatHomeContent(state = ChatHomePreview.archivedReadOnly())
+    }
+
+    @Test
+    fun chat_home_archived_read_only_dark() = snapshot(name = "archived_read_only", dark = true) {
+        ChatHomeContent(state = ChatHomePreview.archivedReadOnly())
+    }
+
+    @Test
+    fun chat_home_drawer_open_font_scale_2x_light() =
+        snapshot(name = "drawer_open_font_scale_2x", dark = false, fontScale = 2f) {
+            // At 200 % the row drops its status dot and gives the space to the
+            // title; the trailing controls keep their targets.
+            ChatHomeContent(state = ChatHomePreview.drawerWithArchive())
+        }
+
+    @Test
     fun chat_home_console_expanded_light() = snapshot(name = "console_expanded", dark = false) {
         ChatHomeContent(state = ChatHomePreview.consoleExpanded())
     }

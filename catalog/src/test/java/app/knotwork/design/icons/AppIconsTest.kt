@@ -38,6 +38,7 @@ class AppIconsTest {
         "NodeEval" to AppIcons.NodeEval,
         "NodeSummary" to AppIcons.NodeSummary,
         "NodeOutput" to AppIcons.NodeOutput,
+        "Unarchive" to AppIcons.Unarchive,
     )
 
     @Test

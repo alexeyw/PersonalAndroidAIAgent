@@ -795,4 +795,38 @@ class AppDatabaseMigrationTest {
             sql.contains("DEFAULT 0"),
         )
     }
+
+    @Test
+    fun `MIGRATION_54_55 targets versions 54 to 55`() {
+        val migration = AppDatabase.MIGRATION_54_55
+
+        assertEquals(54, migration.startVersion)
+        assertEquals(55, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_54_55 adds nullable archivedAt column to chat_sessions`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val sqlSlot = slot<String>()
+
+        AppDatabase.MIGRATION_54_55.migrate(db)
+
+        // Purely additive: one ALTER TABLE, no data rewrite.
+        verify(exactly = 1) { db.execSQL(capture(sqlSlot)) }
+        val sql = sqlSlot.captured.uppercase()
+        assertTrue(
+            "Expected ALTER TABLE on chat_sessions, got: ${sqlSlot.captured}",
+            sql.contains("ALTER TABLE") && sql.contains("`CHAT_SESSIONS`"),
+        )
+        assertTrue(
+            "Expected new archivedAt column, got: ${sqlSlot.captured}",
+            sql.contains("`ARCHIVEDAT` INTEGER"),
+        )
+        // Nullable on purpose: `null` means "not archived", so the flag and the
+        // instant cannot drift into a never-archived row claiming the epoch.
+        assertTrue(
+            "Column must stay nullable so 'not archived' has no fake instant: ${sqlSlot.captured}",
+            !sql.contains("NOT NULL"),
+        )
+    }
 }

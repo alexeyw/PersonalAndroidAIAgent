@@ -130,6 +130,13 @@ project — `:app` consumes it as an `implementation` dependency.
   - `lists/` — `PipelineListRow` / `ToolListRow` / `MemoryEntryRow` /
     `KnotworkNavListRow` (leading-icon + title + chevron routing row) +
     previews.
+    - `SwipeRevealRow.kt` — wraps a list row in a **single** 64 dp
+      swipe-revealed action (`SwipeRevealAction`: glyph + spoken label +
+      tint). `PipelineListRow`'s mechanics — `Animatable` offset driven by
+      `Modifier.draggable`, clamped and snapped at half the reveal, partial
+      reveal never a dismiss — with one action instead of three, so the
+      strip claims 20 % of a 320 dp drawer instead of 60 %. Shared by the
+      chat drawer row (Archive) and the archive row (Restore).
   - `misc/` — `KnotworkLoader` / `KnotworkSnackbar` / `EmptyState` /
     `StripedPlaceholder` / `KnotworkSectionAction` (right-aligned action
     link) / `KnotworkStatCell` (counter grid cell) + previews.
@@ -256,6 +263,23 @@ project — `:app` consumes it as an `implementation` dependency.
       cards).
     - `ChatHomeContentPreview.kt` — Android Studio `@Preview` group for
       the chat variants in both themes.
+  - `chatarchive/` — archived-chats surface (the chats a user took out of
+    the drawer without deleting them).
+    - `ChatArchiveContent.kt` — list of archived chats, most-recently-
+      archived first: leading archive tile, relative archived-at label, an
+      optional "run finished after archiving" note, inline Restore pill, a
+      one-action Restore swipe and a row overflow (Restore / Export chat /
+      ─ / Delete forever behind a plain confirmation). Teaching empty state
+      with no CTA, skeleton and error branches. At font-scale 200 % the
+      tile is dropped and Restore collapses to an icon-only 48 dp button
+      with the word kept for TalkBack.
+    - `ChatArchiveViewState.kt` — visual-state enum (Loading / Default /
+      Empty / Error), `ChatArchiveRowUi`, the localised `ChatArchiveStrings`
+      bundle and the callbacks. `revealedRowId` is a preview/snapshot
+      control only — production leaves each row's swipe under the finger.
+    - `ChatArchivePreview.kt` — deterministic fixtures (long title,
+      starred row, a chat whose run settled after archiving).
+    - `ChatArchiveContentPreview.kt` — Android Studio `@Preview` group.
   - `discover/` — model discovery over the curated Hugging Face
     organisation (list → detail → install).
     - `DiscoverContent.kt` — list surface: sticky search field

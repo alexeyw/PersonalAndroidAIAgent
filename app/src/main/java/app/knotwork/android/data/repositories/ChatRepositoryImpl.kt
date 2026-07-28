@@ -125,7 +125,16 @@ class ChatRepositoryImpl @Inject constructor(
     }
 
     override suspend fun setSessionArchived(sessionId: String, archived: Boolean) {
-        chatDao.setSessionArchived(sessionId, archived)
+        // The archive instant is stamped here rather than taken from the caller:
+        // it is a wall-clock fact about persistence, and the domain use cases
+        // ask for a *state* ("this chat is archived"), not for a transition at a
+        // particular time. Restoring clears it, so `isArchived` and `archivedAt`
+        // are written together and can never disagree.
+        chatDao.setSessionArchived(
+            sessionId = sessionId,
+            archived = archived,
+            archivedAt = if (archived) System.currentTimeMillis() else null,
+        )
     }
 
     override suspend fun importChat(json: String): String {

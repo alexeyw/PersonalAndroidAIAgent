@@ -183,12 +183,19 @@ interface ChatDao {
     fun getSessionsFlow(includeArchived: Boolean): Flow<List<ChatSessionEntity>>
 
     /**
-     * Retrieves **only** the archived chat sessions, ordered by the last update
-     * time (descending) so the archive surface matches the main list's ordering.
+     * Retrieves **only** the archived chat sessions, most-recently-archived
+     * first — the archive is a stack the user puts things on, so what they put
+     * away last is what they look for first.
+     *
+     * Ordering keys off `archivedAt`, not `updatedAt`: a background run may write
+     * into an archived chat without un-archiving it, and that write must not
+     * reshuffle the archive. `COALESCE` keeps a row archived before the column
+     * existed (`archivedAt IS NULL`) in a sane position instead of sinking it to
+     * the bottom.
      *
      * @return A [Flow] emitting the archived [ChatSessionEntity] rows.
      */
-    @Query("SELECT * FROM chat_sessions WHERE isArchived = 1 ORDER BY updatedAt DESC")
+    @Query("SELECT * FROM chat_sessions WHERE isArchived = 1 ORDER BY COALESCE(archivedAt, updatedAt) DESC")
     fun getArchivedSessionsFlow(): Flow<List<ChatSessionEntity>>
 
     /**
@@ -307,7 +314,10 @@ interface ChatDao {
      *
      * @param sessionId The id of the session to update.
      * @param archived The new archive flag to persist.
+     * @param archivedAt Instant the user archived the chat, or `null` when
+     *   restoring it. Written in the same statement as [archived] so the two can
+     *   never disagree — a row is archived iff it carries an archive instant.
      */
-    @Query("UPDATE chat_sessions SET isArchived = :archived WHERE id = :sessionId")
-    suspend fun setSessionArchived(sessionId: String, archived: Boolean)
+    @Query("UPDATE chat_sessions SET isArchived = :archived, archivedAt = :archivedAt WHERE id = :sessionId")
+    suspend fun setSessionArchived(sessionId: String, archived: Boolean, archivedAt: Long?)
 }

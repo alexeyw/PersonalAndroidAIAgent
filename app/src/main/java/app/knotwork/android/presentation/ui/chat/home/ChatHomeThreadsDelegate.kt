@@ -4,6 +4,8 @@ import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.text.toSingleLineTitle
+import app.knotwork.android.domain.usecases.ArchiveChatUseCase
+import app.knotwork.android.domain.usecases.UnarchiveChatUseCase
 import app.knotwork.design.screens.chat.ChatHomeThreadRow
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -38,6 +40,10 @@ import java.util.UUID
  * @property scope The ViewModel's [androidx.lifecycle.viewModelScope].
  * @property state The ViewModel's single source-of-truth state flow.
  * @property chatRepository Source of the session list; session CRUD.
+ * @property archiveChatUseCase Moves a chat out of the drawer list without
+ *   deleting anything it owns.
+ * @property unarchiveChatUseCase Reverses [archiveChatUseCase]. Only the user
+ *   ever calls it — background activity in an archived chat never restores it.
  * @property pipelineRunRepository Source of the active-run session-id set (drawer badges).
  * @property selectThread Seam into the ViewModel's thread switch.
  * @property clearDraft Seam into the ViewModel's per-session draft store; called
@@ -51,6 +57,8 @@ class ChatHomeThreadsDelegate(
     private val scope: CoroutineScope,
     private val state: MutableStateFlow<ChatHomeScreenState>,
     private val chatRepository: ChatRepository,
+    private val archiveChatUseCase: ArchiveChatUseCase,
+    private val unarchiveChatUseCase: UnarchiveChatUseCase,
     private val pipelineRunRepository: PipelineRunRepository,
     private val selectThread: (String) -> Unit,
     private val clearDraft: (String) -> Unit,
@@ -122,15 +130,22 @@ class ChatHomeThreadsDelegate(
             session != null -> s.thread.copy(
                 title = session.name.ifBlank { ChatHomeThreadState.DEFAULT_TITLE },
                 favorite = session.isStarred,
+                archived = session.isArchived,
             )
             currentId.isBlank() -> s.thread.copy(
                 title = ChatHomeThreadState.DEFAULT_TITLE,
                 favorite = false,
+                archived = false,
             )
             else -> s.thread
         }
         return pipelineNameRefresher(
-            s.copy(thread = refreshedThread.copy(rows = buildThreadRows(currentId))),
+            s.copy(
+                thread = refreshedThread.copy(
+                    rows = buildThreadRows(currentId),
+                    archivedCount = sessions.count { it.isArchived },
+                ),
+            ),
         )
     }
 
@@ -219,12 +234,7 @@ class ChatHomeThreadsDelegate(
             // insert and leave an orphan the insert re-adds.
             pendingNewSessionSave?.join()
             chatRepository.deleteSession(sessionId)
-            val remaining = sessions.filter { it.id != sessionId }
-            if (remaining.isNotEmpty()) {
-                selectThread(remaining.first().id)
-            } else {
-                createNewSessionWithPipeline(pipelineId = null)
-            }
+            selectNextAfterLeaving(sessionId)
             // Discard the deleted chat's unsent draft AFTER the switch: the
             // switch stashes the outgoing (now-deleted) session's composer text
             // back into the draft map, so clearing before it would be undone,
@@ -233,10 +243,88 @@ class ChatHomeThreadsDelegate(
         }
     }
 
-    /** Observes the session list. Keeps a cache for lookups and refreshes the title + subtitle + rows. */
+    /** Opens the overflow menu of the drawer row [threadId]. */
+    fun openThreadMenu(threadId: String) {
+        state.update { it.copy(thread = it.thread.copy(openMenuId = threadId)) }
+    }
+
+    /** Closes any open drawer-row overflow menu. */
+    fun dismissThreadMenu() {
+        state.update { it.copy(thread = it.thread.copy(openMenuId = null)) }
+    }
+
+    /**
+     * Archives [threadId] and, when it is the chat currently on screen, switches
+     * away from it.
+     *
+     * The switch mirrors [deleteCurrentSession]: the user asked for this chat to
+     * leave the list, so leaving them staring at it would contradict the action.
+     * Nothing is deleted, so the chat stays one tap away in the archive.
+     *
+     * @param threadId session to archive.
+     */
+    fun archiveThread(threadId: String) {
+        if (threadId.isBlank()) return
+        val wasActive = state.value.thread.currentSessionId == threadId
+        scope.launch {
+            archiveChatUseCase(threadId)
+            if (wasActive) {
+                selectNextAfterLeaving(threadId)
+            }
+        }
+    }
+
+    /** Restores [threadId] out of the archive. Does not switch the active thread. */
+    fun unarchiveThread(threadId: String) {
+        if (threadId.isBlank()) return
+        scope.launch { unarchiveChatUseCase(threadId) }
+    }
+
+    /**
+     * Deletes [threadId] outright. Unlike [deleteCurrentSession] this targets an
+     * arbitrary row (the drawer overflow), so it only re-selects when the
+     * deleted chat was the one on screen.
+     */
+    fun deleteThread(threadId: String) {
+        if (threadId.isBlank()) return
+        val wasActive = state.value.thread.currentSessionId == threadId
+        scope.launch {
+            pendingNewSessionSave?.join()
+            chatRepository.deleteSession(threadId)
+            if (wasActive) {
+                selectNextAfterLeaving(threadId)
+            }
+            clearDraft(threadId)
+        }
+    }
+
+    /**
+     * Moves off [leavingId] onto the next *non-archived* chat, creating a fresh
+     * one when none is left, so the user is never stranded on a session that is
+     * gone (deleted) or no longer in the list (archived).
+     */
+    private fun selectNextAfterLeaving(leavingId: String) {
+        val remaining = sessions.filter { it.id != leavingId && !it.isArchived }
+        if (remaining.isNotEmpty()) {
+            selectThread(remaining.first().id)
+        } else {
+            createNewSessionWithPipeline(pipelineId = null)
+        }
+    }
+
+    /**
+     * Observes the session list. Keeps a cache for lookups and refreshes the
+     * title + subtitle + rows.
+     *
+     * Collects **including** archived sessions: the cache is what resolves the
+     * *active* chat's title, star and archive flag, and an archived chat can be
+     * open (read-only). Filtering here would blank the title the moment the user
+     * archived the chat they were reading. The archived rows are filtered out of
+     * the drawer list itself in [buildThreadRows], where the exclusion belongs.
+     */
     private fun observeSessions() {
         scope.launch {
-            chatRepository.getSessionsFlow().collect { current ->
+            chatRepository.getSessionsFlow(includeArchived = true).collect { current ->
                 sessions = current
                 state.update { sessionMetadataRefreshed(it) }
                 onSessionsChanged()
@@ -269,10 +357,15 @@ class ChatHomeThreadsDelegate(
      * sessions sort to the top of the drawer; the rest follow the repository's
      * `updatedAt DESC` ordering.
      *
+     * Archived sessions are excluded — the drawer is the "current work" list and
+     * archiving is precisely the act of taking a chat out of it. They remain in
+     * [sessions] so the active chat's metadata still resolves when the user is
+     * reading an archived thread.
+     *
      * @param activeId id of the active session used for the `selected`/`active` flags.
      */
     private fun buildThreadRows(activeId: String): List<ChatHomeThreadRow> {
-        val sorted = sessions.sortedWith(
+        val sorted = sessions.filterNot { it.isArchived }.sortedWith(
             compareByDescending<ChatSession> { it.isStarred }
                 .thenByDescending { it.updatedAt },
         )

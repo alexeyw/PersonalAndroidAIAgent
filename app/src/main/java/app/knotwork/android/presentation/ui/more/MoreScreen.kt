@@ -8,6 +8,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import app.knotwork.android.R
@@ -36,6 +37,7 @@ fun MoreScreen(
     onNavigateToAbout: () -> Unit,
     onNavigateToLibrary: () -> Unit,
     onNavigateToFiles: () -> Unit,
+    onNavigateToChatArchive: () -> Unit,
     viewModel: MoreViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -53,6 +55,16 @@ fun MoreScreen(
         titleAbout = stringResource(R.string.more_row_about),
         titleLibrary = stringResource(R.string.more_row_library),
         titleFiles = stringResource(R.string.more_row_files),
+        titleArchive = stringResource(R.string.more_row_chat_archive),
+        subtitleArchive = if (uiState.archivedChats == 0) {
+            stringResource(R.string.more_chat_archive_subtitle_empty)
+        } else {
+            pluralStringResource(
+                R.plurals.more_chat_archive_subtitle,
+                uiState.archivedChats,
+                uiState.archivedChats,
+            )
+        },
         onMemory = onNavigateToMemory,
         onModels = onNavigateToModels,
         onPrompts = onNavigateToPrompts,
@@ -64,6 +76,7 @@ fun MoreScreen(
         onAbout = onNavigateToAbout,
         onLibrary = onNavigateToLibrary,
         onFiles = onNavigateToFiles,
+        onArchive = onNavigateToChatArchive,
     )
     MoreContent(
         state = state,
@@ -92,6 +105,8 @@ internal fun MoreUiState.toViewState(
     titleAbout: String,
     titleLibrary: String,
     titleFiles: String,
+    titleArchive: String,
+    subtitleArchive: String,
     onMemory: () -> Unit,
     onModels: () -> Unit,
     onPrompts: () -> Unit,
@@ -103,6 +118,7 @@ internal fun MoreUiState.toViewState(
     onAbout: () -> Unit,
     onLibrary: () -> Unit,
     onFiles: () -> Unit,
+    onArchive: () -> Unit,
 ): MoreViewState = MoreViewState(
     rows = listOf(
         MoreRow(
@@ -111,6 +127,17 @@ internal fun MoreUiState.toViewState(
             subtitle = memorySubtitle,
             icon = AppIcons.Brain,
             onClick = onMemory,
+        ),
+        // Directly after Memory and above Files — grouped with "your content",
+        // not with tools. Always shown, even at zero, because the drawer's own
+        // entry is hidden then and the feature must stay discoverable. The
+        // count lives in the subtitle, never a badge.
+        MoreRow(
+            id = "archive",
+            title = titleArchive,
+            subtitle = subtitleArchive,
+            icon = AppIcons.Archive,
+            onClick = onArchive,
         ),
         MoreRow(
             id = "files",

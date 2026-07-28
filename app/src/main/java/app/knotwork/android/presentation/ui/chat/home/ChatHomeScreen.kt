@@ -38,8 +38,10 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -81,6 +83,7 @@ import com.mikepenz.markdown.m3.Markdown
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
 /**
@@ -100,6 +103,8 @@ import java.io.File
  * @param viewModel the screen-scoped Hilt [ChatHomeViewModel].
  * @param onOpenSettings deep-link callback into the Settings route.
  * @param onOpenModels deep-link callback into the Models management route.
+ * @param onOpenArchive deep-link callback into the archived-chats route, fired
+ *   from the drawer footer entry (which only appears once something is archived).
  * @param modifier optional layout modifier applied to the screen root.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -109,6 +114,7 @@ fun ChatHomeScreen(
     modifier: Modifier = Modifier,
     onOpenSettings: () -> Unit = {},
     onOpenModels: () -> Unit = {},
+    onOpenArchive: () -> Unit = {},
 ) {
     // Single subscription to the consolidated screen state — the immutable
     // sub-structures (composer, console, pending, thread, model, tokens)
@@ -184,6 +190,7 @@ fun ChatHomeScreen(
     var newThreadSheetVisible by remember { mutableStateOf(false) }
     var modelPickerVisible by remember { mutableStateOf(false) }
     var deleteDialogVisible by remember { mutableStateOf(false) }
+    var deleteThreadTargetId by remember { mutableStateOf<String?>(null) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val clipboardManager = LocalClipboardManager.current
@@ -204,6 +211,11 @@ fun ChatHomeScreen(
     val resumeGraphChangedMessage = stringResource(R.string.chat_snackbar_resume_graph_changed)
     val resumeExpiredMessage = stringResource(R.string.chat_snackbar_resume_expired)
     val resumeUnavailableMessage = stringResource(R.string.chat_snackbar_resume_unavailable)
+    val archiveStrings = ArchiveSnackbarStrings(
+        archived = stringResource(R.string.chat_snackbar_archived),
+        undo = stringResource(R.string.chat_snackbar_archive_undo),
+        restored = stringResource(R.string.chat_snackbar_restored),
+    )
 
     LaunchedEffect(viewModel) {
         viewModel.pipelineBinding.pipelineFallbackEvents.collect {
@@ -396,6 +408,22 @@ fun ChatHomeScreen(
             renameDraft = session?.title.orEmpty()
             renameTargetId = threadId
         },
+        onThreadMenuOpen = viewModel.threads::openThreadMenu,
+        onThreadMenuDismiss = viewModel.threads::dismissThreadMenu,
+        onArchiveThread = { threadId ->
+            viewModel.threads.archiveThread(threadId)
+            coroutineScope.launch { showArchiveUndoSnackbar(snackbarHostState, viewModel, threadId, archiveStrings) }
+        },
+        // Deleting from a drawer row is destructive, so it goes through the
+        // same confirmation the top-bar Delete does — the menu item only
+        // raises the dialog.
+        onDeleteThread = { threadId -> deleteThreadTargetId = threadId },
+        onOpenArchive = onOpenArchive,
+        onRestoreArchivedThread = {
+            val threadId = screenState.thread.currentSessionId
+            viewModel.threads.unarchiveThread(threadId)
+            coroutineScope.launch { snackbarHostState.showSnackbar(message = archiveStrings.restored) }
+        },
         onImportChat = { importLauncher.launch(arrayOf(MIME_JSON)) },
         onOpenSettings = onOpenSettings,
         onSamplePromptCard = { card -> viewModel.onComposerValueChange(card.title) },
@@ -541,6 +569,29 @@ fun ChatHomeScreen(
                 },
             )
         }
+        deleteThreadTargetId?.let { targetId ->
+            AlertDialog(
+                onDismissRequest = { deleteThreadTargetId = null },
+                title = { Text(stringResource(R.string.chat_delete_dialog_title)) },
+                text = { Text(stringResource(R.string.chat_delete_dialog_text)) },
+                confirmButton = {
+                    KnotworkTextButton(
+                        text = stringResource(R.string.chat_delete_dialog_confirm),
+                        destructive = true,
+                        onClick = {
+                            deleteThreadTargetId = null
+                            viewModel.threads.deleteThread(targetId)
+                        },
+                    )
+                },
+                dismissButton = {
+                    KnotworkTextButton(
+                        text = stringResource(R.string.chat_delete_dialog_cancel),
+                        onClick = { deleteThreadTargetId = null },
+                    )
+                },
+            )
+        }
         if (deleteDialogVisible) {
             AlertDialog(
                 onDismissRequest = { deleteDialogVisible = false },
@@ -670,6 +721,57 @@ private fun createImageCaptureUri(context: Context): Uri {
     val dir = File(context.cacheDir, "images").apply { mkdirs() }
     val file = File(dir, "capture_${System.currentTimeMillis()}.jpg")
     return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+}
+
+/**
+ * The three strings the archive snackbars need, resolved once in the composable
+ * so the suspending helper below stays free of resource lookups.
+ *
+ * @property archived confirmation raised right after archiving.
+ * @property undo action label on that confirmation.
+ * @property restored confirmation raised after a restore (no action slot).
+ */
+internal data class ArchiveSnackbarStrings(val archived: String, val undo: String, val restored: String)
+
+/**
+ * Dwell of the archive-undo snackbar.
+ *
+ * Longer than the Material `Short` default (~4 s) on purpose: Undo is the only
+ * way back for a user who has not yet found the archive screen, and 4 s is not
+ * enough to read the message, decide, and reach the action. Material3 offers no
+ * 8 s duration, so the snackbar is shown as `Indefinite` and dismissed on this
+ * timer instead.
+ */
+private const val ARCHIVE_UNDO_DWELL_MS = 8_000L
+
+/**
+ * Shows "Chat archived · Undo" and restores the chat if the user takes the
+ * action. The drawer deliberately stays open — the user is usually mid-triage
+ * and archiving two or three in a row, so closing it would punish them for
+ * using the feature.
+ */
+private suspend fun showArchiveUndoSnackbar(
+    snackbarHostState: SnackbarHostState,
+    viewModel: ChatHomeViewModel,
+    threadId: String,
+    strings: ArchiveSnackbarStrings,
+) {
+    val result = withTimeoutOrNull(ARCHIVE_UNDO_DWELL_MS) {
+        snackbarHostState.showSnackbar(
+            message = strings.archived,
+            actionLabel = strings.undo,
+            duration = SnackbarDuration.Indefinite,
+        )
+    }
+    // `null` means the dwell elapsed with the snackbar still up; dismiss it so
+    // the next one is not queued behind an indefinite predecessor.
+    if (result == null) {
+        snackbarHostState.currentSnackbarData?.dismiss()
+        return
+    }
+    if (result == SnackbarResult.ActionPerformed) {
+        viewModel.threads.unarchiveThread(threadId)
+    }
 }
 
 /**

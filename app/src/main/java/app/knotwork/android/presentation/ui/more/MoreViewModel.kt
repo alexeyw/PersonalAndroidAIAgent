@@ -5,12 +5,14 @@ import androidx.lifecycle.viewModelScope
 import app.knotwork.android.BuildConfig
 import app.knotwork.android.domain.engine.TaskQueueManager
 import app.knotwork.android.domain.models.AgentOrchestratorState
+import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.MemoryStats
 import app.knotwork.android.domain.models.PipelinePreset
 import app.knotwork.android.domain.models.PromptPreset
 import app.knotwork.android.domain.models.WorkspaceListing
 import app.knotwork.android.domain.models.WorkspaceResult
+import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.NetworkActivityTracker
@@ -47,6 +49,7 @@ class MoreViewModel @Inject constructor(
     private val networkActivityTracker: NetworkActivityTracker,
     pipelinePresetRepository: PipelinePresetRepository,
     private val listWorkspaceUseCase: ListWorkspaceUseCase,
+    chatRepository: ChatRepository,
 ) : ViewModel() {
 
     val uiState: StateFlow<MoreUiState> = combine(
@@ -70,6 +73,7 @@ class MoreViewModel @Inject constructor(
         statusTicker(),
         pipelinePresetRepository.getUserPresets(),
         workspaceSummary(),
+        chatRepository.getArchivedSessionsFlow(),
     ) { values -> reduceUiState(values = values) }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(STATE_STOP_TIMEOUT_MS),
@@ -77,7 +81,7 @@ class MoreViewModel @Inject constructor(
     )
 
     /**
-     * Reduces the 6 positional values produced by [combine] into a
+     * Reduces the positional values produced by [combine] into a
      * [MoreUiState]. Pulled out into a dedicated function so the
      * unchecked-cast suppressions for each positional slot stay
      * confined to a single tight scope (and so the `combine` lambda
@@ -93,6 +97,7 @@ class MoreViewModel @Inject constructor(
         val now = values[5] as Long
         val userPresets = values[6] as List<PipelinePreset>
         val workspace = values[7] as WorkspaceResult<WorkspaceListing>
+        val archivedChats = values[8] as List<ChatSession>
         val active = models.firstOrNull { it.isActive }
         val runningCount = activeSessions.values.count {
             it is AgentOrchestratorState.Thinking ||
@@ -115,6 +120,7 @@ class MoreViewModel @Inject constructor(
             aboutSubtitle = "v${BuildConfig.VERSION_NAME} · build ${BuildConfig.VERSION_CODE}",
             librarySubtitle = formatLibraryStats(userPresets.size),
             filesSubtitle = formatWorkspaceStats(workspace),
+            archivedChats = archivedChats.size,
             networkStatusText = formatNetworkStatus(now, lastNetwork),
             networkStatusOk = lastNetwork == null ||
                 (now - lastNetwork) > FRESH_NETWORK_WINDOW_MS,

@@ -196,12 +196,25 @@ data class ChatHomePendingState(
  *   TopAppBar star icon.
  * @property currentSessionId id of the active chat session (blank before
  *   session initialisation completes).
+ * @property archived whether the *active* chat is archived. Drives the
+ *   read-only chrome: the composer is replaced by the restore bar and the
+ *   top-bar subtitle reads "Archived · read-only". An archived chat is
+ *   deliberately openable — reading the history is the whole reason it was
+ *   archived instead of deleted — but it cannot be written to, because a sent
+ *   message would silently un-archive it.
+ * @property archivedCount number of archived chats. The drawer's archive
+ *   footer row appears only when this is positive.
+ * @property openMenuId id of the drawer row whose overflow menu is open, or
+ *   `null`.
  */
 data class ChatHomeThreadState(
     val title: String = DEFAULT_TITLE,
     val rows: List<ChatHomeThreadRow> = emptyList(),
     val favorite: Boolean = false,
     val currentSessionId: String = "",
+    val archived: Boolean = false,
+    val archivedCount: Int = 0,
+    val openMenuId: String? = null,
 ) {
     companion object {
         /** Pre-formatted fallback thread title surfaced before any thread is selected. */
