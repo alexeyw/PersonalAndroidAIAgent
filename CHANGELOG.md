@@ -101,6 +101,31 @@ details.
 
 ### Fixed
 
+- **Bundled pipelines answered in the language of the question, not your
+  device's.** Ask in English on a Russian phone and the reply came back in
+  English. Some bundled pipelines had always been explicit about the language
+  and others had never mentioned it, so behaviour depended on which one you
+  picked. Every step whose text you actually read now works in your device
+  language. Steps that emit a routing keyword or a true/false decision are
+  deliberately untouched — translating those would break the branching — and
+  styled translation still translates into the language its prompt names.
+- **The tool-using agent template called a tool even when it plainly did not
+  need one.** Asked for `17 times 23`, it worked out the answer, then ran a web
+  search anyway and reported that the search results did not contain the
+  product. The template promised in its instructions to answer directly when no
+  tool was needed, but its wiring had no way to skip the tool. It now decides
+  first and branches: a lookup goes through the tool and the summariser, a
+  direct answer goes straight to the reply. This also stops the empty-input case
+  where a blank step produced a search for an invented topic.
+- **The preset gallery opened on a plumbing template.** Bundled presets were
+  listed in filename order, so the first card was *Clarify, then act* and the
+  scenarios from setup were scattered through the list. The order is now
+  deliberate: setup scenarios, then the end-to-end showcases, then the
+  build-your-own templates.
+- **Cloud chat could echo its own context back at you.** The first reply in a
+  conversation could restate the remembered entries and the model's own
+  reasoning before getting to the answer. The cloud step is now told to reply
+  with the answer only.
 - **The bundled preset gallery showed four templates nobody was meant to pick.**
   The four *Subtask —* entries are building blocks the showcase agent runs
   internally, not starting points — their own descriptions said so. They no

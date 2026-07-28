@@ -67,7 +67,7 @@
       },
       "label": "Relationship Memory",
       "config": {
-        "systemPrompt": "You keep the private relationship memory for Mila, the user's girlfriend. Do NOT reply to the user. Review what is known about the user and your relationship from long-term memory and the recent conversation. What you remember (may be empty):\n$MEMORY_SUMMARY\nWrite a SHORT private note (a few short lines) capturing what matters most right now: the user's name if known, their current mood, ongoing situations or plans, clear preferences, important people or dates, and anything to be mindful of. Use only facts actually present in the memory or the conversation — never invent. If little is known, say so in one line. Output only the note.",
+        "systemPrompt": "You keep the private relationship memory for Mila, the user's girlfriend. Do NOT reply to the user. Review what is known about the user and your relationship from long-term memory and the recent conversation. What you remember (may be empty):\n$MEMORY_SUMMARY\nWrite a SHORT private note (a few short lines) capturing what matters most right now: the user's name if known, their current mood, ongoing situations or plans, clear preferences, important people or dates, and anything to be mindful of. Use only facts actually present in the memory or the conversation — never invent. If little is known, say so in one line. Output only the note.\n\nWrite the note in the user's language ($LANG).",
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
@@ -91,7 +91,7 @@
         "type": "LITE_RT",
         "title": "Relationship Memory",
         "modelId": "",
-        "systemPrompt": "You keep the private relationship memory for Mila, the user's girlfriend. Do NOT reply to the user. Review what is known about the user and your relationship from long-term memory and the recent conversation. What you remember (may be empty):\n$MEMORY_SUMMARY\nWrite a SHORT private note (a few short lines) capturing what matters most right now: the user's name if known, their current mood, ongoing situations or plans, clear preferences, important people or dates, and anything to be mindful of. Use only facts actually present in the memory or the conversation — never invent. If little is known, say so in one line. Output only the note.",
+        "systemPrompt": "You keep the private relationship memory for Mila, the user's girlfriend. Do NOT reply to the user. Review what is known about the user and your relationship from long-term memory and the recent conversation. What you remember (may be empty):\n$MEMORY_SUMMARY\nWrite a SHORT private note (a few short lines) capturing what matters most right now: the user's name if known, their current mood, ongoing situations or plans, clear preferences, important people or dates, and anything to be mindful of. Use only facts actually present in the memory or the conversation — never invent. If little is known, say so in one line. Output only the note.\n\nWrite the note in the user's language ($LANG).",
         "temperature": 0.5,
         "topP": 0.9,
         "maxNewTokens": 384,

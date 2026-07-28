@@ -1649,7 +1649,7 @@
                     },
                     "label": "Translate",
                     "config": {
-                        "systemPrompt": "You translate the user's input text. TARGET: translate into Chilean Spanish (Spanish as actually spoken in Chile). REGISTER: use the everyday, casual register — natural, colloquial Chilean speech. To translate formally instead, replace the previous sentence with: use the official, formal register. To translate into a different language, change the TARGET line. Preserve the meaning, tone and politeness level of the original; keep names, numbers and line breaks. Do not add notes, alternatives or explanations. Output only the translated text.",
+                        "systemPrompt": "You translate the user's input text. TARGET: translate into Chilean Spanish (Spanish as actually spoken in Chile). REGISTER: use the everyday, casual register — natural, colloquial Chilean speech. To translate formally instead, replace the previous sentence with: use the official, formal register. To translate into a different language, change the TARGET line. Preserve the meaning, tone and politeness level of the original; keep names, numbers and line breaks. Do not add notes, alternatives or explanations. Output only the translated text.\n\nIf the input carries no translatable text — it is empty, or only punctuation, digits or symbols — return it unchanged and add nothing.",
                         "cloudProvider": null,
                         "modelPath": null,
                         "toolName": null,
@@ -1673,7 +1673,7 @@
                         "type": "LITE_RT",
                         "title": "Translate",
                         "modelId": "",
-                        "systemPrompt": "You translate the user's input text. TARGET: translate into Chilean Spanish (Spanish as actually spoken in Chile). REGISTER: use the everyday, casual register — natural, colloquial Chilean speech. To translate formally instead, replace the previous sentence with: use the official, formal register. To translate into a different language, change the TARGET line. Preserve the meaning, tone and politeness level of the original; keep names, numbers and line breaks. Do not add notes, alternatives or explanations. Output only the translated text.",
+                        "systemPrompt": "You translate the user's input text. TARGET: translate into Chilean Spanish (Spanish as actually spoken in Chile). REGISTER: use the everyday, casual register — natural, colloquial Chilean speech. To translate formally instead, replace the previous sentence with: use the official, formal register. To translate into a different language, change the TARGET line. Preserve the meaning, tone and politeness level of the original; keep names, numbers and line breaks. Do not add notes, alternatives or explanations. Output only the translated text.\n\nIf the input carries no translatable text — it is empty, or only punctuation, digits or symbols — return it unchanged and add nothing.",
                         "temperature": 0.7,
                         "topP": 0.9,
                         "maxNewTokens": 2048,
@@ -1879,7 +1879,7 @@
                     },
                     "label": "Confirm",
                     "config": {
-                        "systemPrompt": "Your input confirms text was appended to a file, like: Appended N bytes to 'inbox/captures.md'. Reply with one short line telling the user the shared item was captured to their workspace inbox. If the input is instead an error message, relay it plainly in one sentence. Add nothing else.",
+                        "systemPrompt": "Your input confirms text was appended to a file, like: Appended N bytes to 'inbox/captures.md'. Reply with one short line telling the user the shared item was captured to their workspace inbox. If the input is instead an error message, relay it plainly in one sentence. Add nothing else.\n\nReply in the user's language ($LANG).",
                         "cloudProvider": null,
                         "modelPath": null,
                         "toolName": null,
@@ -1903,7 +1903,7 @@
                         "type": "OUTPUT",
                         "title": "Confirm",
                         "format": "PLAIN_TEXT",
-                        "systemPrompt": "Your input confirms text was appended to a file, like: Appended N bytes to 'inbox/captures.md'. Reply with one short line telling the user the shared item was captured to their workspace inbox. If the input is instead an error message, relay it plainly in one sentence. Add nothing else."
+                        "systemPrompt": "Your input confirms text was appended to a file, like: Appended N bytes to 'inbox/captures.md'. Reply with one short line telling the user the shared item was captured to their workspace inbox. If the input is instead an error message, relay it plainly in one sentence. Add nothing else.\n\nReply in the user's language ($LANG)."
                     }
                 }
             ],
@@ -1997,7 +1997,7 @@
                     },
                     "label": "Relationship Memory",
                     "config": {
-                        "systemPrompt": "You keep the private relationship memory for Mila, the user's girlfriend. Do NOT reply to the user. Review what is known about the user and your relationship from long-term memory and the recent conversation. What you remember (may be empty):\n$MEMORY_SUMMARY\nWrite a SHORT private note (a few short lines) capturing what matters most right now: the user's name if known, their current mood, ongoing situations or plans, clear preferences, important people or dates, and anything to be mindful of. Use only facts actually present in the memory or the conversation — never invent. If little is known, say so in one line. Output only the note.",
+                        "systemPrompt": "You keep the private relationship memory for Mila, the user's girlfriend. Do NOT reply to the user. Review what is known about the user and your relationship from long-term memory and the recent conversation. What you remember (may be empty):\n$MEMORY_SUMMARY\nWrite a SHORT private note (a few short lines) capturing what matters most right now: the user's name if known, their current mood, ongoing situations or plans, clear preferences, important people or dates, and anything to be mindful of. Use only facts actually present in the memory or the conversation — never invent. If little is known, say so in one line. Output only the note.\n\nWrite the note in the user's language ($LANG).",
                         "cloudProvider": null,
                         "modelPath": null,
                         "toolName": null,
@@ -2021,7 +2021,7 @@
                         "type": "LITE_RT",
                         "title": "Relationship Memory",
                         "modelId": "",
-                        "systemPrompt": "You keep the private relationship memory for Mila, the user's girlfriend. Do NOT reply to the user. Review what is known about the user and your relationship from long-term memory and the recent conversation. What you remember (may be empty):\n$MEMORY_SUMMARY\nWrite a SHORT private note (a few short lines) capturing what matters most right now: the user's name if known, their current mood, ongoing situations or plans, clear preferences, important people or dates, and anything to be mindful of. Use only facts actually present in the memory or the conversation — never invent. If little is known, say so in one line. Output only the note.",
+                        "systemPrompt": "You keep the private relationship memory for Mila, the user's girlfriend. Do NOT reply to the user. Review what is known about the user and your relationship from long-term memory and the recent conversation. What you remember (may be empty):\n$MEMORY_SUMMARY\nWrite a SHORT private note (a few short lines) capturing what matters most right now: the user's name if known, their current mood, ongoing situations or plans, clear preferences, important people or dates, and anything to be mindful of. Use only facts actually present in the memory or the conversation — never invent. If little is known, say so in one line. Output only the note.\n\nWrite the note in the user's language ($LANG).",
                         "temperature": 0.5,
                         "topP": 0.9,
                         "maxNewTokens": 384,
@@ -3728,7 +3728,7 @@
                     },
                     "label": "Reply",
                     "config": {
-                        "systemPrompt": "Your input is a confirmation that a file was written to the agent workspace, in the form Wrote N bytes to 'reports/<name>.md'. Reply to the user with a single short line: Report saved to <path>, where <path> is the path taken exactly from that confirmation. If the input is instead an error message, relay it plainly in one sentence. Do not add anything else.",
+                        "systemPrompt": "Your input is a confirmation that a file was written to the agent workspace, in the form Wrote N bytes to 'reports/<name>.md'. Reply to the user with a single short line: Report saved to <path>, where <path> is the path taken exactly from that confirmation. If the input is instead an error message, relay it plainly in one sentence. Do not add anything else.\n\nReply in the user's language ($LANG).",
                         "cloudProvider": null,
                         "modelPath": null,
                         "toolName": null,
@@ -3752,7 +3752,7 @@
                         "type": "OUTPUT",
                         "title": "Reply",
                         "format": "PLAIN_TEXT",
-                        "systemPrompt": "Your input is a confirmation that a file was written to the agent workspace, in the form Wrote N bytes to 'reports/<name>.md'. Reply to the user with a single short line: Report saved to <path>, where <path> is the path taken exactly from that confirmation. If the input is instead an error message, relay it plainly in one sentence. Do not add anything else."
+                        "systemPrompt": "Your input is a confirmation that a file was written to the agent workspace, in the form Wrote N bytes to 'reports/<name>.md'. Reply to the user with a single short line: Report saved to <path>, where <path> is the path taken exactly from that confirmation. If the input is instead an error message, relay it plainly in one sentence. Do not add anything else.\n\nReply in the user's language ($LANG)."
                     }
                 }
             ],
@@ -3863,7 +3863,7 @@
                     },
                     "label": "Local LLM",
                     "config": {
-                        "systemPrompt": "You are a concise on-device assistant running on $MODEL. Today is $DATE. Answer the user's question directly in one or two short paragraphs. Do not invent facts; if you do not know, say so plainly.",
+                        "systemPrompt": "You are a concise on-device assistant running on $MODEL. Today is $DATE. Answer the user's question directly in one or two short paragraphs. Do not invent facts; if you do not know, say so plainly.\n\nReply in the user's language ($LANG).",
                         "cloudProvider": null,
                         "modelPath": null,
                         "toolName": null,
@@ -3887,7 +3887,7 @@
                         "type": "LITE_RT",
                         "title": "Local LLM",
                         "modelId": "",
-                        "systemPrompt": "You are a concise on-device assistant running on $MODEL. Today is $DATE. Answer the user's question directly in one or two short paragraphs. Do not invent facts; if you do not know, say so plainly.",
+                        "systemPrompt": "You are a concise on-device assistant running on $MODEL. Today is $DATE. Answer the user's question directly in one or two short paragraphs. Do not invent facts; if you do not know, say so plainly.\n\nReply in the user's language ($LANG).",
                         "temperature": 0.7,
                         "topP": 0.9,
                         "maxNewTokens": 2048,
@@ -4014,7 +4014,7 @@
                     },
                     "label": "Cloud LLM",
                     "config": {
-                        "systemPrompt": "You are a knowledgeable cloud assistant available to the user on their Android device. The current date is $DATE and the local time is $TIME. Use the conversation history above to keep continuity across turns. Reply in well-structured prose; cite concrete facts and explain reasoning when it helps the user.",
+                        "systemPrompt": "You are a knowledgeable cloud assistant available to the user on their Android device. The current date is $DATE and the local time is $TIME. Use the conversation history above to keep continuity across turns. Reply in well-structured prose; cite concrete facts and explain reasoning when it helps the user.\n\nReply in the user's language ($LANG). Do not restate, quote or summarise the material you were given — the conversation history, the remembered entries, or your own reasoning. Reply with the answer only.",
                         "cloudProvider": "auto",
                         "modelPath": null,
                         "toolName": null,
@@ -4039,7 +4039,7 @@
                         "title": "Cloud LLM",
                         "provider": "AUTO",
                         "model": "",
-                        "systemPrompt": "You are a knowledgeable cloud assistant available to the user on their Android device. The current date is $DATE and the local time is $TIME. Use the conversation history above to keep continuity across turns. Reply in well-structured prose; cite concrete facts and explain reasoning when it helps the user.",
+                        "systemPrompt": "You are a knowledgeable cloud assistant available to the user on their Android device. The current date is $DATE and the local time is $TIME. Use the conversation history above to keep continuity across turns. Reply in well-structured prose; cite concrete facts and explain reasoning when it helps the user.\n\nReply in the user's language ($LANG). Do not restate, quote or summarise the material you were given — the conversation history, the remembered entries, or your own reasoning. Reply with the answer only.",
                         "temperature": 0.7,
                         "maxTokens": 1024,
                         "timeoutMs": 30000
@@ -4213,7 +4213,7 @@
                     },
                     "label": "Local LLM",
                     "config": {
-                        "systemPrompt": "You are a concise on-device assistant running on $MODEL. Today is $DATE. Answer the user's question directly in one short paragraph.",
+                        "systemPrompt": "You are a concise on-device assistant running on $MODEL. Today is $DATE. Answer the user's question directly in one short paragraph.\n\nReply in the user's language ($LANG).",
                         "cloudProvider": null,
                         "modelPath": null,
                         "toolName": null,
@@ -4237,7 +4237,7 @@
                         "type": "LITE_RT",
                         "title": "Local LLM",
                         "modelId": "",
-                        "systemPrompt": "You are a concise on-device assistant running on $MODEL. Today is $DATE. Answer the user's question directly in one short paragraph.",
+                        "systemPrompt": "You are a concise on-device assistant running on $MODEL. Today is $DATE. Answer the user's question directly in one short paragraph.\n\nReply in the user's language ($LANG).",
                         "temperature": 0.7,
                         "topP": 0.9,
                         "maxNewTokens": 2048,
@@ -4253,7 +4253,7 @@
                     },
                     "label": "Cloud LLM",
                     "config": {
-                        "systemPrompt": "You are a cloud assistant handling a request the on-device router flagged as Complex. The current date is $DATE. Use the conversation history to keep continuity. Reason step by step internally, then reply with a thorough, well-structured answer.",
+                        "systemPrompt": "You are a cloud assistant handling a request the on-device router flagged as Complex. The current date is $DATE. Use the conversation history to keep continuity. Reason step by step internally, then reply with a thorough, well-structured answer.\n\nReply in the user's language ($LANG). Do not restate, quote or summarise the material you were given — the conversation history, the remembered entries, or your own reasoning. Reply with the answer only.",
                         "cloudProvider": "auto",
                         "modelPath": null,
                         "toolName": null,
@@ -4278,7 +4278,7 @@
                         "title": "Cloud LLM",
                         "provider": "AUTO",
                         "model": "",
-                        "systemPrompt": "You are a cloud assistant handling a request the on-device router flagged as Complex. The current date is $DATE. Use the conversation history to keep continuity. Reason step by step internally, then reply with a thorough, well-structured answer.",
+                        "systemPrompt": "You are a cloud assistant handling a request the on-device router flagged as Complex. The current date is $DATE. Use the conversation history to keep continuity. Reason step by step internally, then reply with a thorough, well-structured answer.\n\nReply in the user's language ($LANG). Do not restate, quote or summarise the material you were given — the conversation history, the remembered entries, or your own reasoning. Reply with the answer only.",
                         "temperature": 0.7,
                         "maxTokens": 1024,
                         "timeoutMs": 30000
@@ -4422,7 +4422,7 @@
                     },
                     "label": "Clarify",
                     "config": {
-                        "systemPrompt": "Inspect the user's request. If anything important is ambiguous, craft ONE concise clarifying question and propose 2-3 short, mutually exclusive options. Today is $DATE. Output STRICTLY valid JSON of shape: {\"question\": \"...\", \"options\": [\"...\", \"...\"]}. If nothing needs clarifying, output an empty options array and a question that confirms intent in one line.",
+                        "systemPrompt": "Inspect the user's request. If anything important is ambiguous, craft ONE concise clarifying question and propose 2-3 short, mutually exclusive options. Today is $DATE. Output STRICTLY valid JSON of shape: {\"question\": \"...\", \"options\": [\"...\", \"...\"]}. If nothing needs clarifying, output an empty options array and a question that confirms intent in one line.\n\nWrite the question and every option in the user's language ($LANG).",
                         "cloudProvider": null,
                         "modelPath": null,
                         "toolName": null,
@@ -4445,7 +4445,7 @@
                         "v": 1,
                         "type": "CLARIFICATION",
                         "title": "Clarify",
-                        "questionTemplate": "Inspect the user's request. If anything important is ambiguous, craft ONE concise clarifying question and propose 2-3 short, mutually exclusive options. Today is $DATE. Output STRICTLY valid JSON of shape: {\"question\": \"...\", \"options\": [\"...\", \"...\"]}. If nothing needs clarifying, output an empty options array and a question that confirms intent in one line.",
+                        "questionTemplate": "Inspect the user's request. If anything important is ambiguous, craft ONE concise clarifying question and propose 2-3 short, mutually exclusive options. Today is $DATE. Output STRICTLY valid JSON of shape: {\"question\": \"...\", \"options\": [\"...\", \"...\"]}. If nothing needs clarifying, output an empty options array and a question that confirms intent in one line.\n\nWrite the question and every option in the user's language ($LANG).",
                         "quickReplies": [],
                         "timeoutMs": 60000
                     }
@@ -4459,7 +4459,7 @@
                     },
                     "label": "Local LLM",
                     "config": {
-                        "systemPrompt": "You are an on-device assistant running on $MODEL. Today is $DATE. The user's clarified request appears below; answer it directly in one or two short paragraphs.",
+                        "systemPrompt": "You are an on-device assistant running on $MODEL. Today is $DATE. The user's clarified request appears below; answer it directly in one or two short paragraphs.\n\nReply in the user's language ($LANG).",
                         "cloudProvider": null,
                         "modelPath": null,
                         "toolName": null,
@@ -4483,7 +4483,7 @@
                         "type": "LITE_RT",
                         "title": "Local LLM",
                         "modelId": "",
-                        "systemPrompt": "You are an on-device assistant running on $MODEL. Today is $DATE. The user's clarified request appears below; answer it directly in one or two short paragraphs.",
+                        "systemPrompt": "You are an on-device assistant running on $MODEL. Today is $DATE. The user's clarified request appears below; answer it directly in one or two short paragraphs.\n\nReply in the user's language ($LANG).",
                         "temperature": 0.7,
                         "topP": 0.9,
                         "maxNewTokens": 2048,
@@ -4552,7 +4552,7 @@
             "schemaVersion": 1,
             "id": "tool_using_react",
             "name": "Tool-using agent",
-            "description": "Local model reasons about which tool to call, the tool runs (auto-selected from the registry), and a summariser folds the tool output back into a final answer. Good template for action-oriented tasks.",
+            "description": "The local model decides whether a tool is needed. When it is, the tool runs (auto-selected from the registry) and a summariser folds the result into the final answer; when it is not, the model's own answer goes straight to the reply. Good template for action-oriented tasks.",
             "category": "tool",
             "tags": [
                 "tools",
@@ -4616,9 +4616,9 @@
                         "x": 320,
                         "y": 200
                     },
-                    "label": "Reasoner",
+                    "label": "Answer or lookup",
                     "config": {
-                        "systemPrompt": "You are a reasoning agent deciding whether a tool is needed to answer the user. Today is $DATE. Available tools:\n$TOOLS\n\nThink step by step. If a tool can produce more reliable or fresher information than your own knowledge, output a single short sentence describing what you want the tool to do. Otherwise produce a direct answer. Keep the output under three sentences.",
+                        "systemPrompt": "You decide how to answer the user. Today is $DATE. Available tools:\n$TOOLS\n\nIf a tool can produce more reliable or fresher information than your own knowledge, output ONLY the search term or the short description of what the tool should do — no preamble, no explanation, nothing else. Otherwise answer the user's question directly and completely, in at most two short paragraphs.\n\nThe next step decides which of the two you produced, so do not mix them: either a lookup request on its own, or a finished answer on its own. Never output an empty response — when the input is empty or meaningless, say so in one sentence as a finished answer.\n\nReply in the user's language ($LANG).",
                         "cloudProvider": null,
                         "modelPath": null,
                         "toolName": null,
@@ -4640,9 +4640,9 @@
                     "nodeConfig": {
                         "v": 1,
                         "type": "LITE_RT",
-                        "title": "Reasoner",
+                        "title": "Answer or lookup",
                         "modelId": "",
-                        "systemPrompt": "You are a reasoning agent deciding whether a tool is needed to answer the user. Today is $DATE. Available tools:\n$TOOLS\n\nThink step by step. If a tool can produce more reliable or fresher information than your own knowledge, output a single short sentence describing what you want the tool to do. Otherwise produce a direct answer. Keep the output under three sentences.",
+                        "systemPrompt": "You decide how to answer the user. Today is $DATE. Available tools:\n$TOOLS\n\nIf a tool can produce more reliable or fresher information than your own knowledge, output ONLY the search term or the short description of what the tool should do — no preamble, no explanation, nothing else. Otherwise answer the user's question directly and completely, in at most two short paragraphs.\n\nThe next step decides which of the two you produced, so do not mix them: either a lookup request on its own, or a finished answer on its own. Never output an empty response — when the input is empty or meaningless, say so in one sentence as a finished answer.\n\nReply in the user's language ($LANG).",
                         "temperature": 0.7,
                         "topP": 0.9,
                         "maxNewTokens": 2048,
@@ -4650,11 +4650,49 @@
                     }
                 },
                 {
-                    "id": "tool",
-                    "type": "TOOL",
+                    "id": "needs_tool",
+                    "type": "IF_CONDITION",
                     "position": {
                         "x": 560,
                         "y": 200
+                    },
+                    "label": "Needs a tool?",
+                    "config": {
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "targetPipelineId": null,
+                        "skillId": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": "The upstream text is a request for a lookup rather than a finished answer — the previous step decided that a tool is needed. Answer true when the text is a search term, a topic name, or a short description of what to look up. Answer false when the text already answers the user's original question on its own, including when it says the request cannot be answered.\n\nOutput exactly one word — true or false — in lowercase, with no punctuation, quotation marks or explanation.",
+                        "conditionKeywords": null,
+                        "conditionComplexity": null,
+                        "conditionHasImage": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    },
+                    "nodeConfig": {
+                        "v": 1,
+                        "type": "IF_CONDITION",
+                        "title": "Needs a tool?",
+                        "expression": "The upstream text is a request for a lookup rather than a finished answer — the previous step decided that a tool is needed. Answer true when the text is a search term, a topic name, or a short description of what to look up. Answer false when the text already answers the user's original question on its own, including when it says the request cannot be answered.\n\nOutput exactly one word — true or false — in lowercase, with no punctuation, quotation marks or explanation.",
+                        "labelTrue": "true",
+                        "labelFalse": "false",
+                        "branchOnImage": false
+                    }
+                },
+                {
+                    "id": "tool",
+                    "type": "TOOL",
+                    "position": {
+                        "x": 800,
+                        "y": 100
                     },
                     "label": "Tool",
                     "config": {
@@ -4689,12 +4727,12 @@
                     "id": "summary",
                     "type": "SUMMARY",
                     "position": {
-                        "x": 800,
-                        "y": 200
+                        "x": 1040,
+                        "y": 100
                     },
                     "label": "Summariser",
                     "config": {
-                        "systemPrompt": "You synthesise the result of a tool invocation into a final reply for the user. Quote the concrete facts the tool returned and answer the user's original question directly. If the tool failed or returned nothing useful, say so plainly.",
+                        "systemPrompt": "You synthesise the result of a tool invocation into a final reply for the user. Quote the concrete facts the tool returned and answer the user's original question directly. If the tool failed or returned nothing useful, say so plainly.\n\nReply in the user's language ($LANG).",
                         "cloudProvider": null,
                         "modelPath": null,
                         "toolName": null,
@@ -4718,7 +4756,7 @@
                         "type": "SUMMARY",
                         "title": "Summariser",
                         "format": "CUSTOM",
-                        "customPrompt": "You synthesise the result of a tool invocation into a final reply for the user. Quote the concrete facts the tool returned and answer the user's original question directly. If the tool failed or returned nothing useful, say so plainly.",
+                        "customPrompt": "You synthesise the result of a tool invocation into a final reply for the user. Quote the concrete facts the tool returned and answer the user's original question directly. If the tool failed or returned nothing useful, say so plainly.\n\nReply in the user's language ($LANG).",
                         "targetLengthChars": 2000
                     }
                 },
@@ -4726,7 +4764,7 @@
                     "id": "output",
                     "type": "OUTPUT",
                     "position": {
-                        "x": 1040,
+                        "x": 1280,
                         "y": 200
                     },
                     "label": "Reply",
@@ -4769,20 +4807,32 @@
                 {
                     "id": "c2",
                     "fromNodeId": "lite_rt",
-                    "toNodeId": "tool",
+                    "toNodeId": "needs_tool",
                     "label": null
                 },
                 {
                     "id": "c3",
+                    "fromNodeId": "needs_tool",
+                    "toNodeId": "tool",
+                    "label": "True"
+                },
+                {
+                    "id": "c4",
                     "fromNodeId": "tool",
                     "toNodeId": "summary",
                     "label": null
                 },
                 {
-                    "id": "c4",
+                    "id": "c5",
                     "fromNodeId": "summary",
                     "toNodeId": "output",
                     "label": null
+                },
+                {
+                    "id": "c6",
+                    "fromNodeId": "needs_tool",
+                    "toNodeId": "output",
+                    "label": "False"
                 }
             ]
         },
@@ -4929,7 +4979,7 @@
                     },
                     "label": "Researcher",
                     "config": {
-                        "systemPrompt": "You are a research assistant working on ONE subtask at a time within a larger plan. Today is $DATE. Investigate the current subtask thoroughly and return concrete findings in two or three short paragraphs. Previously completed subtask results, when present, appear above the current subtask — reuse them rather than restarting research.",
+                        "systemPrompt": "You are a research assistant working on ONE subtask at a time within a larger plan. Today is $DATE. Investigate the current subtask thoroughly and return concrete findings in two or three short paragraphs. Previously completed subtask results, when present, appear above the current subtask — reuse them rather than restarting research.\n\nWork in the user's language ($LANG).",
                         "cloudProvider": "auto",
                         "modelPath": null,
                         "toolName": null,
@@ -4954,7 +5004,7 @@
                         "title": "Researcher",
                         "provider": "AUTO",
                         "model": "",
-                        "systemPrompt": "You are a research assistant working on ONE subtask at a time within a larger plan. Today is $DATE. Investigate the current subtask thoroughly and return concrete findings in two or three short paragraphs. Previously completed subtask results, when present, appear above the current subtask — reuse them rather than restarting research.",
+                        "systemPrompt": "You are a research assistant working on ONE subtask at a time within a larger plan. Today is $DATE. Investigate the current subtask thoroughly and return concrete findings in two or three short paragraphs. Previously completed subtask results, when present, appear above the current subtask — reuse them rather than restarting research.\n\nWork in the user's language ($LANG).",
                         "temperature": 0.7,
                         "maxTokens": 1024,
                         "timeoutMs": 30000

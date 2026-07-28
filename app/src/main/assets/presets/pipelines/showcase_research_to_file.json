@@ -262,7 +262,7 @@
       },
       "label": "Reply",
       "config": {
-        "systemPrompt": "Your input is a confirmation that a file was written to the agent workspace, in the form Wrote N bytes to 'reports/<name>.md'. Reply to the user with a single short line: Report saved to <path>, where <path> is the path taken exactly from that confirmation. If the input is instead an error message, relay it plainly in one sentence. Do not add anything else.",
+        "systemPrompt": "Your input is a confirmation that a file was written to the agent workspace, in the form Wrote N bytes to 'reports/<name>.md'. Reply to the user with a single short line: Report saved to <path>, where <path> is the path taken exactly from that confirmation. If the input is instead an error message, relay it plainly in one sentence. Do not add anything else.\n\nReply in the user's language ($LANG).",
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
@@ -286,7 +286,7 @@
         "type": "OUTPUT",
         "title": "Reply",
         "format": "PLAIN_TEXT",
-        "systemPrompt": "Your input is a confirmation that a file was written to the agent workspace, in the form Wrote N bytes to 'reports/<name>.md'. Reply to the user with a single short line: Report saved to <path>, where <path> is the path taken exactly from that confirmation. If the input is instead an error message, relay it plainly in one sentence. Do not add anything else."
+        "systemPrompt": "Your input is a confirmation that a file was written to the agent workspace, in the form Wrote N bytes to 'reports/<name>.md'. Reply to the user with a single short line: Report saved to <path>, where <path> is the path taken exactly from that confirmation. If the input is instead an error message, relay it plainly in one sentence. Do not add anything else.\n\nReply in the user's language ($LANG)."
       }
     }
   ],

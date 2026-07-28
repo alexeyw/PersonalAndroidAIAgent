@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.res.AssetManager
 import app.knotwork.android.data.local.dao.PipelinePresetDao
 import app.knotwork.android.data.local.models.PipelinePresetEntity
+import app.knotwork.android.domain.constants.BundledPresetCatalog
 import app.knotwork.android.domain.models.ConnectionModel
 import app.knotwork.android.domain.models.NodeContextConfig
 import app.knotwork.android.domain.models.NodeModel
@@ -244,6 +245,25 @@ class LocalPipelinePresetRepositoryImplTest {
         val emitted = repository.getBundledPresets().first()
 
         assertEquals(listOf("visible"), emitted.map { it.id })
+    }
+
+    @Test
+    fun `given bundled presets when getBundledPresets then they follow the declared display order`() = runTest {
+        // AssetManager lists alphabetically; the catalogue must come back in
+        // the product order instead, with unranked ids last.
+        val ranked = BundledPresetCatalog.DISPLAY_ORDER.take(2)
+        val fileNames = (listOf("zz_unranked") + ranked.reversed()).map { "$it.json" }
+        every { assets.list("presets/pipelines") } returns fileNames.toTypedArray()
+        fileNames.forEach { fileName ->
+            val id = fileName.removeSuffix(".json")
+            every { assets.open("presets/pipelines/$fileName") } answers {
+                PipelinePresetJsonSerializer.serialize(preset(id = id, isBundled = true)).byteInputStream()
+            }
+        }
+
+        val emitted = repository.getBundledPresets().first()
+
+        assertEquals(ranked + "zz_unranked", emitted.map { it.id })
     }
 
     @Test

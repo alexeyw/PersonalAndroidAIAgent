@@ -66,7 +66,7 @@
       },
       "label": "Clarify",
       "config": {
-        "systemPrompt": "Inspect the user's request. If anything important is ambiguous, craft ONE concise clarifying question and propose 2-3 short, mutually exclusive options. Today is $DATE. Output STRICTLY valid JSON of shape: {\"question\": \"...\", \"options\": [\"...\", \"...\"]}. If nothing needs clarifying, output an empty options array and a question that confirms intent in one line.",
+        "systemPrompt": "Inspect the user's request. If anything important is ambiguous, craft ONE concise clarifying question and propose 2-3 short, mutually exclusive options. Today is $DATE. Output STRICTLY valid JSON of shape: {\"question\": \"...\", \"options\": [\"...\", \"...\"]}. If nothing needs clarifying, output an empty options array and a question that confirms intent in one line.\n\nWrite the question and every option in the user's language ($LANG).",
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
@@ -89,7 +89,7 @@
         "v": 1,
         "type": "CLARIFICATION",
         "title": "Clarify",
-        "questionTemplate": "Inspect the user's request. If anything important is ambiguous, craft ONE concise clarifying question and propose 2-3 short, mutually exclusive options. Today is $DATE. Output STRICTLY valid JSON of shape: {\"question\": \"...\", \"options\": [\"...\", \"...\"]}. If nothing needs clarifying, output an empty options array and a question that confirms intent in one line.",
+        "questionTemplate": "Inspect the user's request. If anything important is ambiguous, craft ONE concise clarifying question and propose 2-3 short, mutually exclusive options. Today is $DATE. Output STRICTLY valid JSON of shape: {\"question\": \"...\", \"options\": [\"...\", \"...\"]}. If nothing needs clarifying, output an empty options array and a question that confirms intent in one line.\n\nWrite the question and every option in the user's language ($LANG).",
         "quickReplies": [],
         "timeoutMs": 60000
       }
@@ -103,7 +103,7 @@
       },
       "label": "Local LLM",
       "config": {
-        "systemPrompt": "You are an on-device assistant running on $MODEL. Today is $DATE. The user's clarified request appears below; answer it directly in one or two short paragraphs.",
+        "systemPrompt": "You are an on-device assistant running on $MODEL. Today is $DATE. The user's clarified request appears below; answer it directly in one or two short paragraphs.\n\nReply in the user's language ($LANG).",
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
@@ -127,7 +127,7 @@
         "type": "LITE_RT",
         "title": "Local LLM",
         "modelId": "",
-        "systemPrompt": "You are an on-device assistant running on $MODEL. Today is $DATE. The user's clarified request appears below; answer it directly in one or two short paragraphs.",
+        "systemPrompt": "You are an on-device assistant running on $MODEL. Today is $DATE. The user's clarified request appears below; answer it directly in one or two short paragraphs.\n\nReply in the user's language ($LANG).",
         "temperature": 0.7,
         "topP": 0.9,
         "maxNewTokens": 2048,

@@ -1,5 +1,6 @@
 package app.knotwork.android.domain.pipelineio
 
+import app.knotwork.android.domain.constants.BundledPresetCatalog
 import app.knotwork.android.domain.models.ConnectionModel
 import app.knotwork.android.domain.models.NodeContextConfig
 import app.knotwork.android.domain.models.NodeModel
@@ -106,6 +107,33 @@ class PipelinePresetCatalogValidationTest {
         "subtask_process",
     )
 
+    /**
+     * Node types whose output is read by the user (directly, or after a
+     * pass-through OUTPUT). These must answer in the device language, not in
+     * whichever language the input happened to use — which is what an LLM does
+     * unprompted. Control-signal types are excluded on purpose:
+     * `INTENT_ROUTER` and `EVALUATION` emit a token matched against edge
+     * labels / verdicts, and `IF_CONDITION` emits `true` / `false`; localising
+     * any of them would break routing.
+     */
+    private val userTextNodeTypes: Set<NodeType> = setOf(
+        NodeType.LITE_RT,
+        NodeType.CLOUD,
+        NodeType.SUMMARY,
+        NodeType.CLARIFICATION,
+        NodeType.OUTPUT,
+    )
+
+    /**
+     * `<preset>/<node>` pairs exempt from the `$LANG` rule because they fix
+     * their output language deliberately. Keep this list one-entry-per-reason.
+     */
+    private val fixedLanguageNodes: Set<String> = setOf(
+        // The whole point of the preset: it translates INTO a target language
+        // named in the prompt, so the device language must not override it.
+        "styled_translation/node-2",
+    )
+
     private val catalogDir: File = File("src/main/assets/presets/pipelines")
 
     private val variableTokenRegex: Regex = Regex("(?<!\\\\)\\$([A-Z_][A-Z0-9_]*)")
@@ -171,6 +199,49 @@ class PipelinePresetCatalogValidationTest {
                         "unknown prompt variable(s) $unknown — register them in " +
                         "di/PromptTemplateModule.kt or fix the typo.",
                     unknown.isEmpty(),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `every user-facing preset declares its place in the display order`() {
+        val userFacing = mutableSetOf<String>()
+        forEachBundledFile { file ->
+            val preset = parseAsSuccess(file).preset
+            if (!preset.isInternal) userFacing += preset.id
+        }
+        // An unranked preset would silently sort to the end of the gallery
+        // rather than to a chosen position. Fail the build instead.
+        val unranked = userFacing.filterNot { it in BundledPresetCatalog.DISPLAY_ORDER }
+        assertTrue(
+            "Bundled preset(s) $unranked are missing from BundledPresetCatalog.DISPLAY_ORDER — " +
+                "they would be demoted to the end of the picker.",
+            unranked.isEmpty(),
+        )
+        // The converse: a rank for a preset that no longer ships is dead weight
+        // that silently shifts nothing, so it should not linger either.
+        val stale = BundledPresetCatalog.DISPLAY_ORDER.filterNot { it in userFacing }
+        assertTrue(
+            "BundledPresetCatalog.DISPLAY_ORDER ranks $stale, which are not user-facing bundled " +
+                "presets (deleted, renamed, or now internal).",
+            stale.isEmpty(),
+        )
+    }
+
+    @Test
+    fun `every node whose text reaches the user declares the language variable`() {
+        forEachBundledFile { file ->
+            val preset = parseAsSuccess(file).preset
+            preset.graph.nodes.forEach { node ->
+                if (node.type !in userTextNodeTypes) return@forEach
+                val prompt = node.systemPrompt?.takeIf { it.isNotBlank() } ?: return@forEach
+                if ("${file.nameWithoutExtension}/${node.id}" in fixedLanguageNodes) return@forEach
+                assertTrue(
+                    "Node \"${node.id}\" (${node.type}) in ${file.name} produces text the user " +
+                        "reads but never mentions \$LANG, so it answers in whatever language the " +
+                        "input happened to use instead of the device language.",
+                    prompt.contains("\$LANG"),
                 )
             }
         }

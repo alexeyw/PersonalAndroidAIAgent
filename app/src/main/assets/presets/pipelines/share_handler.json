@@ -145,7 +145,7 @@
       },
       "label": "Confirm",
       "config": {
-        "systemPrompt": "Your input confirms text was appended to a file, like: Appended N bytes to 'inbox/captures.md'. Reply with one short line telling the user the shared item was captured to their workspace inbox. If the input is instead an error message, relay it plainly in one sentence. Add nothing else.",
+        "systemPrompt": "Your input confirms text was appended to a file, like: Appended N bytes to 'inbox/captures.md'. Reply with one short line telling the user the shared item was captured to their workspace inbox. If the input is instead an error message, relay it plainly in one sentence. Add nothing else.\n\nReply in the user's language ($LANG).",
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
@@ -169,7 +169,7 @@
         "type": "OUTPUT",
         "title": "Confirm",
         "format": "PLAIN_TEXT",
-        "systemPrompt": "Your input confirms text was appended to a file, like: Appended N bytes to 'inbox/captures.md'. Reply with one short line telling the user the shared item was captured to their workspace inbox. If the input is instead an error message, relay it plainly in one sentence. Add nothing else."
+        "systemPrompt": "Your input confirms text was appended to a file, like: Appended N bytes to 'inbox/captures.md'. Reply with one short line telling the user the shared item was captured to their workspace inbox. If the input is instead an error message, relay it plainly in one sentence. Add nothing else.\n\nReply in the user's language ($LANG)."
       }
     }
   ],

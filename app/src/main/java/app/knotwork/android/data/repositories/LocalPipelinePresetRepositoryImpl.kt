@@ -4,6 +4,7 @@ import android.content.Context
 import app.knotwork.android.data.local.TagsCsv
 import app.knotwork.android.data.local.dao.PipelinePresetDao
 import app.knotwork.android.data.local.models.PipelinePresetEntity
+import app.knotwork.android.domain.constants.BundledPresetCatalog
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelinePreset
 import app.knotwork.android.domain.models.PipelinePresetImportOutcome
@@ -57,7 +58,17 @@ class LocalPipelinePresetRepositoryImpl @Inject constructor(
         // catalogue entries — they are filtered out of the observable
         // catalogue here and *only* here, so getPresetById still resolves
         // them for LoadPipelineFromPresetUseCase's dependency seeding.
-        emit(loadBundledOnce().filterNot { it.isInternal })
+        //
+        // The order is the declared one rather than the AssetManager's
+        // alphabetical listing: this list is the gallery a new user browses,
+        // so it leads with the onboarding scenarios instead of whichever
+        // filename sorts first. `sortedBy` is stable, so unranked ids keep
+        // their listing order at the end.
+        emit(
+            loadBundledOnce()
+                .filterNot { it.isInternal }
+                .sortedBy { BundledPresetCatalog.rankOf(it.id) },
+        )
     }
 
     override fun getUserPresets(): Flow<List<PipelinePreset>> =

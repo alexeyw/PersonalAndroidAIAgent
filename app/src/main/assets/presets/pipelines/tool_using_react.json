@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "tool_using_react",
   "name": "Tool-using agent",
-  "description": "Local model reasons about which tool to call, the tool runs (auto-selected from the registry), and a summariser folds the tool output back into a final answer. Good template for action-oriented tasks.",
+  "description": "The local model decides whether a tool is needed. When it is, the tool runs (auto-selected from the registry) and a summariser folds the result into the final answer; when it is not, the model's own answer goes straight to the reply. Good template for action-oriented tasks.",
   "category": "tool",
   "tags": [
     "tools",
@@ -66,9 +66,9 @@
         "x": 320,
         "y": 200
       },
-      "label": "Reasoner",
+      "label": "Answer or lookup",
       "config": {
-        "systemPrompt": "You are a reasoning agent deciding whether a tool is needed to answer the user. Today is $DATE. Available tools:\n$TOOLS\n\nThink step by step. If a tool can produce more reliable or fresher information than your own knowledge, output a single short sentence describing what you want the tool to do. Otherwise produce a direct answer. Keep the output under three sentences.",
+        "systemPrompt": "You decide how to answer the user. Today is $DATE. Available tools:\n$TOOLS\n\nIf a tool can produce more reliable or fresher information than your own knowledge, output ONLY the search term or the short description of what the tool should do — no preamble, no explanation, nothing else. Otherwise answer the user's question directly and completely, in at most two short paragraphs.\n\nThe next step decides which of the two you produced, so do not mix them: either a lookup request on its own, or a finished answer on its own. Never output an empty response — when the input is empty or meaningless, say so in one sentence as a finished answer.\n\nReply in the user's language ($LANG).",
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
@@ -90,9 +90,9 @@
       "nodeConfig": {
         "v": 1,
         "type": "LITE_RT",
-        "title": "Reasoner",
+        "title": "Answer or lookup",
         "modelId": "",
-        "systemPrompt": "You are a reasoning agent deciding whether a tool is needed to answer the user. Today is $DATE. Available tools:\n$TOOLS\n\nThink step by step. If a tool can produce more reliable or fresher information than your own knowledge, output a single short sentence describing what you want the tool to do. Otherwise produce a direct answer. Keep the output under three sentences.",
+        "systemPrompt": "You decide how to answer the user. Today is $DATE. Available tools:\n$TOOLS\n\nIf a tool can produce more reliable or fresher information than your own knowledge, output ONLY the search term or the short description of what the tool should do — no preamble, no explanation, nothing else. Otherwise answer the user's question directly and completely, in at most two short paragraphs.\n\nThe next step decides which of the two you produced, so do not mix them: either a lookup request on its own, or a finished answer on its own. Never output an empty response — when the input is empty or meaningless, say so in one sentence as a finished answer.\n\nReply in the user's language ($LANG).",
         "temperature": 0.7,
         "topP": 0.9,
         "maxNewTokens": 2048,
@@ -100,11 +100,49 @@
       }
     },
     {
-      "id": "tool",
-      "type": "TOOL",
+      "id": "needs_tool",
+      "type": "IF_CONDITION",
       "position": {
         "x": 560,
         "y": 200
+      },
+      "label": "Needs a tool?",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": "The upstream text is a request for a lookup rather than a finished answer — the previous step decided that a tool is needed. Answer true when the text is a search term, a topic name, or a short description of what to look up. Answer false when the text already answers the user's original question on its own, including when it says the request cannot be answered.\n\nOutput exactly one word — true or false — in lowercase, with no punctuation, quotation marks or explanation.",
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "IF_CONDITION",
+        "title": "Needs a tool?",
+        "expression": "The upstream text is a request for a lookup rather than a finished answer — the previous step decided that a tool is needed. Answer true when the text is a search term, a topic name, or a short description of what to look up. Answer false when the text already answers the user's original question on its own, including when it says the request cannot be answered.\n\nOutput exactly one word — true or false — in lowercase, with no punctuation, quotation marks or explanation.",
+        "labelTrue": "true",
+        "labelFalse": "false",
+        "branchOnImage": false
+      }
+    },
+    {
+      "id": "tool",
+      "type": "TOOL",
+      "position": {
+        "x": 800,
+        "y": 100
       },
       "label": "Tool",
       "config": {
@@ -139,12 +177,12 @@
       "id": "summary",
       "type": "SUMMARY",
       "position": {
-        "x": 800,
-        "y": 200
+        "x": 1040,
+        "y": 100
       },
       "label": "Summariser",
       "config": {
-        "systemPrompt": "You synthesise the result of a tool invocation into a final reply for the user. Quote the concrete facts the tool returned and answer the user's original question directly. If the tool failed or returned nothing useful, say so plainly.",
+        "systemPrompt": "You synthesise the result of a tool invocation into a final reply for the user. Quote the concrete facts the tool returned and answer the user's original question directly. If the tool failed or returned nothing useful, say so plainly.\n\nReply in the user's language ($LANG).",
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
@@ -168,7 +206,7 @@
         "type": "SUMMARY",
         "title": "Summariser",
         "format": "CUSTOM",
-        "customPrompt": "You synthesise the result of a tool invocation into a final reply for the user. Quote the concrete facts the tool returned and answer the user's original question directly. If the tool failed or returned nothing useful, say so plainly.",
+        "customPrompt": "You synthesise the result of a tool invocation into a final reply for the user. Quote the concrete facts the tool returned and answer the user's original question directly. If the tool failed or returned nothing useful, say so plainly.\n\nReply in the user's language ($LANG).",
         "targetLengthChars": 2000
       }
     },
@@ -176,7 +214,7 @@
       "id": "output",
       "type": "OUTPUT",
       "position": {
-        "x": 1040,
+        "x": 1280,
         "y": 200
       },
       "label": "Reply",
@@ -219,20 +257,32 @@
     {
       "id": "c2",
       "fromNodeId": "lite_rt",
-      "toNodeId": "tool",
+      "toNodeId": "needs_tool",
       "label": null
     },
     {
       "id": "c3",
+      "fromNodeId": "needs_tool",
+      "toNodeId": "tool",
+      "label": "True"
+    },
+    {
+      "id": "c4",
       "fromNodeId": "tool",
       "toNodeId": "summary",
       "label": null
     },
     {
-      "id": "c4",
+      "id": "c5",
       "fromNodeId": "summary",
       "toNodeId": "output",
       "label": null
+    },
+    {
+      "id": "c6",
+      "fromNodeId": "needs_tool",
+      "toNodeId": "output",
+      "label": "False"
     }
   ]
 }
