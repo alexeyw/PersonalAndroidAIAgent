@@ -111,12 +111,13 @@ details.
   styled translation still translates into the language its prompt names.
 - **The tool-using agent template called a tool even when it plainly did not
   need one.** Asked for `17 times 23`, it worked out the answer, then ran a web
-  search anyway and reported that the search results did not contain the
-  product. The template promised in its instructions to answer directly when no
-  tool was needed, but its wiring had no way to skip the tool. It now decides
-  first and branches: a lookup goes through the tool and the summariser, a
-  direct answer goes straight to the reply. This also stops the empty-input case
-  where a blank step produced a search for an invented topic.
+  search anyway and reported that the results did not contain the product. The
+  template promised in its instructions to answer directly when no tool was
+  needed, but its wiring had no way to skip the tool. It now decides **first**,
+  on your actual request, and then does one thing per branch: a request needing
+  a lookup becomes a search term, runs the tool and gets summarised; a request
+  that does not is simply answered. This also stops the empty-input case where a
+  blank step produced a search for an invented topic.
 - **The preset gallery opened on a plumbing template.** Bundled presets were
   listed in filename order, so the first card was *Clarify, then act* and the
   scenarios from setup were scattered through the list. The order is now

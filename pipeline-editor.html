@@ -4552,7 +4552,7 @@
             "schemaVersion": 1,
             "id": "tool_using_react",
             "name": "Tool-using agent",
-            "description": "The local model decides whether a tool is needed. When it is, the tool runs (auto-selected from the registry) and a summariser folds the result into the final answer; when it is not, the model's own answer goes straight to the reply. Good template for action-oriented tasks.",
+            "description": "An IF-condition decides whether the request needs an external lookup. If it does, the local model turns it into a search term, the tool runs (auto-selected from the registry) and a summariser folds the result into the answer. If it does not, the model answers directly. Good template for action-oriented tasks.",
             "category": "tool",
             "tags": [
                 "tools",
@@ -4610,15 +4610,53 @@
                     }
                 },
                 {
-                    "id": "lite_rt",
-                    "type": "LITE_RT",
+                    "id": "needs_tool",
+                    "type": "IF_CONDITION",
                     "position": {
                         "x": 320,
                         "y": 200
                     },
-                    "label": "Answer or lookup",
+                    "label": "Needs a lookup?",
                     "config": {
-                        "systemPrompt": "You decide how to answer the user. Today is $DATE. Available tools:\n$TOOLS\n\nIf a tool can produce more reliable or fresher information than your own knowledge, output ONLY the search term or the short description of what the tool should do — no preamble, no explanation, nothing else. Otherwise answer the user's question directly and completely, in at most two short paragraphs.\n\nThe next step decides which of the two you produced, so do not mix them: either a lookup request on its own, or a finished answer on its own. Never output an empty response — when the input is empty or meaningless, say so in one sentence as a finished answer.\n\nReply in the user's language ($LANG).",
+                        "systemPrompt": null,
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "targetPipelineId": null,
+                        "skillId": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": "Answering the user's request well requires looking something up in an external source — a fact, a figure, a date, a definition, or anything about a specific person, place, work, event or organisation that the assistant should not answer from memory alone.\n\nAnswer false when the request can be fulfilled with reasoning alone and needs no outside information: arithmetic and other calculations, rewriting or translating text the user supplied, formatting, opinions, or simple conversation.\n\nJudge the user's original request, not the wording of any intermediate step. When genuinely unsure, answer true — a needless lookup is cheaper than a confidently wrong answer.\n\nOutput exactly one word — true or false — in lowercase, with no punctuation, quotation marks or explanation.",
+                        "conditionKeywords": null,
+                        "conditionComplexity": null,
+                        "conditionHasImage": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    },
+                    "nodeConfig": {
+                        "v": 1,
+                        "type": "IF_CONDITION",
+                        "title": "Needs a lookup?",
+                        "expression": "Answering the user's request well requires looking something up in an external source — a fact, a figure, a date, a definition, or anything about a specific person, place, work, event or organisation that the assistant should not answer from memory alone.\n\nAnswer false when the request can be fulfilled with reasoning alone and needs no outside information: arithmetic and other calculations, rewriting or translating text the user supplied, formatting, opinions, or simple conversation.\n\nJudge the user's original request, not the wording of any intermediate step. When genuinely unsure, answer true — a needless lookup is cheaper than a confidently wrong answer.\n\nOutput exactly one word — true or false — in lowercase, with no punctuation, quotation marks or explanation.",
+                        "labelTrue": "true",
+                        "labelFalse": "false",
+                        "branchOnImage": false
+                    }
+                },
+                {
+                    "id": "query_builder",
+                    "type": "LITE_RT",
+                    "position": {
+                        "x": 560,
+                        "y": 100
+                    },
+                    "label": "Query Builder",
+                    "config": {
+                        "systemPrompt": "The user's request needs a factual lookup, and the search runs in the very next step. Your output becomes the search term.\n\nWrite the search term in the user's language ($LANG) so the lookup targets the matching edition.\n\nOutput ONLY the search term: a short noun phrase naming the main topic or entity, the way an encyclopedia article would be titled. No question marks, no full sentences, no quotation marks, no explanation, no leading labels. Strip imperative verbs and filler — keep just the subject. If several topics are mixed in, pick the single most central one.",
                         "cloudProvider": null,
                         "modelPath": null,
                         "toolName": null,
@@ -4640,51 +4678,13 @@
                     "nodeConfig": {
                         "v": 1,
                         "type": "LITE_RT",
-                        "title": "Answer or lookup",
+                        "title": "Query Builder",
                         "modelId": "",
-                        "systemPrompt": "You decide how to answer the user. Today is $DATE. Available tools:\n$TOOLS\n\nIf a tool can produce more reliable or fresher information than your own knowledge, output ONLY the search term or the short description of what the tool should do — no preamble, no explanation, nothing else. Otherwise answer the user's question directly and completely, in at most two short paragraphs.\n\nThe next step decides which of the two you produced, so do not mix them: either a lookup request on its own, or a finished answer on its own. Never output an empty response — when the input is empty or meaningless, say so in one sentence as a finished answer.\n\nReply in the user's language ($LANG).",
+                        "systemPrompt": "The user's request needs a factual lookup, and the search runs in the very next step. Your output becomes the search term.\n\nWrite the search term in the user's language ($LANG) so the lookup targets the matching edition.\n\nOutput ONLY the search term: a short noun phrase naming the main topic or entity, the way an encyclopedia article would be titled. No question marks, no full sentences, no quotation marks, no explanation, no leading labels. Strip imperative verbs and filler — keep just the subject. If several topics are mixed in, pick the single most central one.",
                         "temperature": 0.7,
                         "topP": 0.9,
-                        "maxNewTokens": 2048,
+                        "maxNewTokens": 512,
                         "stopTokens": []
-                    }
-                },
-                {
-                    "id": "needs_tool",
-                    "type": "IF_CONDITION",
-                    "position": {
-                        "x": 560,
-                        "y": 200
-                    },
-                    "label": "Needs a tool?",
-                    "config": {
-                        "systemPrompt": null,
-                        "cloudProvider": null,
-                        "modelPath": null,
-                        "toolName": null,
-                        "targetPipelineId": null,
-                        "skillId": null,
-                        "clarificationTimeoutMs": null,
-                        "conditionPrompt": "The upstream text is a request for a lookup rather than a finished answer — the previous step decided that a tool is needed. Answer true when the text is a search term, a topic name, or a short description of what to look up. Answer false when the text already answers the user's original question on its own, including when it says the request cannot be answered.\n\nOutput exactly one word — true or false — in lowercase, with no punctuation, quotation marks or explanation.",
-                        "conditionKeywords": null,
-                        "conditionComplexity": null,
-                        "conditionHasImage": null
-                    },
-                    "contextConfig": {
-                        "chatHistory": false,
-                        "originalTask": true,
-                        "nodeInput": true,
-                        "longTermMemory": false,
-                        "toolResults": false
-                    },
-                    "nodeConfig": {
-                        "v": 1,
-                        "type": "IF_CONDITION",
-                        "title": "Needs a tool?",
-                        "expression": "The upstream text is a request for a lookup rather than a finished answer — the previous step decided that a tool is needed. Answer true when the text is a search term, a topic name, or a short description of what to look up. Answer false when the text already answers the user's original question on its own, including when it says the request cannot be answered.\n\nOutput exactly one word — true or false — in lowercase, with no punctuation, quotation marks or explanation.",
-                        "labelTrue": "true",
-                        "labelFalse": "false",
-                        "branchOnImage": false
                     }
                 },
                 {
@@ -4761,6 +4761,46 @@
                     }
                 },
                 {
+                    "id": "direct_answer",
+                    "type": "LITE_RT",
+                    "position": {
+                        "x": 560,
+                        "y": 320
+                    },
+                    "label": "Direct Answer",
+                    "config": {
+                        "systemPrompt": "You are an on-device assistant running on $MODEL. Today is $DATE. The previous step established that this request needs no external lookup — answer it yourself, completely.\n\nGive the finished answer in prose, at most two short paragraphs. Do not output a bare value with no sentence around it, and do not describe how you would find the answer. If you genuinely cannot answer, say so plainly in one sentence.\n\nReply in the user's language ($LANG).",
+                        "cloudProvider": null,
+                        "modelPath": null,
+                        "toolName": null,
+                        "targetPipelineId": null,
+                        "skillId": null,
+                        "clarificationTimeoutMs": null,
+                        "conditionPrompt": null,
+                        "conditionKeywords": null,
+                        "conditionComplexity": null,
+                        "conditionHasImage": null
+                    },
+                    "contextConfig": {
+                        "chatHistory": false,
+                        "originalTask": true,
+                        "nodeInput": true,
+                        "longTermMemory": false,
+                        "toolResults": false
+                    },
+                    "nodeConfig": {
+                        "v": 1,
+                        "type": "LITE_RT",
+                        "title": "Direct Answer",
+                        "modelId": "",
+                        "systemPrompt": "You are an on-device assistant running on $MODEL. Today is $DATE. The previous step established that this request needs no external lookup — answer it yourself, completely.\n\nGive the finished answer in prose, at most two short paragraphs. Do not output a bare value with no sentence around it, and do not describe how you would find the answer. If you genuinely cannot answer, say so plainly in one sentence.\n\nReply in the user's language ($LANG).",
+                        "temperature": 0.7,
+                        "topP": 0.9,
+                        "maxNewTokens": 2048,
+                        "stopTokens": []
+                    }
+                },
+                {
                     "id": "output",
                     "type": "OUTPUT",
                     "position": {
@@ -4801,20 +4841,20 @@
                 {
                     "id": "c1",
                     "fromNodeId": "input",
-                    "toNodeId": "lite_rt",
-                    "label": null
-                },
-                {
-                    "id": "c2",
-                    "fromNodeId": "lite_rt",
                     "toNodeId": "needs_tool",
                     "label": null
                 },
                 {
-                    "id": "c3",
+                    "id": "c2",
                     "fromNodeId": "needs_tool",
-                    "toNodeId": "tool",
+                    "toNodeId": "query_builder",
                     "label": "True"
+                },
+                {
+                    "id": "c3",
+                    "fromNodeId": "query_builder",
+                    "toNodeId": "tool",
+                    "label": null
                 },
                 {
                     "id": "c4",
@@ -4831,8 +4871,14 @@
                 {
                     "id": "c6",
                     "fromNodeId": "needs_tool",
-                    "toNodeId": "output",
+                    "toNodeId": "direct_answer",
                     "label": "False"
+                },
+                {
+                    "id": "c7",
+                    "fromNodeId": "direct_answer",
+                    "toNodeId": "output",
+                    "label": null
                 }
             ]
         },
