@@ -916,12 +916,21 @@ speed-dial:
 A **pipeline preset** is a reusable template of a whole graph. Two kinds
 exist:
 
-- **Bundled** — a handful of curated starter presets that ship with the
-  app (local-only Q&A, cloud assist, tool-using agent, multi-step
-  research, clarify-then-act, routed local/cloud, and **research to
-  file** — a question turned into a Wikipedia lookup, distilled, written
-  out as a Markdown report under `reports/` in the agent workspace, with
-  the saved path returned). They are read-only.
+- **Bundled** — a curated starter set that ships with the app, read-only.
+  Three of them are the scenarios offered during onboarding — **styled
+  translation** (keeps register and dialect, fully on-device), **share
+  handler** (anything you share becomes a structured note in your
+  workspace inbox) and **virtual companion** (a private companion that
+  adapts its tone to your mood). Alongside them ship two end-to-end
+  showcases — the **full agent** and **research to file** (a question
+  turned into a Wikipedia lookup, distilled, written out as a Markdown
+  report under `reports/` in the agent workspace, with the saved path
+  returned) — and the building-block templates you would start your own
+  pipeline from: local-only Q&A, cloud assist, routed local/cloud,
+  clarify-then-act, tool-using agent and multi-step research.
+
+  Each bundled preset brings its own starter prompts, so a pipeline
+  spawned from one opens with quick actions that actually fit it.
 - **Mine** — presets you create yourself with **Save as preset** (from a
   pipeline's `⋮` menu). These live in the app's local database.
 

@@ -101,6 +101,59 @@ details.
 
 ### Fixed
 
+- **Bundled pipelines answered in the language of the question, not your
+  device's.** Ask in English on a Russian phone and the reply came back in
+  English. Some bundled pipelines had always been explicit about the language
+  and others had never mentioned it, so behaviour depended on which one you
+  picked. Every step whose text you actually read now works in your device
+  language. Steps that emit a routing keyword or a true/false decision are
+  deliberately untouched — translating those would break the branching — and
+  styled translation still translates into the language its prompt names.
+- **The tool-using agent template called a tool even when it plainly did not
+  need one.** Asked for `17 times 23`, it worked out the answer, then ran a web
+  search anyway and reported that the results did not contain the product. The
+  template promised in its instructions to answer directly when no tool was
+  needed, but its wiring had no way to skip the tool. It now decides **first**,
+  on your actual request, and then does one thing per branch: a request needing
+  a lookup becomes a search term, runs the tool and gets summarised; a request
+  that does not is simply answered. This also stops the empty-input case where a
+  blank step produced a search for an invented topic.
+- **The preset gallery opened on a plumbing template.** Bundled presets were
+  listed in filename order, so the first card was *Clarify, then act* and the
+  scenarios from setup were scattered through the list. The order is now
+  deliberate: setup scenarios, then the end-to-end showcases, then the
+  build-your-own templates.
+- **Cloud chat could echo its own context back at you.** The first reply in a
+  conversation could restate the remembered entries and the model's own
+  reasoning before getting to the answer. The cloud step is now told to reply
+  with the answer only.
+- **The bundled preset gallery showed four templates nobody was meant to pick.**
+  The four *Subtask —* entries are building blocks the showcase agent runs
+  internally, not starting points — their own descriptions said so. They no
+  longer appear in **+ From preset**, in **More → Library**, or in the browser
+  editor's preset list, while the showcase that composes them keeps working
+  exactly as before.
+- **Every bundled preset now opens with its own quick actions.** A pipeline
+  spawned from a preset — including the one created on first launch and the
+  three offered during setup — showed the generic starter cards, because no
+  bundled preset declared any of its own. Each now suggests three prompts that
+  fit what it actually does, naming the tools it really wires.
+- **A router in a bundled preset could not be edited.** Opening the *Router*
+  step of **Routed local + cloud** showed an empty list of categories and an
+  error that blocked saving, because the preset shipped without the editor-side
+  configuration and the fallback could not reconstruct the categories from the
+  wiring. Every bundled preset now carries the full editor configuration on
+  every step, so each one opens ready to edit.
+- **The pass/fail judge template could never return a verdict.** The bundled
+  *Pass/fail* evaluation prompt still asked for the JSON shape used before
+  evaluation steps switched to routing on a `Pass` / `Retry` / `Fail` verdict,
+  so the step always failed its check, retried, and fell through to its default
+  branch. Both evaluation templates now lead with the verdict, and the scored
+  one reports its score below it.
+- **The browser editor's preset list was missing the scenarios from setup.**
+  Styled translation, share handler and virtual companion ship with the app but
+  had never been mirrored into `pipeline-editor.html`. The editor now carries
+  the same catalogue as the app, scenarios first.
 - **Memory compaction could quietly replace a fact with a wrong summary of it.**
   The background pass handed a group of stored facts to the on-device model,
   took whatever came back as their replacement, and deleted the originals — the

@@ -4,23 +4,44 @@
   "name": "Routed local + cloud",
   "description": "An intent router classifies the request and sends simple queries to the on-device model and complex ones to the cloud. Balances latency and capability without the user having to choose.",
   "category": "hybrid",
-  "tags": ["routing", "hybrid", "intent"],
+  "tags": [
+    "routing",
+    "hybrid",
+    "intent"
+  ],
   "updatedAt": 1748304000000,
+  "samplePrompts": [
+    {
+      "title": "What time zone is Santiago in?"
+    },
+    {
+      "title": "Design a six-week plan to learn basic statistics"
+    },
+    {
+      "title": "Why would the same query be fast on one machine and slow on another?"
+    }
+  ],
   "nodes": [
     {
       "id": "input",
       "type": "INPUT",
-      "position": { "x": 80.0, "y": 200.0 },
+      "position": {
+        "x": 80,
+        "y": 200
+      },
       "label": "Input",
       "config": {
         "systemPrompt": null,
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -28,22 +49,34 @@
         "nodeInput": true,
         "longTermMemory": false,
         "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "INPUT",
+        "title": "Input",
+        "inputName": "user.message"
       }
     },
     {
       "id": "router",
       "type": "INTENT_ROUTER",
-      "position": { "x": 320.0, "y": 200.0 },
+      "position": {
+        "x": 320,
+        "y": 200
+      },
       "label": "Router",
       "config": {
         "systemPrompt": "Classify the user's request. Output EXACTLY one keyword: Simple (greetings, small talk, single-step factual questions the on-device model can answer) or Complex (multi-step reasoning, research, code, anything that benefits from a larger model). Today is $DATE. Reply with the single keyword and nothing else.",
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": true,
@@ -51,22 +84,47 @@
         "nodeInput": true,
         "longTermMemory": false,
         "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "INTENT_ROUTER",
+        "title": "Router",
+        "classes": [
+          {
+            "name": "Simple",
+            "description": "Greetings, small talk and single-step factual questions the on-device model can answer.",
+            "examples": []
+          },
+          {
+            "name": "Complex",
+            "description": "Multi-step reasoning, research, code — anything that benefits from a larger model.",
+            "examples": []
+          }
+        ],
+        "classifierPrompt": "Classify the user's request. Output EXACTLY one keyword: Simple (greetings, small talk, single-step factual questions the on-device model can answer) or Complex (multi-step reasoning, research, code, anything that benefits from a larger model). Today is $DATE. Reply with the single keyword and nothing else.",
+        "fallbackClass": "Simple"
       }
     },
     {
       "id": "lite_rt",
       "type": "LITE_RT",
-      "position": { "x": 560.0, "y": 100.0 },
+      "position": {
+        "x": 560,
+        "y": 100
+      },
       "label": "Local LLM",
       "config": {
-        "systemPrompt": "You are a concise on-device assistant running on $MODEL. Today is $DATE. Answer the user's question directly in one short paragraph.",
+        "systemPrompt": "You are a concise on-device assistant running on $MODEL. Today is $DATE. Answer the user's question directly in one short paragraph.\n\nReply in the user's language ($LANG).",
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -74,22 +132,39 @@
         "nodeInput": true,
         "longTermMemory": false,
         "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "LITE_RT",
+        "title": "Local LLM",
+        "modelId": "",
+        "systemPrompt": "You are a concise on-device assistant running on $MODEL. Today is $DATE. Answer the user's question directly in one short paragraph.\n\nReply in the user's language ($LANG).",
+        "temperature": 0.7,
+        "topP": 0.9,
+        "maxNewTokens": 2048,
+        "stopTokens": []
       }
     },
     {
       "id": "cloud",
       "type": "CLOUD",
-      "position": { "x": 560.0, "y": 320.0 },
+      "position": {
+        "x": 560,
+        "y": 320
+      },
       "label": "Cloud LLM",
       "config": {
-        "systemPrompt": "You are a cloud assistant handling a request the on-device router flagged as Complex. The current date is $DATE. Use the conversation history to keep continuity. Reason step by step internally, then reply with a thorough, well-structured answer.",
+        "systemPrompt": "You are a cloud assistant handling a request the on-device router flagged as Complex. The current date is $DATE. Use the conversation history to keep continuity. Reason step by step internally, then reply with a thorough, well-structured answer.\n\nReply in the user's language ($LANG). Do not restate, quote or summarise the material you were given — the conversation history, the remembered entries, or your own reasoning. Reply with the answer only.",
         "cloudProvider": "auto",
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": true,
@@ -97,22 +172,39 @@
         "nodeInput": true,
         "longTermMemory": true,
         "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "CLOUD",
+        "title": "Cloud LLM",
+        "provider": "AUTO",
+        "model": "",
+        "systemPrompt": "You are a cloud assistant handling a request the on-device router flagged as Complex. The current date is $DATE. Use the conversation history to keep continuity. Reason step by step internally, then reply with a thorough, well-structured answer.\n\nReply in the user's language ($LANG). Do not restate, quote or summarise the material you were given — the conversation history, the remembered entries, or your own reasoning. Reply with the answer only.",
+        "temperature": 0.7,
+        "maxTokens": 1024,
+        "timeoutMs": 30000
       }
     },
     {
       "id": "output",
       "type": "OUTPUT",
-      "position": { "x": 800.0, "y": 200.0 },
+      "position": {
+        "x": 800,
+        "y": 200
+      },
       "label": "Reply",
       "config": {
         "systemPrompt": null,
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": true,
@@ -120,14 +212,46 @@
         "nodeInput": true,
         "longTermMemory": true,
         "toolResults": true
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "OUTPUT",
+        "title": "Reply",
+        "format": "PLAIN_TEXT",
+        "systemPrompt": ""
       }
     }
   ],
   "connections": [
-    { "id": "c1", "fromNodeId": "input", "toNodeId": "router", "label": null },
-    { "id": "c2", "fromNodeId": "router", "toNodeId": "lite_rt", "label": "Simple" },
-    { "id": "c3", "fromNodeId": "router", "toNodeId": "cloud", "label": "Complex" },
-    { "id": "c4", "fromNodeId": "lite_rt", "toNodeId": "output", "label": null },
-    { "id": "c5", "fromNodeId": "cloud", "toNodeId": "output", "label": null }
+    {
+      "id": "c1",
+      "fromNodeId": "input",
+      "toNodeId": "router",
+      "label": null
+    },
+    {
+      "id": "c2",
+      "fromNodeId": "router",
+      "toNodeId": "lite_rt",
+      "label": "Simple"
+    },
+    {
+      "id": "c3",
+      "fromNodeId": "router",
+      "toNodeId": "cloud",
+      "label": "Complex"
+    },
+    {
+      "id": "c4",
+      "fromNodeId": "lite_rt",
+      "toNodeId": "output",
+      "label": null
+    },
+    {
+      "id": "c5",
+      "fromNodeId": "cloud",
+      "toNodeId": "output",
+      "label": null
+    }
   ]
 }

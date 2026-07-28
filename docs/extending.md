@@ -775,6 +775,13 @@ seed, so treat it as the canonical "kitchen-sink" template.
 > sub-pipeline preset simply ships as another JSON file whose **filename stem
 > equals the id the parent references**; first-launch seeding and a later
 > **+ From preset** spawn both leave a runnable composition.
+>
+> Such a sub-pipeline is a building block, not something the user picks from
+> the gallery, so it declares `"internal": true` (see the schema below). The
+> flag hides it from the picker and the library — `getBundledPresets()`
+> filters it out — while `getPresetById()` still resolves it, which is
+> exactly the lookup the seeding above performs. The four `subtask_*`
+> presets are the shipped example.
 
 **Step 1 — drop a JSON file under `assets/presets/pipelines/`.** The
 filename stem becomes the preset `id`, so it must be unique across the
@@ -796,10 +803,13 @@ directory (e.g. `local_only_qa.json` → id `local_only_qa`). Schema:
       "position": { "x": 80.0, "y": 200.0 },
       "label": "Input",
       "config": { "systemPrompt": null, "cloudProvider": null, "modelPath": null,
-                  "toolName": null, "clarificationTimeoutMs": null, "conditionPrompt": null,
-                  "conditionKeywords": null, "conditionComplexity": null },
+                  "toolName": null, "targetPipelineId": null, "skillId": null,
+                  "clarificationTimeoutMs": null, "conditionPrompt": null,
+                  "conditionKeywords": null, "conditionComplexity": null,
+                  "conditionHasImage": null },
       "contextConfig": { "chatHistory": false, "originalTask": false, "nodeInput": true,
-                         "longTermMemory": false, "toolResults": false }
+                         "longTermMemory": false, "toolResults": false },
+      "nodeConfig": { "v": 1, "type": "INPUT", "title": "Input", "inputName": "user.message" }
     }
     // … LITE_RT, OUTPUT, …
   ],
@@ -822,6 +832,12 @@ Rules:
   `$LANG`, `$LOCATION`, `$USER`, `$DEVICE`) — same whitelist as §5.2.
 - `name` must not exceed 60 characters (the cross-feature
   `MAX_NAME_LENGTH`).
+- `internal` is optional and defaults to `false`. Set it to `true` **only**
+  for a sub-pipeline another preset composes (see the composed-presets note
+  above): the preset then disappears from the picker and the library while
+  staying resolvable by id. It is honoured only for bundled files — an
+  imported document that sets it is loaded as a normal user preset, so a
+  hand-edited import cannot hide itself from its own owner.
 
 A pipeline may also declare an optional top-level `samplePrompts` array —
 the starter ("quick action") cards shown on a new chat's empty state when
@@ -841,7 +857,11 @@ The field is additive and display-only: it is excluded from
 `PipelineGraph.contentHash()` (editing the suggestions never invalidates a
 resumable run), documents without it import fine (they decode to no
 suggestions), and a pipeline that declares none falls back to a generic,
-tool-agnostic card set on the empty state.
+tool-agnostic card set on the empty state. It is optional for a pipeline
+document in general, but **every user-facing bundled preset must declare
+at least one** — a preset the user spawns from the gallery should open with
+its own quick actions rather than the generic set. `PipelinePresetCatalogValidationTest`
+enforces this for non-`internal` presets.
 
 A pipeline may also declare an optional top-level `memoryRetrievalQuery`
 string — the long-term-memory search key used by its **background** runs
@@ -879,18 +899,46 @@ field-for-field. It is additive: `PipelineJsonSerializer` round-trips it as
 an opaque blob into `NodeModel.configJson`, the runtime engine ignores it
 (it reads only the flat `config` fields), and documents without it import
 fine — the app derives a default rich config from the flat fields on first
-edit. Hand-written presets can omit `nodeConfig`; the browser editor emits
-it automatically on export.
+edit. The browser editor emits it automatically on export.
+
+**Bundled presets must carry it on every node** (enforced by
+`PipelinePresetCatalogValidationTest`), because the legacy derivation is
+lossy for editor-only fields. The sharpest case is `INTENT_ROUTER`: the
+derived config has **no classes at all**, and the form requires 2..6, so a
+router without a `nodeConfig` opens with an empty class list and a
+validation error blocking Save. Declare the classes to match the node's
+outgoing edge labels, in the same order, and set `fallbackClass` to the
+**first** of them — the runtime routes on those labels and falls through to
+the first outgoing edge when the model emits nothing recognised, so any
+other declaration would be a lie the editor shows the user:
+
+```json
+"nodeConfig": {
+  "v": 1, "type": "INTENT_ROUTER", "title": "Router",
+  "classes": [
+    { "name": "Simple",  "description": "Single-step questions the local model can answer.", "examples": [] },
+    { "name": "Complex", "description": "Multi-step reasoning that benefits from a larger model.", "examples": [] }
+  ],
+  "classifierPrompt": "…",
+  "fallbackClass": "Simple"
+}
+```
 
 **Step 2 — register the filename in `PipelinePresetCatalogValidationTest`.**
 `expectedFileNames` in
 `app/src/test/java/app/knotwork/android/domain/pipelineio/PipelinePresetCatalogValidationTest.kt`
 is a hard whitelist of the shipped catalogue. Add the new filename in the
 same PR; otherwise the test refuses the new file (or misses a deletion).
+A preset marked `"internal": true` also belongs in the same file's
+`expectedInternalIds` set, which pins *which* presets are hidden.
 
 **Step 3 — mirror the preset into the browser editor.** Add the same
 preset to the `BUILTIN_PIPELINE_PRESETS` constant in `pipeline-editor.html`
-so it shows up in the **📚 Presets → Bundled** tab. Unlike `NODE_TYPES` /
+so it shows up in the **📚 Presets → Bundled** tab. Mirror `internal`
+presets too: the editor filters them out of the picker list itself
+(`renderPresetList`), but `knownPipelineOptions` / `knownPipelineDocs`
+resolve `PIPELINE` targets and the bundle-export closure through the same
+array. Unlike `NODE_TYPES` /
 `PROMPT_VARIABLES` / `DEFAULT_SYSTEM_PROMPTS` / `AVAILABLE_TOOLS` (which are
 auto-generated by `./gradlew generateBrowserEditorConstants`),
 `BUILTIN_PIPELINE_PRESETS` is **maintained by hand** — see the sync table
