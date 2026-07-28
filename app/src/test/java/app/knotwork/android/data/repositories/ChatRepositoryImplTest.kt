@@ -14,6 +14,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -232,6 +233,69 @@ class ChatRepositoryImplTest {
         repository.setSessionFavorite("sess-fav", false)
         coVerify(exactly = 1) { chatDao.setSessionStarred("sess-fav", true) }
         coVerify(exactly = 1) { chatDao.setSessionStarred("sess-fav", false) }
+    }
+
+    @Test
+    fun `given setSessionArchived when called then dao setSessionArchived flips the flag`() = runTest {
+        repository.setSessionArchived("sess-arch", true)
+        repository.setSessionArchived("sess-arch", false)
+
+        coVerify(exactly = 1) { chatDao.setSessionArchived("sess-arch", true) }
+        coVerify(exactly = 1) { chatDao.setSessionArchived("sess-arch", false) }
+        // Archiving must not delete anything the session owns.
+        coVerify(exactly = 0) { chatDao.deleteSessionCompletely(any()) }
+    }
+
+    /**
+     * The archive flag must survive the entity → domain hop of the list flow;
+     * the thread list and the archive surface both branch on it.
+     */
+    @Test
+    fun `given sessions flow when collected then mapped sessions preserve isArchived`() = runTest {
+        val archived = ChatSessionEntity(
+            id = "sess-archived",
+            name = "Archived",
+            updatedAt = 10L,
+            isArchived = true,
+        )
+        every { chatDao.getSessionsFlow(true) } returns flowOf(listOf(archived))
+
+        val emitted = repository.getSessionsFlow(includeArchived = true).first()
+
+        assertEquals(1, emitted.size)
+        assertTrue(emitted.first().isArchived)
+    }
+
+    /**
+     * The default must be "active chats only": every list-facing caller relies
+     * on it to keep archived conversations out of the thread list.
+     */
+    @Test
+    fun `given getSessionsFlow without arguments then the dao is queried excluding archived`() = runTest {
+        every { chatDao.getSessionsFlow(false) } returns flowOf(emptyList())
+
+        repository.getSessionsFlow().first()
+
+        verify(exactly = 1) { chatDao.getSessionsFlow(false) }
+        verify(exactly = 0) { chatDao.getSessionsFlow(true) }
+    }
+
+    @Test
+    fun `given getArchivedSessionsFlow when collected then dao archived flow is mapped to domain`() = runTest {
+        val archived = ChatSessionEntity(
+            id = "sess-archived",
+            name = "Archived",
+            updatedAt = 11L,
+            pipelineId = "pipe-1",
+            isArchived = true,
+        )
+        every { chatDao.getArchivedSessionsFlow() } returns flowOf(listOf(archived))
+
+        val emitted = repository.getArchivedSessionsFlow().first()
+
+        assertEquals(listOf("sess-archived"), emitted.map { it.id })
+        assertEquals("pipe-1", emitted.first().pipelineId)
+        assertTrue(emitted.first().isArchived)
     }
 
     @Test

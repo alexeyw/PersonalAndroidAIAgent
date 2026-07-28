@@ -3,7 +3,9 @@ package app.knotwork.android.data.mappers
 import app.knotwork.android.data.local.models.ChatSessionEntity
 import app.knotwork.android.domain.models.ChatSession
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -84,10 +86,48 @@ class ChatSessionMapperTest {
             name = "Round-trip",
             updatedAt = 5_000L,
             pipelineId = "pipeline-z",
+            isStarred = true,
+            isArchived = true,
         )
 
         val roundTripped = original.toDomain().toEntity()
 
         assertEquals(original, roundTripped)
+    }
+
+    @Test
+    fun `entity to domain carries the archive flag`() {
+        val archived = ChatSessionEntity(
+            id = "session-5",
+            name = "Archived Chat",
+            updatedAt = 6_000L,
+            isArchived = true,
+        ).toDomain()
+        val active = ChatSessionEntity(
+            id = "session-6",
+            name = "Active Chat",
+            updatedAt = 7_000L,
+        ).toDomain()
+
+        assertTrue(archived.isArchived)
+        assertFalse("A session must default to not-archived", active.isArchived)
+    }
+
+    @Test
+    fun `domain to entity carries the archive flag`() {
+        val archived = ChatSession(
+            id = "session-7",
+            name = "Archived Chat",
+            updatedAt = 8_000L,
+            isArchived = true,
+        ).toEntity()
+        val active = ChatSession(
+            id = "session-8",
+            name = "Active Chat",
+            updatedAt = 9_000L,
+        ).toEntity()
+
+        assertTrue(archived.isArchived)
+        assertFalse("A session must default to not-archived", active.isArchived)
     }
 }

@@ -17,6 +17,11 @@ import androidx.room.PrimaryKey
  * @property isStarred Whether the user has favorited this chat. Favorited
  *   chats sort to the top of the drawer thread list. Added via
  *   `MIGRATION_21_22` (default `0`).
+ * @property isArchived Whether the user has archived this chat. Archived
+ *   sessions are excluded from the main thread list and are reachable only
+ *   through the archive surface; the row itself and all of its messages are
+ *   kept intact. Added via `MIGRATION_53_54` (default `0`), so every
+ *   pre-existing session upgrades to "not archived".
  */
 @Entity(tableName = "chat_sessions")
 data class ChatSessionEntity(
@@ -27,4 +32,6 @@ data class ChatSessionEntity(
     val pipelineId: String? = null,
     @ColumnInfo(name = "isStarred", defaultValue = "0")
     val isStarred: Boolean = false,
+    @ColumnInfo(name = "isArchived", defaultValue = "0")
+    val isArchived: Boolean = false,
 )

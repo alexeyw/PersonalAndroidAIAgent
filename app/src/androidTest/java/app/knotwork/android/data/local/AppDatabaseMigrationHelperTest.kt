@@ -473,6 +473,37 @@ class AppDatabaseMigrationHelperTest {
         }
     }
 
+    @Test
+    fun migrate53to54_addsIsArchivedBackfilledToZeroPreservingSessions() {
+        helper.createDatabase(TEST_DB, 53).use { db ->
+            db.execSQL(
+                "INSERT INTO chat_sessions(id, name, updatedAt, pipelineId, isStarred) " +
+                    "VALUES('$SESSION_ID', 'Chat', $CHUNK_TS, 'pipe-1', 1)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 54, true, AppDatabase.MIGRATION_53_54).use { db ->
+            db.query(
+                "SELECT name, pipelineId, isStarred, isArchived FROM chat_sessions WHERE id = '$SESSION_ID'",
+            ).use { c ->
+                assertTrue("seeded session must survive the migration", c.moveToFirst())
+                assertEquals("Chat", c.getString(0))
+                assertEquals("pipe-1", c.getString(1))
+                assertEquals("existing flags must be untouched", 1, c.getInt(2))
+                // The whole point of the DEFAULT 0: an upgraded install shows
+                // exactly the same thread list it showed before.
+                assertEquals("pre-existing sessions must upgrade to not-archived", 0, c.getInt(3))
+            }
+
+            // The new column is writable and readable through the same row.
+            db.execSQL("UPDATE chat_sessions SET isArchived = 1 WHERE id = '$SESSION_ID'")
+            db.query("SELECT isArchived FROM chat_sessions WHERE id = '$SESSION_ID'").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals(1, c.getInt(0))
+            }
+        }
+    }
+
     // ---------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------

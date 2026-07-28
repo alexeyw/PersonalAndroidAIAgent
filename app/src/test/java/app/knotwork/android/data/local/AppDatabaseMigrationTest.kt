@@ -756,4 +756,43 @@ class AppDatabaseMigrationTest {
             !sql.contains("NOT NULL"),
         )
     }
+
+    @Test
+    fun `MIGRATION_53_54 targets versions 53 to 54`() {
+        val migration = AppDatabase.MIGRATION_53_54
+
+        assertEquals(53, migration.startVersion)
+        assertEquals(54, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_53_54 adds isArchived column to chat_sessions with default 0`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val sqlSlot = slot<String>()
+
+        AppDatabase.MIGRATION_53_54.migrate(db)
+
+        // Purely additive: one ALTER TABLE, no data rewrite.
+        verify(exactly = 1) { db.execSQL(capture(sqlSlot)) }
+        val sql = sqlSlot.captured.uppercase()
+        assertTrue(
+            "Expected ALTER TABLE on chat_sessions, got: ${sqlSlot.captured}",
+            sql.contains("ALTER TABLE") && sql.contains("`CHAT_SESSIONS`"),
+        )
+        assertTrue(
+            "Expected new isArchived column, got: ${sqlSlot.captured}",
+            sql.contains("`ISARCHIVED` INTEGER"),
+        )
+        // NOT NULL is safe here because the column is introduced on a NEW
+        // schema version with a DEFAULT — every pre-existing session upgrades
+        // to "not archived" and keeps appearing in the thread list.
+        assertTrue(
+            "Column must be NOT NULL so the flag is never ambiguous: ${sqlSlot.captured}",
+            sql.contains("NOT NULL"),
+        )
+        assertTrue(
+            "Existing rows must default to not-archived: ${sqlSlot.captured}",
+            sql.contains("DEFAULT 0"),
+        )
+    }
 }

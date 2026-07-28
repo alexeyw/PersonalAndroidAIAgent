@@ -51,7 +51,9 @@ class TaskMonitorViewModel @Inject constructor(
      * The unified UI state containing filtered tasks and loading status.
      */
     val uiState: StateFlow<TaskMonitorState> = combine(
-        chatRepository.getSessionsFlow(),
+        // Archived sessions are included on purpose: a run in flight must not
+        // disappear from the monitor because the user archived its chat.
+        chatRepository.getSessionsFlow(includeArchived = true),
         workInfosFlow,
         taskQueueManager.activeSessionsState,
         _filter,
