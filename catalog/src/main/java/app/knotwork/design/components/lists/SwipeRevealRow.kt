@@ -113,13 +113,19 @@ fun SwipeRevealRow(
     }
 
     Box(modifier = modifier.fillMaxWidth()) {
-        SwipeRevealActionButton(
-            action = action,
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .width(SwipeRevealActionWidth)
-                .fillMaxHeight(),
-        )
+        // `matchParentSize` rather than `fillMaxHeight`: this Box wraps its
+        // content, so inside a LazyColumn the incoming height is unbounded and
+        // `fillMaxHeight` silently collapses the strip to its own ~38 dp — a
+        // revealed action below the touch-target floor. Matching the size the
+        // *content* settled on makes the strip exactly as tall as the row.
+        Box(modifier = Modifier.matchParentSize(), contentAlignment = Alignment.CenterEnd) {
+            SwipeRevealActionButton(
+                action = action,
+                modifier = Modifier
+                    .width(SwipeRevealActionWidth)
+                    .fillMaxHeight(),
+            )
+        }
         Box(
             modifier = Modifier
                 .offset { IntOffset(offsetAnimatable.value.roundToInt(), 0) }

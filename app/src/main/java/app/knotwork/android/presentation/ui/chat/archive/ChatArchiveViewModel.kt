@@ -9,6 +9,7 @@ import app.knotwork.android.domain.usecases.ExportChatUseCase
 import app.knotwork.android.domain.usecases.UnarchiveChatUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -65,6 +66,9 @@ class ChatArchiveViewModel @Inject constructor(
      * replayed on every re-subscription.
      */
     val restoreEvents: SharedFlow<String> = _restoreEvents.asSharedFlow()
+
+    /** The live archived-sessions subscription, replaced on every [retry]. */
+    private var observeJob: Job? = null
 
     init {
         observeArchivedSessions()
@@ -145,7 +149,11 @@ class ChatArchiveViewModel @Inject constructor(
      * frame is bucketed against the same instant.
      */
     private fun observeArchivedSessions() {
-        viewModelScope.launch {
+        // Cancel first: `catch` terminates the failed flow, so today's retry path
+        // cannot double-subscribe — but nothing in the signature says so, and a
+        // second live collector would silently double every future emission.
+        observeJob?.cancel()
+        observeJob = viewModelScope.launch {
             chatRepository.getArchivedSessionsFlow()
                 .catch { e ->
                     Timber.e(e, "Reading the chat archive failed")

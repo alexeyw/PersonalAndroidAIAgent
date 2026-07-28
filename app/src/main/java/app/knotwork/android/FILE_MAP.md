@@ -575,6 +575,7 @@ This file maps the contents of the main application package.
     - `about/` - About screen (full Knotwork redesign on top of `AboutContent`: hero brand mark + version / license / acknowledgments / privacy cards).
       - `AboutScreen.kt` - Slim wrapper around the catalog `AboutContent`. Owns the 15-entry hand-maintained acknowledgments list and the `ACTION_VIEW` intents for License / Privacy CTAs.
     - `chat/` - Chat surface — production surface lives in `home/`; the archive is a sibling screen.
+      - `ChatExportShare.kt` - The single `ACTION_SEND` chooser builder for an exported chat (+ the `application/json` MIME constant), shared by the chat top bar and the archive row so both hand the document over identically.
       - `archive/` - Archived-chats surface. Reached from the More tab (always) and the chat drawer footer (only when something is archived).
         - `ChatArchiveScreen.kt` - Slim mapper over the catalog `ChatArchiveContent`: localises every string, resolves each row's relative archived-at label, owns the `Intent.ACTION_SEND` share sheet and the snackbar host. Tapping a row opens the chat read-only through the `ChatEntryRequestRelay` — it never un-archives.
         - `ChatArchiveViewModel.kt` - Hilt ViewModel over `getArchivedSessionsFlow()`. Owns restore / delete-forever (behind a confirmation) / export, and derives the "run finished after archiving" marker from `updatedAt > archivedAt`.

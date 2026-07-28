@@ -1,6 +1,5 @@
 package app.knotwork.android.presentation.ui.chat.archive
 
-import android.content.Intent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.SnackbarHost
@@ -18,7 +17,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import app.knotwork.android.R
-import app.knotwork.android.domain.usecases.ChatExportDocument
+import app.knotwork.android.presentation.ui.chat.toShareChooser
 import app.knotwork.design.components.misc.KnotworkSnackbar
 import app.knotwork.design.screens.chatarchive.ChatArchiveCallbacks
 import app.knotwork.design.screens.chatarchive.ChatArchiveContent
@@ -182,16 +181,6 @@ internal fun ChatArchiveUiState.toViewState(
         deleteTarget = deleteTargetId?.let { id -> mappedRows.firstOrNull { it.id == id } },
         errorMessage = errorMessage,
     )
-}
-
-/** Wraps an export document in the system share-sheet chooser intent. */
-private fun ChatExportDocument.toShareChooser(chooserTitle: String): Intent {
-    val send = Intent(Intent.ACTION_SEND).apply {
-        type = "application/json"
-        putExtra(Intent.EXTRA_SUBJECT, sessionName)
-        putExtra(Intent.EXTRA_TEXT, json)
-    }
-    return Intent.createChooser(send, chooserTitle).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 }
 
 /** Stable test tag for the archive screen root — used by instrumented tests. */

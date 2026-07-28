@@ -12,6 +12,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -268,16 +269,21 @@ class ChatHomeThreadsDelegate(
         val wasActive = state.value.thread.currentSessionId == threadId
         scope.launch {
             archiveChatUseCase(threadId)
-            if (wasActive) {
-                selectNextAfterLeaving(threadId)
-            }
+                // Only switch away once the write actually landed: moving the
+                // user off a chat that is still in the list would tell them an
+                // action succeeded when it did not.
+                .onSuccess { if (wasActive) selectNextAfterLeaving(threadId) }
+                .onFailure { e -> Timber.w(e, "Archiving chat %s failed", threadId) }
         }
     }
 
     /** Restores [threadId] out of the archive. Does not switch the active thread. */
     fun unarchiveThread(threadId: String) {
         if (threadId.isBlank()) return
-        scope.launch { unarchiveChatUseCase(threadId) }
+        scope.launch {
+            unarchiveChatUseCase(threadId)
+                .onFailure { e -> Timber.w(e, "Restoring chat %s failed", threadId) }
+        }
     }
 
     /**

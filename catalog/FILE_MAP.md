@@ -261,6 +261,12 @@ project — `:app` consumes it as an `implementation` dependency.
     - `ChatHomePreviewData.kt` — deterministic preview fixtures for the
       chat surface (thread, model, message rows, HITL / clarification
       cards).
+    - `ChatHomeDrawer.kt` — the alternate-nav drawer overlay extracted from
+      `ChatHomeContent.kt`: sessions list, `+ New chat` pill, the thread row
+      (`⋮` menu = Rename / Archive / — / Delete chat, plus a one-action
+      Archive swipe and TalkBack custom actions; drops its status dot at
+      font-scale 200 %) and the footer rows (`Archived chats` only when the
+      count is positive, `Import chat`, `Settings`).
     - `ChatHomeContentPreview.kt` — Android Studio `@Preview` group for
       the chat variants in both themes.
   - `chatarchive/` — archived-chats surface (the chats a user took out of

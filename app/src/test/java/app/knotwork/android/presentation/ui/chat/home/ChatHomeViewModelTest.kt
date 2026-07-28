@@ -2383,6 +2383,28 @@ class ChatHomeViewModelTest {
     }
 
     @Test
+    fun `a failed archive leaves the user on the chat instead of pretending it worked`() = runTest(testDispatcher) {
+        val active = "session-active"
+        val other = "session-other"
+        seedSavedSession(active)
+        sessionsFlow.value = listOf(
+            ChatSession(id = active, name = "Active", updatedAt = 100L),
+            ChatSession(id = other, name = "Other", updatedAt = 50L),
+        )
+        coEvery { chatRepository.setSessionArchived(active, archived = true) } throws
+            IllegalStateException("disk full")
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.threads.archiveThread(active)
+        advanceUntilIdle()
+
+        // Switching away would report success for a write that never landed.
+        assertEquals(active, viewModel.state.value.thread.currentSessionId)
+    }
+
+    @Test
     fun `archiving a chat that is not open leaves the active thread alone`() = runTest(testDispatcher) {
         val active = "session-active"
         val other = "session-other"

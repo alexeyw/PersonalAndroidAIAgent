@@ -92,6 +92,19 @@ class ChatArchiveAccessibilityTest {
     }
 
     @Test
+    fun revealedSwipeAction_fillsTheRowAndMeetsTheTouchTargetFloor() {
+        render { ChatArchiveContent(state = ChatArchivePreview.swipeOpen()) }
+
+        // Regression: the strip used `fillMaxHeight` inside a wrap-content Box,
+        // which inside a LazyColumn has unbounded height — so it silently
+        // collapsed to its own ~38 dp and the revealed action fell below the
+        // touch floor while still *looking* right.
+        composeTestRule.onAllNodesWithContentDescription("Restore")[0]
+            .assertWidthIsAtLeast(MIN_TOUCH_TARGET)
+            .assertHeightIsAtLeast(MIN_TOUCH_TARGET)
+    }
+
+    @Test
     fun rowOverflowButton_meetsTheTouchTargetFloor() {
         render { ChatArchiveContent(state = ChatArchivePreview.populated()) }
 

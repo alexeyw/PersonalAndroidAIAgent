@@ -63,12 +63,13 @@ private const val DRAWER_SCRIM_ALPHA = 0.32f
  *  - `SESSIONS` mono header.
  *  - Big rounded `+ New chat` pill on `Accent50` with brand-primary glyph
  *    and label.
- *  - Thread list with leading status dot, bold title, mono subtitle, and
- *    a trailing edit/rename icon. The active thread tints its row with
- *    `Accent50` and pulls the dot up to the brand primary.
- *  - Footer with two list rows — `Import chat (From JSON / text)` and
- *    `Settings (API keys · model params)` — separated from the list by
- *    a divider.
+ *  - Thread list with leading status dot, bold title, mono subtitle, and a
+ *    trailing `⋮` overflow (Rename / Archive / Delete chat). Each row also
+ *    reveals a single Archive action on swipe. The active thread tints its row
+ *    with `primaryContainer` and pulls the dot up to the brand primary.
+ *  - Footer list rows — `Archived chats` (only once something is archived),
+ *    `Import chat (From JSON / text)` and `Settings (API keys · model params)`
+ *    — separated from the list by a divider.
  */
 @Composable
 internal fun ChatHomeDrawerOverlay(state: ChatHomeViewState, callbacks: ChatHomeCallbacks) {
