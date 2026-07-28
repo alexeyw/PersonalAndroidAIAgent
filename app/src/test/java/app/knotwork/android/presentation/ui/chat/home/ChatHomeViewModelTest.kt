@@ -2356,6 +2356,30 @@ class ChatHomeViewModelTest {
     }
 
     @Test
+    fun `switching to an archived thread turns the surface read-only`() = runTest(testDispatcher) {
+        val active = "session-active"
+        val archived = "session-archived"
+        seedSavedSession(active)
+        sessionsFlow.value = listOf(
+            ChatSession(id = active, name = "Active", updatedAt = 100L),
+            ChatSession(id = archived, name = "Archived", updatedAt = 50L, isArchived = true),
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        assertTrue(!viewModel.state.value.thread.archived)
+
+        // This is the path the archive screen takes: it posts an open-thread
+        // request rather than un-archiving, so the switch itself has to carry
+        // the read-only flag.
+        viewModel.selectThread(archived)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.thread.archived)
+        assertEquals("Archived", viewModel.state.value.thread.title)
+    }
+
+    @Test
     fun `archiving the active chat switches to the next non-archived thread`() = runTest(testDispatcher) {
         val active = "session-active"
         val other = "session-other"
