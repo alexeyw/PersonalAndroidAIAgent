@@ -87,9 +87,11 @@ class PerformanceCardSnapshotTest {
 
     private fun snapshot(name: String, dark: Boolean, content: @Composable () -> Unit) {
         composeTestRule.setContent {
-            // The provider must sit INSIDE KnotworkTheme: the theme composable
-            // re-installs DefaultKnotworkA11y, so an outer provider would be
-            // overridden and the running-state animations would not be pinned.
+            // The provider sits INSIDE KnotworkTheme. It used to be mandatory —
+            // the theme re-installed `DefaultKnotworkA11y` and swallowed an
+            // outer override, leaving the running-state animations unpinned.
+            // The theme no longer does that, but this placement is still the
+            // one to prefer: it survives the theme provisioning the local again.
             KnotworkTheme(darkTheme = dark) {
                 CompositionLocalProvider(LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true)) {
                     androidx.compose.foundation.layout.Box(
