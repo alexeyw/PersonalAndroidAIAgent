@@ -35,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
+import app.knotwork.design.a11y.MinTouchTarget
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.ChipStyle
 import app.knotwork.design.components.chips.KnotworkChip
@@ -338,7 +339,7 @@ private fun TextField(
                         onClick = {
                             onPickFromLibrary(libraryCategory, value) { picked -> onChange(picked) }
                         },
-                        modifier = Modifier.size(LIBRARY_BUTTON_TARGET_DP.dp),
+                        modifier = Modifier.size(MinTouchTarget),
                     ) {
                         Icon(
                             imageVector = AppIcons.Book,
@@ -349,7 +350,7 @@ private fun TextField(
                 if (hasSave) {
                     IconButton(
                         onClick = { onSavePreset(libraryCategory, value) },
-                        modifier = Modifier.size(LIBRARY_BUTTON_TARGET_DP.dp),
+                        modifier = Modifier.size(MinTouchTarget),
                     ) {
                         Icon(
                             imageVector = AppIcons.BookmarkAdd,
@@ -380,8 +381,6 @@ private fun TextField(
  * label. 32 dp keeps the label row tighter than the M3 default 48 dp
  * `IconButton` (which would otherwise inflate the row to fit the touch area).
  */
-private const val LIBRARY_BUTTON_TARGET_DP: Float = 32f
-
 /** Float field rendered as a slider plus the resolved numeric value. */
 @Suppress("LongParameterList") // Slider field has a stable contract; collapsing the params hides intent.
 @Composable

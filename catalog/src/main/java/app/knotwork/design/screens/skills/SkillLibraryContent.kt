@@ -40,6 +40,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.a11y.MinTouchTarget
 import app.knotwork.design.components.misc.EmptyState
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
@@ -53,9 +54,6 @@ private val SkillRowGlyph = 20.dp
 
 /** Side length of the FAB icon. */
 private val FabIconSize = 24.dp
-
-/** Side length of the per-row overflow icon button. */
-private val RowMenuButton = 36.dp
 
 /** Height of the active-tab underline indicator. */
 private val TabIndicatorHeight = 2.dp
@@ -328,7 +326,7 @@ private fun SkillRow(
                 Box {
                     IconButton(
                         onClick = { callbacks.onRowMenuOpen(row.id) },
-                        modifier = Modifier.size(RowMenuButton),
+                        modifier = Modifier.size(MinTouchTarget),
                     ) {
                         Icon(
                             imageVector = AppIcons.More,

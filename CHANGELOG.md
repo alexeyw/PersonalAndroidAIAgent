@@ -128,6 +128,13 @@ details.
 
 ### Fixed
 
+- **Small controls are easier to hit.** Six tappable controls — the overflow
+  menus on trigger, skill and file rows, the pin toggle on a memory entry, the
+  preview button in the prompt-preset picker, and the load/save buttons in the
+  node editor — had touch targets smaller than Android's 48 dp minimum, some as
+  small as 28 dp. They looked right and missed often. All six now reserve the
+  full target; the affected rows are a few points taller as a result.
+
 - **Bundled pipelines answered in the language of the question, not your
   device's.** Ask in English on a Russian phone and the reply came back in
   English. Some bundled pipelines had always been explicit about the language

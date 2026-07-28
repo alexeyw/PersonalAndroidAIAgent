@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import app.knotwork.design.a11y.MinTouchTarget
 import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
@@ -497,7 +498,7 @@ private fun PresetRow(
                 CurrentBadge(label = strings.currentBadge, accent = accent)
                 Spacer(modifier = Modifier.width(KnotworkTheme.spacing.sp1))
             }
-            IconButton(onClick = onPreview, modifier = Modifier.size(PREVIEW_ICON_TARGET.dp)) {
+            IconButton(onClick = onPreview, modifier = Modifier.size(MinTouchTarget)) {
                 Icon(
                     imageVector = AppIcons.Search,
                     contentDescription = strings.previewCd,
@@ -604,8 +605,6 @@ private fun ActionRow(
 private const val TAB_INDICATOR_HEIGHT: Int = 2
 
 /** Tap-target for the per-row magnifier preview icon. */
-private const val PREVIEW_ICON_TARGET: Int = 28
-
 /**
  * Indent for the row's description / metadata to align under the title.
  * Tuned so the body text starts roughly under the title (radio button is

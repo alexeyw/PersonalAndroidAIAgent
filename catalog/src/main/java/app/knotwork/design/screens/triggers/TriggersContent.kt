@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.a11y.MinTouchTarget
 import app.knotwork.design.components.chips.HealthBadge
 import app.knotwork.design.components.misc.EmptyState
 import app.knotwork.design.icons.AppIcons
@@ -57,9 +58,6 @@ private val TriggerRowGlyph = 20.dp
 
 /** Side length of the FAB icon. */
 private val FabIconSize = 24.dp
-
-/** Side length of the per-row overflow icon button. */
-private val RowMenuButton = 36.dp
 
 /** Down-scale factor for the inline row switch (matches `LabeledSwitchRow`). */
 private const val ROW_SWITCH_SCALE = 0.78f
@@ -280,7 +278,17 @@ private fun TriggerRow(row: TriggerRowUi, strings: TriggersStrings, menuOpen: Bo
                 modifier = Modifier
                     .fillMaxWidth()
                     .clickable(role = Role.Button) { callbacks.onRowClick(row.id) }
-                    .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3),
+                    // The trailing 48 dp icon button carries its own 12 dp inset
+                    // around the glyph, so a full sp4 end padding double-counts
+                    // it — and on this row that stolen width comes straight out
+                    // of the title, which collapsed to one character next to a
+                    // wide health badge. The glyph lands where it always did.
+                    .padding(
+                        start = KnotworkTheme.spacing.sp4,
+                        end = KnotworkTheme.spacing.sp1,
+                        top = KnotworkTheme.spacing.sp3,
+                        bottom = KnotworkTheme.spacing.sp3,
+                    ),
                 horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
                 verticalAlignment = Alignment.Top,
             ) {
@@ -293,7 +301,7 @@ private fun TriggerRow(row: TriggerRowUi, strings: TriggersStrings, menuOpen: Bo
                     Box {
                         IconButton(
                             onClick = { callbacks.onRowMenuOpen(row.id) },
-                            modifier = Modifier.size(RowMenuButton),
+                            modifier = Modifier.size(MinTouchTarget),
                         ) {
                             Icon(
                                 imageVector = AppIcons.More,

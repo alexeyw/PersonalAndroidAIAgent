@@ -61,6 +61,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
+import app.knotwork.design.a11y.MinTouchTarget
 import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkSecondaryButton
@@ -557,7 +558,7 @@ private fun MemoryListRow(row: MemoryRow, searching: Boolean, callbacks: MemoryC
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f),
                 )
-                IconButton(onClick = { callbacks.onEntryPinToggle(row.id) }, modifier = Modifier.size(28.dp)) {
+                IconButton(onClick = { callbacks.onEntryPinToggle(row.id) }, modifier = Modifier.size(MinTouchTarget)) {
                     Icon(
                         imageVector = if (row.isPinned) AppIcons.PinOn else AppIcons.Pin,
                         contentDescription = stringResource(

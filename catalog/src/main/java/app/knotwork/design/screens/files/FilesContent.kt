@@ -53,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
+import app.knotwork.design.a11y.MinTouchTarget
 import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkSecondaryButton
@@ -495,9 +496,10 @@ private fun FileRowText(item: FileRowItem, modifier: Modifier = Modifier) {
 private fun FileRowMenu(item: FileRowItem, callbacks: FilesCallbacks) {
     var open by remember { mutableStateOf(false) }
     Box {
-        // Constrain the overflow button so its default 48 dp min touch target does not
-        // inflate every row's height.
-        IconButton(onClick = { open = true }, modifier = Modifier.size(ROW_MENU_BUTTON_SIZE)) {
+        // Full 48 dp target. This used to be constrained to 36 dp to keep the
+        // row from growing — but a control the row cannot afford to make
+        // tappable is a row that is too short, not a target that should shrink.
+        IconButton(onClick = { open = true }, modifier = Modifier.size(MinTouchTarget)) {
             Icon(
                 imageVector = AppIcons.More,
                 contentDescription = stringResource(R.string.knotwork_files_row_menu_cd, item.name),
@@ -768,7 +770,6 @@ private fun PreviewActions(path: String, callbacks: FilesCallbacks) {
 private val QUOTA_BAR_HEIGHT = 6.dp
 private val QUOTA_COUNT_BASELINE_PAD = 2.dp
 private val ROW_TILE_SIZE = 38.dp
-private val ROW_MENU_BUTTON_SIZE = 36.dp
 internal val ROW_ICON_SIZE = 19.dp
 private val CHECKBOX_SIZE = 22.dp
 private val CHECKBOX_TICK_SIZE = 14.dp
