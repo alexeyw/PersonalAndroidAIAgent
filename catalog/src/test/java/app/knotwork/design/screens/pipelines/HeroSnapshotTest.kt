@@ -33,10 +33,10 @@ class HeroSnapshotTest {
     @Test
     fun hero_pipeline_library_light() {
         composeTestRule.setContent {
-            CompositionLocalProvider(
-                LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true),
-            ) {
-                KnotworkTheme(darkTheme = false) {
+            KnotworkTheme(darkTheme = false) {
+                CompositionLocalProvider(
+                    LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true),
+                ) {
                     PipelineLibraryContent(state = PipelineLibraryPreview.populated())
                 }
             }
@@ -49,10 +49,10 @@ class HeroSnapshotTest {
     @Test
     fun hero_pipeline_library_dark() {
         composeTestRule.setContent {
-            CompositionLocalProvider(
-                LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true),
-            ) {
-                KnotworkTheme(darkTheme = true) {
+            KnotworkTheme(darkTheme = true) {
+                CompositionLocalProvider(
+                    LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true),
+                ) {
                     PipelineLibraryContent(state = PipelineLibraryPreview.populated())
                 }
             }

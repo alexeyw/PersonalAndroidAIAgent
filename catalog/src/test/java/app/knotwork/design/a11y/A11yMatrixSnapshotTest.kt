@@ -120,17 +120,17 @@ class A11yMatrixSnapshotTest {
     private fun a11ySnapshot(name: String, fontScale: Float, content: @Composable () -> Unit) {
         composeTestRule.setContent {
             val baseDensity = LocalDensity.current
-            CompositionLocalProvider(
-                LocalKnotworkA11y provides FixedKnotworkA11y(
-                    reducedMotion = true,
-                    fontScale = fontScale,
-                ),
-                LocalDensity provides Density(
-                    density = baseDensity.density,
-                    fontScale = fontScale,
-                ),
-            ) {
-                KnotworkTheme(darkTheme = false) { content() }
+            KnotworkTheme(darkTheme = false) {
+                CompositionLocalProvider(
+                    LocalKnotworkA11y provides FixedKnotworkA11y(
+                        reducedMotion = true,
+                        fontScale = fontScale,
+                    ),
+                    LocalDensity provides Density(
+                        density = baseDensity.density,
+                        fontScale = fontScale,
+                    ),
+                ) { content() }
             }
         }
         val scaleTag = "fs${(fontScale * SCALE_FILENAME_FACTOR).toInt()}"

@@ -49,8 +49,10 @@ class ChatCatalogPageSnapshotTest {
     @Test
     fun chat_reduced_motion() {
         composeTestRule.setContent {
-            CompositionLocalProvider(LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true)) {
-                KnotworkTheme(darkTheme = false) { ChatCatalogContent() }
+            KnotworkTheme(darkTheme = false) {
+                CompositionLocalProvider(LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true)) {
+                    ChatCatalogContent()
+                }
             }
         }
         composeTestRule.onRoot().captureRoboImage(
