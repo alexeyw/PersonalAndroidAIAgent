@@ -199,6 +199,7 @@ This file maps the contents of the main application package.
   - `PromptTemplateModule.kt` - Hilt multibinding module for prompt variable providers.
 - `domain/` - Domain layer containing core business logic and Use Cases.
   - `constants/` - Domain-level constants.
+    - `BundledPresetCatalog.kt` - Declared presentation order of the bundled pipeline-preset catalogue (`DISPLAY_ORDER`: onboarding scenarios → showcases → build-your-own templates) plus `rankOf`. Applied by `LocalPipelinePresetRepositoryImpl.getBundledPresets`, which would otherwise emit presets in `AssetManager.list()` (alphabetical) order; `PipelinePresetCatalogValidationTest` requires every user-facing bundled preset to be ranked here.
     - `DefaultPrompts.kt` - Default system prompts.
     - `PromptPresetConstants.kt` - Cross-module limits + `LLM_DRIVEN_NODE_TYPES` set shared by the prompt-preset domain: `MAX_NAME_LENGTH = 60`, `MAX_SYSTEM_PROMPT_LENGTH = 8000`, and the set of node types that can host a system-prompt preset.
     - `NotificationChannels.kt` - Canonical ids of every Android `NotificationChannel` (foreground service status, approval prompts, long-running pings, scheduled-task results).
