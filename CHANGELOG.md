@@ -98,6 +98,14 @@ details.
   retrieve, so a multi-day background soak can be analysed offline without opening
   the app or decrypting the on-device database. Nothing it produces leaves the
   device.
+- **Groundwork for archiving chats.** Chat sessions can now carry an archived
+  state on device — the storage and logic behind an upcoming archive surface for
+  a chat list that grows with use. Archiving is non-destructive by construction:
+  it changes only which list a conversation appears in, keeps every message,
+  trace and run record intact, and is fully reversible. Existing chats upgrade as
+  not archived, so the list looks exactly as it did before, and new activity in
+  an archived chat (a trigger or scheduled run) deliberately does not pull it
+  back — only you do.
 
 ### Fixed
 

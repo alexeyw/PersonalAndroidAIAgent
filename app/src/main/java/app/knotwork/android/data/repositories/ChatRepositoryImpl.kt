@@ -124,6 +124,10 @@ class ChatRepositoryImpl @Inject constructor(
         chatDao.setSessionStarred(sessionId, favorite)
     }
 
+    override suspend fun setSessionArchived(sessionId: String, archived: Boolean) {
+        chatDao.setSessionArchived(sessionId, archived)
+    }
+
     override suspend fun importChat(json: String): String {
         val trimmed = json.trim()
         var sessionName = DEFAULT_IMPORTED_CHAT_NAME
@@ -160,9 +164,15 @@ class ChatRepositoryImpl @Inject constructor(
         return newId
     }
 
-    override fun getSessionsFlow(): Flow<List<ChatSession>> = chatDao.getSessionsFlow().map { entities ->
-        entities.map { it.toDomain() }
-    }
+    override fun getSessionsFlow(includeArchived: Boolean): Flow<List<ChatSession>> =
+        chatDao.getSessionsFlow(includeArchived).map { entities ->
+            entities.map { it.toDomain() }
+        }
+
+    override fun getArchivedSessionsFlow(): Flow<List<ChatSession>> =
+        chatDao.getArchivedSessionsFlow().map { entities ->
+            entities.map { it.toDomain() }
+        }
 
     override suspend fun getSessionById(id: String): ChatSession? = chatDao.getSessionById(id)?.toDomain()
 

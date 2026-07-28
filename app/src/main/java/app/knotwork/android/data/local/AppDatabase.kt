@@ -79,7 +79,7 @@ import app.knotwork.android.data.local.models.UsageCounterEntity
         UsageActiveDayEntity::class,
         OnboardingMilestoneEntity::class,
     ],
-    version = 53,
+    version = 54,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -1275,6 +1275,24 @@ abstract class AppDatabase : RoomDatabase() {
         val MIGRATION_52_53 = object : Migration(52, 53) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE `pipelines` ADD COLUMN `memoryRetrievalQuery` TEXT")
+            }
+        }
+
+        /**
+         * v53 → v54: adds the `isArchived` column to `chat_sessions` — the
+         * chat-archive flag that moves a conversation out of the main thread
+         * list without deleting anything it owns.
+         *
+         * Purely additive: a new column introduced on a new schema version, so
+         * `NOT NULL DEFAULT 0` is safe — every pre-existing session upgrades to
+         * "not archived" and the thread list keeps showing exactly what it
+         * showed before.
+         */
+        val MIGRATION_53_54 = object : Migration(53, 54) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `chat_sessions` ADD COLUMN `isArchived` INTEGER NOT NULL DEFAULT 0",
+                )
             }
         }
     }

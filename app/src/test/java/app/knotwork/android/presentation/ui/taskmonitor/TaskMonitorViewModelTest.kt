@@ -55,7 +55,7 @@ class TaskMonitorViewModelTest {
             every { state } returns WorkInfo.State.SUCCEEDED
         }
 
-        every { chatRepository.getSessionsFlow() } returns flowOf(sessions)
+        every { chatRepository.getSessionsFlow(includeArchived = true) } returns flowOf(sessions)
         every { workManager.getWorkInfosFlow(any()) } returns flowOf(listOf(workInfo1, workInfo2))
 
         val activeMap = mapOf(
