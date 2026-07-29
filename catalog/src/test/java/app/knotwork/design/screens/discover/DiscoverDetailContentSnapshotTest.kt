@@ -80,8 +80,10 @@ class DiscoverDetailContentSnapshotTest {
 
     private fun snapshot(name: String, dark: Boolean, content: @Composable () -> Unit) {
         composeTestRule.setContent {
-            CompositionLocalProvider(LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true)) {
-                KnotworkTheme(darkTheme = dark) { content() }
+            KnotworkTheme(darkTheme = dark) {
+                CompositionLocalProvider(LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true)) {
+                    content()
+                }
             }
         }
         val themeTag = if (dark) "dark" else "light"

@@ -1,5 +1,7 @@
 package app.knotwork.android.presentation.ui.taskmonitor
 
+import app.knotwork.android.domain.services.ScheduledTaskLabel
+
 /**
  * Represents the type of a task in the monitoring screen.
  */
@@ -49,6 +51,8 @@ data class TaskItem(
     val progress: Float?,
     val type: TaskType,
     val pipelineStage: String? = null,
+    val scheduled: ScheduledTaskLabel? = null,
+    val boundSessionName: String? = null,
 )
 
 /**
@@ -67,4 +71,12 @@ data class TaskMonitorState(
      * `null` if the sheet is dismissed.
      */
     val detailTaskId: String? = null,
+    /**
+     * How many tasks the agent scheduled for itself are queued or running —
+     * counted before filtering, because the escape hatch it drives has to be
+     * reachable from whichever filter the user happens to be on.
+     */
+    val scheduledTaskCount: Int = 0,
+    /** `true` while the "stop all scheduled tasks" confirmation is showing. */
+    val confirmingCancelAll: Boolean = false,
 )

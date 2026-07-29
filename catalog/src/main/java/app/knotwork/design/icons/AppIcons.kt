@@ -107,6 +107,7 @@ import app.knotwork.design.icons.imagevector.knotworkToolActiveIcon
 import app.knotwork.design.icons.imagevector.knotworkToolIcon
 import app.knotwork.design.icons.imagevector.knotworkTrashIcon
 import app.knotwork.design.icons.imagevector.knotworkTriggerIcon
+import app.knotwork.design.icons.imagevector.knotworkUnarchiveIcon
 import app.knotwork.design.icons.imagevector.knotworkUndoIcon
 import app.knotwork.design.icons.imagevector.knotworkWarnIcon
 import app.knotwork.design.icons.imagevector.knotworkWordmarkIcon
@@ -398,6 +399,13 @@ object AppIcons {
 
     /** `I.archive` — archive. */
     val Archive: ImageVector get() = knotworkArchiveIcon
+
+    /**
+     * `I.unarchive` — restore out of the archive. Distinct from [Undo] on
+     * purpose: the archive-restore action and the undo-snackbar action appear
+     * at the same moment, so one glyph must not carry both meanings.
+     */
+    val Unarchive: ImageVector get() = knotworkUnarchiveIcon
 
     /** `I.book` — documentation. */
     val Book: ImageVector get() = knotworkBookIcon

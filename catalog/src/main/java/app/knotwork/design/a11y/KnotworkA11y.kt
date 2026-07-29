@@ -141,9 +141,13 @@ data class FixedKnotworkA11y(val reducedMotion: Boolean = false, val fontScale: 
  * Composition-local provider for [KnotworkA11y].
  *
  * Defaults to [DefaultKnotworkA11y] so previews that forget to wrap in
- * `KnotworkTheme { ... }` still resolve the production implementation. The
- * `KnotworkTheme` composable explicitly re-installs the default to make the
- * dependency obvious in a code search; tests override it via
- * `CompositionLocalProvider(LocalKnotworkA11y provides FixedKnotworkA11y(…))`.
+ * `KnotworkTheme { ... }` still resolve the production implementation.
+ *
+ * `KnotworkTheme` must **not** re-provide it. Doing so is a no-op in production
+ * — the default is the same object — but it silently overrides whatever a
+ * caller installed, and the caller here is always a test pinning
+ * `FixedKnotworkA11y` for determinism. Tests may install their override on
+ * either side of the theme; putting it inside is the form to prefer, because it
+ * survives the theme gaining a provision for this local again.
  */
 val LocalKnotworkA11y = staticCompositionLocalOf<KnotworkA11y> { DefaultKnotworkA11y }

@@ -2,25 +2,48 @@
   "schemaVersion": 1,
   "id": "tool_using_react",
   "name": "Tool-using agent",
-  "description": "Local model reasons about which tool to call, the tool runs (auto-selected from the registry), and a summariser folds the tool output back into a final answer. Good template for action-oriented tasks.",
+  "description": "An IF-condition decides whether the request needs an external lookup. If it does, the local model turns it into a search term, the tool runs (auto-selected from the registry) and a summariser folds the result into the answer. If it does not, the model answers directly. Good template for action-oriented tasks.",
   "category": "tool",
-  "tags": ["tools", "agent"],
+  "tags": [
+    "tools",
+    "agent"
+  ],
   "updatedAt": 1748304000000,
+  "samplePrompts": [
+    {
+      "title": "Look up the population of Chile",
+      "toolsHint": "search_tool"
+    },
+    {
+      "title": "When was the Eiffel Tower opened?",
+      "toolsHint": "search_tool"
+    },
+    {
+      "title": "Who was Ada Lovelace?",
+      "toolsHint": "search_tool"
+    }
+  ],
   "nodes": [
     {
       "id": "input",
       "type": "INPUT",
-      "position": { "x": 80.0, "y": 200.0 },
+      "position": {
+        "x": 80,
+        "y": 200
+      },
       "label": "Input",
       "config": {
         "systemPrompt": null,
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -28,22 +51,34 @@
         "nodeInput": true,
         "longTermMemory": false,
         "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "INPUT",
+        "title": "Input",
+        "inputName": "user.message"
       }
     },
     {
-      "id": "lite_rt",
-      "type": "LITE_RT",
-      "position": { "x": 320.0, "y": 200.0 },
-      "label": "Reasoner",
+      "id": "needs_tool",
+      "type": "IF_CONDITION",
+      "position": {
+        "x": 320,
+        "y": 200
+      },
+      "label": "Needs a lookup?",
       "config": {
-        "systemPrompt": "You are a reasoning agent deciding whether a tool is needed to answer the user. Today is $DATE. Available tools:\n$TOOLS\n\nThink step by step. If a tool can produce more reliable or fresher information than your own knowledge, output a single short sentence describing what you want the tool to do. Otherwise produce a direct answer. Keep the output under three sentences.",
+        "systemPrompt": null,
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
-        "conditionPrompt": null,
+        "conditionPrompt": "Answering the user's request well requires looking something up in an external source — a fact, a figure, a date, a definition, or anything about a specific person, place, work, event or organisation that the assistant should not answer from memory alone.\n\nAnswer false when the request can be fulfilled with reasoning alone and needs no outside information: arithmetic and other calculations, rewriting or translating text the user supplied, formatting, opinions, or simple conversation.\n\nJudge the user's original request, not the wording of any intermediate step. When genuinely unsure, answer true — a needless lookup is cheaper than a confidently wrong answer.\n\nOutput exactly one word — true or false — in lowercase, with no punctuation, quotation marks or explanation.",
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -51,22 +86,77 @@
         "nodeInput": true,
         "longTermMemory": false,
         "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "IF_CONDITION",
+        "title": "Needs a lookup?",
+        "expression": "Answering the user's request well requires looking something up in an external source — a fact, a figure, a date, a definition, or anything about a specific person, place, work, event or organisation that the assistant should not answer from memory alone.\n\nAnswer false when the request can be fulfilled with reasoning alone and needs no outside information: arithmetic and other calculations, rewriting or translating text the user supplied, formatting, opinions, or simple conversation.\n\nJudge the user's original request, not the wording of any intermediate step. When genuinely unsure, answer true — a needless lookup is cheaper than a confidently wrong answer.\n\nOutput exactly one word — true or false — in lowercase, with no punctuation, quotation marks or explanation.",
+        "labelTrue": "true",
+        "labelFalse": "false",
+        "branchOnImage": false
+      }
+    },
+    {
+      "id": "query_builder",
+      "type": "LITE_RT",
+      "position": {
+        "x": 560,
+        "y": 100
+      },
+      "label": "Query Builder",
+      "config": {
+        "systemPrompt": "The user's request needs a factual lookup, and the search runs in the very next step. Your output becomes the search term.\n\nWrite the search term in the user's language ($LANG) so the lookup targets the matching edition.\n\nOutput ONLY the search term: a short noun phrase naming the main topic or entity, the way an encyclopedia article would be titled. No question marks, no full sentences, no quotation marks, no explanation, no leading labels. Strip imperative verbs and filler — keep just the subject. If several topics are mixed in, pick the single most central one.",
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "LITE_RT",
+        "title": "Query Builder",
+        "modelId": "",
+        "systemPrompt": "The user's request needs a factual lookup, and the search runs in the very next step. Your output becomes the search term.\n\nWrite the search term in the user's language ($LANG) so the lookup targets the matching edition.\n\nOutput ONLY the search term: a short noun phrase naming the main topic or entity, the way an encyclopedia article would be titled. No question marks, no full sentences, no quotation marks, no explanation, no leading labels. Strip imperative verbs and filler — keep just the subject. If several topics are mixed in, pick the single most central one.",
+        "temperature": 0.7,
+        "topP": 0.9,
+        "maxNewTokens": 512,
+        "stopTokens": []
       }
     },
     {
       "id": "tool",
       "type": "TOOL",
-      "position": { "x": 560.0, "y": 200.0 },
+      "position": {
+        "x": 800,
+        "y": 100
+      },
       "label": "Tool",
       "config": {
         "systemPrompt": null,
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -74,22 +164,35 @@
         "nodeInput": true,
         "longTermMemory": false,
         "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "TOOL",
+        "title": "Tool",
+        "toolId": "",
+        "argumentMapping": []
       }
     },
     {
       "id": "summary",
       "type": "SUMMARY",
-      "position": { "x": 800.0, "y": 200.0 },
+      "position": {
+        "x": 1040,
+        "y": 100
+      },
       "label": "Summariser",
       "config": {
-        "systemPrompt": "You synthesise the result of a tool invocation into a final reply for the user. Quote the concrete facts the tool returned and answer the user's original question directly. If the tool failed or returned nothing useful, say so plainly.",
+        "systemPrompt": "You synthesise the result of a tool invocation into a final reply for the user. Quote the concrete facts the tool returned and answer the user's original question directly. If the tool failed or returned nothing useful, say so plainly.\n\nReply in the user's language ($LANG).",
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -97,22 +200,76 @@
         "nodeInput": true,
         "longTermMemory": false,
         "toolResults": true
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "SUMMARY",
+        "title": "Summariser",
+        "format": "CUSTOM",
+        "customPrompt": "You synthesise the result of a tool invocation into a final reply for the user. Quote the concrete facts the tool returned and answer the user's original question directly. If the tool failed or returned nothing useful, say so plainly.\n\nReply in the user's language ($LANG).",
+        "targetLengthChars": 2000
+      }
+    },
+    {
+      "id": "direct_answer",
+      "type": "LITE_RT",
+      "position": {
+        "x": 560,
+        "y": 320
+      },
+      "label": "Direct Answer",
+      "config": {
+        "systemPrompt": "You are an on-device assistant running on $MODEL. Today is $DATE. The previous step established that this request needs no external lookup — answer it yourself.\n\nBe as brief as the question allows: when a single value or one sentence is the complete answer, that is the answer. Do not narrate intermediate steps, do not show your working, and do not pad the reply with a derivation you were not asked for — an explanation invented after the fact is where mistakes creep in. Write numbers as digits. Use at most two short paragraphs, and only when the question genuinely needs them. If you cannot answer, say so plainly in one sentence.\n\nReply in the user's language ($LANG).",
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "LITE_RT",
+        "title": "Direct Answer",
+        "modelId": "",
+        "systemPrompt": "You are an on-device assistant running on $MODEL. Today is $DATE. The previous step established that this request needs no external lookup — answer it yourself.\n\nBe as brief as the question allows: when a single value or one sentence is the complete answer, that is the answer. Do not narrate intermediate steps, do not show your working, and do not pad the reply with a derivation you were not asked for — an explanation invented after the fact is where mistakes creep in. Write numbers as digits. Use at most two short paragraphs, and only when the question genuinely needs them. If you cannot answer, say so plainly in one sentence.\n\nReply in the user's language ($LANG).",
+        "temperature": 0.7,
+        "topP": 0.9,
+        "maxNewTokens": 2048,
+        "stopTokens": []
       }
     },
     {
       "id": "output",
       "type": "OUTPUT",
-      "position": { "x": 1040.0, "y": 200.0 },
+      "position": {
+        "x": 1280,
+        "y": 200
+      },
       "label": "Reply",
       "config": {
         "systemPrompt": null,
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": true,
@@ -120,13 +277,58 @@
         "nodeInput": true,
         "longTermMemory": true,
         "toolResults": true
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "OUTPUT",
+        "title": "Reply",
+        "format": "PLAIN_TEXT",
+        "systemPrompt": ""
       }
     }
   ],
   "connections": [
-    { "id": "c1", "fromNodeId": "input", "toNodeId": "lite_rt", "label": null },
-    { "id": "c2", "fromNodeId": "lite_rt", "toNodeId": "tool", "label": null },
-    { "id": "c3", "fromNodeId": "tool", "toNodeId": "summary", "label": null },
-    { "id": "c4", "fromNodeId": "summary", "toNodeId": "output", "label": null }
+    {
+      "id": "c1",
+      "fromNodeId": "input",
+      "toNodeId": "needs_tool",
+      "label": null
+    },
+    {
+      "id": "c2",
+      "fromNodeId": "needs_tool",
+      "toNodeId": "query_builder",
+      "label": "True"
+    },
+    {
+      "id": "c3",
+      "fromNodeId": "query_builder",
+      "toNodeId": "tool",
+      "label": null
+    },
+    {
+      "id": "c4",
+      "fromNodeId": "tool",
+      "toNodeId": "summary",
+      "label": null
+    },
+    {
+      "id": "c5",
+      "fromNodeId": "summary",
+      "toNodeId": "output",
+      "label": null
+    },
+    {
+      "id": "c6",
+      "fromNodeId": "needs_tool",
+      "toNodeId": "direct_answer",
+      "label": "False"
+    },
+    {
+      "id": "c7",
+      "fromNodeId": "direct_answer",
+      "toNodeId": "output",
+      "label": null
+    }
   ]
 }

@@ -32,6 +32,30 @@ interface MemoryRepository {
     ): Long
 
     /**
+     * Atomically replaces a set of chunks with the consolidation summary that
+     * subsumes them: the summary is written and the originals removed in a
+     * single transaction.
+     *
+     * This is the only sanctioned way for compaction to delete a chunk. Saving
+     * and deleting separately can half-apply — leaving a summary alongside the
+     * facts it duplicates, or (worse) deleting facts whose summary never
+     * landed — and compaction is the one background path that destroys data the
+     * user cannot recover.
+     *
+     * @param text The summary text produced by the consolidation prompt.
+     * @param embedding The summary's embedding, produced by the **active**
+     *   provider so it shares the space of the chunks it replaces.
+     * @param originalIds Ids of the chunks the summary replaces. These are the
+     *   members that passed the coverage gate
+     *   ([app.knotwork.android.domain.services.CompactionCoverageVerifier]) —
+     *   unverified members are deliberately left alive and must not appear
+     *   here. The same ids are recorded on the summary as
+     *   [MemorySource.Compaction.originalChunkIds].
+     * @return The ID of the saved summary chunk.
+     */
+    suspend fun replaceWithConsolidated(text: String, embedding: FloatArray, originalIds: List<Long>): Long
+
+    /**
      * Retrieves all saved memories.
      *
      * @return A list of [MemoryChunk] objects.
@@ -60,8 +84,10 @@ interface MemoryRepository {
      * **The whole table is scanned on every call — there is no recency
      * window.** A chunk's age must never decide whether it is *visible* to
      * retrieval (that would silently expire long-term facts); recency only
-     * *weights* already-found candidates, and that weighting lives in
-     * [app.knotwork.android.domain.services.MemoryReranker]. The pool is
+     * adds an ordering bonus to already-found candidates, and that bonus lives
+     * in [app.knotwork.android.domain.services.MemoryReranker] — it is added
+     * to the similarity, never multiplied into it, so no candidate can be
+     * scored out of the results by age alone. The pool is
      * bounded in practice by the compaction hard-limit
      * (`SettingsRepository.maxMemoryChunks`), which is the explicit
      * performance cap; implementations log a warning when the scanned pool

@@ -182,6 +182,10 @@ class PipelineNodeExecutor @Inject constructor(
                 imageDelivery = scope.imageDelivery,
                 runHadImage = scope.imagePresent,
                 generatingModel = scope.generatingModel,
+                // The whole run tree shares one origin: a sub-pipeline of a
+                // trigger run is still a trigger run, and must classify its
+                // memory-retrieval key the same way (DESCRIPTION.md §6.10.1).
+                origin = scope.runOrigin,
             ).collect { state ->
                 when (state) {
                     is AgentOrchestratorState.Completed -> finalResponse = state.finalResponse
@@ -225,6 +229,10 @@ class PipelineNodeExecutor @Inject constructor(
                 imageDelivery = scope.imageDelivery,
                 runHadImage = scope.imagePresent,
                 generatingModel = scope.generatingModel,
+                // The whole run tree shares one origin: a sub-pipeline of a
+                // trigger run is still a trigger run, and must classify its
+                // memory-retrieval key the same way (DESCRIPTION.md §6.10.1).
+                origin = scope.runOrigin,
             ).collect { state ->
                 when (state) {
                     is AgentOrchestratorState.Completed -> finalResponse = state.finalResponse

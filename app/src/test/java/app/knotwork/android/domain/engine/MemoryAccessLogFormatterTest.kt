@@ -23,23 +23,38 @@ class MemoryAccessLogFormatterTest {
             chunk(2, "user lives in Berlin") to 0.401f,
         )
 
-        val message = MemoryAccessLogFormatter.format("what is my UI preference", hits, verbose = false)
+        val message = MemoryAccessLogFormatter.format(
+            query = "what is my UI preference",
+            source = RetrievalQuerySource.USER_PROMPT,
+            hits = hits,
+            verbose = false,
+        )
 
-        assertEquals("Memory: query='what is my UI preference' → 2 hits (0.83, 0.40)", message)
+        assertEquals("Memory: query='what is my UI preference' [user prompt] → 2 hits (0.83, 0.40)", message)
     }
 
     @Test
     fun `given no hits when formatted then renders zero-hit line without score parens`() {
-        val message = MemoryAccessLogFormatter.format("anything", emptyList(), verbose = false)
+        val message = MemoryAccessLogFormatter.format(
+            query = "anything",
+            source = RetrievalQuerySource.USER_PROMPT,
+            hits = emptyList(),
+            verbose = false,
+        )
 
-        assertEquals("Memory: query='anything' → 0 hits", message)
+        assertEquals("Memory: query='anything' [user prompt] → 0 hits", message)
     }
 
     @Test
     fun `given no hits when verbose then still renders only the header line`() {
-        val message = MemoryAccessLogFormatter.format("anything", emptyList(), verbose = true)
+        val message = MemoryAccessLogFormatter.format(
+            query = "anything",
+            source = RetrievalQuerySource.USER_PROMPT,
+            hits = emptyList(),
+            verbose = true,
+        )
 
-        assertEquals("Memory: query='anything' → 0 hits", message)
+        assertEquals("Memory: query='anything' [user prompt] → 0 hits", message)
         assertFalse(message.contains("\n"))
     }
 
@@ -50,10 +65,15 @@ class MemoryAccessLogFormatterTest {
             chunk(2, "user lives in Berlin") to 0.5f,
         )
 
-        val message = MemoryAccessLogFormatter.format("prefs", hits, verbose = true)
+        val message = MemoryAccessLogFormatter.format(
+            query = "prefs",
+            source = RetrievalQuerySource.DECLARED,
+            hits = hits,
+            verbose = true,
+        )
 
         val lines = message.split("\n")
-        assertEquals("Memory: query='prefs' → 2 hits (0.90, 0.50)", lines[0])
+        assertEquals("Memory: query='prefs' [pipeline-declared] → 2 hits (0.90, 0.50)", lines[0])
         assertEquals("  1. [0.90] user prefers dark mode", lines[1])
         assertEquals("  2. [0.50] user lives in Berlin", lines[2])
         assertEquals(3, lines.size)
@@ -63,7 +83,12 @@ class MemoryAccessLogFormatterTest {
     fun `given long query when formatted then truncates to the configured maximum with ellipsis`() {
         val query = "a".repeat(MemoryAccessLogFormatter.QUERY_MAX_LENGTH + 20)
 
-        val message = MemoryAccessLogFormatter.format(query, emptyList(), verbose = false)
+        val message = MemoryAccessLogFormatter.format(
+            query = query,
+            source = RetrievalQuerySource.USER_PROMPT,
+            hits = emptyList(),
+            verbose = false,
+        )
 
         val rendered = message.substringAfter("query='").substringBefore("'")
         assertEquals(MemoryAccessLogFormatter.QUERY_MAX_LENGTH + 1, rendered.length) // chars + ellipsis
@@ -75,7 +100,12 @@ class MemoryAccessLogFormatterTest {
         val text = "z".repeat(MemoryAccessLogFormatter.SNIPPET_MAX_LENGTH + 50)
         val hits = listOf(chunk(1, text) to 0.7f)
 
-        val message = MemoryAccessLogFormatter.format("q", hits, verbose = true)
+        val message = MemoryAccessLogFormatter.format(
+            query = "q",
+            source = RetrievalQuerySource.NODE_INPUT,
+            hits = hits,
+            verbose = true,
+        )
 
         val snippet = message.split("\n")[1].substringAfter("] ")
         assertEquals(MemoryAccessLogFormatter.SNIPPET_MAX_LENGTH + 1, snippet.length)
@@ -83,13 +113,34 @@ class MemoryAccessLogFormatterTest {
     }
 
     @Test
+    fun `given each query source when formatted then the header carries its label`() {
+        // The label is what makes a background run's retrieval explainable
+        // after the fact, so every source must render a distinct tag.
+        val labels = RetrievalQuerySource.entries.map { source ->
+            MemoryAccessLogFormatter.format(
+                query = "q",
+                source = source,
+                hits = emptyList(),
+                verbose = false,
+            ).substringAfter("[").substringBefore("]")
+        }
+
+        assertEquals(listOf("pipeline-declared", "node input", "user prompt"), labels)
+    }
+
+    @Test
     fun `given multi-line query and chunk text when formatted then whitespace is collapsed`() {
         val hits = listOf(chunk(1, "line one\n\tline two") to 0.6f)
 
-        val message = MemoryAccessLogFormatter.format("multi\nline\nquery", hits, verbose = true)
+        val message = MemoryAccessLogFormatter.format(
+            query = "multi\nline\nquery",
+            source = RetrievalQuerySource.NODE_INPUT,
+            hits = hits,
+            verbose = true,
+        )
 
         val lines = message.split("\n")
-        assertEquals("Memory: query='multi line query' → 1 hits (0.60)", lines[0])
+        assertEquals("Memory: query='multi line query' [node input] → 1 hits (0.60)", lines[0])
         assertEquals("  1. [0.60] line one line two", lines[1])
     }
 }

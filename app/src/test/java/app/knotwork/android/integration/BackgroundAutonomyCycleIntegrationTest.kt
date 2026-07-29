@@ -55,6 +55,7 @@ import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.ParkedRunResumer
 import app.knotwork.android.domain.usecases.PendingSubmissionOutcome
+import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
 import app.knotwork.android.domain.usecases.ResumeOutcome
 import app.knotwork.android.domain.usecases.ResumePipelineRunUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
@@ -332,6 +333,7 @@ class BackgroundAutonomyCycleIntegrationTest {
             approvalNotifier,
             chatRepository,
             pendingRepository,
+            recordTriggerHitlEvent = mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
         )
         val toolNodeExecutor = ToolNodeExecutor(
             llmEngine,
@@ -388,6 +390,7 @@ class BackgroundAutonomyCycleIntegrationTest {
                 mockk(),
                 pendingRepository,
                 clarificationNotifier,
+                recordTriggerHitlEvent = mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
             ),
             PipelineNodeExecutor(
                 mockk(relaxed = true),
@@ -443,6 +446,7 @@ class BackgroundAutonomyCycleIntegrationTest {
             approvalNotifier,
             clarificationNotifier,
             resumeRun,
+            mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
         )
         return ProcessHarness(
             taskQueueManager = taskQueueManager,

@@ -203,6 +203,11 @@ class PipelineRunRepositoryImpl @Inject constructor(
         }
     }
 
+    override suspend fun countRunsByOriginSince(origin: RunOrigin, sinceEpochMs: Long): Int =
+        absorbing("countRunsByOriginSince") {
+            withContext(Dispatchers.IO) { pipelineRunDao.countRunsByOriginSince(origin.name, sinceEpochMs) }
+        } ?: 0
+
     override suspend fun getDescendantRuns(rootRunId: String): List<PipelineRun> = absorbing("getDescendantRuns") {
         withContext(Dispatchers.IO) {
             // Breadth-first walk over the parentRunId links. The depth ceiling

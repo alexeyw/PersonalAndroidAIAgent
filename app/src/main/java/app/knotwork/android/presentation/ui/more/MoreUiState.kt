@@ -16,6 +16,9 @@ package app.knotwork.android.presentation.ui.more
  * @property aboutSubtitle e.g. `"v0.1 · build 1"`.
  * @property librarySubtitle e.g. `"3 saved presets"` or `"no saved presets"`.
  * @property filesSubtitle e.g. `"7 files · 1.5 MB"` or `"empty"`.
+ * @property archivedChats number of archived chats. Rendered as the archive
+ *   row's subtitle — never as a badge, because a badge says "needs attention"
+ *   and an archive never does.
  * @property networkStatusText footer line, e.g. `"on-device · no network calls in last 14 m"`.
  * @property networkStatusOk drives the footer-dot colour.
  */
@@ -30,6 +33,7 @@ data class MoreUiState(
     val aboutSubtitle: String = "—",
     val librarySubtitle: String = "—",
     val filesSubtitle: String = "—",
+    val archivedChats: Int = 0,
     val networkStatusText: String = "",
     val networkStatusOk: Boolean = true,
 )

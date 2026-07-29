@@ -14,6 +14,7 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -135,6 +136,38 @@ class LocalPipelineRepositoryImplTest {
                 match { it.size == 1 && it[0].id == "c1" && it[0].sourceNodeId == "n1" && it[0].targetNodeId == "n2" },
             )
         }
+    }
+
+    @Test
+    fun `memory retrieval query round-trips through both mapper directions`() = runTest {
+        // Both directions in one test: a mapper that drops the field on either
+        // side silently reverts the pipeline to prompt-keyed retrieval.
+        val pipeline = PipelineGraph(
+            id = "p1",
+            name = "Test Pipeline",
+            nodes = listOf(NodeModel("n1", NodeType.LITE_RT, 0f, 0f, "Label")),
+            memoryRetrievalQuery = "evening journal entries",
+        )
+        val savedEntity = slot<PipelineEntity>()
+        coEvery { pipelineDao.savePipelineTransaction(capture(savedEntity), any(), any()) } returns Unit
+
+        repository.savePipeline(pipeline)
+
+        assertEquals("evening journal entries", savedEntity.captured.memoryRetrievalQuery)
+
+        every { pipelineDao.getAllPipelines() } returns flowOf(
+            listOf(
+                PipelineWithNodesAndConnections(
+                    pipeline = savedEntity.captured,
+                    nodes = emptyList(),
+                    connections = emptyList(),
+                ),
+            ),
+        )
+
+        val reloaded = repository.getAllPipelines().first().single()
+
+        assertEquals("evening journal entries", reloaded.memoryRetrievalQuery)
     }
 
     @Test

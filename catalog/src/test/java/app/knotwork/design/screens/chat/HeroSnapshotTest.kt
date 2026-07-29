@@ -43,10 +43,10 @@ class HeroSnapshotTest {
     @Test
     fun hero_chat_home_light() {
         composeTestRule.setContent {
-            CompositionLocalProvider(
-                LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true),
-            ) {
-                KnotworkTheme(darkTheme = false) {
+            KnotworkTheme(darkTheme = false) {
+                CompositionLocalProvider(
+                    LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true),
+                ) {
                     ChatHomeContent(state = ChatHomePreview.idle())
                 }
             }
@@ -59,10 +59,10 @@ class HeroSnapshotTest {
     @Test
     fun hero_chat_home_dark() {
         composeTestRule.setContent {
-            CompositionLocalProvider(
-                LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true),
-            ) {
-                KnotworkTheme(darkTheme = true) {
+            KnotworkTheme(darkTheme = true) {
+                CompositionLocalProvider(
+                    LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true),
+                ) {
                     ChatHomeContent(state = ChatHomePreview.idle())
                 }
             }

@@ -27,6 +27,7 @@ import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.services.ApprovalNotifier
 import app.knotwork.android.domain.usecases.LoadModelUseCase
+import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
 import dagger.hilt.android.EntryPointAccessors
 import io.mockk.coEvery
 import io.mockk.every
@@ -765,6 +766,7 @@ class AppFunctionsEndToEndTest {
                 approvalNotifier = silentNotifier,
                 chatRepository = entryPoint.chatRepository(),
                 pendingInteractionRepository = entryPoint.pendingInteractionRepository(),
+                recordTriggerHitlEvent = mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
             ),
             structuredOutputGate = StructuredOutputGate(),
             settingsRepository = entryPoint.settingsRepository(),
@@ -786,7 +788,13 @@ class AppFunctionsEndToEndTest {
     )
 
     private companion object {
-        const val AGENT_PACKAGE = "app.knotwork.android"
+        /**
+         * This app's own package, read from the build rather than written out:
+         * the debug build carries an `applicationIdSuffix`, and a literal would
+         * silently address the release install (or nothing at all) on the very
+         * variant these instrumented tests run against.
+         */
+        val AGENT_PACKAGE: String = BuildConfig.APPLICATION_ID
         const val PROBE_PACKAGE = "app.knotwork.android.toolsprobe"
 
         /**

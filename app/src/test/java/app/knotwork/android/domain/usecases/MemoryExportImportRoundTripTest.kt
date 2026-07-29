@@ -148,6 +148,9 @@ private class InMemoryMemoryStore : MemoryRepository {
         tags: List<String>,
     ): Long = throw NotImplementedError()
 
+    override suspend fun replaceWithConsolidated(text: String, embedding: FloatArray, originalIds: List<Long>): Long =
+        throw NotImplementedError()
+
     override suspend fun getRecentMemorySummaries(limit: Int): List<MemorySummary> = throw NotImplementedError()
 
     override suspend fun findSimilarMemories(queryEmbedding: FloatArray, limit: Int?): List<Pair<MemoryChunk, Float>> =

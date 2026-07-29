@@ -109,6 +109,10 @@ https://github.com/user-attachments/assets/2ea06de5-6832-4e0c-ad48-430f375d8b72
   over past conversations, automatic fact extraction, manual "Save to memory,"
   and a memory manager with search, provenance, compaction, and JSON
   export / import.
+- **A chat list that stays a working list.** Archive a conversation to take it
+  out of the drawer without deleting a single message: it waits, whole and
+  exportable, on its own screen until you restore it — and opens read-only in
+  the meantime, so nothing brings it back except you.
 
 The full feature tour lives in the [user guide](docs/user-guide.md).
 

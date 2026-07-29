@@ -300,10 +300,11 @@ flowchart TB
     end
 
     subgraph Retrieval["Retrieval (next session, longTermMemory node)"]
-        Engine[GraphExecutionEngine<br/>resolveMemoriesOnce userPrompt] --> Retrieve[RetrieveRelevantMemoryUseCase]
+        Engine[GraphExecutionEngine<br/>resolveMemoriesOnce · once per run] --> Key[MemoryRetrievalQueryResolver<br/>interactive → userPrompt<br/>background → declared query<br/>→ node input → userPrompt]
+        Key --> Retrieve[RetrieveRelevantMemoryUseCase]
         Retrieve --> Search[findSimilarMemories<br/>cosine over the full table]
         Store --> Search
-        Search --> Rerank[MemoryReranker<br/>dedup · recency decay<br/>pinned boost · threshold]
+        Search --> Rerank[MemoryReranker<br/>threshold · recency bonus · pinned boost<br/>verbatim over summaries · near-duplicate collapse]
         Rerank --> Console[ConsoleEvent.MemoryAccess<br/>+ recordUsage]
         Console --> Block[NodeContextBuilder<br/>--- Long-Term Memory ---]
         Block --> LLM[Node executor → LLM]
@@ -313,30 +314,52 @@ flowchart TB
         Worker[MemoryCompactionWorker<br/>daily · or maxMemoryChunks watch] --> Compact[MemoryCompactionUseCase]
         Store --> Compact
         Compact --> Cluster[KMeansClusterer<br/>k = √N / 2]
-        Cluster --> Consolidate[LLM consolidates clusters ≥ 3<br/>→ MemorySource.Compaction<br/>pinned chunks exempt]
-        Consolidate --> Store
+        Cluster --> Consolidate[LLM consolidates clusters ≥ 3<br/>pinned chunks exempt]
+        Consolidate --> Verify[CompactionCoverageVerifier<br/>summary vs cluster centroid]
+        Verify --> Replace[replaceWithConsolidated<br/>→ MemorySource.Compaction<br/>only verified originals deleted]
+        Replace --> Store
     end
 ```
 
 Key invariants:
 
-1. **One retrieval per run.** The engine memoises memory off the immutable
-   `userPrompt`, so multiple memory-enabled nodes in a graph share a single
-   embed + search rather than re-querying per node.
+1. **One retrieval per run.** The engine memoises the result of the first
+   memory-enabled node's lookup, so multiple memory-enabled nodes in a graph
+   share a single embed + search rather than re-querying per node. The search
+   key itself comes from `MemoryRetrievalQueryResolver` and therefore depends on
+   the run's origin — an interactive run searches with the user's message, a
+   background run with the pipeline's declared key, else the text arriving at
+   that first node, else the prompt. Because the key is resolved inside the same
+   memoisation, choosing it costs nothing extra.
 2. **Same embedding space.** Both extraction and retrieval resolve the
    *active* provider via `EmbeddingProviderResolver`, so a query is always
    embedded with whatever produced the stored vectors; a mismatch (e.g. a
    chunk imported under a different provider) scores ~0 until re-embedded
    (see §2.1).
-3. **Pinned is sacred.** Pinned chunks bypass the recency decay and
-   threshold filter on retrieval and are never compaction candidates — the
-   one mechanism a user has to guarantee a fact stays findable.
+3. **Pinned is sacred.** Pinned chunks carry an extra boost, bypass the
+   threshold filter on retrieval, win any near-duplicate collapse they take
+   part in, and are never compaction candidates — the one mechanism a user
+   has to guarantee a fact stays findable.
 4. **Age never hides a fact.** `findSimilarMemories` scans the *entire*
    `memory_chunks` table on every query — there is no recency window on
-   visibility. Recency only *weights* candidates inside `MemoryReranker`'s
-   half-life decay, and the same full-pool rule applies to the extraction
-   dedup check. The pool stays bounded by the compaction hard-limit
-   (`maxMemoryChunks`), which is the explicit performance cap.
+   visibility — and `MemoryReranker` scores age as an **additive** bonus, so
+   no chunk can be pushed below the relevance threshold by getting old. The
+   same full-pool rule applies to the extraction dedup check. The pool stays
+   bounded by the compaction hard-limit (`maxMemoryChunks`), which is the
+   explicit performance cap.
+5. **A summary never silently replaces a fact.** Compaction deletes only the
+   cluster members its generated summary is *verified* to cover
+   (`CompactionCoverageVerifier`: at least as close to each member as the
+   cluster's own centroid, within a small margin), and writes the summary plus
+   those deletions in a single transaction. Members the summary failed to cover
+   stay stored verbatim; a summary covering fewer than two members is discarded
+   entirely. On the read side the same contract holds in reverse — a summary is
+   dropped from the results whenever the source it was distilled from, or a
+   verbatim restatement of it, is retrievable.
+6. **One similarity metric.** Search, extraction dedup, retrieval-side
+   near-duplicate collapse and compaction clustering all go through
+   `MemoryVectorSimilarity`, which also owns the near-duplicate threshold —
+   so no stage can treat as novel what another stage treats as a duplicate.
 
 The on-device write path is covered end-to-end by the instrumented
 `MemoryLifecycleIntegrationTest` (extract → retrieve into the context block
@@ -391,9 +414,14 @@ which subset is enabled:
    `USER`/`AGENT` roles.
 3. `--- Long-Term Memory ---` — semantic-retrieval hits over past
    memory chunks. A vector search ranks chunks by cosine similarity;
-   `MemoryReranker` then re-scores the pool (recency decay, a pinned
-   boost, near-duplicate collapse, and a final-score threshold) before
-   the top-K hits are injected.
+   `MemoryReranker` then filters the pool by that similarity and re-scores
+   the survivors (an additive freshness bonus plus a pinned boost),
+   collapsing near-duplicates before the top-K hits are injected. The search key comes from
+   `MemoryRetrievalQueryResolver`: the run prompt for interactive runs,
+   and for background ones (trigger / schedule / tile) the pipeline's
+   declared `memoryRetrievalQuery`, then this node's own input, then the
+   prompt. Retrieval still runs at most once per run — the first
+   memory-enabled node fixes the key for the rest of the run tree.
 4. `--- Tool Results ---` — outputs of every tool invocation made
    during the current run.
 5. `--- Previous Node Output ---` — the text produced by the
@@ -1008,6 +1036,19 @@ pipelines (nodes and connections), prompt templates, pipeline-run
 lifecycle records and the per-run execution trace. DAOs are split per
 aggregate (`ChatDao`, `MemoryDao`, `PipelineDao`, …) and live under
 `data/local/dao/`.
+
+**Archiving is a flag, not a deletion.** Putting a chat away writes
+`chat_sessions.isArchived` plus the instant `chat_sessions.archivedAt` in a
+single statement, so the flag and the instant cannot drift apart, and removes
+nothing: messages, runs, trace steps and the history-compression summary all
+stay, which is what makes restoring lossless.
+The thread list and the archive surface are two queries over the same table
+(`getSessionsFlow(includeArchived = false)` / `getArchivedSessionsFlow()`), and
+the archive orders by `archivedAt` rather than `updatedAt` so that a background
+run writing into an archived chat cannot reshuffle it (the ordering coalesces to
+`updatedAt`, which keeps a row archived before the column existed in a sensible
+position instead of sinking it). See
+[Archiving chats](user-guide.md#archiving-chats) for the user-facing behaviour.
 
 **Run trace (buffered write-through).** While the execution engine
 walks a graph it appends every console event and every node's

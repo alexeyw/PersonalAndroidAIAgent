@@ -3,6 +3,8 @@ package app.knotwork.android.domain.usecases
 import app.knotwork.android.domain.models.PendingInteraction
 import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineRunStatus
+import app.knotwork.android.domain.models.TriggerHitlEvent
+import app.knotwork.android.domain.models.TriggerHitlResolution
 import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
@@ -28,6 +30,7 @@ class ParkedRunResumer @Inject constructor(
     private val approvalNotifier: ApprovalNotifier,
     private val clarificationNotifier: ClarificationNotifier,
     private val resumePipelineRunUseCase: ResumePipelineRunUseCase,
+    private val recordTriggerHitlEvent: RecordTriggerHitlEventUseCase,
 ) {
 
     /**
@@ -79,7 +82,16 @@ class ParkedRunResumer @Inject constructor(
             ResumeOutcome.NotResumable -> {
                 // The run record already settled elsewhere (maintenance
                 // expiry, a racing resume, a restart). The park is stale —
-                // drop it so it cannot resurface.
+                // drop it so it cannot resurface. The gate ends here too:
+                // without this it would stay journalled as still waiting on a
+                // run that is long over, which is precisely the kind of silent
+                // state the HITL record exists to remove. The response was
+                // given but could never be applied, so it is ABANDONED rather
+                // than an approval or an answer that took effect.
+                recordTriggerHitlEvent(
+                    pending.runId,
+                    TriggerHitlEvent.Resolved(TriggerHitlResolution.ABANDONED),
+                )
                 pendingInteractionRepository.delete(pending.runId)
                 PendingSubmissionOutcome.NothingPending
             }
@@ -105,6 +117,21 @@ class ParkedRunResumer @Inject constructor(
      */
     suspend fun failPark(pending: PendingInteraction, reason: String) {
         val rootId = pipelineRunRepository.getRootRunId(pending.runId) ?: pending.runId
+        // Settle the gate in the journal before the run record itself: the
+        // window elapsing unanswered and the park being discarded under a
+        // changed graph are two different stories, and the run's own outcome
+        // (FAILED, mapped to HitlTimeout only for the expiry message) cannot
+        // tell them apart on its own.
+        recordTriggerHitlEvent(
+            rootId,
+            TriggerHitlEvent.Resolved(
+                if (reason == APPROVAL_WINDOW_EXPIRED_MESSAGE) {
+                    TriggerHitlResolution.TIMED_OUT
+                } else {
+                    TriggerHitlResolution.ABANDONED
+                },
+            ),
+        )
         pipelineRunRepository.finishRun(rootId, PipelineRunStatus.FAILED, reason)
         pendingInteractionRepository.delete(pending.runId)
         cancelNotification(pending)

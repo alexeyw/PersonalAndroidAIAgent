@@ -97,4 +97,17 @@ interface TaskScheduler {
         sessionId: String?,
         constraints: ScheduledTaskConstraints,
     )
+
+    /**
+     * Cancels every task scheduled through [scheduleOneTime] / [schedulePeriodic]
+     * — the user's escape hatch from a task that keeps re-scheduling itself.
+     *
+     * Deliberately scoped to tasks created by the scheduling tool (matched by
+     * [ScheduledTaskTag.MARKER]): automation triggers, the Quick-Settings tile
+     * and model downloads run on the same background runtime and must survive
+     * this, or the only way out of a runaway task would again be a blunt
+     * instrument. A task already executing is cancelled mid-run like any other
+     * stopped run; nothing re-schedules it afterwards.
+     */
+    fun cancelAllScheduled()
 }

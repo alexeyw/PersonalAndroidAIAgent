@@ -12,9 +12,18 @@ import app.knotwork.android.data.local.models.ChatSessionEntity
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Data Access Object for chat messages.
- * Provides methods to interact with the chat_messages table in the Room database.
+ * Data Access Object for chats: both the `chat_messages` and the
+ * `chat_sessions` tables, plus the session-scoped `pipeline_runs` cleanup that
+ * is part of the session-deletion transaction.
+ *
+ * The interface crossed detekt's function budget with the session archive
+ * queries. The suppression is file-scoped and deliberate: the natural split
+ * (a message DAO and a session DAO) cannot be made here without also splitting
+ * [deleteSessionCompletely], whose whole point is that messages, runs and the
+ * session row die inside **one** transaction. Splitting it is a standalone
+ * refactor, not a side effect of adding a column.
  */
+@Suppress("TooManyFunctions")
 @Dao
 interface ChatDao {
     /**
@@ -157,12 +166,37 @@ interface ChatDao {
     suspend fun updateSession(session: ChatSessionEntity)
 
     /**
-     * Retrieves all chat sessions ordered by the last update time (descending).
+     * Retrieves chat sessions ordered by the last update time (descending),
+     * optionally including the archived ones.
      *
+     * @param includeArchived `false` (the caller default everywhere but the task
+     *   monitor) restricts the result to non-archived sessions — the main thread
+     *   list must not show what the user archived. `true` returns every session
+     *   regardless of its archive state.
      * @return A [Flow] emitting a list of [ChatSessionEntity].
      */
-    @Query("SELECT * FROM chat_sessions ORDER BY updatedAt DESC")
-    fun getSessionsFlow(): Flow<List<ChatSessionEntity>>
+    @Query(
+        "SELECT * FROM chat_sessions " +
+            "WHERE :includeArchived OR isArchived = 0 " +
+            "ORDER BY updatedAt DESC",
+    )
+    fun getSessionsFlow(includeArchived: Boolean): Flow<List<ChatSessionEntity>>
+
+    /**
+     * Retrieves **only** the archived chat sessions, most-recently-archived
+     * first — the archive is a stack the user puts things on, so what they put
+     * away last is what they look for first.
+     *
+     * Ordering keys off `archivedAt`, not `updatedAt`: a background run may write
+     * into an archived chat without un-archiving it, and that write must not
+     * reshuffle the archive. `COALESCE` keeps a row archived before the column
+     * existed (`archivedAt IS NULL`) in a sane position instead of sinking it to
+     * the bottom.
+     *
+     * @return A [Flow] emitting the archived [ChatSessionEntity] rows.
+     */
+    @Query("SELECT * FROM chat_sessions WHERE isArchived = 1 ORDER BY COALESCE(archivedAt, updatedAt) DESC")
+    fun getArchivedSessionsFlow(): Flow<List<ChatSessionEntity>>
 
     /**
      * Retrieves a specific chat session by its ID.
@@ -269,4 +303,21 @@ interface ChatDao {
      */
     @Query("UPDATE chat_sessions SET isStarred = :starred WHERE id = :sessionId")
     suspend fun setSessionStarred(sessionId: String, starred: Boolean)
+
+    /**
+     * Sets the session-level archive flag. A single-column write rather than a
+     * read-modify-write of the whole row, so it cannot race the orchestrator's
+     * concurrent `updatedAt` updates. No-op when no row matches [sessionId].
+     *
+     * The session keeps every message it owns — archiving only decides which
+     * list the conversation appears in.
+     *
+     * @param sessionId The id of the session to update.
+     * @param archived The new archive flag to persist.
+     * @param archivedAt Instant the user archived the chat, or `null` when
+     *   restoring it. Written in the same statement as [archived] so the two can
+     *   never disagree — a row is archived iff it carries an archive instant.
+     */
+    @Query("UPDATE chat_sessions SET isArchived = :archived, archivedAt = :archivedAt WHERE id = :sessionId")
+    suspend fun setSessionArchived(sessionId: String, archived: Boolean, archivedAt: Long?)
 }

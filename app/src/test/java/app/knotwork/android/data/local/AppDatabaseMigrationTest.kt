@@ -722,4 +722,156 @@ class AppDatabaseMigrationTest {
         // The payload is nullable: only SCENARIO_CHOSEN carries one.
         assertTrue("Expected nullable detail column: ${sqlSlot.captured}", sql.contains("`DETAIL` TEXT"))
     }
+
+    @Test
+    fun `MIGRATION_52_53 targets versions 52 to 53`() {
+        val migration = AppDatabase.MIGRATION_52_53
+
+        assertEquals(52, migration.startVersion)
+        assertEquals(53, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_52_53 adds a nullable memoryRetrievalQuery column to pipelines`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val sqlSlot = slot<String>()
+
+        AppDatabase.MIGRATION_52_53.migrate(db)
+
+        // Purely additive: one ALTER TABLE, no data rewrite.
+        verify(exactly = 1) { db.execSQL(capture(sqlSlot)) }
+        val sql = sqlSlot.captured.uppercase()
+        assertTrue(
+            "Expected ALTER TABLE on pipelines, got: ${sqlSlot.captured}",
+            sql.contains("ALTER TABLE") && sql.contains("`PIPELINES`"),
+        )
+        assertTrue(
+            "Expected new memoryRetrievalQuery column, got: ${sqlSlot.captured}",
+            sql.contains("`MEMORYRETRIEVALQUERY` TEXT"),
+        )
+        // Nullable on purpose: "never declared" must stay distinguishable from
+        // "declared blank", and existing pipelines upgrade to "declares nothing".
+        assertTrue(
+            "Column must stay nullable so existing rows mean 'not declared': ${sqlSlot.captured}",
+            !sql.contains("NOT NULL"),
+        )
+    }
+
+    @Test
+    fun `MIGRATION_53_54 targets versions 53 to 54`() {
+        val migration = AppDatabase.MIGRATION_53_54
+
+        assertEquals(53, migration.startVersion)
+        assertEquals(54, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_53_54 adds isArchived column to chat_sessions with default 0`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val sqlSlot = slot<String>()
+
+        AppDatabase.MIGRATION_53_54.migrate(db)
+
+        // Purely additive: one ALTER TABLE, no data rewrite.
+        verify(exactly = 1) { db.execSQL(capture(sqlSlot)) }
+        val sql = sqlSlot.captured.uppercase()
+        assertTrue(
+            "Expected ALTER TABLE on chat_sessions, got: ${sqlSlot.captured}",
+            sql.contains("ALTER TABLE") && sql.contains("`CHAT_SESSIONS`"),
+        )
+        assertTrue(
+            "Expected new isArchived column, got: ${sqlSlot.captured}",
+            sql.contains("`ISARCHIVED` INTEGER"),
+        )
+        // NOT NULL is safe here because the column is introduced on a NEW
+        // schema version with a DEFAULT — every pre-existing session upgrades
+        // to "not archived" and keeps appearing in the thread list.
+        assertTrue(
+            "Column must be NOT NULL so the flag is never ambiguous: ${sqlSlot.captured}",
+            sql.contains("NOT NULL"),
+        )
+        assertTrue(
+            "Existing rows must default to not-archived: ${sqlSlot.captured}",
+            sql.contains("DEFAULT 0"),
+        )
+    }
+
+    @Test
+    fun `MIGRATION_54_55 targets versions 54 to 55`() {
+        val migration = AppDatabase.MIGRATION_54_55
+
+        assertEquals(54, migration.startVersion)
+        assertEquals(55, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_54_55 adds nullable archivedAt column to chat_sessions`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val sqlSlot = slot<String>()
+
+        AppDatabase.MIGRATION_54_55.migrate(db)
+
+        // Purely additive: one ALTER TABLE, no data rewrite.
+        verify(exactly = 1) { db.execSQL(capture(sqlSlot)) }
+        val sql = sqlSlot.captured.uppercase()
+        assertTrue(
+            "Expected ALTER TABLE on chat_sessions, got: ${sqlSlot.captured}",
+            sql.contains("ALTER TABLE") && sql.contains("`CHAT_SESSIONS`"),
+        )
+        assertTrue(
+            "Expected new archivedAt column, got: ${sqlSlot.captured}",
+            sql.contains("`ARCHIVEDAT` INTEGER"),
+        )
+        // Nullable on purpose: `null` means "not archived", so the flag and the
+        // instant cannot drift into a never-archived row claiming the epoch.
+        assertTrue(
+            "Column must stay nullable so 'not archived' has no fake instant: ${sqlSlot.captured}",
+            !sql.contains("NOT NULL"),
+        )
+    }
+
+    @Test
+    fun `MIGRATION_55_56 targets versions 55 to 56`() {
+        val migration = AppDatabase.MIGRATION_55_56
+
+        assertEquals(55, migration.startVersion)
+        assertEquals(56, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_55_56 adds the four HITL columns to trigger_evaluations`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val sqlSlot = mutableListOf<String>()
+
+        AppDatabase.MIGRATION_55_56.migrate(db)
+
+        // Purely additive: four ALTER TABLEs, no data rewrite.
+        verify(exactly = 4) { db.execSQL(capture(sqlSlot)) }
+        val statements = sqlSlot.map { it.uppercase() }
+        assertTrue(
+            "Every statement must be an ALTER TABLE on trigger_evaluations: $sqlSlot",
+            statements.all { it.contains("ALTER TABLE") && it.contains("`TRIGGER_EVALUATIONS`") },
+        )
+        // The counter and the parked flag are NOT NULL with a default, so every
+        // pre-v56 row reads back as "this run never asked" — which is what those
+        // rows mean, nothing having recorded gates before.
+        assertTrue(
+            "Expected counted gates defaulting to none: $sqlSlot",
+            statements.any { it.contains("`HITLGATECOUNT` INTEGER NOT NULL DEFAULT 0") },
+        )
+        assertTrue(
+            "Expected parked flag defaulting to false: $sqlSlot",
+            statements.any { it.contains("`HITLPARKED` INTEGER NOT NULL DEFAULT 0") },
+        )
+        // The two discriminators stay nullable: "no gate" must not be forced to
+        // invent a kind or a resolution for itself.
+        assertTrue(
+            "Expected nullable kind column: $sqlSlot",
+            statements.any { it.contains("`HITLLASTKIND` TEXT") && !it.contains("NOT NULL") },
+        )
+        assertTrue(
+            "Expected nullable resolution column: $sqlSlot",
+            statements.any { it.contains("`HITLLASTRESOLUTION` TEXT") && !it.contains("NOT NULL") },
+        )
+    }
 }

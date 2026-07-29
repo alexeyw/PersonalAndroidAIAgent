@@ -58,6 +58,7 @@ import app.knotwork.android.domain.services.PipelineCompositionValidator
 import app.knotwork.android.domain.usecases.EvaluateIfConditionUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.LoadPipelineFromPresetUseCase
+import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import io.mockk.coEvery
 import io.mockk.every
@@ -290,6 +291,7 @@ class ShowcaseCompositionIntegrationTest {
                 mockk<ApprovalNotifier>(relaxed = true),
                 chatRepository,
                 mockk<PendingInteractionRepository>(relaxed = true),
+                recordTriggerHitlEvent = mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
             ),
             StructuredOutputGate(),
             settingsRepository,
@@ -341,6 +343,7 @@ class ShowcaseCompositionIntegrationTest {
                 mockk<ClarificationRepository>(relaxed = true),
                 mockk<PendingInteractionRepository>(relaxed = true),
                 mockk<ClarificationNotifier>(relaxed = true),
+                recordTriggerHitlEvent = mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
             ),
             PipelineNodeExecutor(
                 pipelineRepository,

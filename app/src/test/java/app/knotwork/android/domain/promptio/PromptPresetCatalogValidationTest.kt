@@ -1,6 +1,7 @@
 package app.knotwork.android.domain.promptio
 
 import app.knotwork.android.domain.constants.PromptPresetConstants
+import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PromptPresetImportOutcome
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -83,6 +84,13 @@ class PromptPresetCatalogValidationTest {
         "USER",
         "DEVICE",
     )
+
+    /**
+     * Verdict tokens an [NodeType.EVALUATION] node may route on. Source of
+     * truth: `EVALUATION_VERDICTS` in `domain/engine/executors/SystemNodeExecutor.kt`
+     * (private there, so mirrored here). Keep the two in sync.
+     */
+    private val evaluationVerdicts: Set<String> = setOf("Pass", "Retry", "Fail")
 
     private val catalogDir: File = File("src/main/assets/presets/prompts")
 
@@ -169,6 +177,30 @@ class PromptPresetCatalogValidationTest {
                 "Bundled preset ${file.name} references unknown prompt variable(s) $unknown — " +
                     "register them in di/PromptTemplateModule.kt or fix the typo.",
                 unknown.isEmpty(),
+            )
+        }
+    }
+
+    @Test
+    fun `every EVALUATION preset instructs an accepted verdict token`() {
+        forEachBundledFile { file ->
+            val preset = parseAsSuccess(file).preset
+            if (preset.nodeType != NodeType.EVALUATION) return@forEachBundledFile
+            // An EVALUATION node routes on a constrained token drawn from
+            // EVALUATION_VERDICTS (SystemNodeExecutor), matched by the same
+            // standalone-token rule StructuredOutputGate.runToken applies. A
+            // prompt that never names one of these tokens can only ever fail
+            // the gate, burn its repair budget and fall through to the default
+            // branch — which is exactly what the JSON-shaped `{"success": …}`
+            // preset used to do before the verdict contract landed.
+            val used = evaluationVerdicts.filter { verdict ->
+                Regex("(?<![A-Za-z0-9])${Regex.escape(verdict)}(?![A-Za-z0-9])", RegexOption.IGNORE_CASE)
+                    .containsMatchIn(preset.systemPrompt)
+            }
+            assertTrue(
+                "EVALUATION preset ${file.name} never names one of $evaluationVerdicts — the node " +
+                    "would always fail the verdict gate and route to its default branch.",
+                used.isNotEmpty(),
             )
         }
     }

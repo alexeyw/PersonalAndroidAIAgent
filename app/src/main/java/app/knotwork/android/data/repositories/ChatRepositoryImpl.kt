@@ -124,6 +124,19 @@ class ChatRepositoryImpl @Inject constructor(
         chatDao.setSessionStarred(sessionId, favorite)
     }
 
+    override suspend fun setSessionArchived(sessionId: String, archived: Boolean) {
+        // The archive instant is stamped here rather than taken from the caller:
+        // it is a wall-clock fact about persistence, and the domain use cases
+        // ask for a *state* ("this chat is archived"), not for a transition at a
+        // particular time. Restoring clears it, so `isArchived` and `archivedAt`
+        // are written together and can never disagree.
+        chatDao.setSessionArchived(
+            sessionId = sessionId,
+            archived = archived,
+            archivedAt = if (archived) System.currentTimeMillis() else null,
+        )
+    }
+
     override suspend fun importChat(json: String): String {
         val trimmed = json.trim()
         var sessionName = DEFAULT_IMPORTED_CHAT_NAME
@@ -160,9 +173,15 @@ class ChatRepositoryImpl @Inject constructor(
         return newId
     }
 
-    override fun getSessionsFlow(): Flow<List<ChatSession>> = chatDao.getSessionsFlow().map { entities ->
-        entities.map { it.toDomain() }
-    }
+    override fun getSessionsFlow(includeArchived: Boolean): Flow<List<ChatSession>> =
+        chatDao.getSessionsFlow(includeArchived).map { entities ->
+            entities.map { it.toDomain() }
+        }
+
+    override fun getArchivedSessionsFlow(): Flow<List<ChatSession>> =
+        chatDao.getArchivedSessionsFlow().map { entities ->
+            entities.map { it.toDomain() }
+        }
 
     override suspend fun getSessionById(id: String): ChatSession? = chatDao.getSessionById(id)?.toDomain()
 

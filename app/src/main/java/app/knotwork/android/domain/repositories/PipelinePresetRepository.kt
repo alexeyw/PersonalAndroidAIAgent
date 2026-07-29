@@ -32,7 +32,13 @@ interface PipelinePresetRepository {
      * failing the whole flow, so a single bad file does not hide the
      * remaining catalogue from the picker.
      *
-     * @return A [Flow] that emits the bundled catalogue.
+     * Presets flagged [PipelinePreset.isInternal] are **excluded**: they are
+     * building blocks composed by another preset, not catalogue entries the
+     * user picks. They remain reachable through [getPresetById], which is what
+     * `LoadPipelineFromPresetUseCase` uses to seed a composed preset's
+     * `PIPELINE` targets.
+     *
+     * @return A [Flow] that emits the user-facing bundled catalogue.
      */
     fun getBundledPresets(): Flow<List<PipelinePreset>>
 
@@ -53,6 +59,9 @@ interface PipelinePresetRepository {
      *
      * Used by `LoadPipelineFromPresetUseCase` to materialise the chosen
      * preset into a concrete [PipelinePreset] before id regeneration.
+     * Resolves [PipelinePreset.isInternal] presets too — unlike
+     * [getBundledPresets] — because a composed preset's `PIPELINE` targets are
+     * seeded through exactly this lookup.
      *
      * @param id The stable preset id.
      * @return The matching preset, or `null` if no preset with [id] exists

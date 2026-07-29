@@ -46,7 +46,7 @@ class AppInitializationUseCaseTest {
 
         coEvery { loadModelUseCase() } returns Result.Success(Unit)
         coEvery { pipelineRepository.getAllPipelines() } returns flowOf(emptyList())
-        coEvery { chatRepository.getSessionsFlow() } returns flowOf(emptyList())
+        coEvery { chatRepository.getSessionsFlow(includeArchived = false) } returns flowOf(emptyList())
         coEvery { memoryRepository.getRecentMemorySummaries(any()) } returns emptyList()
 
         useCase = AppInitializationUseCase(
@@ -90,7 +90,7 @@ class AppInitializationUseCaseTest {
         coVerify(exactly = 1) { initializeAppUseCase() }
         coVerify(exactly = 1) { loadModelUseCase() }
         coVerify(exactly = 1) { pipelineRepository.getAllPipelines() }
-        coVerify(exactly = 1) { chatRepository.getSessionsFlow() }
+        coVerify(exactly = 1) { chatRepository.getSessionsFlow(includeArchived = false) }
         coVerify(exactly = 1) { memoryRepository.getRecentMemorySummaries(any()) }
     }
 
@@ -142,7 +142,7 @@ class AppInitializationUseCaseTest {
         // Earlier stages emitted; later stages did not run.
         coVerify(exactly = 1) { initializeAppUseCase() }
         coVerify(exactly = 1) { loadModelUseCase() }
-        coVerify(exactly = 0) { chatRepository.getSessionsFlow() }
+        coVerify(exactly = 0) { chatRepository.getSessionsFlow(includeArchived = false) }
         coVerify(exactly = 0) { memoryRepository.getRecentMemorySummaries(any()) }
     }
 

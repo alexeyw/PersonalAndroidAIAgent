@@ -37,6 +37,7 @@ import app.knotwork.android.domain.models.ConnectionModel
 import app.knotwork.android.domain.models.NetworkState
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
+import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.PowerState
@@ -49,6 +50,8 @@ import app.knotwork.android.domain.models.Trigger
 import app.knotwork.android.domain.models.TriggerCondition
 import app.knotwork.android.domain.models.TriggerEvaluationSource
 import app.knotwork.android.domain.models.TriggerEvaluationVerdict
+import app.knotwork.android.domain.models.TriggerHitlActivity
+import app.knotwork.android.domain.models.TriggerHitlResolution
 import app.knotwork.android.domain.models.TriggerRunOutcome
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
 import app.knotwork.android.domain.repositories.ChatRepository
@@ -73,6 +76,7 @@ import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.ParkedRunResumer
 import app.knotwork.android.domain.usecases.PendingSubmissionOutcome
 import app.knotwork.android.domain.usecases.RecordTriggerEvaluationUseCase
+import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
 import app.knotwork.android.domain.usecases.ResumePipelineRunUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
@@ -329,6 +333,9 @@ class TriggerBackgroundRunIntegrationTest {
             assertEquals(TriggerEvaluationSource.POLL, entry.source)
             assertEquals(runId, entry.runId)
             assertEquals(TriggerRunOutcome.Success, entry.outcome)
+            // This pipeline never stops to ask, so the row carries no HITL
+            // activity at all — "no gate" is an absence, not a neutral value.
+            assertNull(entry.hitl)
 
             process.taskQueueManager.scope.cancel()
         }
@@ -348,9 +355,16 @@ class TriggerBackgroundRunIntegrationTest {
             val runId = process.scheduler.lastRunId!!
 
             // ── No UI answers: the live wait times out and the run parks ──
-            awaitUntil("run parked WAITING_APPROVAL") {
+            // The live gate is part of the condition, not an afterthought: the
+            // approval below must take the durable path, and it only does so
+            // once `pendingApproval` is gone. `ToolInvocationGate` retires the
+            // holder before writing the durable record, so waiting for all
+            // three is waiting for one consistent state — asserting only the
+            // record would race that ordering.
+            awaitUntil("run parked WAITING_APPROVAL with the live gate retired") {
                 process.runRepository.getRun(runId)?.status == PipelineRunStatus.WAITING_APPROVAL &&
-                    process.pendingRepository.getForRun(runId) != null
+                    process.pendingRepository.getForRun(runId) != null &&
+                    process.taskQueueManager.pendingApproval(SESSION_ID) == null
             }
             verify(atLeast = 1) {
                 process.approvalNotifier.sendApprovalRequest(any(), any(), any(), any())
@@ -391,6 +405,21 @@ class TriggerBackgroundRunIntegrationTest {
             assertEquals(TriggerEvaluationVerdict.Fired, entry.verdict)
             assertEquals(runId, entry.runId)
             assertEquals(TriggerRunOutcome.Success, entry.outcome)
+
+            // ── …and the row says the run asked for approval, had to wait in the
+            //    shade for it, and got it. Without this the run is a plain
+            //    Success, indistinguishable from one that never asked — which is
+            //    exactly what made the background-approval criterion of the soak
+            //    protocol unprovable from a journal dump ──
+            assertEquals(
+                TriggerHitlActivity(
+                    gateCount = 1,
+                    lastKind = PendingInteractionKind.APPROVAL,
+                    lastResolution = TriggerHitlResolution.APPROVED,
+                    parked = true,
+                ),
+                entry.hitl,
+            )
 
             process.taskQueueManager.scope.cancel()
         }
@@ -447,12 +476,17 @@ class TriggerBackgroundRunIntegrationTest {
         coEvery { retrieveRelevantMemoryUseCase(any()) } returns emptyList()
         coEvery { retrieveRelevantMemoryUseCase.retrieveScored(any()) } returns emptyList()
 
+        // Real HITL reporter over the same journal and run store: the park →
+        // approve → resume path must leave the gate visible on the fired row,
+        // which is the whole point of the columns.
+        val recordTriggerHitlEvent = RecordTriggerHitlEventUseCase(triggerJournal, runRepository)
         val toolInvocationGate = ToolInvocationGate(
             toolRepository,
             settingsRepository,
             approvalNotifier,
             chatRepository,
             pendingRepository,
+            recordTriggerHitlEvent = recordTriggerHitlEvent,
         )
         val toolNodeExecutor = ToolNodeExecutor(
             llmEngine,
@@ -504,6 +538,7 @@ class TriggerBackgroundRunIntegrationTest {
                 mockk(),
                 pendingRepository,
                 clarificationNotifier,
+                recordTriggerHitlEvent = recordTriggerHitlEvent,
             ),
             PipelineNodeExecutor(
                 mockk(relaxed = true),
@@ -557,6 +592,7 @@ class TriggerBackgroundRunIntegrationTest {
             approvalNotifier,
             clarificationNotifier,
             resumeRun,
+            recordTriggerHitlEvent,
         )
         return ProcessHarness(
             scheduler = QueueBridgeScheduler(AgentOrchestratorUseCase(taskQueueManager)),
@@ -639,6 +675,9 @@ class TriggerBackgroundRunIntegrationTest {
                 runId = runId,
             )
         }
+
+        /** Unused by the trigger path under test. */
+        override fun cancelAllScheduled() = Unit
 
         override fun schedulePeriodic(
             prompt: String,

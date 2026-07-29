@@ -9,6 +9,8 @@ import app.knotwork.android.domain.engine.TaskQueueManager
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.services.ScheduledTaskTag
+import app.knotwork.android.domain.usecases.CancelScheduledTasksUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -29,10 +31,12 @@ class TaskMonitorViewModel @Inject constructor(
     private val workManager: WorkManager,
     private val settingsRepository: SettingsRepository,
     private val taskQueueManager: TaskQueueManager,
+    private val cancelScheduledTasks: CancelScheduledTasksUseCase,
 ) : ViewModel() {
 
     private val _filter = MutableStateFlow(TaskFilterType.ACTIVE)
     private val _detailTaskId = MutableStateFlow<String?>(value = null)
+    private val _confirmingCancelAll = MutableStateFlow(value = false)
 
     private val workInfosFlow = workManager.getWorkInfosFlow(
         WorkQuery.Builder.fromStates(
@@ -51,12 +55,14 @@ class TaskMonitorViewModel @Inject constructor(
      * The unified UI state containing filtered tasks and loading status.
      */
     val uiState: StateFlow<TaskMonitorState> = combine(
-        chatRepository.getSessionsFlow(),
+        // Archived sessions are included on purpose: a run in flight must not
+        // disappear from the monitor because the user archived its chat.
+        chatRepository.getSessionsFlow(includeArchived = true),
         workInfosFlow,
         taskQueueManager.activeSessionsState,
         _filter,
-        _detailTaskId,
-    ) { sessions, workInfos, activeSessionsMap, filter, detailId ->
+        combine(_detailTaskId, _confirmingCancelAll) { detailId, confirming -> detailId to confirming },
+    ) { sessions, workInfos, activeSessionsMap, filter, (detailId, confirmingCancelAll) ->
         val sessionTasks = sessions.mapNotNull { session ->
             val orchestratorState = activeSessionsMap[session.id] ?: AgentOrchestratorState.Idle
 
@@ -89,9 +95,13 @@ class TaskMonitorViewModel @Inject constructor(
             )
         }
 
+        val sessionNamesById = sessions.associate { it.id to it.name }
         val workTasks = workInfos.map { info ->
             val stage = info.progress.getString("current_stage")
             val isPassedOutput = stage == "OUTPUT" || stage == "COMPLETED"
+            // A queued task's input data is not readable, so everything the row
+            // can say about it comes from the tag the scheduler attached.
+            val scheduled = ScheduledTaskTag.parse(info.tags)
 
             TaskItem(
                 id = info.id.toString(),
@@ -108,10 +118,16 @@ class TaskMonitorViewModel @Inject constructor(
                 progress = if (info.state == WorkInfo.State.RUNNING) -1f else 1f,
                 type = TaskType.BACKGROUND_WORK,
                 pipelineStage = stage,
+                scheduled = scheduled,
+                boundSessionName = scheduled?.sessionId?.let(sessionNamesById::get),
             )
         }
 
         val allTasks = sessionTasks + workTasks
+
+        val scheduledCount = workInfos.count {
+            ScheduledTaskTag.MARKER in it.tags && it.state in UNFINISHED_STATES
+        }
 
         val filteredTasks = when (filter) {
             TaskFilterType.ALL -> allTasks
@@ -131,6 +147,14 @@ class TaskMonitorViewModel @Inject constructor(
             filter = filter,
             isLoading = false,
             detailTaskId = detailId,
+            // Counted over every work item, not the filtered list: the escape
+            // hatch must be reachable from whichever filter is selected.
+            scheduledTaskCount = scheduledCount,
+            // Derived, not just mirrored: the last scheduled task can finish
+            // while the confirmation is open, and a dialog offering to stop
+            // nothing (or worse, one that reappears when an unrelated task is
+            // scheduled later) would be asking about a premise that is gone.
+            confirmingCancelAll = confirmingCancelAll && scheduledCount > 0,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -158,6 +182,29 @@ class TaskMonitorViewModel @Inject constructor(
         } catch (e: IllegalArgumentException) {
             // Ignored: Invalid UUID format
         }
+    }
+
+    /** Stages the "stop all scheduled tasks" confirmation. */
+    fun onCancelAllScheduledClicked() {
+        _confirmingCancelAll.value = true
+    }
+
+    /** Dismisses the confirmation without cancelling anything. */
+    fun onCancelAllScheduledDismissed() {
+        _confirmingCancelAll.value = false
+    }
+
+    /**
+     * Cancels every task the agent scheduled for itself.
+     *
+     * The user's way out of a task that keeps re-scheduling itself: cancelling
+     * the one queued item by hand does not help while the run that will enqueue
+     * the next one is still executing, and before this the only remaining option
+     * was clearing the app's data.
+     */
+    fun onCancelAllScheduledConfirmed() {
+        _confirmingCancelAll.value = false
+        cancelScheduledTasks()
     }
 
     /**
@@ -190,5 +237,16 @@ class TaskMonitorViewModel @Inject constructor(
          * round-trips that would otherwise tear it down and re-build it.
          */
         const val STATE_STOP_TIMEOUT_MS: Long = 5_000L
+
+        /**
+         * Work states that still have a future: a scheduled task in one of these
+         * is something "stop all scheduled tasks" can actually settle, so only
+         * these are counted towards offering that action.
+         */
+        val UNFINISHED_STATES = setOf(
+            WorkInfo.State.ENQUEUED,
+            WorkInfo.State.BLOCKED,
+            WorkInfo.State.RUNNING,
+        )
     }
 }

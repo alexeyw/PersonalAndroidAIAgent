@@ -160,4 +160,62 @@
 
     <!-- Long-press message context menu. -->
     <string name="chat_message_rate_coming_soon">Message rating is not yet available.</string>
+
+    <!-- Chat archive: undo snackbars raised from the drawer. The thread is deliberately
+         not named — over a 320 dp drawer the title ellipsises to nothing useful, and the
+         user just acted on that row. -->
+    <string name="chat_snackbar_archived">Chat archived</string>
+    <string name="chat_snackbar_archive_undo">Undo</string>
+    <string name="chat_snackbar_restored">Chat restored</string>
+
+    <!-- Chat archive screen. -->
+    <string name="chat_archive_title">Archived chats</string>
+    <string name="chat_archive_back_cd">Back</string>
+    <plurals name="chat_archive_subtitle">
+        <item quantity="one">%1$d chat · newest first</item>
+        <item quantity="other">%1$d chats · newest first</item>
+    </plurals>
+    <string name="chat_archive_restore">Restore</string>
+    <string name="chat_archive_export">Export chat</string>
+    <string name="chat_archive_delete_forever">Delete forever</string>
+    <string name="chat_archive_row_menu_cd">More actions</string>
+    <string name="chat_archive_ran_after_archiving">Run finished after archiving</string>
+    <string name="chat_archive_footer">Archived chats are kept until you delete them</string>
+    <string name="chat_archive_empty_title">Nothing archived</string>
+    <string name="chat_archive_empty_body">Archiving takes a chat out of your list without deleting it. In the chat list, swipe a chat or open its menu and pick Archive — it waits here, whole, until you restore it.</string>
+    <string name="chat_archive_error_title">Couldn\'t load the archive</string>
+    <string name="chat_archive_error_retry">Try again</string>
+    <string name="chat_archive_delete_title">Delete this chat?</string>
+    <string name="chat_archive_delete_body">"%1$s" and all its messages will be deleted from this device. This can\'t be undone.</string>
+    <string name="chat_archive_delete_confirm">Delete</string>
+    <string name="chat_archive_delete_cancel">Cancel</string>
+
+    <!-- Relative "when was this archived" label on an archive row. -->
+    <string name="chat_archive_when_just_now">Archived just now</string>
+    <string name="chat_archive_when_yesterday">Archived yesterday</string>
+    <string name="chat_archive_when_unknown">Archived</string>
+    <plurals name="chat_archive_when_minutes">
+        <item quantity="one">Archived %1$d min ago</item>
+        <item quantity="other">Archived %1$d min ago</item>
+    </plurals>
+    <plurals name="chat_archive_when_hours">
+        <item quantity="one">Archived %1$d h ago</item>
+        <item quantity="other">Archived %1$d h ago</item>
+    </plurals>
+    <plurals name="chat_archive_when_days">
+        <item quantity="one">Archived %1$d d ago</item>
+        <item quantity="other">Archived %1$d d ago</item>
+    </plurals>
+    <plurals name="chat_archive_when_weeks">
+        <item quantity="one">Archived %1$d w ago</item>
+        <item quantity="other">Archived %1$d w ago</item>
+    </plurals>
+    <plurals name="chat_archive_when_months">
+        <item quantity="one">Archived %1$d mo ago</item>
+        <item quantity="other">Archived %1$d mo ago</item>
+    </plurals>
+    <plurals name="chat_archive_when_years">
+        <item quantity="one">Archived %1$d y ago</item>
+        <item quantity="other">Archived %1$d y ago</item>
+    </plurals>
 </resources>

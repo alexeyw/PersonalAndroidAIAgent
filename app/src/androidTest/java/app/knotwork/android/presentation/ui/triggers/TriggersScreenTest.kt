@@ -11,7 +11,10 @@ import app.knotwork.android.R
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.Trigger
 import app.knotwork.android.domain.repositories.PipelineRepository
+import app.knotwork.android.domain.repositories.TriggerJournalRepository
 import app.knotwork.android.domain.repositories.TriggerRepository
+import app.knotwork.android.domain.usecases.ObserveTriggerHealthInputsUseCase
+import app.knotwork.android.domain.usecases.ObserveTriggerJournalUseCase
 import app.knotwork.android.domain.usecases.SaveTriggerUseCase
 import app.knotwork.android.domain.usecases.SyncTriggersUseCase
 import app.knotwork.design.theme.KnotworkTheme
@@ -53,7 +56,21 @@ class TriggersScreenTest {
         }
         val syncTriggers = mockk<SyncTriggersUseCase>(relaxed = true)
         val saveTrigger = SaveTriggerUseCase(triggerRepository, mockk(relaxed = true))
-        val viewModel = TriggersViewModel(triggerRepository, pipelineRepository, saveTrigger, syncTriggers)
+        // Real use cases over a faked journal, as with saveTrigger above: the
+        // health flow feeds the same combine() as the trigger list, so it has to
+        // emit for the list to render at all — a relaxed mock's Flow never does.
+        val journalRepository = mockk<TriggerJournalRepository>(relaxed = true) {
+            every { observeHealthInputs() } returns flowOf(emptyMap())
+            every { observeByTrigger(any()) } returns flowOf(emptyList())
+        }
+        val viewModel = TriggersViewModel(
+            triggerRepository,
+            pipelineRepository,
+            saveTrigger,
+            syncTriggers,
+            ObserveTriggerHealthInputsUseCase(journalRepository),
+            ObserveTriggerJournalUseCase(journalRepository),
+        )
 
         composeTestRule.setContent {
             KnotworkTheme { TriggersScreen(viewModel = viewModel) }

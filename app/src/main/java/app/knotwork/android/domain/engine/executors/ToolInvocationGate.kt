@@ -11,11 +11,14 @@ import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.models.ToolApprovalPolicy
 import app.knotwork.android.domain.models.ToolExecutionContext
 import app.knotwork.android.domain.models.ToolRisk
+import app.knotwork.android.domain.models.TriggerHitlEvent
+import app.knotwork.android.domain.models.TriggerHitlResolution
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.TimeoutCancellationException
@@ -48,6 +51,12 @@ import javax.inject.Singleton
  *     the two-phase live-deferred → durable-park protocol;
  *  4. executes the tool through [ToolRepository] and emits the observation.
  *
+ * Every gate it raises is also reported to the trigger-evaluation journal via
+ * [RecordTriggerHitlEventUseCase] — raise, park and settlement alike — so that a
+ * background run which stopped to ask the user is visible as such afterwards
+ * instead of settling into an anonymous success. The reports are no-ops for runs
+ * that own no journal row (every interactive one).
+ *
  * Marked `@Singleton` because [activeApprovalDeferreds] holds per-session
  * pending approval requests that must outlive any individual node execution
  * and be reachable from the UI / notification resume path regardless of which
@@ -60,6 +69,7 @@ class ToolInvocationGate @Inject constructor(
     private val approvalNotifier: ApprovalNotifier,
     private val chatRepository: ChatRepository,
     private val pendingInteractionRepository: PendingInteractionRepository,
+    private val recordTriggerHitlEvent: RecordTriggerHitlEventUseCase,
 ) {
 
     private val activeApprovalDeferreds = ConcurrentHashMap<String, PendingApprovalHolder>()
@@ -221,6 +231,23 @@ class ToolInvocationGate @Inject constructor(
         // here clears the record in that case; when approval IS still required
         // the captured decision drives the gate exactly as before.
         val parkedDecision = consumeParkedDecision(runId, resolvedToolName, resolvedToolArgs)
+        if (parkedDecision != null) {
+            // Settles the gate this run parked on in an earlier process (which
+            // counted itself then). Written here rather than alongside the live
+            // settlement below because the decision also has to be journalled on
+            // the path where the policy relaxed to NeverPrompt while the run was
+            // parked: the answer was still given, and the gate still ended.
+            recordTriggerHitlEvent(
+                runId,
+                TriggerHitlEvent.Resolved(
+                    if (parkedDecision == PendingDecision.APPROVED) {
+                        TriggerHitlResolution.APPROVED
+                    } else {
+                        TriggerHitlResolution.DENIED
+                    },
+                ),
+            )
+        }
 
         if (needsApproval) {
             if (parkedDecision != null) {
@@ -228,6 +255,12 @@ class ToolInvocationGate @Inject constructor(
                 // exact request snapshot — apply it without raising a new gate.
                 isApproved = parkedDecision == PendingDecision.APPROVED
             } else {
+                // Journal the gate the moment it is raised, not when (or if) it
+                // parks: the live waiting phase is a full minute by default, so a
+                // background approval answered promptly from the notification
+                // never parks — and recording only parks would leave exactly that
+                // case looking like "this run never asked for anything".
+                recordTriggerHitlEvent(runId, TriggerHitlEvent.Raised(PendingInteractionKind.APPROVAL))
                 val approvalRequest =
                     AgentOrchestratorState.WaitingForApproval(resolvedToolName, resolvedToolArgs, risk)
                 emit(NodeOutput.State(approvalRequest))
@@ -242,11 +275,24 @@ class ToolInvocationGate @Inject constructor(
                     withTimeout(timeoutMs) { deferred.await() }
                 } catch (e: TimeoutCancellationException) {
                     Timber.tag("PipelineDebug").w("Live approval phase timed out for session: $sessionId")
+                    // Retire the live gate BEFORE parking, not in the `finally`
+                    // below. `parkRun` suspends on storage, and while the durable
+                    // record already exists but the holder is still registered the
+                    // two states disagree: a notification approval arriving in that
+                    // window takes `SubmitApprovalDecisionUseCase`'s live
+                    // short-circuit and completes a deferred whose `withTimeout`
+                    // has already given up — the decision is silently swallowed and
+                    // the run stays parked. Removing first makes the transition
+                    // atomic from an observer's point of view: the gate is either
+                    // live or durable, never both. The `finally` remove stays for
+                    // every other exit path (it is a no-op once removed here).
+                    activeApprovalDeferreds.remove(sessionId, holder)
                     if (runId != null && parkRun(runId, sessionId, resolvedToolName, resolvedToolArgs, risk)) {
                         // Two-phase wait, second phase: the run parks on its
                         // durable pending record instead of failing. No
                         // NodeOutput.Result on purpose — the engine stops the
                         // walk and the run record stays WAITING_APPROVAL.
+                        recordTriggerHitlEvent(runId, TriggerHitlEvent.Parked)
                         emit(
                             NodeOutput.State(
                                 AgentOrchestratorState.SuspendedInBackground(PendingInteractionKind.APPROVAL),
@@ -255,7 +301,13 @@ class ToolInvocationGate @Inject constructor(
                     } else {
                         // Non-persisted runs (editor test runs) and storage
                         // failures keep the legacy fail-fast semantics: a park
-                        // without a durable record would be unrecoverable.
+                        // without a durable record would be unrecoverable. The
+                        // gate ends without the user ever getting the chance to
+                        // answer it — ABANDONED, not TIMED_OUT.
+                        recordTriggerHitlEvent(
+                            runId,
+                            TriggerHitlEvent.Resolved(TriggerHitlResolution.ABANDONED),
+                        )
                         emit(NodeOutput.State(AgentOrchestratorState.Error("Approval request timed out")))
                         emit(NodeOutput.Result(NodeExecutionResult(error = "Approval request timed out")))
                     }
@@ -270,6 +322,15 @@ class ToolInvocationGate @Inject constructor(
                     // registration for the same session untouched.
                     activeApprovalDeferreds.remove(sessionId, holder)
                 }
+                // Reached only when the live phase settled with the user's
+                // decision (the timeout path returns above), so the gate ends
+                // without ever having parked.
+                recordTriggerHitlEvent(
+                    runId,
+                    TriggerHitlEvent.Resolved(
+                        if (isApproved) TriggerHitlResolution.APPROVED else TriggerHitlResolution.DENIED,
+                    ),
+                )
             }
 
             if (!isApproved) {

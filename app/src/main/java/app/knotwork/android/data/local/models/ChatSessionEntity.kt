@@ -17,6 +17,18 @@ import androidx.room.PrimaryKey
  * @property isStarred Whether the user has favorited this chat. Favorited
  *   chats sort to the top of the drawer thread list. Added via
  *   `MIGRATION_21_22` (default `0`).
+ * @property isArchived Whether the user has archived this chat. Archived
+ *   sessions are excluded from the main thread list and are reachable only
+ *   through the archive surface; the row itself and all of its messages are
+ *   kept intact. Added via `MIGRATION_53_54` (default `0`), so every
+ *   pre-existing session upgrades to "not archived".
+ * @property archivedAt Wall-clock instant at which the user archived this
+ *   chat, or `null` when it is not archived. Kept separate from [updatedAt]
+ *   because a background trigger run may write into an archived chat without
+ *   un-archiving it — [updatedAt] would then order the archive by activity and
+ *   the surface's "Archived 2 h ago" label would name the wrong event. Added
+ *   via `MIGRATION_54_55` (nullable, so a row archived before the column
+ *   existed simply reads `null`).
  */
 @Entity(tableName = "chat_sessions")
 data class ChatSessionEntity(
@@ -27,4 +39,8 @@ data class ChatSessionEntity(
     val pipelineId: String? = null,
     @ColumnInfo(name = "isStarred", defaultValue = "0")
     val isStarred: Boolean = false,
+    @ColumnInfo(name = "isArchived", defaultValue = "0")
+    val isArchived: Boolean = false,
+    @ColumnInfo(name = "archivedAt")
+    val archivedAt: Long? = null,
 )

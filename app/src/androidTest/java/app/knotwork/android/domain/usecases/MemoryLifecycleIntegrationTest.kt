@@ -21,6 +21,7 @@ import app.knotwork.android.domain.prompt.PromptTemplateEngine
 import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.MetricsRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.services.CompactionCoverageVerifier
 import app.knotwork.android.domain.services.EmbeddingProvider
 import app.knotwork.android.domain.services.EmbeddingProviderResolver
 import app.knotwork.android.domain.services.KMeansClusterer
@@ -189,6 +190,7 @@ class MemoryLifecycleIntegrationTest {
             memoryRepository = repository,
             settingsRepository = settingsRepository,
             kMeansClusterer = KMeansClusterer(),
+            coverageVerifier = CompactionCoverageVerifier(),
         )
     }
 

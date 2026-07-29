@@ -5,7 +5,11 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequest
 import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkManager
+import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.services.ScheduledTaskConstraints
+import app.knotwork.android.domain.services.ScheduledTaskKind
+import app.knotwork.android.domain.services.ScheduledTaskLabel
+import app.knotwork.android.domain.services.ScheduledTaskTag
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -245,5 +249,70 @@ class WorkManagerTaskSchedulerTest {
 
         verify { workManager.enqueue(capture(requestSlot)) }
         assertTrue(!requestSlot.captured.workSpec.constraints.requiresBatteryNotLow())
+    }
+
+    // --- Tagging and bulk cancellation --------------------------------------
+
+    @Test
+    fun `given a one-time task when scheduled then it carries the marker and a readable label`() {
+        val requestSlot = slot<OneTimeWorkRequest>()
+
+        scheduler.scheduleOneTime("check emails once", delayMinutes = 0, sessionId = "s-1", constraints = constraints)
+
+        verify { workManager.enqueue(capture(requestSlot)) }
+        val tags = requestSlot.captured.tags
+        // The marker scopes bulk cancellation; the label is the only thing the
+        // monitor can show, since a queued task's input data is not readable.
+        assertTrue(ScheduledTaskTag.MARKER in tags)
+        assertEquals(
+            ScheduledTaskLabel(
+                kind = ScheduledTaskKind.ONE_TIME,
+                intervalHours = 0,
+                sessionId = "s-1",
+                promptPreview = "check emails once",
+            ),
+            ScheduledTaskTag.parse(tags),
+        )
+    }
+
+    @Test
+    fun `given a trigger or tile origin when scheduled then the task carries no scheduled marker`() {
+        val requestSlot = mutableListOf<OneTimeWorkRequest>()
+
+        scheduler.scheduleOneTime("fire", 0, null, constraints, origin = RunOrigin.TRIGGER)
+        scheduler.scheduleOneTime("tile", 0, null, constraints, origin = RunOrigin.QUICK_TILE)
+
+        verify(exactly = 2) { workManager.enqueue(capture(requestSlot)) }
+        // Both reach the same method as the scheduling tool. Marking them would
+        // let "stop all scheduled tasks" kill an automation the user never asked
+        // to stop.
+        requestSlot.forEach { request ->
+            assertTrue(ScheduledTaskTag.MARKER !in request.tags)
+            assertNull(ScheduledTaskTag.parse(request.tags))
+        }
+    }
+
+    @Test
+    fun `given a periodic task when scheduled then its label carries the interval`() {
+        val requestSlot = slot<PeriodicWorkRequest>()
+
+        scheduler.schedulePeriodic("check emails", intervalHours = 6, sessionId = null, constraints = constraints)
+
+        verify { workManager.enqueueUniquePeriodicWork(any(), any(), capture(requestSlot)) }
+        val label = ScheduledTaskTag.parse(requestSlot.captured.tags)
+        assertEquals(ScheduledTaskKind.PERIODIC, label?.kind)
+        assertEquals(6L, label?.intervalHours)
+        assertTrue(ScheduledTaskTag.MARKER in requestSlot.captured.tags)
+    }
+
+    @Test
+    fun `when cancelAllScheduled then only work carrying the scheduled marker is cancelled`() {
+        every { workManager.cancelAllWorkByTag(any()) } returns mockk()
+
+        scheduler.cancelAllScheduled()
+
+        // Scoped by the marker on purpose: automation triggers, the tile and
+        // model downloads run on the same runtime and must survive this.
+        verify(exactly = 1) { workManager.cancelAllWorkByTag(ScheduledTaskTag.MARKER) }
     }
 }

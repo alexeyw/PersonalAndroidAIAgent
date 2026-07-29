@@ -23,6 +23,14 @@ import kotlin.math.sqrt
  * figures are therefore approximate (hence the "~" the UI renders) — actual
  * removal depends on per-cluster size floors and best-effort skips.
  *
+ * The estimate is deliberately an **upper bound**: the real pass deletes only
+ * the facts each summary is verified to cover
+ * ([app.knotwork.android.domain.services.CompactionCoverageVerifier]), so
+ * clusters whose summary comes out unfaithful remove fewer chunks than
+ * predicted — or none. Over-promising removal and under-delivering is the safe
+ * direction for a preview of a destructive action; the reverse would be a
+ * surprise.
+ *
  * @property memoryRepository Candidate loading.
  * @property settingsRepository Source of the compaction age window.
  */

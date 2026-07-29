@@ -58,6 +58,7 @@ import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.skillio.SkillJsonSerializer
 import app.knotwork.android.domain.usecases.EvaluateIfConditionUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
+import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -252,6 +253,7 @@ class SkillReportWriterIntegrationTest {
             mockk<ApprovalNotifier>(relaxed = true),
             chatRepository,
             mockk<PendingInteractionRepository>(relaxed = true),
+            recordTriggerHitlEvent = mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
         )
         val toolNodeExecutor = ToolNodeExecutor(
             llmEngine,
@@ -321,6 +323,7 @@ class SkillReportWriterIntegrationTest {
                 mockk<ClarificationRepository>(relaxed = true),
                 mockk<PendingInteractionRepository>(relaxed = true),
                 mockk<ClarificationNotifier>(relaxed = true),
+                recordTriggerHitlEvent = mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
             ),
             PipelineNodeExecutor(
                 mockk(relaxed = true),

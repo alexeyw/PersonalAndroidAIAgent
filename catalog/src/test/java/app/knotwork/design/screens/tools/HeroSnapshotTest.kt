@@ -34,10 +34,10 @@ class HeroSnapshotTest {
     @Test
     fun hero_tools_light() {
         composeTestRule.setContent {
-            CompositionLocalProvider(
-                LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true),
-            ) {
-                KnotworkTheme(darkTheme = false) {
+            KnotworkTheme(darkTheme = false) {
+                CompositionLocalProvider(
+                    LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true),
+                ) {
                     ToolsContent(state = ToolsPreview.defaultExpanded())
                 }
             }
@@ -50,10 +50,10 @@ class HeroSnapshotTest {
     @Test
     fun hero_tools_dark() {
         composeTestRule.setContent {
-            CompositionLocalProvider(
-                LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true),
-            ) {
-                KnotworkTheme(darkTheme = true) {
+            KnotworkTheme(darkTheme = true) {
+                CompositionLocalProvider(
+                    LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true),
+                ) {
                     ToolsContent(state = ToolsPreview.defaultExpanded())
                 }
             }

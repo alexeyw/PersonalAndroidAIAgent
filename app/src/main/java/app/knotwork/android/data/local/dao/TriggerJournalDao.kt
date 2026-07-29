@@ -9,8 +9,8 @@ import app.knotwork.android.data.local.models.TriggerEvaluationEntity
 import kotlinx.coroutines.flow.Flow
 
 /**
- * DAO for the `trigger_evaluations` table (v51) backing the trigger-evaluation
- * journal.
+ * DAO for the `trigger_evaluations` table (introduced in v51, HITL columns added
+ * in v56) backing the trigger-evaluation journal.
  */
 @Dao
 interface TriggerJournalDao {
@@ -38,6 +38,47 @@ interface TriggerJournalDao {
             "WHERE runId = :runId",
     )
     suspend fun updateOutcome(runId: String, outcomeKind: String, outcomeError: String?)
+
+    /**
+     * Records a newly raised human-in-the-loop gate on the journal row(s) whose
+     * run matches [runId]: counts the gate, remembers its kind, resets the
+     * resolution to "still waiting" and clears the parked flag (the fresh gate
+     * starts in its live waiting phase, whatever the previous one did).
+     *
+     * @param runId Id of the run that raised the gate.
+     * @param kind Gate-kind discriminator (approval / clarification).
+     * @param pendingResolution The "not resolved yet" resolution discriminator.
+     */
+    @Query(
+        "UPDATE trigger_evaluations SET hitlGateCount = hitlGateCount + 1, hitlLastKind = :kind, " +
+            "hitlLastResolution = :pendingResolution, hitlParked = 0 WHERE runId = :runId",
+    )
+    suspend fun recordHitlGateRaised(runId: String, kind: String, pendingResolution: String)
+
+    /**
+     * Marks the current gate of [runId] as parked on a durable record — the
+     * answer can now only arrive from a notification.
+     *
+     * Guarded on a counted gate so a park reported without its preceding raise
+     * (a lost write) cannot leave a row claiming a park it never recorded.
+     *
+     * @param runId Id of the run whose gate parked.
+     */
+    @Query("UPDATE trigger_evaluations SET hitlParked = 1 WHERE runId = :runId AND hitlGateCount > 0")
+    suspend fun recordHitlGateParked(runId: String)
+
+    /**
+     * Settles the current gate of [runId] with its final resolution. Guarded on a
+     * counted gate for the same reason as [recordHitlGateParked].
+     *
+     * @param runId Id of the run whose gate ended.
+     * @param resolution Terminal gate-resolution discriminator.
+     */
+    @Query(
+        "UPDATE trigger_evaluations SET hitlLastResolution = :resolution " +
+            "WHERE runId = :runId AND hitlGateCount > 0",
+    )
+    suspend fun recordHitlGateResolved(runId: String, resolution: String)
 
     /**
      * Observes a single trigger's journal, newest evaluation first.

@@ -74,6 +74,12 @@ class BuildTriggerJournalExportUseCase @Inject constructor() {
         put("runId", evaluation.runId)
         put("outcome", evaluation.outcome?.let(::outcomeKind))
         put("outcomeError", outcomeError(evaluation.outcome))
+        // Flat rather than nested so the dump stays trivially filterable
+        // offline (`select(.hitlParked)`), like every other field here.
+        put("hitlGateCount", evaluation.hitl?.gateCount ?: 0)
+        put("hitlKind", evaluation.hitl?.lastKind?.name)
+        put("hitlResolution", evaluation.hitl?.lastResolution?.name)
+        put("hitlParked", evaluation.hitl?.parked ?: false)
     }
 
     /** The stable discriminator string for a verdict. */
@@ -100,8 +106,19 @@ class BuildTriggerJournalExportUseCase @Inject constructor() {
     private fun outcomeError(outcome: TriggerRunOutcome?): String? = (outcome as? TriggerRunOutcome.Failure)?.error
 
     private companion object {
-        /** Export-format version; bumped only on a breaking shape change. */
-        const val SCHEMA_VERSION = 1
+        /**
+         * Export-format version.
+         *
+         * Bumped on any shape change a consumer must be able to detect —
+         * including a purely additive one, because "the key is absent" and "the
+         * key is present and empty" are different findings when a dump is the
+         * evidence for a criterion.
+         *
+         * - `1` — the original evaluation shape.
+         * - `2` — adds the `hitl*` fields (which gates the run raised, how the
+         *   latest one resolved, whether it had to park).
+         */
+        const val SCHEMA_VERSION = 2
 
         const val VERDICT_FIRED = "FIRED"
         const val VERDICT_RE_ARMED = "RE_ARMED"

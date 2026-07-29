@@ -1,11 +1,13 @@
 package app.knotwork.android.domain.pipelineio
 
+import app.knotwork.android.domain.constants.BundledPresetCatalog
 import app.knotwork.android.domain.models.ConnectionModel
 import app.knotwork.android.domain.models.NodeContextConfig
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelinePresetImportOutcome
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -21,19 +23,25 @@ import java.io.File
  * Why a catalogue-level test exists separately from
  * [PipelinePresetJsonSerializerTest]: the serializer test pins the
  * round-trip contract using synthetic fixtures, while this test pins the
- * *shipped* artefacts — seven curated presets that the user sees the first
- * time they open the library (including the comprehensive
- * `showcase_full_agent`, which doubles as the first-launch seed). A broken
- * preset would otherwise only surface at runtime on a real device.
+ * *shipped* artefacts — the curated presets the user sees the first time they
+ * open the library (including the comprehensive `showcase_full_agent`, which
+ * doubles as the first-launch seed) plus the four internal sub-pipelines it
+ * composes. A broken preset would otherwise only surface at runtime on a real
+ * device.
  *
- * The four assertions per file are intentionally narrow:
+ * The assertions per file are intentionally narrow:
  * - the filename set is the promised one (catches typos /
  *   accidental deletion);
  * - every file parses to [PipelinePresetImportOutcome.Success] with
  *   `isBundled == true`;
  * - every embedded graph passes [PipelineGraph.validate] with zero errors;
  * - every `$VARIABLE` token used in any `systemPrompt` is one of the
- *   registered runtime providers from `di/PromptTemplateModule.kt`.
+ *   registered runtime providers from `di/PromptTemplateModule.kt`;
+ * - exactly the composed sub-pipelines are flagged `internal`, and every
+ *   user-facing preset declares starter prompts;
+ * - every node carries a `nodeConfig` envelope agreeing with its flat type,
+ *   every `INTENT_ROUTER`'s declared classes match its outgoing edge labels,
+ *   and every `PIPELINE` target resolves to a preset in this same catalogue.
  *
  * The final test (`validate detects a broken preset`) is a regression
  * guard: it parses an intentionally-broken in-memory document and asserts
@@ -84,6 +92,46 @@ class PipelinePresetCatalogValidationTest {
         "LOCATION",
         "USER",
         "DEVICE",
+    )
+
+    /**
+     * Preset ids that are building blocks of a composed preset rather than
+     * catalogue entries. They are hidden from the picker
+     * (`PipelinePresetRepository.getBundledPresets`) but must stay resolvable
+     * by id, because `showcase_full_agent`'s `PIPELINE` nodes target them.
+     */
+    private val expectedInternalIds: Set<String> = setOf(
+        "subtask_clarify",
+        "subtask_lookup",
+        "subtask_act",
+        "subtask_process",
+    )
+
+    /**
+     * Node types whose output is read by the user (directly, or after a
+     * pass-through OUTPUT). These must answer in the device language, not in
+     * whichever language the input happened to use — which is what an LLM does
+     * unprompted. Control-signal types are excluded on purpose:
+     * `INTENT_ROUTER` and `EVALUATION` emit a token matched against edge
+     * labels / verdicts, and `IF_CONDITION` emits `true` / `false`; localising
+     * any of them would break routing.
+     */
+    private val userTextNodeTypes: Set<NodeType> = setOf(
+        NodeType.LITE_RT,
+        NodeType.CLOUD,
+        NodeType.SUMMARY,
+        NodeType.CLARIFICATION,
+        NodeType.OUTPUT,
+    )
+
+    /**
+     * `<preset>/<node>` pairs exempt from the `$LANG` rule because they fix
+     * their output language deliberately. Keep this list one-entry-per-reason.
+     */
+    private val fixedLanguageNodes: Set<String> = setOf(
+        // The whole point of the preset: it translates INTO a target language
+        // named in the prompt, so the device language must not override it.
+        "styled_translation/node-2",
     )
 
     private val catalogDir: File = File("src/main/assets/presets/pipelines")
@@ -153,6 +201,160 @@ class PipelinePresetCatalogValidationTest {
                     unknown.isEmpty(),
                 )
             }
+        }
+    }
+
+    @Test
+    fun `every user-facing preset declares its place in the display order`() {
+        val userFacing = mutableSetOf<String>()
+        forEachBundledFile { file ->
+            val preset = parseAsSuccess(file).preset
+            if (!preset.isInternal) userFacing += preset.id
+        }
+        // An unranked preset would silently sort to the end of the gallery
+        // rather than to a chosen position. Fail the build instead.
+        val unranked = userFacing.filterNot { it in BundledPresetCatalog.DISPLAY_ORDER }
+        assertTrue(
+            "Bundled preset(s) $unranked are missing from BundledPresetCatalog.DISPLAY_ORDER — " +
+                "they would be demoted to the end of the picker.",
+            unranked.isEmpty(),
+        )
+        // The converse: a rank for a preset that no longer ships is dead weight
+        // that silently shifts nothing, so it should not linger either.
+        val stale = BundledPresetCatalog.DISPLAY_ORDER.filterNot { it in userFacing }
+        assertTrue(
+            "BundledPresetCatalog.DISPLAY_ORDER ranks $stale, which are not user-facing bundled " +
+                "presets (deleted, renamed, or now internal).",
+            stale.isEmpty(),
+        )
+    }
+
+    @Test
+    fun `every node whose text reaches the user declares the language variable`() {
+        forEachBundledFile { file ->
+            val preset = parseAsSuccess(file).preset
+            preset.graph.nodes.forEach { node ->
+                if (node.type !in userTextNodeTypes) return@forEach
+                val prompt = node.systemPrompt?.takeIf { it.isNotBlank() } ?: return@forEach
+                if ("${file.nameWithoutExtension}/${node.id}" in fixedLanguageNodes) return@forEach
+                assertTrue(
+                    "Node \"${node.id}\" (${node.type}) in ${file.name} produces text the user " +
+                        "reads but never mentions \$LANG, so it answers in whatever language the " +
+                        "input happened to use instead of the device language.",
+                    prompt.contains("\$LANG"),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `exactly the composed sub-pipelines are flagged internal`() {
+        val actual = mutableSetOf<String>()
+        forEachBundledFile { file ->
+            if (parseAsSuccess(file).preset.isInternal) actual += file.nameWithoutExtension
+        }
+        assertEquals(
+            "The internal flag hides a preset from the picker — it belongs only on " +
+                "sub-pipelines another preset composes.",
+            expectedInternalIds,
+            actual,
+        )
+    }
+
+    @Test
+    fun `every user-facing preset declares starter prompts`() {
+        forEachBundledFile { file ->
+            val preset = parseAsSuccess(file).preset
+            if (preset.isInternal) return@forEachBundledFile
+            assertTrue(
+                "Bundled preset ${file.name} declares no samplePrompts — a preset-spawned " +
+                    "pipeline would show an empty quick-action row on the new-chat empty state.",
+                preset.graph.samplePrompts.isNotEmpty(),
+            )
+        }
+    }
+
+    @Test
+    fun `every node carries a nodeConfig envelope matching its type`() {
+        forEachBundledFile { file ->
+            val preset = parseAsSuccess(file).preset
+            preset.graph.nodes.forEach { node ->
+                val raw = node.configJson
+                assertTrue(
+                    "Bundled preset ${file.name} node \"${node.id}\" has no nodeConfig envelope — " +
+                        "the editor would fall back to legacy derivation and lose editor-only fields.",
+                    !raw.isNullOrBlank(),
+                )
+                val envelope = JSONObject(raw)
+                assertEquals(
+                    "nodeConfig type disagrees with the node type in ${file.name} node \"${node.id}\"",
+                    node.type.name,
+                    envelope.optString("type"),
+                )
+            }
+        }
+    }
+
+    @Test
+    fun `every INTENT_ROUTER declares classes matching its outgoing edge labels`() {
+        forEachBundledFile { file ->
+            val preset = parseAsSuccess(file).preset
+            preset.graph.nodes
+                .filter { it.type == NodeType.INTENT_ROUTER }
+                .forEach { node ->
+                    // The runtime constrains the model to the labels of the node's
+                    // own outgoing edges and falls back to the FIRST edge when
+                    // nothing matches, so the editor-facing declaration has to
+                    // agree with the wiring on both counts.
+                    val edges = preset.graph.connections.filter { it.sourceNodeId == node.id }
+                    // Every branch must be labelled first: the runtime's fallback is
+                    // the first *edge*, not the first labelled one, so an unlabelled
+                    // branch would make the fallback assertion below claim something
+                    // that is not true of the wiring.
+                    assertTrue(
+                        "INTENT_ROUTER \"${node.id}\" in ${file.name} has an unlabelled outgoing edge — " +
+                            "the model cannot be constrained to a branch that has no label.",
+                        edges.all { !it.label.isNullOrBlank() },
+                    )
+                    val edgeLabels = edges.mapNotNull { it.label }
+                    val envelope = JSONObject(node.configJson.orEmpty())
+                    val declared = envelope.optJSONArray("classes")
+                        ?.let { array -> (0 until array.length()).map { array.getJSONObject(it).optString("name") } }
+                        .orEmpty()
+                    assertEquals(
+                        "INTENT_ROUTER \"${node.id}\" in ${file.name} declares classes that do not " +
+                            "match its outgoing edge labels",
+                        edgeLabels,
+                        declared,
+                    )
+                    assertEquals(
+                        "INTENT_ROUTER \"${node.id}\" in ${file.name} must declare its first outgoing " +
+                            "edge as the fallback class — that is the branch the runtime takes",
+                        edgeLabels.firstOrNull(),
+                        envelope.optString("fallbackClass").takeIf { it.isNotBlank() },
+                    )
+                }
+        }
+    }
+
+    @Test
+    fun `every PIPELINE target resolves to a preset in this catalogue`() {
+        val availableIds = mutableSetOf<String>()
+        val targets = mutableListOf<Pair<String, String>>()
+        forEachBundledFile { file ->
+            val preset = parseAsSuccess(file).preset
+            availableIds += preset.id
+            preset.graph.nodes
+                .filter { it.type == NodeType.PIPELINE }
+                .mapNotNull { it.targetPipelineId?.takeIf(String::isNotBlank) }
+                .forEach { targets += file.name to it }
+        }
+        targets.forEach { (fileName, targetId) ->
+            assertTrue(
+                "Preset $fileName composes \"$targetId\", which is not a bundled preset — the " +
+                    "composition would materialise with a dangling PIPELINE target.",
+                targetId in availableIds,
+            )
         }
     }
 

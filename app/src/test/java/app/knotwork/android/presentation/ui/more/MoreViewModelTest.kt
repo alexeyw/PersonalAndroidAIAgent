@@ -11,6 +11,7 @@ import app.knotwork.android.domain.models.WorkspaceFile
 import app.knotwork.android.domain.models.WorkspaceListing
 import app.knotwork.android.domain.models.WorkspaceResult
 import app.knotwork.android.domain.models.WorkspaceUsage
+import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.NetworkActivityTracker
@@ -23,6 +24,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -61,6 +63,7 @@ class MoreViewModelTest {
     private lateinit var networkActivityTracker: NetworkActivityTracker
     private lateinit var pipelinePresetRepository: PipelinePresetRepository
     private lateinit var listWorkspaceUseCase: ListWorkspaceUseCase
+    private lateinit var chatRepository: ChatRepository
 
     private lateinit var memoryFlow: MutableStateFlow<MemoryStats>
     private lateinit var modelsFlow: MutableStateFlow<List<LocalModel>>
@@ -81,6 +84,8 @@ class MoreViewModelTest {
         networkActivityTracker = mockk()
         pipelinePresetRepository = mockk()
         listWorkspaceUseCase = mockk()
+        chatRepository = mockk()
+        every { chatRepository.getArchivedSessionsFlow() } returns flowOf(emptyList())
         coEvery { listWorkspaceUseCase() } returns
             WorkspaceResult.Success(WorkspaceListing(emptyList(), WorkspaceUsage(usedBytes = 0L, limitBytes = 0L)))
 
@@ -114,6 +119,7 @@ class MoreViewModelTest {
         networkActivityTracker = networkActivityTracker,
         pipelinePresetRepository = pipelinePresetRepository,
         listWorkspaceUseCase = listWorkspaceUseCase,
+        chatRepository = chatRepository,
     )
 
     @Test

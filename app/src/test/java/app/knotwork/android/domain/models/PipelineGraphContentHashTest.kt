@@ -62,6 +62,16 @@ class PipelineGraphContentHashTest {
     }
 
     @Test
+    fun `editing the declared memory retrieval query does not change the hash`() {
+        // A parked run resumes from its persisted memory snapshot and never
+        // re-queries, so this edit cannot alter replay — invalidating the run
+        // over it would be a false positive, not caution.
+        val requeried = baseGraph().copy(memoryRetrievalQuery = "evening journal entries")
+
+        assertEquals(baseGraph().contentHash(), requeried.contentHash())
+    }
+
+    @Test
     fun `reordering nodes and connections does not change the hash`() {
         val reordered = baseGraph().let { graph ->
             graph.copy(
@@ -171,7 +181,12 @@ class PipelineGraphContentHashTest {
         val hashedGraphFields = setOf("nodes", "connections")
         // samplePrompts is display-only starter-prompt metadata (like name):
         // editing it must never invalidate a resumable run, so it is excluded.
-        val excludedGraphFields = setOf("id", "name", "updatedAt", "samplePrompts")
+        // memoryRetrievalQuery is behavioural but still excluded: retrieved
+        // memory is snapshotted into the run trace, so a resumed run replays the
+        // snapshot and never re-queries — the field cannot change replay
+        // fidelity, and hashing it would strand parked runs over an edit that
+        // provably cannot affect them.
+        val excludedGraphFields = setOf("id", "name", "updatedAt", "samplePrompts", "memoryRetrievalQuery")
         assertEquals(
             "PipelineGraph gained or lost a field — classify it in contentHash() " +
                 "and update this guard.",

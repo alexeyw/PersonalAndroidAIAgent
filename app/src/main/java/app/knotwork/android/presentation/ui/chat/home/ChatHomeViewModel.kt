@@ -27,7 +27,9 @@ import app.knotwork.android.domain.services.AudioRecorder
 import app.knotwork.android.domain.services.ChatHistoryCompressionCoordinator
 import app.knotwork.android.domain.services.MemoryAutoExtractionCoordinator
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
+import app.knotwork.android.domain.usecases.ArchiveChatUseCase
 import app.knotwork.android.domain.usecases.AttachmentMessageContent
+import app.knotwork.android.domain.usecases.ExportChatUseCase
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.ResolveEntryInferenceUseCase
@@ -36,6 +38,7 @@ import app.knotwork.android.domain.usecases.SaveMessageToMemoryUseCase
 import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
 import app.knotwork.android.domain.usecases.SubmitClarificationAnswerUseCase
 import app.knotwork.android.domain.usecases.TranscribeAudioUseCase
+import app.knotwork.android.domain.usecases.UnarchiveChatUseCase
 import app.knotwork.android.presentation.state.ActiveSessionTracker
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ChatMessageStatus
@@ -131,6 +134,9 @@ class ChatHomeViewModel @Inject constructor(
     private val audioCaptureStore: AudioCaptureStore,
     private val transcribeAudioUseCase: TranscribeAudioUseCase,
     private val activeSessionTracker: ActiveSessionTracker,
+    private val archiveChatUseCase: ArchiveChatUseCase,
+    private val exportChatUseCase: ExportChatUseCase,
+    private val unarchiveChatUseCase: UnarchiveChatUseCase,
 ) : ViewModel() {
 
     private val _state: MutableStateFlow<ChatHomeScreenState> = MutableStateFlow(ChatHomeScreenState())
@@ -268,6 +274,7 @@ class ChatHomeViewModel @Inject constructor(
         scope = viewModelScope,
         state = _state,
         chatRepository = chatRepository,
+        exportChatUseCase = exportChatUseCase,
         saveMessageToMemoryUseCase = saveMessageToMemoryUseCase,
         selectThread = ::selectThread,
     )
@@ -296,6 +303,8 @@ class ChatHomeViewModel @Inject constructor(
         scope = viewModelScope,
         state = _state,
         chatRepository = chatRepository,
+        archiveChatUseCase = archiveChatUseCase,
+        unarchiveChatUseCase = unarchiveChatUseCase,
         pipelineRunRepository = pipelineRunRepository,
         selectThread = ::selectThread,
         clearDraft = ::clearDraft,
@@ -371,13 +380,35 @@ class ChatHomeViewModel @Inject constructor(
      * flow. Same for the final agent reply: `OutputNodeExecutor` writes
      * the `isFinal = true` row when the pipeline reaches OUTPUT.
      */
+    /**
+     * The three cheap refusals the send path applies before touching the
+     * engine: an attachment still being downscaled, a wholly empty send, and an
+     * archived chat.
+     *
+     * The archived case is unreachable from the UI — the composer is replaced
+     * by the restore bar — but the guard keeps the invariant true for every
+     * other caller: accepting a message here would silently un-archive a chat
+     * the user deliberately put away.
+     *
+     * Grouped into one predicate so the send path's early-return count stays
+     * readable as the pre-flight grows.
+     *
+     * @param draftText the trimmed composer text.
+     * @param readyAttachment the fully-ingested image attachment, or `null`.
+     * @return `true` when the send may proceed.
+     */
+    private fun canAcceptSend(draftText: String, readyAttachment: MessageAttachment?): Boolean {
+        val snapshot = _state.value
+        if (snapshot.composer.attachment is ComposerAttachmentDraft.Processing) return false
+        if (draftText.isEmpty() && readyAttachment == null) return false
+        if (snapshot.thread.archived) return false
+        return true
+    }
+
     fun sendMessage() {
         val draftText = _state.value.composer.value.trim()
         val readyAttachment = (_state.value.composer.attachment as? ComposerAttachmentDraft.Ready)?.attachment
-        // Block while the attachment is still being downscaled, and refuse a
-        // wholly empty send (no text and no image).
-        if (_state.value.composer.attachment is ComposerAttachmentDraft.Processing) return
-        if (draftText.isEmpty() && readyAttachment == null) return
+        if (!canAcceptSend(draftText = draftText, readyAttachment = readyAttachment)) return
         // Busy: a generation is streaming, or a model load kicked off by this
         // very path is still in flight (`Generating(preparingModel = true)`).
         // A single `is Generating` covers both, so a second tap cannot cancel

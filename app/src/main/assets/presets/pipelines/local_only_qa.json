@@ -4,23 +4,44 @@
   "name": "Local-only Q&A",
   "description": "Single-turn answers handled entirely by the on-device model. No network, no tools. Best for quick factual questions when you want privacy and predictable latency.",
   "category": "local",
-  "tags": ["offline", "qa", "starter"],
+  "tags": [
+    "offline",
+    "qa",
+    "starter"
+  ],
   "updatedAt": 1748304000000,
+  "samplePrompts": [
+    {
+      "title": "Explain how a solar eclipse happens"
+    },
+    {
+      "title": "What is the difference between RAM and storage?"
+    },
+    {
+      "title": "Give me three practical tips for sleeping better"
+    }
+  ],
   "nodes": [
     {
       "id": "input",
       "type": "INPUT",
-      "position": { "x": 80.0, "y": 200.0 },
+      "position": {
+        "x": 80,
+        "y": 200
+      },
       "label": "Input",
       "config": {
         "systemPrompt": null,
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -28,22 +49,34 @@
         "nodeInput": true,
         "longTermMemory": false,
         "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "INPUT",
+        "title": "Input",
+        "inputName": "user.message"
       }
     },
     {
       "id": "lite_rt",
       "type": "LITE_RT",
-      "position": { "x": 320.0, "y": 200.0 },
+      "position": {
+        "x": 320,
+        "y": 200
+      },
       "label": "Local LLM",
       "config": {
-        "systemPrompt": "You are a concise on-device assistant running on $MODEL. Today is $DATE. Answer the user's question directly in one or two short paragraphs. Do not invent facts; if you do not know, say so plainly.",
+        "systemPrompt": "You are a concise on-device assistant running on $MODEL. Today is $DATE. Answer the user's question directly in one or two short paragraphs. Do not invent facts; if you do not know, say so plainly.\n\nReply in the user's language ($LANG).",
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": false,
@@ -51,22 +84,39 @@
         "nodeInput": true,
         "longTermMemory": false,
         "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "LITE_RT",
+        "title": "Local LLM",
+        "modelId": "",
+        "systemPrompt": "You are a concise on-device assistant running on $MODEL. Today is $DATE. Answer the user's question directly in one or two short paragraphs. Do not invent facts; if you do not know, say so plainly.\n\nReply in the user's language ($LANG).",
+        "temperature": 0.7,
+        "topP": 0.9,
+        "maxNewTokens": 2048,
+        "stopTokens": []
       }
     },
     {
       "id": "output",
       "type": "OUTPUT",
-      "position": { "x": 560.0, "y": 200.0 },
+      "position": {
+        "x": 560,
+        "y": 200
+      },
       "label": "Reply",
       "config": {
         "systemPrompt": null,
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
         "clarificationTimeoutMs": null,
         "conditionPrompt": null,
         "conditionKeywords": null,
-        "conditionComplexity": null
+        "conditionComplexity": null,
+        "conditionHasImage": null
       },
       "contextConfig": {
         "chatHistory": true,
@@ -74,11 +124,28 @@
         "nodeInput": true,
         "longTermMemory": true,
         "toolResults": true
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "OUTPUT",
+        "title": "Reply",
+        "format": "PLAIN_TEXT",
+        "systemPrompt": ""
       }
     }
   ],
   "connections": [
-    { "id": "c1", "fromNodeId": "input", "toNodeId": "lite_rt", "label": null },
-    { "id": "c2", "fromNodeId": "lite_rt", "toNodeId": "output", "label": null }
+    {
+      "id": "c1",
+      "fromNodeId": "input",
+      "toNodeId": "lite_rt",
+      "label": null
+    },
+    {
+      "id": "c2",
+      "fromNodeId": "lite_rt",
+      "toNodeId": "output",
+      "label": null
+    }
   ]
 }

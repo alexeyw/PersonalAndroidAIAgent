@@ -74,10 +74,13 @@ class MemoryCompactionWorker @AssistedInject constructor(
         return try {
             val outcome = memoryCompactionUseCase()
             Timber.tag(TAG).d(
-                "Memory compaction finished: %d clusters, %d chunks merged into %d",
+                "Memory compaction finished: %d clusters, %d chunks merged into %d " +
+                    "(%d clusters rejected, %d chunks kept unverified)",
                 outcome.clustersProcessed,
                 outcome.chunksConsolidated,
                 outcome.chunksCreated,
+                outcome.clustersRejected,
+                outcome.chunksKeptUnverified,
             )
             Result.success()
         } catch (e: CancellationException) {

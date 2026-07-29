@@ -223,9 +223,9 @@ chats are sorted to the top with a small leading star glyph.
   pipeline automatically.
 - **Switch chat** — tap any row in the list. The chat screen updates
   immediately.
-- **Rename chat** — tap the pencil icon next to a session row. A
-  bottom sheet titled **Rename chat** opens with the current name
-  pre-filled; **Save** persists the new name.
+- **Row actions** — tap the `⋮` next to a session row for **Rename**,
+  **Archive**, and **Delete chat**. Rename opens a bottom sheet with the
+  current name pre-filled; Delete asks for confirmation first.
 - **Favorite chat** — tap the star icon in the chat top bar to favorite
   the active chat. Favorited chats persist across restarts and sort to
   the top of the drawer.
@@ -237,6 +237,39 @@ sheet listing every locally installed LiteRT model. Picking a model
 activates it and reloads the inference engine. If no models are
 installed, the sheet shows **Open Models** that takes you directly to
 the Models screen.
+
+### Archiving chats
+
+A chat list that only grows eventually stops being useful. Archiving
+takes a conversation out of the drawer **without deleting anything** —
+every message, run, and trace stays exactly where it was.
+
+- **Archive** — swipe a drawer row from the right and tap **Archive**,
+  or pick **Archive** from the row's `⋮` menu. A snackbar confirms with
+  an **Undo** action; the drawer stays open, so you can put several
+  chats away in a row. Archiving the chat you are reading moves you to
+  the next one.
+- **Find archived chats** — **More → Archived chats**, which is always
+  there and shows the count. Once at least one chat is archived, the
+  chat drawer's footer carries the same entry.
+- **The archive screen** lists your archived chats newest-archived
+  first, each labelled with when you put it away ("Archived 2 h ago").
+  A chat whose background run finished *after* you archived it says so
+  on the row, so nothing changes behind your back silently.
+- **Restore** — the row's `⋮` menu, or swipe the row and tap **Restore**.
+  The chat returns to the drawer unchanged.
+- **Open an archived chat** — tap the row. It opens **read-only**: the
+  history is fully readable, the top bar reads `Archived · read-only`,
+  and the message box is replaced by a bar offering **Restore**. This is
+  deliberate — sending a message would silently un-archive the chat, and
+  only you decide when a chat comes back.
+- **Delete forever** — the row's `⋮` menu, behind a confirmation. This
+  is the only irreversible action on the screen; a swipe can never
+  trigger it.
+
+A background trigger or scheduled run is still allowed to write into an
+archived chat, and doing so does **not** bring it back to the drawer.
+Archived chats stay until you delete them; nothing expires on its own.
 
 ### Settings shortcut
 
@@ -253,7 +286,9 @@ history is portable to any app that handles JSON or plain text.
   choose **Export chat**. The Android **Share Sheet** opens with a
   JSON payload containing the full message history. Choose any
   destination that accepts JSON (Files, email, a messenger, a
-  cloud-drive app, and so on).
+  cloud-drive app, and so on). Archived chats export the same way, from
+  their own row menu on the archive screen — putting a chat away never
+  puts it out of reach.
 - **Import** — open the drawer and tap **Import chat**. The system
   file picker opens, filtered to `application/json`. Selecting a
   previously exported file creates a new chat session with the
@@ -812,7 +847,13 @@ and the verdict:
 - **Fired** — a run started. The entry is completed later with how that run
   ended: **Completed**, **Failed**, **Stopped by the system** (the app's
   process was killed mid-run), **You stopped it**, or **Timed out waiting for
-  approval**. Until the run settles it reads **Running…**.
+  approval**. Until the run settles it reads **Running…**. If the run stopped
+  to ask you something, a second line says what became of the request —
+  **You approved it**, **You denied it**, **You answered it**, **Waiting for
+  your response**, **No response before the window closed**, or **The request
+  never reached you** — and adds *from the notification* (or *in the
+  notification shade*, while it is still waiting) when the answer had to come
+  back from the shade rather than from a screen you already had open.
 - **Didn't run** — with the reason in plain language: *"The condition wasn't
   met at 07:15."*, *"It had already fired for this window."*, *"The trigger
   was turned off."*, or *"No pipeline is bound."*
@@ -835,10 +876,12 @@ Distinguishing the two is the whole point, and **Overdue** exists to flag the
 second case. Journal writing can never disturb the automation it describes: a
 failure to record is logged and dropped, never allowed to abort a run.
 
-One gap worth knowing about: when a background run pauses for approval and
-you **grant** it from the notification, the journal records only how the run
-finally ended — an approved run therefore looks exactly like one that never
-needed approval. Only an approval that *timed out* is called out explicitly.
+That reasoning extends to approvals. A run that paused for your approval and
+got it ends as a plain **Completed**, which on its own is indistinguishable
+from a run that never needed asking — so the entry records the request too:
+that it happened, whether it had to wait in the notification shade, and how it
+was settled. An approval nobody answered before the window closed is
+distinguished from one that never reached you at all.
 
 This first wave covers only **low-sensitivity** conditions (time,
 charging, network) that need no dangerous permission; notification,
@@ -916,12 +959,21 @@ speed-dial:
 A **pipeline preset** is a reusable template of a whole graph. Two kinds
 exist:
 
-- **Bundled** — a handful of curated starter presets that ship with the
-  app (local-only Q&A, cloud assist, tool-using agent, multi-step
-  research, clarify-then-act, routed local/cloud, and **research to
-  file** — a question turned into a Wikipedia lookup, distilled, written
-  out as a Markdown report under `reports/` in the agent workspace, with
-  the saved path returned). They are read-only.
+- **Bundled** — a curated starter set that ships with the app, read-only.
+  Three of them are the scenarios offered during onboarding — **styled
+  translation** (keeps register and dialect, fully on-device), **share
+  handler** (anything you share becomes a structured note in your
+  workspace inbox) and **virtual companion** (a private companion that
+  adapts its tone to your mood). Alongside them ship two end-to-end
+  showcases — the **full agent** and **research to file** (a question
+  turned into a Wikipedia lookup, distilled, written out as a Markdown
+  report under `reports/` in the agent workspace, with the saved path
+  returned) — and the building-block templates you would start your own
+  pipeline from: local-only Q&A, cloud assist, routed local/cloud,
+  clarify-then-act, tool-using agent and multi-step research.
+
+  Each bundled preset brings its own starter prompts, so a pipeline
+  spawned from one opens with quick actions that actually fit it.
 - **Mine** — presets you create yourself with **Save as preset** (from a
   pipeline's `⋮` menu). These live in the app's local database.
 
@@ -1312,6 +1364,22 @@ If the original conversation was deleted before the task fired (or the
 task predates session binding), the result is delivered to a fresh
 conversation named after the task, e.g. *Scheduled: check the news*.
 
+### A task that keeps scheduling itself
+
+An agent asked to "do this and set up the next one" can end up
+scheduling its own successor every time it runs. Only ever one task is
+queued, so nothing looks wrong in the list, while the agent works
+continuously in the background.
+
+Two things bound this. The app refuses to schedule anything more once
+too many scheduled runs have already started within the last hour, and
+tells the agent so instead of failing silently — a legitimate schedule
+(hourly or slower, which is all background work honours anyway) never
+comes close to that. And **More → Active tasks → Stop all scheduled
+tasks** ends the chain outright, which cancelling the one queued item by
+hand cannot do while the run that will enqueue the next one is still
+going.
+
 When a scheduled run finishes, the app posts a **Task completed**
 notification with the first line of the answer — or **Task failed**
 with the reason — and tapping it opens the conversation. The
@@ -1498,9 +1566,67 @@ away.
 ### Searching memory
 
 Tap the search icon to open semantic search. Your query is embedded and
-the list is re-ranked by relevance — each result shows a 0–1 score, so a
-search for "berlin" surfaces the timezone note even though it never
-contains that word.
+the list is re-ranked by relevance, so a search for "berlin" surfaces the
+timezone note even though it never contains that word. Each result shows
+its ranking score: how well the entry matches, plus the small bonuses a
+recent or pinned entry earns — which is why a strong match can read
+slightly above 1.00.
+
+### What the agent recalls, and when
+
+Memory is not read on every step of a reply. A run searches long-term memory
+**once**, when it reaches the first step that has the *Long-term memory* input
+switched on, and the entries it finds are the ones every later step in that run
+sees. Which entries those are is decided in this order:
+
+- **Meaning, not words.** Your question is compared against the meaning of each
+  stored entry, so an entry can be recalled without sharing any wording with
+  the question — and an entry that repeats your words can still be skipped if it
+  is about something else.
+- **A relevance gate.** An entry has to clear **Settings → Memory → Similarity
+  threshold** to be eligible at all. Nothing below the gate is recalled, and no
+  bonus can push an entry through it.
+- **Age never disqualifies anything.** An entry that clears the gate stays
+  recallable however old it is. Freshness is only a tie-breaker: recent entries
+  get a small bonus that fades with **Recency half-life**, so when more entries
+  qualify than **Search results (top-K)** allows, newer ones take the slots.
+- **Pinned entries are always in.** Pinning skips the gate, adds the largest
+  bonus, and sorts the entry first — it is the one way to guarantee a fact is
+  recalled.
+- **The original wins over a summary of it.** If compaction has merged some
+  facts into a summary and one of those facts is still stored word-for-word, the
+  original is what the agent is shown. A summary is a paraphrase written by the
+  on-device model; when both are available, the exact wording is the safer one.
+- **Duplicates don't take two slots.** When two qualifying entries say nearly
+  the same thing, only the better-ranked one is recalled (the pinned one if
+  there is one), so a reworded copy cannot crowd out a different fact.
+
+You can see the outcome for any run: the console's **Memory** filter carries one
+`Memory:` line per run, giving the search key, where that key came from, and the
+relevance score of every hit (turn on **Verbose memory logging** in Settings →
+Memory for a snippet per hit as well).
+Each entry's detail sheet also counts how often it has been recalled. If
+something you expected is missing, work down
+[Memory search isn't finding an obvious entry](#memory-search-isnt-finding-an-obvious-entry).
+
+### What the agent recalls in a background run
+
+When you talk to the agent, it searches memory with your own message. A
+run started by an automation trigger, a schedule, or the Quick Settings
+tile has no such message — it runs the prompt the pipeline was built
+with, which is the same every time and rarely describes what today's run
+is about. Such a run therefore searches with, in order: the search key
+the pipeline declares for background runs, otherwise the text arriving at
+the first step that uses long-term memory, otherwise the pipeline's
+prompt.
+
+You can see which one was used: open the run's console and read the
+**MEMORY** line — it names the key and tags it `[pipeline-declared]`,
+`[node input]`, or `[user prompt]`. If a scheduled pipeline keeps
+recalling the wrong things, declaring a search key for it is the fix;
+that key is part of the pipeline document (see the pipeline JSON schema
+in the extension guide) and is set in the browser editor's **Memory key**
+field or in the file you import.
 
 ### Viewing and editing an entry
 
@@ -1518,6 +1644,15 @@ previews the estimated number of chunks removed, bytes freed, and
 runtime before you confirm. Compaction merges near-duplicate chunks and
 re-summarises the oldest entries; pinned memories are never touched. The
 "compacted N ago" line in the header reflects the last run.
+
+The preview is an upper bound, and deliberately so. An entry is deleted only
+once the on-device model's summary has been checked to actually represent it,
+so facts a summary skipped stay in memory word-for-word, and a summary that
+turned out not to describe its group is discarded with the whole group left
+intact. A run can therefore free less than it predicted — never more, and never
+at the cost of a fact whose only copy it was about to remove. If a merged
+summary and the original wording of one of its facts are both in memory (say
+after importing an older backup), the original is what the agent is shown.
 
 ### Exporting memory
 
@@ -1993,6 +2128,18 @@ inline cancel button on running background work. Tap any row to
 open a bottom sheet with the task details and an `Open chat` shortcut
 for session-bound tasks.
 
+**Tasks the agent scheduled for itself** are named: the row leads with
+the beginning of the task's own prompt, and the line under it reads
+*Scheduled task*, its repeat interval if it has one, and the chat it
+reports into. That is what makes cancelling a specific one possible —
+without it every scheduled task looks the same.
+
+When at least one such task is queued or running, the top bar offers
+**Stop all scheduled tasks**. It settles every task the agent scheduled
+for itself, including any running at that moment, and nothing else:
+automations and their triggers keep working, and nothing is deleted —
+a task can simply be scheduled again. It exists for the case below.
+
 ## Live metrics
 
 **More → Live metrics** surfaces the orchestrator's performance
@@ -2093,7 +2240,9 @@ always there, and which of two shapes it takes decides what to do next:
   for approval* means the run parked on a sensitive tool and the approval
   window expired before you answered — either respond sooner, widen
   **Settings → Background & triggers → Approval window**, or use a pipeline
-  whose tools don't need approval.
+  whose tools don't need approval. If the entry says *The request never
+  reached you*, the opposite happened: the approval could not be handed over
+  at all, so no notification was worth waiting for.
 - **There is no entry at all around that time,** and the list shows
   **Overdue**. The app was never woken to check. This is a platform-side
   problem: exclude the app from battery optimisation, and on phones with an
@@ -2121,9 +2270,16 @@ screen's search), work down this list:
   Similarity threshold** drops loosely-related chunks before they reach
   the prompt. Lower it (or pin the entry — pinned chunks bypass the
   threshold entirely and always sort to the top).
-- **Recency decay buried it.** Old, non-pinned chunks lose score with
-  age. If a months-old fact stops surfacing, raise **Recency half-life**
-  or pin it.
+- **Fresher entries won the slots.** Age never disqualifies an entry —
+  a chunk that clears the similarity threshold stays retrievable however
+  old it is — but freshness is a tie-breaker, so when more entries clear
+  the threshold than **Search results (top-K)** allows, newer ones win
+  the slots. Raise top-K, raise **Recency half-life** (it widens the
+  window in which freshness still counts for much), or pin the entry.
+- **Another entry said the same thing.** Entries whose meaning nearly
+  matches a better-ranked one are collapsed into it, so a reworded
+  duplicate does not spend a second slot. The surviving copy is the
+  pinned one if there is one, otherwise the best-ranked.
 - **The entry is queued for re-embedding.** A chunk imported under a
   different embedding provider can't be matched until the background
   re-embed finishes (it scores ~0 in the meantime). Give it a moment, or

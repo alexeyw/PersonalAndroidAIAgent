@@ -17,6 +17,7 @@ import app.knotwork.android.domain.repositories.MetricsRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.EmbeddingProviderResolver
 import app.knotwork.android.domain.services.MemorySearchStatsTracker
+import app.knotwork.android.domain.services.MemoryVectorSimilarity
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -37,7 +38,8 @@ import javax.inject.Inject
  *     for temporal grounding — and run it once through the local LiteRT model.
  *  3. Parse the model's reply as a JSON array of `{type, text}` facts.
  *  4. For each fact, compute its embedding with the **active** provider and
- *     reject near-duplicates (cosine similarity ≥ [DEDUP_SIMILARITY_THRESHOLD])
+ *     reject near-duplicates (cosine similarity ≥
+ *     [MemoryVectorSimilarity.NEAR_DUPLICATE_THRESHOLD])
  *     of either an already-stored chunk (checked against the **full** stored
  *     pool — an old fact must stay dedup-visible no matter its age) or a fact
  *     accepted earlier in the same pass.
@@ -241,7 +243,8 @@ class MemoryExtractionUseCase @Inject constructor(
     /**
      * Decides whether [embedding] is a near-duplicate. A fact is a duplicate
      * when its cosine similarity to either a stored chunk or a fact already
-     * accepted in this pass is at least [DEDUP_SIMILARITY_THRESHOLD]. The
+     * accepted in this pass is at least
+     * [MemoryVectorSimilarity.NEAR_DUPLICATE_THRESHOLD]. The
      * stored-chunk check runs against the **full** stored pool — an old fact
      * must keep rejecting its re-extracted duplicates no matter its age.
      *
@@ -253,8 +256,10 @@ class MemoryExtractionUseCase @Inject constructor(
         val hits = memoryRepository.findSimilarMemories(embedding, limit = 1)
         memorySearchStatsTracker.record(hits.map { it.second })
         val topStored = hits.firstOrNull()?.second ?: 0f
-        if (topStored >= DEDUP_SIMILARITY_THRESHOLD) return true
-        return acceptedEmbeddings.any { cosineSimilarity(embedding, it) >= DEDUP_SIMILARITY_THRESHOLD }
+        if (topStored >= MemoryVectorSimilarity.NEAR_DUPLICATE_THRESHOLD) return true
+        return acceptedEmbeddings.any {
+            MemoryVectorSimilarity.cosine(embedding, it) >= MemoryVectorSimilarity.NEAR_DUPLICATE_THRESHOLD
+        }
     }
 
     /**
@@ -276,26 +281,6 @@ class MemoryExtractionUseCase @Inject constructor(
     @Serializable
     private data class ExtractedFactDto(val type: String = "", val text: String = "")
 
-    /**
-     * Cosine similarity between two equal-length vectors, used for the
-     * within-pass duplicate check. Returns `0` for mismatched or empty vectors
-     * or a zero-magnitude operand. Mirrors the data-layer implementation so the
-     * stored-chunk and within-pass checks use the same metric.
-     */
-    private fun cosineSimilarity(a: FloatArray, b: FloatArray): Float {
-        if (a.size != b.size || a.isEmpty()) return 0f
-        var dot = 0f
-        var normA = 0f
-        var normB = 0f
-        for (i in a.indices) {
-            dot += a[i] * b[i]
-            normA += a[i] * a[i]
-            normB += b[i] * b[i]
-        }
-        if (normA == 0f || normB == 0f) return 0f
-        return dot / (kotlin.math.sqrt(normA) * kotlin.math.sqrt(normB))
-    }
-
     /** Maps a [Role] to the speaker label used inside the extraction prompt. */
     private fun Role.label(): String = when (this) {
         Role.USER -> "User"
@@ -311,14 +296,6 @@ class MemoryExtractionUseCase @Inject constructor(
 
         /** Minimum messages required before a pass is worthwhile. */
         const val MIN_MESSAGES_TO_EXTRACT = 2
-
-        /**
-         * Cosine-similarity at or above which a candidate fact is treated as a
-         * duplicate of an existing chunk and skipped. Fixed (not user-tunable):
-         * high enough to drop paraphrases of the same fact while letting
-         * genuinely new facts through.
-         */
-        const val DEDUP_SIMILARITY_THRESHOLD = 0.92f
 
         /**
          * Synthetic node key under which this off-graph consumer records its

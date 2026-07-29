@@ -79,7 +79,7 @@ import app.knotwork.android.data.local.models.UsageCounterEntity
         UsageActiveDayEntity::class,
         OnboardingMilestoneEntity::class,
     ],
-    version = 52,
+    version = 56,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -1256,6 +1256,96 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                     """.trimIndent(),
                 )
+            }
+        }
+
+        /**
+         * v52 → v53: adds the nullable `memoryRetrievalQuery` column to
+         * `pipelines` — the long-term-memory search key a pipeline declares for
+         * its background (trigger / scheduled / tile) runs, whose authored
+         * prompt is too generic to be a useful semantic key
+         * (`DESCRIPTION.md` §6.10.1).
+         *
+         * Purely additive and nullable: every existing pipeline upgrades to
+         * "declares nothing" and keeps the previous behaviour exactly (its
+         * background runs fall through to the first memory-aware node's input,
+         * then to the run prompt). Nullable rather than `NOT NULL DEFAULT ''`
+         * so "never declared" and "declared blank" cannot drift apart.
+         */
+        val MIGRATION_52_53 = object : Migration(52, 53) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `pipelines` ADD COLUMN `memoryRetrievalQuery` TEXT")
+            }
+        }
+
+        /**
+         * v53 → v54: adds the `isArchived` column to `chat_sessions` — the
+         * chat-archive flag that moves a conversation out of the main thread
+         * list without deleting anything it owns.
+         *
+         * Purely additive: a new column introduced on a new schema version, so
+         * `NOT NULL DEFAULT 0` is safe — every pre-existing session upgrades to
+         * "not archived" and the thread list keeps showing exactly what it
+         * showed before.
+         */
+        val MIGRATION_53_54 = object : Migration(53, 54) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `chat_sessions` ADD COLUMN `isArchived` INTEGER NOT NULL DEFAULT 0",
+                )
+            }
+        }
+
+        /**
+         * v54 → v55: adds the nullable `archivedAt` column to `chat_sessions` —
+         * the instant the user archived the conversation.
+         *
+         * The archive surface orders by it and renders it as each row's label
+         * ("Archived 2 h ago"). It cannot be folded into `updatedAt`: a
+         * background trigger run is allowed to write into an archived chat
+         * without un-archiving it (v53 → v54's contract), which bumps
+         * `updatedAt` and would silently reshuffle the archive and mislabel the
+         * row. Comparing the two is also what surfaces "run finished after
+         * archiving" to the user.
+         *
+         * Nullable rather than `NOT NULL DEFAULT 0`: `null` means "not
+         * archived", so the flag and the instant cannot drift into a state
+         * where a never-archived row claims an archive instant of the epoch.
+         * The archive query `COALESCE`s to `updatedAt`, so the (in practice
+         * empty) set of rows archived under v54 still orders sensibly.
+         */
+        val MIGRATION_54_55 = object : Migration(54, 55) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `chat_sessions` ADD COLUMN `archivedAt` INTEGER")
+            }
+        }
+
+        /**
+         * v55 → v56: adds the human-in-the-loop columns to `trigger_evaluations`
+         * — how many approval / clarification gates the fired run raised, which
+         * kind the latest one was, how it resolved, and whether it had to park on
+         * a durable record first.
+         *
+         * Until now the journal recorded only the run's terminal outcome, which
+         * makes an *answered* background approval indistinguishable from a run
+         * that never asked (only the unanswered case surfaced, as
+         * `HITL_TIMEOUT`). That is a silent gap on exactly the interaction the
+         * user is most likely to miss, and it forced the background-approval
+         * criterion of the soak protocol to be argued from operator memory
+         * instead of from the journal dump.
+         *
+         * Purely additive: the counter and the parked flag default to "no gate",
+         * so every pre-v56 row reads back as a run that never asked — which is
+         * what those rows actually mean, since nothing recorded gates before.
+         */
+        val MIGRATION_55_56 = object : Migration(55, 56) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `trigger_evaluations` ADD COLUMN `hitlGateCount` INTEGER NOT NULL DEFAULT 0",
+                )
+                db.execSQL("ALTER TABLE `trigger_evaluations` ADD COLUMN `hitlLastKind` TEXT")
+                db.execSQL("ALTER TABLE `trigger_evaluations` ADD COLUMN `hitlLastResolution` TEXT")
+                db.execSQL("ALTER TABLE `trigger_evaluations` ADD COLUMN `hitlParked` INTEGER NOT NULL DEFAULT 0")
             }
         }
     }

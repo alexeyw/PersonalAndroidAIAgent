@@ -473,6 +473,37 @@ class AppDatabaseMigrationHelperTest {
         }
     }
 
+    @Test
+    fun migrate53to54_addsIsArchivedBackfilledToZeroPreservingSessions() {
+        helper.createDatabase(TEST_DB, 53).use { db ->
+            db.execSQL(
+                "INSERT INTO chat_sessions(id, name, updatedAt, pipelineId, isStarred) " +
+                    "VALUES('$SESSION_ID', 'Chat', $CHUNK_TS, 'pipe-1', 1)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 54, true, AppDatabase.MIGRATION_53_54).use { db ->
+            db.query(
+                "SELECT name, pipelineId, isStarred, isArchived FROM chat_sessions WHERE id = '$SESSION_ID'",
+            ).use { c ->
+                assertTrue("seeded session must survive the migration", c.moveToFirst())
+                assertEquals("Chat", c.getString(0))
+                assertEquals("pipe-1", c.getString(1))
+                assertEquals("existing flags must be untouched", 1, c.getInt(2))
+                // The whole point of the DEFAULT 0: an upgraded install shows
+                // exactly the same thread list it showed before.
+                assertEquals("pre-existing sessions must upgrade to not-archived", 0, c.getInt(3))
+            }
+
+            // The new column is writable and readable through the same row.
+            db.execSQL("UPDATE chat_sessions SET isArchived = 1 WHERE id = '$SESSION_ID'")
+            db.query("SELECT isArchived FROM chat_sessions WHERE id = '$SESSION_ID'").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals(1, c.getInt(0))
+            }
+        }
+    }
+
     // ---------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------
@@ -514,5 +545,79 @@ class AppDatabaseMigrationHelperTest {
         const val CHUNK_TS = 1_700_000_000_000L
         const val SESSION_ID = "session-mig"
         const val TRIGGER_ID = "trigger-mig"
+    }
+
+    @Test
+    fun migrate54to55_addsNullableArchivedAtPreservingSessions() {
+        helper.createDatabase(TEST_DB, 54).use { db ->
+            db.execSQL(
+                "INSERT INTO chat_sessions(id, name, updatedAt, pipelineId, isStarred, isArchived) " +
+                    "VALUES('$SESSION_ID', 'Chat', $CHUNK_TS, 'pipe-1', 1, 1)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 55, true, AppDatabase.MIGRATION_54_55).use { db ->
+            db.query(
+                "SELECT name, isArchived, archivedAt FROM chat_sessions WHERE id = '$SESSION_ID'",
+            ).use { c ->
+                assertTrue("seeded session must survive the migration", c.moveToFirst())
+                assertEquals("Chat", c.getString(0))
+                assertEquals("existing archive flag must be untouched", 1, c.getInt(1))
+                // Nothing invents an archive instant for a row archived before
+                // the column existed; the archive query COALESCEs to updatedAt.
+                assertTrue("archivedAt must upgrade to NULL", c.isNull(2))
+            }
+
+            db.execSQL("UPDATE chat_sessions SET archivedAt = $CHUNK_TS WHERE id = '$SESSION_ID'")
+            db.query("SELECT archivedAt FROM chat_sessions WHERE id = '$SESSION_ID'").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals(CHUNK_TS, c.getLong(0))
+            }
+        }
+    }
+
+    @Test
+    fun migrate55to56_addsHitlColumnsDefaultingToNoGatePreservingEvaluations() {
+        helper.createDatabase(TEST_DB, 55).use { db ->
+            db.execSQL(
+                "INSERT INTO trigger_evaluations(id, triggerId, evaluatedAt, source, verdictKind, " +
+                    "skipReason, runId, outcomeKind, outcomeError) " +
+                    "VALUES('eval-1', '$TRIGGER_ID', $CHUNK_TS, 'POLL', 'FIRED', NULL, 'run-1', " +
+                    "'SUCCESS', NULL)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 56, true, AppDatabase.MIGRATION_55_56).use { db ->
+            db.query(
+                "SELECT verdictKind, outcomeKind, hitlGateCount, hitlLastKind, hitlLastResolution, " +
+                    "hitlParked FROM trigger_evaluations WHERE id = 'eval-1'",
+            ).use { c ->
+                assertTrue("seeded evaluation must survive the migration", c.moveToFirst())
+                assertEquals("FIRED", c.getString(0))
+                assertEquals("SUCCESS", c.getString(1))
+                // A pre-v56 row means "nothing recorded gates back then", which
+                // reads back as a run that never asked — not as a gate of an
+                // unknown kind.
+                assertEquals("gate count must upgrade to none", 0, c.getInt(2))
+                assertTrue("kind must upgrade to NULL", c.isNull(3))
+                assertTrue("resolution must upgrade to NULL", c.isNull(4))
+                assertEquals("parked flag must upgrade to false", 0, c.getInt(5))
+            }
+
+            db.execSQL(
+                "UPDATE trigger_evaluations SET hitlGateCount = 1, hitlLastKind = 'APPROVAL', " +
+                    "hitlLastResolution = 'APPROVED', hitlParked = 1 WHERE id = 'eval-1'",
+            )
+            db.query(
+                "SELECT hitlGateCount, hitlLastKind, hitlLastResolution, hitlParked " +
+                    "FROM trigger_evaluations WHERE id = 'eval-1'",
+            ).use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals(1, c.getInt(0))
+                assertEquals("APPROVAL", c.getString(1))
+                assertEquals("APPROVED", c.getString(2))
+                assertEquals(1, c.getInt(3))
+            }
+        }
     }
 }

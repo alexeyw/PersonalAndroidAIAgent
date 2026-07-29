@@ -15,6 +15,38 @@ details.
 
 ### Added
 
+- **Archive chats instead of deleting them.** A chat list that only grows
+  eventually stops being useful, and until now the only way to shorten it was to
+  delete a conversation for good. Chats can now be archived: swipe a row in the
+  chat drawer or use its new `⋮` menu, and the conversation leaves the list with
+  every message, run and trace intact. A snackbar offers **Undo** for eight
+  seconds and the drawer stays open, so putting several chats away in a row is
+  one gesture each. Archived chats live on their own screen — always reachable
+  from **More → Archived chats**, and from the drawer's footer once there is
+  something in there — newest-archived first, each labelled with when you put it
+  away. Restore is one tap (button, row menu, or swipe); **Delete forever** is
+  available too, from the row menu only and behind a confirmation, never from a
+  swipe. Opening an archived chat shows the full history **read-only**, with the
+  message box replaced by a Restore bar: sending a message would silently
+  un-archive the conversation, and that decision stays yours. A background
+  trigger or scheduled run may still write into an archived chat without
+  bringing it back, and the row says so when one does. Archived chats export to
+  the share sheet exactly like active ones, so putting a chat away never puts it
+  out of reach of your history.
+
+- **Scheduled and triggered runs can say what they should remember.** A run you
+  start yourself searches long-term memory with your own message. A run started
+  by an automation trigger, a schedule, or the Quick Settings tile had no such
+  message — it searched with the pipeline's built-in prompt ("write the evening
+  journal entry"), which is identical on every firing and describes none of
+  them, so the recalled entries were largely arbitrary. Such a run now uses, in
+  order: a search key the pipeline declares (`memoryRetrievalQuery`, a new
+  optional field in the pipeline JSON and in the browser editor's **Memory key**
+  box, prompt variables included), otherwise the text arriving at the first step
+  that uses memory, otherwise the prompt as before. Interactive runs are
+  unchanged, the search still happens at most once per run, and the console's
+  MEMORY line now names which rule supplied the key.
+
 - **Model downloads survive leaving the app, and resume instead of restarting.**
   A download used to live and die with the screen that started it: switching
   away froze the transfer, and finishing setup cancelled it outright — on a slow
@@ -85,9 +117,149 @@ details.
   retrieve, so a multi-day background soak can be analysed offline without opening
   the app or decrypting the on-device database. Nothing it produces leaves the
   device.
+- **Groundwork for archiving chats.** Chat sessions can now carry an archived
+  state on device — the storage and logic behind an upcoming archive surface for
+  a chat list that grows with use. Archiving is non-destructive by construction:
+  it changes only which list a conversation appears in, keeps every message,
+  trace and run record intact, and is fully reversible. Existing chats upgrade as
+  not archived, so the list looks exactly as it did before, and new activity in
+  an archived chat (a trigger or scheduled run) deliberately does not pull it
+  back — only you do.
 
 ### Fixed
 
+- **A task the agent scheduled for itself could not be found, let alone
+  stopped.** Every scheduled task showed up under **More → Active tasks** as
+  the same anonymous "Background Task", so cancelling a specific one was
+  guesswork — and there was no way to stop them all. A task whose prompt told
+  the agent to schedule its own successor was therefore unstoppable in
+  practice: only one task is ever queued, so cancelling it changed nothing
+  while the run that would enqueue the next one was still going, and clearing
+  the app's data was the only way out. Scheduled tasks are now named — the row
+  leads with the start of the task's own prompt, under it the repeat interval
+  and the chat it reports into — and the screen offers **Stop all scheduled
+  tasks**, which settles every one of them, running included. Automations and
+  their triggers are untouched by it, and nothing is deleted. The agent is also
+  now refused when too many scheduled runs have already started within the past
+  hour, so a chain like that bounds itself instead of running until someone
+  notices.
+- **An automation that stopped to ask you something looked exactly like one
+  that never asked.** A background run pausing for approval — the moment you
+  are most likely to miss — left no trace in a trigger's evaluation journal
+  once it was over: approve it from the notification and the run simply ended
+  as **Completed**, indistinguishable from a run that needed nothing from you.
+  Only an approval nobody answered was ever called out. A fired entry now also
+  records the request itself: that the run asked, whether the answer had to
+  come back from the notification shade, and how it was settled — approved,
+  denied, answered, still waiting, timed out, or never delivered to you at
+  all. Requests answered on the spot are recorded too, not just the ones that
+  waited: the in-app wait lasts a full minute, so a promptly answered approval
+  never reaches the shade, and recording only those would have missed the
+  commonest case entirely. Diagnostic exports of the journal carry the same
+  fields.
+- **Bundled pipelines answered in the language of the question, not your
+  device's.** Ask in English on a Russian phone and the reply came back in
+  English. Some bundled pipelines had always been explicit about the language
+  and others had never mentioned it, so behaviour depended on which one you
+  picked. Every step whose text you actually read now works in your device
+  language. Steps that emit a routing keyword or a true/false decision are
+  deliberately untouched — translating those would break the branching — and
+  styled translation still translates into the language its prompt names.
+- **The tool-using agent template called a tool even when it plainly did not
+  need one.** Asked for `17 times 23`, it worked out the answer, then ran a web
+  search anyway and reported that the results did not contain the product. The
+  template promised in its instructions to answer directly when no tool was
+  needed, but its wiring had no way to skip the tool. It now decides **first**,
+  on your actual request, and then does one thing per branch: a request needing
+  a lookup becomes a search term, runs the tool and gets summarised; a request
+  that does not is simply answered. This also stops the empty-input case where a
+  blank step produced a search for an invented topic.
+- **The preset gallery opened on a plumbing template.** Bundled presets were
+  listed in filename order, so the first card was *Clarify, then act* and the
+  scenarios from setup were scattered through the list. The order is now
+  deliberate: setup scenarios, then the end-to-end showcases, then the
+  build-your-own templates.
+- **Cloud chat could echo its own context back at you.** The first reply in a
+  conversation could restate the remembered entries and the model's own
+  reasoning before getting to the answer. The cloud step is now told to reply
+  with the answer only.
+- **The bundled preset gallery showed four templates nobody was meant to pick.**
+  The four *Subtask —* entries are building blocks the showcase agent runs
+  internally, not starting points — their own descriptions said so. They no
+  longer appear in **+ From preset**, in **More → Library**, or in the browser
+  editor's preset list, while the showcase that composes them keeps working
+  exactly as before.
+- **Every bundled preset now opens with its own quick actions.** A pipeline
+  spawned from a preset — including the one created on first launch and the
+  three offered during setup — showed the generic starter cards, because no
+  bundled preset declared any of its own. Each now suggests three prompts that
+  fit what it actually does, naming the tools it really wires.
+- **A router in a bundled preset could not be edited.** Opening the *Router*
+  step of **Routed local + cloud** showed an empty list of categories and an
+  error that blocked saving, because the preset shipped without the editor-side
+  configuration and the fallback could not reconstruct the categories from the
+  wiring. Every bundled preset now carries the full editor configuration on
+  every step, so each one opens ready to edit.
+- **The pass/fail judge template could never return a verdict.** The bundled
+  *Pass/fail* evaluation prompt still asked for the JSON shape used before
+  evaluation steps switched to routing on a `Pass` / `Retry` / `Fail` verdict,
+  so the step always failed its check, retried, and fell through to its default
+  branch. Both evaluation templates now lead with the verdict, and the scored
+  one reports its score below it.
+- **The browser editor's preset list was missing the scenarios from setup.**
+  Styled translation, share handler and virtual companion ship with the app but
+  had never been mirrored into `pipeline-editor.html`. The editor now carries
+  the same catalogue as the app, scenarios first.
+- **Memory compaction could quietly replace a fact with a wrong summary of it.**
+  The background pass handed a group of stored facts to the on-device model,
+  took whatever came back as their replacement, and deleted the originals — the
+  only copy. Nothing checked that the summary actually said what the facts said,
+  so a model that dropped one of them, or answered about something else, cost
+  you that memory with no way to notice or recover. A summary now has to be
+  shown to represent an entry before that entry can be removed: entries it
+  skipped stay stored word-for-word, and a summary that represents fewer than
+  two of them is discarded with the whole group left intact. The write and the
+  deletions also became a single transaction, so a failure part-way can no
+  longer leave a summary sitting next to the very entries it replaced. Where a
+  summary and the original wording of one of its facts are both present — after
+  importing an older backup, say — retrieval now shows the agent the original,
+  which previously lost out because the summary was newer and counted as
+  fresher. The compaction preview is correspondingly an upper bound: a run can
+  free less than it estimated, never more.
+
+- **Long-term memory stopped recalling anything more than a few weeks old.**
+  A memory entry's relevance score was multiplied by a weight that fell to
+  zero as it aged, and the resulting product was what the similarity threshold
+  judged — so age worked as an expiry date rather than a preference. At the
+  default settings a perfectly on-topic entry was already scored out after one
+  half-life (30 days) and, past two, could not be recalled at any relevance,
+  even though the entry was still listed on the Memory screen and still
+  matched the query. Freshness is now a bonus added on top of relevance
+  instead of a multiplier applied to it: the threshold judges how well an
+  entry matches, nothing else, so an old but genuinely relevant entry stays
+  recallable indefinitely, while a fresher entry still wins when two match
+  equally well. The **Recency half-life** setting keeps its meaning — it is
+  how quickly that freshness bonus fades — and pinned entries are unaffected.
+- **Near-duplicate memory entries were detected by comparing their opening
+  characters.** Retrieval collapsed entries that shared their first 80
+  characters, which both merged and missed the wrong things: pipelines that
+  write with a fixed preamble (an evening journal, a translation log)
+  produced unrelated facts with identical openings and only one of them ever
+  reached the model, while the same fact saved twice in different words kept
+  two of the limited recall slots. Duplicates are now recognised by meaning,
+  using the same measure that already stops a duplicate from being stored in
+  the first place. A pinned entry always survives a merge, and an entry
+  waiting to be re-embedded is never merged into another.
+
+- **An approval tapped at the exact moment a background run gave up waiting
+  could be ignored.** When nobody answers a tool-confirmation prompt in time,
+  the run stops waiting live and parks so it can be approved later from the
+  notification. For a brief moment both states existed at once, and an approval
+  arriving in that window was applied to the wait that had already ended — the
+  notification reported success while the run stayed parked, waiting for a
+  decision that had in fact been made. The live wait is now retired before the
+  run parks, so an approval always reaches whichever of the two is actually in
+  effect.
 - **Release builds crashed on the first message that touched long-term
   memory.** In a minified (release) build, initialising the on-device text
   embedder threw `ExceptionInInitializerError` and killed the app process, so a
@@ -100,6 +272,14 @@ details.
 
 ### Changed
 
+- **What long-term memory recalls is now written down.** The user guide gains a
+  *"What the agent recalls, and when"* section: memory is searched once per run,
+  at the first step that reads it; the similarity threshold is a gate nothing
+  can be bonused through; age never disqualifies an entry and freshness only
+  breaks ties; pinning always wins; the original wording beats a summary of it;
+  and near-duplicates share one slot. The architecture guide's memory
+  invariants now describe where the search key comes from, and its persistence
+  section states that archiving a chat writes a flag and deletes nothing.
 - **Cloud model line-up follows the upstream client.** With the Koog client
   updated to 1.1.1, Google's `gemini-3-pro-preview` is no longer offered — the
   upstream catalogue replaced it with `gemini-3.1-pro-preview`, which now takes

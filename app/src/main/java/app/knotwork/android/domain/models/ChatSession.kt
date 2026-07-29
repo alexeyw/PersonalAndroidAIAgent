@@ -17,6 +17,21 @@ import java.util.UUID
  *   chats sort to the top of the drawer thread list and render a small star
  *   indicator next to the title. Persisted in `chat_sessions.isStarred`
  *   (migration v21 → v22).
+ * @property isArchived Whether the user has archived this chat. Archived
+ *   sessions drop out of the main thread list and are reachable only through
+ *   the archive surface; nothing they own is deleted, and unarchiving restores
+ *   them to the list unchanged. New activity in an archived session (a
+ *   background trigger run, a scheduled task) deliberately does **not** bring
+ *   it back — archiving is a user decision and only the user reverses it.
+ *   Persisted in `chat_sessions.isArchived` (migration v53 → v54).
+ * @property archivedAt Wall-clock instant (epoch-millis) at which the user
+ *   archived this chat, or `null` when it is not archived. The archive surface
+ *   orders by it ("newest archived first") and renders it as the row's relative
+ *   label ("Archived 2 h ago"); comparing it against [updatedAt] is also what
+ *   tells the user a background run settled *after* they archived the chat.
+ *   Deliberately not derived from [updatedAt], which a background run bumps
+ *   without un-archiving. Persisted in `chat_sessions.archivedAt`
+ *   (migration v54 → v55).
  */
 data class ChatSession(
     val id: String,
@@ -24,6 +39,8 @@ data class ChatSession(
     val updatedAt: Long,
     val pipelineId: String? = null,
     val isStarred: Boolean = false,
+    val isArchived: Boolean = false,
+    val archivedAt: Long? = null,
 ) {
     /** Factory helpers for constructing fresh [ChatSession] rows. */
     companion object {

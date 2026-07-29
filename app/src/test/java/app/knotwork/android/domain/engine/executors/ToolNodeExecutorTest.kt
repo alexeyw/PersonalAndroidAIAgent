@@ -17,14 +17,18 @@ import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.ToolApprovalPolicy
 import app.knotwork.android.domain.models.ToolExecutionContext
 import app.knotwork.android.domain.models.ToolRisk
+import app.knotwork.android.domain.models.TriggerHitlEvent
+import app.knotwork.android.domain.models.TriggerHitlResolution
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
 import app.knotwork.android.domain.usecases.LoadModelUseCase
+import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -57,6 +61,7 @@ class ToolNodeExecutorTest {
     private lateinit var approvalNotifier: ApprovalNotifier
     private lateinit var chatRepository: ChatRepository
     private lateinit var pendingInteractionRepository: PendingInteractionRepository
+    private lateinit var recordTriggerHitlEvent: RecordTriggerHitlEventUseCase
     private lateinit var toolInvocationGate: ToolInvocationGate
     private lateinit var executor: ToolNodeExecutor
 
@@ -71,6 +76,7 @@ class ToolNodeExecutorTest {
         pendingInteractionRepository = mockk(relaxed = true)
         coEvery { pendingInteractionRepository.getForRun(any()) } returns null
         coEvery { pendingInteractionRepository.save(any()) } returns true
+        recordTriggerHitlEvent = mockk(relaxed = true)
 
         toolInvocationGate = ToolInvocationGate(
             toolRepository = toolRepository,
@@ -78,6 +84,7 @@ class ToolNodeExecutorTest {
             approvalNotifier = approvalNotifier,
             chatRepository = chatRepository,
             pendingInteractionRepository = pendingInteractionRepository,
+            recordTriggerHitlEvent = recordTriggerHitlEvent,
         )
         executor = ToolNodeExecutor(
             llmEngine = llmEngine,
@@ -391,6 +398,139 @@ class ToolNodeExecutorTest {
         job.cancel()
     }
 
+    // --- HITL journalling ---------------------------------------------------
+    //
+    // Every gate the tool path raises must reach the trigger journal, so that a
+    // background run which stopped to ask is distinguishable afterwards from one
+    // that never asked. Reported for all runs; the journal drops what it cannot
+    // attribute to a fired trigger.
+
+    /** Stages a SENSITIVE tool call that will raise the approval gate. */
+    private fun stageSensitiveCall(toolName: String = "SensTool"): NodeModel {
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
+        coEvery { toolRepository.getRisk(any(), any()) } returns ToolRisk.SENSITIVE
+        coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool(toolName, "Desc", "Schema"))
+        every { llmEngine.generateResponseStream(any()) } returns
+            flowOf("""{"tool": "$toolName", "arguments": "args"}""")
+        coEvery { toolRepository.executeTool(any(), any(), any()) } returns "ok"
+        return NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName)
+    }
+
+    @Test
+    fun `given an approval answered live when execute then the gate is journalled raised then approved`() = runTest {
+        every { settingsRepository.toolCallTimeoutMs } returns flowOf(5_000L)
+        val node = stageSensitiveCall()
+
+        val job = launch { executor.execute(node, "Do", "session-1", "", runId = "run-1").collect { } }
+        runCurrent()
+        executor.resumeWithApproval("session-1", isApproved = true)
+        advanceUntilIdle()
+
+        // The whole point: an approval given inside the live window never parks,
+        // and must still be visible as a gate that happened and was approved.
+        coVerifyOrder {
+            recordTriggerHitlEvent("run-1", TriggerHitlEvent.Raised(PendingInteractionKind.APPROVAL))
+            recordTriggerHitlEvent("run-1", TriggerHitlEvent.Resolved(TriggerHitlResolution.APPROVED))
+        }
+        coVerify(exactly = 0) { recordTriggerHitlEvent(any(), TriggerHitlEvent.Parked) }
+        job.cancel()
+    }
+
+    @Test
+    fun `given the user denies live when execute then the gate is journalled as denied`() = runTest {
+        every { settingsRepository.toolCallTimeoutMs } returns flowOf(5_000L)
+        val node = stageSensitiveCall()
+
+        val job = launch { executor.execute(node, "Do", "session-1", "", runId = "run-1").collect { } }
+        runCurrent()
+        executor.resumeWithApproval("session-1", isApproved = false)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) {
+            recordTriggerHitlEvent("run-1", TriggerHitlEvent.Resolved(TriggerHitlResolution.DENIED))
+        }
+        job.cancel()
+    }
+
+    @Test
+    fun `given the live phase times out and the park is durable when execute then the gate is journalled parked`() =
+        runTest {
+            every { settingsRepository.toolCallTimeoutMs } returns flowOf(100L)
+            val node = stageSensitiveCall()
+
+            val job = launch { executor.execute(node, "Do", "session-1", "", runId = "run-1").collect { } }
+            advanceTimeBy(200L)
+            advanceUntilIdle()
+
+            coVerifyOrder {
+                recordTriggerHitlEvent("run-1", TriggerHitlEvent.Raised(PendingInteractionKind.APPROVAL))
+                recordTriggerHitlEvent("run-1", TriggerHitlEvent.Parked)
+            }
+            // A parked gate is unresolved until the user answers (or the window
+            // closes) — settling it here would forge an answer nobody gave.
+            coVerify(exactly = 0) { recordTriggerHitlEvent(any(), ofType(TriggerHitlEvent.Resolved::class)) }
+            job.cancel()
+        }
+
+    @Test
+    fun `given the park cannot be persisted when execute then the gate is journalled as abandoned`() = runTest {
+        every { settingsRepository.toolCallTimeoutMs } returns flowOf(100L)
+        coEvery { pendingInteractionRepository.save(any()) } returns false
+        val node = stageSensitiveCall()
+
+        val job = launch { executor.execute(node, "Do", "session-1", "", runId = "run-1").collect { } }
+        advanceTimeBy(200L)
+        advanceUntilIdle()
+
+        // Nobody was ever given the chance to answer — that is ABANDONED, and
+        // specifically not the TIMED_OUT of a request that did reach the user.
+        coVerify(exactly = 1) {
+            recordTriggerHitlEvent("run-1", TriggerHitlEvent.Resolved(TriggerHitlResolution.ABANDONED))
+        }
+        job.cancel()
+    }
+
+    @Test
+    fun `given a resumed run carrying a parked decision when execute then only the resolution is journalled`() =
+        runTest {
+            every { settingsRepository.toolCallTimeoutMs } returns flowOf(5_000L)
+            val node = stageSensitiveCall()
+            coEvery { pendingInteractionRepository.getForRun("run-1") } returns PendingInteraction(
+                runId = "run-1",
+                sessionId = "session-1",
+                kind = PendingInteractionKind.APPROVAL,
+                toolName = "SensTool",
+                toolArgs = "args",
+                risk = ToolRisk.SENSITIVE,
+                decision = PendingDecision.APPROVED,
+                requestedAt = 0L,
+            )
+
+            executor.execute(node, "Do", "session-1", "", runId = "run-1").collect { }
+
+            // The gate was raised (and counted) in the earlier process; counting
+            // it again on resume would double-count a single request.
+            coVerify(exactly = 0) { recordTriggerHitlEvent(any(), ofType(TriggerHitlEvent.Raised::class)) }
+            coVerify(exactly = 1) {
+                recordTriggerHitlEvent("run-1", TriggerHitlEvent.Resolved(TriggerHitlResolution.APPROVED))
+            }
+        }
+
+    @Test
+    fun `given a tool needing no approval when execute then no gate is journalled`() = runTest {
+        val toolName = "MyTool"
+        val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName)
+        coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool(toolName, "Desc", "Schema"))
+        every { llmEngine.generateResponseStream(any()) } returns
+            flowOf("""{"tool": "MyTool", "arguments": "args"}""")
+        coEvery { toolRepository.executeTool(any(), any(), any()) } returns "ok"
+
+        executor.execute(node, "Do", "session-1", "", runId = "run-1").collect { }
+
+        coVerify(exactly = 0) { recordTriggerHitlEvent(any(), any()) }
+    }
+
     @Test
     fun `pendingApprovalFor exposes the suspended request and clears after resolution`() = runTest {
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
@@ -575,6 +715,35 @@ class ToolNodeExecutorTest {
         coVerify(exactly = 0) { toolRepository.executeTool(any(), any(), any()) }
         job.cancel()
     }
+
+    @Test
+    fun `given a run parking on the gate when the durable record is written then the live gate is already gone`() =
+        runTest {
+            // The two states must never be observable at the same time. While
+            // both exist, a notification approval takes SubmitApprovalDecision's
+            // live short-circuit and resolves a deferred whose withTimeout has
+            // already expired — the user's decision is swallowed and the run
+            // stays parked. Asserting at the moment of the durable save (rather
+            // than after the flow ends) is what pins the ordering: checking
+            // afterwards would pass even with the `finally`-only cleanup.
+            armSensitiveGate()
+            val liveGateAtParkTime = mutableListOf<Any?>()
+            coEvery { pendingInteractionRepository.save(any()) } answers {
+                liveGateAtParkTime += executor.pendingApprovalFor("session-1")
+                true
+            }
+            val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = "MyTool")
+
+            val job = launch {
+                executor.execute(node, "Do", "session-1", "", runId = "run-1").collect { }
+            }
+            advanceTimeBy(200L)
+            advanceUntilIdle()
+
+            assertEquals("the durable park must have happened", 1, liveGateAtParkTime.size)
+            assertNull("live gate must be retired before the durable record exists", liveGateAtParkTime.single())
+            job.cancel()
+        }
 
     @Test
     fun `given a DESTRUCTIVE delete_file on a persisted run when live timeout then parks for background approval`() =

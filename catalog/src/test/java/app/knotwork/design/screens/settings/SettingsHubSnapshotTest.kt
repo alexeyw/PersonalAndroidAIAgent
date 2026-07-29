@@ -72,11 +72,11 @@ class SettingsHubSnapshotTest {
     private fun snapshot(name: String, dark: Boolean, fontScale: Float = 1f, content: @Composable () -> Unit) {
         composeTestRule.setContent {
             val baseDensity = LocalDensity.current
-            CompositionLocalProvider(
-                LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true, fontScale = fontScale),
-                LocalDensity provides Density(density = baseDensity.density, fontScale = fontScale),
-            ) {
-                KnotworkTheme(darkTheme = dark) { content() }
+            KnotworkTheme(darkTheme = dark) {
+                CompositionLocalProvider(
+                    LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true, fontScale = fontScale),
+                    LocalDensity provides Density(density = baseDensity.density, fontScale = fontScale),
+                ) { content() }
             }
         }
         val themeTag = if (dark) "dark" else "light"

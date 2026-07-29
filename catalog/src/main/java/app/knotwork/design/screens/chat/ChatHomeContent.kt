@@ -26,37 +26,29 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.calculateEndPadding
 import androidx.compose.foundation.layout.calculateStartPadding
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.Add
-import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Menu
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SheetValue
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -68,8 +60,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
@@ -81,6 +71,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
 import app.knotwork.design.a11y.respectReducedMotionTransitions
+import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.chat.ChatComposer
 import app.knotwork.design.components.chat.ChatContent
@@ -245,35 +236,19 @@ private fun ChatHomeTopBar(state: ChatHomeViewState, callbacks: ChatHomeCallback
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    // Pipeline name yields space first (weighted + ellipsis), so a
-                    // long name truncates instead of pushing the token count out.
+                if (state.archivedReadOnly) {
+                    // An archived thread advertises its state in words, not by the
+                    // absence of a composer — the user must be able to tell why
+                    // they cannot type without inferring it. Pipeline + token
+                    // counts are dropped: neither can change on a read-only thread.
                     Text(
-                        text = stringResource(
-                            R.string.knotwork_chat_home_topbar_pipeline,
-                            state.pipelineName,
-                        ),
+                        text = stringResource(R.string.knotwork_chat_home_archived_subtitle),
                         style = KnotworkTextStyles.MonoSm,
                         color = KnotworkTheme.extended.onSurfaceMuted,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
                     )
-                    if (state.tokensMax > 0) {
-                        // Pinned (non-weighted, no ellipsis) so the token count is
-                        // always fully visible regardless of the pipeline name.
-                        Text(
-                            text = " · " + stringResource(
-                                R.string.knotwork_chat_home_topbar_tokens,
-                                formatTokenCount(state.tokensUsed),
-                                formatTokenCount(state.tokensMax),
-                            ),
-                            style = KnotworkTextStyles.MonoSm,
-                            color = KnotworkTheme.extended.onSurfaceMuted,
-                            maxLines = 1,
-                            softWrap = false,
-                        )
-                    }
+                } else {
+                    ChatHomeTopBarMeta(state = state)
                 }
             }
         },
@@ -313,6 +288,41 @@ private fun ChatHomeTopBar(state: ChatHomeViewState, callbacks: ChatHomeCallback
     )
 }
 
+/** Mono `pipeline · used / max tok` line beneath the thread title. */
+@Composable
+private fun ChatHomeTopBarMeta(state: ChatHomeViewState) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        // Pipeline name yields space first (weighted + ellipsis), so a
+        // long name truncates instead of pushing the token count out.
+        Text(
+            text = stringResource(
+                R.string.knotwork_chat_home_topbar_pipeline,
+                state.pipelineName,
+            ),
+            style = KnotworkTextStyles.MonoSm,
+            color = KnotworkTheme.extended.onSurfaceMuted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        if (state.tokensMax > 0) {
+            // Pinned (non-weighted, no ellipsis) so the token count is
+            // always fully visible regardless of the pipeline name.
+            Text(
+                text = " · " + stringResource(
+                    R.string.knotwork_chat_home_topbar_tokens,
+                    formatTokenCount(state.tokensUsed),
+                    formatTokenCount(state.tokensMax),
+                ),
+                style = KnotworkTextStyles.MonoSm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+                maxLines = 1,
+                softWrap = false,
+            )
+        }
+    }
+}
+
 /** "1432" → "1.4k", "8000" → "8k". Falls back to the raw integer for small values. */
 private fun formatTokenCount(value: Int): String = when {
     value < TOKEN_FORMAT_THRESHOLD -> value.toString()
@@ -338,6 +348,10 @@ private const val TOKEN_FORMAT_THRESHOLD = 1000
  */
 @Composable
 private fun ChatHomeBottomBar(state: ChatHomeViewState, callbacks: ChatHomeCallbacks) {
+    if (state.archivedReadOnly) {
+        ChatHomeArchivedBar(onRestore = callbacks.onRestoreArchivedThread)
+        return
+    }
     Column {
         if (state.agentStatusLine != null) {
             AgentStatusPill(text = state.agentStatusLine, onClick = callbacks.onAgentStatusClick)
@@ -357,6 +371,52 @@ private fun ChatHomeBottomBar(state: ChatHomeViewState, callbacks: ChatHomeCallb
             voiceNotice = state.composerVoiceNotice,
             onChangeModel = callbacks.onChangeModel,
             onOpenSettings = callbacks.onOpenAppSettings,
+        )
+    }
+}
+
+/**
+ * Bar that **replaces** the composer on an archived thread.
+ *
+ * Replaced rather than disabled in place: a disabled composer still reads as
+ * "type here, but something is wrong", while the whole point is that this
+ * thread is intact and readable and simply not accepting new messages until
+ * the user restores it. The bar states that, and carries the Restore action —
+ * the third and most contextual of the three Restore placements.
+ */
+@Composable
+private fun ChatHomeArchivedBar(onRestore: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(KnotworkTheme.extended.surface2)
+            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3),
+    ) {
+        Icon(
+            imageVector = AppIcons.Archive,
+            contentDescription = null,
+            tint = KnotworkTheme.extended.onSurfaceMuted,
+            modifier = Modifier.size(KnotworkTheme.spacing.sp6),
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.knotwork_chat_home_archived_bar_title),
+                style = KnotworkTextStyles.LabelLg.copy(fontWeight = FontWeight.SemiBold),
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = stringResource(R.string.knotwork_chat_home_archived_bar_body),
+                style = KnotworkTextStyles.BodySm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+        KnotworkSecondaryButton(
+            text = stringResource(R.string.knotwork_chat_home_archived_bar_restore),
+            onClick = onRestore,
+            size = KnotworkButtonSize.Sm,
+            leadingIcon = AppIcons.Unarchive,
         )
     }
 }
@@ -725,262 +785,6 @@ private fun ChatHomeErrorTile(message: String, onRetry: () -> Unit) {
 }
 
 /**
- * Slide-in drawer overlay rendered when [ChatHomeVisualState.DrawerOpen]
- * is active:
- *  - `SESSIONS` mono header.
- *  - Big rounded `+ New chat` pill on `Accent50` with brand-primary glyph
- *    and label.
- *  - Thread list with leading status dot, bold title, mono subtitle, and
- *    a trailing edit/rename icon. The active thread tints its row with
- *    `Accent50` and pulls the dot up to the brand primary.
- *  - Footer with two list rows — `Import chat (From JSON / text)` and
- *    `Settings (API keys · model params)` — separated from the list by
- *    a divider.
- */
-@Composable
-private fun ChatHomeDrawerOverlay(state: ChatHomeViewState, callbacks: ChatHomeCallbacks) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(color = Color.Black.copy(alpha = DRAWER_SCRIM_ALPHA))
-            .scrimClickable(onClick = callbacks.onCloseDrawer),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        Surface(
-            color = KnotworkTheme.extended.surface1,
-            tonalElevation = KnotworkTheme.elevation.el2,
-            modifier = Modifier
-                .width(DrawerWidth)
-                .fillMaxHeight()
-                .windowInsetsPadding(WindowInsets.statusBars)
-                .absorbClicks(),
-        ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // -------- Header + New chat pill --------
-                Text(
-                    text = stringResource(R.string.knotwork_chat_home_drawer_sessions_header),
-                    style = KnotworkTextStyles.MonoSm,
-                    color = KnotworkTheme.extended.onSurfaceMuted,
-                    modifier = Modifier.padding(
-                        start = KnotworkTheme.spacing.sp4,
-                        end = KnotworkTheme.spacing.sp4,
-                        top = KnotworkTheme.spacing.sp4,
-                        bottom = KnotworkTheme.spacing.sp2,
-                    ),
-                )
-                DrawerNewChatPill(
-                    onClick = {
-                        callbacks.onNewThread()
-                        callbacks.onCloseDrawer()
-                    },
-                )
-                Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp2))
-                // -------- Sessions list --------
-                LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                    items(items = state.threads, key = { it.id }) { thread ->
-                        ChatHomeDrawerThreadRow(
-                            row = thread,
-                            onClick = {
-                                callbacks.onSelectThread(thread.id)
-                                callbacks.onCloseDrawer()
-                            },
-                            onEdit = { callbacks.onEditThread(thread.id) },
-                        )
-                    }
-                }
-                // -------- Footer entries --------
-                HorizontalDivider(color = KnotworkTheme.extended.divider)
-                DrawerFooterRow(
-                    icon = AppIcons.Download,
-                    title = stringResource(R.string.knotwork_chat_home_drawer_import_title),
-                    subtitle = stringResource(R.string.knotwork_chat_home_drawer_import_subtitle),
-                    onClick = {
-                        callbacks.onImportChat()
-                        callbacks.onCloseDrawer()
-                    },
-                )
-                DrawerFooterRow(
-                    icon = AppIcons.Theme,
-                    title = stringResource(R.string.knotwork_chat_home_drawer_settings_title),
-                    subtitle = stringResource(R.string.knotwork_chat_home_drawer_settings_subtitle),
-                    onClick = {
-                        callbacks.onOpenSettings()
-                        callbacks.onCloseDrawer()
-                    },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun DrawerNewChatPill(onClick: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-        modifier = Modifier
-            .padding(horizontal = KnotworkTheme.spacing.sp4)
-            .fillMaxWidth()
-            .clip(KnotworkTheme.shapes.full)
-            .background(color = app.knotwork.design.tokens.KnotworkPalette.Accent100)
-            .clickable(onClick = onClick)
-            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3),
-    ) {
-        Icon(
-            imageVector = AppIcons.Add,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-        )
-        Text(
-            text = stringResource(R.string.knotwork_chat_home_drawer_new_thread),
-            style = KnotworkTextStyles.LabelLg.copy(
-                fontWeight = FontWeight.SemiBold,
-            ),
-            color = MaterialTheme.colorScheme.primary,
-        )
-    }
-}
-
-@Composable
-private fun ChatHomeDrawerThreadRow(row: ChatHomeThreadRow, onClick: () -> Unit, onEdit: () -> Unit) {
-    // Pair the selected-row background and the on-row text colour through the
-    // Material3 colour scheme so the contrast stays WCAG-AA in both themes.
-    // The previous `KnotworkPalette.Accent50` was a static tan that washed out
-    // against `onSurface` on dark theme (mirror of the onboarding row fix).
-    val selected = row.active || row.selected
-    val rowBg = if (selected) {
-        MaterialTheme.colorScheme.primaryContainer
-    } else {
-        Color.Transparent
-    }
-    val rowFg = if (selected) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        MaterialTheme.colorScheme.onSurface
-    }
-    val rowSubtitleFg = if (selected) {
-        MaterialTheme.colorScheme.onPrimaryContainer
-    } else {
-        KnotworkTheme.extended.onSurfaceMuted
-    }
-    val dotColor = if (row.active) {
-        MaterialTheme.colorScheme.primary
-    } else {
-        KnotworkTheme.extended.onSurfaceMuted
-    }
-    val runningDescription = stringResource(R.string.knotwork_chat_home_drawer_running_cd)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(color = rowBg)
-            .clickable(onClick = onClick)
-            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3),
-    ) {
-        Box(
-            modifier = Modifier
-                .size(DRAWER_STATUS_DOT_SIZE)
-                .background(color = dotColor, shape = CircleShape),
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
-            ) {
-                if (row.starred) {
-                    Icon(
-                        imageVector = AppIcons.Star,
-                        contentDescription =
-                        stringResource(R.string.knotwork_chat_home_drawer_starred_cd),
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(DRAWER_STARRED_ICON_SIZE),
-                    )
-                }
-                Text(
-                    text = row.title,
-                    // Compact list-title token (15 sp Medium) — the drawer holds many
-                    // rows, so a lighter, denser title reads better than the larger
-                    // 17 sp SemiBold used for standalone list rows.
-                    style = KnotworkTextStyles.LabelLg,
-                    color = rowFg,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            Text(
-                text = row.subtitle,
-                style = KnotworkTextStyles.MonoSm,
-                color = rowSubtitleFg,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (row.running) {
-            // The design-system loader (not a raw Material spinner): it
-            // honours the reduced-motion contract by collapsing to a static
-            // glyph, and keeps the in-progress visual language consistent
-            // with the other inline-busy surfaces. The wrapper overrides
-            // the loader's generic "Loading" announcement with row-specific
-            // copy.
-            Box(
-                modifier = Modifier.semantics {
-                    contentDescription = runningDescription
-                },
-            ) {
-                KnotworkLoader()
-            }
-        }
-        IconButton(onClick = onEdit) {
-            Icon(
-                imageVector = AppIcons.Edit,
-                contentDescription = stringResource(R.string.knotwork_chat_home_drawer_edit_cd),
-                tint = KnotworkTheme.extended.onSurfaceMuted,
-            )
-        }
-    }
-}
-
-@Composable
-private fun DrawerFooterRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.size(KnotworkTheme.spacing.sp6),
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = KnotworkTextStyles.TitleMd.copy(
-                    fontWeight = FontWeight.SemiBold,
-                ),
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = subtitle,
-                style = KnotworkTextStyles.BodySm,
-                color = KnotworkTheme.extended.onSurfaceMuted,
-            )
-        }
-    }
-}
-
-/** Diameter of the leading status dot rendered next to each session row. */
-private val DRAWER_STATUS_DOT_SIZE = 8.dp
-
-/** Size of the inline star glyph rendered before a favorited session's title. */
-private val DRAWER_STARRED_ICON_SIZE = 14.dp
-
-/**
  * Material 3 [ModalBottomSheet] hosting the stateless [ConsolePane].
  *
  * The sheet owns:
@@ -1111,7 +915,7 @@ private const val TRIPLE_TAP_TIMEOUT_MS = 400L
  * surface underneath.
  */
 @Composable
-private fun Modifier.scrimClickable(onClick: () -> Unit): Modifier {
+internal fun Modifier.scrimClickable(onClick: () -> Unit): Modifier {
     val interactionSource = remember { MutableInteractionSource() }
     return this.clickable(
         interactionSource = interactionSource,
@@ -1128,7 +932,7 @@ private fun Modifier.scrimClickable(onClick: () -> Unit): Modifier {
  * handles, tab strips) keep working without dismissing the overlay.
  */
 @Composable
-private fun Modifier.absorbClicks(): Modifier {
+internal fun Modifier.absorbClicks(): Modifier {
     val interactionSource = remember { MutableInteractionSource() }
     return this.clickable(
         interactionSource = interactionSource,

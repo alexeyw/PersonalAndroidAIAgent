@@ -120,6 +120,29 @@ interface ChatRepository {
     suspend fun setSessionFavorite(sessionId: String, favorite: Boolean)
 
     /**
+     * Sets the session-level archive flag persisted on
+     * `chat_sessions.isArchived`. Archiving hides the conversation from the
+     * main thread list without deleting the session, its messages, or its
+     * runs; unarchiving restores it unchanged.
+     *
+     * No-op when no session with [sessionId] exists.
+     *
+     * Implementations also stamp `chat_sessions.archivedAt` with the current
+     * instant when [archived] is `true` and clear it when it is `false`, so the
+     * archive surface can order by, and label, *when the user put a chat away*
+     * rather than when it was last written to.
+     *
+     * Prefer the [app.knotwork.android.domain.usecases.ArchiveChatUseCase] /
+     * [app.knotwork.android.domain.usecases.UnarchiveChatUseCase] entry points
+     * over calling this directly — they carry the id validation and the
+     * `Result` boundary the UI needs.
+     *
+     * @param sessionId The id of the session to update.
+     * @param archived The new archive flag to persist.
+     */
+    suspend fun setSessionArchived(sessionId: String, archived: Boolean)
+
+    /**
      * Imports a chat from a JSON document into a freshly-created session and
      * returns the new session id. The caller is expected to switch the
      * active session to the returned id.
@@ -138,11 +161,25 @@ interface ChatRepository {
     suspend fun importChat(json: String): String
 
     /**
-     * Retrieves all chat sessions as a flow, ordered by the last update time.
+     * Retrieves chat sessions as a flow, ordered by the last update time.
      *
+     * @param includeArchived Whether archived sessions are part of the result.
+     *   Defaults to `false`: every list-facing caller (thread list, startup
+     *   session restore, dynamic shortcuts) wants the active conversations
+     *   only. Pass `true` where an archived session must still be accounted
+     *   for — the task monitor does, so a run in flight does not vanish from
+     *   it when its chat is archived.
      * @return A [Flow] emitting the list of [ChatSession].
      */
-    fun getSessionsFlow(): Flow<List<ChatSession>>
+    fun getSessionsFlow(includeArchived: Boolean = false): Flow<List<ChatSession>>
+
+    /**
+     * Retrieves **only** the archived chat sessions as a flow, most-recently-
+     * archived first — the observable source behind the archive surface.
+     *
+     * @return A [Flow] emitting the list of archived [ChatSession]s.
+     */
+    fun getArchivedSessionsFlow(): Flow<List<ChatSession>>
 
     /**
      * Retrieves a specific chat session by its ID.

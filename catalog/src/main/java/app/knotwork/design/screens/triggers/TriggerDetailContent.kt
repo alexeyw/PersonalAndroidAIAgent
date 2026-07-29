@@ -445,6 +445,7 @@ private fun JournalEntryRow(entry: TriggerJournalEntryUi, strings: TriggerDetail
         ) {
             EntryFirstLine(entry = entry, strings = strings)
             EntrySecondLine(entry = entry, strings = strings)
+            entry.hitl?.let { HitlLine(hitl = it, parked = entry.hitlParked, strings = strings) }
         }
     }
 }
@@ -556,6 +557,42 @@ private fun OutcomeLine(outcome: TriggerJournalOutcomeUi, error: String?, string
             )
         }
         Text(text = text, style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold), color = color)
+    }
+}
+
+/**
+ * The human-in-the-loop line of a fired entry: whether the run stopped to ask,
+ * and what came of it.
+ *
+ * Rendered under the outcome line rather than folded into it, because the two
+ * answer different questions — the outcome is what became of the *run*, this is
+ * what became of the *request to the user*. A run can complete successfully after
+ * an approval that sat in the shade for an hour, and both halves matter.
+ */
+@Composable
+private fun HitlLine(hitl: TriggerJournalHitlUi, parked: Boolean, strings: TriggerDetailStrings) {
+    val color = hitlColor(hitl)
+    val qualifier = when {
+        !parked -> null
+        hitl == TriggerJournalHitlUi.Waiting -> strings.hitlParkedPending
+        else -> strings.hitlParkedSettled
+    }
+    val label = hitl.label(strings)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+    ) {
+        Icon(
+            imageVector = hitl.glyph(),
+            contentDescription = null,
+            tint = color,
+            modifier = Modifier.size(InlineGlyphSize),
+        )
+        Text(
+            text = if (qualifier == null) label else "$label · $qualifier",
+            style = KnotworkTextStyles.BodySm,
+            color = color,
+        )
     }
 }
 
@@ -724,6 +761,34 @@ private fun outcomeColor(outcome: TriggerJournalOutcomeUi): Color = when (outcom
     TriggerJournalOutcomeUi.CancelledBySystem -> KnotworkTheme.extended.signalWarn
     TriggerJournalOutcomeUi.HitlTimeout -> KnotworkTheme.extended.signalWarn
     TriggerJournalOutcomeUi.Cancelled -> KnotworkTheme.extended.onSurface2
+}
+
+private fun TriggerJournalHitlUi.glyph(): ImageVector = when (this) {
+    TriggerJournalHitlUi.Waiting -> AppIcons.Hourglass
+    TriggerJournalHitlUi.Approved -> AppIcons.Shield
+    TriggerJournalHitlUi.Denied -> AppIcons.Block
+    TriggerJournalHitlUi.Answered -> AppIcons.Chat
+    TriggerJournalHitlUi.TimedOut -> AppIcons.Hourglass
+    TriggerJournalHitlUi.Abandoned -> AppIcons.MinusCircle
+}
+
+private fun TriggerJournalHitlUi.label(strings: TriggerDetailStrings): String = when (this) {
+    TriggerJournalHitlUi.Waiting -> strings.hitlWaiting
+    TriggerJournalHitlUi.Approved -> strings.hitlApproved
+    TriggerJournalHitlUi.Denied -> strings.hitlDenied
+    TriggerJournalHitlUi.Answered -> strings.hitlAnswered
+    TriggerJournalHitlUi.TimedOut -> strings.hitlTimedOut
+    TriggerJournalHitlUi.Abandoned -> strings.hitlAbandoned
+}
+
+@Composable
+private fun hitlColor(hitl: TriggerJournalHitlUi): Color = when (hitl) {
+    // A gate still open is the only one asking for action; the settled ones are
+    // context for the outcome above, so they stay muted rather than competing
+    // with it. Timing out is the one failure mode of the request itself.
+    TriggerJournalHitlUi.Waiting -> MaterialTheme.colorScheme.primary
+    TriggerJournalHitlUi.TimedOut -> KnotworkTheme.extended.signalWarn
+    else -> KnotworkTheme.extended.onSurface2
 }
 
 private fun TriggerJournalEntryUi.skipSentence(strings: TriggerDetailStrings): String = when (skipReason) {

@@ -37,6 +37,15 @@ package app.knotwork.android.domain.models
  *   `false` for user-saved presets persisted in Room. Bundled presets must
  *   never reach `PipelinePresetRepository.saveUserPreset` /
  *   `deleteUserPreset`.
+ * @property isInternal `true` for a bundled preset that exists only as a
+ *   building block of another preset — the four `subtask_*` sub-pipelines
+ *   composed by `showcase_full_agent` are the shipped example. Internal
+ *   presets are **hidden from the picker and the library**
+ *   (`PipelinePresetRepository.getBundledPresets`) but stay resolvable by id
+ *   (`getPresetById`), because `LoadPipelineFromPresetUseCase` seeds a
+ *   composed parent's `PIPELINE` targets from exactly that lookup. Always
+ *   `false` for user presets — the user never authors a building block that
+ *   another preset composes.
  */
 data class PipelinePreset(
     val id: String,
@@ -46,6 +55,7 @@ data class PipelinePreset(
     val graph: PipelineGraph,
     val tags: List<String> = emptyList(),
     val isBundled: Boolean,
+    val isInternal: Boolean = false,
 )
 
 /**

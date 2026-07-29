@@ -122,7 +122,7 @@ class ChatHomeConsoleStreamingTest {
 
         every { llmInferenceEngine.isInitialized } returns true
         every { localModelRepository.getAllModels() } returns localModelsFlow
-        every { chatRepository.getSessionsFlow() } returns sessionsFlow
+        every { chatRepository.getSessionsFlow(any()) } returns sessionsFlow
         every { chatRepository.getDisplayMessagesForSession(any()) } returns messagesFlow
         coEvery { chatRepository.saveSession(any()) } answers {
             val saved = firstArg<ChatSession>()
@@ -165,6 +165,9 @@ class ChatHomeConsoleStreamingTest {
         mockk(relaxed = true),
         pipelineRunRepository,
         runTraceRepository,
+        mockk(relaxed = true),
+        mockk(relaxed = true),
+        mockk(relaxed = true),
         mockk(relaxed = true),
         mockk(relaxed = true),
         mockk(relaxed = true),

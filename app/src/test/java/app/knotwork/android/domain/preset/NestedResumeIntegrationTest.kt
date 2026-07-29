@@ -57,6 +57,7 @@ import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.usecases.EvaluateIfConditionUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
+import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -306,6 +307,7 @@ class NestedResumeIntegrationTest {
                 mockk<ApprovalNotifier>(relaxed = true),
                 chatRepository,
                 pendingInteractionRepository,
+                recordTriggerHitlEvent = mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
             ),
             StructuredOutputGate(),
             settingsRepository,
@@ -357,6 +359,7 @@ class NestedResumeIntegrationTest {
                 clarificationRepository,
                 pendingInteractionRepository,
                 mockk<ClarificationNotifier>(relaxed = true),
+                recordTriggerHitlEvent = mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
             ),
             PipelineNodeExecutor(
                 pipelineRepository,

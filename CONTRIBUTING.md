@@ -54,6 +54,17 @@ Required toolchain:
   `targetSdk`). Minimum runtime is API 36 (Android 16).
 - **NDK** is not required.
 
+Debug and release install side by side:
+
+- The debug build uses the applicationId `app.knotwork.android.debug`
+  and the launcher label **Knotwork Debug**, so it never replaces (or
+  shares data with) a release build already on the device. Its Firebase
+  config is the placeholder in `app/src/debug/google-services.json`,
+  which keeps a debug build off any real project even when the
+  module-root file is swapped for a real one.
+- Both apps answer the same deep links and share targets, so Android
+  will ask which one to use. That is expected; pick by the label.
+
 Local configuration:
 
 - Create `local.properties` in the repository root with at least

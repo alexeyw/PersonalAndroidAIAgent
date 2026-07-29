@@ -130,6 +130,13 @@ project — `:app` consumes it as an `implementation` dependency.
   - `lists/` — `PipelineListRow` / `ToolListRow` / `MemoryEntryRow` /
     `KnotworkNavListRow` (leading-icon + title + chevron routing row) +
     previews.
+    - `SwipeRevealRow.kt` — wraps a list row in a **single** 64 dp
+      swipe-revealed action (`SwipeRevealAction`: glyph + spoken label +
+      tint). `PipelineListRow`'s mechanics — `Animatable` offset driven by
+      `Modifier.draggable`, clamped and snapped at half the reveal, partial
+      reveal never a dismiss — with one action instead of three, so the
+      strip claims 20 % of a 320 dp drawer instead of 60 %. Shared by the
+      chat drawer row (Archive) and the archive row (Restore).
   - `misc/` — `KnotworkLoader` / `KnotworkSnackbar` / `EmptyState` /
     `StripedPlaceholder` / `KnotworkSectionAction` (right-aligned action
     link) / `KnotworkStatCell` (counter grid cell) + previews.
@@ -254,8 +261,31 @@ project — `:app` consumes it as an `implementation` dependency.
     - `ChatHomePreviewData.kt` — deterministic preview fixtures for the
       chat surface (thread, model, message rows, HITL / clarification
       cards).
+    - `ChatHomeDrawer.kt` — the alternate-nav drawer overlay extracted from
+      `ChatHomeContent.kt`: sessions list, `+ New chat` pill, the thread row
+      (`⋮` menu = Rename / Archive / — / Delete chat, plus a one-action
+      Archive swipe and TalkBack custom actions; drops its status dot at
+      font-scale 200 %) and the footer rows (`Archived chats` only when the
+      count is positive, `Import chat`, `Settings`).
     - `ChatHomeContentPreview.kt` — Android Studio `@Preview` group for
       the chat variants in both themes.
+  - `chatarchive/` — archived-chats surface (the chats a user took out of
+    the drawer without deleting them).
+    - `ChatArchiveContent.kt` — list of archived chats, most-recently-
+      archived first: leading archive tile, relative archived-at label, an
+      optional "run finished after archiving" note, inline Restore pill, a
+      one-action Restore swipe and a row overflow (Restore / Export chat /
+      ─ / Delete forever behind a plain confirmation). Teaching empty state
+      with no CTA, skeleton and error branches. At font-scale 200 % the
+      tile is dropped and Restore collapses to an icon-only 48 dp button
+      with the word kept for TalkBack.
+    - `ChatArchiveViewState.kt` — visual-state enum (Loading / Default /
+      Empty / Error), `ChatArchiveRowUi`, the localised `ChatArchiveStrings`
+      bundle and the callbacks. `revealedRowId` is a preview/snapshot
+      control only — production leaves each row's swipe under the finger.
+    - `ChatArchivePreview.kt` — deterministic fixtures (long title,
+      starred row, a chat whose run settled after archiving).
+    - `ChatArchiveContentPreview.kt` — Android Studio `@Preview` group.
   - `discover/` — model discovery over the curated Hugging Face
     organisation (list → detail → install).
     - `DiscoverContent.kt` — list surface: sticky search field
@@ -410,9 +440,14 @@ project — `:app` consumes it as an `implementation` dependency.
       cold-start state.
   - `taskmonitor/`
     - `TaskMonitorContent.kt` — task list (filter row, task cards,
-      expandable detail sheet with logs + actions).
+      expandable detail sheet with logs + actions), plus the top-bar
+      "stop all scheduled tasks" action and its confirmation. The
+      action appears only when something is actually stoppable; the
+      confirm is a plain dialog rather than the typed-keyword one, since
+      this is recoverable and is itself a recovery action.
     - `TaskMonitorViewState.kt` — visual-state enum + filter enum + task
-      row / detail / status-lifecycle models.
+      row / detail / status-lifecycle models, plus the scheduled-task
+      count and bulk-cancel confirmation flag.
   - `tools/`
     - `ToolsContent.kt` — Tools surface (built-in AppFunctions section +
       MCP servers with expandable tool lists and connection states).
@@ -435,11 +470,14 @@ project — `:app` consumes it as an `implementation` dependency.
       (When / Runs / State + enable switch), Edit / Delete, an optional
       overdue stale banner, and the **evaluation journal** timeline (per-day
       groups; each entry = verdict tile + source + timestamp, plus a settled
-      outcome line for fired rows or a human skip / re-arm sentence);
+      outcome line for fired rows or a human skip / re-arm sentence, and a
+      third HITL line when the run stopped to ask the user — state plus a
+      "from the notification" qualifier when it had to park);
       loading / empty / populated states, reduced-motion-aware pending dot.
     - `TriggerDetailViewState.kt` — detail view-state + the journal
       vocabulary mirrors (`TriggerHealthUi`, source / verdict / skip-reason /
-      outcome enums, entry / day-group models, `TriggerJournalVisualState`),
+      outcome / `TriggerJournalHitlUi` enums, entry / day-group models,
+      `TriggerJournalVisualState`),
       `TriggerDetailStrings` (final English copy defaults), callbacks.
     - `TriggersViewState.kt` — list view-state (`TriggerRowUi` incl. the
       optional `health` badge, editor / delete models, strings, callbacks).

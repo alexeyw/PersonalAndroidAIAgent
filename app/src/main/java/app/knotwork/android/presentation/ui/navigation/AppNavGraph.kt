@@ -18,6 +18,7 @@ import app.knotwork.android.domain.models.ProviderId
 import app.knotwork.android.presentation.state.ChatEntryRequest
 import app.knotwork.android.presentation.state.ChatEntryRequestRelay
 import app.knotwork.android.presentation.ui.about.AboutScreen
+import app.knotwork.android.presentation.ui.chat.archive.ChatArchiveScreen
 import app.knotwork.android.presentation.ui.chat.home.ChatHomeScreen
 import app.knotwork.android.presentation.ui.chat.home.ChatHomeViewModel
 import app.knotwork.android.presentation.ui.discover.DiscoverDetailScreen
@@ -172,6 +173,7 @@ fun AppNavGraph(
                 viewModel = chatHomeViewModel,
                 onOpenSettings = { navController.navigate(NavRoutes.SETTINGS) },
                 onOpenModels = { navController.navigate(NavRoutes.MODELS) },
+                onOpenArchive = { navController.navigate(NavRoutes.CHAT_ARCHIVE) },
             )
         }
 
@@ -302,6 +304,7 @@ fun AppNavGraph(
                 onNavigateToAbout = { navController.navigate(NavRoutes.ABOUT) },
                 onNavigateToLibrary = { navController.navigate(NavRoutes.PIPELINE_PRESETS) },
                 onNavigateToFiles = { navController.navigate(NavRoutes.FILES) },
+                onNavigateToChatArchive = { navController.navigate(NavRoutes.CHAT_ARCHIVE) },
             )
         }
         composable(NavRoutes.PIPELINE_PRESETS) {
@@ -443,6 +446,21 @@ fun AppNavGraph(
             SkillLibraryScreen(
                 modifier = Modifier.fillMaxSize(),
                 onBack = { navController.popBackStack() },
+            )
+        }
+        composable(NavRoutes.CHAT_ARCHIVE) {
+            ChatArchiveScreen(
+                modifier = Modifier.fillMaxSize(),
+                onBack = { navController.popBackStack() },
+                // Opening an archived chat routes into the *single* chat home
+                // through the same relay every other entry surface uses, so no
+                // second chat destination is ever pushed. The chat renders
+                // read-only from the session's own archive flag — opening never
+                // un-archives.
+                onOpenChat = { sessionId ->
+                    chatEntryRequestRelay.openThread(sessionId)
+                    navController.navigate(NavRoutes.CHAT_TAB) { launchSingleTop = true }
+                },
             )
         }
         composable(NavRoutes.TRIGGERS) {

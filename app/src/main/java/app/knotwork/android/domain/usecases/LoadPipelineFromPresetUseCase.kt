@@ -132,6 +132,10 @@ class LoadPipelineFromPresetUseCase @Inject constructor(
             // the new-chat empty state shows the pipeline's own quick actions
             // (mirrors DuplicatePipelineUseCase).
             samplePrompts = template.samplePrompts,
+            // Same reasoning for the preset's declared background
+            // memory-retrieval key: a materialized preset must behave like the
+            // template it came from.
+            memoryRetrievalQuery = template.memoryRetrievalQuery,
         )
 
         val errors = pipeline.validate()
