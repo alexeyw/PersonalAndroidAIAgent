@@ -227,7 +227,12 @@ data class TriggerHitlActivity(
  * dump, so they must never be renamed.
  */
 enum class TriggerHitlResolution {
-    /** The gate is still waiting for the user — live, or parked in the shade. */
+    /**
+     * The gate is still waiting for the user — live, or parked in the shade.
+     * Also the resting state of a gate whose run died before it could be
+     * settled: nobody ever answered it, and the row's own
+     * [TriggerEvaluation.outcome] says what became of the run.
+     */
     PENDING,
 
     /** The user approved the staged tool call. */
