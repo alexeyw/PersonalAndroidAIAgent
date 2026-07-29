@@ -2,9 +2,9 @@ package app.knotwork.android.data.tools.local.executors
 
 import app.knotwork.android.domain.models.ToolExecutionContext
 import app.knotwork.android.domain.usecases.ScheduleTaskUseCase
-import io.mockk.every
+import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import org.json.JSONException
 import org.junit.Assert.assertEquals
@@ -48,7 +48,7 @@ class ScheduleTaskExecutorTest {
     fun `given JSON with all fields when execute then forwards values to use case`() = runTest {
         // Given
         val arguments = """{"prompt":"Remind me to drink water","intervalHours":4,"delayMinutes":15}"""
-        every { scheduleTaskUseCase("Remind me to drink water", 4L, 15L) } returns
+        coEvery { scheduleTaskUseCase("Remind me to drink water", 4L, 15L, any(), any()) } returns
             "Success: scheduled (id=abc)"
 
         // When
@@ -56,35 +56,35 @@ class ScheduleTaskExecutorTest {
 
         // Then
         assertEquals("Success: scheduled (id=abc)", result)
-        verify(exactly = 1) { scheduleTaskUseCase("Remind me to drink water", 4L, 15L) }
+        coVerify(exactly = 1) { scheduleTaskUseCase("Remind me to drink water", 4L, 15L, any(), any()) }
     }
 
     @Test
     fun `given JSON with only prompt when execute then defaults intervalHours and delayMinutes to zero`() = runTest {
         // Given
         val arguments = """{"prompt":"One-shot task"}"""
-        every { scheduleTaskUseCase("One-shot task", 0L, 0L) } returns "Success: scheduled (id=once)"
+        coEvery { scheduleTaskUseCase("One-shot task", 0L, 0L, any(), any()) } returns "Success: scheduled (id=once)"
 
         // When
         val result = executor.execute(arguments)
 
         // Then
         assertEquals("Success: scheduled (id=once)", result)
-        verify(exactly = 1) { scheduleTaskUseCase("One-shot task", 0L, 0L) }
+        coVerify(exactly = 1) { scheduleTaskUseCase("One-shot task", 0L, 0L, any(), any()) }
     }
 
     @Test
     fun `given execution context with session id when execute then forwards it to use case`() = runTest {
         // Given
         val arguments = """{"prompt":"Morning summary"}"""
-        every { scheduleTaskUseCase("Morning summary", 0L, 0L, "session-9") } returns "Scheduled"
+        coEvery { scheduleTaskUseCase("Morning summary", 0L, 0L, "session-9", any()) } returns "Scheduled"
 
         // When
         val result = executor.execute(arguments, ToolExecutionContext(sessionId = "session-9"))
 
         // Then — the session id comes from the trusted engine context, never the LLM JSON.
         assertEquals("Scheduled", result)
-        verify(exactly = 1) { scheduleTaskUseCase("Morning summary", 0L, 0L, "session-9") }
+        coVerify(exactly = 1) { scheduleTaskUseCase("Morning summary", 0L, 0L, "session-9", any()) }
     }
 
     @Test
@@ -113,7 +113,8 @@ class ScheduleTaskExecutorTest {
     fun `given use case throws when execute then exception propagates`() {
         // Given
         val arguments = """{"prompt":"Boom"}"""
-        every { scheduleTaskUseCase(any(), any(), any()) } throws IllegalStateException("WorkManager unavailable")
+        coEvery { scheduleTaskUseCase(any(), any(), any(), any(), any()) } throws
+            IllegalStateException("WorkManager unavailable")
 
         // When / Then
         val thrown = assertThrows(IllegalStateException::class.java) {

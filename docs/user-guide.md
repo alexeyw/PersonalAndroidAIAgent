@@ -1364,6 +1364,22 @@ If the original conversation was deleted before the task fired (or the
 task predates session binding), the result is delivered to a fresh
 conversation named after the task, e.g. *Scheduled: check the news*.
 
+### A task that keeps scheduling itself
+
+An agent asked to "do this and set up the next one" can end up
+scheduling its own successor every time it runs. Only ever one task is
+queued, so nothing looks wrong in the list, while the agent works
+continuously in the background.
+
+Two things bound this. The app refuses to schedule anything more once
+too many scheduled runs have already started within the last hour, and
+tells the agent so instead of failing silently — a legitimate schedule
+(hourly or slower, which is all background work honours anyway) never
+comes close to that. And **More → Active tasks → Stop all scheduled
+tasks** ends the chain outright, which cancelling the one queued item by
+hand cannot do while the run that will enqueue the next one is still
+going.
+
 When a scheduled run finishes, the app posts a **Task completed**
 notification with the first line of the answer — or **Task failed**
 with the reason — and tapping it opens the conversation. The
@@ -2074,6 +2090,18 @@ pill (Queued / Running / Success / Failed / Cancelled), and an
 inline cancel button on running background work. Tap any row to
 open a bottom sheet with the task details and an `Open chat` shortcut
 for session-bound tasks.
+
+**Tasks the agent scheduled for itself** are named: the row leads with
+the beginning of the task's own prompt, and the line under it reads
+*Scheduled task*, its repeat interval if it has one, and the chat it
+reports into. That is what makes cancelling a specific one possible —
+without it every scheduled task looks the same.
+
+When at least one such task is queued or running, the top bar offers
+**Stop all scheduled tasks**. It settles every task the agent scheduled
+for itself, including any running at that moment, and nothing else:
+automations and their triggers keep working, and nothing is deleted —
+a task can simply be scheduled again. It exists for the case below.
 
 ## Live metrics
 

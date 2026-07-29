@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -26,6 +27,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -72,7 +74,7 @@ fun TaskMonitorContent(
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(left = 0, top = 0, right = 0, bottom = 0),
         topBar = {
             androidx.compose.foundation.layout.Column {
-                TopBar(strings = strings, callbacks = callbacks)
+                TopBar(state = state, strings = strings, callbacks = callbacks)
                 androidx.compose.material3.HorizontalDivider(color = KnotworkTheme.extended.divider)
             }
         },
@@ -94,12 +96,15 @@ fun TaskMonitorContent(
                 }
             }
         }
+        if (state.confirmingCancelAll) {
+            CancelAllScheduledDialog(strings = strings, callbacks = callbacks)
+        }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TopBar(strings: TaskMonitorStrings, callbacks: TaskMonitorCallbacks) {
+private fun TopBar(state: TaskMonitorViewState, strings: TaskMonitorStrings, callbacks: TaskMonitorCallbacks) {
     TopAppBar(
         title = {
             Text(text = strings.title, style = KnotworkTextStyles.TitleMd, color = MaterialTheme.colorScheme.onSurface)
@@ -113,10 +118,50 @@ private fun TopBar(strings: TaskMonitorStrings, callbacks: TaskMonitorCallbacks)
                 )
             }
         },
+        actions = {
+            // Only offered when there is something to stop: this is the way out
+            // of a task that keeps re-scheduling itself, not a routine control.
+            if (state.scheduledTaskCount > 0) {
+                IconButton(onClick = callbacks.onCancelAllScheduled) {
+                    Icon(
+                        imageVector = AppIcons.Stop,
+                        contentDescription = strings.cancelAllCd,
+                        tint = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+        },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
         ),
+    )
+}
+
+/**
+ * Confirmation for stopping every scheduled task at once.
+ *
+ * A plain confirm rather than the typed-keyword dialog the settings wipes use:
+ * this is recoverable (a task can simply be scheduled again) and it is itself
+ * the recovery action, so making someone type a word while they are trying to
+ * stop a runaway loop would be the wrong kind of friction. It still confirms,
+ * because it settles several tasks the user cannot individually see at that
+ * moment.
+ */
+@Composable
+private fun CancelAllScheduledDialog(strings: TaskMonitorStrings, callbacks: TaskMonitorCallbacks) {
+    AlertDialog(
+        onDismissRequest = callbacks.onCancelAllScheduledDismiss,
+        title = { Text(text = strings.cancelAllTitle) },
+        text = { Text(text = strings.cancelAllBody) },
+        confirmButton = {
+            TextButton(onClick = callbacks.onCancelAllScheduledConfirm) {
+                Text(text = strings.cancelAllConfirm, color = KnotworkTheme.extended.signalError)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = callbacks.onCancelAllScheduledDismiss) { Text(text = strings.cancelAllDismiss) }
+        },
     )
 }
 
@@ -339,4 +384,17 @@ data class TaskMonitorStrings(
     val detailDismiss: String = "Close",
     val detailOpenChat: String = "Open chat",
     val detailNoLogs: String = "No log lines captured yet.",
+    val cancelAllCd: String = "Stop all scheduled tasks",
+    val cancelAllTitle: String = "Stop all scheduled tasks?",
+    val cancelAllConfirm: String = "Stop all",
+    val cancelAllDismiss: String = "Keep them",
+    /**
+     * Body of the bulk-cancel confirmation. Already carries the task count:
+     * the host resolves the plural for its own language before building this
+     * bundle, the same way every other counted string in the catalog arrives
+     * pre-resolved.
+     */
+    val cancelAllBody: String =
+        "This stops 2 scheduled tasks, including any that are running. Automations and their triggers are not " +
+            "affected. Nothing else is deleted — a task can be scheduled again.",
 )

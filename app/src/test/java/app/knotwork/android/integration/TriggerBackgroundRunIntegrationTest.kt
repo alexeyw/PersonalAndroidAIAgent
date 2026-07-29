@@ -676,6 +676,9 @@ class TriggerBackgroundRunIntegrationTest {
             )
         }
 
+        /** Unused by the trigger path under test. */
+        override fun cancelAllScheduled() = Unit
+
         override fun schedulePeriodic(
             prompt: String,
             intervalHours: Long,

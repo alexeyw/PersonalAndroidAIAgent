@@ -23,4 +23,22 @@
     <string name="taskmonitor_filter_background">Background</string>
     <string name="taskmonitor_filter_completed">Completed</string>
     <string name="taskmonitor_detail_no_logs">No log lines captured yet.</string>
+
+    <!-- Task monitor: rows for tasks the agent scheduled for itself. The
+         interval fragment is abbreviated ("every 6 h"), which reads the same
+         for every count, so it is a plain format string rather than a plural. -->
+    <string name="taskmonitor_row_scheduled_title">Scheduled task</string>
+    <string name="taskmonitor_row_scheduled_interval_format">every %1$d h</string>
+
+    <!-- Task monitor: stopping every scheduled task at once. -->
+    <string name="taskmonitor_cancel_all_cd">Stop all scheduled tasks</string>
+    <string name="taskmonitor_cancel_all_title">Stop all scheduled tasks?</string>
+    <string name="taskmonitor_cancel_all_confirm">Stop all</string>
+    <string name="taskmonitor_cancel_all_dismiss">Keep them</string>
+    <plurals name="taskmonitor_cancel_all_body">
+        <item quantity="one">This stops the scheduled task, including if it is running right now. Automations and
+            their triggers are not affected, and nothing is deleted — a task can be scheduled again.</item>
+        <item quantity="other">This stops all %1$d scheduled tasks, including any running right now. Automations
+            and their triggers are not affected, and nothing is deleted — a task can be scheduled again.</item>
+    </plurals>
 </resources>

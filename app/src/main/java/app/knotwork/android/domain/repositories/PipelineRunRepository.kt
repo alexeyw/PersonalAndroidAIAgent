@@ -2,6 +2,7 @@ package app.knotwork.android.domain.repositories
 
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
+import app.knotwork.android.domain.models.RunOrigin
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -112,6 +113,22 @@ interface PipelineRunRepository {
      * @return The descendant runs, nearest-first by start time.
      */
     suspend fun getDescendantRuns(rootRunId: String): List<PipelineRun>
+
+    /**
+     * Counts the runs of [origin] that started at or after [sinceEpochMs].
+     *
+     * Exists for the scheduling tool's runaway guard, which has to answer "how
+     * often is this actually firing?" — a question the queue cannot answer,
+     * since a self-re-scheduling task never has more than one item queued.
+     *
+     * Degrades to `0` on a storage failure (fail-open): a diagnostic count must
+     * never be the reason a legitimate task cannot be scheduled.
+     *
+     * @param origin The run origin to count.
+     * @param sinceEpochMs Inclusive lower bound on the run's start, epoch-millis.
+     * @return The number of matching runs, or `0` when the read failed.
+     */
+    suspend fun countRunsByOriginSince(origin: RunOrigin, sinceEpochMs: Long): Int
 
     /**
      * Walks the [PipelineRun.parentRunId] links up from [runId] to the root of
