@@ -323,9 +323,14 @@ flowchart TB
 
 Key invariants:
 
-1. **One retrieval per run.** The engine memoises memory off the immutable
-   `userPrompt`, so multiple memory-enabled nodes in a graph share a single
-   embed + search rather than re-querying per node.
+1. **One retrieval per run.** The engine memoises the result of the first
+   memory-enabled node's lookup, so multiple memory-enabled nodes in a graph
+   share a single embed + search rather than re-querying per node. The search
+   key itself comes from `MemoryRetrievalQueryResolver` and therefore depends on
+   the run's origin — an interactive run searches with the user's message, a
+   background run with the pipeline's declared key, else the text arriving at
+   that first node, else the prompt. Because the key is resolved inside the same
+   memoisation, choosing it costs nothing extra.
 2. **Same embedding space.** Both extraction and retrieval resolve the
    *active* provider via `EmbeddingProviderResolver`, so a query is always
    embedded with whatever produced the stored vectors; a mismatch (e.g. a
@@ -1031,6 +1036,17 @@ pipelines (nodes and connections), prompt templates, pipeline-run
 lifecycle records and the per-run execution trace. DAOs are split per
 aggregate (`ChatDao`, `MemoryDao`, `PipelineDao`, …) and live under
 `data/local/dao/`.
+
+**Archiving is a flag, not a deletion.** Putting a chat away writes
+`chat_sessions.isArchived` plus the instant `chat_sessions.archivedAt` in a
+single statement (so a row is archived exactly when it carries an archive
+instant) and removes nothing: messages, runs, trace steps and the
+history-compression summary all stay, which is what makes restoring lossless.
+The thread list and the archive surface are two queries over the same table
+(`getSessionsFlow(includeArchived = false)` / `getArchivedSessionsFlow()`), and
+the archive orders by `archivedAt` rather than `updatedAt` so that a background
+run writing into an archived chat cannot reshuffle it. See
+[Archiving chats](user-guide.md#archiving-chats) for the user-facing behaviour.
 
 **Run trace (buffered write-through).** While the execution engine
 walks a graph it appends every console event and every node's

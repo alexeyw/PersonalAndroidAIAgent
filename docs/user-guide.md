@@ -1572,6 +1572,42 @@ its ranking score: how well the entry matches, plus the small bonuses a
 recent or pinned entry earns — which is why a strong match can read
 slightly above 1.00.
 
+### What the agent recalls, and when
+
+Memory is not read on every step of a reply. A run searches long-term memory
+**once**, when it reaches the first step that has the *Long-term memory* input
+switched on, and the entries it finds are the ones every later step in that run
+sees. Which entries those are is decided in this order:
+
+- **Meaning, not words.** Your question is compared against the meaning of each
+  stored entry, so an entry can be recalled without sharing any wording with
+  the question — and an entry that repeats your words can still be skipped if it
+  is about something else.
+- **A relevance gate.** An entry has to clear **Settings → Memory → Similarity
+  threshold** to be eligible at all. Nothing below the gate is recalled, and no
+  bonus can push an entry through it.
+- **Age never disqualifies anything.** An entry that clears the gate stays
+  recallable however old it is. Freshness is only a tie-breaker: recent entries
+  get a small bonus that fades with **Recency half-life**, so when more entries
+  qualify than **Search results (top-K)** allows, newer ones take the slots.
+- **Pinned entries are always in.** Pinning skips the gate, adds the largest
+  bonus, and sorts the entry first — it is the one way to guarantee a fact is
+  recalled.
+- **The original wins over a summary of it.** If compaction has merged some
+  facts into a summary and one of those facts is still stored word-for-word, the
+  original is what the agent is shown. A summary is a paraphrase written by the
+  on-device model; when both are available, the exact wording is the safer one.
+- **Duplicates don't take two slots.** When two qualifying entries say nearly
+  the same thing, only the better-ranked one is recalled (the pinned one if
+  there is one), so a reworded copy cannot crowd out a different fact.
+
+You can see the outcome for any run: the console's **Memory** filter shows one
+`Memory: query='…' → N hits` line per run, with the relevance score of each hit
+(turn on **Verbose memory logging** in Settings → Memory for a snippet per hit).
+Each entry's detail sheet also counts how often it has been recalled. If
+something you expected is missing, work down
+[Memory search isn't finding an obvious entry](#memory-search-isnt-finding-an-obvious-entry).
+
 ### What the agent recalls in a background run
 
 When you talk to the agent, it searches memory with your own message. A

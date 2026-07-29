@@ -279,6 +279,14 @@ details.
   pick the new entry: an unrecognised saved model falls back to the default
   Gemini flash model. Also bumps the Android Gradle plugin, `org.json` and
   Roborazzi to their current releases.
+- **What long-term memory recalls is now written down.** The user guide gains a
+  *"What the agent recalls, and when"* section: memory is searched once per run,
+  at the first step that reads it; the similarity threshold is a gate nothing
+  can be bonused through; age never disqualifies an entry and freshness only
+  breaks ties; pinning always wins; the original wording beats a summary of it;
+  and near-duplicates share one slot. The architecture guide's memory
+  invariants now describe where the search key comes from, and its persistence
+  section states that archiving a chat writes a flag and deletes nothing.
 - **Trigger observability is documented end to end.** The user guide now
   explains the health badges and the evaluation journal in the terms the
   screens actually use, adds a *"A trigger didn't fire"* troubleshooting path
