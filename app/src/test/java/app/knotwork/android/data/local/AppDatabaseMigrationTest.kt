@@ -829,4 +829,49 @@ class AppDatabaseMigrationTest {
             !sql.contains("NOT NULL"),
         )
     }
+
+    @Test
+    fun `MIGRATION_55_56 targets versions 55 to 56`() {
+        val migration = AppDatabase.MIGRATION_55_56
+
+        assertEquals(55, migration.startVersion)
+        assertEquals(56, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_55_56 adds the four HITL columns to trigger_evaluations`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val sqlSlot = mutableListOf<String>()
+
+        AppDatabase.MIGRATION_55_56.migrate(db)
+
+        // Purely additive: four ALTER TABLEs, no data rewrite.
+        verify(exactly = 4) { db.execSQL(capture(sqlSlot)) }
+        val statements = sqlSlot.map { it.uppercase() }
+        assertTrue(
+            "Every statement must be an ALTER TABLE on trigger_evaluations: $sqlSlot",
+            statements.all { it.contains("ALTER TABLE") && it.contains("`TRIGGER_EVALUATIONS`") },
+        )
+        // The counter and the parked flag are NOT NULL with a default, so every
+        // pre-v56 row reads back as "this run never asked" — which is what those
+        // rows mean, nothing having recorded gates before.
+        assertTrue(
+            "Expected counted gates defaulting to none: $sqlSlot",
+            statements.any { it.contains("`HITLGATECOUNT` INTEGER NOT NULL DEFAULT 0") },
+        )
+        assertTrue(
+            "Expected parked flag defaulting to false: $sqlSlot",
+            statements.any { it.contains("`HITLPARKED` INTEGER NOT NULL DEFAULT 0") },
+        )
+        // The two discriminators stay nullable: "no gate" must not be forced to
+        // invent a kind or a resolution for itself.
+        assertTrue(
+            "Expected nullable kind column: $sqlSlot",
+            statements.any { it.contains("`HITLLASTKIND` TEXT") && !it.contains("NOT NULL") },
+        )
+        assertTrue(
+            "Expected nullable resolution column: $sqlSlot",
+            statements.any { it.contains("`HITLLASTRESOLUTION` TEXT") && !it.contains("NOT NULL") },
+        )
+    }
 }

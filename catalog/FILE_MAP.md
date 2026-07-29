@@ -465,11 +465,14 @@ project — `:app` consumes it as an `implementation` dependency.
       (When / Runs / State + enable switch), Edit / Delete, an optional
       overdue stale banner, and the **evaluation journal** timeline (per-day
       groups; each entry = verdict tile + source + timestamp, plus a settled
-      outcome line for fired rows or a human skip / re-arm sentence);
+      outcome line for fired rows or a human skip / re-arm sentence, and a
+      third HITL line when the run stopped to ask the user — state plus a
+      "from the notification" qualifier when it had to park);
       loading / empty / populated states, reduced-motion-aware pending dot.
     - `TriggerDetailViewState.kt` — detail view-state + the journal
       vocabulary mirrors (`TriggerHealthUi`, source / verdict / skip-reason /
-      outcome enums, entry / day-group models, `TriggerJournalVisualState`),
+      outcome / `TriggerJournalHitlUi` enums, entry / day-group models,
+      `TriggerJournalVisualState`),
       `TriggerDetailStrings` (final English copy defaults), callbacks.
     - `TriggersViewState.kt` — list view-state (`TriggerRowUi` incl. the
       optional `health` badge, editor / delete models, strings, callbacks).

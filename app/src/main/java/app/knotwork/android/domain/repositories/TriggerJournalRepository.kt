@@ -2,6 +2,7 @@ package app.knotwork.android.domain.repositories
 
 import app.knotwork.android.domain.models.TriggerEvaluation
 import app.knotwork.android.domain.models.TriggerHealthInputs
+import app.knotwork.android.domain.models.TriggerHitlEvent
 import app.knotwork.android.domain.models.TriggerRunOutcome
 import kotlinx.coroutines.flow.Flow
 
@@ -46,6 +47,25 @@ interface TriggerJournalRepository {
      * @param outcome The terminal fate to record.
      */
     suspend fun recordRunOutcome(runId: String, outcome: TriggerRunOutcome)
+
+    /**
+     * Folds one human-in-the-loop [event] onto the journal row that started the
+     * run identified by [runId] (matched exactly as [recordRunOutcome] does), so
+     * a background run that stopped to ask the user is visible as such instead of
+     * settling into an anonymous success.
+     *
+     * Idempotent in the same sense as [recordRunOutcome]: a no-op when no row
+     * references [runId] — which is the normal case for every interactive,
+     * scheduled-but-untriggered or child run, none of which own a journal row.
+     * Callers therefore report events unconditionally rather than pre-checking
+     * the run's origin.
+     *
+     * @param runId Id of the **root** run whose gate this is; a gate raised
+     *   inside a child pipeline run must be reported under the root, because that
+     *   is the id the journal row carries.
+     * @param event The transition to fold onto the row.
+     */
+    suspend fun recordHitlEvent(runId: String, event: TriggerHitlEvent)
 
     /**
      * Observes the journal of a single trigger, newest evaluation first. Backs

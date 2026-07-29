@@ -3,10 +3,14 @@ package app.knotwork.android.data.repositories
 import androidx.annotation.VisibleForTesting
 import app.knotwork.android.data.local.dao.TriggerJournalDao
 import app.knotwork.android.data.local.models.TriggerEvaluationEntity
+import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.TriggerEvaluation
 import app.knotwork.android.domain.models.TriggerEvaluationSource
 import app.knotwork.android.domain.models.TriggerEvaluationVerdict
 import app.knotwork.android.domain.models.TriggerHealthInputs
+import app.knotwork.android.domain.models.TriggerHitlActivity
+import app.knotwork.android.domain.models.TriggerHitlEvent
+import app.knotwork.android.domain.models.TriggerHitlResolution
 import app.knotwork.android.domain.models.TriggerRunOutcome
 import app.knotwork.android.domain.models.TriggerSkipReason
 import app.knotwork.android.domain.repositories.TriggerJournalRepository
@@ -56,6 +60,19 @@ class TriggerJournalRepositoryImpl @Inject constructor(private val dao: TriggerJ
         val (kind, error) = outcome.encode()
         absorbingStoreFailure({ "Trigger-journal recordRunOutcome failed; ignored" }) {
             withContext(dispatcher) { dao.updateOutcome(runId, kind, error) }
+        }
+    }
+
+    override suspend fun recordHitlEvent(runId: String, event: TriggerHitlEvent) {
+        absorbingStoreFailure({ "Trigger-journal recordHitlEvent failed; ignored" }) {
+            withContext(dispatcher) {
+                when (event) {
+                    is TriggerHitlEvent.Raised ->
+                        dao.recordHitlGateRaised(runId, event.kind.name, TriggerHitlResolution.PENDING.name)
+                    TriggerHitlEvent.Parked -> dao.recordHitlGateParked(runId)
+                    is TriggerHitlEvent.Resolved -> dao.recordHitlGateResolved(runId, event.resolution.name)
+                }
+            }
         }
     }
 
@@ -125,6 +142,10 @@ class TriggerJournalRepositoryImpl @Inject constructor(private val dao: TriggerJ
             runId = runId,
             outcomeKind = outcomeKind,
             outcomeError = outcomeError,
+            hitlGateCount = hitl?.gateCount ?: 0,
+            hitlLastKind = hitl?.lastKind?.name,
+            hitlLastResolution = hitl?.lastResolution?.name,
+            hitlParked = hitl?.parked ?: false,
         )
     }
 
@@ -151,6 +172,32 @@ class TriggerJournalRepositoryImpl @Inject constructor(private val dao: TriggerJ
             verdict = decodedVerdict,
             runId = runId,
             outcome = decodeOutcome(outcomeKind, outcomeError),
+            hitl = decodeHitl(),
+        )
+    }
+
+    /**
+     * Reconstitutes the row's HITL activity, or `null` when the run raised no
+     * gate ([TriggerEvaluationEntity.hitlGateCount] is `0` — the default of every
+     * pre-v56 row) or when a discriminator is undecodable.
+     *
+     * An undecodable HITL pair drops **only** the activity, never the row: unlike
+     * the verdict, the gate history is an annotation on the evaluation, and losing
+     * the fire itself over it would trade a small blind spot for a bigger one.
+     */
+    private fun TriggerEvaluationEntity.decodeHitl(): TriggerHitlActivity? {
+        if (hitlGateCount <= 0) return null
+        val kind = enumOrNull<PendingInteractionKind>(hitlLastKind)
+        val resolution = enumOrNull<TriggerHitlResolution>(hitlLastResolution)
+        if (kind == null || resolution == null) {
+            Timber.tag(TAG).w("Dropping HITL activity of journal row %s: undecodable kind/resolution.", id)
+            return null
+        }
+        return TriggerHitlActivity(
+            gateCount = hitlGateCount,
+            lastKind = kind,
+            lastResolution = resolution,
+            parked = hitlParked,
         )
     }
 

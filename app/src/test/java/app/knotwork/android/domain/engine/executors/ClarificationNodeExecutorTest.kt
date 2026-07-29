@@ -11,12 +11,16 @@ import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PendingInteraction
 import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.Result
+import app.knotwork.android.domain.models.TriggerHitlEvent
+import app.knotwork.android.domain.models.TriggerHitlResolution
 import app.knotwork.android.domain.repositories.ClarificationRepository
 import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.usecases.LoadModelUseCase
+import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -53,6 +57,7 @@ class ClarificationNodeExecutorTest {
     private lateinit var clarificationRepository: ClarificationRepository
     private lateinit var pendingInteractionRepository: PendingInteractionRepository
     private lateinit var clarificationNotifier: ClarificationNotifier
+    private lateinit var recordTriggerHitlEvent: RecordTriggerHitlEventUseCase
     private lateinit var executor: ClarificationNodeExecutor
 
     @Before
@@ -62,6 +67,7 @@ class ClarificationNodeExecutorTest {
         clarificationRepository = mockk()
         pendingInteractionRepository = mockk(relaxed = true)
         clarificationNotifier = mockk(relaxed = true)
+        recordTriggerHitlEvent = mockk(relaxed = true)
         coEvery { pendingInteractionRepository.getForRun(any()) } returns null
         coEvery { pendingInteractionRepository.save(any()) } returns true
         executor = ClarificationNodeExecutor(
@@ -70,6 +76,7 @@ class ClarificationNodeExecutorTest {
             clarificationRepository = clarificationRepository,
             pendingInteractionRepository = pendingInteractionRepository,
             clarificationNotifier = clarificationNotifier,
+            recordTriggerHitlEvent = recordTriggerHitlEvent,
         )
     }
 
@@ -347,4 +354,78 @@ class ClarificationNodeExecutorTest {
         assertEquals("Q: Pick a color\nA: red", result.outputText)
         coVerify { pendingInteractionRepository.delete("run-1") }
     }
+
+    // --- HITL journalling ---------------------------------------------------
+
+    /** Stages a question the LLM will generate, ready for the live wait. */
+    private fun stageQuestion() {
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf(
+            "{\"question\":\"Pick a color\",\"options\":[\"red\",\"blue\"]}",
+        )
+    }
+
+    @Test
+    fun `given an answer given live when execute then the gate is journalled raised then answered`() = runTest {
+        stageQuestion()
+        coEvery { clarificationRepository.requestAnswer(any()) } returns ClarificationOutcome.Answered("blue")
+
+        executor.execute(clarificationNode(), "ctx", "session", "prompt", runId = "run-1").toList()
+
+        coVerifyOrder {
+            recordTriggerHitlEvent("run-1", TriggerHitlEvent.Raised(PendingInteractionKind.CLARIFICATION))
+            recordTriggerHitlEvent("run-1", TriggerHitlEvent.Resolved(TriggerHitlResolution.ANSWERED))
+        }
+    }
+
+    @Test
+    fun `given a live timeout that parks when execute then the gate is journalled parked and unresolved`() = runTest {
+        stageQuestion()
+        coEvery { clarificationRepository.requestAnswer(any()) } returns ClarificationOutcome.TimedOut
+
+        executor.execute(clarificationNode(), "ctx", "session", "prompt", runId = "run-1").toList()
+
+        coVerifyOrder {
+            recordTriggerHitlEvent("run-1", TriggerHitlEvent.Raised(PendingInteractionKind.CLARIFICATION))
+            recordTriggerHitlEvent("run-1", TriggerHitlEvent.Parked)
+        }
+        coVerify(exactly = 0) { recordTriggerHitlEvent(any(), ofType(TriggerHitlEvent.Resolved::class)) }
+    }
+
+    @Test
+    fun `given the park cannot be persisted when execute then the gate is journalled as abandoned`() = runTest {
+        stageQuestion()
+        coEvery { clarificationRepository.requestAnswer(any()) } returns ClarificationOutcome.TimedOut
+        coEvery { pendingInteractionRepository.save(any()) } returns false
+
+        executor.execute(clarificationNode(), "ctx", "session", "prompt", runId = "run-1").toList()
+
+        // The default answer is fabricated locally; the question never reached
+        // the user, so it must not read as one they answered.
+        coVerify(exactly = 1) {
+            recordTriggerHitlEvent("run-1", TriggerHitlEvent.Resolved(TriggerHitlResolution.ABANDONED))
+        }
+    }
+
+    @Test
+    fun `given a resumed run carrying a recorded answer when execute then only the resolution is journalled`() =
+        runTest {
+            coEvery { pendingInteractionRepository.getForRun("run-1") } returns PendingInteraction(
+                runId = "run-1",
+                sessionId = "session",
+                kind = PendingInteractionKind.CLARIFICATION,
+                question = "Pick a color",
+                answer = "blue",
+                requestedAt = 0L,
+            )
+
+            executor.execute(clarificationNode(), "ctx", "session", "prompt", runId = "run-1").toList()
+
+            // The gate was raised (and counted) before the park, in the earlier
+            // process; the resume settles it rather than opening a second one.
+            coVerify(exactly = 0) { recordTriggerHitlEvent(any(), ofType(TriggerHitlEvent.Raised::class)) }
+            coVerify(exactly = 1) {
+                recordTriggerHitlEvent("run-1", TriggerHitlEvent.Resolved(TriggerHitlResolution.ANSWERED))
+            }
+        }
 }

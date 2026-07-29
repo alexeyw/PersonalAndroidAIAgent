@@ -29,6 +29,7 @@ import app.knotwork.android.domain.models.TriggerCondition
 import app.knotwork.android.domain.models.TriggerEvaluationSource
 import app.knotwork.android.domain.models.TriggerEvaluationVerdict
 import app.knotwork.android.domain.models.TriggerHealthStatus
+import app.knotwork.android.domain.models.TriggerHitlResolution
 import app.knotwork.android.domain.models.TriggerRunOutcome
 import app.knotwork.android.domain.models.TriggerSkipReason
 import app.knotwork.android.domain.usecases.ClockTime
@@ -53,6 +54,7 @@ import app.knotwork.design.screens.triggers.TriggerEditorUi
 import app.knotwork.design.screens.triggers.TriggerHealthUi
 import app.knotwork.design.screens.triggers.TriggerJournalDayGroupUi
 import app.knotwork.design.screens.triggers.TriggerJournalEntryUi
+import app.knotwork.design.screens.triggers.TriggerJournalHitlUi
 import app.knotwork.design.screens.triggers.TriggerJournalOutcomeUi
 import app.knotwork.design.screens.triggers.TriggerJournalSkipReasonUi
 import app.knotwork.design.screens.triggers.TriggerJournalSourceUi
@@ -461,6 +463,8 @@ private fun TriggerJournalView.toDayGroupsUi(
                 skipReason = (verdict as? TriggerEvaluationVerdict.Skipped)?.reason?.toSkipReasonUi(),
                 skipMomentLabel = clockLabel(entry.momentTime),
                 timestampLabel = entry.timestamp.label(labels),
+                hitl = entry.evaluation.hitl?.lastResolution?.toHitlUi(),
+                hitlParked = entry.evaluation.hitl?.parked == true,
             )
         },
     )
@@ -501,6 +505,16 @@ private fun TriggerRunOutcome?.toOutcomeUi(): TriggerJournalOutcomeUi = when (th
     TriggerRunOutcome.CancelledBySystem -> TriggerJournalOutcomeUi.CancelledBySystem
     TriggerRunOutcome.Cancelled -> TriggerJournalOutcomeUi.Cancelled
     TriggerRunOutcome.HitlTimeout -> TriggerJournalOutcomeUi.HitlTimeout
+}
+
+/** Maps the latest HITL gate's resolution to the catalog enum. */
+private fun TriggerHitlResolution.toHitlUi(): TriggerJournalHitlUi = when (this) {
+    TriggerHitlResolution.PENDING -> TriggerJournalHitlUi.Waiting
+    TriggerHitlResolution.APPROVED -> TriggerJournalHitlUi.Approved
+    TriggerHitlResolution.DENIED -> TriggerJournalHitlUi.Denied
+    TriggerHitlResolution.ANSWERED -> TriggerJournalHitlUi.Answered
+    TriggerHitlResolution.TIMED_OUT -> TriggerJournalHitlUi.TimedOut
+    TriggerHitlResolution.ABANDONED -> TriggerJournalHitlUi.Abandoned
 }
 
 // ── Timestamp / day-header resolution ───────────────────────────────────────
@@ -572,6 +586,14 @@ private fun triggerDetailStrings(): TriggerDetailStrings = TriggerDetailStrings(
     outcomeCancelledBySystem = stringResource(R.string.triggers_journal_outcome_cancelled_by_system),
     outcomeCancelled = stringResource(R.string.triggers_journal_outcome_cancelled),
     outcomeHitlTimeout = stringResource(R.string.triggers_journal_outcome_hitl_timeout),
+    hitlWaiting = stringResource(R.string.triggers_journal_hitl_waiting),
+    hitlApproved = stringResource(R.string.triggers_journal_hitl_approved),
+    hitlDenied = stringResource(R.string.triggers_journal_hitl_denied),
+    hitlAnswered = stringResource(R.string.triggers_journal_hitl_answered),
+    hitlTimedOut = stringResource(R.string.triggers_journal_hitl_timed_out),
+    hitlAbandoned = stringResource(R.string.triggers_journal_hitl_abandoned),
+    hitlParkedPending = stringResource(R.string.triggers_journal_hitl_parked_pending),
+    hitlParkedSettled = stringResource(R.string.triggers_journal_hitl_parked_settled),
 )
 
 @Composable

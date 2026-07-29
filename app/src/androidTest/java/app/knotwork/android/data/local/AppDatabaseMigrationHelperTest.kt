@@ -575,4 +575,49 @@ class AppDatabaseMigrationHelperTest {
             }
         }
     }
+
+    @Test
+    fun migrate55to56_addsHitlColumnsDefaultingToNoGatePreservingEvaluations() {
+        helper.createDatabase(TEST_DB, 55).use { db ->
+            db.execSQL(
+                "INSERT INTO trigger_evaluations(id, triggerId, evaluatedAt, source, verdictKind, " +
+                    "skipReason, runId, outcomeKind, outcomeError) " +
+                    "VALUES('eval-1', '$TRIGGER_ID', $CHUNK_TS, 'POLL', 'FIRED', NULL, 'run-1', " +
+                    "'SUCCESS', NULL)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 56, true, AppDatabase.MIGRATION_55_56).use { db ->
+            db.query(
+                "SELECT verdictKind, outcomeKind, hitlGateCount, hitlLastKind, hitlLastResolution, " +
+                    "hitlParked FROM trigger_evaluations WHERE id = 'eval-1'",
+            ).use { c ->
+                assertTrue("seeded evaluation must survive the migration", c.moveToFirst())
+                assertEquals("FIRED", c.getString(0))
+                assertEquals("SUCCESS", c.getString(1))
+                // A pre-v56 row means "nothing recorded gates back then", which
+                // reads back as a run that never asked — not as a gate of an
+                // unknown kind.
+                assertEquals("gate count must upgrade to none", 0, c.getInt(2))
+                assertTrue("kind must upgrade to NULL", c.isNull(3))
+                assertTrue("resolution must upgrade to NULL", c.isNull(4))
+                assertEquals("parked flag must upgrade to false", 0, c.getInt(5))
+            }
+
+            db.execSQL(
+                "UPDATE trigger_evaluations SET hitlGateCount = 1, hitlLastKind = 'APPROVAL', " +
+                    "hitlLastResolution = 'APPROVED', hitlParked = 1 WHERE id = 'eval-1'",
+            )
+            db.query(
+                "SELECT hitlGateCount, hitlLastKind, hitlLastResolution, hitlParked " +
+                    "FROM trigger_evaluations WHERE id = 'eval-1'",
+            ).use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals(1, c.getInt(0))
+                assertEquals("APPROVAL", c.getString(1))
+                assertEquals("APPROVED", c.getString(2))
+                assertEquals(1, c.getInt(3))
+            }
+        }
+    }
 }

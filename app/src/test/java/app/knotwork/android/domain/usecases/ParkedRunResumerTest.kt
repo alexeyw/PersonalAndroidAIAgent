@@ -4,6 +4,8 @@ import app.knotwork.android.domain.models.PendingInteraction
 import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.ToolRisk
+import app.knotwork.android.domain.models.TriggerHitlEvent
+import app.knotwork.android.domain.models.TriggerHitlResolution
 import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
@@ -36,6 +38,7 @@ class ParkedRunResumerTest {
     private lateinit var approvalNotifier: ApprovalNotifier
     private lateinit var clarificationNotifier: ClarificationNotifier
     private lateinit var resumePipelineRunUseCase: ResumePipelineRunUseCase
+    private lateinit var recordTriggerHitlEvent: RecordTriggerHitlEventUseCase
     private lateinit var resumer: ParkedRunResumer
 
     @Before
@@ -46,6 +49,7 @@ class ParkedRunResumerTest {
         approvalNotifier = mockk(relaxed = true)
         clarificationNotifier = mockk(relaxed = true)
         resumePipelineRunUseCase = mockk()
+        recordTriggerHitlEvent = mockk(relaxed = true)
         resumer = ParkedRunResumer(
             pendingInteractionRepository = pendingInteractionRepository,
             pipelineRunRepository = pipelineRunRepository,
@@ -53,6 +57,7 @@ class ParkedRunResumerTest {
             approvalNotifier = approvalNotifier,
             clarificationNotifier = clarificationNotifier,
             resumePipelineRunUseCase = resumePipelineRunUseCase,
+            recordTriggerHitlEvent = recordTriggerHitlEvent,
         )
         coEvery { settingsRepository.backgroundApprovalWindowHours } returns flowOf(24)
         coEvery { resumePipelineRunUseCase("run-1") } returns ResumeOutcome.Resumed
@@ -170,5 +175,39 @@ class ParkedRunResumerTest {
         coVerify { pipelineRunRepository.finishRun("run-1", PipelineRunStatus.FAILED, "reason") }
         coVerify { pendingInteractionRepository.delete("run-1") }
         verify { approvalNotifier.cancelApprovalNotification("session-1") }
+    }
+
+    @Test
+    fun `failPark on an elapsed window journals the gate as timed out`() = runTest {
+        resumer.failPark(parkedApproval(), ParkedRunResumer.APPROVAL_WINDOW_EXPIRED_MESSAGE)
+
+        // The run's own outcome (FAILED) cannot say whether the user was asked
+        // and never answered, or whether the park was discarded for another
+        // reason — the journal has to carry that.
+        coVerify(exactly = 1) {
+            recordTriggerHitlEvent("run-1", TriggerHitlEvent.Resolved(TriggerHitlResolution.TIMED_OUT))
+        }
+    }
+
+    @Test
+    fun `failPark on a changed graph journals the gate as abandoned`() = runTest {
+        resumer.failPark(parkedApproval(), ParkedRunResumer.GRAPH_CHANGED_MESSAGE)
+
+        coVerify(exactly = 1) {
+            recordTriggerHitlEvent("run-1", TriggerHitlEvent.Resolved(TriggerHitlResolution.ABANDONED))
+        }
+    }
+
+    @Test
+    fun `failPark on a nested park journals against the root run`() = runTest {
+        // The park sits on a sub-pipeline run, but the journal row belongs to
+        // the root — the run the trigger actually enqueued.
+        coEvery { pipelineRunRepository.getRootRunId("run-1") } returns "root-run"
+
+        resumer.failPark(parkedApproval(), ParkedRunResumer.APPROVAL_WINDOW_EXPIRED_MESSAGE)
+
+        coVerify(exactly = 1) {
+            recordTriggerHitlEvent("root-run", TriggerHitlEvent.Resolved(TriggerHitlResolution.TIMED_OUT))
+        }
     }
 }

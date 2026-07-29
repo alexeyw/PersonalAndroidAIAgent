@@ -56,6 +56,7 @@ import app.knotwork.android.domain.usecases.EvaluateIfConditionUseCase
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.LoadPipelineFromPresetUseCase
+import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import io.mockk.coEvery
 import io.mockk.every
@@ -170,6 +171,7 @@ class ShowcaseResearchToFilePresetIntegrationTest {
                 approvalNotifier,
                 chatRepository,
                 pendingInteractionRepository,
+                recordTriggerHitlEvent = mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
             ),
             StructuredOutputGate(),
             settingsRepository,
@@ -221,6 +223,7 @@ class ShowcaseResearchToFilePresetIntegrationTest {
                 clarificationRepository,
                 pendingInteractionRepository,
                 clarificationNotifier,
+                recordTriggerHitlEvent = mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
             ),
             PipelineNodeExecutor(
                 mockk(relaxed = true),

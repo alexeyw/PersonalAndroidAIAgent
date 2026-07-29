@@ -128,6 +128,20 @@ details.
 
 ### Fixed
 
+- **An automation that stopped to ask you something looked exactly like one
+  that never asked.** A background run pausing for approval — the moment you
+  are most likely to miss — left no trace in a trigger's evaluation journal
+  once it was over: approve it from the notification and the run simply ended
+  as **Completed**, indistinguishable from a run that needed nothing from you.
+  Only an approval nobody answered was ever called out. A fired entry now also
+  records the request itself: that the run asked, whether the answer had to
+  come back from the notification shade, and how it was settled — approved,
+  denied, answered, still waiting, timed out, or never delivered to you at
+  all. Requests answered on the spot are recorded too, not just the ones that
+  waited: the in-app wait lasts a full minute, so a promptly answered approval
+  never reaches the shade, and recording only those would have missed the
+  commonest case entirely. Diagnostic exports of the journal carry the same
+  fields.
 - **Bundled pipelines answered in the language of the question, not your
   device's.** Ask in English on a Russian phone and the reply came back in
   English. Some bundled pipelines had always been explicit about the language

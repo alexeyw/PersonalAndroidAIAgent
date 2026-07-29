@@ -4,9 +4,13 @@ import androidx.room.Room
 import app.knotwork.android.data.local.AppDatabase
 import app.knotwork.android.data.local.dao.TriggerJournalDao
 import app.knotwork.android.data.local.models.TriggerEvaluationEntity
+import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.TriggerEvaluation
 import app.knotwork.android.domain.models.TriggerEvaluationSource
 import app.knotwork.android.domain.models.TriggerEvaluationVerdict
+import app.knotwork.android.domain.models.TriggerHitlActivity
+import app.knotwork.android.domain.models.TriggerHitlEvent
+import app.knotwork.android.domain.models.TriggerHitlResolution
 import app.knotwork.android.domain.models.TriggerRunOutcome
 import app.knotwork.android.domain.models.TriggerSkipReason
 import io.mockk.coEvery
@@ -252,6 +256,135 @@ class TriggerJournalRepositoryImplTest {
         val repo = repository(failingDao)
 
         assertTrue(repo.readAll().isEmpty())
+    }
+
+    // --- Human-in-the-loop activity ---------------------------------------
+
+    /** Reads back the single stored evaluation of `trig-1`. */
+    private suspend fun TriggerJournalRepositoryImpl.singleEvaluation(): TriggerEvaluation =
+        observeByTrigger("trig-1").first().single()
+
+    @Test
+    fun `given a run that never asked when read then it carries no hitl activity`() = runTest {
+        val repo = repository()
+        repo.recordEvaluation(evaluation("q", runId = "run-q", outcome = TriggerRunOutcome.Success))
+
+        // The overwhelming majority of rows: "no gate" must read as absence, not
+        // as a gate of some default kind.
+        assertNull(repo.singleEvaluation().hitl)
+    }
+
+    @Test
+    fun `given a gate raised then approved when read then the activity round-trips`() = runTest {
+        val repo = repository()
+        repo.recordEvaluation(evaluation("r", runId = "run-r"))
+
+        repo.recordHitlEvent("run-r", TriggerHitlEvent.Raised(PendingInteractionKind.APPROVAL))
+        repo.recordHitlEvent("run-r", TriggerHitlEvent.Resolved(TriggerHitlResolution.APPROVED))
+
+        assertEquals(
+            TriggerHitlActivity(
+                gateCount = 1,
+                lastKind = PendingInteractionKind.APPROVAL,
+                lastResolution = TriggerHitlResolution.APPROVED,
+                parked = false,
+            ),
+            repo.singleEvaluation().hitl,
+        )
+    }
+
+    @Test
+    fun `given a gate that parked before being approved when read then the park is preserved`() = runTest {
+        val repo = repository()
+        repo.recordEvaluation(evaluation("s", runId = "run-s"))
+
+        repo.recordHitlEvent("run-s", TriggerHitlEvent.Raised(PendingInteractionKind.APPROVAL))
+        repo.recordHitlEvent("run-s", TriggerHitlEvent.Parked)
+        repo.recordHitlEvent("run-s", TriggerHitlEvent.Resolved(TriggerHitlResolution.APPROVED))
+
+        // This exact row is the evidence that a background approval reached the
+        // user and came back — the case the terminal outcome alone cannot show.
+        val hitl = repo.singleEvaluation().hitl
+        assertEquals(TriggerHitlResolution.APPROVED, hitl?.lastResolution)
+        assertTrue("the park must survive the settlement", hitl?.parked == true)
+    }
+
+    @Test
+    fun `given a raise while a gate is still pending when read then it is still pending`() = runTest {
+        val repo = repository()
+        repo.recordEvaluation(evaluation("t", runId = "run-t"))
+
+        repo.recordHitlEvent("run-t", TriggerHitlEvent.Raised(PendingInteractionKind.CLARIFICATION))
+
+        val hitl = repo.singleEvaluation().hitl
+        assertEquals(PendingInteractionKind.CLARIFICATION, hitl?.lastKind)
+        assertEquals(TriggerHitlResolution.PENDING, hitl?.lastResolution)
+    }
+
+    @Test
+    fun `given a second gate after a parked first when read then it counts both and starts unparked`() = runTest {
+        val repo = repository()
+        repo.recordEvaluation(evaluation("u", runId = "run-u"))
+
+        repo.recordHitlEvent("run-u", TriggerHitlEvent.Raised(PendingInteractionKind.CLARIFICATION))
+        repo.recordHitlEvent("run-u", TriggerHitlEvent.Parked)
+        repo.recordHitlEvent("run-u", TriggerHitlEvent.Resolved(TriggerHitlResolution.ANSWERED))
+        repo.recordHitlEvent("run-u", TriggerHitlEvent.Raised(PendingInteractionKind.APPROVAL))
+
+        // Last gate wins, but the count keeps the collapsed row honest — and the
+        // fresh gate must not inherit the previous one's park.
+        val hitl = repo.singleEvaluation().hitl
+        assertEquals(2, hitl?.gateCount)
+        assertEquals(PendingInteractionKind.APPROVAL, hitl?.lastKind)
+        assertEquals(TriggerHitlResolution.PENDING, hitl?.lastResolution)
+        assertEquals(false, hitl?.parked)
+    }
+
+    @Test
+    fun `given no raise was recorded when a park or resolution arrives then the row stays gate-free`() = runTest {
+        val repo = repository()
+        repo.recordEvaluation(evaluation("v", runId = "run-v"))
+
+        // A lost raise must not leave a row claiming a park or a resolution for a
+        // gate it never counted.
+        repo.recordHitlEvent("run-v", TriggerHitlEvent.Parked)
+        repo.recordHitlEvent("run-v", TriggerHitlEvent.Resolved(TriggerHitlResolution.APPROVED))
+
+        assertNull(repo.singleEvaluation().hitl)
+    }
+
+    @Test
+    fun `given an event for an unknown run when recorded then no row is touched`() = runTest {
+        val repo = repository()
+        repo.recordEvaluation(evaluation("w", runId = "run-w"))
+
+        // Every interactive run takes this path: no journal row, so nothing to do.
+        repo.recordHitlEvent("some-other-run", TriggerHitlEvent.Raised(PendingInteractionKind.APPROVAL))
+
+        assertNull(repo.singleEvaluation().hitl)
+    }
+
+    @Test
+    fun `given an undecodable hitl discriminator when read then the activity drops but the row survives`() = runTest {
+        val repo = repository()
+        dao.insert(
+            row("corrupt-hitl", evaluatedAt = 5, outcomeKind = "SUCCESS", outcomeError = null)
+                .copy(hitlGateCount = 1, hitlLastKind = "TELEPATHY", hitlLastResolution = "APPROVED"),
+        )
+
+        // Losing the fire itself over an unreadable annotation would trade a
+        // small blind spot for a bigger one.
+        val evaluation = repo.singleEvaluation()
+        assertEquals(TriggerRunOutcome.Success, evaluation.outcome)
+        assertNull(evaluation.hitl)
+    }
+
+    @Test
+    fun `given the dao write fails when recording a hitl event then the failure is absorbed`() = runTest {
+        val failingDao = mockk<TriggerJournalDao>()
+        coEvery { failingDao.recordHitlGateParked(any()) } throws IllegalStateException("db down")
+
+        repository(failingDao).recordHitlEvent("run-x", TriggerHitlEvent.Parked)
     }
 
     // --- Best-effort contract (mocked DAO) --------------------------------

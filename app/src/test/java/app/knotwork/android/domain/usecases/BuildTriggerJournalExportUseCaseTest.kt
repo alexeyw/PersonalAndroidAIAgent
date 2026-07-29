@@ -1,8 +1,11 @@
 package app.knotwork.android.domain.usecases
 
+import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.TriggerEvaluation
 import app.knotwork.android.domain.models.TriggerEvaluationSource
 import app.knotwork.android.domain.models.TriggerEvaluationVerdict
+import app.knotwork.android.domain.models.TriggerHitlActivity
+import app.knotwork.android.domain.models.TriggerHitlResolution
 import app.knotwork.android.domain.models.TriggerRunOutcome
 import app.knotwork.android.domain.models.TriggerSkipReason
 import kotlinx.serialization.json.Json
@@ -36,7 +39,8 @@ class BuildTriggerJournalExportUseCaseTest {
         verdict: TriggerEvaluationVerdict = TriggerEvaluationVerdict.Fired,
         runId: String? = null,
         outcome: TriggerRunOutcome? = null,
-    ) = TriggerEvaluation(id, triggerId, evaluatedAt, source, verdict, runId, outcome)
+        hitl: TriggerHitlActivity? = null,
+    ) = TriggerEvaluation(id, triggerId, evaluatedAt, source, verdict, runId, outcome, hitl)
 
     private fun render(evaluations: List<TriggerEvaluation>) =
         Json.parseToJsonElement(useCase(evaluations, label)).jsonObject
@@ -45,7 +49,9 @@ class BuildTriggerJournalExportUseCaseTest {
     fun `given an empty journal when rendered then the header is present and the list is empty`() {
         val document = render(emptyList())
 
-        assertEquals(1, document.getValue("schemaVersion").jsonPrimitive.int)
+        // Bumped to 2 by the hitl* fields: an analyst reading a dump must be
+        // able to tell "this build never recorded gates" from "no gate here".
+        assertEquals(2, document.getValue("schemaVersion").jsonPrimitive.int)
         assertEquals(label, document.getValue("generatedAt").jsonPrimitive.content)
         assertTrue(document.getValue("localOnly").jsonPrimitive.content.toBoolean())
         assertEquals(0, document.getValue("totalEvaluations").jsonPrimitive.int)
@@ -78,6 +84,61 @@ class BuildTriggerJournalExportUseCaseTest {
         assertEquals("run-a", row.getValue("runId").jsonPrimitive.content)
         assertEquals("SUCCESS", row.getValue("outcome").jsonPrimitive.content)
         assertEquals(JsonNull, row.getValue("outcomeError"))
+        // A run that never asked renders as zero gates, not as absent keys — the
+        // dump is filtered offline, where a missing key reads as a parse bug.
+        assertEquals(0, row.getValue("hitlGateCount").jsonPrimitive.int)
+        assertEquals(JsonNull, row.getValue("hitlKind"))
+        assertEquals(JsonNull, row.getValue("hitlResolution"))
+        assertEquals(false, row.getValue("hitlParked").jsonPrimitive.content.toBoolean())
+    }
+
+    @Test
+    fun `given a run that parked on an approval and got it when rendered then the dump says so`() {
+        val document = render(
+            listOf(
+                evaluation(
+                    id = "h",
+                    verdict = TriggerEvaluationVerdict.Fired,
+                    runId = "run-h",
+                    outcome = TriggerRunOutcome.Success,
+                    hitl = TriggerHitlActivity(
+                        gateCount = 2,
+                        lastKind = PendingInteractionKind.APPROVAL,
+                        lastResolution = TriggerHitlResolution.APPROVED,
+                        parked = true,
+                    ),
+                ),
+            ),
+        )
+
+        // This row is what makes the background-approval criterion of the soak
+        // protocol checkable from the dump instead of from operator memory.
+        val row = document.getValue("evaluations").jsonArray.single().jsonObject
+        assertEquals(2, row.getValue("hitlGateCount").jsonPrimitive.int)
+        assertEquals("APPROVAL", row.getValue("hitlKind").jsonPrimitive.content)
+        assertEquals("APPROVED", row.getValue("hitlResolution").jsonPrimitive.content)
+        assertEquals(true, row.getValue("hitlParked").jsonPrimitive.content.toBoolean())
+    }
+
+    @Test
+    fun `given every hitl resolution when rendered then each maps to its discriminator`() {
+        val evaluations = TriggerHitlResolution.entries.mapIndexed { index, resolution ->
+            evaluation(
+                id = "hitl-$index",
+                runId = "run-hitl-$index",
+                hitl = TriggerHitlActivity(
+                    gateCount = 1,
+                    lastKind = PendingInteractionKind.CLARIFICATION,
+                    lastResolution = resolution,
+                    parked = false,
+                ),
+            )
+        }
+
+        val rendered = render(evaluations).getValue("evaluations").jsonArray
+            .map { it.jsonObject.getValue("hitlResolution").jsonPrimitive.content }
+
+        assertEquals(TriggerHitlResolution.entries.map { it.name }, rendered)
     }
 
     @Test

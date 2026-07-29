@@ -27,6 +27,7 @@ import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.services.ApprovalNotifier
 import app.knotwork.android.domain.usecases.LoadModelUseCase
+import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
 import dagger.hilt.android.EntryPointAccessors
 import io.mockk.coEvery
 import io.mockk.every
@@ -765,6 +766,7 @@ class AppFunctionsEndToEndTest {
                 approvalNotifier = silentNotifier,
                 chatRepository = entryPoint.chatRepository(),
                 pendingInteractionRepository = entryPoint.pendingInteractionRepository(),
+                recordTriggerHitlEvent = mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
             ),
             structuredOutputGate = StructuredOutputGate(),
             settingsRepository = entryPoint.settingsRepository(),
