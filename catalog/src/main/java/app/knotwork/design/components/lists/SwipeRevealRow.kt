@@ -115,9 +115,13 @@ fun SwipeRevealRow(
     Box(modifier = modifier.fillMaxWidth()) {
         // `matchParentSize` rather than `fillMaxHeight`: this Box wraps its
         // content, so inside a LazyColumn the incoming height is unbounded and
-        // `fillMaxHeight` silently collapses the strip to its own ~38 dp — a
-        // revealed action below the touch-target floor. Matching the size the
-        // *content* settled on makes the strip exactly as tall as the row.
+        // `fillMaxHeight` silently collapses the strip to its own ~32 dp — a
+        // short floating band beside the row instead of the full-height strip
+        // the design draws. Matching the size the *content* settled on makes it
+        // exactly as tall as the row.
+        //
+        // Visual, not reach: Compose already expands a `clickable`'s touch
+        // bounds to the 48 dp minimum, so the stunted strip was still hittable.
         Box(modifier = Modifier.matchParentSize(), contentAlignment = Alignment.CenterEnd) {
             SwipeRevealActionButton(
                 action = action,

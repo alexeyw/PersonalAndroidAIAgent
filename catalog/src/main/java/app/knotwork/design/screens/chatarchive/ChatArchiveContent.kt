@@ -61,10 +61,20 @@ private val ArchiveRowTileGlyph = 20.dp
 /** Side length of the leading star marking a favorited chat. */
 private val ArchiveRowStar = 14.dp
 
-/** Side length of the per-row overflow icon button — the a11y touch-target floor. */
+/**
+ * Side length of the per-row overflow icon button, per the design handoff
+ * ("targets ≥ 48 dp: ⋮ 48"). This is a **visual** size: Material's
+ * `IconButton` already expands its touch bounds to 48 dp whatever it is laid
+ * out at, so the a11y floor is met either way.
+ */
 private val ArchiveRowMenuButton = 48.dp
 
-/** Visual height of the inline Restore pill (its touch target is the 48 dp box around it). */
+/**
+ * Visual height of the inline Restore pill, per the design ("a 32 dp visual
+ * inside a 48 dp target"). The 48 dp box around it is what the design asks for
+ * visually; reach is not at stake, because Compose expands a `clickable`'s
+ * touch bounds to the 48 dp minimum on its own.
+ */
 private val ArchiveRestorePillHeight = 32.dp
 
 /** Glyph size inside the inline Restore pill. */
@@ -294,9 +304,10 @@ private fun ChatArchiveRow(
                     onClick = { callbacks.onRestore(row.id) },
                 )
                 Box {
-                    // Pinned to 48 dp rather than left to the Material default,
-                    // which the current M3 line sizes below the touch-target
-                    // floor this surface commits to.
+                    // 48 dp because the design asks for it, not for reach:
+                    // Material lays `IconButton` out at 40 dp but expands its
+                    // touch bounds to 48 regardless, so this changes how the
+                    // control looks, not how easy it is to hit.
                     IconButton(
                         onClick = { callbacks.onRowMenuOpen(row.id) },
                         modifier = Modifier.size(ArchiveRowMenuButton),
