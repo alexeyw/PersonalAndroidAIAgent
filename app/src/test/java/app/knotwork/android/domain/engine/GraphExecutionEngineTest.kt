@@ -69,6 +69,7 @@ import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.usecases.EvaluateIfConditionUseCase
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
+import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -192,6 +193,7 @@ class GraphExecutionEngineTest {
                 approvalNotifier,
                 chatRepository,
                 pendingInteractionRepository,
+                recordTriggerHitlEvent = mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
             ),
             StructuredOutputGate(),
             settingsRepository,
@@ -240,6 +242,7 @@ class GraphExecutionEngineTest {
             clarificationRepository,
             pendingInteractionRepository,
             clarificationNotifier,
+            recordTriggerHitlEvent = mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
         )
 
         // The recursive engine reference is captured lazily via Provider: it is
@@ -1269,6 +1272,7 @@ class GraphExecutionEngineTest {
                     approvalNotifier,
                     chatRepository,
                     pendingInteractionRepository,
+                    recordTriggerHitlEvent = mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
                 ),
                 StructuredOutputGate(),
                 settingsRepository,
@@ -1315,6 +1319,7 @@ class GraphExecutionEngineTest {
                 clarificationRepository,
                 pendingInteractionRepository,
                 clarificationNotifier,
+                recordTriggerHitlEvent = mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
             ),
             PipelineNodeExecutor(
                 pipelineRepository,
@@ -1337,6 +1342,7 @@ class GraphExecutionEngineTest {
                     approvalNotifier,
                     chatRepository,
                     pendingInteractionRepository,
+                    recordTriggerHitlEvent = mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
                 ),
                 StructuredOutputGate(),
                 settingsRepository,
@@ -1488,6 +1494,7 @@ class GraphExecutionEngineTest {
                         approvalNotifier,
                         chatRepository,
                         pendingInteractionRepository,
+                        recordTriggerHitlEvent = mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
                     ),
                     StructuredOutputGate(),
                     settingsRepository,
@@ -1529,6 +1536,7 @@ class GraphExecutionEngineTest {
                     realClarificationRepository,
                     pendingInteractionRepository,
                     clarificationNotifier,
+                    recordTriggerHitlEvent = mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
                 ),
                 PipelineNodeExecutor(
                     pipelineRepository,
@@ -1551,6 +1559,7 @@ class GraphExecutionEngineTest {
                         approvalNotifier,
                         chatRepository,
                         pendingInteractionRepository,
+                        recordTriggerHitlEvent = mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
                     ),
                     StructuredOutputGate(),
                     settingsRepository,

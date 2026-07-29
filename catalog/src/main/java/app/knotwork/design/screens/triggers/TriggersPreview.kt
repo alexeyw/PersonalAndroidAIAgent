@@ -167,7 +167,11 @@ object TriggersPreview {
     /**
      * A populated journal covering every legibility case: a pending fire, a
      * settled success, the three distinct non-success outcomes, both skip
-     * sentences, and a re-arm — spread across three day groups.
+     * sentences, and a re-arm — spread across three day groups. Four of the
+     * fired entries also carry a human-in-the-loop line, covering the states
+     * that differ visually: still waiting, approved and answered (settled,
+     * muted), and timed out (the warn case), with and without the parked
+     * qualifier.
      */
     private val DAY_GROUPS = listOf(
         TriggerJournalDayGroupUi(
@@ -179,6 +183,8 @@ object TriggersPreview {
                     verdict = TriggerJournalVerdictUi.Fired,
                     outcome = TriggerJournalOutcomeUi.Pending,
                     timestampLabel = "just now",
+                    hitl = TriggerJournalHitlUi.Waiting,
+                    hitlParked = true,
                 ),
                 TriggerJournalEntryUi(
                     id = "e2",
@@ -186,6 +192,8 @@ object TriggersPreview {
                     verdict = TriggerJournalVerdictUi.Fired,
                     outcome = TriggerJournalOutcomeUi.Success,
                     timestampLabel = "08:15",
+                    hitl = TriggerJournalHitlUi.Approved,
+                    hitlParked = true,
                 ),
                 TriggerJournalEntryUi(
                     id = "e3",
@@ -239,6 +247,8 @@ object TriggersPreview {
                     verdict = TriggerJournalVerdictUi.Fired,
                     outcome = TriggerJournalOutcomeUi.HitlTimeout,
                     timestampLabel = "19:05",
+                    hitl = TriggerJournalHitlUi.TimedOut,
+                    hitlParked = true,
                 ),
                 TriggerJournalEntryUi(
                     id = "e9",
@@ -246,6 +256,7 @@ object TriggersPreview {
                     verdict = TriggerJournalVerdictUi.Fired,
                     outcome = TriggerJournalOutcomeUi.Cancelled,
                     timestampLabel = "15:20",
+                    hitl = TriggerJournalHitlUi.Answered,
                 ),
                 TriggerJournalEntryUi(
                     id = "e10",

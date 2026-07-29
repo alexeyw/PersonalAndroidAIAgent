@@ -847,7 +847,13 @@ and the verdict:
 - **Fired** — a run started. The entry is completed later with how that run
   ended: **Completed**, **Failed**, **Stopped by the system** (the app's
   process was killed mid-run), **You stopped it**, or **Timed out waiting for
-  approval**. Until the run settles it reads **Running…**.
+  approval**. Until the run settles it reads **Running…**. If the run stopped
+  to ask you something, a second line says what became of the request —
+  **You approved it**, **You denied it**, **You answered it**, **Waiting for
+  your response**, **No response before the window closed**, or **The request
+  never reached you** — and adds *from the notification* (or *in the
+  notification shade*, while it is still waiting) when the answer had to come
+  back from the shade rather than from a screen you already had open.
 - **Didn't run** — with the reason in plain language: *"The condition wasn't
   met at 07:15."*, *"It had already fired for this window."*, *"The trigger
   was turned off."*, or *"No pipeline is bound."*
@@ -870,10 +876,12 @@ Distinguishing the two is the whole point, and **Overdue** exists to flag the
 second case. Journal writing can never disturb the automation it describes: a
 failure to record is logged and dropped, never allowed to abort a run.
 
-One gap worth knowing about: when a background run pauses for approval and
-you **grant** it from the notification, the journal records only how the run
-finally ended — an approved run therefore looks exactly like one that never
-needed approval. Only an approval that *timed out* is called out explicitly.
+That reasoning extends to approvals. A run that paused for your approval and
+got it ends as a plain **Completed**, which on its own is indistinguishable
+from a run that never needed asking — so the entry records the request too:
+that it happened, whether it had to wait in the notification shade, and how it
+was settled. An approval nobody answered before the window closed is
+distinguished from one that never reached you at all.
 
 This first wave covers only **low-sensitivity** conditions (time,
 charging, network) that need no dangerous permission; notification,
@@ -2167,7 +2175,9 @@ always there, and which of two shapes it takes decides what to do next:
   for approval* means the run parked on a sensitive tool and the approval
   window expired before you answered — either respond sooner, widen
   **Settings → Background & triggers → Approval window**, or use a pipeline
-  whose tools don't need approval.
+  whose tools don't need approval. If the entry says *The request never
+  reached you*, the opposite happened: the approval could not be handed over
+  at all, so no notification was worth waiting for.
 - **There is no entry at all around that time,** and the list shows
   **Overdue**. The app was never woken to check. This is a platform-side
   problem: exclude the app from battery optimisation, and on phones with an

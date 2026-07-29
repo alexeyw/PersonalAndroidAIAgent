@@ -13,10 +13,13 @@ import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PendingInteraction
 import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.Result
+import app.knotwork.android.domain.models.TriggerHitlEvent
+import app.knotwork.android.domain.models.TriggerHitlResolution
 import app.knotwork.android.domain.repositories.ClarificationRepository
 import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.usecases.LoadModelUseCase
+import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -70,6 +73,7 @@ class ClarificationNodeExecutor @Inject constructor(
     private val clarificationRepository: ClarificationRepository,
     private val pendingInteractionRepository: PendingInteractionRepository,
     private val clarificationNotifier: ClarificationNotifier,
+    private val recordTriggerHitlEvent: RecordTriggerHitlEventUseCase,
 ) : NodeExecutor {
 
     override fun execute(
@@ -88,6 +92,9 @@ class ClarificationNodeExecutor @Inject constructor(
         val parked = consumeParkedAnswer(runId)
         if (parked != null) {
             val (parkedQuestion, parkedAnswer) = parked
+            // Settles the gate this run parked on in an earlier process, which
+            // counted itself then.
+            recordTriggerHitlEvent(runId, TriggerHitlEvent.Resolved(TriggerHitlResolution.ANSWERED))
             emit(
                 NodeOutput.Result(
                     NodeExecutionResult(outputText = pairQuestionWithAnswer(parkedQuestion, parkedAnswer)),
@@ -144,20 +151,27 @@ class ClarificationNodeExecutor @Inject constructor(
             timeoutMs = node.clarificationTimeoutMs ?: DEFAULT_TIMEOUT_MS,
         )
 
+        // Journal the gate as raised before the live wait, for the same reason
+        // the approval gate does: an answer given inside the live window never
+        // parks, and a park-only record would make that case invisible.
+        recordTriggerHitlEvent(runId, TriggerHitlEvent.Raised(PendingInteractionKind.CLARIFICATION))
         emit(NodeOutput.State(AgentOrchestratorState.AwaitingClarification(request)))
         when (val outcome = clarificationRepository.requestAnswer(request)) {
-            is ClarificationOutcome.Answered ->
+            is ClarificationOutcome.Answered -> {
+                recordTriggerHitlEvent(runId, TriggerHitlEvent.Resolved(TriggerHitlResolution.ANSWERED))
                 emit(
                     NodeOutput.Result(
                         NodeExecutionResult(outputText = pairQuestionWithAnswer(question, outcome.answer)),
                     ),
                 )
+            }
             is ClarificationOutcome.TimedOut -> {
                 if (runId != null && parkRun(runId, sessionId, question, options)) {
                     // Two-phase wait, second phase: the run parks on its
                     // durable pending record. No NodeOutput.Result on
                     // purpose — the engine stops the walk and the run record
                     // stays WAITING_CLARIFICATION.
+                    recordTriggerHitlEvent(runId, TriggerHitlEvent.Parked)
                     emit(
                         NodeOutput.State(
                             AgentOrchestratorState.SuspendedInBackground(PendingInteractionKind.CLARIFICATION),
@@ -165,7 +179,10 @@ class ClarificationNodeExecutor @Inject constructor(
                     )
                 } else {
                     // Non-persisted runs (editor test runs) and storage
-                    // failures keep the legacy default-answer fallback.
+                    // failures keep the legacy default-answer fallback. The
+                    // question never reached the user, so the gate is
+                    // ABANDONED rather than answered.
+                    recordTriggerHitlEvent(runId, TriggerHitlEvent.Resolved(TriggerHitlResolution.ABANDONED))
                     val defaultAnswer = request.options?.firstOrNull().orEmpty()
                     Timber.tag(TAG).w("Clarification timed out; using default answer: %s", defaultAnswer)
                     emit(

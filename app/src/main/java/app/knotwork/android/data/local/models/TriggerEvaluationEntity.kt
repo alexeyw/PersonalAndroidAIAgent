@@ -1,13 +1,15 @@
 package app.knotwork.android.data.local.models
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
  * Room row for one trigger-evaluation journal record (`trigger_evaluations`
- * table, v51). See [app.knotwork.android.domain.models.TriggerEvaluation] for the
- * domain contract and the no-silent-skips invariant.
+ * table, introduced in v51, HITL columns added in v56). See
+ * [app.knotwork.android.domain.models.TriggerEvaluation] for the domain contract
+ * and the no-silent-skips invariant.
  *
  * The sealed verdict and run-outcome are flattened into string discriminators
  * (plus a couple of payload columns) rather than a JSON blob, so the "by trigger,
@@ -39,6 +41,18 @@ import androidx.room.PrimaryKey
  *   settles (or when no run was started).
  * @property outcomeError Human-readable error for a `FAILURE` outcome; `null`
  *   otherwise.
+ * @property hitlGateCount How many human-in-the-loop gates the run raised; `0`
+ *   (the default for every pre-v56 row and for every run that never asked) means
+ *   the domain record carries no
+ *   [app.knotwork.android.domain.models.TriggerHitlActivity] at all.
+ * @property hitlLastKind [app.knotwork.android.domain.models.PendingInteractionKind]
+ *   name of the most recent gate; `null` while [hitlGateCount] is `0`.
+ * @property hitlLastResolution
+ *   [app.knotwork.android.domain.models.TriggerHitlResolution] name of the most
+ *   recent gate; `null` while [hitlGateCount] is `0`.
+ * @property hitlParked Whether the most recent gate outlived its live waiting
+ *   phase and parked on a durable `pending_interactions` record — the column that
+ *   makes a background approval answered from the shade provable after the fact.
  */
 @Entity(
     tableName = "trigger_evaluations",
@@ -57,4 +71,10 @@ data class TriggerEvaluationEntity(
     val runId: String?,
     val outcomeKind: String?,
     val outcomeError: String?,
+    @ColumnInfo(defaultValue = "0")
+    val hitlGateCount: Int = 0,
+    val hitlLastKind: String? = null,
+    val hitlLastResolution: String? = null,
+    @ColumnInfo(defaultValue = "0")
+    val hitlParked: Boolean = false,
 )

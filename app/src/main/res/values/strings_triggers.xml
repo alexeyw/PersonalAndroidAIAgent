@@ -164,6 +164,18 @@
     <string name="triggers_journal_outcome_cancelled">You stopped it</string>
     <string name="triggers_journal_outcome_hitl_timeout">Timed out waiting for approval</string>
 
+    <!-- Journal: the run stopped to ask the user something. The two "parked"
+         qualifiers are appended after the state when the request had to wait on
+         a notification rather than being answered on the spot. -->
+    <string name="triggers_journal_hitl_waiting">Waiting for your response</string>
+    <string name="triggers_journal_hitl_approved">You approved it</string>
+    <string name="triggers_journal_hitl_denied">You denied it</string>
+    <string name="triggers_journal_hitl_answered">You answered it</string>
+    <string name="triggers_journal_hitl_timed_out">No response before the window closed</string>
+    <string name="triggers_journal_hitl_abandoned">The request never reached you</string>
+    <string name="triggers_journal_hitl_parked_pending">in the notification shade</string>
+    <string name="triggers_journal_hitl_parked_settled">from the notification</string>
+
     <!-- Journal: timestamps and day headers. The abbreviated "m ago" reads the
          same for every count, so it is a plain format string, not a plural. -->
     <string name="triggers_journal_time_just_now">just now</string>

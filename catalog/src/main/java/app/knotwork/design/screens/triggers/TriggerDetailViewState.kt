@@ -92,6 +92,35 @@ enum class TriggerJournalOutcomeUi {
 }
 
 /**
+ * Whether a fired run stopped to ask the user something, and how that ended — the
+ * catalog mirror of the domain `TriggerHitlResolution`.
+ *
+ * Describes the **latest** gate of the run. A run that asks more than once is
+ * rare, and the entry answers a single question for the reader ("did it need me,
+ * and what came of it?"); the full count stays in the diagnostic journal export,
+ * where the analysis that cares about it happens.
+ */
+enum class TriggerJournalHitlUi {
+    /** Still waiting for the user — either live, or parked in the shade. */
+    Waiting,
+
+    /** The user approved the staged tool call. */
+    Approved,
+
+    /** The user denied the staged tool call. */
+    Denied,
+
+    /** The user answered the clarifying question. */
+    Answered,
+
+    /** Nobody answered before the approval window closed; the run was failed. */
+    TimedOut,
+
+    /** The request never reached the user (it could not be parked, or was discarded). */
+    Abandoned,
+}
+
+/**
  * One journal entry projected for display. Structured verdict / source / outcome
  * carry the icon + label; the dynamic strings (timestamp, failure error) are
  * pre-resolved by the app so the catalog neither formats time nor holds locale.
@@ -109,6 +138,13 @@ enum class TriggerJournalOutcomeUi {
  *   [TriggerJournalSkipReasonUi.ConditionNotMet] sentence (e.g. "07:15").
  * @property timestampLabel Pre-resolved moment label ("just now" / "12m ago" /
  *   "07:15").
+ * @property hitl How the run's human-in-the-loop gate ended, or `null` when the
+ *   run never asked for anything — which is the ordinary case, so the line is
+ *   absent rather than reading "no approval needed" on every entry.
+ * @property hitlParked Whether that gate had to wait on a notification instead of
+ *   being answered on the spot. Rendered as a qualifier on the [hitl] line, and
+ *   the reason the line exists at all: an approval given from the shade is what
+ *   proves background HITL still reaches the user.
  */
 data class TriggerJournalEntryUi(
     val id: String,
@@ -119,6 +155,8 @@ data class TriggerJournalEntryUi(
     val skipReason: TriggerJournalSkipReasonUi? = null,
     val skipMomentLabel: String? = null,
     val timestampLabel: String,
+    val hitl: TriggerJournalHitlUi? = null,
+    val hitlParked: Boolean = false,
 )
 
 /**
@@ -230,6 +268,16 @@ data class TriggerDetailStrings(
     val outcomeCancelledBySystem: String = "Stopped by the system",
     val outcomeCancelled: String = "You stopped it",
     val outcomeHitlTimeout: String = "Timed out waiting for approval",
+    // Human-in-the-loop line. The two "parked" qualifiers are appended after the
+    // state label when the run had to wait on a notification.
+    val hitlWaiting: String = "Waiting for your response",
+    val hitlApproved: String = "You approved it",
+    val hitlDenied: String = "You denied it",
+    val hitlAnswered: String = "You answered it",
+    val hitlTimedOut: String = "No response before the window closed",
+    val hitlAbandoned: String = "The request never reached you",
+    val hitlParkedPending: String = "in the notification shade",
+    val hitlParkedSettled: String = "from the notification",
 )
 
 /** One-shot callbacks consumed by `TriggerDetailContent`. */
