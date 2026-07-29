@@ -272,13 +272,6 @@ details.
 
 ### Changed
 
-- **Cloud model line-up follows the upstream client.** With the Koog client
-  updated to 1.1.1, Google's `gemini-3-pro-preview` is no longer offered — the
-  upstream catalogue replaced it with `gemini-3.1-pro-preview`, which now takes
-  its place in the model picker. If a provider was pinned to the removed model,
-  pick the new entry: an unrecognised saved model falls back to the default
-  Gemini flash model. Also bumps the Android Gradle plugin, `org.json` and
-  Roborazzi to their current releases.
 - **What long-term memory recalls is now written down.** The user guide gains a
   *"What the agent recalls, and when"* section: memory is searched once per run,
   at the first step that reads it; the similarity threshold is a gate nothing
@@ -287,6 +280,13 @@ details.
   and near-duplicates share one slot. The architecture guide's memory
   invariants now describe where the search key comes from, and its persistence
   section states that archiving a chat writes a flag and deletes nothing.
+- **Cloud model line-up follows the upstream client.** With the Koog client
+  updated to 1.1.1, Google's `gemini-3-pro-preview` is no longer offered — the
+  upstream catalogue replaced it with `gemini-3.1-pro-preview`, which now takes
+  its place in the model picker. If a provider was pinned to the removed model,
+  pick the new entry: an unrecognised saved model falls back to the default
+  Gemini flash model. Also bumps the Android Gradle plugin, `org.json` and
+  Roborazzi to their current releases.
 - **Trigger observability is documented end to end.** The user guide now
   explains the health badges and the evaluation journal in the terms the
   screens actually use, adds a *"A trigger didn't fire"* troubleshooting path

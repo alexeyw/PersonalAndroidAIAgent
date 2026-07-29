@@ -1039,13 +1039,15 @@ aggregate (`ChatDao`, `MemoryDao`, `PipelineDao`, …) and live under
 
 **Archiving is a flag, not a deletion.** Putting a chat away writes
 `chat_sessions.isArchived` plus the instant `chat_sessions.archivedAt` in a
-single statement (so a row is archived exactly when it carries an archive
-instant) and removes nothing: messages, runs, trace steps and the
+single statement, so the flag and the instant cannot drift apart, and removes
+nothing: messages, runs, trace steps and the
 history-compression summary all stay, which is what makes restoring lossless.
 The thread list and the archive surface are two queries over the same table
 (`getSessionsFlow(includeArchived = false)` / `getArchivedSessionsFlow()`), and
 the archive orders by `archivedAt` rather than `updatedAt` so that a background
-run writing into an archived chat cannot reshuffle it. See
+run writing into an archived chat cannot reshuffle it (the ordering coalesces to
+`updatedAt`, which keeps a row archived before the column existed in a sensible
+position instead of sinking it). See
 [Archiving chats](user-guide.md#archiving-chats) for the user-facing behaviour.
 
 **Run trace (buffered write-through).** While the execution engine

@@ -1601,9 +1601,10 @@ sees. Which entries those are is decided in this order:
   the same thing, only the better-ranked one is recalled (the pinned one if
   there is one), so a reworded copy cannot crowd out a different fact.
 
-You can see the outcome for any run: the console's **Memory** filter shows one
-`Memory: query='…' → N hits` line per run, with the relevance score of each hit
-(turn on **Verbose memory logging** in Settings → Memory for a snippet per hit).
+You can see the outcome for any run: the console's **Memory** filter carries one
+`Memory:` line per run, giving the search key, where that key came from, and the
+relevance score of every hit (turn on **Verbose memory logging** in Settings →
+Memory for a snippet per hit as well).
 Each entry's detail sheet also counts how often it has been recalled. If
 something you expected is missing, work down
 [Memory search isn't finding an obvious entry](#memory-search-isnt-finding-an-obvious-entry).
