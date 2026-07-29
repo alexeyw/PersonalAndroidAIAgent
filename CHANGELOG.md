@@ -272,6 +272,14 @@ details.
 
 ### Changed
 
+- **What long-term memory recalls is now written down.** The user guide gains a
+  *"What the agent recalls, and when"* section: memory is searched once per run,
+  at the first step that reads it; the similarity threshold is a gate nothing
+  can be bonused through; age never disqualifies an entry and freshness only
+  breaks ties; pinning always wins; the original wording beats a summary of it;
+  and near-duplicates share one slot. The architecture guide's memory
+  invariants now describe where the search key comes from, and its persistence
+  section states that archiving a chat writes a flag and deletes nothing.
 - **Cloud model line-up follows the upstream client.** With the Koog client
   updated to 1.1.1, Google's `gemini-3-pro-preview` is no longer offered — the
   upstream catalogue replaced it with `gemini-3.1-pro-preview`, which now takes
