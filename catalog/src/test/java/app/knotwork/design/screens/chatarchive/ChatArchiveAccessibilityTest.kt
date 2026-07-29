@@ -59,23 +59,21 @@ class ChatArchiveAccessibilityTest {
     }
 
     @Test
-    fun archiveRow_atDefaultScale_announcesRestoreOncePerRow() {
+    fun archiveRow_announcesRestoreOncePerRow() {
         render { ChatArchiveContent(state = ChatArchivePreview.populated()) }
 
-        // Only each row's swipe strip carries the verb as a description here;
-        // the inline pill states it as visible text instead.
+        // Exactly one per row — the swipe strip. There is no inline Restore
+        // button any more: on a 360 dp row it ate the title and stood as a
+        // third Restore beside the strip and the overflow item.
         assertEquals(ROW_COUNT, countNodesWithContentDescription("Restore"))
     }
 
     @Test
-    fun archiveRow_keepsRestoreSpokenWhenItCollapsesToAnIcon() {
+    fun archiveRow_atLargeFontStillAnnouncesRestoreOncePerRow() {
         render(fontScale = LARGE_FONT_SCALE) { ChatArchiveContent(state = ChatArchivePreview.populated()) }
 
-        // At 200 % the pill collapses to an icon; the word has to survive in the
-        // contentDescription or TalkBack announces a bare glyph. One *extra*
-        // announcing node per row (strip + collapsed button) is that collapse —
-        // and it also proves the compact branch actually ran under test.
-        assertEquals(ROW_COUNT * 2, countNodesWithContentDescription("Restore"))
+        // Unchanged at 200 %: the row sheds its leading tile, not an action.
+        assertEquals(ROW_COUNT, countNodesWithContentDescription("Restore"))
     }
 
     @Test

@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -69,26 +68,6 @@ private val ArchiveRowStar = 14.dp
  */
 private val ArchiveRowMenuButton = 48.dp
 
-/**
- * Visual height of the inline Restore pill, per the design ("a 32 dp visual
- * inside a 48 dp target"). The 48 dp box around it is what the design asks for
- * visually; reach is not at stake, because Compose expands a `clickable`'s
- * touch bounds to the 48 dp minimum on its own.
- */
-private val ArchiveRestorePillHeight = 32.dp
-
-/** Glyph size inside the inline Restore pill. */
-private val ArchiveRestorePillGlyph = 15.dp
-
-/** Alpha of the Restore pill's tinted fill. */
-private const val RESTORE_PILL_FILL_ALPHA = 0.12f
-
-/** Side length of the icon-only Restore button used at font-scale ≥ 2.0. */
-private val ArchiveRestoreIconButton = 48.dp
-
-/** Glyph size inside the icon-only Restore button. */
-private val ArchiveRestoreGlyph = 22.dp
-
 /** Side length of the empty/error illustration tile. */
 private val ArchiveIllustrationTile = 72.dp
 
@@ -100,9 +79,8 @@ private const val SKELETON_ROW_COUNT = 5
 
 /**
  * Font scale at or above which the row sheds decoration: the leading archive
- * tile goes (on a screen where *every* row is archived it carries no
- * information) and the inline Restore collapses to an icon-only 48 dp button.
- * Both gains go to the title — the trailing slot is never what wins.
+ * tile goes, since on a screen where *every* row is archived it carries no
+ * information. The gain goes to the title — the trailing slot never wins.
  */
 private const val COMPACT_FONT_SCALE = 2.0f
 
@@ -121,8 +99,11 @@ private const val ILLUSTRATION_BORDER_ALPHA = 0.24f
  *    relative archived-at string; the archive is a stack you put things on.
  *  - Tapping a row **opens** the chat (read-only, elsewhere); it never
  *    un-archives it. Archive state changes only when the user says so.
- *  - Restore is reachable three ways — an inline button, the row overflow, and
- *    a single 64 dp swipe action — because swipe must never be the only path.
+ *  - Restore is reachable from the row overflow and from a single 64 dp swipe
+ *    action, so the gesture is never the only path. The design also placed an
+ *    inline Restore button on the row; it was dropped in dogfooding, where it
+ *    ate the title — the one thing identifying the chat — and put a third
+ *    Restore beside two others already on screen.
  *  - **Delete forever** lives in the row overflow only, behind a confirmation.
  *    The swipe stays a single safe action.
  *
@@ -298,11 +279,6 @@ private fun ChatArchiveRow(
                     ArchiveTile()
                 }
                 ChatArchiveRowText(row = row, strings = strings, modifier = Modifier.weight(1f))
-                RestoreControl(
-                    compact = compact,
-                    label = strings.restore,
-                    onClick = { callbacks.onRestore(row.id) },
-                )
                 Box {
                     // 48 dp because the design asks for it, not for reach:
                     // Material lays `IconButton` out at 40 dp but expands its
@@ -347,60 +323,6 @@ private fun ArchiveTile() {
             tint = KnotworkTheme.extended.onSurfaceMuted,
             modifier = Modifier.size(ArchiveRowTileGlyph),
         )
-    }
-}
-
-/**
- * Inline Restore.
- *
- * A bespoke compact pill rather than [app.knotwork.design.components.buttons.KnotworkSecondaryButton]:
- * on a 360 dp row the standard small button leaves the title barely sixteen
- * mono characters, which truncates the archived-at label the row exists to
- * show. The design sizes this control at a 32 dp visual inside a 48 dp target
- * for exactly that reason.
- *
- * At font-scale ≥ 2.0 it collapses to an icon-only 48 dp button; the word
- * survives in `contentDescription`, so TalkBack still reads "Restore" (the same
- * move the trigger health badge makes).
- */
-@Composable
-private fun RestoreControl(compact: Boolean, label: String, onClick: () -> Unit) {
-    if (compact) {
-        IconButton(onClick = onClick, modifier = Modifier.size(ArchiveRestoreIconButton)) {
-            Icon(
-                imageVector = AppIcons.Unarchive,
-                contentDescription = label,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(ArchiveRestoreGlyph),
-            )
-        }
-        return
-    }
-    val accent = MaterialTheme.colorScheme.primary
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = Modifier
-            .heightIn(min = ArchiveRestoreIconButton)
-            .clip(KnotworkTheme.shapes.full)
-            .clickable(onClick = onClick, role = Role.Button),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
-            modifier = Modifier
-                .height(ArchiveRestorePillHeight)
-                .clip(KnotworkTheme.shapes.full)
-                .background(accent.copy(alpha = RESTORE_PILL_FILL_ALPHA))
-                .padding(horizontal = KnotworkTheme.spacing.sp3),
-        ) {
-            Icon(
-                imageVector = AppIcons.Unarchive,
-                contentDescription = null,
-                tint = accent,
-                modifier = Modifier.size(ArchiveRestorePillGlyph),
-            )
-            Text(text = label, style = KnotworkTextStyles.LabelSm, color = accent, maxLines = 1)
-        }
     }
 }
 

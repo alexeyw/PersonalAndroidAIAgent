@@ -256,8 +256,8 @@ every message, run, and trace stays exactly where it was.
   first, each labelled with when you put it away ("Archived 2 h ago").
   A chat whose background run finished *after* you archived it says so
   on the row, so nothing changes behind your back silently.
-- **Restore** — the **Restore** button on the row, the row's `⋮` menu,
-  or a swipe. The chat returns to the drawer unchanged.
+- **Restore** — the row's `⋮` menu, or swipe the row and tap **Restore**.
+  The chat returns to the drawer unchanged.
 - **Open an archived chat** — tap the row. It opens **read-only**: the
   history is fully readable, the top bar reads `Archived · read-only`,
   and the message box is replaced by a bar offering **Restore**. This is
