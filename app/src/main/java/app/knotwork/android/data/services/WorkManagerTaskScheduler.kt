@@ -6,8 +6,11 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.WorkRequest
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.services.ScheduledTaskConstraints
+import app.knotwork.android.domain.services.ScheduledTaskKind
+import app.knotwork.android.domain.services.ScheduledTaskTag
 import app.knotwork.android.domain.services.TaskScheduler
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -38,6 +41,7 @@ class WorkManagerTaskScheduler @Inject constructor(private val workManager: Work
         val requestBuilder = OneTimeWorkRequestBuilder<AgentWorker>()
             .setInputData(buildInputData(prompt, sessionId, pipelineId, origin, runId))
             .setConstraints(constraints.toWorkConstraints())
+        tagAsScheduledTask(requestBuilder, ScheduledTaskKind.ONE_TIME, intervalHours = 0, sessionId, prompt)
 
         if (delayMinutes > 0) {
             requestBuilder.setInitialDelay(delayMinutes, TimeUnit.MINUTES)
@@ -53,10 +57,11 @@ class WorkManagerTaskScheduler @Inject constructor(private val workManager: Work
         constraints: ScheduledTaskConstraints,
     ) {
         val inputData = buildInputData(prompt, sessionId, pipelineId = null, origin = RunOrigin.SCHEDULER, runId = null)
-        val request = PeriodicWorkRequestBuilder<AgentWorker>(intervalHours, TimeUnit.HOURS)
+        val requestBuilder = PeriodicWorkRequestBuilder<AgentWorker>(intervalHours, TimeUnit.HOURS)
             .setInputData(inputData)
             .setConstraints(constraints.toWorkConstraints())
-            .build()
+        tagAsScheduledTask(requestBuilder, ScheduledTaskKind.PERIODIC, intervalHours, sessionId, prompt)
+        val request = requestBuilder.build()
 
         // Keyed by (intervalHours, sessionId, trimmed prompt) so re-scheduling
         // the same recurring agent task into the same session does not stack
@@ -68,6 +73,36 @@ class WorkManagerTaskScheduler @Inject constructor(private val workManager: Work
             ExistingPeriodicWorkPolicy.KEEP,
             request,
         )
+    }
+
+    override fun cancelAllScheduled() {
+        workManager.cancelAllWorkByTag(ScheduledTaskTag.MARKER)
+    }
+
+    /**
+     * Attaches the scheduled-task marker and the human-readable label to
+     * [builder].
+     *
+     * Both are needed because the runtime does not expose a queued request's
+     * input data: the marker is what "cancel every scheduled task" matches on
+     * (and what keeps trigger / tile work out of that blast radius), while the
+     * label is the only way the task monitor can say which task a row is.
+     *
+     * @param builder The request under construction.
+     * @param kind One-shot or repeating.
+     * @param intervalHours Repeat interval in hours; `0` for a one-time task.
+     * @param sessionId Bound chat session, or `null`.
+     * @param prompt The task's prompt (truncated into the label's preview).
+     */
+    private fun tagAsScheduledTask(
+        builder: WorkRequest.Builder<*, *>,
+        kind: ScheduledTaskKind,
+        intervalHours: Long,
+        sessionId: String?,
+        prompt: String,
+    ) {
+        builder.addTag(ScheduledTaskTag.MARKER)
+        builder.addTag(ScheduledTaskTag.encode(kind, intervalHours, sessionId, prompt))
     }
 
     /**

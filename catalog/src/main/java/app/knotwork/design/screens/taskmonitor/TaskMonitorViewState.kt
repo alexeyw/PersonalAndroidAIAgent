@@ -69,6 +69,14 @@ data class TaskMonitorDetail(
 
 /**
  * Top-level immutable input to `TaskMonitorContent`.
+ *
+ * @property scheduledTaskCount How many tasks the agent scheduled for itself are
+ * currently queued or running. Drives the "cancel every scheduled task" action,
+ * which is hidden at `0` — the action exists for the case where a task keeps
+ * re-scheduling itself, and an always-present bulk-cancel on an empty list is
+ * just a hazard.
+ * @property confirmingCancelAll `true` while the bulk-cancel confirmation is on
+ * screen.
  */
 data class TaskMonitorViewState(
     val visualState: TaskMonitorVisualState,
@@ -76,6 +84,8 @@ data class TaskMonitorViewState(
     val rows: List<TaskMonitorRow> = emptyList(),
     val expandedDetail: TaskMonitorDetail? = null,
     val errorMessage: String? = null,
+    val scheduledTaskCount: Int = 0,
+    val confirmingCancelAll: Boolean = false,
 ) {
     init {
         require((visualState == TaskMonitorVisualState.Error) == (errorMessage != null)) {
@@ -91,6 +101,9 @@ class TaskMonitorCallbacks(
     val onFilterChanged: (TaskFilterKind) -> Unit = {},
     val onRowClick: (String) -> Unit = {},
     val onRowCancel: (String) -> Unit = {},
+    val onCancelAllScheduled: () -> Unit = {},
+    val onCancelAllScheduledConfirm: () -> Unit = {},
+    val onCancelAllScheduledDismiss: () -> Unit = {},
     val onDetailDismiss: () -> Unit = {},
     val onDetailOpenChat: (String) -> Unit = {},
     val onRetry: () -> Unit = {},

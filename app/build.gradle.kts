@@ -171,6 +171,23 @@ android {
     }
 
     buildTypes {
+        debug {
+            // A debug build installs next to a release build instead of
+            // replacing it: separate applicationId means a separate data
+            // directory, so dogfooding a work-in-progress build can no longer
+            // migrate, corrupt or wipe the database of the build actually in
+            // daily use. The launcher label is overridden in `src/debug/res`
+            // and the version name is suffixed so About and bug reports say
+            // which of the two is talking.
+            //
+            // `src/debug/google-services.json` carries the same placeholder
+            // values as the module-root file with the suffixed package name.
+            // The variant-specific file wins for this build type, so the debug
+            // build never resolves to a real Firebase project even when the
+            // root file is swapped for the real one at release-build time.
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             // R8 in full mode + resource shrinking.
             // Keep rules for reflection-heavy code paths (Koog, Ktor,

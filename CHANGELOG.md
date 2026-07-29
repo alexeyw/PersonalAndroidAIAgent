@@ -128,6 +128,21 @@ details.
 
 ### Fixed
 
+- **A task the agent scheduled for itself could not be found, let alone
+  stopped.** Every scheduled task showed up under **More → Active tasks** as
+  the same anonymous "Background Task", so cancelling a specific one was
+  guesswork — and there was no way to stop them all. A task whose prompt told
+  the agent to schedule its own successor was therefore unstoppable in
+  practice: only one task is ever queued, so cancelling it changed nothing
+  while the run that would enqueue the next one was still going, and clearing
+  the app's data was the only way out. Scheduled tasks are now named — the row
+  leads with the start of the task's own prompt, under it the repeat interval
+  and the chat it reports into — and the screen offers **Stop all scheduled
+  tasks**, which settles every one of them, running included. Automations and
+  their triggers are untouched by it, and nothing is deleted. The agent is also
+  now refused when too many scheduled runs have already started within the past
+  hour, so a chain like that bounds itself instead of running until someone
+  notices.
 - **An automation that stopped to ask you something looked exactly like one
   that never asked.** A background run pausing for approval — the moment you
   are most likely to miss — left no trace in a trigger's evaluation journal

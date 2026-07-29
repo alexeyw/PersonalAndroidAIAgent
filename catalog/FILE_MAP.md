@@ -440,9 +440,14 @@ project — `:app` consumes it as an `implementation` dependency.
       cold-start state.
   - `taskmonitor/`
     - `TaskMonitorContent.kt` — task list (filter row, task cards,
-      expandable detail sheet with logs + actions).
+      expandable detail sheet with logs + actions), plus the top-bar
+      "stop all scheduled tasks" action and its confirmation. The
+      action appears only when something is actually stoppable; the
+      confirm is a plain dialog rather than the typed-keyword one, since
+      this is recoverable and is itself a recovery action.
     - `TaskMonitorViewState.kt` — visual-state enum + filter enum + task
-      row / detail / status-lifecycle models.
+      row / detail / status-lifecycle models, plus the scheduled-task
+      count and bulk-cancel confirmation flag.
   - `tools/`
     - `ToolsContent.kt` — Tools surface (built-in AppFunctions section +
       MCP servers with expandable tool lists and connection states).

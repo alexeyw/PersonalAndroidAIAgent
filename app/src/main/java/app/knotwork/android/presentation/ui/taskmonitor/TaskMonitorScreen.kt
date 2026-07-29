@@ -8,8 +8,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import app.knotwork.android.R
+import app.knotwork.android.domain.services.ScheduledTaskKind
 import app.knotwork.design.screens.taskmonitor.TaskFilterKind
 import app.knotwork.design.screens.taskmonitor.TaskMonitorCallbacks
 import app.knotwork.design.screens.taskmonitor.TaskMonitorContent
@@ -35,13 +37,19 @@ fun TaskMonitorScreen(
     onBack: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val strings = taskMonitorStrings()
-    val viewState = remember(uiState) { uiState.toViewState() }
+    val strings = taskMonitorStrings(scheduledTaskCount = uiState.scheduledTaskCount)
+    // Row copy is resolved once in composable context; the projection below is a
+    // plain function, so it cannot call `stringResource` per row.
+    val labels = taskMonitorRowLabels()
+    val viewState = remember(uiState, labels) { uiState.toViewState(labels) }
     val callbacks = TaskMonitorCallbacks(
         onBack = onBack,
         onFilterChanged = { viewModel.onFilterChanged(it.toAppFilter()) },
         onRowClick = viewModel::openDetails,
         onRowCancel = viewModel::onCancelTaskClicked,
+        onCancelAllScheduled = viewModel::onCancelAllScheduledClicked,
+        onCancelAllScheduledConfirm = viewModel::onCancelAllScheduledConfirmed,
+        onCancelAllScheduledDismiss = viewModel::onCancelAllScheduledDismissed,
         onDetailDismiss = viewModel::closeDetails,
         onDetailOpenChat = { taskId ->
             // The catalog already gates the CTA visibility on
@@ -75,8 +83,24 @@ fun TaskMonitorScreen(
     }
 }
 
-internal fun TaskMonitorState.toViewState(): TaskMonitorViewState {
-    val rows = tasks.map { it.toRow() }
+/**
+ * Pre-resolved row copy for the scheduled-task rows.
+ *
+ * @property scheduledTitle Base title of a task the agent scheduled for itself.
+ * @property intervalFormat Compact repeat-interval fragment (`every 6 h`).
+ *   Deliberately abbreviated rather than pluralised: it reads the same for every
+ *   count, the same reasoning the journal's `12m ago` label follows.
+ */
+internal data class TaskRowLabels(val scheduledTitle: String, val intervalFormat: String)
+
+@Composable
+private fun taskMonitorRowLabels(): TaskRowLabels = TaskRowLabels(
+    scheduledTitle = stringResource(R.string.taskmonitor_row_scheduled_title),
+    intervalFormat = stringResource(R.string.taskmonitor_row_scheduled_interval_format),
+)
+
+internal fun TaskMonitorState.toViewState(labels: TaskRowLabels): TaskMonitorViewState {
+    val rows = tasks.map { it.toRow(labels) }
     val visualState = when {
         isLoading -> TaskMonitorVisualState.Loading
         rows.isEmpty() -> TaskMonitorVisualState.Empty
@@ -102,13 +126,36 @@ internal fun TaskMonitorState.toViewState(): TaskMonitorViewState {
         filter = filter.toCatalog(),
         rows = rows,
         expandedDetail = detail,
+        scheduledTaskCount = scheduledTaskCount,
+        confirmingCancelAll = confirmingCancelAll,
     )
 }
 
-private fun TaskItem.toRow(): TaskMonitorRow = TaskMonitorRow(
+/**
+ * Says what a scheduled task *is* — its kind, cadence and the chat it reports
+ * into — as the row's second line.
+ *
+ * The prompt takes the title and this takes the subtitle, not the other way
+ * round: a row title has room for roughly a dozen characters next to the status
+ * pill and the cancel control, and every scheduled task would open with the same
+ * "Scheduled task · …" prefix. Truncating the one thing that differs would
+ * reproduce the anonymous rows this label exists to replace.
+ */
+private fun TaskItem.scheduledSubtitle(labels: TaskRowLabels): String? {
+    val label = scheduled ?: return null
+    return buildList {
+        add(labels.scheduledTitle)
+        if (label.kind == ScheduledTaskKind.PERIODIC) add(labels.intervalFormat.format(label.intervalHours))
+        boundSessionName?.takeIf { it.isNotBlank() }?.let(::add)
+    }.joinToString(SUBTITLE_SEPARATOR)
+}
+
+private fun TaskItem.toRow(labels: TaskRowLabels): TaskMonitorRow = TaskMonitorRow(
     id = id,
-    title = title,
-    subtitle = pipelineStage,
+    // The prompt is the only part that tells two scheduled tasks apart, so it
+    // gets the widest line.
+    title = scheduled?.promptPreview?.takeIf { it.isNotBlank() } ?: title,
+    subtitle = scheduledSubtitle(labels) ?: pipelineStage,
     status = status.toCatalog(),
     progress = progress?.takeIf { it >= 0f },
     isCancellable = type == TaskType.BACKGROUND_WORK && (status == TaskStatus.RUNNING || status == TaskStatus.QUEUED),
@@ -135,8 +182,11 @@ private fun TaskFilterKind.toAppFilter(): TaskFilterType = when (this) {
     TaskFilterKind.Completed -> TaskFilterType.COMPLETED
 }
 
+/** Separator between the parts of a scheduled row's subtitle. */
+private const val SUBTITLE_SEPARATOR = " · "
+
 @Composable
-private fun taskMonitorStrings(): TaskMonitorStrings = TaskMonitorStrings(
+private fun taskMonitorStrings(scheduledTaskCount: Int): TaskMonitorStrings = TaskMonitorStrings(
     title = stringResource(R.string.taskmonitor_screen_title),
     backCd = stringResource(R.string.common_back),
     cancelCd = stringResource(R.string.common_cancel),
@@ -147,4 +197,13 @@ private fun taskMonitorStrings(): TaskMonitorStrings = TaskMonitorStrings(
     detailDismiss = stringResource(R.string.common_close),
     detailOpenChat = stringResource(R.string.taskmonitor_open_chat),
     detailNoLogs = stringResource(R.string.taskmonitor_detail_no_logs),
+    cancelAllCd = stringResource(R.string.taskmonitor_cancel_all_cd),
+    cancelAllTitle = stringResource(R.string.taskmonitor_cancel_all_title),
+    cancelAllConfirm = stringResource(R.string.taskmonitor_cancel_all_confirm),
+    cancelAllDismiss = stringResource(R.string.taskmonitor_cancel_all_dismiss),
+    cancelAllBody = pluralStringResource(
+        R.plurals.taskmonitor_cancel_all_body,
+        scheduledTaskCount,
+        scheduledTaskCount,
+    ),
 )

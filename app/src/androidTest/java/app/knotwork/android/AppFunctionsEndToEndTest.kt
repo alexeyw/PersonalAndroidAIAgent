@@ -788,7 +788,13 @@ class AppFunctionsEndToEndTest {
     )
 
     private companion object {
-        const val AGENT_PACKAGE = "app.knotwork.android"
+        /**
+         * This app's own package, read from the build rather than written out:
+         * the debug build carries an `applicationIdSuffix`, and a literal would
+         * silently address the release install (or nothing at all) on the very
+         * variant these instrumented tests run against.
+         */
+        val AGENT_PACKAGE: String = BuildConfig.APPLICATION_ID
         const val PROBE_PACKAGE = "app.knotwork.android.toolsprobe"
 
         /**

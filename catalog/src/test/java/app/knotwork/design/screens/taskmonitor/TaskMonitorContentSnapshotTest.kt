@@ -43,6 +43,16 @@ class TaskMonitorContentSnapshotTest {
     }
 
     @Test
+    fun taskmonitor_cancel_all_light() = snapshot(name = "cancel_all", dark = false) {
+        TaskMonitorContent(state = TaskMonitorPreview.confirmingCancelAll())
+    }
+
+    @Test
+    fun taskmonitor_cancel_all_dark() = snapshot(name = "cancel_all", dark = true) {
+        TaskMonitorContent(state = TaskMonitorPreview.confirmingCancelAll())
+    }
+
+    @Test
     fun taskmonitor_detail_light() = snapshot(name = "detail", dark = false) {
         TaskMonitorDetailSheetBody(
             detail = TaskMonitorPreview.detail(),
@@ -97,6 +107,33 @@ internal object TaskMonitorPreview {
 
     fun empty(): TaskMonitorViewState = TaskMonitorViewState(
         visualState = TaskMonitorVisualState.Empty,
+    )
+
+    /**
+     * Two scheduled tasks queued and the bulk-cancel confirmation open — the
+     * recovery path out of a task that keeps re-scheduling itself, and the only
+     * state in which the top-bar action is offered at all.
+     */
+    fun confirmingCancelAll(): TaskMonitorViewState = default().copy(
+        rows = listOf(
+            TaskMonitorRow(
+                id = "s1",
+                title = "write the evening journal entry",
+                subtitle = "Scheduled task · every 6 h · Evening journal",
+                status = TaskRowStatus.Queued,
+                isCancellable = true,
+            ),
+            TaskMonitorRow(
+                id = "s2",
+                title = "check the inbox and summarise anything new",
+                subtitle = "Scheduled task · Inbox triage",
+                status = TaskRowStatus.Running,
+                progress = -1f,
+                isCancellable = true,
+            ),
+        ),
+        scheduledTaskCount = 2,
+        confirmingCancelAll = true,
     )
 
     fun detail(): TaskMonitorDetail = TaskMonitorDetail(

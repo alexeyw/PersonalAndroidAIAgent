@@ -7,6 +7,9 @@ import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.services.ScheduledTaskKind
+import app.knotwork.android.domain.services.ScheduledTaskTag
+import app.knotwork.android.domain.usecases.CancelScheduledTasksUseCase
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -33,6 +36,7 @@ class TaskMonitorViewModelTest {
     private val workManager: WorkManager = mockk(relaxed = true)
     private val settingsRepository: SettingsRepository = mockk(relaxed = true)
     private val taskQueueManager: TaskQueueManager = mockk(relaxed = true)
+    private val cancelScheduledTasks: CancelScheduledTasksUseCase = mockk(relaxed = true)
     private val testDispatcher = StandardTestDispatcher()
 
     @Before
@@ -66,7 +70,13 @@ class TaskMonitorViewModelTest {
         )
         every { taskQueueManager.activeSessionsState } returns kotlinx.coroutines.flow.MutableStateFlow(activeMap)
 
-        viewModel = TaskMonitorViewModel(chatRepository, workManager, settingsRepository, taskQueueManager)
+        viewModel = TaskMonitorViewModel(
+            chatRepository,
+            workManager,
+            settingsRepository,
+            taskQueueManager,
+            cancelScheduledTasks,
+        )
     }
 
     @After
@@ -114,5 +124,111 @@ class TaskMonitorViewModelTest {
         viewModel.onCancelTaskClicked(uuid.toString())
 
         verify { workManager.cancelWorkById(uuid) }
+    }
+
+    // --- Scheduled tasks ----------------------------------------------------
+
+    /** A queued scheduled task, tagged the way the scheduler tags one. */
+    private fun scheduledWorkInfo(
+        state: WorkInfo.State = WorkInfo.State.ENQUEUED,
+        kind: ScheduledTaskKind = ScheduledTaskKind.PERIODIC,
+        intervalHours: Long = 6,
+        sessionId: String? = "session1",
+        prompt: String = "write the evening journal entry",
+    ): WorkInfo = mockk(relaxed = true) {
+        every { id } returns UUID.randomUUID()
+        every { tags } returns setOf(
+            ScheduledTaskTag.MARKER,
+            ScheduledTaskTag.encode(kind, intervalHours, sessionId, prompt),
+            WORKER_CLASS_TAG,
+        )
+        every { this@mockk.state } returns state
+    }
+
+    @Test
+    fun `given a tagged scheduled task when observed then the row carries its label and bound chat`() =
+        runTest(testDispatcher) {
+            every { workManager.getWorkInfosFlow(any()) } returns flowOf(listOf(scheduledWorkInfo()))
+            viewModel = TaskMonitorViewModel(
+                chatRepository,
+                workManager,
+                settingsRepository,
+                taskQueueManager,
+                cancelScheduledTasks,
+            )
+            viewModel.onFilterChanged(TaskFilterType.BACKGROUND)
+
+            val task = viewModel.uiState.first { !it.isLoading }.tasks
+                .single { it.type == TaskType.BACKGROUND_WORK }
+
+            // Without this the row reads "Background Task (AgentWorker)" — the
+            // same for every task, so cancelling the right one is guesswork.
+            assertEquals(ScheduledTaskKind.PERIODIC, task.scheduled?.kind)
+            assertEquals(6L, task.scheduled?.intervalHours)
+            assertEquals("write the evening journal entry", task.scheduled?.promptPreview)
+            assertEquals("First Session", task.boundSessionName)
+        }
+
+    @Test
+    fun `given unfinished and finished scheduled tasks when observed then only the unfinished ones are counted`() =
+        runTest(testDispatcher) {
+            every { workManager.getWorkInfosFlow(any()) } returns flowOf(
+                listOf(
+                    scheduledWorkInfo(state = WorkInfo.State.ENQUEUED),
+                    scheduledWorkInfo(state = WorkInfo.State.RUNNING),
+                    scheduledWorkInfo(state = WorkInfo.State.SUCCEEDED),
+                    scheduledWorkInfo(state = WorkInfo.State.CANCELLED),
+                ),
+            )
+            viewModel = TaskMonitorViewModel(
+                chatRepository,
+                workManager,
+                settingsRepository,
+                taskQueueManager,
+                cancelScheduledTasks,
+            )
+
+            // Offering to stop tasks that already finished would be a lie.
+            assertEquals(2, viewModel.uiState.first { !it.isLoading }.scheduledTaskCount)
+        }
+
+    @Test
+    fun `given untagged background work when observed then it is not counted as scheduled`() = runTest(testDispatcher) {
+        // The default fixture's work carries no scheduled marker: trigger and
+        // tile runs must stay out of the bulk-cancel's blast radius.
+        assertEquals(0, viewModel.uiState.first { !it.isLoading }.scheduledTaskCount)
+    }
+
+    @Test
+    fun `given the confirmation is staged when confirmed then every scheduled task is cancelled`() =
+        runTest(testDispatcher) {
+            viewModel.onCancelAllScheduledClicked()
+            assertTrue(viewModel.uiState.first { it.confirmingCancelAll }.confirmingCancelAll)
+
+            viewModel.onCancelAllScheduledConfirmed()
+
+            verify(exactly = 1) { cancelScheduledTasks() }
+            // Await the cleared state rather than reading the cached one: the
+            // combine has not recomputed yet on a StandardTestDispatcher.
+            assertTrue(!viewModel.uiState.first { !it.confirmingCancelAll }.confirmingCancelAll)
+        }
+
+    @Test
+    fun `given the confirmation is staged when dismissed then nothing is cancelled`() = runTest(testDispatcher) {
+        viewModel.onCancelAllScheduledClicked()
+
+        viewModel.onCancelAllScheduledDismissed()
+
+        verify(exactly = 0) { cancelScheduledTasks() }
+        assertTrue(!viewModel.uiState.first { !it.confirmingCancelAll }.confirmingCancelAll)
+    }
+
+    private companion object {
+        /**
+         * Stand-in for the tag the background runtime adds by itself (the worker
+         * class name). Only its presence matters here: an unrelated tag must not
+         * be mistaken for a label.
+         */
+        const val WORKER_CLASS_TAG = "AgentWorker"
     }
 }
