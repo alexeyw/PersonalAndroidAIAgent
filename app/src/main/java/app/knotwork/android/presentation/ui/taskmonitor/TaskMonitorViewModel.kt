@@ -125,6 +125,10 @@ class TaskMonitorViewModel @Inject constructor(
 
         val allTasks = sessionTasks + workTasks
 
+        val scheduledCount = workInfos.count {
+            ScheduledTaskTag.MARKER in it.tags && it.state in UNFINISHED_STATES
+        }
+
         val filteredTasks = when (filter) {
             TaskFilterType.ALL -> allTasks
             TaskFilterType.ACTIVE -> allTasks.filter { it.status == TaskStatus.RUNNING }
@@ -145,10 +149,12 @@ class TaskMonitorViewModel @Inject constructor(
             detailTaskId = detailId,
             // Counted over every work item, not the filtered list: the escape
             // hatch must be reachable from whichever filter is selected.
-            scheduledTaskCount = workInfos.count {
-                ScheduledTaskTag.MARKER in it.tags && it.state in UNFINISHED_STATES
-            },
-            confirmingCancelAll = confirmingCancelAll,
+            scheduledTaskCount = scheduledCount,
+            // Derived, not just mirrored: the last scheduled task can finish
+            // while the confirmation is open, and a dialog offering to stop
+            // nothing (or worse, one that reappears when an unrelated task is
+            // scheduled later) would be asking about a premise that is gone.
+            confirmingCancelAll = confirmingCancelAll && scheduledCount > 0,
         )
     }.stateIn(
         scope = viewModelScope,

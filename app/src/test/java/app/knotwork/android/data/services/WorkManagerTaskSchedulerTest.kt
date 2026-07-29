@@ -5,6 +5,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequest
 import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkManager
+import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.services.ScheduledTaskConstraints
 import app.knotwork.android.domain.services.ScheduledTaskKind
 import app.knotwork.android.domain.services.ScheduledTaskLabel
@@ -272,6 +273,23 @@ class WorkManagerTaskSchedulerTest {
             ),
             ScheduledTaskTag.parse(tags),
         )
+    }
+
+    @Test
+    fun `given a trigger or tile origin when scheduled then the task carries no scheduled marker`() {
+        val requestSlot = mutableListOf<OneTimeWorkRequest>()
+
+        scheduler.scheduleOneTime("fire", 0, null, constraints, origin = RunOrigin.TRIGGER)
+        scheduler.scheduleOneTime("tile", 0, null, constraints, origin = RunOrigin.QUICK_TILE)
+
+        verify(exactly = 2) { workManager.enqueue(capture(requestSlot)) }
+        // Both reach the same method as the scheduling tool. Marking them would
+        // let "stop all scheduled tasks" kill an automation the user never asked
+        // to stop.
+        requestSlot.forEach { request ->
+            assertTrue(ScheduledTaskTag.MARKER !in request.tags)
+            assertNull(ScheduledTaskTag.parse(request.tags))
+        }
     }
 
     @Test

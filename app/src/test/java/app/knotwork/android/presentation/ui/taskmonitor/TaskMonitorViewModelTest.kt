@@ -202,6 +202,14 @@ class TaskMonitorViewModelTest {
     @Test
     fun `given the confirmation is staged when confirmed then every scheduled task is cancelled`() =
         runTest(testDispatcher) {
+            every { workManager.getWorkInfosFlow(any()) } returns flowOf(listOf(scheduledWorkInfo()))
+            viewModel = TaskMonitorViewModel(
+                chatRepository,
+                workManager,
+                settingsRepository,
+                taskQueueManager,
+                cancelScheduledTasks,
+            )
             viewModel.onCancelAllScheduledClicked()
             assertTrue(viewModel.uiState.first { it.confirmingCancelAll }.confirmingCancelAll)
 
@@ -214,7 +222,25 @@ class TaskMonitorViewModelTest {
         }
 
     @Test
+    fun `given no scheduled task is left when the confirmation is open then it closes itself`() =
+        runTest(testDispatcher) {
+            // The default fixture has no scheduled work: a confirmation staged
+            // against nothing must not ask about a premise that is gone.
+            viewModel.onCancelAllScheduledClicked()
+
+            assertTrue(!viewModel.uiState.first { !it.isLoading }.confirmingCancelAll)
+        }
+
+    @Test
     fun `given the confirmation is staged when dismissed then nothing is cancelled`() = runTest(testDispatcher) {
+        every { workManager.getWorkInfosFlow(any()) } returns flowOf(listOf(scheduledWorkInfo()))
+        viewModel = TaskMonitorViewModel(
+            chatRepository,
+            workManager,
+            settingsRepository,
+            taskQueueManager,
+            cancelScheduledTasks,
+        )
         viewModel.onCancelAllScheduledClicked()
 
         viewModel.onCancelAllScheduledDismissed()

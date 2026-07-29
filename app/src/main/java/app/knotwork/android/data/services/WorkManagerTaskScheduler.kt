@@ -41,7 +41,14 @@ class WorkManagerTaskScheduler @Inject constructor(private val workManager: Work
         val requestBuilder = OneTimeWorkRequestBuilder<AgentWorker>()
             .setInputData(buildInputData(prompt, sessionId, pipelineId, origin, runId))
             .setConstraints(constraints.toWorkConstraints())
-        tagAsScheduledTask(requestBuilder, ScheduledTaskKind.ONE_TIME, intervalHours = 0, sessionId, prompt)
+        // Only the scheduling tool's own tasks are marked. A trigger fire and a
+        // Quick-Settings launch reach this same method, and marking them would
+        // put them inside the blast radius of "stop all scheduled tasks" — an
+        // automation the user never asked to stop, silently killed by a recovery
+        // action aimed at something else.
+        if (origin == RunOrigin.SCHEDULER) {
+            tagAsScheduledTask(requestBuilder, ScheduledTaskKind.ONE_TIME, intervalHours = 0, sessionId, prompt)
+        }
 
         if (delayMinutes > 0) {
             requestBuilder.setInitialDelay(delayMinutes, TimeUnit.MINUTES)
