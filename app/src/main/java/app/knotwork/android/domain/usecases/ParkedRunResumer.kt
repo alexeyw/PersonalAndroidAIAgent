@@ -82,7 +82,16 @@ class ParkedRunResumer @Inject constructor(
             ResumeOutcome.NotResumable -> {
                 // The run record already settled elsewhere (maintenance
                 // expiry, a racing resume, a restart). The park is stale —
-                // drop it so it cannot resurface.
+                // drop it so it cannot resurface. The gate ends here too:
+                // without this it would stay journalled as still waiting on a
+                // run that is long over, which is precisely the kind of silent
+                // state the HITL record exists to remove. The response was
+                // given but could never be applied, so it is ABANDONED rather
+                // than an approval or an answer that took effect.
+                recordTriggerHitlEvent(
+                    pending.runId,
+                    TriggerHitlEvent.Resolved(TriggerHitlResolution.ABANDONED),
+                )
                 pendingInteractionRepository.delete(pending.runId)
                 PendingSubmissionOutcome.NothingPending
             }

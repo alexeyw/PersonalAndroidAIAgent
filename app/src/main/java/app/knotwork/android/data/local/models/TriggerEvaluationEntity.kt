@@ -7,8 +7,9 @@ import androidx.room.PrimaryKey
 
 /**
  * Room row for one trigger-evaluation journal record (`trigger_evaluations`
- * table, introduced in v51, HITL columns added in v56). See [app.knotwork.android.domain.models.TriggerEvaluation] for the
- * domain contract and the no-silent-skips invariant.
+ * table, introduced in v51, HITL columns added in v56). See
+ * [app.knotwork.android.domain.models.TriggerEvaluation] for the domain contract
+ * and the no-silent-skips invariant.
  *
  * The sealed verdict and run-outcome are flattened into string discriminators
  * (plus a couple of payload columns) rather than a JSON blob, so the "by trigger,

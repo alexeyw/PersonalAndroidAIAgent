@@ -166,6 +166,11 @@ class ParkedRunResumerTest {
         coVerify { pendingInteractionRepository.delete("run-1") }
         // The run record was settled elsewhere — no second terminal write.
         coVerify(exactly = 0) { pipelineRunRepository.finishRun(any(), any(), any()) }
+        // …but the gate must not be left journalled as still waiting on a run
+        // that is already over: the response arrived and could not be applied.
+        coVerify(exactly = 1) {
+            recordTriggerHitlEvent("run-1", TriggerHitlEvent.Resolved(TriggerHitlResolution.ABANDONED))
+        }
     }
 
     @Test

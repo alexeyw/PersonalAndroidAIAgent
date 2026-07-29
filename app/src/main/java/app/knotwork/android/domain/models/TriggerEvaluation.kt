@@ -246,10 +246,12 @@ enum class TriggerHitlResolution {
     TIMED_OUT,
 
     /**
-     * The gate ended without ever reaching the user: it could not be parked
-     * durably (a non-persisted editor run, or a storage failure), or the park
-     * was later discarded because the pipeline graph had changed underneath it.
-     * Distinct from [TIMED_OUT] — nobody was ever given the chance to answer.
+     * The gate ended without a decision that could take effect: it could not be
+     * parked durably (a non-persisted editor run, or a storage failure), the park
+     * was later discarded because the pipeline graph had changed underneath it,
+     * or a response arrived for a run that had already settled elsewhere.
+     * Distinct from [TIMED_OUT], where the user was asked and the window simply
+     * ran out.
      */
     ABANDONED,
 }
