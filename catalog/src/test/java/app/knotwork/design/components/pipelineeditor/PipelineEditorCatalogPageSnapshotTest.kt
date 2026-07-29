@@ -29,8 +29,10 @@ class PipelineEditorCatalogPageSnapshotTest {
     @Test
     fun pipeline_editor_light() {
         composeTestRule.setContent {
-            CompositionLocalProvider(LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true)) {
-                KnotworkTheme(darkTheme = false) { PipelineEditorCatalogContent() }
+            KnotworkTheme(darkTheme = false) {
+                CompositionLocalProvider(LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true)) {
+                    PipelineEditorCatalogContent()
+                }
             }
         }
         composeTestRule.onRoot().captureRoboImage(
@@ -41,8 +43,10 @@ class PipelineEditorCatalogPageSnapshotTest {
     @Test
     fun pipeline_editor_dark() {
         composeTestRule.setContent {
-            CompositionLocalProvider(LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true)) {
-                KnotworkTheme(darkTheme = true) { PipelineEditorCatalogContent() }
+            KnotworkTheme(darkTheme = true) {
+                CompositionLocalProvider(LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true)) {
+                    PipelineEditorCatalogContent()
+                }
             }
         }
         composeTestRule.onRoot().captureRoboImage(

@@ -55,8 +55,10 @@ class ImageAttachmentCatalogPageSnapshotTest {
     @Test
     fun image_attachments_reduced_motion() {
         composeTestRule.setContent {
-            CompositionLocalProvider(LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true)) {
-                KnotworkTheme(darkTheme = false) { ImageAttachmentCatalogContent() }
+            KnotworkTheme(darkTheme = false) {
+                CompositionLocalProvider(LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true)) {
+                    ImageAttachmentCatalogContent()
+                }
             }
         }
         composeTestRule.onRoot().captureRoboImage(

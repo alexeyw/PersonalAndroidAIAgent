@@ -5,8 +5,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.knotwork.design.a11y.FixedKnotworkA11y
@@ -184,15 +186,39 @@ class TriggersContentSnapshotTest {
      * looping animations don't randomise the snapshot, and writes the PNG to
      * `src/test/snapshots/trigger_<name>_<theme>.png`.
      */
-    private fun snapshot(name: String, dark: Boolean, content: @Composable () -> Unit) {
+    /**
+     * The list at the "Largest" text preset — the only capture that exercises
+     * `HealthBadge`'s icon-only collapse, and the one place a long trigger name
+     * could squeeze the badge off the row.
+     */
+    @Test
+    fun list_populated_font_scale_2x_light() =
+        snapshot(name = "list_populated_font_scale_2x", dark = false, fontScale = LARGE_FONT_SCALE) {
+            TriggersContent(state = TriggersPreview.populated())
+        }
+
+    private fun snapshot(name: String, dark: Boolean, fontScale: Float = 1f, content: @Composable () -> Unit) {
         composeTestRule.setContent {
-            CompositionLocalProvider(LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true)) {
-                KnotworkTheme(darkTheme = dark) { content() }
+            val baseDensity = LocalDensity.current
+            // Inside the theme on purpose: it is the placement that survives the
+            // theme ever provisioning `LocalKnotworkA11y` again.
+            KnotworkTheme(darkTheme = dark) {
+                CompositionLocalProvider(
+                    LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true, fontScale = fontScale),
+                    LocalDensity provides Density(density = baseDensity.density, fontScale = fontScale),
+                ) {
+                    content()
+                }
             }
         }
         val themeTag = if (dark) "dark" else "light"
         composeTestRule.onRoot().captureRoboImage(
             filePath = "src/test/snapshots/trigger_${name}_$themeTag.png",
         )
+    }
+
+    private companion object {
+        /** The "Largest" system text-size preset every layout must survive. */
+        const val LARGE_FONT_SCALE = 2.0f
     }
 }

@@ -213,11 +213,11 @@ class ChatHomeContentSnapshotTest {
             // requested font scale — FixedKnotworkA11y only adjusts the
             // a11y-aware Knotwork primitives, not the underlying typography.
             val baseDensity = LocalDensity.current
-            CompositionLocalProvider(
-                LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true, fontScale = fontScale),
-                LocalDensity provides Density(density = baseDensity.density, fontScale = fontScale),
-            ) {
-                KnotworkTheme(darkTheme = dark) { content() }
+            KnotworkTheme(darkTheme = dark) {
+                CompositionLocalProvider(
+                    LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true, fontScale = fontScale),
+                    LocalDensity provides Density(density = baseDensity.density, fontScale = fontScale),
+                ) { content() }
             }
         }
         val themeTag = if (dark) "dark" else "light"

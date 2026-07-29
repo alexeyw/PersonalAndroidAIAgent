@@ -5,7 +5,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
-import app.knotwork.design.a11y.DefaultKnotworkA11y
 import app.knotwork.design.a11y.KnotworkA11y
 import app.knotwork.design.a11y.LocalKnotworkA11y
 import app.knotwork.design.tokens.DefaultKnotworkElevation
@@ -63,7 +62,13 @@ fun KnotworkTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composab
         LocalKnotworkShapes provides DefaultKnotworkShapes,
         LocalKnotworkElevation provides DefaultKnotworkElevation,
         LocalKnotworkMotion provides DefaultKnotworkMotion,
-        LocalKnotworkA11y provides DefaultKnotworkA11y,
+        // `LocalKnotworkA11y` is deliberately NOT provided here. It already
+        // defaults to `DefaultKnotworkA11y`, so re-installing it changed
+        // nothing in production — but it *shadowed* any override a caller had
+        // installed outside the theme, which is the documented way for tests to
+        // pin reduced motion and font scale. Every snapshot suite used that
+        // form, so none of them actually exercised a font-scale branch and none
+        // pinned reduced motion, while their KDoc claimed both.
     ) {
         MaterialTheme(
             colorScheme = colorScheme,
