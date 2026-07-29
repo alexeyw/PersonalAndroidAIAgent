@@ -211,6 +211,12 @@ fun ChatHomeScreenState.toViewState(fixtures: ChatHomeFixtures = ChatHomeFixture
         composerAttachment = composerAttachment,
         composerState = voiceComposerState ?: baseViewState.composerState,
         composerVoiceNotice = composer.voiceNotice,
+        // Drawer chrome and the archived read-only flag are orthogonal to the
+        // visual branch, so they ride the same post-pass rather than being
+        // repeated across all nine constructor blocks.
+        openThreadMenuId = thread.openMenuId,
+        archivedCount = thread.archivedCount,
+        archivedReadOnly = thread.archived,
     )
 }
 

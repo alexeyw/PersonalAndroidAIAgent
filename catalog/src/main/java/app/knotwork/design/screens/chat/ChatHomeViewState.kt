@@ -230,6 +230,33 @@ data class ChatHomeViewState(
      * voice action cannot proceed, or `null` when none.
      */
     val composerVoiceNotice: ComposerVoiceNotice? = null,
+    /**
+     * Id of the drawer thread whose overflow menu is open, or `null`. Hoisted
+     * so only one menu can be open at a time.
+     */
+    val openThreadMenuId: String? = null,
+    /**
+     * **Preview / snapshot control only**: when non-null the named drawer row is
+     * forced open, every other row forced shut, and the drag disabled. `null`
+     * (production) leaves each row's swipe under the user's finger.
+     */
+    val revealedThreadId: String? = null,
+    /**
+     * Number of archived chats. Drives the drawer's "Archived chats" footer
+     * row, which is shown **only** when this is greater than zero: the drawer
+     * is a 320 dp working list, and a permanently empty row is clutter in the
+     * one place the user goes to switch threads. Discoverability is carried by
+     * the always-present More-tab entry instead.
+     */
+    val archivedCount: Int = 0,
+    /**
+     * `true` when the open thread is archived. The composer is **replaced** by
+     * the restore bar (not disabled in place) and the top-bar subtitle reads
+     * "Archived · read-only": a thread that is not in the drawer must not
+     * accept a message, because sending one would silently change archive
+     * state — and archiving is a user decision that only the user reverses.
+     */
+    val archivedReadOnly: Boolean = false,
 ) {
     init {
         require((visualState == ChatHomeVisualState.Error) == (errorMessage != null)) {
@@ -303,7 +330,20 @@ class ChatHomeCallbacks(
     val onErrorRetry: () -> Unit = {},
     val onTitleTripleTap: () -> Unit = {},
     val onToggleFavorite: () -> Unit = {},
+    /** Fired from the drawer row's overflow "Rename" item. */
     val onEditThread: (String) -> Unit = {},
+    /** Opens the drawer row's overflow menu (⋮, which replaced the pencil). */
+    val onThreadMenuOpen: (String) -> Unit = {},
+    /** Dismisses the drawer row's overflow menu. */
+    val onThreadMenuDismiss: () -> Unit = {},
+    /** Archives the drawer thread — from the swipe action or the overflow item. */
+    val onArchiveThread: (String) -> Unit = {},
+    /** Deletes the drawer thread — overflow only, and the host confirms first. */
+    val onDeleteThread: (String) -> Unit = {},
+    /** Opens the archive surface from the drawer footer row. */
+    val onOpenArchive: () -> Unit = {},
+    /** Restores the open archived thread from the read-only bar replacing the composer. */
+    val onRestoreArchivedThread: () -> Unit = {},
     val onImportChat: () -> Unit = {},
     val onOpenSettings: () -> Unit = {},
     val onSamplePromptCard: (ChatHomeSamplePromptCard) -> Unit = {},

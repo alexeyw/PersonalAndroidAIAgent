@@ -15,6 +15,25 @@ details.
 
 ### Added
 
+- **Archive chats instead of deleting them.** A chat list that only grows
+  eventually stops being useful, and until now the only way to shorten it was to
+  delete a conversation for good. Chats can now be archived: swipe a row in the
+  chat drawer or use its new `⋮` menu, and the conversation leaves the list with
+  every message, run and trace intact. A snackbar offers **Undo** for eight
+  seconds and the drawer stays open, so putting several chats away in a row is
+  one gesture each. Archived chats live on their own screen — always reachable
+  from **More → Archived chats**, and from the drawer's footer once there is
+  something in there — newest-archived first, each labelled with when you put it
+  away. Restore is one tap (button, row menu, or swipe); **Delete forever** is
+  available too, from the row menu only and behind a confirmation, never from a
+  swipe. Opening an archived chat shows the full history **read-only**, with the
+  message box replaced by a Restore bar: sending a message would silently
+  un-archive the conversation, and that decision stays yours. A background
+  trigger or scheduled run may still write into an archived chat without
+  bringing it back, and the row says so when one does. Archived chats export to
+  the share sheet exactly like active ones, so putting a chat away never puts it
+  out of reach of your history.
+
 - **Scheduled and triggered runs can say what they should remember.** A run you
   start yourself searches long-term memory with your own message. A run started
   by an automation trigger, a schedule, or the Quick Settings tile had no such

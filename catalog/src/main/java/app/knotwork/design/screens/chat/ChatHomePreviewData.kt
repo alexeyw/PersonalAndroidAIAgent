@@ -269,6 +269,18 @@ internal object ChatHomePreview {
         threads = threadRows(activeId = "t1"),
     )
 
+    /** DrawerOpen with the second row's overflow menu open (Rename · Archive · Delete). */
+    fun drawerRowMenu(): ChatHomeViewState = drawerOpen().copy(openThreadMenuId = "t2")
+
+    /** DrawerOpen with the active row's single Archive swipe action revealed. */
+    fun drawerSwipeOpen(): ChatHomeViewState = drawerOpen().copy(revealedThreadId = "t1")
+
+    /** DrawerOpen with the archive footer entry visible (count > 0). */
+    fun drawerWithArchive(): ChatHomeViewState = drawerOpen().copy(archivedCount = 6)
+
+    /** Idle state on an archived thread — read-only, composer replaced by the restore bar. */
+    fun archivedReadOnly(): ChatHomeViewState = idle().copy(archivedReadOnly = true)
+
     /** ConsoleExpanded state — console sheet overlayed at the Partial snap. */
     fun consoleExpanded(): ChatHomeViewState = ChatHomeViewState(
         visualState = ChatHomeVisualState.ConsoleExpanded,

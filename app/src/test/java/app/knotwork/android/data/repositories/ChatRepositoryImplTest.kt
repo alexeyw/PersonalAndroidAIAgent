@@ -240,8 +240,14 @@ class ChatRepositoryImplTest {
         repository.setSessionArchived("sess-arch", true)
         repository.setSessionArchived("sess-arch", false)
 
-        coVerify(exactly = 1) { chatDao.setSessionArchived("sess-arch", true) }
-        coVerify(exactly = 1) { chatDao.setSessionArchived("sess-arch", false) }
+        // Archiving stamps the instant the archive surface orders and labels by;
+        // restoring clears it, so the flag and the instant can never disagree.
+        coVerify(exactly = 1) {
+            chatDao.setSessionArchived("sess-arch", archived = true, archivedAt = match { it != null })
+        }
+        coVerify(exactly = 1) {
+            chatDao.setSessionArchived("sess-arch", archived = false, archivedAt = null)
+        }
         // Archiving must not delete anything the session owns.
         coVerify(exactly = 0) { chatDao.deleteSessionCompletely(any()) }
     }

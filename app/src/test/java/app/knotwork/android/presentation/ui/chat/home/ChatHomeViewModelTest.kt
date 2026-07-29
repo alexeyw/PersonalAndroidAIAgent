@@ -32,7 +32,9 @@ import app.knotwork.android.domain.services.AudioCaptureStore
 import app.knotwork.android.domain.services.AudioRecorder
 import app.knotwork.android.domain.services.RecordingState
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
+import app.knotwork.android.domain.usecases.ArchiveChatUseCase
 import app.knotwork.android.domain.usecases.EntryInferenceKind
+import app.knotwork.android.domain.usecases.ExportChatUseCase
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.PendingSubmissionOutcome
@@ -45,6 +47,7 @@ import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
 import app.knotwork.android.domain.usecases.SubmitClarificationAnswerUseCase
 import app.knotwork.android.domain.usecases.TranscribeAudioUseCase
 import app.knotwork.android.domain.usecases.TranscriptionOutcome
+import app.knotwork.android.domain.usecases.UnarchiveChatUseCase
 import app.knotwork.android.presentation.state.ActiveSessionTracker
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ChatRole
@@ -142,6 +145,9 @@ class ChatHomeViewModelTest {
 
     private lateinit var viewModel: ChatHomeViewModel
     private lateinit var activeSessionTracker: ActiveSessionTracker
+    private lateinit var archiveChatUseCase: ArchiveChatUseCase
+    private lateinit var unarchiveChatUseCase: UnarchiveChatUseCase
+    private lateinit var exportChatUseCase: ExportChatUseCase
 
     @Before
     fun setUp() {
@@ -149,6 +155,11 @@ class ChatHomeViewModelTest {
         activeSessionTracker = ActiveSessionTracker()
         agentOrchestratorUseCase = mockk(relaxed = true)
         chatRepository = mockk()
+        // Real use cases over the mocked repository: they are thin
+        // validate-and-delegate wrappers, so stubbing them would test the stub.
+        archiveChatUseCase = ArchiveChatUseCase(chatRepository)
+        unarchiveChatUseCase = UnarchiveChatUseCase(chatRepository)
+        exportChatUseCase = ExportChatUseCase(chatRepository)
         pipelineRepository = mockk()
         settingsRepository = mockk(relaxed = true)
         getContextWindowUseCase = mockk()
@@ -207,7 +218,7 @@ class ChatHomeViewModelTest {
         coEvery { chatRepository.importChat(any()) } returns "imported-session-id"
         coEvery { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
         coEvery { chatRepository.getSessionById(any()) } returns null
-        every { chatRepository.getSessionsFlow() } returns sessionsFlow
+        every { chatRepository.getSessionsFlow(any()) } returns sessionsFlow
         every { chatRepository.getDisplayMessagesForSession(any()) } returns messagesFlow
         coEvery { chatRepository.saveSession(any()) } answers {
             val saved = firstArg<ChatSession>()
@@ -260,6 +271,9 @@ class ChatHomeViewModelTest {
         audioCaptureStore,
         transcribeAudioUseCase,
         activeSessionTracker,
+        archiveChatUseCase,
+        exportChatUseCase,
+        unarchiveChatUseCase,
     ).also { vm ->
         // Keep the replay projection on the test scheduler so
         // advanceUntilIdle() deterministically covers it.
@@ -2297,6 +2311,185 @@ class ChatHomeViewModelTest {
         val rows = viewModel.state.value.thread.rows
         assertTrue(rows.first { it.id == background }.running)
         assertTrue(!rows.first { it.id == foreground }.running)
+    }
+
+    @Test
+    fun `archived sessions are excluded from the drawer but still counted`() = runTest(testDispatcher) {
+        val active = "session-active"
+        seedSavedSession(active)
+        sessionsFlow.value = listOf(
+            ChatSession(id = active, name = "Active", updatedAt = 100L),
+            ChatSession(id = "session-archived", name = "Archived", updatedAt = 50L, isArchived = true),
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val thread = viewModel.state.value.thread
+        assertEquals(listOf(active), thread.rows.map { it.id })
+        // The count drives the drawer's archive footer entry, which only
+        // appears once something is actually archived.
+        assertEquals(1, thread.archivedCount)
+    }
+
+    @Test
+    fun `opening an archived chat marks it read-only and refuses a send`() = runTest(testDispatcher) {
+        val archived = "session-archived"
+        seedSavedSession(archived)
+        sessionsFlow.value = listOf(
+            ChatSession(id = archived, name = "Archived", updatedAt = 50L, isArchived = true),
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertTrue("An archived chat must open read-only", viewModel.state.value.thread.archived)
+
+        viewModel.onComposerValueChange("this must not be sent")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        // Accepting the message would silently un-archive a chat the user
+        // deliberately put away - only the user reverses the flag.
+        assertEquals("this must not be sent", viewModel.state.value.composer.value)
+        coVerify(exactly = 0) { chatRepository.saveMessage(any()) }
+    }
+
+    @Test
+    fun `switching to an archived thread turns the surface read-only`() = runTest(testDispatcher) {
+        val active = "session-active"
+        val archived = "session-archived"
+        seedSavedSession(active)
+        sessionsFlow.value = listOf(
+            ChatSession(id = active, name = "Active", updatedAt = 100L),
+            ChatSession(id = archived, name = "Archived", updatedAt = 50L, isArchived = true),
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        assertTrue(!viewModel.state.value.thread.archived)
+
+        // This is the path the archive screen takes: it posts an open-thread
+        // request rather than un-archiving, so the switch itself has to carry
+        // the read-only flag.
+        viewModel.selectThread(archived)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.thread.archived)
+        assertEquals("Archived", viewModel.state.value.thread.title)
+    }
+
+    @Test
+    fun `archiving the active chat switches to the next non-archived thread`() = runTest(testDispatcher) {
+        val active = "session-active"
+        val other = "session-other"
+        seedSavedSession(active)
+        sessionsFlow.value = listOf(
+            ChatSession(id = active, name = "Active", updatedAt = 100L),
+            ChatSession(id = other, name = "Other", updatedAt = 50L),
+        )
+        coEvery { chatRepository.setSessionArchived(active, archived = true) } answers {
+            sessionsFlow.value = sessionsFlow.value.map {
+                if (it.id == active) it.copy(isArchived = true) else it
+            }
+        }
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.threads.archiveThread(active)
+        advanceUntilIdle()
+
+        // Leaving the user staring at the chat they just took out of the list
+        // would contradict the action they asked for.
+        assertEquals(other, viewModel.state.value.thread.currentSessionId)
+        coVerify(exactly = 1) { chatRepository.setSessionArchived(active, archived = true) }
+    }
+
+    @Test
+    fun `a failed archive leaves the user on the chat instead of pretending it worked`() = runTest(testDispatcher) {
+        val active = "session-active"
+        val other = "session-other"
+        seedSavedSession(active)
+        sessionsFlow.value = listOf(
+            ChatSession(id = active, name = "Active", updatedAt = 100L),
+            ChatSession(id = other, name = "Other", updatedAt = 50L),
+        )
+        coEvery { chatRepository.setSessionArchived(active, archived = true) } throws
+            IllegalStateException("disk full")
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.threads.archiveThread(active)
+        advanceUntilIdle()
+
+        // Switching away would report success for a write that never landed.
+        assertEquals(active, viewModel.state.value.thread.currentSessionId)
+    }
+
+    @Test
+    fun `archiving a chat that is not open leaves the active thread alone`() = runTest(testDispatcher) {
+        val active = "session-active"
+        val other = "session-other"
+        seedSavedSession(active)
+        sessionsFlow.value = listOf(
+            ChatSession(id = active, name = "Active", updatedAt = 100L),
+            ChatSession(id = other, name = "Other", updatedAt = 50L),
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.threads.archiveThread(other)
+        advanceUntilIdle()
+
+        assertEquals(active, viewModel.state.value.thread.currentSessionId)
+    }
+
+    @Test
+    fun `unarchiveThread restores through the use case`() = runTest(testDispatcher) {
+        seedSavedSession("session-active")
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.threads.unarchiveThread("session-archived")
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { chatRepository.setSessionArchived("session-archived", archived = false) }
+    }
+
+    @Test
+    fun `deleteThread removes an arbitrary row without switching when it is not open`() = runTest(testDispatcher) {
+        val active = "session-active"
+        val other = "session-other"
+        seedSavedSession(active)
+        sessionsFlow.value = listOf(
+            ChatSession(id = active, name = "Active", updatedAt = 100L),
+            ChatSession(id = other, name = "Other", updatedAt = 50L),
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.threads.deleteThread(other)
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { chatRepository.deleteSession(other) }
+        assertEquals(active, viewModel.state.value.thread.currentSessionId)
+    }
+
+    @Test
+    fun `drawer row menu state opens and dismisses`() = runTest(testDispatcher) {
+        seedSavedSession("session-active")
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.threads.openThreadMenu("session-other")
+        assertEquals("session-other", viewModel.state.value.thread.openMenuId)
+
+        viewModel.threads.dismissThreadMenu()
+        assertEquals(null, viewModel.state.value.thread.openMenuId)
     }
 
     // endregion

@@ -1,6 +1,8 @@
 package app.knotwork.android.presentation.ui.chat.home
 
 import app.knotwork.android.domain.repositories.ChatRepository
+import app.knotwork.android.domain.usecases.ChatExportDocument
+import app.knotwork.android.domain.usecases.ExportChatUseCase
 import app.knotwork.android.domain.usecases.SaveMessageToMemoryUseCase
 import app.knotwork.android.domain.usecases.SaveToMemoryOutcome
 import app.knotwork.design.components.chat.ChatContent
@@ -10,10 +12,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import org.json.JSONArray
-import org.json.JSONObject
 import timber.log.Timber
 
 /**
@@ -32,7 +31,9 @@ import timber.log.Timber
  *
  * @property scope The ViewModel's [androidx.lifecycle.viewModelScope].
  * @property state The ViewModel's single source-of-truth state flow.
- * @property chatRepository Reads messages / sessions for export, imports a chat.
+ * @property chatRepository Imports a chat from JSON.
+ * @property exportChatUseCase Serialises a session (active *or* archived) into
+ *   the transferable JSON document.
  * @property saveMessageToMemoryUseCase Persists a message's text as a manual memory entry.
  * @property selectThread Seam into the ViewModel's thread switch — an imported
  *   chat becomes the active thread.
@@ -41,20 +42,22 @@ class ChatHomeTransferDelegate(
     private val scope: CoroutineScope,
     private val state: MutableStateFlow<ChatHomeScreenState>,
     private val chatRepository: ChatRepository,
+    private val exportChatUseCase: ExportChatUseCase,
     private val saveMessageToMemoryUseCase: SaveMessageToMemoryUseCase,
     private val selectThread: (String) -> Unit,
 ) {
 
-    private val _exportEvents: MutableSharedFlow<ChatExportPayload> = MutableSharedFlow(extraBufferCapacity = 1)
+    private val _exportEvents: MutableSharedFlow<ChatExportDocument> = MutableSharedFlow(extraBufferCapacity = 1)
     private val _importErrorEvents: MutableSharedFlow<String> = MutableSharedFlow(extraBufferCapacity = 1)
     private val _memorySaveEvents: MutableSharedFlow<MemorySaveEvent> = MutableSharedFlow(extraBufferCapacity = 1)
 
     /**
-     * One-shot stream raised when the user picks `Export chat` from the
-     * overflow menu. The screen consumes each payload via a `LaunchedEffect`
-     * and dispatches a system share-sheet (`Intent.ACTION_SEND`).
+     * One-shot stream raised when the user picks `Export chat` from either
+     * overflow menu (the chat top bar, or an archive row). The screen consumes
+     * each document via a `LaunchedEffect` and dispatches a system share-sheet
+     * (`Intent.ACTION_SEND`).
      */
-    val exportEvents: SharedFlow<ChatExportPayload> = _exportEvents.asSharedFlow()
+    val exportEvents: SharedFlow<ChatExportDocument> = _exportEvents.asSharedFlow()
 
     /**
      * One-shot stream of import-failure messages. Surfaced via the shared
@@ -132,52 +135,36 @@ class ChatHomeTransferDelegate(
 
     /**
      * Serialises the currently active session and emits the resulting
-     * [ChatExportPayload] via [exportEvents]. The screen consumes the payload
+     * [ChatExportDocument] via [exportEvents]. The screen consumes the document
      * and dispatches a system share-sheet (`Intent.ACTION_SEND`) — kept in the
      * screen because Hilt-ViewModels stay free of `Context`.
      */
     fun exportCurrentSession() {
-        val sessionId = state.value.thread.currentSessionId
+        exportSession(state.value.thread.currentSessionId)
+    }
+
+    /**
+     * Serialises an arbitrary session by id and emits its [ChatExportDocument].
+     *
+     * Kept independent of the active thread so the archive surface can export a
+     * chat it is not currently showing: archiving must not put a conversation
+     * out of reach of the history-transfer path, and an archived session is
+     * exactly the one a user is most likely to want to hand off elsewhere.
+     *
+     * @param sessionId Session to serialise. Blank ids are ignored.
+     */
+    fun exportSession(sessionId: String) {
         if (sessionId.isBlank()) return
         scope.launch {
-            try {
-                val rawMessages = chatRepository.getMessagesForSession(sessionId).first()
-                val session = chatRepository.getSessionById(sessionId)
-                val sessionName = session?.name ?: EXPORT_FALLBACK_SESSION_NAME
-                val messagesArray = JSONArray()
-                rawMessages.forEach { message ->
-                    messagesArray.put(
-                        JSONObject()
-                            .put("role", message.role.name)
-                            .put("text", message.content)
-                            .put("timestamp", message.timestamp),
-                    )
-                }
-                val root = JSONObject()
-                    .put("sessionId", sessionId)
-                    .put("sessionName", sessionName)
-                    .put("exportedAt", System.currentTimeMillis())
-                    .put("messages", messagesArray)
-                val payload =
-                    ChatExportPayload(sessionName = sessionName, json = root.toString(EXPORT_JSON_INDENT))
-                _exportEvents.tryEmit(payload)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                // Mirrors the previous silent-failure contract: an export
-                // that cannot be serialised simply emits nothing.
-                Timber.w(e, "Chat export failed")
-            }
+            exportChatUseCase(sessionId)
+                .onSuccess { document -> _exportEvents.tryEmit(document) }
+                // Mirrors the previous silent-failure contract: an export that
+                // cannot be serialised simply emits nothing.
+                .onFailure { e -> Timber.w(e, "Chat export failed") }
         }
     }
 
     companion object {
-        /** Fallback session name forwarded as the share-sheet subject when the session has no name. */
-        const val EXPORT_FALLBACK_SESSION_NAME: String = "Chat"
-
-        /** JSON pretty-print indent used for export payloads. */
-        const val EXPORT_JSON_INDENT: Int = 2
-
         /** Fallback localised-error string used when the import path throws without a message. */
         const val IMPORT_GENERIC_FAILURE_MESSAGE: String = "Could not import the chat."
     }

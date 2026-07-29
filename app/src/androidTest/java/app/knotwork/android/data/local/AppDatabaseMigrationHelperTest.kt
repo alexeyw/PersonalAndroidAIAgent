@@ -546,4 +546,33 @@ class AppDatabaseMigrationHelperTest {
         const val SESSION_ID = "session-mig"
         const val TRIGGER_ID = "trigger-mig"
     }
+
+    @Test
+    fun migrate54to55_addsNullableArchivedAtPreservingSessions() {
+        helper.createDatabase(TEST_DB, 54).use { db ->
+            db.execSQL(
+                "INSERT INTO chat_sessions(id, name, updatedAt, pipelineId, isStarred, isArchived) " +
+                    "VALUES('$SESSION_ID', 'Chat', $CHUNK_TS, 'pipe-1', 1, 1)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 55, true, AppDatabase.MIGRATION_54_55).use { db ->
+            db.query(
+                "SELECT name, isArchived, archivedAt FROM chat_sessions WHERE id = '$SESSION_ID'",
+            ).use { c ->
+                assertTrue("seeded session must survive the migration", c.moveToFirst())
+                assertEquals("Chat", c.getString(0))
+                assertEquals("existing archive flag must be untouched", 1, c.getInt(1))
+                // Nothing invents an archive instant for a row archived before
+                // the column existed; the archive query COALESCEs to updatedAt.
+                assertTrue("archivedAt must upgrade to NULL", c.isNull(2))
+            }
+
+            db.execSQL("UPDATE chat_sessions SET archivedAt = $CHUNK_TS WHERE id = '$SESSION_ID'")
+            db.query("SELECT archivedAt FROM chat_sessions WHERE id = '$SESSION_ID'").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals(CHUNK_TS, c.getLong(0))
+            }
+        }
+    }
 }

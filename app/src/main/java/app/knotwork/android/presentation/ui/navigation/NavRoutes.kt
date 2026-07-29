@@ -189,6 +189,13 @@ object NavRoutes {
     /** Triggers management (under More). */
     const val TRIGGERS: String = "triggers"
 
+    /**
+     * Archived chats. Reachable from the More tab (always) and from the chat
+     * drawer's footer (only when something is archived), so it is pushed onto
+     * whichever back stack opened it rather than owning a tab.
+     */
+    const val CHAT_ARCHIVE: String = "chat-archive"
+
     /** Pipeline-preset manager (under More → Library). */
     const val PIPELINE_PRESETS: String = "pipeline-presets"
 

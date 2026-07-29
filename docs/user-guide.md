@@ -223,9 +223,9 @@ chats are sorted to the top with a small leading star glyph.
   pipeline automatically.
 - **Switch chat** — tap any row in the list. The chat screen updates
   immediately.
-- **Rename chat** — tap the pencil icon next to a session row. A
-  bottom sheet titled **Rename chat** opens with the current name
-  pre-filled; **Save** persists the new name.
+- **Row actions** — tap the `⋮` next to a session row for **Rename**,
+  **Archive**, and **Delete chat**. Rename opens a bottom sheet with the
+  current name pre-filled; Delete asks for confirmation first.
 - **Favorite chat** — tap the star icon in the chat top bar to favorite
   the active chat. Favorited chats persist across restarts and sort to
   the top of the drawer.
@@ -237,6 +237,39 @@ sheet listing every locally installed LiteRT model. Picking a model
 activates it and reloads the inference engine. If no models are
 installed, the sheet shows **Open Models** that takes you directly to
 the Models screen.
+
+### Archiving chats
+
+A chat list that only grows eventually stops being useful. Archiving
+takes a conversation out of the drawer **without deleting anything** —
+every message, run, and trace stays exactly where it was.
+
+- **Archive** — swipe a drawer row from the right and tap **Archive**,
+  or pick **Archive** from the row's `⋮` menu. A snackbar confirms with
+  an **Undo** action; the drawer stays open, so you can put several
+  chats away in a row. Archiving the chat you are reading moves you to
+  the next one.
+- **Find archived chats** — **More → Archived chats**, which is always
+  there and shows the count. Once at least one chat is archived, the
+  chat drawer's footer carries the same entry.
+- **The archive screen** lists your archived chats newest-archived
+  first, each labelled with when you put it away ("Archived 2 h ago").
+  A chat whose background run finished *after* you archived it says so
+  on the row, so nothing changes behind your back silently.
+- **Restore** — the row's `⋮` menu, or swipe the row and tap **Restore**.
+  The chat returns to the drawer unchanged.
+- **Open an archived chat** — tap the row. It opens **read-only**: the
+  history is fully readable, the top bar reads `Archived · read-only`,
+  and the message box is replaced by a bar offering **Restore**. This is
+  deliberate — sending a message would silently un-archive the chat, and
+  only you decide when a chat comes back.
+- **Delete forever** — the row's `⋮` menu, behind a confirmation. This
+  is the only irreversible action on the screen; a swipe can never
+  trigger it.
+
+A background trigger or scheduled run is still allowed to write into an
+archived chat, and doing so does **not** bring it back to the drawer.
+Archived chats stay until you delete them; nothing expires on its own.
 
 ### Settings shortcut
 
@@ -253,7 +286,9 @@ history is portable to any app that handles JSON or plain text.
   choose **Export chat**. The Android **Share Sheet** opens with a
   JSON payload containing the full message history. Choose any
   destination that accepts JSON (Files, email, a messenger, a
-  cloud-drive app, and so on).
+  cloud-drive app, and so on). Archived chats export the same way, from
+  their own row menu on the archive screen — putting a chat away never
+  puts it out of reach.
 - **Import** — open the drawer and tap **Import chat**. The system
   file picker opens, filtered to `application/json`. Selecting a
   previously exported file creates a new chat session with the

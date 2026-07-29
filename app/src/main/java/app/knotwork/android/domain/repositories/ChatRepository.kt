@@ -127,6 +127,11 @@ interface ChatRepository {
      *
      * No-op when no session with [sessionId] exists.
      *
+     * Implementations also stamp `chat_sessions.archivedAt` with the current
+     * instant when [archived] is `true` and clear it when it is `false`, so the
+     * archive surface can order by, and label, *when the user put a chat away*
+     * rather than when it was last written to.
+     *
      * Prefer the [app.knotwork.android.domain.usecases.ArchiveChatUseCase] /
      * [app.knotwork.android.domain.usecases.UnarchiveChatUseCase] entry points
      * over calling this directly — they carry the id validation and the
@@ -169,8 +174,8 @@ interface ChatRepository {
     fun getSessionsFlow(includeArchived: Boolean = false): Flow<List<ChatSession>>
 
     /**
-     * Retrieves **only** the archived chat sessions as a flow, ordered by the
-     * last update time — the observable source behind the archive surface.
+     * Retrieves **only** the archived chat sessions as a flow, most-recently-
+     * archived first — the observable source behind the archive surface.
      *
      * @return A [Flow] emitting the list of archived [ChatSession]s.
      */
