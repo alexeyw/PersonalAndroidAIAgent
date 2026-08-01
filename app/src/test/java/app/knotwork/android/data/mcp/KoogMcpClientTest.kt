@@ -3,6 +3,7 @@ package app.knotwork.android.data.mcp
 import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.ToolDescriptor
 import ai.koog.agents.core.tools.ToolParameterDescriptor
+import ai.koog.agents.core.tools.ToolParameterType
 import ai.koog.agents.core.tools.ToolRegistry
 import app.knotwork.android.domain.models.McpAuth
 import app.knotwork.android.domain.models.McpServerConfig
@@ -62,9 +63,86 @@ class KoogMcpClientTest {
     }
 
     @Test
+    fun `getTools preserves declared parameter types instead of calling everything a string`() = runTest {
+        val duration = mockk<ToolParameterDescriptor>()
+        every { duration.name } returns "duration"
+        every { duration.description } returns "How long to run, in seconds"
+        every { duration.type } returns ToolParameterType.Integer
+
+        val ratio = mockk<ToolParameterDescriptor>()
+        every { ratio.name } returns "ratio"
+        every { ratio.description } returns ""
+        every { ratio.type } returns ToolParameterType.Float
+
+        val verbose = mockk<ToolParameterDescriptor>()
+        every { verbose.name } returns "verbose"
+        every { verbose.description } returns ""
+        every { verbose.type } returns ToolParameterType.Boolean
+
+        val mockDescriptor = mockk<ToolDescriptor>()
+        every { mockDescriptor.description } returns "long running op"
+        every { mockDescriptor.requiredParameters } returns listOf(duration)
+        every { mockDescriptor.optionalParameters } returns listOf(ratio, verbose)
+
+        val mockTool = mockk<Tool<Any, Any>>()
+        every { mockTool.name } returns "trigger-long-running-operation"
+        every { mockTool.descriptor } returns mockDescriptor
+
+        val schema = JSONObject(makeClient(listOf(mockTool)).getTools()[0].parameters)
+        val props = schema.getJSONObject("properties")
+
+        // Advertising every parameter as a string made the model send "300" for a
+        // numeric field, and the server rejected the call on schema validation —
+        // which made any MCP tool with a non-string parameter unusable
+        // (phase-40 finding F11).
+        assertEquals("integer", props.getJSONObject("duration").getString("type"))
+        assertEquals("number", props.getJSONObject("ratio").getString("type"))
+        assertEquals("boolean", props.getJSONObject("verbose").getString("type"))
+        // The description is what tells the model what the argument means.
+        assertEquals(
+            "How long to run, in seconds",
+            props.getJSONObject("duration").getString("description"),
+        )
+    }
+
+    @Test
+    fun `getTools renders enum and array parameters as their JSON Schema shapes`() = runTest {
+        val mode = mockk<ToolParameterDescriptor>()
+        every { mode.name } returns "mode"
+        every { mode.description } returns ""
+        every { mode.type } returns ToolParameterType.Enum(arrayOf("fast", "slow"))
+
+        val tags = mockk<ToolParameterDescriptor>()
+        every { tags.name } returns "tags"
+        every { tags.description } returns ""
+        every { tags.type } returns ToolParameterType.List(ToolParameterType.String)
+
+        val mockDescriptor = mockk<ToolDescriptor>()
+        every { mockDescriptor.description } returns "d"
+        every { mockDescriptor.requiredParameters } returns listOf(mode, tags)
+        every { mockDescriptor.optionalParameters } returns emptyList()
+
+        val mockTool = mockk<Tool<Any, Any>>()
+        every { mockTool.name } returns "shaped"
+        every { mockTool.descriptor } returns mockDescriptor
+
+        val props = JSONObject(makeClient(listOf(mockTool)).getTools()[0].parameters)
+            .getJSONObject("properties")
+
+        val modeSchema = props.getJSONObject("mode")
+        assertEquals("string", modeSchema.getString("type"))
+        assertEquals("fast", modeSchema.getJSONArray("enum").getString(0))
+        val tagsSchema = props.getJSONObject("tags")
+        assertEquals("array", tagsSchema.getString("type"))
+        assertEquals("string", tagsSchema.getJSONObject("items").getString("type"))
+    }
+
+    @Test
     fun `getTools builds required array for required parameters`() = runTest {
         val requiredParam = mockk<ToolParameterDescriptor>()
         every { requiredParam.name } returns "query"
+        every { requiredParam.description } returns ""
+        every { requiredParam.type } returns ToolParameterType.String
 
         val mockDescriptor = mockk<ToolDescriptor>()
         every { mockDescriptor.description } returns "search tool"
@@ -133,6 +211,8 @@ class KoogMcpClientTest {
     fun `getTools optional parameters appear in properties but not in required`() = runTest {
         val optionalParam = mockk<ToolParameterDescriptor>()
         every { optionalParam.name } returns "lang"
+        every { optionalParam.description } returns ""
+        every { optionalParam.type } returns ToolParameterType.String
 
         val mockDescriptor = mockk<ToolDescriptor>()
         every { mockDescriptor.description } returns "search tool"

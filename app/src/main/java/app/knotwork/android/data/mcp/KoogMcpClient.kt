@@ -1,5 +1,7 @@
 package app.knotwork.android.data.mcp
 
+import ai.koog.agents.core.tools.ToolParameterDescriptor
+import ai.koog.agents.core.tools.ToolParameterType
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.mcp.McpToolRegistryProvider
 import ai.koog.agents.mcp.metadata.McpServerInfo
@@ -214,11 +216,11 @@ class KoogMcpClient(private val networkActivityTracker: NetworkActivityTracker? 
                     val props = JSONObject()
                     val required = JSONArray()
                     tool.descriptor.requiredParameters.forEach { param ->
-                        props.put(param.name, JSONObject().put("type", "string"))
+                        props.put(param.name, param.toJsonSchema())
                         required.put(param.name)
                     }
                     tool.descriptor.optionalParameters.forEach { param ->
-                        props.put(param.name, JSONObject().put("type", "string"))
+                        props.put(param.name, param.toJsonSchema())
                     }
                     root.put("properties", props)
                     if (required.length() > 0) root.put("required", required)
@@ -265,6 +267,63 @@ class KoogMcpClient(private val networkActivityTracker: NetworkActivityTracker? 
         val result = tool.executeUnsafe(args)
             ?: throw IllegalStateException("MCP tool $name produced a null result")
         tool.encodeResultToStringUnsafe(result, serializer)
+    }
+
+    /**
+     * Renders this parameter as a JSON-Schema fragment, preserving both its
+     * declared type and its description.
+     *
+     * Every parameter used to be advertised as `{"type":"string"}` regardless of
+     * what the server declared. The model then dutifully produced `"300"` for a
+     * numeric field and the server rejected the call on schema validation, which
+     * made **any MCP tool with a non-string parameter unusable** — found by the
+     * phase-40 directed test against `trigger-long-running-operation` (F11).
+     * The description was dropped too, leaving the model to guess an argument's
+     * meaning from its name alone.
+     */
+    private fun ToolParameterDescriptor.toJsonSchema(): JSONObject = type.toJsonSchema().apply {
+        if (description.isNotBlank()) put("description", description)
+    }
+
+    /**
+     * Maps a Koog [ToolParameterType] onto its JSON-Schema equivalent.
+     *
+     * `Integer` and `Float` are kept distinct (`integer` / `number`) because a
+     * server validating a whole-number field rejects `1.5`, and collapsing both
+     * to `number` would let the model offer one.
+     *
+     * The `when` is deliberately exhaustive over the sealed hierarchy rather than
+     * carrying an `else`: a type Koog adds later should break the build here, not
+     * silently fall back to a guess. Guessing `string` for everything is exactly
+     * how F11 happened.
+     */
+    private fun ToolParameterType.toJsonSchema(): JSONObject = when (this) {
+        is ToolParameterType.String -> JSONObject().put("type", "string")
+        is ToolParameterType.Integer -> JSONObject().put("type", "integer")
+        is ToolParameterType.Float -> JSONObject().put("type", "number")
+        is ToolParameterType.Boolean -> JSONObject().put("type", "boolean")
+        is ToolParameterType.Null -> JSONObject().put("type", "null")
+        is ToolParameterType.Enum -> JSONObject()
+            .put("type", "string")
+            .put("enum", JSONArray().apply { entries.forEach { put(it) } })
+        is ToolParameterType.List -> JSONObject()
+            .put("type", "array")
+            .put("items", itemsType.toJsonSchema())
+        is ToolParameterType.Object -> JSONObject().apply {
+            put("type", "object")
+            put(
+                "properties",
+                JSONObject().apply {
+                    properties.forEach { put(it.name, it.toJsonSchema()) }
+                },
+            )
+            if (requiredProperties.isNotEmpty()) {
+                put("required", JSONArray().apply { requiredProperties.forEach { put(it) } })
+            }
+            additionalProperties?.let { put("additionalProperties", it) }
+        }
+        is ToolParameterType.AnyOf -> JSONObject()
+            .put("anyOf", JSONArray().apply { types.forEach { put(it.toJsonSchema()) } })
     }
 
     /** Header-composition + auth helpers shared across instances. */
