@@ -2,6 +2,9 @@ package app.knotwork.android.data.mcp
 
 import app.knotwork.android.domain.models.McpServerConfig
 import app.knotwork.android.domain.models.McpTransport
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.pluginOrNull
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -122,6 +125,36 @@ class KoogMcpClientSessionTest {
         assertEquals(listOf("echo"), tools.map { it.name })
         assertEquals(1, received.count { it.startsWith("initialize") })
 
+        client.disconnect()
+    }
+
+    @Test
+    fun `given a connected client then an explicit request timeout is installed`() = runTest {
+        start()
+        val client = KoogMcpClient()
+        client.connect(
+            McpServerConfig(
+                url = server.url("/mcp").toString(),
+                transport = McpTransport.STREAMABLE_HTTP,
+            ),
+        )
+
+        // The deadline used to be whatever the transitively-resolved Ktor engine
+        // defaulted to — measured at 10 s on device, too short for real MCP tools
+        // and liable to change under us on any Ktor/Koog bump (phase-40 F12).
+        // Asserting the plugin is attached to the live client, not just that a
+        // constant exists: the constant alone would pass with the install missing.
+        val session = KoogMcpClient::class.java.getDeclaredField("session")
+            .apply { isAccessible = true }
+            .get(client)!!
+        val httpClient = session.javaClass.getDeclaredField("httpClient")
+            .apply { isAccessible = true }
+            .get(session) as HttpClient
+
+        assertTrue(
+            "MCP client must not inherit the engine's default request deadline",
+            httpClient.pluginOrNull(HttpTimeout) != null,
+        )
         client.disconnect()
     }
 
