@@ -13,7 +13,6 @@ import app.knotwork.android.domain.models.McpServerConfig
 import app.knotwork.android.domain.models.McpTransport
 import app.knotwork.android.domain.repositories.NetworkActivityTracker
 import io.ktor.client.HttpClient
-import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.sse.SSE
 import io.ktor.http.HttpHeaders
@@ -122,21 +121,6 @@ class KoogMcpClient(private val networkActivityTracker: NetworkActivityTracker? 
                 // HttpClient without juggling `client.config { install(SSE) }` calls.
                 val client = HttpClient {
                     install(SSE)
-                    // Without this the request deadline is whatever the
-                    // transitively-resolved Ktor engine happens to default to —
-                    // measured at 10 s on device, which is far too short for real
-                    // MCP tools (search, LLM-backed tools, indexing) and would
-                    // change under us on any Ktor/Koog bump. 60 s matches the
-                    // documented cloud-LLM budget in `api-conventions.md`, so the
-                    // two outbound paths now fail on the same clock.
-                    //
-                    // Only the per-request deadline is raised: connect and socket
-                    // timeouts stay at engine defaults, so an unreachable host
-                    // still fails fast instead of making the user wait a minute
-                    // for a server that was never there.
-                    install(HttpTimeout) {
-                        requestTimeoutMillis = REQUEST_TIMEOUT_MS
-                    }
                     if (composedHeaders.isNotEmpty()) {
                         defaultRequest {
                             composedHeaders.forEach { (key, value) -> headers.append(key, value) }
@@ -344,13 +328,6 @@ class KoogMcpClient(private val networkActivityTracker: NetworkActivityTracker? 
 
     /** Header-composition + auth helpers shared across instances. */
     companion object {
-        /**
-         * Per-request deadline for every MCP round-trip, matching the cloud-LLM
-         * budget documented in `api-conventions.md`. Chosen explicitly so the
-         * value is ours rather than an engine default nobody picked.
-         */
-        private const val REQUEST_TIMEOUT_MS: Long = 60_000L
-
         /**
          * Builds the final request-header map for [config]: typed
          * [McpAuth] is rendered first, then user-supplied
