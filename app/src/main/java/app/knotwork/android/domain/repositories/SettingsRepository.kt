@@ -452,6 +452,29 @@ interface SettingsRepository {
     suspend fun setLastInitBackendAttempt(backendKey: String?)
 
     /**
+     * Number of **consecutive** cold starts that found [lastInitBackendAttempt]
+     * still set, i.e. the previous process died before init finished. Reset to
+     * zero by the first successful init.
+     *
+     * The breadcrumb alone cannot tell a backend crash apart from any other way
+     * the process can die inside that window — swiped from recents, reclaimed by
+     * the low-memory killer, frozen by the OEM. Treating the first such death as
+     * proof that the GPU is broken silently and permanently downgraded the user
+     * to CPU; observed during the phase-40 directed test, where an unrelated
+     * `lmkd` kill cost the device its GPU backend. Corroboration across two
+     * consecutive starts is what separates "this backend really cannot
+     * initialise" from "something else killed us".
+     */
+    val localBackendFailureStreak: Flow<Int>
+
+    /**
+     * Records the current consecutive-failure count for the local backend.
+     *
+     * @param streak new streak value; `0` clears it after a successful init.
+     */
+    suspend fun setLocalBackendFailureStreak(streak: Int)
+
+    /**
      * A [Flow] representing the timeout in milliseconds for tool approval requests.
      * After this duration without a user response, the approval is considered timed out.
      */

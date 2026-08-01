@@ -33,7 +33,17 @@ import javax.inject.Singleton
 @Singleton
 class McpServerRepositoryImpl @Inject constructor(private val clientFactory: McpClientFactory) : McpServerRepository {
 
-    private val clients = ConcurrentHashMap<String, McpClient>()
+    /**
+     * A pooled connection plus the [McpServerConfig] it was established with.
+     * The config is the equality unit that decides whether a cached connection
+     * is still valid or has to be torn down and rebuilt.
+     *
+     * @property client live client for the server.
+     * @property config configuration this connection was opened with.
+     */
+    private data class PooledClient(val client: McpClient, val config: McpServerConfig)
+
+    private val clients = ConcurrentHashMap<String, PooledClient>()
     private val statusFlows = ConcurrentHashMap<String, MutableStateFlow<McpConnectionStatus>>()
     private val caches = ConcurrentHashMap<String, CachedToolList>()
     private val mutexes = ConcurrentHashMap<String, Mutex>()
@@ -63,6 +73,7 @@ class McpServerRepositoryImpl @Inject constructor(private val clientFactory: Mcp
                     return@withLock Result.success(cached.tools)
                 }
             }
+            val statusBeforeFetch = flow.value
             flow.value = McpConnectionStatus.Connecting
 
             // try/catch instead of runCatching: the block suspends
@@ -70,20 +81,80 @@ class McpServerRepositoryImpl @Inject constructor(private val clientFactory: Mcp
             // CancellationException that must propagate for cooperative
             // cancellation. `Throwable` keeps runCatching's catch surface.
             try {
-                val client = clients.getOrPut(serverUrl) { clientFactory.create() }
-                client.connect(config)
+                val client = connectedClient(serverUrl = serverUrl, config = config)
                 val tools = client.getTools().map { agentTool -> agentTool.toMcpTool(serverUrl) }
                 caches[serverUrl] = CachedToolList(tools = tools, fetchedAtMs = clockMs())
                 flow.value = McpConnectionStatus.Connected
                 Result.success(tools)
             } catch (e: CancellationException) {
+                // Success and failure both resolve the status; cancellation used
+                // to resolve nothing, so a fetch abandoned mid-flight (the caller's
+                // scope going away — a settings edit that renavigates, a screen
+                // leaving) pinned the row on "Connecting…" until the user hit
+                // Refresh by hand (phase-40 finding F8).
+                //
+                // Restoring the previous value is not enough: a flow starts life
+                // at `Connecting`, so the very first fetch has nothing better to
+                // fall back to. An abandoned attempt genuinely leaves the server
+                // in an unknown state, and the honest rendering of that is "not
+                // connected, try again" rather than a spinner that never stops.
+                // Assignment does not suspend, so this is safe while cancelling.
+                flow.value = when {
+                    statusBeforeFetch != McpConnectionStatus.Connecting -> statusBeforeFetch
+                    caches[serverUrl] != null -> McpConnectionStatus.Connected
+                    else -> McpConnectionStatus.Error(reason = INTERRUPTED_REASON)
+                }
                 throw e
             } catch (e: Throwable) {
                 Timber.e(e, "MCP tools/list failed for %s", serverUrl)
+                // Drop the pooled entry so the next attempt reconnects instead of
+                // reusing a connection that has already proven unusable.
+                clients.remove(serverUrl)
                 flow.value = McpConnectionStatus.Error(reason = e.localizedMessage ?: e.javaClass.simpleName)
                 Result.failure(e)
             }
         }
+    }
+
+    /**
+     * Returns a connected client for [serverUrl], connecting only when there is
+     * no usable pooled entry — i.e. on first use, after a failure dropped the
+     * entry, or when [config] differs from the one the pooled connection was
+     * established with (changed auth / transport / headers must actually apply).
+     *
+     * Reconnecting on **every** call, as this used to, opened a fresh MCP
+     * session per manual Refresh: the server kept the abandoned ones (nothing
+     * terminated them) and the in-place transport swap could break a tool call
+     * running concurrently on the same client. Both were observed in the
+     * phase-40 directed MCP test (finding F3).
+     *
+     * Callers hold the per-URL [Mutex], so the check-then-connect sequence here
+     * cannot interleave with another fetch for the same server.
+     *
+     * @param serverUrl pool key and connection identity.
+     * @param config configuration to connect with, compared against the config
+     *   the pooled entry was built from.
+     * @return a connected [McpClient] ready for `getTools`.
+     */
+    private suspend fun connectedClient(serverUrl: String, config: McpServerConfig): McpClient {
+        val pooled = clients[serverUrl]
+        if (pooled != null && pooled.config == config) {
+            return pooled.client
+        }
+        if (pooled != null) {
+            try {
+                pooled.client.disconnect()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Throwable) {
+                Timber.w(e, "MCP disconnect of stale config for %s failed; reconnecting anyway", serverUrl)
+            }
+            clients.remove(serverUrl)
+        }
+        val client = clientFactory.create()
+        client.connect(config)
+        clients[serverUrl] = PooledClient(client = client, config = config)
+        return client
     }
 
     override fun observeConnectionStatus(serverUrl: String): Flow<McpConnectionStatus> =
@@ -100,9 +171,9 @@ class McpServerRepositoryImpl @Inject constructor(private val clientFactory: Mcp
         // disconnect.
         val mutex = mutexes.getOrPut(serverUrl) { Mutex() }
         mutex.withLock {
-            val client = clients.remove(serverUrl)
+            val pooled = clients.remove(serverUrl)
             try {
-                client?.disconnect()
+                pooled?.client?.disconnect()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -140,6 +211,9 @@ class McpServerRepositoryImpl @Inject constructor(private val clientFactory: Mcp
     companion object {
         /** Recognises [mcpToolId] outputs in route parameters and other callers. */
         const val MCP_ID_PREFIX: String = "mcp:"
+
+        /** Shown when a tool-list fetch was abandoned before it could resolve. */
+        private const val INTERRUPTED_REASON: String = "Connection attempt was interrupted"
 
         /** Number of hex chars taken from the SHA-256 digest for the id prefix. */
         private const val ID_HASH_HEX_LEN: Int = 8

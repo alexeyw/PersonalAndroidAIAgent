@@ -30,6 +30,7 @@ import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ClarificationOutcome
 import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.ConnectionModel
+import app.knotwork.android.domain.models.ConsoleEvent
 import app.knotwork.android.domain.models.ConsoleEventType
 import app.knotwork.android.domain.models.EngineImageInput
 import app.knotwork.android.domain.models.MemoryChunk
@@ -38,6 +39,7 @@ import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.NodeType
+import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Result
@@ -2585,6 +2587,68 @@ class GraphExecutionEngineTest {
             pipelineRunRepository.updateStatus("run-44", PipelineRunStatus.RUNNING)
         }
         job.cancel()
+    }
+
+    /**
+     * A sub-pipeline forwards its child's console traffic to the parent as
+     * ordinary states, so `ConsoleLog` / `NodeIO` keep arriving while a HITL
+     * gate is still open. They are observations *about* the run, not progress
+     * of it, and must leave the WAITING_* status alone.
+     *
+     * Treating them as "the wait ended" left a nested run's root in RUNNING
+     * while its child sat in WAITING_APPROVAL, and `ResumePipelineRunUseCase`
+     * — which requires a resumable *root* — then rejected every answer to the
+     * parked notification, stranding the run behind a permanent "generating…"
+     * (phase-40 finding F7, reproduced on device).
+     *
+     * The state sequence is injected through the SKILL executor rather than by
+     * standing up a real sub-pipeline: the defect lives in the engine's
+     * state → run-status mapping, and this drives exactly the sequence a
+     * PIPELINE node forwards.
+     */
+    @Test
+    fun `given console traffic while a gate waits then the run keeps its WAITING_APPROVAL status`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { skillNodeExecutor.execute(any(), any(), any(), any(), any(), any()) } returns flowOf(
+            NodeOutput.State(
+                AgentOrchestratorState.WaitingForApproval("sens.tool", "a=1", ToolRisk.SENSITIVE),
+            ),
+            // The poison: a child console line arriving mid-wait.
+            NodeOutput.State(
+                AgentOrchestratorState.ConsoleLog(
+                    events = listOf(
+                        ConsoleEvent(
+                            seq = 1,
+                            type = ConsoleEventType.NodeExecution,
+                            message = "child chatter",
+                            timestamp = 0L,
+                        ),
+                    ),
+                ),
+            ),
+            NodeOutput.State(
+                AgentOrchestratorState.SuspendedInBackground(PendingInteractionKind.APPROVAL),
+            ),
+        )
+
+        val graph = PipelineGraph(
+            id = "g-park",
+            name = "Parking",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("skill_1", NodeType.SKILL, 10f, 0f),
+                NodeModel("output_1", NodeType.OUTPUT, 20f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "skill_1"),
+                ConnectionModel("c2", "skill_1", "output_1"),
+            ),
+        )
+
+        engine(sessionId, "prompt", graph, "run-park").toList()
+
+        coVerify { pipelineRunRepository.updateStatus("run-park", PipelineRunStatus.WAITING_APPROVAL) }
+        coVerify(exactly = 0) { pipelineRunRepository.updateStatus("run-park", PipelineRunStatus.RUNNING) }
     }
 
     /**

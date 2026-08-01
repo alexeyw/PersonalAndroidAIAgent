@@ -6,8 +6,10 @@ import ai.koog.agents.core.tools.ToolParameterDescriptor
 import ai.koog.agents.core.tools.ToolRegistry
 import app.knotwork.android.domain.models.McpAuth
 import app.knotwork.android.domain.models.McpServerConfig
+import io.ktor.client.HttpClient
 import io.mockk.every
 import io.mockk.mockk
+import io.modelcontextprotocol.kotlin.sdk.shared.Transport
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -18,13 +20,26 @@ class KoogMcpClientTest {
 
     private fun makeClient(tools: List<Tool<*, *>>): KoogMcpClient {
         val client = KoogMcpClient()
-        val field = client.javaClass.getDeclaredField("registry")
-        field.isAccessible = true
         val mockRegistry = mockk<ToolRegistry>()
         every { mockRegistry.tools } returns tools
-        field.set(client, mockRegistry)
+        // `connect` publishes an atomic Session snapshot rather than separate
+        // registry / httpClient fields, so the stub has to be installed the same way.
+        // The Session type is reached through the field itself — naming it inline
+        // would be an internal FQN reference, which `checkNoInternalFqn` rejects.
+        val constructor = sessionField(client).type.declaredConstructors.first()
+        constructor.isAccessible = true
+        val session = constructor.newInstance(
+            mockk<HttpClient>(relaxed = true),
+            mockk<Transport>(relaxed = true),
+            mockRegistry,
+        )
+        sessionField(client).set(client, session)
         return client
     }
+
+    /** Reflective handle on the private `session` field published by `connect`. */
+    private fun sessionField(client: KoogMcpClient) =
+        client.javaClass.getDeclaredField("session").apply { isAccessible = true }
 
     @Test
     fun `getTools maps ToolRegistry to AgentTool with valid JSON Schema`() = runTest {
@@ -69,14 +84,12 @@ class KoogMcpClientTest {
     }
 
     @Test
-    fun `connect that fails during transport attachment leaves httpClient field null`() = runTest {
+    fun `connect that fails during transport attachment leaves session field null`() = runTest {
         // Leak-on-failure regression guard: when SSE transport attachment to a
         // non-routable address surfaces an exception, the freshly-created HttpClient
         // must be closed locally. The field stays at its previous value (null on a
         // first attempt), so a retry does not accumulate leaked Ktor engines.
         val client = KoogMcpClient()
-        val httpClientField = client.javaClass.getDeclaredField("httpClient")
-        httpClientField.isAccessible = true
 
         val outcome = runCatching { client.connect(McpServerConfig(url = "http://127.0.0.1:1")) }
 
@@ -84,7 +97,7 @@ class KoogMcpClientTest {
         assertEquals(
             "Failed connect must clean up the new HttpClient — leaked engine = bug",
             null,
-            httpClientField.get(client),
+            sessionField(client).get(client),
         )
     }
 
@@ -93,31 +106,27 @@ class KoogMcpClientTest {
         // Same invariant under repeated failure: the field must remain clean so callers
         // can keep retrying without building up open Ktor engines.
         val client = KoogMcpClient()
-        val httpClientField = client.javaClass.getDeclaredField("httpClient")
-        httpClientField.isAccessible = true
 
         repeat(3) {
             runCatching { client.connect(McpServerConfig(url = "http://127.0.0.1:1")) }
             assertEquals(
-                "After failed connect #${it + 1} the httpClient field must be null",
+                "After failed connect #${it + 1} the session field must be null",
                 null,
-                httpClientField.get(client),
+                sessionField(client).get(client),
             )
         }
     }
 
     @Test
-    fun `disconnect after a failed connect keeps httpClient field null`() = runTest {
+    fun `disconnect after a failed connect keeps session field null`() = runTest {
         // Defect 5 regression guard: a disconnect after a failed connect is harmless
         // (no double-close) and leaves the field in the documented "no client" state.
         val client = KoogMcpClient()
-        val httpClientField = client.javaClass.getDeclaredField("httpClient")
-        httpClientField.isAccessible = true
 
         runCatching { client.connect(McpServerConfig(url = "http://127.0.0.1:1")) }
         client.disconnect()
 
-        assertEquals(null, httpClientField.get(client))
+        assertEquals(null, sessionField(client).get(client))
     }
 
     @Test

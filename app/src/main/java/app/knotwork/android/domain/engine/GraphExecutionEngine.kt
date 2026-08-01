@@ -1178,6 +1178,16 @@ class GraphExecutionEngine @Inject constructor(
             runTraceRepository.flush()
             true
         }
+        // Console lines and node-I/O snapshots are observations *about* the run,
+        // not progress of it: they keep arriving while a HITL gate is waiting
+        // (a sub-pipeline forwards its child's console traffic upwards). Letting
+        // them fall through to the branch below made the first such line read as
+        // "the wait ended" and flip the record back to RUNNING while the gate was
+        // still open. For a nested pipeline that left the root RUNNING and the
+        // child WAITING_APPROVAL, so `ResumePipelineRunUseCase` — which requires
+        // a resumable *root* — rejected every attempt to answer the parked
+        // notification (phase-40 finding F7).
+        state is AgentOrchestratorState.ConsoleLog || state is AgentOrchestratorState.NodeIO -> wasSuspended
         wasSuspended -> {
             pipelineRunRepository.updateStatus(runId, PipelineRunStatus.RUNNING)
             false
