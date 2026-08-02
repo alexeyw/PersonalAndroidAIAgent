@@ -149,6 +149,13 @@ class TaskQueueManagerImpl @Inject constructor(
          * legitimate quiet stretch by a wide margin — a live approval gate
          * waits 60 s, MCP and cloud calls are capped at 60 s each — while
          * still reacting long before a person concludes the app is broken.
+         *
+         * Scope, stated plainly: the valve guards the engine phase of a task.
+         * The short prologue before it — resolving the pipeline, writing the
+         * user message — is not covered, so a hang in those repository calls
+         * would still stop the queue. Nothing in the phase-40 run pointed at
+         * that path, and widening the guard there would mean failing a task on
+         * a database stall it could not explain.
          */
         @VisibleForTesting
         internal const val NO_PROGRESS_TIMEOUT_MS = 5 * 60 * 1000L
@@ -177,10 +184,14 @@ class TaskQueueManagerImpl @Inject constructor(
      * operator reports the stall as a [kotlinx.coroutines.TimeoutCancellationException];
      * cancellation travels a different path through [executeRun] (re-thrown,
      * killing the worker coroutine) than a failure does, and the queue must
-     * settle the run as FAILED and keep going. The relay is a rendezvous
-     * channel on purpose: it preserves the engine back-pressure the direct
-     * `collect` had, so a slow *collector* can never be mistaken for a stalled
-     * *producer*.
+     * settle the run as FAILED and keep going.
+     *
+     * A slow *collector* can never be mistaken for a stalled *producer*: when
+     * the consumer lags, this loop is suspended in `send`, not in the timed
+     * receive. The relay itself is a rendezvous channel so the engine still
+     * feels back-pressure — though `channelFlow` adds its own bounded buffer
+     * downstream, so the engine now runs up to that buffer ahead of the
+     * collector rather than in lock-step with it.
      *
      * Silence that follows a **human-wait** state is exempt: a run showing an
      * approval or clarification prompt is not stalled, it is waiting for a

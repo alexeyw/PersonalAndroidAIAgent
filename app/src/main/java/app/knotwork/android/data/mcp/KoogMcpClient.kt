@@ -66,9 +66,11 @@ class KoogMcpClient(private val networkActivityTracker: NetworkActivityTracker? 
     private var session: Session? = null
 
     /**
-     * Serialises connection-state transitions against readers. Held only while
-     * swapping or reading [session] — never across a tool execution, so a slow
-     * or hung MCP call cannot block the Tools screen behind it.
+     * Serialises connection-state transitions against readers. Readers hold it
+     * only long enough to take a [session] snapshot, and it is **never** held
+     * across a tool execution, so a slow or hung MCP call cannot block the
+     * Tools screen behind it. [connect] does hold it for the whole handshake —
+     * bounded by [connectTimeoutMs], which is the longest a reader can wait.
      */
     private val sessionMutex = Mutex()
 
@@ -77,7 +79,8 @@ class KoogMcpClient(private val networkActivityTracker: NetworkActivityTracker? 
     /**
      * Deadline for a single [executeTool] round-trip, in milliseconds.
      * Overridable in tests so a regression can measure the deadline without
-     * waiting out the production value.
+     * waiting out the production value. [connect] also derives the socket
+     * timeout from it, so a change only reaches the socket on the next connect.
      */
     @VisibleForTesting
     internal var toolCallTimeoutMs: Long = TOOL_CALL_TIMEOUT_MS
