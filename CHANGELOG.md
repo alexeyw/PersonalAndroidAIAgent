@@ -128,6 +128,41 @@ details.
 
 ### Fixed
 
+- **One external tool that never answered could freeze every chat in the app.**
+  Messages are processed one at a time, so a tool call that hung took the whole
+  queue with it: new messages in any chat were accepted, given a title, and
+  then sat on "Generating…" forever with an empty console and no explanation —
+  observed for an hour and a half against a server that simply stopped
+  replying. Two independent limits now apply. A call to an MCP server gives up
+  after 60 seconds and is reported as a failed tool call, like any other tool
+  error; the previous limit was an accident of whichever HTTP engine happened
+  to be bundled — 10 seconds, too short for tools that search or run a model of
+  their own, and liable to change silently on any dependency upgrade. And
+  independently of any one tool, a run that goes five minutes without a single
+  sign of progress is ended with a message saying so, and the queue moves on.
+  The five minutes count silence, not length: a long answer streams
+  continuously, so slow-but-working runs are never cut short.
+
+- **A tool list that would not stop loading.** A server that accepted the
+  connection and then went quiet left its row spinning on "Connecting…" for as
+  long as the app stayed open. The handshake now gives up after 30 seconds and
+  says what happened.
+
+- **Any tool whose input was not text was unusable.** Every parameter an MCP
+  server declared was passed on to the model as free text, dropping both its
+  real type and its description. Asked for a duration of 300 seconds, the model
+  would faithfully send the *word* "300", and the server rejected the call —
+  so a tool taking a number, a switch, a list or a choice from a fixed set
+  could never be called successfully. Types and descriptions now reach the
+  model as declared.
+
+- **A server could stay stuck on "Connecting…" after you edited it.** Saving a
+  change while its tool list was mid-load — or simply leaving the screen —
+  cancelled the load without resolving the row, which then span indefinitely
+  until refreshed by hand. Cancellation now settles the row honestly: back to
+  connected if a usable tool list is already held, otherwise a plain
+  "Connection attempt was interrupted".
+
 - **A background approval you did not answer within the first minute could
   never be granted afterwards.** When nobody responds straight away the run
   parks and waits for you — for up to a day by default. Tapping **Approve** on

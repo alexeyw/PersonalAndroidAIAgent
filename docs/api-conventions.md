@@ -98,6 +98,15 @@ interface Tool {
   other failures to `ToolResult.Error`. `runCatching` is never used around
   these (suspending) calls — it would swallow cancellation; see
   [code-style.md](code-style.md) § Coroutines & Flow.
+- Every network round-trip carries an **explicit deadline applied in our own
+  code**: `withTimeoutOrNull` around the call inside `KoogMcpClient` — 60 s for
+  a tool call (matching the cloud-LLM budget below), 30 s for the connect
+  handshake. Ktor's `HttpTimeout` plugin is deliberately **not** used: it does
+  not apply to MCP's SSE-framed response path, so installing it removes the
+  engine's own socket timeout without supplying a replacement and leaves the
+  call unbounded. `withTimeoutOrNull` rather than `withTimeout`, because a
+  timeout surfacing as a `CancellationException` would propagate past the
+  tool-error mapping and cancel the entire run.
 - **MCP credentials** (Bearer tokens, Basic passwords, API-key values) are
   stored in the **Keystore-backed encrypted store**, keyed per server by a hash
   of its URL — never in the plain `mcp_servers_json` DataStore entry, which

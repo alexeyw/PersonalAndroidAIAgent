@@ -17,6 +17,7 @@ import app.knotwork.android.domain.models.ResumeContext
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.TaskPriority
+import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
@@ -858,6 +859,56 @@ class TaskQueueManagerImplTest {
 
         coVerify { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.COMPLETED) }
         coVerify(exactly = 0) { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, any()) }
+    }
+
+    /**
+     * A run showing an approval prompt is not stalled — it is waiting for a
+     * person, visibly, and the gate bounds that wait itself. Killing it would
+     * turn a correctly configured long wait (a CLARIFICATION node's reply
+     * window is user-configurable) into "the task stopped responding".
+     */
+    @Test
+    fun `given a run waiting on an approval gate then the window does not apply`() = testScope.runTest {
+        val window = taskQueueManager.noProgressTimeoutMs
+        every { graphExecutionEngine.invoke(any(), any(), any(), any()) } returns flow {
+            emit(AgentOrchestratorState.WaitingForApproval("echo", "{}", ToolRisk.SENSITIVE))
+            delay(window * 3)
+            emit(AgentOrchestratorState.Completed("approved and done"))
+        }
+
+        val task = AgentTask(sessionId = "session_gate", prompt = "p")
+        taskQueueManager.enqueueTask(task)
+        advanceUntilIdle()
+
+        coVerify { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.COMPLETED) }
+        coVerify(exactly = 0) { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, any()) }
+    }
+
+    /**
+     * The other half of that exemption: it lasts exactly until the next
+     * emission. The gate emits `ExecutingTool` before running an approved tool,
+     * so the hung call that follows an approval — the shape of the defect this
+     * valve exists for — is guarded again.
+     */
+    @Test
+    fun `given silence after an approved tool starts then the run is still failed`() = testScope.runTest {
+        every { graphExecutionEngine.invoke(any(), any(), any(), any()) } returns flow {
+            emit(AgentOrchestratorState.WaitingForApproval("echo", "{}", ToolRisk.SENSITIVE))
+            emit(AgentOrchestratorState.ExecutingTool("echo", "{}"))
+            awaitCancellation()
+        }
+
+        val task = AgentTask(sessionId = "session_gate_then_hang", prompt = "p")
+        taskQueueManager.enqueueTask(task)
+        advanceUntilIdle()
+
+        coVerify {
+            pipelineRunRepository.finishRun(
+                task.id,
+                PipelineRunStatus.FAILED,
+                TaskQueueManagerImpl.STALLED_MESSAGE,
+            )
+        }
     }
 
     // endregion

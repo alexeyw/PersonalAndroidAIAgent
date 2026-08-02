@@ -182,14 +182,24 @@ class TaskQueueManagerImpl @Inject constructor(
      * `collect` had, so a slow *collector* can never be mistaken for a stalled
      * *producer*.
      *
+     * Silence that follows a **human-wait** state is exempt: a run showing an
+     * approval or clarification prompt is not stalled, it is waiting for a
+     * person, and that wait is visible in the UI and bounded by the gate's own
+     * timeout (after which the run parks durably). The exemption ends at the
+     * next emission — the gate emits [AgentOrchestratorState.ExecutingTool]
+     * before it runs the approved tool, so the call that follows an approval is
+     * guarded again. Without this, a clarification node configured to wait
+     * longer than the window would be killed while behaving exactly as
+     * configured.
+     *
      * @param timeoutMs Maximum silence tolerated between emissions; a
      *   non-positive value returns the receiver unguarded (see [noProgressTimeoutMs]).
      * @return The same values as the receiver, or a failure once silence exceeds the window.
      */
-    private fun <T> Flow<T>.failIfStalled(timeoutMs: Long): Flow<T> {
+    private fun Flow<AgentOrchestratorState>.failIfStalled(timeoutMs: Long): Flow<AgentOrchestratorState> {
         if (timeoutMs <= 0) return this
         return channelFlow {
-            val relay = Channel<T>()
+            val relay = Channel<AgentOrchestratorState>()
             val pump = launch { collect { relay.send(it) } }
             // Close on *every* exit path, carrying the cause: a
             // `CancellationException` from upstream cancels this child only — it
@@ -199,14 +209,21 @@ class TaskQueueManagerImpl @Inject constructor(
             // stalled instead of cancelled. `invokeOnCompletion` covers normal
             // completion (null cause), failure and cancellation in one place.
             pump.invokeOnCompletion { cause -> relay.close(cause) }
+            var awaitingUser = false
             while (true) {
-                val received = withTimeoutOrNull(timeoutMs) { relay.receiveCatching() }
-                    ?: throw RunStalledException()
+                val received = if (awaitingUser) {
+                    relay.receiveCatching()
+                } else {
+                    withTimeoutOrNull(timeoutMs) { relay.receiveCatching() } ?: throw RunStalledException()
+                }
                 if (received.isClosed) {
                     received.exceptionOrNull()?.let { throw it }
                     break
                 }
-                send(received.getOrThrow())
+                val state = received.getOrThrow()
+                awaitingUser = state is AgentOrchestratorState.WaitingForApproval ||
+                    state is AgentOrchestratorState.AwaitingClarification
+                send(state)
             }
         }
     }
