@@ -7,6 +7,7 @@ import ai.koog.agents.mcp.McpToolRegistryProvider
 import ai.koog.agents.mcp.metadata.McpServerInfo
 import ai.koog.serialization.kotlinx.KotlinxSerializer
 import ai.koog.serialization.kotlinx.toKoogJSONObject
+import androidx.annotation.VisibleForTesting
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.McpAuth
 import app.knotwork.android.domain.models.McpServerConfig
@@ -24,11 +25,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import org.json.JSONArray
 import org.json.JSONObject
 import timber.log.Timber
+import java.io.IOException
 import java.util.Base64
 import javax.inject.Inject
 
@@ -69,6 +72,18 @@ class KoogMcpClient(private val networkActivityTracker: NetworkActivityTracker? 
     private val sessionMutex = Mutex()
 
     private val serializer = KotlinxSerializer(Json { ignoreUnknownKeys = true })
+
+    /**
+     * Deadline for a single [executeTool] round-trip, in milliseconds.
+     * Overridable in tests so a regression can measure the deadline without
+     * waiting out the production value.
+     */
+    @VisibleForTesting
+    internal var toolCallTimeoutMs: Long = TOOL_CALL_TIMEOUT_MS
+
+    /** Deadline for the [connect] handshake, in milliseconds. See [toolCallTimeoutMs]. */
+    @VisibleForTesting
+    internal var connectTimeoutMs: Long = CONNECT_TIMEOUT_MS
 
     /**
      * Connects to the MCP server described by [config]. Branches on
@@ -134,18 +149,28 @@ class KoogMcpClient(private val networkActivityTracker: NetworkActivityTracker? 
                 // cooperative.
                 var attached = false
                 try {
-                    val transport: Transport = when (config.transport) {
-                        McpTransport.SSE -> McpToolRegistryProvider.defaultSseTransport(
-                            url = config.url,
-                            baseClient = client,
-                        )
-                        McpTransport.STREAMABLE_HTTP -> client.mcpStreamableHttpTransport(url = config.url)
-                    }
-                    val serverInfo = McpServerInfo(url = config.url, command = "")
-                    val toolRegistry = McpToolRegistryProvider.fromTransport(transport, serverInfo)
+                    // The handshake carries its own deadline for the same reason
+                    // the tool call does (see [executeTool]): a server that accepts
+                    // the socket and then goes quiet would otherwise spin the Tools
+                    // row on "Connecting…" for as long as the process lives.
+                    val established = withTimeoutOrNull(connectTimeoutMs) {
+                        val transport: Transport = when (config.transport) {
+                            McpTransport.SSE -> McpToolRegistryProvider.defaultSseTransport(
+                                url = config.url,
+                                baseClient = client,
+                            )
+                            McpTransport.STREAMABLE_HTTP -> client.mcpStreamableHttpTransport(url = config.url)
+                        }
+                        val serverInfo = McpServerInfo(url = config.url, command = "")
+                        val toolRegistry = McpToolRegistryProvider.fromTransport(transport, serverInfo)
+                        Session(httpClient = client, transport = transport, registry = toolRegistry)
+                    } ?: throw IOException(
+                        "MCP server ${config.url} did not complete the handshake within " +
+                            "${connectTimeoutMs / MILLIS_PER_SECOND}s",
+                    )
                     // Publish the session only after the transport has been attached
                     // successfully — failure paths must close the client locally.
-                    session = Session(httpClient = client, transport = transport, registry = toolRegistry)
+                    session = established
                     attached = true
                 } finally {
                     if (!attached) {
@@ -243,11 +268,27 @@ class KoogMcpClient(private val networkActivityTracker: NetworkActivityTracker? 
      * tells the agent the tool does not exist, and the agent then plans around
      * a capability it actually has (phase-40 finding F3).
      *
+     * The round-trip carries an explicit [toolCallTimeoutMs] deadline. Without
+     * one the limit was whatever the transitively resolved Ktor engine happened
+     * to default to — measured at exactly 10 s on the reference device, a value
+     * nobody chose, documented nowhere and free to change on any Ktor/Koog bump
+     * (phase-40 finding F12). The deadline is applied here with
+     * [withTimeoutOrNull] rather than through Ktor's `HttpTimeout` plugin
+     * **on purpose**: that plugin does not apply to MCP's SSE-framed response
+     * path, so installing it removed the engine's own socket timeout without
+     * supplying a replacement and made the call unbounded — a hung call then
+     * froze the whole task queue, since it is a single serial worker (F13).
+     * `withTimeoutOrNull` also keeps the timeout from surfacing as a
+     * [CancellationException]: a cancellation would propagate through
+     * `ToolRepositoryImpl` and take the entire run down instead of being
+     * reported as one failed tool call.
+     *
      * @param name The name of the tool to execute.
      * @param arguments A JSON string representing the arguments.
      * @return A string containing the serialized result of the execution.
      * @throws IllegalStateException if the client is not connected.
      * @throws IllegalArgumentException if the server does not advertise [name].
+     * @throws IOException if the server does not answer within [toolCallTimeoutMs].
      */
     override suspend fun executeTool(name: String, arguments: String): String = withContext(Dispatchers.IO) {
         networkActivityTracker?.recordOutbound()
@@ -256,17 +297,21 @@ class KoogMcpClient(private val networkActivityTracker: NetworkActivityTracker? 
         val tool = current.registry.getToolOrNull(name)
             ?: throw IllegalArgumentException("Tool $name not found")
 
-        val kotlinxJsonArgs = Json.parseToJsonElement(arguments).jsonObject
-        val koogJsonArgs = kotlinxJsonArgs.toKoogJSONObject()
-        // Fail with a descriptive error rather than an opaque NPE when a
-        // misbehaving MCP server / Koog tool yields null for the decoded args or
-        // the result; the caller (ToolInvocationGate) maps the throw to a tool
-        // error observation.
-        val args = tool.decodeArgs(koogJsonArgs, serializer)
-            ?: throw IllegalStateException("MCP tool $name produced null decoded arguments")
-        val result = tool.executeUnsafe(args)
-            ?: throw IllegalStateException("MCP tool $name produced a null result")
-        tool.encodeResultToStringUnsafe(result, serializer)
+        withTimeoutOrNull(toolCallTimeoutMs) {
+            val kotlinxJsonArgs = Json.parseToJsonElement(arguments).jsonObject
+            val koogJsonArgs = kotlinxJsonArgs.toKoogJSONObject()
+            // Fail with a descriptive error rather than an opaque NPE when a
+            // misbehaving MCP server / Koog tool yields null for the decoded args or
+            // the result; the caller (ToolInvocationGate) maps the throw to a tool
+            // error observation.
+            val args = tool.decodeArgs(koogJsonArgs, serializer)
+                ?: throw IllegalStateException("MCP tool $name produced null decoded arguments")
+            val result = tool.executeUnsafe(args)
+                ?: throw IllegalStateException("MCP tool $name produced a null result")
+            tool.encodeResultToStringUnsafe(result, serializer)
+        } ?: throw IOException(
+            "MCP tool $name did not respond within ${toolCallTimeoutMs / MILLIS_PER_SECOND}s",
+        )
     }
 
     /**
@@ -328,6 +373,24 @@ class KoogMcpClient(private val networkActivityTracker: NetworkActivityTracker? 
 
     /** Header-composition + auth helpers shared across instances. */
     companion object {
+        /**
+         * Default deadline for one tool round-trip. Matches the 60 s the
+         * project already requires of cloud LLM calls (`api-conventions.md`):
+         * real MCP tools search, index or run a model of their own, and the
+         * accidental 10 s engine default was well under what they need.
+         */
+        internal const val TOOL_CALL_TIMEOUT_MS = 60_000L
+
+        /**
+         * Default deadline for the connect handshake. Shorter than
+         * [TOOL_CALL_TIMEOUT_MS] because this one blocks a person looking at
+         * the Tools screen rather than a background tool call.
+         */
+        internal const val CONNECT_TIMEOUT_MS = 30_000L
+
+        /** Divisor for rendering a millisecond deadline as seconds in error text. */
+        private const val MILLIS_PER_SECOND = 1_000L
+
         /**
          * Builds the final request-header map for [config]: typed
          * [McpAuth] is rendered first, then user-supplied

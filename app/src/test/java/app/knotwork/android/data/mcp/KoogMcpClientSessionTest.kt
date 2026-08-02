@@ -2,6 +2,7 @@ package app.knotwork.android.data.mcp
 
 import app.knotwork.android.domain.models.McpServerConfig
 import app.knotwork.android.domain.models.McpTransport
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -17,7 +18,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.IOException
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * Session-lifecycle regression tests for [KoogMcpClient], covering finding F3
@@ -38,8 +42,19 @@ class KoogMcpClientSessionTest {
     private val server = MockWebServer()
     private val received = CopyOnWriteArrayList<String>()
 
+    /**
+     * JSON-RPC method the stub server refuses to answer, modelling the server
+     * that accepts a request and then goes quiet — the shape of phase-40
+     * findings F12/F13. `null` (the default) makes the stub answer everything.
+     */
+    private var stallMethod: String? = null
+
+    /** Released in [tearDown] so a stalled dispatcher thread never outlives the test. */
+    private val stallRelease = CountDownLatch(1)
+
     @After
     fun tearDown() {
+        stallRelease.countDown()
         server.close()
     }
 
@@ -65,6 +80,13 @@ class KoogMcpClientSessionTest {
                 val method = Regex("\"method\"\\s*:\\s*\"([^\"]+)\"").find(body)?.groupValues?.get(1)
                 val id = Regex("\"id\"\\s*:\\s*(\\d+)").find(body)?.groupValues?.get(1) ?: "1"
                 received += "${method ?: "?"} sid=${request.headers["mcp-session-id"]}"
+
+                if (method != null && method == stallMethod) {
+                    // Hold the response the way an unresponsive server does. The
+                    // ceiling only bounds the test if the client has no deadline
+                    // of its own — which is exactly the defect under test.
+                    stallRelease.await(STALL_CEILING_SECONDS, TimeUnit.SECONDS)
+                }
 
                 return when (method) {
                     "initialize" -> {
@@ -190,5 +212,95 @@ class KoogMcpClientSessionTest {
 
         scope.cancel()
         client.disconnect()
+    }
+
+    /**
+     * Deadline regression for finding F12/F13: a tool call must end on a
+     * deadline **the app chose**. Before this, no timeout was installed at all,
+     * so the limit was whatever Ktor engine happened to be on the classpath
+     * (measured at 10 s on the device), and the attempted fix via Ktor's
+     * `HttpTimeout` plugin removed even that — the call became unbounded, which
+     * froze the whole serial task queue.
+     *
+     * Two things are asserted, and the second is the load-bearing one: the
+     * failure must be an ordinary exception, not a [CancellationException].
+     * A cancellation propagates through `ToolRepositoryImpl` and takes the
+     * entire run down instead of being reported as one failed tool call.
+     */
+    @Test
+    fun `given a server that never answers when executeTool then it fails on its own deadline`() = runTest {
+        stallMethod = "tools/call"
+        start()
+        val client = KoogMcpClient().apply { toolCallTimeoutMs = TEST_DEADLINE_MS }
+        client.connect(
+            McpServerConfig(
+                url = server.url("/mcp").toString(),
+                transport = McpTransport.STREAMABLE_HTTP,
+            ),
+        )
+        client.getTools()
+
+        // Deliberately catching without re-throwing: the type and message the
+        // caller observes ARE the assertion. Nothing suspends afterwards.
+        @Suppress("SwallowedException", "TooGenericExceptionCaught")
+        val observed: Throwable? = try {
+            client.executeTool(name = "echo", arguments = """{"message":"hi"}""")
+            null
+        } catch (e: Throwable) {
+            e
+        }
+
+        assertTrue("expected a deadline failure, got $observed", observed is IOException)
+        assertTrue(
+            "the error must name the deadline, got ${observed?.message}",
+            observed?.message.orEmpty().contains("did not respond within"),
+        )
+        assertFalse(
+            "a timeout reported as cancellation would take the whole run down: $observed",
+            observed is CancellationException,
+        )
+    }
+
+    /**
+     * Same deadline, other end of the connection: a server that accepts the
+     * socket and never finishes the handshake used to leave the Tools row
+     * spinning on "Connecting…" for the life of the process.
+     */
+    @Test
+    fun `given a server that never completes the handshake when connect then it fails on its own deadline`() = runTest {
+        stallMethod = "initialize"
+        start()
+        val client = KoogMcpClient().apply { connectTimeoutMs = TEST_DEADLINE_MS }
+
+        @Suppress("SwallowedException", "TooGenericExceptionCaught")
+        val observed: Throwable? = try {
+            client.connect(
+                McpServerConfig(
+                    url = server.url("/mcp").toString(),
+                    transport = McpTransport.STREAMABLE_HTTP,
+                ),
+            )
+            null
+        } catch (e: Throwable) {
+            e
+        }
+
+        assertTrue("expected a deadline failure, got $observed", observed is IOException)
+        assertTrue(
+            "the error must name the deadline, got ${observed?.message}",
+            observed?.message.orEmpty().contains("did not complete the handshake"),
+        )
+        assertFalse(
+            "a timeout reported as cancellation would take the caller down with it: $observed",
+            observed is CancellationException,
+        )
+    }
+
+    private companion object {
+        /** Deadline used by the timeout tests — short enough to keep them quick. */
+        const val TEST_DEADLINE_MS = 300L
+
+        /** Upper bound on how long the stub holds a stalled response. */
+        const val STALL_CEILING_SECONDS = 30L
     }
 }
