@@ -22,6 +22,8 @@
         <domain includeSubdomains="false">192.168.1.1</domain>
         <domain includeSubdomains="false">192.168.1.100</domain>
         <domain includeSubdomains="false">192.168.0.100</domain>
+        <domain includeSubdomains="false">192.168.0.205</domain>
+        <domain includeSubdomains="false">192.168.0.76</domain>
         <domain includeSubdomains="false">10.0.0.1</domain>
         <domain includeSubdomains="false">10.0.1.1</domain>
         <!-- Corporate / Docker bridge networks (172.16–172.31 prefix) -->

@@ -80,19 +80,32 @@ class ParkedRunResumer @Inject constructor(
                 PendingSubmissionOutcome.Expired
             }
             ResumeOutcome.NotResumable -> {
-                // The run record already settled elsewhere (maintenance
-                // expiry, a racing resume, a restart). The park is stale —
-                // drop it so it cannot resurface. The gate ends here too:
-                // without this it would stay journalled as still waiting on a
-                // run that is long over, which is precisely the kind of silent
-                // state the HITL record exists to remove. The response was
-                // given but could never be applied, so it is ABANDONED rather
-                // than an approval or an answer that took effect.
-                recordTriggerHitlEvent(
-                    pending.runId,
-                    TriggerHitlEvent.Resolved(TriggerHitlResolution.ABANDONED),
-                )
-                pendingInteractionRepository.delete(pending.runId)
+                // Usually the run record already settled elsewhere (maintenance
+                // expiry, a racing resume, a restart) and only the stale park is
+                // left to drop. But "cannot resume" was also reachable with the
+                // run still *unfinished* — and this branch then deleted the only
+                // record that made it answerable while leaving it non-terminal,
+                // stranding it in RUNNING behind a permanent "generating…"
+                // (phase-40 finding F7). Whatever made it unresumable, a run
+                // nobody can act on any more has to reach a terminal state:
+                // settle it instead of abandoning it.
+                val stillOpen = pipelineRunRepository.getRun(pending.runId)
+                    ?.status in NON_TERMINAL_STATUSES
+                if (stillOpen) {
+                    failPark(pending, NOT_RESUMABLE_MESSAGE)
+                } else {
+                    // The gate ends here too: without this it would stay
+                    // journalled as still waiting on a run that is long over,
+                    // which is precisely the kind of silent state the HITL
+                    // record exists to remove. The response was given but could
+                    // never be applied, so it is ABANDONED rather than an
+                    // approval or an answer that took effect.
+                    recordTriggerHitlEvent(
+                        pending.runId,
+                        TriggerHitlEvent.Resolved(TriggerHitlResolution.ABANDONED),
+                    )
+                    pendingInteractionRepository.delete(pending.runId)
+                }
                 PendingSubmissionOutcome.NothingPending
             }
         }
@@ -159,8 +172,30 @@ class ParkedRunResumer @Inject constructor(
         const val GRAPH_CHANGED_MESSAGE: String =
             "Pipeline graph changed while waiting for the response. Restart the task instead."
 
+        /**
+         * Failure reason stamped on a park that could not be resumed while its
+         * run was still open. Deliberately distinct from the expiry and
+         * graph-change messages: those describe *why* the response could not be
+         * applied, this one admits the run could not be continued at all.
+         */
+        const val NOT_RESUMABLE_MESSAGE: String =
+            "The run could not be resumed and was stopped. Restart the task instead."
+
         /** Milliseconds in one hour, for the approval-window check. */
         private const val MILLIS_PER_HOUR: Long = 3_600_000L
+
+        /**
+         * Run statuses that still expect an executor. A park found in one of
+         * these has not settled anywhere else, so dropping its pending record
+         * without finishing it would strand the run.
+         */
+        private val NON_TERMINAL_STATUSES = setOf(
+            PipelineRunStatus.RUNNING,
+            PipelineRunStatus.QUEUED,
+            PipelineRunStatus.INTERRUPTED,
+            PipelineRunStatus.WAITING_APPROVAL,
+            PipelineRunStatus.WAITING_CLARIFICATION,
+        )
     }
 }
 

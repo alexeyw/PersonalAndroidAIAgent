@@ -936,9 +936,20 @@ class ChatHomeViewModel @Inject constructor(
         }
     }
 
-    /** Mirrors the running streamed-token estimate into [ChatHomeTokenState.streaming]. */
+    /**
+     * Mirrors the running streamed-token estimate into
+     * [ChatHomeTokenState.streaming], together with the backend actually
+     * decoding those tokens.
+     *
+     * The backend is read from the engine, not from settings: a load that fell
+     * back runs on CPU while the saved preference still reads GPU, and that
+     * divergence is precisely what the status line has to expose (phase-40
+     * finding F6). Re-reading it per token is a volatile field read, and an
+     * unchanged value produces an equal state that `StateFlow` drops.
+     */
     private fun updateStreamingTokens(tokens: Int) {
-        _state.update { it.copy(tokens = it.tokens.copy(streaming = tokens)) }
+        val backend = llmInferenceEngine.activeBackend?.key
+        _state.update { it.copy(tokens = it.tokens.copy(streaming = tokens, backend = backend)) }
     }
 
     /**

@@ -30,6 +30,7 @@ import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ClarificationOutcome
 import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.ConnectionModel
+import app.knotwork.android.domain.models.ConsoleEvent
 import app.knotwork.android.domain.models.ConsoleEventType
 import app.knotwork.android.domain.models.EngineImageInput
 import app.knotwork.android.domain.models.MemoryChunk
@@ -38,6 +39,7 @@ import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.NodeType
+import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Result
@@ -2588,6 +2590,68 @@ class GraphExecutionEngineTest {
     }
 
     /**
+     * A sub-pipeline forwards its child's console traffic to the parent as
+     * ordinary states, so `ConsoleLog` / `NodeIO` keep arriving while a HITL
+     * gate is still open. They are observations *about* the run, not progress
+     * of it, and must leave the WAITING_* status alone.
+     *
+     * Treating them as "the wait ended" left a nested run's root in RUNNING
+     * while its child sat in WAITING_APPROVAL, and `ResumePipelineRunUseCase`
+     * — which requires a resumable *root* — then rejected every answer to the
+     * parked notification, stranding the run behind a permanent "generating…"
+     * (phase-40 finding F7, reproduced on device).
+     *
+     * The state sequence is injected through the SKILL executor rather than by
+     * standing up a real sub-pipeline: the defect lives in the engine's
+     * state → run-status mapping, and this drives exactly the sequence a
+     * PIPELINE node forwards.
+     */
+    @Test
+    fun `given console traffic while a gate waits then the run keeps its WAITING_APPROVAL status`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { skillNodeExecutor.execute(any(), any(), any(), any(), any(), any()) } returns flowOf(
+            NodeOutput.State(
+                AgentOrchestratorState.WaitingForApproval("sens.tool", "a=1", ToolRisk.SENSITIVE),
+            ),
+            // The poison: a child console line arriving mid-wait.
+            NodeOutput.State(
+                AgentOrchestratorState.ConsoleLog(
+                    events = listOf(
+                        ConsoleEvent(
+                            seq = 1,
+                            type = ConsoleEventType.NodeExecution,
+                            message = "child chatter",
+                            timestamp = 0L,
+                        ),
+                    ),
+                ),
+            ),
+            NodeOutput.State(
+                AgentOrchestratorState.SuspendedInBackground(PendingInteractionKind.APPROVAL),
+            ),
+        )
+
+        val graph = PipelineGraph(
+            id = "g-park",
+            name = "Parking",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("skill_1", NodeType.SKILL, 10f, 0f),
+                NodeModel("output_1", NodeType.OUTPUT, 20f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "skill_1"),
+                ConnectionModel("c2", "skill_1", "output_1"),
+            ),
+        )
+
+        engine(sessionId, "prompt", graph, "run-park").toList()
+
+        coVerify { pipelineRunRepository.updateStatus("run-park", PipelineRunStatus.WAITING_APPROVAL) }
+        coVerify(exactly = 0) { pipelineRunRepository.updateStatus("run-park", PipelineRunStatus.RUNNING) }
+    }
+
+    /**
      * The persistent run trace must be complete after a run: every console
      * event and every per-node I/O snapshot reaches the trace repository,
      * attributed to the run, with a strictly monotonic per-run seq shared
@@ -2719,6 +2783,63 @@ class GraphExecutionEngineTest {
             pipelineRunRepository.updateStatus("run-45", PipelineRunStatus.RUNNING)
         }
         job.cancel()
+    }
+
+    /**
+     * A tool call is the one node whose re-execution is not free — it acted on
+     * the world — so its trace record must be durable the moment it lands, not
+     * whenever the write buffer next drains.
+     *
+     * Found on the reference device (phase-40, cell 7b): the process killed
+     * 112 ms after a tool returned lost the buffered record, and the resumed
+     * run invoked the same tool a second time — visible as a second
+     * `tools/call` on the wire. Killed 1.2 s after (past the buffer's 500 ms
+     * timer) the same run replayed the record as designed.
+     */
+    @Test
+    fun `given a completed tool node then its trace record is flushed immediately`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.NeverPrompt)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
+        every { settingsRepository.toolCallTimeoutMs } returns flowOf(5_000L)
+        coEvery { toolRepository.getRisk("safe.tool", any()) } returns ToolRisk.READ_ONLY
+        coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool("safe.tool", "Desc", "{}"))
+        coEvery { toolRepository.executeTool("safe.tool", any(), any()) } returns "tool-result"
+
+        // Call order, not merely call presence: the terminal flush would satisfy
+        // a plain "flush was called" assertion even without the fix.
+        val calls = mutableListOf<String>()
+        coEvery { runTraceRepository.append(any()) } answers {
+            val record = firstArg<RunTraceRecord>()
+            calls += if (record is RunTraceRecord.NodeIo) "append:${record.nodeId}" else "append:console"
+        }
+        coEvery { runTraceRepository.flush() } answers { calls += "flush" }
+
+        val graph = PipelineGraph(
+            id = "g-tool-flush",
+            name = "Tool Flush",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("tool_1", NodeType.TOOL, 0f, 0f, toolName = "safe.tool"),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "tool_1"),
+                ConnectionModel("c2", "tool_1", "output_1"),
+            ),
+        )
+        every { llmEngine.generateResponseStream(any()) } returns
+            flowOf("""{"tool":"safe.tool","arguments":"a=1"}""")
+
+        engine(sessionId, "prompt", graph, "run-tool-flush").toList()
+
+        val recordIndex = calls.indexOf("append:tool_1")
+        assertTrue("the tool node's I/O record never reached the trace: $calls", recordIndex >= 0)
+        assertEquals(
+            "the tool record must be flushed before anything else is written: $calls",
+            "flush",
+            calls.getOrNull(recordIndex + 1),
+        )
     }
 
     // ─── Checkpoint resume ──────────────────────────────────────────────────

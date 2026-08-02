@@ -7,9 +7,9 @@ package app.knotwork.android.domain.models
  * @property url base URL of the MCP server (acts as the stable identity).
  * @property name optional display label rendered as the row title; the
  * row falls back to [url] when null/blank.
- * @property transport transport protocol (see [McpTransport]). Only
- * [McpTransport.SSE] is end-to-end wired today; the field is persisted
- * so the user's pick survives future client upgrades.
+ * @property transport transport protocol (see [McpTransport]). Both
+ * variants are wired end to end: the runtime branches on this field when
+ * it builds the transport at connect time.
  * @property auth typed authentication scheme. The runtime composes the
  * matching request header at connect time; [McpAuth.None] keeps the
  * request anonymous.

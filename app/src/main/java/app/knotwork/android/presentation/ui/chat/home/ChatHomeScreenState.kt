@@ -251,6 +251,11 @@ data class ChatHomeModelState(
  *   `SettingsRepository.maxContextLength`.
  * @property streaming running approximate count of tokens produced by the
  *   in-flight LLM stream; surfaced through the agent status pill as
- *   `generating · N tok`. Zero outside of [ChatHomeUiState.Generating].
+ *   `generating (GPU) · N tok`. Zero outside of [ChatHomeUiState.Generating].
+ * @property backend wire key of the backend the engine is really executing on
+ *   (`CPU` / `GPU` / `NPU`), or `null` when no model is loaded. Read from the
+ *   engine rather than from settings: a load that fell back runs on CPU while
+ *   the saved preference still says GPU, and the status pill has to show what
+ *   is actually decoding the tokens.
  */
-data class ChatHomeTokenState(val used: Int = 0, val max: Int = 0, val streaming: Int = 0)
+data class ChatHomeTokenState(val used: Int = 0, val max: Int = 0, val streaming: Int = 0, val backend: String? = null)

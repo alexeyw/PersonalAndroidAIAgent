@@ -3,11 +3,14 @@ package app.knotwork.android.data.mcp
 import ai.koog.agents.core.tools.Tool
 import ai.koog.agents.core.tools.ToolDescriptor
 import ai.koog.agents.core.tools.ToolParameterDescriptor
+import ai.koog.agents.core.tools.ToolParameterType
 import ai.koog.agents.core.tools.ToolRegistry
 import app.knotwork.android.domain.models.McpAuth
 import app.knotwork.android.domain.models.McpServerConfig
+import io.ktor.client.HttpClient
 import io.mockk.every
 import io.mockk.mockk
+import io.modelcontextprotocol.kotlin.sdk.shared.Transport
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -18,13 +21,26 @@ class KoogMcpClientTest {
 
     private fun makeClient(tools: List<Tool<*, *>>): KoogMcpClient {
         val client = KoogMcpClient()
-        val field = client.javaClass.getDeclaredField("registry")
-        field.isAccessible = true
         val mockRegistry = mockk<ToolRegistry>()
         every { mockRegistry.tools } returns tools
-        field.set(client, mockRegistry)
+        // `connect` publishes an atomic Session snapshot rather than separate
+        // registry / httpClient fields, so the stub has to be installed the same way.
+        // The Session type is reached through the field itself — naming it inline
+        // would be an internal FQN reference, which `checkNoInternalFqn` rejects.
+        val constructor = sessionField(client).type.declaredConstructors.first()
+        constructor.isAccessible = true
+        val session = constructor.newInstance(
+            mockk<HttpClient>(relaxed = true),
+            mockk<Transport>(relaxed = true),
+            mockRegistry,
+        )
+        sessionField(client).set(client, session)
         return client
     }
+
+    /** Reflective handle on the private `session` field published by `connect`. */
+    private fun sessionField(client: KoogMcpClient) =
+        client.javaClass.getDeclaredField("session").apply { isAccessible = true }
 
     @Test
     fun `getTools maps ToolRegistry to AgentTool with valid JSON Schema`() = runTest {
@@ -47,9 +63,86 @@ class KoogMcpClientTest {
     }
 
     @Test
+    fun `getTools preserves declared parameter types instead of calling everything a string`() = runTest {
+        val duration = mockk<ToolParameterDescriptor>()
+        every { duration.name } returns "duration"
+        every { duration.description } returns "How long to run, in seconds"
+        every { duration.type } returns ToolParameterType.Integer
+
+        val ratio = mockk<ToolParameterDescriptor>()
+        every { ratio.name } returns "ratio"
+        every { ratio.description } returns ""
+        every { ratio.type } returns ToolParameterType.Float
+
+        val verbose = mockk<ToolParameterDescriptor>()
+        every { verbose.name } returns "verbose"
+        every { verbose.description } returns ""
+        every { verbose.type } returns ToolParameterType.Boolean
+
+        val mockDescriptor = mockk<ToolDescriptor>()
+        every { mockDescriptor.description } returns "long running op"
+        every { mockDescriptor.requiredParameters } returns listOf(duration)
+        every { mockDescriptor.optionalParameters } returns listOf(ratio, verbose)
+
+        val mockTool = mockk<Tool<Any, Any>>()
+        every { mockTool.name } returns "trigger-long-running-operation"
+        every { mockTool.descriptor } returns mockDescriptor
+
+        val schema = JSONObject(makeClient(listOf(mockTool)).getTools()[0].parameters)
+        val props = schema.getJSONObject("properties")
+
+        // Advertising every parameter as a string made the model send "300" for a
+        // numeric field, and the server rejected the call on schema validation —
+        // which made any MCP tool with a non-string parameter unusable
+        // (phase-40 finding F11).
+        assertEquals("integer", props.getJSONObject("duration").getString("type"))
+        assertEquals("number", props.getJSONObject("ratio").getString("type"))
+        assertEquals("boolean", props.getJSONObject("verbose").getString("type"))
+        // The description is what tells the model what the argument means.
+        assertEquals(
+            "How long to run, in seconds",
+            props.getJSONObject("duration").getString("description"),
+        )
+    }
+
+    @Test
+    fun `getTools renders enum and array parameters as their JSON Schema shapes`() = runTest {
+        val mode = mockk<ToolParameterDescriptor>()
+        every { mode.name } returns "mode"
+        every { mode.description } returns ""
+        every { mode.type } returns ToolParameterType.Enum(arrayOf("fast", "slow"))
+
+        val tags = mockk<ToolParameterDescriptor>()
+        every { tags.name } returns "tags"
+        every { tags.description } returns ""
+        every { tags.type } returns ToolParameterType.List(ToolParameterType.String)
+
+        val mockDescriptor = mockk<ToolDescriptor>()
+        every { mockDescriptor.description } returns "d"
+        every { mockDescriptor.requiredParameters } returns listOf(mode, tags)
+        every { mockDescriptor.optionalParameters } returns emptyList()
+
+        val mockTool = mockk<Tool<Any, Any>>()
+        every { mockTool.name } returns "shaped"
+        every { mockTool.descriptor } returns mockDescriptor
+
+        val props = JSONObject(makeClient(listOf(mockTool)).getTools()[0].parameters)
+            .getJSONObject("properties")
+
+        val modeSchema = props.getJSONObject("mode")
+        assertEquals("string", modeSchema.getString("type"))
+        assertEquals("fast", modeSchema.getJSONArray("enum").getString(0))
+        val tagsSchema = props.getJSONObject("tags")
+        assertEquals("array", tagsSchema.getString("type"))
+        assertEquals("string", tagsSchema.getJSONObject("items").getString("type"))
+    }
+
+    @Test
     fun `getTools builds required array for required parameters`() = runTest {
         val requiredParam = mockk<ToolParameterDescriptor>()
         every { requiredParam.name } returns "query"
+        every { requiredParam.description } returns ""
+        every { requiredParam.type } returns ToolParameterType.String
 
         val mockDescriptor = mockk<ToolDescriptor>()
         every { mockDescriptor.description } returns "search tool"
@@ -69,14 +162,12 @@ class KoogMcpClientTest {
     }
 
     @Test
-    fun `connect that fails during transport attachment leaves httpClient field null`() = runTest {
+    fun `connect that fails during transport attachment leaves session field null`() = runTest {
         // Leak-on-failure regression guard: when SSE transport attachment to a
         // non-routable address surfaces an exception, the freshly-created HttpClient
         // must be closed locally. The field stays at its previous value (null on a
         // first attempt), so a retry does not accumulate leaked Ktor engines.
         val client = KoogMcpClient()
-        val httpClientField = client.javaClass.getDeclaredField("httpClient")
-        httpClientField.isAccessible = true
 
         val outcome = runCatching { client.connect(McpServerConfig(url = "http://127.0.0.1:1")) }
 
@@ -84,7 +175,7 @@ class KoogMcpClientTest {
         assertEquals(
             "Failed connect must clean up the new HttpClient — leaked engine = bug",
             null,
-            httpClientField.get(client),
+            sessionField(client).get(client),
         )
     }
 
@@ -93,37 +184,35 @@ class KoogMcpClientTest {
         // Same invariant under repeated failure: the field must remain clean so callers
         // can keep retrying without building up open Ktor engines.
         val client = KoogMcpClient()
-        val httpClientField = client.javaClass.getDeclaredField("httpClient")
-        httpClientField.isAccessible = true
 
         repeat(3) {
             runCatching { client.connect(McpServerConfig(url = "http://127.0.0.1:1")) }
             assertEquals(
-                "After failed connect #${it + 1} the httpClient field must be null",
+                "After failed connect #${it + 1} the session field must be null",
                 null,
-                httpClientField.get(client),
+                sessionField(client).get(client),
             )
         }
     }
 
     @Test
-    fun `disconnect after a failed connect keeps httpClient field null`() = runTest {
+    fun `disconnect after a failed connect keeps session field null`() = runTest {
         // Defect 5 regression guard: a disconnect after a failed connect is harmless
         // (no double-close) and leaves the field in the documented "no client" state.
         val client = KoogMcpClient()
-        val httpClientField = client.javaClass.getDeclaredField("httpClient")
-        httpClientField.isAccessible = true
 
         runCatching { client.connect(McpServerConfig(url = "http://127.0.0.1:1")) }
         client.disconnect()
 
-        assertEquals(null, httpClientField.get(client))
+        assertEquals(null, sessionField(client).get(client))
     }
 
     @Test
     fun `getTools optional parameters appear in properties but not in required`() = runTest {
         val optionalParam = mockk<ToolParameterDescriptor>()
         every { optionalParam.name } returns "lang"
+        every { optionalParam.description } returns ""
+        every { optionalParam.type } returns ToolParameterType.String
 
         val mockDescriptor = mockk<ToolDescriptor>()
         every { mockDescriptor.description } returns "search tool"

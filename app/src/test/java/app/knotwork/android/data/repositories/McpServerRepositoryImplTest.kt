@@ -3,14 +3,19 @@ package app.knotwork.android.data.repositories
 import app.knotwork.android.data.mcp.McpClient
 import app.knotwork.android.data.mcp.McpClientFactory
 import app.knotwork.android.domain.models.AgentTool
+import app.knotwork.android.domain.models.McpAuth
 import app.knotwork.android.domain.models.McpConnectionStatus
 import app.knotwork.android.domain.models.McpServerConfig
 import app.knotwork.android.domain.models.ToolRisk
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -116,6 +121,89 @@ class McpServerRepositoryImplTest {
 
         assertTrue(refreshed.isSuccess)
         coVerify(exactly = 2) { client.getTools() }
+    }
+
+    @Test
+    fun `given repeated refreshes when config is unchanged then the client connects only once`() = runTest {
+        val client = mockk<McpClient>(relaxed = true)
+        coEvery { client.getTools() } returns listOf(AgentTool("a", "d", "{}"))
+        val factory = mockk<McpClientFactory>()
+        coEvery { factory.create() } returns client
+        val repo = McpServerRepositoryImpl(clientFactory = factory)
+
+        repeat(times = 3) { repo.fetchToolList(config = config, forceRefresh = true) }
+
+        // Reconnecting per refresh opened a fresh MCP session each time and left
+        // the abandoned ones live on the server, while the in-place transport
+        // swap could break a tool call running concurrently on the same client
+        // (phase-40 directed MCP test, finding F3). A refresh re-lists tools; it
+        // does not re-establish the connection.
+        coVerify(exactly = 1) { client.connect(any()) }
+        coVerify(exactly = 3) { client.getTools() }
+    }
+
+    @Test
+    fun `given a changed config when fetching then the stale connection is replaced`() = runTest {
+        val client = mockk<McpClient>(relaxed = true)
+        coEvery { client.getTools() } returns listOf(AgentTool("a", "d", "{}"))
+        val factory = mockk<McpClientFactory>()
+        coEvery { factory.create() } returns client
+        val repo = McpServerRepositoryImpl(clientFactory = factory)
+
+        repo.fetchToolList(config = config)
+        // Same URL (the pool key), different auth — the new credentials must
+        // actually reach the server rather than being masked by a pooled
+        // connection opened with the old ones.
+        val reconfigured = config.copy(auth = McpAuth.Bearer(token = "t"))
+        repo.fetchToolList(config = reconfigured, forceRefresh = true)
+
+        coVerify(exactly = 1) { client.disconnect() }
+        coVerify(exactly = 2) { client.connect(any()) }
+    }
+
+    @Test
+    fun `given a failed fetch when retried then a fresh connection is established`() = runTest {
+        val client = mockk<McpClient>(relaxed = true)
+        coEvery { client.getTools() } throws IllegalStateException("boom") andThen listOf(AgentTool("a", "d", "{}"))
+        val factory = mockk<McpClientFactory>()
+        coEvery { factory.create() } returns client
+        val repo = McpServerRepositoryImpl(clientFactory = factory)
+
+        val failed = repo.fetchToolList(config = config)
+        val retried = repo.fetchToolList(config = config, forceRefresh = true)
+
+        assertTrue(failed.isFailure)
+        assertTrue(retried.isSuccess)
+        // Not caching the broken entry is what keeps "connect once" from turning
+        // into "never reconnect after a blip".
+        coVerify(exactly = 2) { client.connect(any()) }
+    }
+
+    @Test
+    fun `given a fetch cancelled mid-flight then the status does not stay Connecting`() = runTest {
+        val client = mockk<McpClient>(relaxed = true)
+        val started = CompletableDeferred<Unit>()
+        // Suspend forever inside the fetch so the caller can be cancelled while
+        // the status still reads Connecting.
+        coEvery { client.getTools() } coAnswers {
+            started.complete(Unit)
+            awaitCancellation()
+        }
+        val factory = mockk<McpClientFactory>()
+        coEvery { factory.create() } returns client
+        val repo = McpServerRepositoryImpl(clientFactory = factory)
+
+        val job = launch { repo.fetchToolList(config = config) }
+        started.await()
+        assertEquals(McpConnectionStatus.Connecting, repo.observeConnectionStatus(url).first())
+        job.cancelAndJoin()
+
+        // A row pinned on "Connecting…" reads as "still trying" forever, and
+        // only a manual Refresh cleared it (phase-40 finding F8).
+        assertTrue(
+            "cancelled fetch must not leave the row pinned on Connecting",
+            repo.observeConnectionStatus(url).first() != McpConnectionStatus.Connecting,
+        )
     }
 
     @Test

@@ -99,6 +99,13 @@ class SettingsManager @Inject constructor(
          * to CPU automatically.
          */
         val LAST_INIT_BACKEND_ATTEMPT = stringPreferencesKey("last_init_backend_attempt")
+
+        /**
+         * Consecutive cold starts that found [LAST_INIT_BACKEND_ATTEMPT] still
+         * set. Absent means zero — a permanent downgrade needs corroboration
+         * across two starts, not one unexplained process death.
+         */
+        val LOCAL_BACKEND_FAILURE_STREAK = intPreferencesKey("local_backend_failure_streak")
         val TOOL_CALL_TIMEOUT_MS = androidx.datastore.preferences.core.longPreferencesKey("tool_call_timeout_ms")
         val WORKSPACE_MAX_FILE_SIZE_BYTES =
             androidx.datastore.preferences.core.longPreferencesKey("workspace_max_file_size_bytes")
@@ -1325,6 +1332,27 @@ class SettingsManager @Inject constructor(
                 preferences.remove(PreferencesKeys.LAST_INIT_BACKEND_ATTEMPT)
             } else {
                 preferences[PreferencesKeys.LAST_INIT_BACKEND_ATTEMPT] = backendKey
+            }
+        }
+    }
+
+    override val localBackendFailureStreak: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences -> preferences[PreferencesKeys.LOCAL_BACKEND_FAILURE_STREAK] ?: 0 }
+
+    override suspend fun setLocalBackendFailureStreak(streak: Int) {
+        dataStore.edit { preferences ->
+            if (streak <= 0) {
+                preferences.remove(PreferencesKeys.LOCAL_BACKEND_FAILURE_STREAK)
+            } else {
+                preferences[PreferencesKeys.LOCAL_BACKEND_FAILURE_STREAK] = streak
             }
         }
     }

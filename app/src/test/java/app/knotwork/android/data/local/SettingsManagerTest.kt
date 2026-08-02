@@ -1475,7 +1475,12 @@ class SettingsManagerTest {
                 "mcp_server_urls", "mcp_servers_json",
                 "disabled_app_functions", "disabled_mcp_tools", "app_function_risk_overrides",
                 "current_chat_session_id", "memory_last_compacted_at",
-                "local_model_backend", "last_init_backend_attempt",
+                // Backend choice plus the two crash-recovery breadcrumbs that
+                // qualify it. The streak belongs with the attempt sentinel: both
+                // describe how the last inits went on *this* device, and a
+                // settings reset is not evidence that a backend which failed
+                // twice now works.
+                "local_model_backend", "last_init_backend_attempt", "local_backend_failure_streak",
                 "default_pipeline_id", "console_preferred_tab", "last_test_probe_result",
                 "active_embedding_provider_id", "last_reembed_provider_id",
                 "allowed_http_domains",

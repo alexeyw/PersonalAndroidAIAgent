@@ -128,6 +128,109 @@ details.
 
 ### Fixed
 
+- **One external tool that never answered could freeze every chat in the app.**
+  Messages are processed one at a time, so a tool call that hung took the whole
+  queue with it: new messages in any chat were accepted, given a title, and
+  then sat on "Generating…" forever with an empty console and no explanation —
+  observed for an hour and a half against a server that simply stopped
+  replying. Two independent limits now apply. A call to an MCP server gives up
+  after 60 seconds and is reported as a failed tool call, like any other tool
+  error; the previous limit was an accident of whichever HTTP engine happened
+  to be bundled — 10 seconds, too short for tools that search or run a model of
+  their own, and liable to change silently on any dependency upgrade. And
+  independently of any one tool, a run that goes five minutes without a single
+  sign of progress is ended with a message saying so, and the queue moves on.
+  The five minutes count silence, not length: a long answer streams
+  continuously, so slow-but-working runs are never cut short.
+
+- **A tool could run twice after the app was killed mid-task.** When a task is
+  interrupted — the app swiped away, the system reclaiming memory — resuming it
+  replays the steps that already finished instead of repeating them, and that
+  guarantee matters most for tools, which have already acted on the world. It
+  held only once the record of the finished step reached storage, and records
+  are written in batches up to half a second apart. A process death inside that
+  window lost the record, and the resumed task called the same tool a second
+  time: for a tool that asks permission you were asked again, but anything set
+  to run without asking simply repeated its effect. A finished tool call is now
+  recorded durably the moment it returns.
+
+- **A tool list that would not stop loading.** A server that accepted the
+  connection and then went quiet left its row spinning on "Connecting…" for as
+  long as the app stayed open. The handshake now gives up after 30 seconds and
+  says what happened.
+
+- **Any tool whose input was not text was unusable.** Every parameter an MCP
+  server declared was passed on to the model as free text, dropping both its
+  real type and its description. Asked for a duration of 300 seconds, the model
+  would faithfully send the *word* "300", and the server rejected the call —
+  so a tool taking a number, a switch, a list or a choice from a fixed set
+  could never be called successfully. Types and descriptions now reach the
+  model as declared.
+
+- **A server could stay stuck on "Connecting…" after you edited it.** Saving a
+  change while its tool list was mid-load — or simply leaving the screen —
+  cancelled the load without resolving the row, which then span indefinitely
+  until refreshed by hand. Cancellation now settles the row honestly: back to
+  connected if a usable tool list is already held, otherwise a plain
+  "Connection attempt was interrupted".
+
+- **A background approval you did not answer within the first minute could
+  never be granted afterwards.** When nobody responds straight away the run
+  parks and waits for you — for up to a day by default. Tapping **Approve** on
+  the notification after that point did nothing useful: the run refused to
+  continue, and in the chat it sat on "generating…" indefinitely, surviving
+  restarts. The cause was bookkeeping: while the request waited, ordinary
+  progress messages from the step doing the work were mistaken for the wait
+  having ended, so the run stopped advertising itself as waiting and no answer
+  could be applied to it any more. Any pipeline that runs another pipeline
+  inside it was affected. Such a run now stays answerable for its whole window,
+  and a run that genuinely cannot be continued is stopped with a reason instead
+  of being left hanging.
+
+- **An unrelated crash could quietly move you off GPU for good.** Before trying
+  a GPU or NPU backend the app leaves a marker, because a missing driver can
+  kill the process outright before any error handling runs; finding that marker
+  on the next start meant the backend was blamed and switched to CPU
+  permanently. But the marker only records that the app died while starting the
+  model — not why. Being swiped away, or reclaimed by the system for memory, or
+  frozen by the device's battery manager leaves exactly the same trace, so a
+  single unrelated kill was enough to cost you GPU acceleration silently and
+  for good. A first unexplained failure now only runs that one session on CPU
+  and leaves your choice untouched; the saved setting changes only if a second
+  start in a row fails the same way. The status line beside the answer also
+  names the backend actually in use — `generating (GPU) · 65 tok` — so a
+  fallback is visible while it is happening rather than discovered later by its
+  slowness.
+
+- **A background run could die the moment it started, right after you closed
+  the app.** Swiping the app away tells Android to reclaim what it can, and the
+  model is unloaded in response — correct when nothing is running, but the
+  unload could not take effect immediately and instead landed a moment later,
+  by which time a trigger-started run had already loaded the model for itself.
+  The run then failed with "LLM Engine not initialized" seconds after firing.
+  An unload now applies only to the model it was actually asked to release, so
+  one that arrives late leaves a newly loaded model alone. Going to the
+  background also no longer interrupts work already under way: a run that is
+  generating keeps the model until it finishes. Genuine memory pressure still
+  frees the model immediately, in-flight generation included — being killed
+  outright is worse than losing one answer.
+
+- **Refreshing an MCP server's tool list could break a tool call in progress —
+  and told the agent the tool did not exist.** Tapping the refresh icon next to
+  a server (or any tool-list fetch that had outlived its five-minute cache)
+  re-established the connection from scratch instead of simply asking for the
+  tools again. If the agent happened to be calling a tool from that server at
+  the same moment, the connection was pulled out from under the call, which
+  then failed as either "tool not found" or a session error — the first of
+  which is actively misleading, since the agent would go on to plan around a
+  capability it still had. Refreshing now re-lists the tools over the existing
+  connection and reconnects only when there is no usable one, when the server's
+  address, credentials or transport changed, or after a failure; and a call in
+  progress can no longer observe a half-replaced connection. Disconnecting also
+  ends the session on the server rather than just dropping the socket, so
+  servers no longer accumulate abandoned sessions — one run of the reference
+  server had collected four.
+
 - **A task the agent scheduled for itself could not be found, let alone
   stopped.** Every scheduled task showed up under **More → Active tasks** as
   the same anonymous "Background Task", so cancelling a specific one was
