@@ -14,6 +14,7 @@ import app.knotwork.android.domain.models.McpServerConfig
 import app.knotwork.android.domain.models.McpTransport
 import app.knotwork.android.domain.repositories.NetworkActivityTracker
 import io.ktor.client.HttpClient
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.sse.SSE
 import io.ktor.http.HttpHeaders
@@ -136,6 +137,21 @@ class KoogMcpClient(private val networkActivityTracker: NetworkActivityTracker? 
                 // HttpClient without juggling `client.config { install(SSE) }` calls.
                 val client = HttpClient {
                     install(SSE)
+                    // Socket floor, deliberately set ABOVE our own call deadline
+                    // ([toolCallTimeoutMs]) so the two never race: the engine Koog
+                    // resolves is OkHttp, whose default read timeout is 10 s, and
+                    // that default — not any decision of ours — was what actually
+                    // ended every MCP call, measured at exactly 10.0 s on the
+                    // reference device. `requestTimeoutMillis` stays unset on
+                    // purpose: setting it alone is what made the call unbounded in
+                    // the reverted first attempt at this fix (F12), because it
+                    // replaces the engine's defaults without applying to the
+                    // SSE-framed response path. The call deadline lives in
+                    // [executeTool]; this only stops the socket undercutting it.
+                    install(HttpTimeout) {
+                        socketTimeoutMillis = toolCallTimeoutMs + SOCKET_TIMEOUT_SLACK_MS
+                        connectTimeoutMillis = connectTimeoutMs
+                    }
                     if (composedHeaders.isNotEmpty()) {
                         defaultRequest {
                             composedHeaders.forEach { (key, value) -> headers.append(key, value) }
@@ -387,6 +403,13 @@ class KoogMcpClient(private val networkActivityTracker: NetworkActivityTracker? 
          * the Tools screen rather than a background tool call.
          */
         internal const val CONNECT_TIMEOUT_MS = 30_000L
+
+        /**
+         * How far the socket read timeout sits above [TOOL_CALL_TIMEOUT_MS], so
+         * a slow-but-alive server is ended by our deadline with its own error
+         * text rather than by a lower-level socket error five seconds earlier.
+         */
+        private const val SOCKET_TIMEOUT_SLACK_MS = 5_000L
 
         /** Divisor for rendering a millisecond deadline as seconds in error text. */
         private const val MILLIS_PER_SECOND = 1_000L

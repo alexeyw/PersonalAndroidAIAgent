@@ -143,6 +143,17 @@ details.
   The five minutes count silence, not length: a long answer streams
   continuously, so slow-but-working runs are never cut short.
 
+- **A tool could run twice after the app was killed mid-task.** When a task is
+  interrupted — the app swiped away, the system reclaiming memory — resuming it
+  replays the steps that already finished instead of repeating them, and that
+  guarantee matters most for tools, which have already acted on the world. It
+  held only once the record of the finished step reached storage, and records
+  are written in batches up to half a second apart. A process death inside that
+  window lost the record, and the resumed task called the same tool a second
+  time: for a tool that asks permission you were asked again, but anything set
+  to run without asking simply repeated its effect. A finished tool call is now
+  recorded durably the moment it returns.
+
 - **A tool list that would not stop loading.** A server that accepted the
   connection and then went quiet left its row spinning on "Connecting…" for as
   long as the app stayed open. The handshake now gives up after 30 seconds and

@@ -887,6 +887,19 @@ class GraphExecutionEngine @Inject constructor(
                             depth = depth,
                         ),
                     )
+                    // A tool call is the one node whose re-execution is not free:
+                    // it acted on the world. The trace is write-buffered (flushed
+                    // on size, on a 500 ms timer, or at suspension points), so a
+                    // process death inside that window used to lose the record of
+                    // a tool that had already run — and the resume then called it
+                    // a second time. Measured on the reference device: killed
+                    // 112 ms after the tool returned, the resumed run re-invoked
+                    // it (second `tools/call` on the wire); killed 1.2 s after, it
+                    // replayed as designed. Flushing here closes the window at the
+                    // cost of one batch insert per tool call.
+                    if (currentNode.type == NodeType.TOOL) {
+                        runTraceRepository.flush()
+                    }
                 }
                 emit(AgentOrchestratorState.PipelineTrace(traceSteps.toList()))
                 // Surface the per-node I/O pair for the Vars tab of the

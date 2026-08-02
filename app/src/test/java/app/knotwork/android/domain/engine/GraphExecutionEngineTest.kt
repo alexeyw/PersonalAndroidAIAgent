@@ -2785,6 +2785,63 @@ class GraphExecutionEngineTest {
         job.cancel()
     }
 
+    /**
+     * A tool call is the one node whose re-execution is not free — it acted on
+     * the world — so its trace record must be durable the moment it lands, not
+     * whenever the write buffer next drains.
+     *
+     * Found on the reference device (phase-40, cell 7b): the process killed
+     * 112 ms after a tool returned lost the buffered record, and the resumed
+     * run invoked the same tool a second time — visible as a second
+     * `tools/call` on the wire. Killed 1.2 s after (past the buffer's 500 ms
+     * timer) the same run replayed the record as designed.
+     */
+    @Test
+    fun `given a completed tool node then its trace record is flushed immediately`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.NeverPrompt)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
+        every { settingsRepository.toolCallTimeoutMs } returns flowOf(5_000L)
+        coEvery { toolRepository.getRisk("safe.tool", any()) } returns ToolRisk.READ_ONLY
+        coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool("safe.tool", "Desc", "{}"))
+        coEvery { toolRepository.executeTool("safe.tool", any(), any()) } returns "tool-result"
+
+        // Call order, not merely call presence: the terminal flush would satisfy
+        // a plain "flush was called" assertion even without the fix.
+        val calls = mutableListOf<String>()
+        coEvery { runTraceRepository.append(any()) } answers {
+            val record = firstArg<RunTraceRecord>()
+            calls += if (record is RunTraceRecord.NodeIo) "append:${record.nodeId}" else "append:console"
+        }
+        coEvery { runTraceRepository.flush() } answers { calls += "flush" }
+
+        val graph = PipelineGraph(
+            id = "g-tool-flush",
+            name = "Tool Flush",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("tool_1", NodeType.TOOL, 0f, 0f, toolName = "safe.tool"),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "tool_1"),
+                ConnectionModel("c2", "tool_1", "output_1"),
+            ),
+        )
+        every { llmEngine.generateResponseStream(any()) } returns
+            flowOf("""{"tool":"safe.tool","arguments":"a=1"}""")
+
+        engine(sessionId, "prompt", graph, "run-tool-flush").toList()
+
+        val recordIndex = calls.indexOf("append:tool_1")
+        assertTrue("the tool node's I/O record never reached the trace: $calls", recordIndex >= 0)
+        assertEquals(
+            "the tool record must be flushed before anything else is written: $calls",
+            "flush",
+            calls.getOrNull(recordIndex + 1),
+        )
+    }
+
     // ─── Checkpoint resume ──────────────────────────────────────────────────
 
     /** Recorded NodeIo snapshot shorthand for the resume tests. */
