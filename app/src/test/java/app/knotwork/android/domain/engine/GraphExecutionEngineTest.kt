@@ -4,6 +4,7 @@ import ai.koog.prompt.Prompt
 import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
 import ai.koog.prompt.llm.LLModel
+import ai.koog.prompt.message.ResponseMetaInfo
 import ai.koog.prompt.streaming.StreamFrame
 import app.knotwork.android.data.engine.KoogClientFactory
 import app.knotwork.android.data.engine.KoogCloudLlmModelResolver
@@ -2837,6 +2838,60 @@ class GraphExecutionEngineTest {
         assertTrue("the tool node's I/O record never reached the trace: $calls", recordIndex >= 0)
         assertEquals(
             "the tool record must be flushed before anything else is written: $calls",
+            "flush",
+            calls.getOrNull(recordIndex + 1),
+        )
+    }
+
+    /**
+     * The same durability rule for a CLOUD node, for a different reason: repeating a
+     * billed API call costs money and rate-limit budget, so its record must survive a
+     * process death in the write buffer's 500 ms window exactly as a tool's does.
+     *
+     * The original rule covered only TOOL, on the reasoning that a repeat elsewhere is
+     * "lost time, not a side effect" — true for on-device nodes, false for a paid one.
+     */
+    @Test
+    fun `given a completed cloud node then its trace record is flushed immediately`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        // A cloud node that cannot reach a provider now fails before writing its I/O
+        // record, so the call has to actually succeed for this test to be about
+        // durability rather than about the failure path. The End frame carries a finish
+        // reason because a stream without one is treated as truncated.
+        val cloudClient: LLMClient = mockk(relaxed = true)
+        coEvery { cloudClient.executeStreaming(any(), any<LLModel>()) } returns flowOf(
+            StreamFrame.TextDelta("cloud answer"),
+            StreamFrame.End(finishReason = "stop", metaInfo = ResponseMetaInfo.Empty),
+        )
+        coEvery { koogClientFactory.createDeepSeekExecutor() } returns cloudClient
+
+        val calls = mutableListOf<String>()
+        coEvery { runTraceRepository.append(any()) } answers {
+            val record = firstArg<RunTraceRecord>()
+            calls += if (record is RunTraceRecord.NodeIo) "append:${record.nodeId}" else "append:console"
+        }
+        coEvery { runTraceRepository.flush() } answers { calls += "flush" }
+
+        val graph = PipelineGraph(
+            id = "g-cloud-flush",
+            name = "Cloud Flush",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("cloud_1", NodeType.CLOUD, 0f, 0f, cloudProvider = "deepseek"),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "cloud_1"),
+                ConnectionModel("c2", "cloud_1", "output_1"),
+            ),
+        )
+
+        engine(sessionId, "prompt", graph, "run-cloud-flush").toList()
+
+        val recordIndex = calls.indexOf("append:cloud_1")
+        assertTrue("the cloud node's I/O record never reached the trace: $calls", recordIndex >= 0)
+        assertEquals(
+            "the cloud record must be flushed before anything else is written: $calls",
             "flush",
             calls.getOrNull(recordIndex + 1),
         )

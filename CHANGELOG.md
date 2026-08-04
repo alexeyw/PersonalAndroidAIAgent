@@ -136,6 +136,13 @@ details.
   and shown as the result. A reply that never reported a completion is now
   treated as the failure it is: the partial text is discarded and the run says
   the response was cut off, so nothing incomplete is presented as final.
+- **A resumed run could pay for the same cloud call twice.** When a run was
+  interrupted, a cloud step that had already completed was supposed to be
+  replayed from its record rather than re-sent. That record was written to a
+  buffer that only reaches storage every half-second, so a process death inside
+  that window lost it — and the resumed run called the provider again, at real
+  cost. The record is now saved the moment a cloud step finishes, as was already
+  done for tool calls.
 - **A cloud provider that stopped responding could hold a run for 15 minutes.**
   Cloud requests inherited a 900-second network deadline that nothing in the app
   had chosen. Cloud calls now allow 60 seconds of *silence* from the provider
