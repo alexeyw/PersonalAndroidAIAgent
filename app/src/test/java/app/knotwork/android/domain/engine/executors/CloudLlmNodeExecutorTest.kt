@@ -4,9 +4,11 @@ import ai.koog.prompt.Prompt
 import ai.koog.prompt.executor.clients.LLMClient
 import ai.koog.prompt.executor.clients.anthropic.AnthropicModels
 import ai.koog.prompt.llm.LLModel
+import ai.koog.prompt.message.ResponseMetaInfo
 import ai.koog.prompt.streaming.StreamFrame
 import app.knotwork.android.domain.engine.CloudLlmClientFactory
 import app.knotwork.android.domain.engine.CloudLlmModelResolver
+import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
@@ -26,6 +28,7 @@ import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -54,6 +57,7 @@ class CloudLlmNodeExecutorTest {
         networkActivityTracker = mockk(relaxed = true)
 
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
+        every { settingsRepository.blockNetworkFromLocalModel } returns flowOf(false)
         every { apiKeyRepository.getAnthropicKey() } returns flowOf("anthropic-key")
         every { apiKeyRepository.getOpenAIKey() } returns flowOf(null)
         every { apiKeyRepository.getGoogleKey() } returns flowOf(null)
@@ -113,16 +117,115 @@ class CloudLlmNodeExecutorTest {
     }
 
     @Test
-    fun `execute returns error result when client factory returns null`() = runTest {
+    fun `given no credentials when execute then the node fails instead of answering`() = runTest {
+        // Regression guard: an unreachable provider must terminate the node through
+        // `error`, never through `outputText`. The previous version of this test asserted
+        // the opposite — it pinned the defect in place, because a result whose outputText
+        // reads "Error: anthropic not configured" and whose error is null is a *success*
+        // to GraphExecutionEngine, which then forwarded that sentence to the next node.
         val node = NodeModel("1", NodeType.CLOUD, 0f, 0f, cloudProvider = "anthropic")
         coEvery { clientFactory.createClient(CloudProvider.ANTHROPIC, any()) } returns null
 
         val outputs = executor.execute(node, "input", "s1", "Q").toList()
 
-        // No exception is thrown — the executor surfaces a Result with the configured
-        // outputText so the engine can attribute the failure to this node and continue.
         val result = outputs.filterIsInstance<NodeOutput.Result>().single().result
-        assertTrue(result.outputText!!.contains("not configured"))
+        assertNull("a failed cloud call must not produce node output", result.outputText)
+        assertTrue(result.error!!.contains("no API key"))
+        assertTrue(
+            "the live UI needs the same failure",
+            outputs.filterIsInstance<NodeOutput.State>()
+                .any { it.state is AgentOrchestratorState.Error },
+        )
+    }
+
+    @Test
+    fun `given local-only mode when execute then the error names the restriction not a missing key`() = runTest {
+        // The factory returns null for both "blocked by policy" and "no credentials";
+        // reporting the latter when the former is true sends the user to the wrong screen.
+        val node = NodeModel("1", NodeType.CLOUD, 0f, 0f, cloudProvider = "anthropic")
+        every { settingsRepository.blockNetworkFromLocalModel } returns flowOf(true)
+        coEvery { clientFactory.createClient(CloudProvider.ANTHROPIC, any()) } returns null
+
+        val outputs = executor.execute(node, "input", "s1", "Q").toList()
+
+        val error = outputs.filterIsInstance<NodeOutput.Result>().single().result.error!!
+        assertTrue("expected the restriction to be named, got: $error", error.contains("Block network"))
+        assertFalse("must not blame a missing key", error.contains("no API key"))
+    }
+
+    @Test
+    fun `given no provider selected and no keys when execute then the node fails`() = runTest {
+        val node = NodeModel("1", NodeType.CLOUD, 0f, 0f, cloudProvider = CloudProvider.AUTO_KEY)
+        every { apiKeyRepository.getAnthropicKey() } returns flowOf(null)
+
+        val outputs = executor.execute(node, "input", "s1", "Q").toList()
+
+        val result = outputs.filterIsInstance<NodeOutput.Result>().single().result
+        assertNull(result.outputText)
+        assertTrue(result.error!!.contains("No cloud provider is configured"))
+    }
+
+    @Test
+    fun `given a stream that ends without a finish reason then the answer is not passed off as complete`() =
+        runTest {
+            // Measured shape of a dropped connection on the OpenAI-compatible clients: the
+            // frames are identical to a healthy stream except that End carries no finish
+            // reason, and no exception is raised. Handing that text on would be exactly the
+            // "partial result presented as a full one" the cloud path must not produce.
+            val node = NodeModel("1", NodeType.CLOUD, 0f, 0f, cloudProvider = "deepseek")
+            val client: LLMClient = mockk(relaxed = true)
+            coEvery { client.executeStreaming(any(), any<LLModel>()) } returns flowOf(
+                StreamFrame.TextDelta("Half an "),
+                StreamFrame.TextDelta("answer"),
+                StreamFrame.End(finishReason = null, metaInfo = ResponseMetaInfo.Empty),
+            )
+            coEvery { clientFactory.createClient(CloudProvider.DEEPSEEK, any()) } returns client
+            coEvery { modelResolver.resolveModel(CloudProvider.DEEPSEEK) } returns AnthropicModels.Sonnet_4_5
+
+            val result = executor.execute(node, "input", "s1", "Q").toList()
+                .filterIsInstance<NodeOutput.Result>().single().result
+
+            assertNull("the truncated text must not become node output", result.outputText)
+            assertTrue(result.error!!.contains("cut off"))
+        }
+
+    @Test
+    fun `given a stream that ends with a finish reason then the answer is delivered`() = runTest {
+        val node = NodeModel("1", NodeType.CLOUD, 0f, 0f, cloudProvider = "deepseek")
+        val client: LLMClient = mockk(relaxed = true)
+        coEvery { client.executeStreaming(any(), any<LLModel>()) } returns flowOf(
+            StreamFrame.TextDelta("A whole "),
+            StreamFrame.TextDelta("answer"),
+            StreamFrame.End(finishReason = "stop", metaInfo = ResponseMetaInfo.Empty),
+        )
+        coEvery { clientFactory.createClient(CloudProvider.DEEPSEEK, any()) } returns client
+        coEvery { modelResolver.resolveModel(CloudProvider.DEEPSEEK) } returns AnthropicModels.Sonnet_4_5
+
+        val result = executor.execute(node, "input", "s1", "Q").toList()
+            .filterIsInstance<NodeOutput.Result>().single().result
+
+        assertEquals("A whole answer", result.outputText)
+        assertNull(result.error)
+    }
+
+    @Test
+    fun `given Ollama which never reports a finish reason then a healthy answer is not rejected`() = runTest {
+        // The false positive that would break working setups: Koog's Ollama client emits no
+        // finish reason at all, so absence must not be read as truncation there.
+        val node = NodeModel("1", NodeType.CLOUD, 0f, 0f, cloudProvider = "ollama")
+        val client: LLMClient = mockk(relaxed = true)
+        coEvery { client.executeStreaming(any(), any<LLModel>()) } returns flowOf(
+            StreamFrame.TextDelta("Local answer"),
+            StreamFrame.End(finishReason = null, metaInfo = ResponseMetaInfo.Empty),
+        )
+        coEvery { clientFactory.createClient(CloudProvider.OLLAMA, any()) } returns client
+        coEvery { modelResolver.resolveModel(CloudProvider.OLLAMA) } returns AnthropicModels.Sonnet_4_5
+
+        val result = executor.execute(node, "input", "s1", "Q").toList()
+            .filterIsInstance<NodeOutput.Result>().single().result
+
+        assertEquals("Local answer", result.outputText)
+        assertNull(result.error)
     }
 
     @Test
