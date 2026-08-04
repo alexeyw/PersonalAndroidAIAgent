@@ -166,28 +166,27 @@ class CloudLlmNodeExecutorTest {
     }
 
     @Test
-    fun `given a stream that ends without a finish reason then the answer is not passed off as complete`() =
-        runTest {
-            // Measured shape of a dropped connection on the OpenAI-compatible clients: the
-            // frames are identical to a healthy stream except that End carries no finish
-            // reason, and no exception is raised. Handing that text on would be exactly the
-            // "partial result presented as a full one" the cloud path must not produce.
-            val node = NodeModel("1", NodeType.CLOUD, 0f, 0f, cloudProvider = "deepseek")
-            val client: LLMClient = mockk(relaxed = true)
-            coEvery { client.executeStreaming(any(), any<LLModel>()) } returns flowOf(
-                StreamFrame.TextDelta("Half an "),
-                StreamFrame.TextDelta("answer"),
-                StreamFrame.End(finishReason = null, metaInfo = ResponseMetaInfo.Empty),
-            )
-            coEvery { clientFactory.createClient(CloudProvider.DEEPSEEK, any()) } returns client
-            coEvery { modelResolver.resolveModel(CloudProvider.DEEPSEEK) } returns AnthropicModels.Sonnet_4_5
+    fun `given a stream that ends without a finish reason then the answer is not passed off as complete`() = runTest {
+        // Measured shape of a dropped connection on the OpenAI-compatible clients: the
+        // frames are identical to a healthy stream except that End carries no finish
+        // reason, and no exception is raised. Handing that text on would be exactly the
+        // "partial result presented as a full one" the cloud path must not produce.
+        val node = NodeModel("1", NodeType.CLOUD, 0f, 0f, cloudProvider = "deepseek")
+        val client: LLMClient = mockk(relaxed = true)
+        coEvery { client.executeStreaming(any(), any<LLModel>()) } returns flowOf(
+            StreamFrame.TextDelta("Half an "),
+            StreamFrame.TextDelta("answer"),
+            StreamFrame.End(finishReason = null, metaInfo = ResponseMetaInfo.Empty),
+        )
+        coEvery { clientFactory.createClient(CloudProvider.DEEPSEEK, any()) } returns client
+        coEvery { modelResolver.resolveModel(CloudProvider.DEEPSEEK) } returns AnthropicModels.Sonnet_4_5
 
-            val result = executor.execute(node, "input", "s1", "Q").toList()
-                .filterIsInstance<NodeOutput.Result>().single().result
+        val result = executor.execute(node, "input", "s1", "Q").toList()
+            .filterIsInstance<NodeOutput.Result>().single().result
 
-            assertNull("the truncated text must not become node output", result.outputText)
-            assertTrue(result.error!!.contains("cut off"))
-        }
+        assertNull("the truncated text must not become node output", result.outputText)
+        assertTrue(result.error!!.contains("cut off"))
+    }
 
     @Test
     fun `given a stream that ends with a finish reason then the answer is delivered`() = runTest {
