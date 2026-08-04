@@ -7,7 +7,7 @@ This file maps the contents of the main application package.
   - `logging/` - Application-level Timber sinks.
     - `CrashlyticsTimberTree.kt` - Timber tree forwarding `Log.WARN` / `Log.ERROR` records to the flavour-specific `CrashReportingRepository` (Firebase in `full`, no-op in `foss`). Planted only after the user opts in (release builds).
   - `engine/` - Core LLM and inference engines.
-    - `KoogClientFactory.kt` - Factory for Koog clients; data-layer impl of `domain/engine/CloudLlmClientFactory`. Every constructed client is retry-wrapped via `CloudRetryWrapper`; `createClient` threads a `CloudRetryListener` for console observability, the per-provider helpers wrap with no observation.
+    - `KoogClientFactory.kt` - Factory for Koog clients; data-layer impl of `domain/engine/CloudLlmClientFactory`. Every constructed client is retry-wrapped via `CloudRetryWrapper` and carries an explicit `ConnectionTimeoutConfig` (60 s socket / 30 s connect / 900 s request) — the per-read socket value bounds provider silence rather than answer length. `createClient` threads a `CloudRetryListener` for console observability, the per-provider helpers wrap with no observation.
     - `KoogStructuredInferenceClientFactory.kt` - Data-layer impl of `domain/engine/structured/CloudStructuredInferenceClientFactory`; builds a retry-wrapped Koog client, detects native JSON via `LLModel.capabilities`, and exposes a `StructuredInferenceClient` that collapses the streamed response for the gate.
     - `retry/` - Cloud retry wrapping (data layer).
       - `CloudRetryWrapper.kt` - `@Singleton` that decorates a raw Koog `LLMClient` with Koog's `RetryingLLMClient` using the settings-driven policy (attempts + base delay); returns the raw client unchanged when retries are disabled (`maxAttempts == 1`).
@@ -212,6 +212,7 @@ This file maps the contents of the main application package.
     - `SettingsDefaults.kt` - Default values for every user-tunable preference (sampling params, timeouts, pipeline-step bounds, Ollama context window). Single source of truth shared by `SettingsManager`, `SettingsViewModel`, and the visual orchestrator.
     - `TimeAndIdConstants.kt` - Cross-module numeric constants for time-unit conversion (`MS_PER_SECOND`, `MS_PER_MINUTE`) and the notification-id partition range shared by approval-publish/receive paths.
   - `engine/` - Engine interfaces and abstractions.
+    - `CloudErrorSanitizer.kt` - Strips credentials (secret-named query parameters, `Bearer` tokens) out of cloud-provider error text before it reaches the console, the run trace or logcat. Needed because providers that authenticate by query parameter quote the failing URL — key included — in ordinary transport errors.
     - `CloudLlmClientFactory.kt` - Domain interface for constructing cloud LLM clients (data-layer impl: `KoogClientFactory`).
     - `CloudLlmModelResolver.kt` - Domain interface for resolving cloud-LLM model objects (data-layer impl: `KoogCloudLlmModelResolver`).
     - `DefaultPipelineFactory.kt` - Factory for default pipelines.
