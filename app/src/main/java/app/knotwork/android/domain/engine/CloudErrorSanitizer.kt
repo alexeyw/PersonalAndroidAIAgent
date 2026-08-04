@@ -52,5 +52,29 @@ object CloudErrorSanitizer {
         return raw
             .replace(SECRET_QUERY_PARAM) { match -> "${match.groupValues[1]}=$MASK" }
             .replace(BEARER_TOKEN, "Bearer $MASK")
+            .let(::collapseRepeatedLines)
     }
+
+    /**
+     * Drops a line that merely repeats the one before it.
+     *
+     * Koog wraps a client failure in `LLMClientException`, which prefixes
+     * `"Error from client: <name>"` to a message that already carries the same prefix
+     * from the inner exception. On the device that reaches the user as a literal
+     * duplicate:
+     *
+     * ```
+     * Error from client: GoogleLLMClient
+     * Error from client: GoogleLLMClient
+     * Message: Unable to resolve host "generativelanguage.googleapis.com"
+     * ```
+     *
+     * The repetition carries no information and costs a line in an error card the user
+     * is meant to read, so it is collapsed here rather than shown twice. Only *adjacent*
+     * duplicates are removed — two identical lines that are genuinely apart in a longer
+     * provider message are left alone.
+     */
+    private fun collapseRepeatedLines(text: String): String = text.lines()
+        .filterIndexed { index, line -> index == 0 || line != text.lines()[index - 1] }
+        .joinToString("\n")
 }

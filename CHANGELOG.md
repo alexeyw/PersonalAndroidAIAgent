@@ -157,6 +157,10 @@ details.
   Relatedly, when cloud access was switched off by the **Block network from
   local model** restriction, the message blamed a missing API key and sent you
   to the wrong screen; it now names the restriction that is actually in force.
+- **Cloud error messages opened with the same line twice.** A failed cloud call
+  showed its client name on two consecutive lines before the actual diagnosis,
+  costing a line in a card the user is meant to read quickly. The repeat is now
+  collapsed.
 - **A provider error could carry your API key into the logs.** One provider
   authenticates by putting the key in the request address, so an ordinary
   network error arrived with the key inside its text — and that text reached the

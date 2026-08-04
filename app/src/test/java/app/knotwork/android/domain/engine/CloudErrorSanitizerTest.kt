@@ -54,6 +54,35 @@ class CloudErrorSanitizerTest {
     }
 
     @Test
+    fun `given Koog's doubled client prefix when sanitized then the repeat is dropped`() {
+        // Verbatim from the reference device (airplane mode, Google): Koog's wrapper
+        // prefixes "Error from client: <name>" to a message that already starts with it,
+        // so the user's error card opened with the same line twice.
+        val raw = "Error from client: GoogleLLMClient\n" +
+            "Error from client: GoogleLLMClient\n" +
+            "Message: Unable to resolve host \"generativelanguage.googleapis.com\": " +
+            "No address associated with hostname"
+
+        val sanitized = CloudErrorSanitizer.sanitize(raw)
+
+        assertEquals(
+            "Error from client: GoogleLLMClient\n" +
+                "Message: Unable to resolve host \"generativelanguage.googleapis.com\": " +
+                "No address associated with hostname",
+            sanitized,
+        )
+    }
+
+    @Test
+    fun `given identical lines that are not adjacent when sanitized then both survive`() {
+        // Only the adjacent repeat is noise; a line that recurs later in a longer
+        // provider message may be carrying real structure.
+        val raw = "attempt failed\nreason: timeout\nattempt failed"
+
+        assertEquals(raw, CloudErrorSanitizer.sanitize(raw))
+    }
+
+    @Test
     fun `given a blank or null message when sanitized then a readable fallback is returned`() {
         assertEquals("Unknown error", CloudErrorSanitizer.sanitize(null))
         assertEquals("Unknown error", CloudErrorSanitizer.sanitize("   "))
