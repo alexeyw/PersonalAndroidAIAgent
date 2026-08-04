@@ -1,6 +1,7 @@
 package app.knotwork.android.data.engine
 
 import ai.koog.prompt.executor.clients.ConnectionTimeoutConfig
+import ai.koog.prompt.executor.clients.retry.RetryConfig
 import app.knotwork.android.data.engine.retry.CloudRetryWrapper
 import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.repositories.ApiKeyRepository
@@ -10,6 +11,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -95,6 +97,24 @@ class KoogClientFactoryTimeoutTest {
             )
             assertEquals("$provider connect budget", 30_000L, timeouts.connectTimeoutMillis)
         }
+    }
+
+    @Test
+    fun `given a socket timeout when matched against the retry policy then it is not retried`() {
+        // What the deadline actually costs the user depends on whether the retry policy
+        // treats it as transient: with the configured 3 attempts, a retried socket timeout
+        // would mean three full 60 s waits instead of one. Koog's default patterns match
+        // several timeout phrasings, so this is asserted against the real message the
+        // engine produces rather than assumed.
+        val socketTimeout = "Socket timeout has expired " +
+            "[url=https://api.deepseek.com/chat/completions, socket_timeout=60000] ms"
+
+        val retryable = RetryConfig.DEFAULT_PATTERNS.any { it.matches(socketTimeout) }
+
+        assertFalse(
+            "a socket timeout must fail once, not three times over three minutes",
+            retryable,
+        )
     }
 
     @Test

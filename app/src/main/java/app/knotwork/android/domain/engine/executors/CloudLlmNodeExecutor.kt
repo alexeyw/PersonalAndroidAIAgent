@@ -178,9 +178,13 @@ class CloudLlmNodeExecutor @Inject constructor(
             // the message rather than the throwable to Timber keeps the key out of the
             // logged stack trace too.
             val safeMessage = CloudErrorSanitizer.sanitize(e.message)
-            Timber.tag(
-                "PipelineDebug",
-            ).e("[NODE_ERR] type=${node.type.name} id=${node.id} CloudLlmNodeExecutor generation: $safeMessage")
+            // The exception type is kept because it is the fastest triage signal and
+            // carries no credential; only the throwable itself is withheld, since
+            // logging it would print the unscrubbed message inside the stack trace.
+            Timber.tag("PipelineDebug").e(
+                "[NODE_ERR] type=${node.type.name} id=${node.id} " +
+                    "CloudLlmNodeExecutor generation failed with ${e::class.simpleName}: $safeMessage",
+            )
             emitRetries(retryCollector)
             emit(NodeOutput.State(AgentOrchestratorState.Error(safeMessage)))
             emit(NodeOutput.Result(NodeExecutionResult(error = safeMessage)))
