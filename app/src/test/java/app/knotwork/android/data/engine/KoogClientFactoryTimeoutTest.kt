@@ -118,6 +118,32 @@ class KoogClientFactoryTimeoutTest {
     }
 
     @Test
+    fun `given a rejected API key when matched against the retry policy then it is not retried`() {
+        // Verbatim from the reference device (invalid Google key). Retrying an auth
+        // failure spends the whole attempt budget to be told "no" three times, and
+        // delays the one message that tells the user what to fix. Koog's patterns match
+        // on message text, and a provider's error body is long and quotes numbers, so
+        // "400 is not in the retryable list" is asserted rather than assumed.
+        val invalidKey = """
+            Error from client: GoogleLLMClient
+            Message: Expected status code 200 but was 400
+            Status code: 400
+            Error body:
+            {
+              "error": {
+                "code": 400,
+                "message": "API key not valid. Please pass a valid API key.",
+                "status": "INVALID_ARGUMENT"
+              }
+            }
+        """.trimIndent()
+
+        val retryable = RetryConfig.DEFAULT_PATTERNS.any { it.matches(invalidKey) }
+
+        assertFalse("an invalid key must be reported at once, not retried", retryable)
+    }
+
+    @Test
     fun `given the socket deadline when compared to the request deadline then silence is bounded first`() = runTest {
         // The semantic that matters: a long healthy stream keeps resetting the per-read
         // socket timeout, so it must be the tighter of the two. If the request timeout were
