@@ -47,12 +47,41 @@ object CloudErrorSanitizer {
      * @param message Raw provider/transport error text, possibly `null`.
      * @return Text safe to surface to the user and to persist, never `null`.
      */
-    fun sanitize(message: String?): String {
-        val raw = message?.takeIf { it.isNotBlank() } ?: return UNKNOWN
+    fun sanitize(message: String?, causeName: String? = null): String {
+        val raw = message?.takeIf { it.isNotBlank() } ?: return causeName ?: UNKNOWN
         return raw
             .replace(SECRET_QUERY_PARAM) { match -> "${match.groupValues[1]}=$MASK" }
             .replace(BEARER_TOKEN, "Bearer $MASK")
             .let(::collapseRepeatedLines)
+            .let { text -> replaceDanglingNull(text, causeName) }
+    }
+
+    /**
+     * Replaces a message that trails off into the literal word `null`.
+     *
+     * A transport failure whose own exception carries no message gets interpolated by
+     * the client library into its wrapper text, and the user is shown the result
+     * verbatim. Measured on the reference device when a provider dropped the connection
+     * mid-answer: the entire error card read
+     *
+     * ```
+     * Error from client: OllamaClient
+     * Message: Exception during streaming: null
+     * ```
+     *
+     * The run failed correctly — but "null" tells the reader nothing at all, which is
+     * the same failure of the "no silent degradation" contract as a wrong message would
+     * be. The exception type is substituted instead: it is short, carries no credential,
+     * and at least names the kind of failure.
+     *
+     * Only a **trailing** `null` is treated this way. A provider's JSON error body may
+     * legitimately contain `null` values (`"finish_reason": null`) and must survive.
+     */
+    private fun replaceDanglingNull(text: String, causeName: String?): String {
+        val trimmed = text.trimEnd()
+        if (trimmed != "null" && !trimmed.endsWith(": null")) return text
+        val replacement = causeName ?: UNKNOWN
+        return if (trimmed == "null") replacement else trimmed.removeSuffix("null") + replacement
     }
 
     /**

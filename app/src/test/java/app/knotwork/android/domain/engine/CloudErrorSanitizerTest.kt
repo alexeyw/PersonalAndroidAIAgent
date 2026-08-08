@@ -83,6 +83,28 @@ class CloudErrorSanitizerTest {
     }
 
     @Test
+    fun `given a message trailing off into null when sanitized then the cause type replaces it`() {
+        // Verbatim from the reference device: the provider dropped the connection
+        // mid-answer, the underlying exception had no message, and the whole error card
+        // read "Exception during streaming: null".
+        val raw = "Error from client: OllamaClient\nMessage: Exception during streaming: null"
+
+        val sanitized = CloudErrorSanitizer.sanitize(raw, causeName = "EOFException")
+
+        assertFalse("the reader must not be shown the word null", sanitized.endsWith("null"))
+        assertTrue(sanitized.endsWith("Exception during streaming: EOFException"))
+    }
+
+    @Test
+    fun `given a JSON body containing null values when sanitized then they survive`() {
+        // The counter-case: only a *trailing* null is noise. A provider's error body may
+        // legitimately carry null fields, and rewriting those would corrupt the payload.
+        val raw = """{"error":{"code":400,"finish_reason":null,"message":"bad request"}}"""
+
+        assertEquals(raw, CloudErrorSanitizer.sanitize(raw, causeName = "EOFException"))
+    }
+
+    @Test
     fun `given a blank or null message when sanitized then a readable fallback is returned`() {
         assertEquals("Unknown error", CloudErrorSanitizer.sanitize(null))
         assertEquals("Unknown error", CloudErrorSanitizer.sanitize("   "))

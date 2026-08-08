@@ -164,6 +164,11 @@ details.
   and keeps naming the real device backend for on-device ones, which is what
   makes a silent fallback to CPU visible. The label also lost a redundant word
   so it fits on one line.
+- **A dropped cloud connection could report itself as the word "null".** When the
+  provider cut the connection mid-answer, the underlying failure carried no
+  message of its own and the error card ended up reading *"Exception during
+  streaming: null"* — a correct failure with an unreadable reason. The kind of
+  failure is now named instead.
 - **Cloud error messages opened with the same line twice.** A failed cloud call
   showed its client name on two consecutive lines before the actual diagnosis,
   costing a line in a card the user is meant to read quickly. The repeat is now
