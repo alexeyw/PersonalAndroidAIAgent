@@ -157,6 +157,13 @@ details.
   Relatedly, when cloud access was switched off by the **Block network from
   local model** restriction, the message blamed a missing API key and sent you
   to the wrong screen; it now names the restriction that is actually in force.
+- **The status line claimed your device was generating an answer the cloud was
+  producing.** While a Cloud step streamed, the pill still named the on-device
+  backend (`gpu` / `cpu`) — the one place a local-first app must not be vague
+  about where a prompt is being processed. It now reads `cloud` for cloud steps
+  and keeps naming the real device backend for on-device ones, which is what
+  makes a silent fallback to CPU visible. The label also lost a redundant word
+  so it fits on one line.
 - **Cloud error messages opened with the same line twice.** A failed cloud call
   showed its client name on two consecutive lines before the actual diagnosis,
   costing a line in a card the user is meant to read quickly. The repeat is now
