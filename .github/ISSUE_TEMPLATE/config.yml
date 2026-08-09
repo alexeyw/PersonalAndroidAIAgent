@@ -1,7 +1,7 @@
 blank_issues_enabled: false
 contact_links:
   - name: Report a security vulnerability
-    url: https://github.com/alexeyw/PersonalAndroidAIAgent/security/advisories/new
+    url: https://github.com/alexeyw/knotwork/security/advisories/new
     about: |
       Please report suspected vulnerabilities privately through GitHub Security
       Advisories. See SECURITY.md for the threat model and what to include in a
@@ -9,7 +9,7 @@ contact_links:
   # Uncomment the block below once GitHub Discussions are enabled for the
   # repository (Settings → Features → Discussions).
   # - name: Questions and discussions
-  #   url: https://github.com/alexeyw/PersonalAndroidAIAgent/discussions
+  #   url: https://github.com/alexeyw/knotwork/discussions
   #   about: |
   #     Use Discussions for open-ended questions, design proposals, and
   #     general feedback that does not fit a bug report or feature request.

@@ -334,8 +334,9 @@ If you want a third-party app to be able to call your tool through the
 system [`AppFunctionManager`](https://developer.android.com/reference/android/app/appfunctions/AppFunctionManager),
 add an `@AppFunction`-annotated wrapper next to the existing
 [`SearchAppFunction`](../app/src/main/java/app/knotwork/android/data/tools/local/appfunctions/SearchAppFunction.kt).
-The library's
-[`PlatformAppFunctionService`](https://developer.android.com/reference/androidx/appfunctions/service/PlatformAppFunctionService)
+The library's `PlatformAppFunctionService` (from
+[`androidx.appfunctions`](https://developer.android.com/reference/androidx/appfunctions/package-summary),
+still alpha — the service class itself has no published reference page yet)
 is auto-merged from `appfunctions-service` and dispatches incoming
 requests through KSP-generated invokers — you do **not** subclass
 `AppFunctionService` or write a manual router.

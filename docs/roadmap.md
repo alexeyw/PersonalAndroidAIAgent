@@ -8,7 +8,7 @@ lands — if something here has already shipped, check
 [CHANGELOG.md](../CHANGELOG.md) for the authoritative record.
 
 Concrete, actionable work items live in the
-[issue tracker](https://github.com/alexeyw/PersonalAndroidAIAgent/issues);
+[issue tracker](https://github.com/alexeyw/knotwork/issues);
 this document provides the connective tissue between them. GitHub
 Milestones may be introduced later to group issues per release once the
 release cadence settles.
@@ -129,9 +129,9 @@ a good area for first-time contributors.
 ## How to get involved
 
 - Issues labelled
-  [`good first issue`](https://github.com/alexeyw/PersonalAndroidAIAgent/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+  [`good first issue`](https://github.com/alexeyw/knotwork/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
   are scoped to be approachable without deep knowledge of the codebase;
-  [`help wanted`](https://github.com/alexeyw/PersonalAndroidAIAgent/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22)
+  [`help wanted`](https://github.com/alexeyw/knotwork/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22)
   marks items where outside contributions are especially welcome.
 - [CONTRIBUTING.md](../CONTRIBUTING.md) covers dev setup, the branch
   model, and the PR checklist.
@@ -139,7 +139,7 @@ a good area for first-time contributors.
   cheapest high-value contributions: new node types, tools, cloud
   providers, and prompt variables.
 - For new capabilities, open a
-  [feature request](https://github.com/alexeyw/PersonalAndroidAIAgent/issues/new/choose)
+  [feature request](https://github.com/alexeyw/knotwork/issues/new/choose)
   first — many ideas fit an existing extension point and can land without
   core changes.
 

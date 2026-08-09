@@ -894,7 +894,9 @@ location and SMS triggers are intentionally deferred.
 A **pipeline** is the recipe the agent follows when it processes a
 message. It is a graph of typed nodes (for example, a local-LLM call,
 a cloud-LLM call, a tool invocation, an output formatter) connected
-by arrows that describe the flow of data.
+by arrows that describe the flow of data. If you come from Tasker, n8n,
+or Zapier, this is the thing those tools call a *workflow* — the app
+says "pipeline" everywhere, including in the menus.
 
 You do not need to design a pipeline yourself — the app ships with a
 sensible default — but the orchestrator lets you tweak how the agent
@@ -1288,6 +1290,31 @@ dangling references. A **bundle** solves this: it packs the pipeline
 
 Bundles carry pipelines only — not triggers, tool/MCP settings, prompt
 presets, or chat history. Those stay on the device they were set up on.
+
+### Sharing pipeline files: what compatibility you can count on
+
+Every exported file carries a version stamp — `schemaVersion` for a
+pipeline or preset, `bundleVersion` for a bundle. Before version 1.0 that
+stamp is a **marker, not a promise**: the format may change without a
+major bump, and no import-time migration is provided.
+
+What that means when you hand a file to someone else, or open your own
+file in a later build:
+
+- **A stamp mismatch does not block the import.** Both the app and the
+  browser editor warn you that the file came from a different version
+  and let you continue.
+- **Continuing is a best-effort import.** The graph loads, but any field
+  the importing build does not recognise is dropped — the pipeline can
+  come back with part of its node configuration missing, and it will not
+  tell you which part.
+- **So keep the original file.** Re-exporting after a lossy import
+  overwrites the only complete copy you had.
+
+From 1.0 onwards the format is a semantic-versioning contract: a breaking
+change means a major `schemaVersion` and a migration applied on import.
+Until then, treat shared pipelines the way you would treat a config file
+from a pre-release tool.
 
 ---
 
