@@ -201,6 +201,21 @@
     <string name="settings_usage_active_days_first">First</string>
     <string name="settings_usage_active_days_last">Last</string>
     <string name="settings_usage_active_days_none">—</string>
+    <string name="settings_usage_retention_this_week">Active days</string>
+    <string name="settings_usage_retention_previous_week">Week before</string>
+    <string name="settings_usage_retention_pipelines">Pipelines used</string>
+    <string name="settings_usage_retention_streak">Current streak</string>
+    <string name="settings_usage_retention_returns">Returns after a break</string>
+    <string name="settings_usage_retention_longest_break">Longest break</string>
+    <string name="settings_usage_retention_first_week">First week after install</string>
+    <!-- Active days out of the window length, e.g. "4 / 7". -->
+    <string name="settings_usage_retention_out_of">%1$d / %2$d</string>
+    <string name="settings_usage_retention_not_yet">—</string>
+    <!-- Day counts that are not out of the window (a streak or a break can exceed it). -->
+    <plurals name="settings_usage_retention_day_count">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
     <string name="settings_usage_onboarding_total">Time to first value</string>
     <string name="settings_usage_onboarding_download">Model download</string>
     <string name="settings_usage_onboarding_product">Excluding model download</string>

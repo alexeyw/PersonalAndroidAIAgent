@@ -620,4 +620,34 @@ class AppDatabaseMigrationHelperTest {
             }
         }
     }
+
+    @Test
+    fun migrate56to57_addsPipelineDaySetPreservingExistingUsageCounters() {
+        helper.createDatabase(TEST_DB, 56).use { db ->
+            db.execSQL("INSERT INTO usage_counter(category, counterKey, count) VALUES('pipeline_run', 'pipe-1', 4)")
+            db.execSQL("INSERT INTO usage_active_day(day) VALUES('2026-06-25')")
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 57, true, AppDatabase.MIGRATION_56_57).use { db ->
+            db.query("SELECT count FROM usage_counter WHERE counterKey = 'pipe-1'").use { c ->
+                assertTrue("seeded counter must survive the migration", c.moveToFirst())
+                assertEquals(4, c.getInt(0))
+            }
+            // The historical counters carry no dates, so the new set starts
+            // empty rather than being back-filled from invented days.
+            db.query("SELECT COUNT(*) FROM usage_pipeline_day").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals("upgraded install must start with no per-day activity", 0, c.getInt(0))
+            }
+
+            db.execSQL("INSERT INTO usage_pipeline_day(day, pipelineId) VALUES('2026-06-25', 'pipe-1')")
+            // The composite primary key is what makes the table a set: a second
+            // run of the same pipeline that day must not add a row.
+            db.execSQL("INSERT OR IGNORE INTO usage_pipeline_day(day, pipelineId) VALUES('2026-06-25', 'pipe-1')")
+            db.query("SELECT COUNT(*) FROM usage_pipeline_day").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals(1, c.getInt(0))
+            }
+        }
+    }
 }

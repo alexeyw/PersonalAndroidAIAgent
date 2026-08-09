@@ -15,6 +15,25 @@ details.
 
 ### Added
 
+- **Usage statistics now show whether the app actually stuck.** The on-device
+  dashboard gained a **This week** section: active days out of the last seven
+  with the previous week beside them for comparison, how many distinct pipelines
+  you ran in that window, your current run of consecutive days, how often you
+  came back after a break of three days or more, the longest such break, and how
+  many days you used the app in your first week after installing. Everything is
+  derived from counts the app already kept, plus one addition — which pipelines
+  were used on which day — so the week can be told apart from the all-time
+  totals. Nothing leaves the device: the same build-time guard that forbids any
+  network call on this path covers the new code as well. The first-week figure
+  stays blank until that week has actually elapsed rather than showing a number
+  a two-day-old install has not earned, and the JSON export carries the window
+  definition next to the figures so a saved snapshot still explains itself
+  months later. Your day-by-day history was already being recorded, so the
+  day-based figures are meaningful immediately after updating; **Pipelines
+  used** is the one that starts at zero, because which pipeline ran on which day
+  was never stored before and inventing that history would be worse than a week
+  of honest zeros.
+
 - **Archive chats instead of deleting them.** A chat list that only grows
   eventually stops being useful, and until now the only way to shorten it was to
   delete a conversation for good. Chats can now be archived: swipe a row in the

@@ -4,6 +4,7 @@ import app.knotwork.android.domain.models.OnboardingJourney
 import app.knotwork.android.domain.models.OnboardingMilestone
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.PipelineRunTally
+import app.knotwork.android.domain.models.UsageRetention
 import app.knotwork.android.domain.models.UsageTelemetrySummary
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
@@ -49,6 +50,15 @@ class BuildUsageTelemetryExportUseCaseTest {
             ),
             scenarioPipelineId = "pipe-1",
         ),
+        retention = UsageRetention(
+            activeDaysInWindow = 4,
+            activeDaysInPreviousWindow = 2,
+            livePipelineIds = listOf("pipe-1", "pipe-2"),
+            currentStreakDays = 3,
+            returnsAfterBreak = 1,
+            longestBreakDays = 5,
+            firstWeekActiveDays = 6,
+        ),
     )
 
     @Test
@@ -63,6 +73,53 @@ class BuildUsageTelemetryExportUseCaseTest {
         assertTrue(export.text.contains("Unknown pipeline: 1"))
         assertTrue(export.text.contains("CHARGING: 3"))
         assertTrue(export.text.contains("Active days: 4"))
+        assertTrue(export.text.contains("This week (last 7 days):"))
+        assertTrue(export.text.contains("Active days: 4/7"))
+        assertTrue(export.text.contains("Active days the week before: 2/7"))
+        assertTrue(export.text.contains("Pipelines used: 2"))
+        assertTrue(export.text.contains("Current streak (days): 3"))
+        assertTrue(export.text.contains("Returns after a break: 1"))
+        assertTrue(export.text.contains("Longest break (days): 5"))
+        assertTrue(export.text.contains("First week after install: 6"))
+    }
+
+    @Test
+    fun `given retention when rendered to JSON then the window definition travels with the figures`() {
+        val export = useCase(populated, mapOf("pipe-1" to "Daily digest"), "25 Jun 2026 14:30")
+
+        val retention = Json.parseToJsonElement(export.json).jsonObject["retention"]!!.jsonObject
+        // The definition ships with the document: a figure read months later
+        // must still say what "this week" and "a break" meant when written.
+        assertEquals(7, retention["windowDays"]!!.jsonPrimitive.int)
+        assertEquals(3, retention["breakThresholdDays"]!!.jsonPrimitive.int)
+        assertEquals(4, retention["activeDaysInWindow"]!!.jsonPrimitive.int)
+        assertEquals(2, retention["activeDaysInPreviousWindow"]!!.jsonPrimitive.int)
+        assertEquals(3, retention["currentStreakDays"]!!.jsonPrimitive.int)
+        assertEquals(1, retention["returnsAfterBreak"]!!.jsonPrimitive.int)
+        assertEquals(5, retention["longestBreakDays"]!!.jsonPrimitive.int)
+        assertEquals(6, retention["firstWeekActiveDays"]!!.jsonPrimitive.int)
+        // The ids travel next to the count so the number can be re-derived.
+        assertEquals(2, retention["livePipelinesInWindow"]!!.jsonPrimitive.int)
+        assertEquals(
+            listOf("pipe-1", "pipe-2"),
+            retention["livePipelineIds"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+    }
+
+    @Test
+    fun `given an unmeasurable first week when rendered then it reads as unknown not as zero`() {
+        val export = useCase(
+            populated.copy(retention = populated.retention.copy(firstWeekActiveDays = null)),
+            emptyMap(),
+            "25 Jun 2026 14:30",
+        )
+
+        assertTrue(export.text.contains("First week after install: —"))
+        assertEquals(
+            JsonNull,
+            Json.parseToJsonElement(export.json).jsonObject["retention"]!!
+                .jsonObject["firstWeekActiveDays"],
+        )
     }
 
     @Test

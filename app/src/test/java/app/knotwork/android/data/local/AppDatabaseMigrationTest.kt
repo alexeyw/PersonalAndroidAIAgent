@@ -874,4 +874,40 @@ class AppDatabaseMigrationTest {
             statements.any { it.contains("`HITLLASTRESOLUTION` TEXT") && !it.contains("NOT NULL") },
         )
     }
+
+    @Test
+    fun `MIGRATION_56_57 targets versions 56 to 57`() {
+        val migration = AppDatabase.MIGRATION_56_57
+
+        assertEquals(56, migration.startVersion)
+        assertEquals(57, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_56_57 creates the usage_pipeline_day set keyed by day and pipeline`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val sqlSlot = slot<String>()
+
+        AppDatabase.MIGRATION_56_57.migrate(db)
+
+        // Purely additive: one CREATE TABLE, no existing table touched and no
+        // back-fill (the historical counters carry no dates to back-fill from).
+        verify(exactly = 1) { db.execSQL(capture(sqlSlot)) }
+        val sql = sqlSlot.captured.uppercase()
+        assertTrue(
+            "Expected CREATE TABLE usage_pipeline_day, got: ${sqlSlot.captured}",
+            sql.contains("CREATE TABLE IF NOT EXISTS `USAGE_PIPELINE_DAY`"),
+        )
+        // Both columns form the primary key: that is what makes the table a set
+        // of (day, pipeline) pairs rather than a second run counter.
+        assertTrue(
+            "Day and pipeline must form the composite primary key: ${sqlSlot.captured}",
+            sql.contains("PRIMARY KEY(`DAY`, `PIPELINEID`)"),
+        )
+        assertTrue("Expected non-null day column: ${sqlSlot.captured}", sql.contains("`DAY` TEXT NOT NULL"))
+        assertTrue(
+            "Expected non-null pipelineId column: ${sqlSlot.captured}",
+            sql.contains("`PIPELINEID` TEXT NOT NULL"),
+        )
+    }
 }
