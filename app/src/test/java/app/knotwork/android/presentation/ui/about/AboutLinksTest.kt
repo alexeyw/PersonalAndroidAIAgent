@@ -53,8 +53,9 @@ class AboutLinksTest {
 
     /**
      * Collects the GitHub anchor slug of every ATX heading in the repository
-     * README, applying GitHub's slug rules: lower-case, drop everything that is
-     * not a word character / space / hyphen, then replace spaces with hyphens.
+     * README, applying GitHub's slug rules: lower-case, drop every character
+     * that is not alphanumeric, a space, a hyphen or an underscore, then
+     * replace spaces with hyphens.
      *
      * Lines inside fenced code blocks are skipped — a shell comment such as
      * `# Privacy` is not a heading, and counting it would let the guard pass on
