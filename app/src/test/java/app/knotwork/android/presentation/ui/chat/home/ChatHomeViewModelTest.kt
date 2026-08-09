@@ -8,6 +8,7 @@ import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.ClarificationRequest
+import app.knotwork.android.domain.models.LocalBackend
 import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.MessageAttachment
 import app.knotwork.android.domain.models.NodeModel
@@ -409,6 +410,58 @@ class ChatHomeViewModelTest {
 
         assertEquals(ChatHomeUiState.Empty, viewModel.state.value.visual)
         coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any()) }
+    }
+
+    @Test
+    fun `given a cloud node streaming then the status names the cloud not the device backend`() =
+        runTest(testDispatcher) {
+            // The status pill exists to say where the prompt is being processed. While a
+            // CLOUD node streams, nothing is decoding on this device, so reporting the
+            // local GPU/CPU backend would be a false claim about exactly that.
+            every { llmInferenceEngine.activeBackend } returns LocalBackend.GPU
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            val sessionId = viewModel.state.value.thread.currentSessionId
+            coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+                emit(
+                    AgentOrchestratorState.PipelineStage(
+                        AgentOrchestratorState.PipelineStepInfo(1, 3, "CLOUD"),
+                    ),
+                )
+                emit(AgentOrchestratorState.Answering("some streamed text"))
+            }
+
+            viewModel.onComposerValueChange("hi")
+            viewModel.sendMessage()
+            advanceUntilIdle()
+
+            assertEquals("cloud", viewModel.state.value.tokens.backend)
+        }
+
+    @Test
+    fun `given a local node streaming then the status still names the device backend`() = runTest(testDispatcher) {
+        // The counter-case: the backend hint exists to expose a silent CPU fallback,
+        // so it must survive for on-device nodes.
+        every { llmInferenceEngine.activeBackend } returns LocalBackend.GPU
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(
+                AgentOrchestratorState.PipelineStage(
+                    AgentOrchestratorState.PipelineStepInfo(1, 3, "LITE_RT"),
+                ),
+            )
+            emit(AgentOrchestratorState.Answering("some streamed text"))
+        }
+
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        assertEquals(LocalBackend.GPU.key, viewModel.state.value.tokens.backend)
     }
 
     @Test

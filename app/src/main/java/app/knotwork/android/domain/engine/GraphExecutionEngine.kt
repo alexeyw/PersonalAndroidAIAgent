@@ -897,7 +897,13 @@ class GraphExecutionEngine @Inject constructor(
                     // it (second `tools/call` on the wire); killed 1.2 s after, it
                     // replayed as designed. Flushing here closes the window at the
                     // cost of one batch insert per tool call.
-                    if (currentNode.type == NodeType.TOOL) {
+                    // A CLOUD node earns the same treatment for a different reason:
+                    // re-running it is not free either, but the cost is money and the
+                    // provider's rate limit rather than a side effect on the world. The
+                    // original TOOL-only rule reasoned that for every other node type a
+                    // repeat is "lost time, not a side effect" — that holds for on-device
+                    // nodes and not for a billed API call.
+                    if (currentNode.type == NodeType.TOOL || currentNode.type == NodeType.CLOUD) {
                         runTraceRepository.flush()
                     }
                 }

@@ -6,6 +6,7 @@ import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.streaming.StreamFrame
 import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.constants.PipelineExecutionDefaults
+import app.knotwork.android.domain.engine.CloudErrorSanitizer
 import app.knotwork.android.domain.engine.CloudLlmClientFactory
 import app.knotwork.android.domain.engine.CloudLlmModelResolver
 import app.knotwork.android.domain.engine.retry.CollectingCloudRetryListener
@@ -27,8 +28,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.mapNotNull
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -107,30 +106,54 @@ class CloudLlmNodeExecutor @Inject constructor(
         // the first token, so draining afterwards still reports them in order.
         val retryCollector = CollectingCloudRetryListener()
 
-        val responseStream = if (selectedProvider == null) {
-            flowOf("Error: No cloud provider configured or selected")
-        } else {
-            val client = cloudLlmClientFactory.createClient(selectedProvider, retryCollector) as? LLMClient
-            if (client == null) {
-                flowOf("Error: ${selectedProvider.id} not configured")
-            } else {
-                // The resolver owns the per-provider configured-id ↔ default fallback,
-                // so the executor stays out of the data layer's settings plumbing.
-                val model = cloudLlmModelResolver.resolveModel(selectedProvider) as LLModel
-                // Privacy-status pulse for the More tab footer. Recorded right before
-                // the network call so the timestamp reflects the actual outbound moment.
-                networkActivityTracker.recordOutbound()
-                client.executeStreaming(prompt("default") { user(fullPrompt) }, model)
-                    .mapNotNull { (it as? StreamFrame.TextDelta)?.text }
-            }
+        // A node that cannot reach a provider has *failed*; it has not answered.
+        // Feeding the explanation into the token stream (as this executor used to do)
+        // made `NodeExecutionResult.error` stay null, so the engine read the run as a
+        // success and passed the sentence "Error: … not configured" downstream as if it
+        // were the model's reply. Configuration failures therefore terminate the node
+        // through the same typed-error path as a mid-stream exception.
+        if (selectedProvider == null) {
+            emitFailure(NO_PROVIDER_CONFIGURED)
+            return@flow
         }
+        val client = cloudLlmClientFactory.createClient(selectedProvider, retryCollector) as? LLMClient
+        if (client == null) {
+            // The factory collapses "blocked by policy" and "no credentials" into a
+            // single null, but the two need different remedies from the user, so the
+            // gate is re-read here to name the actual cause instead of always blaming
+            // a missing key.
+            emitFailure(
+                if (settingsRepository.blockNetworkFromLocalModel.first()) {
+                    cloudBlockedByLocalOnlyMode(selectedProvider.id)
+                } else {
+                    missingCredentials(selectedProvider.id)
+                },
+            )
+            return@flow
+        }
+        // The resolver owns the per-provider configured-id ↔ default fallback,
+        // so the executor stays out of the data layer's settings plumbing.
+        val model = cloudLlmModelResolver.resolveModel(selectedProvider) as LLModel
+        // Privacy-status pulse for the More tab footer. Recorded right before
+        // the network call so the timestamp reflects the actual outbound moment.
+        networkActivityTracker.recordOutbound()
+        val responseStream = client.executeStreaming(prompt("default") { user(fullPrompt) }, model)
 
         val accumulatedResponse = StringBuilder()
         var emittedThinking = false
         var approximateTokenCount = 0
+        // Whether the provider ever said *why* it stopped. A dropped connection ends the
+        // stream with no finish reason, which is otherwise indistinguishable from a
+        // complete answer — see [providerReportsFinishReason].
+        var finishReason: String? = null
 
         try {
-            responseStream.collect { token ->
+            responseStream.collect { frame ->
+                if (frame is StreamFrame.End) {
+                    finishReason = frame.finishReason
+                    return@collect
+                }
+                val token = (frame as? StreamFrame.TextDelta)?.text ?: return@collect
                 accumulatedResponse.append(token)
                 // Cloud streams emit token-sized text deltas; counting per emission keeps the
                 // metric consistent with the local LiteRT path. Length-based estimation was
@@ -149,12 +172,36 @@ class CloudLlmNodeExecutor @Inject constructor(
             // would silently swallow cancellation and leave the parent coroutine running.
             throw e
         } catch (e: Exception) {
-            Timber.tag(
-                "PipelineDebug",
-            ).e(e, "[NODE_ERR] type=${node.type.name} id=${node.id} error in CloudLlmNodeExecutor generation")
+            // Provider errors quote the failing request, and a provider that authenticates
+            // by query parameter (Google) therefore hands us its own API key inside the
+            // message. Scrub before it reaches the console, the trace or logcat — passing
+            // the message rather than the throwable to Timber keeps the key out of the
+            // logged stack trace too.
+            // The deepest cause is what actually failed; the wrapper above it often has
+            // no message of its own, which is how a user ends up reading the word "null".
+            val rootCause = generateSequence(e as Throwable) { it.cause }.last()
+            val safeMessage = CloudErrorSanitizer.sanitize(e.message, rootCause::class.simpleName)
+            // The exception type is kept because it is the fastest triage signal and
+            // carries no credential; only the throwable itself is withheld, since
+            // logging it would print the unscrubbed message inside the stack trace.
+            Timber.tag("PipelineDebug").e(
+                "[NODE_ERR] type=${node.type.name} id=${node.id} " +
+                    "CloudLlmNodeExecutor generation failed with ${e::class.simpleName}: $safeMessage",
+            )
             emitRetries(retryCollector)
-            emit(NodeOutput.State(AgentOrchestratorState.Error(e.message ?: "Unknown error during LLM generation")))
-            emit(NodeOutput.Result(NodeExecutionResult(error = e.message)))
+            emit(NodeOutput.State(AgentOrchestratorState.Error(safeMessage)))
+            emit(NodeOutput.Result(NodeExecutionResult(error = safeMessage)))
+            return@flow
+        }
+
+        // A provider whose connection dies mid-answer does not always raise: the
+        // OpenAI-compatible clients end the stream normally and simply omit the finish
+        // reason, so the half-written answer would otherwise be handed on as a complete
+        // one. Measured on a stub that cut the socket mid-stream: identical frames in both
+        // cases apart from `finishReason` (null when cut, "stop" when complete).
+        if (providerReportsFinishReason(selectedProvider) && finishReason == null) {
+            emitRetries(retryCollector)
+            emitFailure(truncatedResponse(selectedProvider.id))
             return@flow
         }
 
@@ -179,6 +226,21 @@ class CloudLlmNodeExecutor @Inject constructor(
         kotlinx.coroutines.delay(PipelineExecutionDefaults.NODE_RESULT_EMIT_DELAY_MS)
 
         emit(NodeOutput.Result(NodeExecutionResult(outputText = fullResponseText, tokenCount = approximateTokenCount)))
+    }
+
+    /**
+     * Terminates the node with a typed failure, using the same two-emission shape as
+     * the mid-stream exception path: an [AgentOrchestratorState.Error] for the live UI
+     * and a [NodeExecutionResult] carrying `error`, which is what
+     * [GraphExecutionEngine][app.knotwork.android.domain.engine.GraphExecutionEngine]
+     * inspects to stop the run instead of forwarding the text to the next node.
+     *
+     * @param reason User-facing explanation of why no cloud call was attempted.
+     */
+    private suspend fun FlowCollector<NodeOutput>.emitFailure(reason: String) {
+        Timber.tag("PipelineDebug").e("[NODE_ERR] type=CLOUD $reason")
+        emit(NodeOutput.State(AgentOrchestratorState.Error(reason)))
+        emit(NodeOutput.Result(NodeExecutionResult(error = reason)))
     }
 
     /**
@@ -207,5 +269,52 @@ class CloudLlmNodeExecutor @Inject constructor(
         if (!apiKeyRepository.getOpenAIKey().first().isNullOrBlank()) return CloudProvider.OPENAI
         if (!apiKeyRepository.getDeepSeekKey().first().isNullOrBlank()) return CloudProvider.DEEPSEEK
         return null
+    }
+
+    /**
+     * Whether an absent finish reason is evidence of a truncated answer for [provider].
+     *
+     * Only true where it was actually measured against a stub, because the inverse
+     * mistake — treating a healthy stream as truncated — fails working runs:
+     *
+     * - `DEEPSEEK` / `OPENAI` — **checked**. Measured on DeepSeek: a socket cut mid-stream
+     *   ends the flow with `End(finishReason = null)` and no exception, while a complete
+     *   stream ends with `End(finishReason = "stop")`. OpenAI shares the same streaming
+     *   implementation (`AbstractOpenAILLMClient`), so the signal is the same one.
+     * - `GOOGLE` — **checked**, and already correct without help: its client throws
+     *   `IncompleteStreamException` on a cut, so the guard below never fires for it.
+     * - `OLLAMA` — **excluded**. Its client never emits a finish reason at all, so absence
+     *   carries no information; enabling the check would fail every healthy Ollama run.
+     * - `ANTHROPIC` — **excluded pending measurement**. The harness could not produce a
+     *   stream its parser accepts, so there is no evidence either way, and a guess here
+     *   is exactly the failure mode this task exists to avoid.
+     */
+    private fun providerReportsFinishReason(provider: CloudProvider): Boolean = when (provider) {
+        CloudProvider.OPENAI, CloudProvider.DEEPSEEK, CloudProvider.GOOGLE -> true
+        CloudProvider.ANTHROPIC, CloudProvider.OLLAMA -> false
+    }
+
+    private companion object {
+        /** The provider stopped sending without ever saying the answer was finished. */
+        fun truncatedResponse(providerId: String): String =
+            "The response from '$providerId' was cut off before it finished — the connection " +
+                "ended without a completion signal. The partial answer was discarded; try again."
+
+        /** No provider is selected on the node and no configured key could be auto-detected. */
+        const val NO_PROVIDER_CONFIGURED: String =
+            "No cloud provider is configured. Add a provider API key in Settings, " +
+                "or select a provider on this Cloud node."
+
+        /**
+         * The node names a provider whose credentials are missing — distinct from the
+         * policy block below, which the user resolves in a different place entirely.
+         */
+        fun missingCredentials(providerId: String): String =
+            "Cloud provider '$providerId' has no API key configured. Add one in Settings to use this node."
+
+        /** The call never left the device because the local-only restriction is on. */
+        fun cloudBlockedByLocalOnlyMode(providerId: String): String =
+            "Cloud provider '$providerId' is blocked by the \"Block network from local model\" " +
+                "restriction. Turn it off in Settings to allow this Cloud node to run."
     }
 }

@@ -87,7 +87,7 @@
         aligned with the mockup.
     -->
     <string name="chat_home_status_idle">[NODE]  idle · ready</string>
-    <string name="chat_home_status_generating">[NODE]  generating · streaming</string>
+    <string name="chat_home_status_generating">[NODE]  generating</string>
     <string name="chat_home_status_preparing_model">[NODE]  loading model · please wait</string>
     <string name="chat_home_status_hitl">[TOOL]  awaiting approval</string>
     <string name="chat_home_status_clarification">[NODE]  waiting on clarification</string>

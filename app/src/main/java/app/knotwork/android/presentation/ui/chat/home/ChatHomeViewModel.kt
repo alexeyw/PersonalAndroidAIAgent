@@ -176,6 +176,14 @@ class ChatHomeViewModel @Inject constructor(
     }
 
     private var messagesJob: Job? = null
+
+    /**
+     * Node type currently executing in the live run, taken from
+     * [AgentOrchestratorState.PipelineStage]. Used only to attribute streamed tokens
+     * to the right producer in the status pill; `null` between runs.
+     */
+    private var currentNodeType: String? = null
+
     private var generationJob: Job? = null
 
     /**
@@ -900,6 +908,13 @@ class ChatHomeViewModel @Inject constructor(
             is AgentOrchestratorState.ConsoleLog -> console.onConsoleLog(state.events, state.runId)
             is AgentOrchestratorState.PipelineTrace -> console.onPipelineTrace(state.steps)
             is AgentOrchestratorState.NodeIO -> console.onNodeIo(state)
+            is AgentOrchestratorState.PipelineStage -> {
+                // Remembered only to attribute the streamed tokens correctly: while a
+                // CLOUD node runs, nothing is decoding on this device, so naming the
+                // local backend would tell the user their prompt is being processed
+                // on-device when it is not.
+                currentNodeType = state.stepInfo.nodeName
+            }
             is AgentOrchestratorState.Thinking ->
                 // Approximate-token estimate from the cumulative partial text
                 // length divided by `TOKEN_CHARS_PER_TOKEN`. Same heuristic
@@ -948,7 +963,14 @@ class ChatHomeViewModel @Inject constructor(
      * unchanged value produces an equal state that `StateFlow` drops.
      */
     private fun updateStreamingTokens(tokens: Int) {
-        val backend = llmInferenceEngine.activeBackend?.key
+        // A cloud node's tokens are decoded by the provider, not here. Reporting the
+        // device's GPU/CPU backend for them would misstate *where the prompt is being
+        // processed* — the one thing a local-first app must not get wrong.
+        val backend = if (currentNodeType == CLOUD_NODE_TYPE) {
+            CLOUD_BACKEND_LABEL
+        } else {
+            llmInferenceEngine.activeBackend?.key
+        }
         _state.update { it.copy(tokens = it.tokens.copy(streaming = tokens, backend = backend)) }
     }
 
@@ -1027,6 +1049,16 @@ class ChatHomeViewModel @Inject constructor(
 
         /** Rough chars-per-token divisor used for the v0.1 token counter (`text.length / 4`). */
         const val TOKEN_CHARS_PER_TOKEN: Int = 4
+
+        /** `NodeType.CLOUD.name` — matched as a string to keep the UI off the domain enum. */
+        private const val CLOUD_NODE_TYPE: String = "CLOUD"
+
+        /**
+         * Shown in the status pill instead of a device backend while a cloud node
+         * streams. Deliberately generic: the provider id is not available to the UI
+         * mid-run, and "cloud" is the fact the user needs — the work left the device.
+         */
+        private const val CLOUD_BACKEND_LABEL: String = "cloud"
 
         /** Pre-formatted timestamp format used in [ChatMetadata.timestamp] (24h, locale-aware). */
         private const val TIMESTAMP_PATTERN: String = "HH:mm"

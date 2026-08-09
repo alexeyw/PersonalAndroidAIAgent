@@ -128,6 +128,56 @@ details.
 
 ### Fixed
 
+- **A cloud answer cut off in transit was shown as if it were complete.** When
+  the connection to a cloud provider dropped part-way through a reply, some
+  providers end the stream so quietly that it looks exactly like a finished
+  answer — the only difference is that the provider never says *why* it stopped.
+  The half-written reply was accepted, passed to the next step of the pipeline
+  and shown as the result. A reply that never reported a completion is now
+  treated as the failure it is: the partial text is discarded and the run says
+  the response was cut off, so nothing incomplete is presented as final.
+- **A resumed run could pay for the same cloud call twice.** When a run was
+  interrupted, a cloud step that had already completed was supposed to be
+  replayed from its record rather than re-sent. That record was written to a
+  buffer that only reaches storage every half-second, so a process death inside
+  that window lost it — and the resumed run called the provider again, at real
+  cost. The record is now saved the moment a cloud step finishes, as was already
+  done for tool calls.
+- **A cloud provider that stopped responding could hold a run for 15 minutes.**
+  Cloud requests inherited a 900-second network deadline that nothing in the app
+  had chosen. Cloud calls now allow 60 seconds of *silence* from the provider
+  before giving up — measured between pieces of the answer, so a long reply that
+  is still arriving is never cut short, while a dead connection is no longer
+  waited on for a quarter of an hour.
+- **A Cloud step that could not run said so in the reply instead of failing.**
+  When no provider was configured, or the selected one had no API key, the
+  explanation was passed down the pipeline as though the model had written it —
+  a run could end "successfully" with the words *"Error: … not configured"* as
+  its answer. Such a step now fails properly and the run stops with the reason.
+  Relatedly, when cloud access was switched off by the **Block network from
+  local model** restriction, the message blamed a missing API key and sent you
+  to the wrong screen; it now names the restriction that is actually in force.
+- **The status line claimed your device was generating an answer the cloud was
+  producing.** While a Cloud step streamed, the pill still named the on-device
+  backend (`gpu` / `cpu`) — the one place a local-first app must not be vague
+  about where a prompt is being processed. It now reads `cloud` for cloud steps
+  and keeps naming the real device backend for on-device ones, which is what
+  makes a silent fallback to CPU visible. The label also lost a redundant word
+  so it fits on one line.
+- **A dropped cloud connection could report itself as the word "null".** When the
+  provider cut the connection mid-answer, the underlying failure carried no
+  message of its own and the error card ended up reading *"Exception during
+  streaming: null"* — a correct failure with an unreadable reason. The kind of
+  failure is now named instead.
+- **Cloud error messages opened with the same line twice.** A failed cloud call
+  showed its client name on two consecutive lines before the actual diagnosis,
+  costing a line in a card the user is meant to read quickly. The repeat is now
+  collapsed.
+- **A provider error could carry your API key into the logs.** One provider
+  authenticates by putting the key in the request address, so an ordinary
+  network error arrived with the key inside its text — and that text reached the
+  run console, the saved run history and the device log. Credentials are now
+  stripped from provider errors before they are shown or stored.
 - **One external tool that never answered could freeze every chat in the app.**
   Messages are processed one at a time, so a tool call that hung took the whole
   queue with it: new messages in any chat were accepted, given a title, and

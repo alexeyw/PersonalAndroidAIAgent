@@ -129,7 +129,25 @@ interface Tool {
   Discover screen lives in the **same Keystore-backed store** (keyed
   `hugging_face_token`), never in plain DataStore. It is sent only on the file
   download that needs it — discovery browsing and metadata calls are anonymous.
-- Requests include a `timeout` of 60 seconds (OkHttp).
+- **Every cloud client carries an explicit `ConnectionTimeoutConfig`**, applied in
+  `KoogClientFactory`: 60 s socket, 30 s connect, 900 s request. The socket value
+  is the load-bearing one because Ktor applies it *per read* — it bounds how long
+  the provider may stay **silent**, not how long a healthy answer may take, so a
+  long streaming reply is never cut short for being long. Do not "simplify" this
+  to a single overall timeout. Leaving the config off is not neutral: Koog's own
+  default is 900 s for both request and socket, measured to hold a node for
+  900 033 ms against a stalled provider.
+- **A stream that ends without a finish reason is a failure, not an answer.** The
+  OpenAI-compatible clients end a dropped stream normally and simply omit the
+  finish reason, so the only signal that a reply was truncated is the absent
+  `StreamFrame.End.finishReason`. `CloudLlmNodeExecutor` rejects such a response
+  instead of forwarding a half-written answer. The check is per provider and
+  enabled only where the behaviour was measured — Koog's Ollama client never
+  emits a finish reason at all, so enabling it there would fail healthy runs.
+- **Provider error text is scrubbed before it is shown, logged or stored**
+  (`CloudErrorSanitizer`). Google authenticates by query parameter, so its
+  transport errors arrive carrying the API key; credentials must never reach the
+  run console, the run trace or logcat.
 - Use the unified `CLOUD` pipeline node with a `provider` parameter — do
   not add per-provider node types to the pipeline graph.
 
