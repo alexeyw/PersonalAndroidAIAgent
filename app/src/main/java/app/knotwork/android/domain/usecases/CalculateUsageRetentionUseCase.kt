@@ -44,7 +44,7 @@ class CalculateUsageRetentionUseCase @Inject constructor() {
         val window = today.minusDays((UsageRetention.WINDOW_DAYS - 1).toLong())..today
         val previousWindowEnd = window.start.minusDays(1)
         val previousWindow = previousWindowEnd.minusDays((UsageRetention.WINDOW_DAYS - 1).toLong())..previousWindowEnd
-        val breaks = breakLengths(days) + ongoingBreakLength(days.last(), today)
+        val completedBreaks = breakLengths(days)
 
         return UsageRetention(
             activeDaysInWindow = days.count { it in window },
@@ -55,10 +55,11 @@ class CalculateUsageRetentionUseCase @Inject constructor() {
                 .distinct()
                 .sorted(),
             currentStreakDays = currentStreakDays(days, today),
-            // The ongoing absence is deliberately excluded here: nobody has
-            // returned from it yet.
-            returnsAfterBreak = breakLengths(days).count { it >= UsageRetention.MIN_BREAK_DAYS },
-            longestBreakDays = breaks.max(),
+            // Only completed breaks count as returns: nobody has come back from
+            // an absence that is still running. The longest break does include
+            // it — an absence you are still in is the honest maximum.
+            returnsAfterBreak = completedBreaks.count { it >= UsageRetention.MIN_BREAK_DAYS },
+            longestBreakDays = (completedBreaks + ongoingBreakLength(days.last(), today)).max(),
             firstWeekActiveDays = firstWeekActiveDays(days, today),
         )
     }

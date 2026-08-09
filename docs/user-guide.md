@@ -1942,9 +1942,11 @@ anywhere on this path (a build-time guard enforces that). The screen shows:
   many times you came back after a break of three days or more, the longest such
   break, and how many days you used the app in your first week after installing.
   The first-week figure stays blank (`—`) until that week has actually passed, so
-  a fresh install is never labelled with a number it has not earned yet. These
-  figures only count days recorded from the version that introduced them
-  onwards — earlier counts carry no dates, so nothing is back-filled.
+  a fresh install is never labelled with a number it has not earned yet. The
+  day-based figures use the day history the app was already keeping, so they are
+  meaningful right after updating; **Pipelines used** starts at zero after an
+  update, because which pipeline ran on which day was not recorded before and is
+  not back-filled.
 - **Setup** — how long your first run took to arrive: the time from opening
   onboarding to your first successful run, how much of that was the model
   download, and the two subtracted (`mm:ss`). The download depends on your

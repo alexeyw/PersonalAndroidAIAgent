@@ -28,9 +28,11 @@ details.
   stays blank until that week has actually elapsed rather than showing a number
   a two-day-old install has not earned, and the JSON export carries the window
   definition next to the figures so a saved snapshot still explains itself
-  months later. Upgrading installs start the weekly figures empty — the older
-  counts carry no dates, and inventing a history would be worse than a week of
-  honest blanks.
+  months later. Your day-by-day history was already being recorded, so the
+  day-based figures are meaningful immediately after updating; **Pipelines
+  used** is the one that starts at zero, because which pipeline ran on which day
+  was never stored before and inventing that history would be worse than a week
+  of honest zeros.
 
 - **Archive chats instead of deleting them.** A chat list that only grows
   eventually stops being useful, and until now the only way to shorten it was to

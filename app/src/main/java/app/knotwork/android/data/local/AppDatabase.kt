@@ -1361,10 +1361,11 @@ abstract class AppDatabase : RoomDatabase() {
          * key + `INSERT OR IGNORE`), not as a second run counter.
          *
          * Purely additive, and deliberately **not** back-filled: the historical
-         * counters hold no dates to back-fill from, so an upgraded install starts
-         * its window figures empty and fills them as it is used. Fabricating a
-         * history here would be inventing data, which is worse than a week of
-         * honest zeros.
+         * counters hold no dates to back-fill from, so on an upgraded install the
+         * *live-pipelines* figure starts at zero and fills as the app is used.
+         * (The day-based figures are unaffected — they read `usage_active_day`,
+         * which has been recorded since v47.) Fabricating a history here would be
+         * inventing data, which is worse than a week of honest zeros.
          */
         val MIGRATION_56_57 = object : Migration(56, 57) {
             override fun migrate(db: SupportSQLiteDatabase) {

@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -156,7 +157,7 @@ private fun buildRetentionRows(retention: UsageRetention): List<UsageStatRow> = 
     ),
     UsageStatRow(
         stringResource(R.string.settings_usage_retention_streak),
-        retention.currentStreakDays.toString(),
+        dayCountLabel(retention.currentStreakDays),
     ),
     UsageStatRow(
         stringResource(R.string.settings_usage_retention_returns),
@@ -164,7 +165,7 @@ private fun buildRetentionRows(retention: UsageRetention): List<UsageStatRow> = 
     ),
     UsageStatRow(
         stringResource(R.string.settings_usage_retention_longest_break),
-        retention.longestBreakDays.toString(),
+        dayCountLabel(retention.longestBreakDays),
     ),
     UsageStatRow(
         stringResource(R.string.settings_usage_retention_first_week),
@@ -172,6 +173,14 @@ private fun buildRetentionRows(retention: UsageRetention): List<UsageStatRow> = 
             ?: stringResource(R.string.settings_usage_retention_not_yet),
     ),
 )
+
+/**
+ * Formats a day count that is not bounded by the window — a streak or a break
+ * can outgrow it — so the unit has to travel with the number (`3 days`).
+ */
+@Composable
+private fun dayCountLabel(days: Int): String =
+    pluralStringResource(R.plurals.settings_usage_retention_day_count, days, days)
 
 /** Formats an active-day count against the window length, e.g. `4 / 7`. */
 @Composable

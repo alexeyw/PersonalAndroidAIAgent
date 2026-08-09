@@ -121,9 +121,11 @@ class BuildUsageTelemetryExportUseCase @Inject constructor() {
                 "${retention.activeDaysInPreviousWindow}/${UsageRetention.WINDOW_DAYS}",
         )
         appendLine("  Pipelines used: ${retention.livePipelinesInWindow}")
-        appendLine("  Current streak: ${retention.currentStreakDays}")
+        // The unit is spelled into the label: a streak and a break are day
+        // counts that the window does not bound, so a bare number is ambiguous.
+        appendLine("  Current streak (days): ${retention.currentStreakDays}")
         appendLine("  Returns after a break: ${retention.returnsAfterBreak}")
-        appendLine("  Longest break: ${retention.longestBreakDays}")
+        appendLine("  Longest break (days): ${retention.longestBreakDays}")
         appendLine("  First week after install: ${retention.firstWeekActiveDays ?: "—"}")
         appendLine()
 

@@ -226,9 +226,9 @@ internal object SettingsPreview {
             UsageStatRow("Active days", "4 / 7"),
             UsageStatRow("Week before", "2 / 7"),
             UsageStatRow("Pipelines used", "2"),
-            UsageStatRow("Current streak", "3"),
+            UsageStatRow("Current streak", "3 days"),
             UsageStatRow("Returns after a break", "1"),
-            UsageStatRow("Longest break", "5"),
+            UsageStatRow("Longest break", "5 days"),
             UsageStatRow("First week after install", "6 / 7"),
         ),
         onboarding = listOf(

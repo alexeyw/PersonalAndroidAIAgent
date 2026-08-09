@@ -77,7 +77,9 @@ class BuildUsageTelemetryExportUseCaseTest {
         assertTrue(export.text.contains("Active days: 4/7"))
         assertTrue(export.text.contains("Active days the week before: 2/7"))
         assertTrue(export.text.contains("Pipelines used: 2"))
+        assertTrue(export.text.contains("Current streak (days): 3"))
         assertTrue(export.text.contains("Returns after a break: 1"))
+        assertTrue(export.text.contains("Longest break (days): 5"))
         assertTrue(export.text.contains("First week after install: 6"))
     }
 
