@@ -42,6 +42,7 @@ import app.knotwork.android.data.local.models.TriggerEntity
 import app.knotwork.android.data.local.models.TriggerEvaluationEntity
 import app.knotwork.android.data.local.models.UsageActiveDayEntity
 import app.knotwork.android.data.local.models.UsageCounterEntity
+import app.knotwork.android.data.local.models.UsagePipelineDayEntity
 
 /**
  * Main Room Database for the Android AI Agent.
@@ -77,9 +78,10 @@ import app.knotwork.android.data.local.models.UsageCounterEntity
         TriggerEvaluationEntity::class,
         UsageCounterEntity::class,
         UsageActiveDayEntity::class,
+        UsagePipelineDayEntity::class,
         OnboardingMilestoneEntity::class,
     ],
-    version = 56,
+    version = 57,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -1346,6 +1348,31 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE `trigger_evaluations` ADD COLUMN `hitlLastKind` TEXT")
                 db.execSQL("ALTER TABLE `trigger_evaluations` ADD COLUMN `hitlLastResolution` TEXT")
                 db.execSQL("ALTER TABLE `trigger_evaluations` ADD COLUMN `hitlParked` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * v56 → v57: creates `usage_pipeline_day`, the `(day, pipeline)` activity
+         * set behind the weekly-retention figures of the local usage statistics.
+         *
+         * The existing counters are all-time totals carrying no date, so "which
+         * pipelines are alive this week" is not derivable from them; this table
+         * adds exactly that one missing dimension as a set (composite primary
+         * key + `INSERT OR IGNORE`), not as a second run counter.
+         *
+         * Purely additive, and deliberately **not** back-filled: the historical
+         * counters hold no dates to back-fill from, so an upgraded install starts
+         * its window figures empty and fills them as it is used. Fabricating a
+         * history here would be inventing data, which is worse than a week of
+         * honest zeros.
+         */
+        val MIGRATION_56_57 = object : Migration(56, 57) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `usage_pipeline_day` (" +
+                        "`day` TEXT NOT NULL, `pipelineId` TEXT NOT NULL, " +
+                        "PRIMARY KEY(`day`, `pipelineId`))",
+                )
             }
         }
     }

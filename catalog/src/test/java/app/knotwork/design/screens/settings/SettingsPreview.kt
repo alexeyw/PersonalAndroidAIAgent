@@ -222,6 +222,15 @@ internal object SettingsPreview {
             UsageStatRow("First", "2026-06-20"),
             UsageStatRow("Last", "2026-06-25"),
         ),
+        retention = listOf(
+            UsageStatRow("Active days", "4 / 7"),
+            UsageStatRow("Week before", "2 / 7"),
+            UsageStatRow("Pipelines used", "2"),
+            UsageStatRow("Current streak", "3"),
+            UsageStatRow("Returns after a break", "1"),
+            UsageStatRow("Longest break", "5"),
+            UsageStatRow("First week after install", "6 / 7"),
+        ),
         onboarding = listOf(
             UsageStatRow("Time to first value", "7:24"),
             UsageStatRow("Model download", "5:00"),

@@ -30,6 +30,9 @@ package app.knotwork.android.domain.models
  * @property onboarding The recorded install → first-value journey backing the
  *   repeatable "< 10 minutes to first value" measurement;
  *   [OnboardingJourney.EMPTY] until the first marker is recorded.
+ * @property retention Weekly-retention aggregate over the same activity set —
+ *   the window figures, streak, breaks and first-week number. Computed as of the
+ *   moment the summary was assembled; [UsageRetention.EMPTY] with no activity.
  */
 data class UsageTelemetrySummary(
     val runsByPipeline: List<PipelineRunTally>,
@@ -39,6 +42,7 @@ data class UsageTelemetrySummary(
     val firstActiveDay: String?,
     val lastActiveDay: String?,
     val onboarding: OnboardingJourney,
+    val retention: UsageRetention = UsageRetention.EMPTY,
 ) {
     /** Total number of terminal root runs across every outcome. */
     val totalRuns: Int get() = runsByOutcome.values.sum()
@@ -69,6 +73,7 @@ data class UsageTelemetrySummary(
             firstActiveDay = null,
             lastActiveDay = null,
             onboarding = OnboardingJourney.EMPTY,
+            retention = UsageRetention.EMPTY,
         )
     }
 }

@@ -45,6 +45,8 @@ data class UsageStatRow(val label: String, val value: String)
  * @property triggersHeadline Pre-formatted total trigger-firings headline.
  * @property triggers Per-kind trigger-firing rows; may be empty.
  * @property activeDays Active-day rows (count, first, last).
+ * @property retention Weekly-retention rows (this week vs the week before,
+ *   pipelines used, streak, breaks, first week after install).
  * @property onboarding Install → first-value rows (total, model download, total
  *   excluding the download). Empty until the journey reached first value — the
  *   section is then omitted entirely rather than rendered as a row of dashes.
@@ -58,6 +60,7 @@ data class UsageTelemetryViewState(
     val triggersHeadline: String,
     val triggers: List<UsageStatRow>,
     val activeDays: List<UsageStatRow>,
+    val retention: List<UsageStatRow> = emptyList(),
     val onboarding: List<UsageStatRow> = emptyList(),
 )
 
@@ -138,6 +141,13 @@ fun UsageTelemetryContent(
                 headline = null,
                 rows = state.activeDays,
             )
+            if (state.retention.isNotEmpty()) {
+                StatSection(
+                    label = stringResource(R.string.knotwork_usage_section_retention),
+                    headline = null,
+                    rows = state.retention,
+                )
+            }
             if (state.onboarding.isNotEmpty()) {
                 StatSection(
                     label = stringResource(R.string.knotwork_usage_section_onboarding),

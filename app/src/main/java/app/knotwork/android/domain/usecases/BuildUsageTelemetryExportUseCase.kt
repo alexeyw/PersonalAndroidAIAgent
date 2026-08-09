@@ -3,10 +3,12 @@ package app.knotwork.android.domain.usecases
 import app.knotwork.android.domain.models.OnboardingJourney
 import app.knotwork.android.domain.models.OnboardingMilestone
 import app.knotwork.android.domain.models.PipelineRunStatus
+import app.knotwork.android.domain.models.UsageRetention
 import app.knotwork.android.domain.models.UsageTelemetrySummary
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -111,6 +113,20 @@ class BuildUsageTelemetryExportUseCase @Inject constructor() {
         appendLine("  Last: ${summary.lastActiveDay ?: "—"}")
         appendLine()
 
+        val retention = summary.retention
+        appendLine("This week (last ${UsageRetention.WINDOW_DAYS} days):")
+        appendLine("  Active days: ${retention.activeDaysInWindow}/${UsageRetention.WINDOW_DAYS}")
+        appendLine(
+            "  Active days the week before: " +
+                "${retention.activeDaysInPreviousWindow}/${UsageRetention.WINDOW_DAYS}",
+        )
+        appendLine("  Pipelines used: ${retention.livePipelinesInWindow}")
+        appendLine("  Current streak: ${retention.currentStreakDays}")
+        appendLine("  Returns after a break: ${retention.returnsAfterBreak}")
+        appendLine("  Longest break: ${retention.longestBreakDays}")
+        appendLine("  First week after install: ${retention.firstWeekActiveDays ?: "—"}")
+        appendLine()
+
         appendLine("Onboarding (install → first value):")
         val journey = summary.onboarding
         if (journey.isEmpty) {
@@ -151,9 +167,33 @@ class BuildUsageTelemetryExportUseCase @Inject constructor() {
             put("activeDays", summary.activeDays)
             put("firstActiveDay", summary.firstActiveDay)
             put("lastActiveDay", summary.lastActiveDay)
+            put("retention", retentionJson(summary.retention))
             put("onboarding", onboardingJson(summary.onboarding))
         }
         return PRETTY_JSON.encodeToString(JsonObject.serializer(), document)
+    }
+
+    /**
+     * The weekly-retention block. Carries the window definition (`windowDays`,
+     * `breakThresholdDays`) alongside the figures, so a document read months
+     * later still says what "this week" and "a break" meant when it was written,
+     * and the live pipeline **ids** next to their count, so the number can be
+     * re-derived instead of trusted.
+     */
+    private fun retentionJson(retention: UsageRetention): JsonObject = buildJsonObject {
+        put("windowDays", UsageRetention.WINDOW_DAYS)
+        put("breakThresholdDays", UsageRetention.MIN_BREAK_DAYS)
+        put("activeDaysInWindow", retention.activeDaysInWindow)
+        put("activeDaysInPreviousWindow", retention.activeDaysInPreviousWindow)
+        put("livePipelinesInWindow", retention.livePipelinesInWindow)
+        put(
+            "livePipelineIds",
+            buildJsonArray { for (id in retention.livePipelineIds) add(JsonPrimitive(id)) },
+        )
+        put("currentStreakDays", retention.currentStreakDays)
+        put("returnsAfterBreak", retention.returnsAfterBreak)
+        put("longestBreakDays", retention.longestBreakDays)
+        put("firstWeekActiveDays", retention.firstWeekActiveDays)
     }
 
     /**

@@ -1936,6 +1936,15 @@ anywhere on this path (a build-time guard enforces that). The screen shows:
   (schedule / daily / charging / network) fired.
 - **Active days** — the number of distinct days with any activity, plus the
   first and last.
+- **This week** — whether the app is actually sticking. Active days out of the
+  last seven (with the week before it for comparison), how many distinct
+  pipelines you ran in that window, your current run of consecutive days, how
+  many times you came back after a break of three days or more, the longest such
+  break, and how many days you used the app in your first week after installing.
+  The first-week figure stays blank (`—`) until that week has actually passed, so
+  a fresh install is never labelled with a number it has not earned yet. These
+  figures only count days recorded from the version that introduced them
+  onwards — earlier counts carry no dates, so nothing is back-filled.
 - **Setup** — how long your first run took to arrive: the time from opening
   onboarding to your first successful run, how much of that was the model
   download, and the two subtracted (`mm:ss`). The download depends on your

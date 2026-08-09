@@ -19,6 +19,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.knotwork.android.R
 import app.knotwork.android.domain.models.OnboardingJourney
 import app.knotwork.android.domain.models.PipelineRunStatus
+import app.knotwork.android.domain.models.UsageRetention
 import app.knotwork.android.domain.models.UsageTelemetrySummary
 import app.knotwork.design.screens.settings.UsageStatRow
 import app.knotwork.design.screens.settings.UsageTelemetryCallbacks
@@ -125,9 +126,57 @@ private fun buildUsageViewState(uiState: UsageTelemetryUiState): UsageTelemetryV
             UsageStatRow(label = triggerKindLabel(kind), value = count.toString())
         },
         activeDays = buildActiveDayRows(summary),
+        retention = buildRetentionRows(summary.retention),
         onboarding = buildOnboardingRows(summary.onboarding),
     )
 }
+
+/**
+ * Builds the weekly-retention rows: this week against the week before, how many
+ * pipelines were actually used in the window, the streak, the breaks, and the
+ * first week after install.
+ *
+ * The first-week figure renders as an em-dash until that week has elapsed — a
+ * two-day-old install has no first-week retention to report, and a partial count
+ * would read as a bad one.
+ */
+@Composable
+private fun buildRetentionRows(retention: UsageRetention): List<UsageStatRow> = listOf(
+    UsageStatRow(
+        stringResource(R.string.settings_usage_retention_this_week),
+        windowDaysLabel(retention.activeDaysInWindow),
+    ),
+    UsageStatRow(
+        stringResource(R.string.settings_usage_retention_previous_week),
+        windowDaysLabel(retention.activeDaysInPreviousWindow),
+    ),
+    UsageStatRow(
+        stringResource(R.string.settings_usage_retention_pipelines),
+        retention.livePipelinesInWindow.toString(),
+    ),
+    UsageStatRow(
+        stringResource(R.string.settings_usage_retention_streak),
+        retention.currentStreakDays.toString(),
+    ),
+    UsageStatRow(
+        stringResource(R.string.settings_usage_retention_returns),
+        retention.returnsAfterBreak.toString(),
+    ),
+    UsageStatRow(
+        stringResource(R.string.settings_usage_retention_longest_break),
+        retention.longestBreakDays.toString(),
+    ),
+    UsageStatRow(
+        stringResource(R.string.settings_usage_retention_first_week),
+        retention.firstWeekActiveDays?.let { windowDaysLabel(it) }
+            ?: stringResource(R.string.settings_usage_retention_not_yet),
+    ),
+)
+
+/** Formats an active-day count against the window length, e.g. `4 / 7`. */
+@Composable
+private fun windowDaysLabel(days: Int): String =
+    stringResource(R.string.settings_usage_retention_out_of, days, UsageRetention.WINDOW_DAYS)
 
 /**
  * Builds the install → first-value rows: the full figure, the model-download
