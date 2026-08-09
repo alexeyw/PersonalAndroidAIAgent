@@ -25,11 +25,11 @@ By participating in this project you agree to abide by our
 - The [roadmap](docs/roadmap.md) describes where the project is headed
   and which directions welcome outside help.
 - Issues labelled
-  [`good first issue`](https://github.com/alexeyw/PersonalAndroidAIAgent/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+  [`good first issue`](https://github.com/alexeyw/knotwork/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
   are scoped to be approachable without deep knowledge of the codebase:
   each one states the motivation, the files involved, and concrete
   acceptance criteria. Issues labelled
-  [`help wanted`](https://github.com/alexeyw/PersonalAndroidAIAgent/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22)
+  [`help wanted`](https://github.com/alexeyw/knotwork/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22)
   mark work where contributions are especially welcome.
 - [`docs/extending.md`](docs/extending.md) has step-by-step recipes for
   the most self-contained contributions — new node types, tools, cloud
@@ -120,7 +120,7 @@ long-lived branch before reaching `main`:
   integration branch is merged into `main` with a merge commit and
   deleted.
 - If no `phase/<N>` branch is currently open (check the
-  [branch list](https://github.com/alexeyw/PersonalAndroidAIAgent/branches)),
+  [branch list](https://github.com/alexeyw/knotwork/branches)),
   target `main` directly. When in doubt, open the PR against `main` —
   maintainers will retarget it if an integration branch is active.
 - Direct pushes to `main` are not permitted; every change lands through a

@@ -1,6 +1,6 @@
 # Knotwork — on-device AI agent for Android
 
-[![Check](https://github.com/alexeyw/PersonalAndroidAIAgent/actions/workflows/check.yml/badge.svg)](https://github.com/alexeyw/PersonalAndroidAIAgent/actions/workflows/check.yml)
+[![Check](https://github.com/alexeyw/knotwork/actions/workflows/check.yml/badge.svg)](https://github.com/alexeyw/knotwork/actions/workflows/check.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 ![Version](https://img.shields.io/badge/version-0.6.0-orange.svg)
 ![Android API](https://img.shields.io/badge/Android-API%2036%2B-3DDC84.svg?logo=android)
@@ -30,10 +30,11 @@ Inference runs **on-device** via [LiteRT-LM](https://ai.google.dev/edge)
 and replies stay on the phone unless you deliberately reach for a cloud model.
 
 What makes it Knotwork rather than another chat box is that **you build the
-behaviour**. Every conversation is processed by a pipeline — a graph of typed
-nodes (input, on-device LLM, optional cloud LLM, tool calls, routing,
-decomposition, evaluation, clarifications, output) that you can edit inside the
-app or in a standalone browser editor. Automations that can act on their own
+behaviour**. Every conversation is processed by a pipeline — what Tasker, n8n,
+or Zapier would call a *workflow*: a graph of typed nodes (input, on-device LLM,
+optional cloud LLM, tool calls, routing, decomposition, evaluation,
+clarifications, output) that you can edit inside the app or in a standalone
+browser editor. Automations that can act on their own
 still can't act *unsupervised*: destructive or sensitive tool calls pass
 through a human-in-the-loop gate, so the agent never sends a message or writes a
 file without showing you the request first.
@@ -176,7 +177,7 @@ tap) an image to see the dark variant via your browser's `prefers-color-scheme`.
 ### From a release build
 
 Grab the latest APK from the
-[**Releases**](https://github.com/alexeyw/PersonalAndroidAIAgent/releases) page
+[**Releases**](https://github.com/alexeyw/knotwork/releases) page
 and install it on an Android 16+ device. Two flavours are published:
 
 - **`full`** — the standard build, with opt-in Firebase Crashlytics for
@@ -193,8 +194,8 @@ and install it on an Android 16+ device. Two flavours are published:
 ### Build from source
 
 ```bash
-git clone https://github.com/alexeyw/PersonalAndroidAIAgent.git
-cd PersonalAndroidAIAgent
+git clone https://github.com/alexeyw/knotwork.git
+cd knotwork
 ./gradlew assembleFullDebug
 adb install app/build/outputs/apk/full/debug/app-full-debug.apk
 ```
@@ -231,6 +232,36 @@ first message once it loads.
 | Testing          | JUnit + MockK                                           |
 | Architecture tests | Konsist (Clean-Architecture layer guard, in `check`)  |
 
+## Privacy
+
+Knotwork has no account, no sign-in, and no server of its own. There is nothing
+to log into, and nothing is uploaded for the app to work.
+
+- **Conversations stay on the device by default.** Inference runs locally
+  through LiteRT-LM. Data leaves the phone only through a path you configured
+  yourself: a cloud LLM node with your own API key, or an MCP server you added.
+  Both are opt-in and both are visible in the pipeline you built.
+- **Usage statistics are local-only.** The in-app statistics are computed and
+  stored on the device and are never transmitted; a build-time architecture
+  guard fails the build if any network dependency reaches that code. Exporting
+  them is a manual action you take.
+- **Crash reporting is opt-in and off by default.** In the `full` flavour you
+  can enable anonymous crash reports (stack traces, device model, Android and
+  app version, the active pipeline and model identifiers). Message content,
+  prompts, memory, and API keys are never included. The `foss` flavour has no
+  crash-reporting dependency at all and hides the setting.
+- **Sensitive data is encrypted at rest.** The local database — chats, long-term
+  memory, run traces — is SQLCipher-encrypted, and API keys, the Hugging Face
+  token, and MCP credentials are sealed with AES-GCM under a dedicated Android
+  Keystore key.
+- **The agent asks before it acts.** Destructive and sensitive tool calls stop
+  at a human-in-the-loop confirmation, including when a pipeline runs in the
+  background from a trigger.
+
+The full threat model, including what is explicitly *out* of scope, is in
+[SECURITY.md](SECURITY.md); the per-feature behaviour is in the
+[user guide](docs/user-guide.md).
+
 ## Documentation
 
 - Architecture overview — [docs/architecture.md](docs/architecture.md).
@@ -256,6 +287,17 @@ experimentation. Expect rough edges:
   pipeline JSON schema, settings layout) between versions.
 - On-device storage formats (encrypted preferences, exported pipeline JSON)
   may still change between versions.
+- **Shared pipeline files are not yet a compatibility contract.** Exported
+  pipelines and bundles carry a version stamp (`schemaVersion: 1`,
+  `bundleVersion: 1`), but before 1.0 that stamp is a marker, not a promise:
+  the schema may change without a major bump, and no import-time migration is
+  provided. A file whose stamp does not match the build importing it is not
+  rejected — it is imported on a **best-effort** basis behind an explicit
+  warning, and fields the build does not recognise are dropped silently. In
+  practice: a pipeline you share today may come back into a later build with
+  part of its node configuration missing, so keep the original file. The format
+  is frozen as a semantic-versioning contract — breaking change means a major
+  `schemaVersion` plus a migration on import — at 1.0 at the latest.
 - **Upgrades preserve local data.** Every Room schema-version bump ships with
   an explicit migration, so an in-place update keeps your chat history,
   long-term memory, run traces, custom pipelines, and saved presets / prompt

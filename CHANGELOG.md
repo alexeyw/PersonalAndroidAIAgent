@@ -442,6 +442,15 @@ details.
   affected, which is why this survived undetected — anyone running a release
   build of `0.6.0` should update.
 
+- **"Privacy policy" in About opened a link to nowhere.** The button pointed at
+  the `#privacy` section of the project README — a section that did not exist,
+  so the link quietly dropped you at the top of the page instead. The README now
+  has a real **Privacy** section (no account, on-device by default, local-only
+  statistics, opt-in crash reporting, encryption at rest, confirmation before
+  the agent acts), and the button lands on it. A new build-time guard resolves
+  the link's anchor against the README's actual headings, so renaming the
+  heading on either side now fails the build rather than shipping a dead link.
+
 ### Changed
 
 - **What long-term memory recalls is now written down.** The user guide gains a
@@ -474,6 +483,30 @@ details.
   the end of `README.md` was removed, several dangling references to
   internal-only documents were inlined or dropped, and duplicated version
   numbers were replaced with a single source of truth.
+
+- **The repository is now `knotwork`.** It carried the old working title
+  `PersonalAndroidAIAgent` while the app itself had long since become Knotwork.
+  GitHub redirects the old URL — existing clones, links and `git` remotes keep
+  working — but every link in the documentation, the CI badge, the clone
+  command, the issue-template URLs and the in-app privacy link were rewritten to
+  the new address rather than left to lean on that redirect, which disappears
+  permanently if anyone ever creates a repository under the old name.
+
+- **What you can expect when you share a pipeline file is now stated outright.**
+  Exported pipelines and bundles carry a version stamp, and it was never
+  explained what that stamp is worth. Before 1.0 it is a marker, not a promise:
+  a file whose stamp does not match the build importing it is not rejected — it
+  loads on a best-effort basis behind a warning, and any field the build does
+  not recognise is dropped without saying which. The README pre-release notice
+  now says so, and the user guide gains a *Sharing pipeline files* section with
+  the practical consequence spelled out (keep the original — re-exporting after
+  a lossy import overwrites your only complete copy). From 1.0 the format
+  becomes a semantic-versioning contract with migration on import.
+
+- **A pointer for people arriving from Tasker, n8n or Zapier.** The README and
+  the user guide now say once, in plain terms, that a *pipeline* is what those
+  tools call a *workflow*. The app's own wording is unchanged: it says
+  "pipeline" on every screen, and the docs match it.
 
 ## [0.6.0] - 2026-07-16
 
@@ -4299,10 +4332,10 @@ that produced the initial 0.1.0 snapshot.
 - **Master key**: `EncryptedSharedPreferences` is rooted in the Android
   Keystore, so the master key is hardware-backed where available.
 
-[Unreleased]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.6.0...HEAD
-[0.6.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.5.0...v0.6.0
-[0.5.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.4.0...v0.5.0
-[0.4.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/releases/tag/v0.1.0
+[Unreleased]: https://github.com/alexeyw/knotwork/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/alexeyw/knotwork/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/alexeyw/knotwork/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/alexeyw/knotwork/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/alexeyw/knotwork/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/alexeyw/knotwork/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/alexeyw/knotwork/releases/tag/v0.1.0

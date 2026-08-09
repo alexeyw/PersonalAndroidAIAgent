@@ -51,26 +51,40 @@ fun AboutScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
             onBack = onBack,
             onOpenLicense = {
                 runCatching {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, LICENSE_URL.toUri()))
+                    context.startActivity(Intent(Intent.ACTION_VIEW, AboutLinks.LICENSE_URL.toUri()))
                 }
             },
             onOpenPrivacyPolicy = {
                 runCatching {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, PRIVACY_URL.toUri()))
+                    context.startActivity(Intent(Intent.ACTION_VIEW, AboutLinks.PRIVACY_URL.toUri()))
                 }
             },
         ),
     )
 }
 
-/** Public Apache 2.0 license URL — same the manifest already declares via `license_url`. */
-private const val LICENSE_URL = "https://www.apache.org/licenses/LICENSE-2.0"
-
 /**
- * Privacy policy URL — points at the repo README until a dedicated page
- * ships. Replace once the privacy.html page is published.
+ * Outbound web links opened from the About screen.
+ *
+ * `internal` rather than file-private so `AboutLinksTest` can assert they still
+ * resolve: both are hand-written strings that no compiler check covers, and the
+ * privacy link additionally depends on a heading anchor living in another file
+ * (the repository `README.md`). A rename on either side silently turns the
+ * user-facing button into a link to nowhere, which is exactly what the guard
+ * exists to catch.
  */
-private const val PRIVACY_URL = "https://github.com/alexeyw/PersonalAndroidAIAgent#privacy"
+internal object AboutLinks {
+
+    /** Public Apache 2.0 license URL — same the manifest already declares via `license_url`. */
+    const val LICENSE_URL = "https://www.apache.org/licenses/LICENSE-2.0"
+
+    /**
+     * Privacy policy URL — points at the `## Privacy` section of the repository
+     * README until a dedicated page ships. Replace once the privacy.html page is
+     * published.
+     */
+    const val PRIVACY_URL = "https://github.com/alexeyw/knotwork#privacy"
+}
 
 /**
  * Hand-maintained acknowledgments for the third-party components bundled in the
