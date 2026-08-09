@@ -1,5 +1,6 @@
 package app.knotwork.android.presentation.ui.about
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -20,9 +21,10 @@ class AboutLinksTest {
 
     @Test
     fun `given the license link when read then it is the canonical Apache 2 0 url`() {
-        assertTrue(
-            "License link must point at the canonical Apache 2.0 text, was ${AboutLinks.LICENSE_URL}",
-            AboutLinks.LICENSE_URL == "https://www.apache.org/licenses/LICENSE-2.0",
+        assertEquals(
+            "License link must point at the canonical Apache 2.0 text",
+            "https://www.apache.org/licenses/LICENSE-2.0",
+            AboutLinks.LICENSE_URL,
         )
     }
 

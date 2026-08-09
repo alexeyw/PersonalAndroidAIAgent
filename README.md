@@ -34,10 +34,10 @@ behaviour**. Every conversation is processed by a pipeline — what Tasker, n8n,
 or Zapier would call a *workflow*: a graph of typed nodes (input, on-device LLM,
 optional cloud LLM, tool calls, routing, decomposition, evaluation,
 clarifications, output) that you can edit inside the app or in a standalone
-browser editor. Automations that can act on their own
-still can't act *unsupervised*: destructive or sensitive tool calls pass
-through a human-in-the-loop gate, so the agent never sends a message or writes a
-file without showing you the request first.
+browser editor. Automations that can act on their own still can't act
+*unsupervised*: destructive or sensitive tool calls pass through a
+human-in-the-loop gate, so the agent never sends a message or writes a file
+without showing you the request first.
 
 ## Who it's for
 
@@ -177,8 +177,8 @@ tap) an image to see the dark variant via your browser's `prefers-color-scheme`.
 ### From a release build
 
 Grab the latest APK from the
-[**Releases**](https://github.com/alexeyw/knotwork/releases) page
-and install it on an Android 16+ device. Two flavours are published:
+[**Releases**](https://github.com/alexeyw/knotwork/releases) page and install it
+on an Android 16+ device. Two flavours are published:
 
 - **`full`** — the standard build, with opt-in Firebase Crashlytics for
   anonymous crash reporting (off by default, never collects message content).
@@ -295,9 +295,9 @@ experimentation. Expect rough edges:
   rejected — it is imported on a **best-effort** basis behind an explicit
   warning, and fields the build does not recognise are dropped silently. In
   practice: a pipeline you share today may come back into a later build with
-  part of its node configuration missing, so keep the original file. The format
-  is frozen as a semantic-versioning contract — breaking change means a major
-  `schemaVersion` plus a migration on import — at 1.0 at the latest.
+  part of its node configuration missing, so keep the original file. At 1.0 at
+  the latest the format becomes a semantic-versioning contract: a breaking
+  change then means a major `schemaVersion` plus a migration applied on import.
 - **Upgrades preserve local data.** Every Room schema-version bump ships with
   an explicit migration, so an in-place update keeps your chat history,
   long-term memory, run traces, custom pipelines, and saved presets / prompt
