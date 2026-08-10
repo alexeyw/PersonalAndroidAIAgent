@@ -41,7 +41,7 @@ class ClarificationNotificationManager @Inject constructor(@ApplicationContext p
         ensureChannelRegistered(notificationManager)
 
         val notification = NotificationCompat.Builder(context, NotificationChannels.AGENT_CLARIFICATION)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(R.drawable.ic_notif_question)
             .setContentTitle(context.getString(R.string.clarification_notification_title))
             .setContentText(question)
             .setStyle(NotificationCompat.BigTextStyle().bigText(question))

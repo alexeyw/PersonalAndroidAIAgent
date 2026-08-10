@@ -180,6 +180,19 @@ details.
   is made, and the message says plainly that the tool is not in the available list.
   A near-miss is not silently corrected to the closest match — running a different
   tool than the one named is exactly what the confirmation prompt exists to prevent.
+- **Notifications looked like they came from three different apps.** Every
+  notification the agent posts — a trigger firing, a background task finishing or
+  failing, a question, a request for approval — borrowed a stock Android icon
+  picked for rough resemblance. A finished background task showed the **download
+  complete** icon, so the status bar reported a download from an app that had
+  downloaded nothing, sitting right next to a foreground notification carrying the
+  real Knotwork mark. The approval buttons were worse than mismatched: **Approve**
+  was a media *play* symbol and **Deny** was a *trash can*, so on a destructive
+  confirmation the choice read as "run it" or "delete it" — the opposite of what
+  the buttons do. Notifications now use one deliberate set: the Knotwork mark for
+  anything that needs nothing from you, a plain tick or cross for an outcome, a
+  shield for a decision you have to make, a speech bubble for a question, and a
+  tick/cross pair on the buttons.
 - **A cloud answer cut off in transit was shown as if it were complete.** When
   the connection to a cloud provider dropped part-way through a reply, some
   providers end the stream so quietly that it looks exactly like a finished

@@ -76,8 +76,8 @@ class ApprovalNotificationManager @Inject constructor(
             ToolRisk.SENSITIVE, ToolRisk.READ_ONLY -> NotificationChannels.AGENT_APPROVAL
         }
         val smallIcon = when (risk) {
-            ToolRisk.DESTRUCTIVE -> android.R.drawable.stat_sys_warning
-            ToolRisk.SENSITIVE, ToolRisk.READ_ONLY -> android.R.drawable.ic_dialog_alert
+            ToolRisk.DESTRUCTIVE -> R.drawable.ic_notif_decision
+            ToolRisk.SENSITIVE, ToolRisk.READ_ONLY -> R.drawable.ic_notif_decision
         }
         val title = when (risk) {
             ToolRisk.DESTRUCTIVE -> context.getString(R.string.approval_notification_title_destructive)
@@ -93,12 +93,12 @@ class ApprovalNotificationManager @Inject constructor(
             .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .addAction(
-                android.R.drawable.ic_media_play,
+                R.drawable.ic_notif_done,
                 context.getString(R.string.chat_thought_approve),
                 approvePendingIntent,
             )
             .addAction(
-                android.R.drawable.ic_delete,
+                R.drawable.ic_action_deny,
                 context.getString(R.string.chat_thought_deny),
                 denyPendingIntent,
             )
@@ -146,8 +146,8 @@ class ApprovalNotificationManager @Inject constructor(
             ToolRisk.SENSITIVE, ToolRisk.READ_ONLY -> NotificationChannels.AGENT_APPROVAL
         }
         val smallIcon = when (risk) {
-            ToolRisk.DESTRUCTIVE -> android.R.drawable.stat_sys_warning
-            ToolRisk.SENSITIVE, ToolRisk.READ_ONLY -> android.R.drawable.ic_dialog_alert
+            ToolRisk.DESTRUCTIVE -> R.drawable.ic_notif_decision
+            ToolRisk.SENSITIVE, ToolRisk.READ_ONLY -> R.drawable.ic_notif_decision
         }
         val title = when (risk) {
             ToolRisk.DESTRUCTIVE -> context.getString(R.string.approval_notification_title_destructive)
@@ -171,19 +171,19 @@ class ApprovalNotificationManager @Inject constructor(
 
         if (risk == ToolRisk.DESTRUCTIVE) {
             builder.addAction(
-                android.R.drawable.ic_menu_view,
+                R.drawable.ic_action_open,
                 context.getString(R.string.approval_notification_review_in_chat),
                 deepLink,
             )
         } else {
             builder.addAction(
-                android.R.drawable.ic_media_play,
+                R.drawable.ic_notif_done,
                 context.getString(R.string.chat_thought_approve),
                 persistentPendingIntent(sessionId, runId, ApprovalAction.APPROVE, APPROVE_OFFSET),
             )
         }
         builder.addAction(
-            android.R.drawable.ic_delete,
+            R.drawable.ic_action_deny,
             context.getString(R.string.chat_thought_deny),
             persistentPendingIntent(sessionId, runId, ApprovalAction.DENY, DENY_OFFSET),
         )
