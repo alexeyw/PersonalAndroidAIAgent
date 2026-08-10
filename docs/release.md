@@ -86,9 +86,14 @@ extension (`*.jks` / `*.keystore` / `*.p12` …) plus `local.properties`,
 
 ### Current distribution state
 
-Until a maintainer provisions a real release keystore, GitHub-Release builds
-are debug-signed via the fallback above. This is acceptable for the pre-release
-sideload channel because:
+The debug fallback exists so that a clean checkout still builds; it is **not** a
+path any published artefact can take. `release.yml` refuses to run without
+release credentials and re-checks the signer of every artefact it produces
+(§3 *Provisioning the keystore in CI*), so everything attached to a GitHub
+Release from that workflow onwards is release-signed.
+
+Artefacts published **before** that workflow existed were debug-signed via the
+fallback. That was acceptable for the pre-release sideload channel because:
 
 - the debug signing identity is well-known and not a secret;
 - sideloading does not require a stable signing identity across releases
@@ -138,42 +143,103 @@ certificate on every subsequent release.
 
 ### Provisioning the keystore in CI
 
-CI builds read the same four keys from the environment, so they are injected
-as **repository secrets** rather than checked-in files. Store the keystore
-itself as a base64-encoded secret and materialise it before the build:
+`.github/workflows/release.yml` resolves the same four signing keys as above
+from the environment rather than from `local.properties`, so they — plus the
+real Firebase config — are injected as **repository secrets** instead of
+checked-in files. This is a one-time setup; §9 is the per-release procedure
+that uses it.
 
-```yaml
-# GitHub Actions — release-signing step (illustrative).
-- name: Decode release keystore
-  run: echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 --decode > app/release.keystore
-- name: Assemble signed release
-  env:
-    RELEASE_KEYSTORE_PATH: app/release.keystore
-    RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
-    RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
-    RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
-  run: ./gradlew :app:bundleRelease
+Everything below is run **once**, on the machine that holds the keystore.
+
+**1 — Base64-encode the keystore.** The secret has to be a single line, so
+strip the newlines the encoder inserts:
+
+```bash
+base64 < app/release.keystore | tr -d '\n' | pbcopy   # macOS; `xclip -sel c` on Linux
 ```
 
-The default `check.yml` gate does **not** build release artefacts, so it needs
-no signing secrets; wire the snippet above only into a dedicated release/publish
-workflow.
+**2 — Read the certificate fingerprint.** This is what every released artefact
+will be checked against, so take it from the keystore itself rather than from
+a previous build:
+
+```bash
+keytool -list -v -keystore app/release.keystore -alias agent-release \
+    | grep 'SHA256:'
+# SHA256: A1:B2:C3:…   ← copy the whole value
+```
+
+**3 — Base64-encode the real `google-services.json`.** The copy committed at
+`app/google-services.json` is a **placeholder**: it keeps a clean checkout
+building and keeps the real Firebase project id out of the repository, but a
+`full` build made with it has crash reporting pointed at a project that does
+not exist. Download the real file from the Firebase console (project settings →
+your Android app → `google-services.json`) and encode it the same way:
+
+```bash
+base64 < ~/Downloads/google-services.json | tr -d '\n' | pbcopy
+```
+
+**4 — Store them.** Repository → *Settings* → *Secrets and variables* →
+*Actions*:
+
+| Name                          | Kind     | Value                                                    |
+|-------------------------------|----------|----------------------------------------------------------|
+| `RELEASE_KEYSTORE_BASE64`     | secret   | Output of step 1.                                        |
+| `RELEASE_KEYSTORE_PASSWORD`   | secret   | Keystore (store) password.                               |
+| `RELEASE_KEY_ALIAS`           | secret   | Key alias, e.g. `agent-release`.                         |
+| `RELEASE_KEY_PASSWORD`        | secret   | Key password.                                            |
+| `GOOGLE_SERVICES_JSON_BASE64` | secret   | Output of step 3.                                        |
+| `RELEASE_CERT_SHA256`         | **variable** | Fingerprint from step 2 (colons and case are ignored). |
+
+The fingerprint is a **variable**, not a secret, on purpose. It is public
+information — it is embedded in every APK the project has ever shipped — and
+a secret would be masked as `***` in the workflow log, turning the one check
+that is supposed to be readable into an unreadable one.
+
+**What the workflow does with them.** The keystore is decoded into
+`$RUNNER_TEMP`, never into the checkout, so nothing under the workspace can
+sweep it into an uploaded artefact, and it is deleted in a step that runs even
+when the build fails. Passwords reach `keytool` on stdin rather than in argv.
+The real `google-services.json` overwrites the placeholder for the `full`
+build only and is restored from Git afterwards; the `foss` build is a separate
+Gradle invocation that never loads the Google plugins at all (§8), and the
+`debug` build type keeps its own committed placeholder so dogfooding never
+reports into the real Firebase project.
+
+**Why the setup is checked before the build, not after.** A missing or blank
+credential does not fail the build — `resolveReleaseSigning()` returns `null`
+and the release build silently falls back to the debug keystore (§3). So the
+workflow fails loudly on an unset secret, and verifies the keystore's
+fingerprint against `RELEASE_CERT_SHA256` *before* starting an hour-long build
+rather than discovering the wrong signer at the end of it.
+
+The `check.yml` gate does **not** build release artefacts and needs none of
+these secrets.
 
 ### Verifying the signature
 
-After a signed build, confirm the artefact carries the expected certificate
-(not the debug one) with `apksigner` from the Android SDK build-tools:
+`release.yml` verifies every artefact it publishes and fails the release on a
+mismatch, so this is the manual equivalent — useful for a locally built
+artefact or for auditing something already downloaded.
+
+For an APK, use `apksigner` from the Android SDK build-tools:
 
 ```bash
 apksigner verify --print-certs --verbose \
-    app/build/outputs/apk/release/app-release.apk
+    app/build/outputs/apk/full/release/app-full-release.apk
 ```
 
-Check the printed `Signer #1 certificate DN` matches the keystore's
-Distinguished Name (e.g. `CN=Knotwork`) and that the SHA-256
-fingerprint matches the one Play Console registered for the app. The debug
-keystore prints `CN=Android Debug`, so this is the quickest way to catch an
-accidental fallback to debug signing.
+An AAB carries only a v1 (JAR) signature, which `apksigner` does not read;
+`keytool` prints the signer certificate of a signed JAR directly:
+
+```bash
+keytool -printcert -jarfile app/build/outputs/bundle/fullRelease/app-full-release.aab
+```
+
+In both cases check that the printed SHA-256 fingerprint matches
+`RELEASE_CERT_SHA256` (and the one Play Console registered for the app). The
+debug keystore prints `CN=Android Debug`, so the DN is the quickest way to spot
+an accidental fallback to debug signing.
 
 ## 4. R8 minification + resource shrinking
 
@@ -242,20 +308,21 @@ Future wins (left out of scope for now):
 ## 6. App Bundle build (Play Store upload)
 
 ```bash
-./gradlew :app:bundleRelease
-# Output: app/build/outputs/bundle/release/app-release.aab  (~37 MiB)
+./gradlew :app:bundleFullRelease
+# Output: app/build/outputs/bundle/fullRelease/app-full-release.aab  (~37 MiB)
 ```
 
 The AAB is the format Play Store wants; per-device APKs delivered through
-Play Store are smaller than `app-release.apk` because they only ship the
-ABI + density resources the target device needs.
+Play Store are smaller than `app-full-release.apk` because they only ship the
+ABI + density resources the target device needs. Only the `full` flavour has an
+AAB build — the `foss` flavour goes to F-Droid as an APK (§8).
 
 To inspect what Play Store would deliver to a specific device:
 
 ```bash
 # bundletool is in the Android SDK cmdline-tools.
 bundletool build-apks \
-    --bundle=app-release.aab \
+    --bundle=app-full-release.aab \
     --output=app.apks \
     --mode=universal
 bundletool get-size total --apks=app.apks
@@ -278,6 +345,11 @@ bundletool get-size total --apks=app.apks
 The integration PR gates on the same three commands in CI, plus the
 manual smoke test on the reference device described in
 [`testing.md`](testing.md) § *What the automated gate does NOT cover*.
+
+`release.yml` (§9) runs `check` as its first job and gets the release-config
+lint through `lintVital<Variant>Release`, which AGP wires into every release
+assemble. That is the fatal-severity subset of `lintFullRelease`, so running the
+command above before tagging still buys something the release pipeline does not.
 
 ## 8. FOSS / F-Droid build
 
@@ -363,3 +435,64 @@ sources of non-determinism in this project:
 The `foss` release is otherwise a standard R8-minified arm64-v8a build (§4); the
 F-Droid build recipe should disable any signing config so F-Droid applies its
 own signature.
+
+## 9. Cutting a release
+
+Releases are built by `.github/workflows/release.yml`, not by hand. The
+maintainer's part is the version bump, the tag, and the decision to publish.
+
+**Before tagging**
+
+1. Bump `versionCode` **and** `versionName` in `app/build.gradle.kts`. The
+   workflow refuses to build a tag that disagrees with `versionName`
+   (`./gradlew :app:verifyReleaseVersion -PreleaseTag=v0.7.0` is the same check,
+   runnable locally), so this is the step that decides what the release is
+   called. `versionCode` must increase monotonically — Play rejects a re-used
+   one, and Android refuses the in-place upgrade.
+2. Move the `[Unreleased]` section of [`CHANGELOG.md`](../CHANGELOG.md) under
+   the new version heading.
+3. Land both on `main` through the normal review path.
+
+**Tagging**
+
+```bash
+git checkout main && git pull
+git tag -a v0.7.0 -m "Knotwork 0.7.0"
+git push origin v0.7.0
+```
+
+The tag push starts the workflow. It reuses the `check` gate, verifies the tag
+against `versionName`, materialises the keystore and the real
+`google-services.json`, builds `fullRelease` (APK + AAB) and — in a separate
+Gradle invocation, so the Google plugins stay out of it (§8) — `fossRelease`
+(APK), re-verifies the signer of all three artefacts against
+`RELEASE_CERT_SHA256`, and attaches them plus a `SHA256SUMS.txt` to a **draft**
+GitHub Release. The R8 mapping files are uploaded as a workflow artefact (90-day
+retention) rather than as a public asset — they belong with the maintainer, for
+deobfuscating crash reports.
+
+Note that the release build only *injects* the Crashlytics mapping-file id
+(`injectCrashlyticsMappingFileIdFullRelease`); it does not upload the mapping.
+Until `./gradlew :app:uploadCrashlyticsMappingFileFullRelease` is run against
+the same build, Crashlytics stack traces for that version stay obfuscated —
+which is what the archived workflow artefact is for.
+
+**Publishing**
+
+The release is left as a draft on purpose: publishing is a deliberate act, the
+same way merging a pull request is. Before pressing publish:
+
+1. Replace the auto-generated notes with the CHANGELOG section for this version.
+2. Download the APK and install it on the reference device — the automated gate
+   is JVM-only and never runs the artefact (see
+   [`testing.md`](testing.md) § *What the automated gate does NOT cover*).
+3. Publish.
+
+**Dry-running the workflow.** *Actions* → *Release* → *Run workflow* takes a tag
+as input and performs every step except creating the release, so the pipeline
+(and freshly rotated secrets) can be exercised without minting a throwaway tag.
+It still requires the tag to match the declared `versionName`.
+
+**A tag with a pre-release suffix** (`v0.7.0-rc1`) is marked as a prerelease on
+GitHub and does not become the "Latest" download. A plain `0.x` tag does not —
+pre-1.0 is still the version users are meant to install.
