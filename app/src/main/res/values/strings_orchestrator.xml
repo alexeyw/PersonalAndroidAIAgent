@@ -130,6 +130,15 @@
     <string name="orchestrator_library_import_unreadable">Selected file could not be read.</string>
     <string name="orchestrator_library_import_schema_title">Schema mismatch</string>
     <string name="orchestrator_library_import_schema_body" tools:ignore="PluralsCandidate">This pipeline was written for schema v%1$d but this build expects v%2$d. Some configuration may not import cleanly.</string>
+    <string name="orchestrator_library_import_dropped_heading">These settings are in the file but cannot be imported by this version, and will be lost:</string>
+    <plurals name="orchestrator_library_import_dropped_more">
+        <item quantity="one">…and %1$d more</item>
+        <item quantity="other">…and %1$d more</item>
+    </plurals>
+    <plurals name="orchestrator_library_import_dropped_feedback">
+        <item quantity="one">Imported. One setting in the file could not be read by this version and was not kept.</item>
+        <item quantity="other">Imported. %1$d settings in the file could not be read by this version and were not kept.</item>
+    </plurals>
     <string name="orchestrator_library_import_anyway">Import anyway</string>
 
     <!-- Pipeline id-collision resolution (single import) -->

@@ -293,9 +293,11 @@ experimentation. Expect rough edges:
   the schema may change without a major bump, and no import-time migration is
   provided. A file whose stamp does not match the build importing it is not
   rejected — it is imported on a **best-effort** basis behind an explicit
-  warning, and fields the build does not recognise are dropped silently. In
-  practice: a pipeline you share today may come back into a later build with
-  part of its node configuration missing, so keep the original file. At 1.0 at
+  warning. What the import *does* now tell you is exactly which settings it
+  could not read, by name, whether or not the stamp matches — because the
+  format adds fields without bumping the stamp, so a matching version is no
+  guarantee that nothing was lost. Keep the original file anyway: naming the
+  loss is not the same as preventing it. At 1.0 at
   the latest the format becomes a semantic-versioning contract: a breaking
   change then means a major `schemaVersion` plus a migration applied on import.
 - **Upgrades preserve local data.** Every Room schema-version bump ships with

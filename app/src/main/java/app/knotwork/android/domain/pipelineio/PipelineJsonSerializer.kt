@@ -95,6 +95,67 @@ object PipelineJsonSerializer {
      */
     const val CURRENT_SCHEMA_VERSION: Int = 1
 
+    /**
+     * Every `schemaVersion` this build knows how to read.
+     *
+     * Today this is exactly `{1}` — the stamp has never held another value, so
+     * there is no older format to migrate from and [migrate] is an identity.
+     * The set is spelled out anyway because it is the thing a future version
+     * bump has to extend: adding `2` here without also adding its migration
+     * step is a compile-visible omission, whereas the previous
+     * `version == CURRENT` test would have quietly started rejecting every
+     * v1 document the moment the stamp moved.
+     *
+     * A version **outside** this set is not a failure — the document is still
+     * parsed best-effort and reported as
+     * [PipelineImportOutcome.SchemaMismatch], because a file from a future
+     * build is usually still mostly readable.
+     *
+     * There is deliberately **no migration function yet**. A no-op `migrate()`
+     * would be a placeholder that reads as a working mechanism, and the first
+     * real bump has to touch [parse] anyway to decide *where* the step runs.
+     * When `2` is added here, its transformation goes with it — and the loop in
+     * `PipelineJsonSerializerTest` that asserts every member of this set parses
+     * will fail until it does.
+     */
+    val SUPPORTED_SCHEMA_VERSIONS: Set<Int> = setOf(1)
+
+    /**
+     * Keys this build reads at each level of the document. Anything present in
+     * a document and absent from these sets is data we cannot represent, and
+     * is reported through `droppedFields` rather than discarded quietly.
+     *
+     * Kept beside the serializer that writes them: a field added to
+     * [serialize] without being added here would immediately show up as a
+     * false "dropped" report on the app's own exports, which is a much louder
+     * failure than the silent loss it replaces.
+     */
+    private val ROOT_KEYS = setOf(
+        "schemaVersion",
+        "id",
+        "name",
+        "updatedAt",
+        "nodes",
+        "connections",
+        "samplePrompts",
+        "memoryRetrievalQuery",
+    )
+    private val NODE_KEYS = setOf("id", "type", "position", "label", "config", "contextConfig", "nodeConfig")
+    private val POSITION_KEYS = setOf("x", "y")
+    private val CONFIG_KEYS = setOf(
+        "systemPrompt", "cloudProvider", "modelPath", "toolName", "targetPipelineId", "skillId",
+        "clarificationTimeoutMs", "conditionPrompt", "conditionKeywords", "conditionComplexity",
+        "conditionHasImage",
+    )
+    private val CONTEXT_CONFIG_KEYS = setOf(
+        "chatHistory",
+        "originalTask",
+        "nodeInput",
+        "longTermMemory",
+        "toolResults",
+    )
+    private val CONNECTION_KEYS = setOf("id", "fromNodeId", "toNodeId", "label")
+
     /* ----------------------------------------------------------------- *
      *  Serialise
      * ----------------------------------------------------------------- */
@@ -216,6 +277,11 @@ object PipelineJsonSerializer {
             return PipelineImportOutcome.Failure("Missing required field: schemaVersion")
         }
         val schemaVersion = root.optInt("schemaVersion", -1)
+        val supported = schemaVersion in SUPPORTED_SCHEMA_VERSIONS
+
+        // Collected before building, because building is what drops them:
+        // `buildNode` reads the keys it knows and never looks at the rest.
+        val droppedFields = collectDroppedFields(root)
 
         val graph = try {
             buildGraph(root)
@@ -225,16 +291,68 @@ object PipelineJsonSerializer {
             return PipelineImportOutcome.Failure("Malformed pipeline document: ${e.message}")
         }
 
-        return if (schemaVersion == CURRENT_SCHEMA_VERSION) {
-            PipelineImportOutcome.Success(graph)
+        return if (supported) {
+            PipelineImportOutcome.Success(graph = graph, droppedFields = droppedFields)
         } else {
             PipelineImportOutcome.SchemaMismatch(
                 graph = graph,
                 foundVersion = schemaVersion,
                 expectedVersion = CURRENT_SCHEMA_VERSION,
+                droppedFields = droppedFields,
             )
         }
     }
+
+    /**
+     * Lists, as dotted paths, every key the document carries that this build
+     * does not read.
+     *
+     * This is the answer to the real complaint about the importer: a document
+     * whose `schemaVersion` matches can still contain fields we silently throw
+     * away, because the format's convention is that additive fields do **not**
+     * bump the version. A version check could never have caught that; walking
+     * the document against the known key sets can.
+     *
+     * `nodeConfig` is deliberately not descended into — it is an opaque blob
+     * that round-trips verbatim, so nothing inside it is ever lost.
+     *
+     * @param root the parsed document.
+     * @return dotted paths, in document order, e.g. `nodes[1].config.topK`.
+     *   Empty for a document this build wrote.
+     */
+    private fun collectDroppedFields(root: JSONObject): List<String> {
+        val dropped = mutableListOf<String>()
+        unknownKeys(root, ROOT_KEYS).forEach { dropped += it }
+
+        root.optJSONArray("nodes")?.let { nodes ->
+            for (i in 0 until nodes.length()) {
+                val node = nodes.optJSONObject(i) ?: continue
+                val prefix = "nodes[$i]"
+                unknownKeys(node, NODE_KEYS).forEach { dropped += "$prefix.$it" }
+                node.optJSONObject("position")
+                    ?.let { unknownKeys(it, POSITION_KEYS) }
+                    ?.forEach { dropped += "$prefix.position.$it" }
+                node.optJSONObject("config")
+                    ?.let { unknownKeys(it, CONFIG_KEYS) }
+                    ?.forEach { dropped += "$prefix.config.$it" }
+                node.optJSONObject("contextConfig")
+                    ?.let { unknownKeys(it, CONTEXT_CONFIG_KEYS) }
+                    ?.forEach { dropped += "$prefix.contextConfig.$it" }
+            }
+        }
+
+        root.optJSONArray("connections")?.let { connections ->
+            for (i in 0 until connections.length()) {
+                val connection = connections.optJSONObject(i) ?: continue
+                unknownKeys(connection, CONNECTION_KEYS).forEach { dropped += "connections[$i].$it" }
+            }
+        }
+        return dropped
+    }
+
+    /** Keys of [json] that are not in [known], in document order. */
+    private fun unknownKeys(json: JSONObject, known: Set<String>): List<String> =
+        json.keys().asSequence().filterNot { it in known }.toList()
 
     private fun buildGraph(root: JSONObject): PipelineGraph {
         val id = root.optString("id").takeIf { it.isNotBlank() }
