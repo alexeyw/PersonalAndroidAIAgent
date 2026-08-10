@@ -1317,10 +1317,19 @@ file in a later build:
   and let you continue.
 - **Continuing is a best-effort import.** The graph loads, but any field
   the importing build does not recognise is dropped — the pipeline can
-  come back with part of its node configuration missing, and it will not
-  tell you which part.
-- **So keep the original file.** Re-exporting after a lossy import
-  overwrites the only complete copy you had.
+  come back with part of its node configuration missing.
+- **The import now names what it dropped.** The warning lists the exact
+  settings it could not read (`nodes[1].config.samplingTopK`, and so on),
+  so you can judge whether the loss matters instead of guessing.
+- **A matching stamp is not a guarantee that nothing was lost.** The
+  format adds new fields without bumping the version, so a file written
+  by a newer build can claim the same `schemaVersion` and still contain
+  settings this build cannot read. That case used to be completely
+  invisible; it is now reported the same way, as a notice after the
+  import.
+- **So keep the original file.** Naming the loss is not preventing it,
+  and re-exporting after a lossy import overwrites the only complete copy
+  you had.
 
 From 1.0 onwards the format is a semantic-versioning contract: a breaking
 change means a major `schemaVersion` and a migration applied on import.

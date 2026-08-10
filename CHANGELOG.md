@@ -228,6 +228,16 @@ details.
   anything that needs nothing from you, a plain tick or cross for an outcome, a
   shield for a decision you have to make, a speech bubble for a question, and a
   tick/cross pair on the buttons.
+- **Importing a pipeline no longer loses settings without telling you.** When a
+  pipeline file contained anything the app could not read, those settings were
+  discarded in silence — the graph loaded, looked fine, and part of its node
+  configuration was simply gone. The import now names exactly what it could not
+  read, path by path, so you can judge whether the loss matters before keeping
+  the result. This is reported even when the file's version stamp matches the
+  app's: new fields are added to the format without changing that stamp, so a
+  file written by a newer build can claim the same version and still carry
+  settings this one cannot read. That case was previously invisible — a matching
+  version produced no warning at all.
 - **A cloud answer cut off in transit was shown as if it were complete.** When
   the connection to a cloud provider dropped part-way through a reply, some
   providers end the stream so quietly that it looks exactly like a finished
