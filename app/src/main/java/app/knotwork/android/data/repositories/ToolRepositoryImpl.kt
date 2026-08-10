@@ -32,8 +32,14 @@ import timber.log.Timber
 import javax.inject.Inject
 
 /**
- * Implementation of [ToolRepository] that manages multiple [McpClient] connections
- * and local AppFunctions based on application settings.
+ * Implementation of [ToolRepository] that merges the agent's tool sources —
+ * built-ins, AppFunctions discovered on the device, and the tools advertised by
+ * the MCP servers configured in settings — and dispatches calls to them.
+ *
+ * It does **not** own the MCP connections: live [McpClient] instances belong to
+ * the shared [McpConnectionPool], which `McpServerRepositoryImpl` uses too. That
+ * is deliberate — while the two kept separate pools, the Tools screen's health
+ * badge could describe a session the agent's next call would not use.
  *
  * @property localToolExecutors Hilt multibinding map keyed by tool name. Each entry
  * implements one of the built-in agent tools (e.g. `schedule_task`, `delegate_task`,
@@ -283,10 +289,10 @@ class ToolRepositoryImpl @Inject constructor(
                 !(httpDisabled && tool.name == HttpRequestExecutor.TOOL_NAME)
         }
 
-        // Walk persisted-config order, not `mcpClients.entries`. ConcurrentHashMap
-        // iteration is non-deterministic; the user's ordering in Settings →
-        // External providers must dictate the probe order so multi-provider
-        // routing stays predictable.
+        // Walk the persisted config order rather than iterating the pool's own map:
+        // its iteration order is non-deterministic, and the user's ordering in
+        // Settings → External providers must dictate the probe order so
+        // multi-provider routing stays predictable.
         val mcpTools = configs.flatMap { config ->
             val client = mcpConnectionPool.peek(config.url) ?: return@flatMap emptyList()
             try {
@@ -385,10 +391,10 @@ class ToolRepositoryImpl @Inject constructor(
         val disabledMcp = settingsRepository.disabledMcpTools.first()
         var sawDisabled = false
         var lastExecutionError: Throwable? = null
-        // Walk in user-controlled order (Settings → External providers). Skipping
-        // `mcpClients.entries` for ConcurrentHashMap's non-deterministic iteration
-        // means multi-provider routing is now both deterministic and matches the
-        // priority the user actually configured.
+        // Walk in user-controlled order (Settings → External providers) rather than
+        // iterating the pool's own map, whose order is non-deterministic — so
+        // multi-provider routing is both deterministic and matches the priority the
+        // user actually configured.
         for (config in configs) {
             val client = mcpConnectionPool.peek(config.url) ?: continue
             if (!advertisesTool(client, name)) continue

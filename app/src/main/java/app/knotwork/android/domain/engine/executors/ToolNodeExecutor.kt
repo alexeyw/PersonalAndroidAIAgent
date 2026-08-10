@@ -321,8 +321,12 @@ class ToolNodeExecutor @Inject constructor(
         if (match != null) {
             return match.name
         }
-        val offered = availableTools.joinToString(", ") { it.name }
-            .take(AVAILABLE_TOOLS_ERROR_CHARS)
+        val allNames = availableTools.joinToString(", ") { it.name }
+        val offered = if (allNames.length > AVAILABLE_TOOLS_ERROR_CHARS) {
+            allNames.take(AVAILABLE_TOOLS_ERROR_CHARS) + "…"
+        } else {
+            allNames
+        }
         val errorMsg = "Tool $normalised not found in available tools"
         emit(
             NodeOutput.Console(
