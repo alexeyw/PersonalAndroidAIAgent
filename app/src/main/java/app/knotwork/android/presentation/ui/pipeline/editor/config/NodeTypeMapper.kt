@@ -100,6 +100,33 @@ internal object CloudProviderMapper {
     fun toWireId(provider: CatalogCloudProvider): String = toDomain(provider)?.id ?: DomainCloudProvider.AUTO_KEY
 
     /**
+     * Round-trip-safe variant of [toWireId] for a node that already has a provider.
+     *
+     * The catalog→domain direction is lossy where several domain providers share one
+     * tile: `COMPATIBLE` covers both [DomainCloudProvider.DEEPSEEK] and
+     * [DomainCloudProvider.OLLAMA], so [toWireId] alone rewrote every Ollama node to
+     * DeepSeek the moment its config sheet was opened and saved. For a local-first
+     * product that is a privacy change, not a cosmetic one — the node silently starts
+     * sending the same data to a third-party endpoint instead of a LAN server.
+     *
+     * The rule: if the node's existing wire-id already resolves to the tile the form is
+     * showing, the user did not change the provider, so keep what was there. Only a
+     * genuine change of tile — or an unrecognised / absent previous value — falls
+     * through to [toWireId]'s canonical pick.
+     *
+     * @param provider the tile currently selected in the form.
+     * @param previousWireId the `cloudProvider` wire-id already stored on the node.
+     * @return the wire-id to persist.
+     */
+    fun toWireIdPreserving(provider: CatalogCloudProvider, previousWireId: String?): String {
+        val recognised = previousWireId?.takeIf {
+            it.isNotBlank() &&
+                (it.equals(DomainCloudProvider.AUTO_KEY, ignoreCase = true) || DomainCloudProvider.fromId(it) != null)
+        }
+        return recognised?.takeIf { fromWireId(it) == provider } ?: toWireId(provider)
+    }
+
+    /**
      * Translates a domain wire-id into the matching catalog selection. Both [DomainCloudProvider.DEEPSEEK]
      * and [DomainCloudProvider.OLLAMA] map to the catalog's `COMPATIBLE` tile.
      *

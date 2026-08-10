@@ -139,19 +139,21 @@ internal object NodeConfigCodec {
             )
             is CloudConfig -> withJson.copy(
                 systemPrompt = config.systemPrompt,
-                // `toWireId` keeps `CloudProvider.AUTO` as the "auto" sentinel
-                // (rather than collapsing to a concrete provider), so saving the
-                // sheet does not rewrite an auto-routing node to OpenAI.
-                cloudProvider = CloudProviderMapper.toWireId(config.provider),
+                // `toWireIdPreserving` keeps `CloudProvider.AUTO` as the "auto"
+                // sentinel (rather than collapsing to a concrete provider), so
+                // saving the sheet does not rewrite an auto-routing node to
+                // OpenAI — and, for the same reason, does not rewrite an Ollama
+                // node to DeepSeek just because both share the `COMPATIBLE` tile.
+                cloudProvider = CloudProviderMapper.toWireIdPreserving(config.provider, source.cloudProvider),
             )
             is ToolConfig -> withJson.copy(
                 toolName = config.toolId.takeIf { it.isNotBlank() },
-                cloudProvider = engineWire(config.engineProvider),
+                cloudProvider = engineWire(config.engineProvider, source.cloudProvider),
             )
             is IfConditionConfig -> withJson.copy(
                 conditionPrompt = config.expression,
                 conditionHasImage = config.branchOnImage,
-                cloudProvider = engineWire(config.engineProvider),
+                cloudProvider = engineWire(config.engineProvider, source.cloudProvider),
             )
             is ClarificationConfig -> withJson.copy(
                 clarificationTimeoutMs = config.timeoutMs?.toLong(),
@@ -176,9 +178,12 @@ internal object NodeConfigCodec {
                 skillId = config.skillId.takeIf { it.isNotBlank() },
                 cloudProvider = if (config.engine == SkillEngine.CLOUD) CloudProvider.AUTO_KEY else null,
             )
-            is IntentRouterConfig -> withJson.copy(cloudProvider = engineWire(config.engineProvider))
-            is DecompositionConfig -> withJson.copy(cloudProvider = engineWire(config.engineProvider))
-            is EvaluationConfig -> withJson.copy(cloudProvider = engineWire(config.engineProvider))
+            is IntentRouterConfig ->
+                withJson.copy(cloudProvider = engineWire(config.engineProvider, source.cloudProvider))
+            is DecompositionConfig ->
+                withJson.copy(cloudProvider = engineWire(config.engineProvider, source.cloudProvider))
+            is EvaluationConfig ->
+                withJson.copy(cloudProvider = engineWire(config.engineProvider, source.cloudProvider))
             is QueueProcessorConfig,
             is SummaryConfig,
             is InputConfig,
@@ -191,9 +196,14 @@ internal object NodeConfigCodec {
      * `cloudProvider` wire-id: `null` (on-device) stays `null`; a concrete cloud
      * provider yields its wire-id. `Auto` never reaches here — the structured
      * engine picker offers only on-device + concrete providers.
+     *
+     * [previousWireId] is the value already on the node, forwarded so an unchanged
+     * `COMPATIBLE` selection keeps the provider it actually had (Ollama stays
+     * Ollama) instead of collapsing to the tile's canonical DeepSeek — the same
+     * round-trip hazard the CLOUD node has.
      */
-    private fun engineWire(provider: CatalogCloudProvider?): String? =
-        provider?.let { CloudProviderMapper.toWireId(it) }
+    private fun engineWire(provider: CatalogCloudProvider?, previousWireId: String?): String? =
+        provider?.let { CloudProviderMapper.toWireIdPreserving(it, previousWireId) }
 
     /**
      * Inverse of [engineWire]: maps a node's flat `cloudProvider` back to the

@@ -19,7 +19,7 @@ import dagger.hilt.components.SingletonComponent
  *
  *  - [toolRepository] — caller-side dispatch (`getAvailableTools`, `executeTool`) plus the
  *    canonical risk classification consumed by the HITL gate (`getRisk`).
- *  - [settingsRepository] — exercised through `setAppFunctionRiskOverride` to assert the
+ *  - [settingsRepository] — exercised through `setToolRiskOverride` to assert the
  *    SENSITIVE → READ_ONLY downgrade flow short-circuits the gate.
  *  - [chatRepository] — passed to the manually-constructed `ToolNodeExecutor` so the
  *    executor's tool-observation persistence side effect hits the real database (the

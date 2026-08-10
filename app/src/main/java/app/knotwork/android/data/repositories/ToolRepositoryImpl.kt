@@ -523,18 +523,24 @@ class ToolRepositoryImpl @Inject constructor(
         }
 
         if (localAppFunctionManager.isDiscovered(toolName)) {
-            val overrides = settingsRepository.appFunctionRiskOverrides.first()
+            val overrides = settingsRepository.toolRiskOverrides.first()
             return overrides[toolName] ?: ToolRisk.SENSITIVE
         }
 
         syncMcpClients()
+        val overrides = settingsRepository.toolRiskOverrides.first()
         // Walk in persisted-config order for the same determinism reasons as
         // executeMcpTool / getAvailableTools. distinctMcpConfigs() defends
         // against a duplicate-URL row that updateMcpServer can persist.
         for (config in distinctMcpConfigs()) {
             val entry = mcpClients[config.url] ?: continue
             if (advertisesTool(entry.client, toolName)) {
-                return ToolRisk.SENSITIVE
+                // Keyed per server, not per bare name: a long shared prefix is
+                // normal in MCP catalogues, and two servers advertising the same
+                // `create_issue` must stay independent decisions — the same rule
+                // `disabledMcpTools` already follows.
+                val key = McpServerRepositoryImpl.mcpToolId(serverUrl = config.url, toolName = toolName)
+                return overrides[key] ?: ToolRisk.SENSITIVE
             }
         }
 

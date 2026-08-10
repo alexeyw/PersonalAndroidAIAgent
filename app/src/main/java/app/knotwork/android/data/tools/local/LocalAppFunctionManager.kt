@@ -138,7 +138,7 @@ class LocalAppFunctionManager(private val context: Context, private val codec: A
      * delete. Defaulting conservatively means the Human-in-the-Loop gate prompts the
      * user on the first call; users can downgrade specific AppFunctions to
      * [ToolRisk.READ_ONLY] (or upgrade to [ToolRisk.DESTRUCTIVE]) via
-     * `SettingsRepository.setAppFunctionRiskOverride`. The override is the
+     * `SettingsRepository.setToolRiskOverride`. The override is the
      * authoritative source consumed by `ToolRepository.getRisk`.
      */
     suspend fun getAvailableFunctions(): List<AgentTool> {
