@@ -852,12 +852,18 @@ merges three layers:
    to `SENSITIVE` because the platform `AppFunctionManager` metadata
    gives no trustworthy signal about side effects. Users can override
    per-tool through
-   `SettingsRepository.setAppFunctionRiskOverride(toolName, risk)`,
-   which writes into the `appFunctionRiskOverrides` flow persisted
+   `SettingsRepository.setToolRiskOverride(toolKey, risk)`,
+   which writes into the `toolRiskOverrides` flow persisted
    under DataStore key `app_function_risk_overrides`. The override
    always wins over the conservative default.
-3. **MCP tools** are blanket `SENSITIVE` until a per-server policy
-   scheme is introduced.
+3. **MCP tools** also default to `SENSITIVE`, and take the override from
+   the same map — keyed per server by the tool's
+   `mcp:<sha8(serverUrl)>:<toolName>` id rather than its bare name, so
+   two servers advertising the same `create_issue` stay independent
+   decisions. The override is the **user's** voice, never the server's:
+   MCP's `readOnlyHint` / `destructiveHint` annotations are deliberately
+   not consulted, because a remote server that could declare its own
+   tools read-only could walk straight past this gate.
 
 HITL contract (live):
 
@@ -884,10 +890,22 @@ HITL contract (live):
 ### 4.3. Model Context Protocol (MCP)
 
 External tool servers are integrated through MCP clients in
-`data/mcp/` (`KoogMcpClient`, `McpClient`). `ToolRepositoryImpl` holds
-active connections in a `ConcurrentHashMap<String, McpClient>` keyed by
-server id. Connections are **lazy**: they open on first use and close
-when the agent session ends. Every MCP call is wrapped in a
+`data/mcp/` (`KoogMcpClient`, `McpClient`). Live connections have a
+single owner: the `@Singleton` `McpConnectionPool`, keyed by server URL,
+holding one client per server together with the config it was connected
+with (so an edited auth tier or transport actually reconnects instead of
+lingering on stale credentials). Both consumers share it —
+`McpServerRepositoryImpl`, which owns the Tools screen's TTL-cached tool
+list and connection-status flows, and `ToolRepositoryImpl`, which routes
+the agent's real calls. That sharing is load-bearing: while each kept its
+own pool, the health indicator could describe a session the next tool
+call would not use, so the screen read "ok" against a session that was
+already dead for execution. Connections are **lazy**: they open on first
+use and close when the agent session ends. The pool's lock is per server
+URL and is held only across connect / invalidate, never while a caller
+uses the client — an MCP tool call can run for a minute, and serialising
+concurrent calls behind the connect lock would be a silent throughput
+regression. Every MCP call is wrapped in a
 `try`/`catch` that re-throws `CancellationException` from a dedicated
 first catch clause before mapping any other failure to a
 `ToolResult.Error` — so cooperative cancellation propagates cleanly and

@@ -971,4 +971,49 @@ class ToolNodeExecutorTest {
         assertTrue(result.error!!.contains("Failed to parse tool selection", ignoreCase = true))
         coVerify(exactly = 0) { toolRepository.executeTool(any(), any(), any()) }
     }
+
+    @Test
+    fun `given auto-select names a tool outside the catalogue when execute then it fails at selection`() = runTest {
+        // The reply is well-formed JSON, so the structured-output gate is happy — the
+        // name itself is the problem. Before this check the bad name travelled to the
+        // HITL gate and first surfaced at `getRisk` as "Risk lookup failed …
+        // Unknown tool", which reads like an internal fault rather than a bad pick.
+        val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = "auto")
+        coEvery { toolRepository.getAvailableTools() } returns listOf(
+            AgentTool("get-resource-alpha", "DescA", "SchemaA"),
+            AgentTool("get-resource-beta", "DescB", "SchemaB"),
+        )
+        every { llmEngine.generateResponseStream(any(), any(), any()) } returns
+            flowOf("""{"tool": "get-resource", "arguments": "x"}""")
+
+        val outputs = executor.execute(node, "Do", "session-1", "").toList()
+
+        val result = outputs.lastResult()
+        assertNotNull(result.error)
+        assertTrue(result.error!!.contains("get-resource"))
+        assertTrue(result.error!!.contains("not found in available tools"))
+        // The point of the fix: the rejection happens at the point of choice, so the
+        // risk lookup and the execution are never reached at all.
+        coVerify(exactly = 0) { toolRepository.getRisk(any(), any()) }
+        coVerify(exactly = 0) { toolRepository.executeTool(any(), any(), any()) }
+    }
+
+    @Test
+    fun `given auto-selected name is padded with whitespace when execute then the tool still runs`() = runTest {
+        // Surrounding whitespace is model noise, not a different tool — normalising it
+        // is safe. A near-miss is deliberately NOT repaired to the closest candidate:
+        // running a different tool than the model named would move the call across the
+        // HITL risk boundary.
+        val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = "auto")
+        coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool("ToolA", "DescA", "SchemaA"))
+        every { llmEngine.generateResponseStream(any(), any(), any()) } returns
+            flowOf("""{"tool": "  ToolA  ", "arguments": "arg_a"}""")
+        coEvery { toolRepository.executeTool("ToolA", "arg_a", any()) } returns "Tool A Success"
+
+        val outputs = executor.execute(node, "Do A", "session-1", "").toList()
+
+        val result = outputs.lastResult()
+        assertNull(result.error)
+        assertEquals("Tool A Success", result.outputText)
+    }
 }

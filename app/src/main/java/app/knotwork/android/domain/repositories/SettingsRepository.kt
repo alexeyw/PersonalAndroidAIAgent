@@ -219,32 +219,42 @@ interface SettingsRepository {
     suspend fun setDisabledMcpTools(toolIds: Set<String>)
 
     /**
-     * A [Flow] of per-AppFunction risk overrides, keyed by the AppFunction's
-     * tool name. The map is the user's authoritative voice on what risk class a
-     * discovered AppFunction should be treated as; when an entry is present it
-     * takes precedence over the conservative `SENSITIVE` default applied by
-     * `LocalAppFunctionManager`.
+     * A [Flow] of per-tool risk overrides. The map is the user's authoritative
+     * voice on what risk class a discovered tool should be treated as; when an
+     * entry is present it takes precedence over the conservative `SENSITIVE`
+     * default that both discovery sources fall back to.
      *
-     * The map applies only to discovered AppFunctions. Built-in tools carry
-     * hard-coded risk constants (see `ToolRepositoryImpl.getBuiltinTools`) and
-     * are not affected by entries in this map. MCP tools are governed by a
-     * blanket policy until a per-server scheme is introduced.
+     * Two key namespaces share this map, and they cannot collide because the
+     * MCP form is prefixed:
+     *  - **Discovered AppFunctions** — keyed by the AppFunction's tool name
+     *    (the qualified `"${packageName}/${id}"` form).
+     *  - **MCP tools** — keyed by the `mcp:<sha8(serverUrl)>:<toolName>` id
+     *    produced by `McpServerRepositoryImpl.mcpToolId`, i.e. per server and
+     *    not per bare name. Two servers advertising the same `create_issue`
+     *    are independent decisions, exactly as they already are for
+     *    [disabledMcpTools].
+     *
+     * Built-in tools carry hard-coded risk constants (see
+     * `ToolRepositoryImpl.getBuiltinTools`) and are deliberately NOT affected
+     * by entries in this map — their risk is part of the app's own contract.
      *
      * Missing entries (or an empty map) mean "no override, use the source
      * default" — the canonical resolution lives in `ToolRepository.getRisk`.
      */
-    val appFunctionRiskOverrides: Flow<Map<String, ToolRisk>>
+    val toolRiskOverrides: Flow<Map<String, ToolRisk>>
 
     /**
-     * Sets (or replaces) the risk override for a single AppFunction. To remove
-     * an override, callers should pass the source-default value or wait for the
-     * removal API to land in a follow-up task; this initial cut intentionally
+     * Sets (or replaces) the risk override for a single discovered tool. To
+     * remove an override, callers should pass the source-default value or wait
+     * for the removal API to land in a follow-up task; this cut intentionally
      * keeps the surface minimal because there is no UI surface yet.
      *
-     * @param toolName Name of the AppFunction to override.
-     * @param risk Effective risk class to associate with [toolName].
+     * @param toolKey Key of the tool to override — an AppFunction tool name or
+     *   an `mcp:<sha8(serverUrl)>:<toolName>` id. See [toolRiskOverrides] for
+     *   the namespace rules.
+     * @param risk Effective risk class to associate with [toolKey].
      */
-    suspend fun setAppFunctionRiskOverride(toolName: String, risk: ToolRisk)
+    suspend fun setToolRiskOverride(toolKey: String, risk: ToolRisk)
 
     /**
      * A [Flow] representing the current active chat session ID.

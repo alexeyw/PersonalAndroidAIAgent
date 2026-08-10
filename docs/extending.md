@@ -303,11 +303,24 @@ from other packages), the default is `SENSITIVE` — the platform
 `AppFunctionManager` metadata gives no trustworthy signal about side
 effects. The user can downgrade a specific tool to `READ_ONLY` (or
 upgrade it to `DESTRUCTIVE`) via
-[`SettingsRepository.setAppFunctionRiskOverride(toolName, risk)`](../app/src/main/java/app/knotwork/android/domain/repositories/SettingsRepository.kt),
-which writes into the `appFunctionRiskOverrides` flow persisted under
+[`SettingsRepository.setToolRiskOverride(toolKey, risk)`](../app/src/main/java/app/knotwork/android/domain/repositories/SettingsRepository.kt),
+which writes into the `toolRiskOverrides` flow persisted under
 DataStore key `app_function_risk_overrides`. `ToolRepository.getRisk(name)`
 consults the override map first and falls back to the conservative
 default.
+
+**MCP tools** work the same way and share that map, with one difference:
+they are keyed per server, by the tool's `mcp:<sha8(serverUrl)>:<toolName>`
+id rather than its bare name. A long shared prefix is normal in MCP
+catalogues, and two servers advertising `create_issue` must stay
+independent decisions — the same rule `disabledMcpTools` already follows.
+The override is the **user's** voice and never the server's: MCP's
+`readOnlyHint` / `destructiveHint` tool annotations are deliberately not
+consulted, because a remote server able to declare its own tools
+read-only could walk straight past the confirmation gate.
+
+There is no settings screen for risk overrides yet — the API is reachable
+programmatically only.
 
 Most tools have a single, static risk. A tool whose risk depends on the
 *call* rather than its name (the built-in `http_request`, whose `GET` is

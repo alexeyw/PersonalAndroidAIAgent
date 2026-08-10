@@ -10,6 +10,7 @@ import app.knotwork.android.domain.engine.structured.GateResult
 import app.knotwork.android.domain.engine.structured.StructuredInferenceClient
 import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentOrchestratorState
+import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.ConsoleEventType
 import app.knotwork.android.domain.models.ExecutionScope
@@ -234,7 +235,8 @@ class ToolNodeExecutor @Inject constructor(
             // has no fallback tool to run, so it takes the existing error path — only
             // after the gate has spent its repair attempts.
             return when (val result = runArgGate(ToolCall.serializer(), prompt, node, maxRepairs, inference)) {
-                is GateResult.Success -> result.value.tool to result.value.arguments.asArgumentString()
+                is GateResult.Success ->
+                    requireSelectable(result.value.tool, availableTools) to result.value.arguments.asArgumentString()
                 is GateResult.Failed -> {
                     val errorMsg = "Failed to parse tool selection JSON from LLM output"
                     emit(
@@ -289,6 +291,55 @@ class ToolNodeExecutor @Inject constructor(
     }
 
     /**
+     * Verifies that an auto-selected tool name actually exists in the catalogue the
+     * model was offered, and returns the catalogue's own spelling of it.
+     *
+     * The fixed-tool branch has always validated its configured name against
+     * [ToolRepository.getAvailableTools]; auto-select did not, so a name the model
+     * mangled travelled all the way to [ToolInvocationGate] and first failed at the
+     * risk lookup — later than necessary and phrased as an internal fault
+     * ("Risk lookup failed … Unknown tool") rather than as what it is. This restores
+     * the symmetry: the check happens where the choice is made.
+     *
+     * Only surrounding whitespace is normalised. A near-miss is deliberately NOT
+     * repaired to the closest candidate — silently running a *different* tool than
+     * the model named would move a call across the HITL risk boundary, which is
+     * exactly the decision the gate exists to protect.
+     *
+     * @param selected The tool name emitted by the model.
+     * @param availableTools The catalogue offered to the model in the same pass.
+     * @return The matching catalogue name.
+     * @throws ResolutionFailed after emitting the terminal diagnostics, when the name
+     *   matches no offered tool.
+     */
+    private suspend fun FlowCollector<NodeOutput>.requireSelectable(
+        selected: String,
+        availableTools: List<AgentTool>,
+    ): String {
+        val normalised = selected.trim()
+        val match = availableTools.find { it.name == normalised }
+        if (match != null) {
+            return match.name
+        }
+        val allNames = availableTools.joinToString(", ") { it.name }
+        val offered = if (allNames.length > AVAILABLE_TOOLS_ERROR_CHARS) {
+            allNames.take(AVAILABLE_TOOLS_ERROR_CHARS) + "…"
+        } else {
+            allNames
+        }
+        val errorMsg = "Tool $normalised not found in available tools"
+        emit(
+            NodeOutput.Console(
+                ConsoleEventType.Error,
+                "$errorMsg — the model selected a name outside the offered catalogue ($offered)",
+            ),
+        )
+        emit(NodeOutput.State(AgentOrchestratorState.Error(errorMsg)))
+        emit(NodeOutput.Result(NodeExecutionResult(error = errorMsg)))
+        throw ResolutionFailed()
+    }
+
+    /**
      * Runs one structured-output gate pass for a tool inference, surfacing each repair
      * attempt as a console line (which the engine also counts in the repair metric).
      *
@@ -339,5 +390,14 @@ class ToolNodeExecutor @Inject constructor(
         val toolField = (obj["tool"] as? JsonPrimitive)?.contentOrNull
         val argsField = obj["arguments"]
         return if (toolField == toolName && argsField != null) argsField.asArgumentString() else obj.toString()
+    }
+
+    private companion object {
+        /**
+         * Ceiling on how much of the offered catalogue is echoed back in the
+         * "tool not found" console line. A connected MCP server can advertise
+         * dozens of tools; the line is a diagnostic hint, not the catalogue.
+         */
+        const val AVAILABLE_TOOLS_ERROR_CHARS = 300
     }
 }

@@ -40,8 +40,10 @@ safely-correctable subset before invoking `check`.
 
 ## Detekt — Kotlin rules
 
-Plugin: `dev.detekt` `2.0.0-alpha.3` (the 2.x line is required for Kotlin
-2.3.21 / AGP 9.x compatibility). Configuration:
+Plugin: `dev.detekt`, 2.x line (required for Kotlin 2.4.x / AGP 9.x
+compatibility). The exact version is pinned in
+[`gradle/libs.versions.toml`](../gradle/libs.versions.toml) under the `detekt`
+key — that catalog entry, not this page, is the source of truth. Configuration:
 [`config/detekt/detekt.yml`](../config/detekt/detekt.yml), layered on top of
 detekt's bundled defaults via `buildUponDefaultConfig = true` in
 `app/build.gradle.kts`.

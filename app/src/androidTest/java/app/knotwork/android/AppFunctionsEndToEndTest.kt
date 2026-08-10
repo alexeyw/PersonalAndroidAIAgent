@@ -172,9 +172,9 @@ class AppFunctionsEndToEndTest {
         // scenarios. The pre-test cleanup also drops any override the probe id might still
         // carry from a previous run that crashed before the @After cleanup ran.
         val settings = entryPoint.settingsRepository()
-        val existing = settings.appFunctionRiskOverrides.first()
+        val existing = settings.toolRiskOverrides.first()
         if (qualifiedEchoName in existing) {
-            settings.setAppFunctionRiskOverride(qualifiedEchoName, ToolRisk.SENSITIVE)
+            settings.setToolRiskOverride(qualifiedEchoName, ToolRisk.SENSITIVE)
         }
     }
 
@@ -342,7 +342,7 @@ class AppFunctionsEndToEndTest {
      * Scenario 4 — Risk override flow.
      *
      * Persists a [ToolRisk.READ_ONLY] override for the probe's echo through
-     * [SettingsRepository.setAppFunctionRiskOverride] and verifies that
+     * [SettingsRepository.setToolRiskOverride] and verifies that
      * [ToolRepository.getRisk] resolves the same name to READ_ONLY on the next call.
      * The HITL gate then short-circuits to a direct execution because READ_ONLY tools
      * skip the approval flow (see `ToolNodeExecutor.execute`'s `needsApproval` branch).
@@ -358,7 +358,7 @@ class AppFunctionsEndToEndTest {
             toolRepo.getRisk(qualifiedEchoName),
         )
 
-        settings.setAppFunctionRiskOverride(qualifiedEchoName, ToolRisk.READ_ONLY)
+        settings.setToolRiskOverride(qualifiedEchoName, ToolRisk.READ_ONLY)
         try {
             assertEquals(
                 "Persisted override must be reflected by ToolRepository.getRisk",
@@ -392,7 +392,7 @@ class AppFunctionsEndToEndTest {
             // Restore the SENSITIVE default so a subsequent run of the same test class
             // starts from the production-default state regardless of prior failure
             // boundary.
-            settings.setAppFunctionRiskOverride(qualifiedEchoName, ToolRisk.SENSITIVE)
+            settings.setToolRiskOverride(qualifiedEchoName, ToolRisk.SENSITIVE)
         }
     }
 

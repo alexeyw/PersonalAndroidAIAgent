@@ -90,6 +90,64 @@ class NodeConfigCodecTest {
     }
 
     @Test
+    fun `given Ollama CLOUD node when decoded and re-applied then it stays Ollama`() {
+        // The privacy regression: `COMPATIBLE` is one tile for two domain providers,
+        // and the catalog->domain direction resolved it to DeepSeek. Opening an Ollama
+        // node's config sheet and saving it — without touching the provider — pointed
+        // a LAN-local node at a third-party endpoint, silently.
+        val src = node(NodeType.CLOUD, "Cloud").copy(cloudProvider = "ollama")
+
+        val decoded = NodeConfigCodec.decode(src) as CloudConfig
+        assertEquals(CloudProvider.COMPATIBLE, decoded.provider)
+
+        val applied = NodeConfigCodec.apply(src, decoded)
+
+        assertEquals("ollama", applied.cloudProvider)
+    }
+
+    @Test
+    fun `given DeepSeek CLOUD node when decoded and re-applied then it stays DeepSeek`() {
+        // The other half of the shared tile must be equally stable.
+        val src = node(NodeType.CLOUD, "Cloud").copy(cloudProvider = "deepseek")
+
+        val applied = NodeConfigCodec.apply(src, NodeConfigCodec.decode(src) as CloudConfig)
+
+        assertEquals("deepseek", applied.cloudProvider)
+    }
+
+    @Test
+    fun `given Ollama CLOUD node when the user switches to a different tile then the change sticks`() {
+        // Preserving must not become "ignoring": a real provider change is still a change.
+        val src = node(NodeType.CLOUD, "Cloud").copy(cloudProvider = "ollama")
+
+        val applied = NodeConfigCodec.apply(src, CloudConfig(title = "Cloud", provider = CloudProvider.GOOGLE))
+
+        assertEquals("google", applied.cloudProvider)
+    }
+
+    @Test
+    fun `given a non-compatible node when the user picks COMPATIBLE then it resolves to DeepSeek`() {
+        // A fresh pick of the shared tile has no prior compatible provider to preserve,
+        // so it falls through to the tile's canonical instance.
+        val src = node(NodeType.CLOUD, "Cloud").copy(cloudProvider = "google")
+
+        val applied = NodeConfigCodec.apply(src, CloudConfig(title = "Cloud", provider = CloudProvider.COMPATIBLE))
+
+        assertEquals("deepseek", applied.cloudProvider)
+    }
+
+    @Test
+    fun `given structured node on Ollama when decoded and re-applied then it stays Ollama`() {
+        // Same shared-tile hazard on the structured engine picker (TOOL / IF /
+        // INTENT_ROUTER / DECOMPOSITION / EVALUATION), not just the CLOUD node.
+        val src = node(NodeType.DECOMPOSITION, "Plan").copy(cloudProvider = "ollama")
+
+        val applied = NodeConfigCodec.apply(src, NodeConfigCodec.decode(src) as DecompositionConfig)
+
+        assertEquals("ollama", applied.cloudProvider)
+    }
+
+    @Test
     fun `given legacy auto CLOUD node with no configJson when decode then provider is AUTO`() {
         // Regression for the round-trip bug: a browser-edited / default CLOUD
         // node persists cloudProvider="auto" with no rich payload. It must decode
