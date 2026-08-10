@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A tool call is waiting for approval — both the sensitive and the destructive
+  channel. One glyph on purpose: the risk is carried by the title, the channel
+  (its own importance and sound) and the large icon, and a two-step difference
+  at 18 px is not something anyone learns from notifications that arrive rarely
+  and never side by side. `ic_notif_decision_destructive` exists if that is ever
+  revisited.
+
+  Small notification icons use the ALPHA CHANNEL ONLY: the system paints them as
+  a silhouette in its own tint, so the white here is not a colour choice and must
+  not be replaced by a theme attribute. Stroke width is baked into the file
+  because `res/drawable` has no equivalent of the code-supplied width the catalog
+  `I.*` glyphs rely on, and it is heavier than the UI norm because the mark is
+  squeezed to ~18 px in the status bar.
+
+  Source: project_docs/design/icons-src/notifications/.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M12,2.6l8.6,3.2v6.4c0,5.4-3.8,8.6-8.6,9.6-4.8-1-8.6-4.2-8.6-9.6V5.8z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M12,8.4v3.6"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M12,16h.01"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.6"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>
