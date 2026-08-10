@@ -13,7 +13,10 @@ name: Check
 # Triggers: every pull request targeting `main`, and every push to `main`
 # (so the badge reflects the head of the protected branch). `workflow_dispatch`
 # allows a manual run from the Actions tab — useful to exercise the gate on a
-# phase branch before the phase→main PR exists.
+# phase branch before the phase→main PR exists. `workflow_call` lets
+# `release.yml` reuse this exact gate as its first job instead of restating it:
+# the release build must never run against a definition of "green" that has
+# drifted from the one every pull request is measured by.
 
 on:
   pull_request:
@@ -21,7 +24,14 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  workflow_call:
 
+# NOTE for callers: in a reusable workflow these expressions are evaluated in
+# the CALLER's context, so `github.workflow` resolves to the calling workflow's
+# name. A caller whose own top-level concurrency group would render to the same
+# string (case-insensitively) deadlocks against itself — the caller run holds
+# the group while this job waits for it. `release.yml` therefore uses a group
+# name that cannot collide with `<caller name>-<ref>`.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
