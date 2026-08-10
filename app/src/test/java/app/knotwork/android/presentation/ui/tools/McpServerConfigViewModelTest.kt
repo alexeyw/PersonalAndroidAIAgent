@@ -36,6 +36,7 @@ class McpServerConfigViewModelTest {
     private val settings: SettingsRepository = mockk(relaxed = true)
     private val mcp: McpServerRepository = mockk(relaxed = true)
     private val mcpServersFlow = MutableStateFlow<List<McpServerConfig>>(emptyList())
+    private val approvedOriginsFlow = MutableStateFlow<Set<String>>(emptySet())
 
     private val testDispatcher = StandardTestDispatcher()
 
@@ -43,6 +44,7 @@ class McpServerConfigViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         every { settings.mcpServers } returns mcpServersFlow
+        every { settings.approvedCleartextOrigins } returns approvedOriginsFlow
     }
 
     @After
@@ -256,4 +258,74 @@ class McpServerConfigViewModelTest {
         assertEquals(1, rows.size)
         assertEquals(McpHeaderRow(key = "K2", value = "V2"), rows[0])
     }
+
+    @Test
+    fun `given an unapproved private http url when typed then the consent notice names the origin`() =
+        runTest(testDispatcher) {
+            val viewModel = vm()
+            advanceUntilIdle()
+
+            viewModel.onUrlChange("http://192.168.1.42:8080/sse")
+
+            assertEquals("http://192.168.1.42:8080", viewModel.form.value.cleartextConsentOrigin)
+        }
+
+    @Test
+    fun `given an https url when typed then there is nothing to consent to`() = runTest(testDispatcher) {
+        val viewModel = vm()
+        advanceUntilIdle()
+
+        viewModel.onUrlChange("https://mcp.example.com/sse")
+
+        assertNull(viewModel.form.value.cleartextConsentOrigin)
+    }
+
+    @Test
+    fun `given the notice is showing when submitted then it refuses instead of saving`() = runTest(testDispatcher) {
+        val viewModel = vm()
+        advanceUntilIdle()
+        viewModel.onUrlChange("http://192.168.1.42:8080/sse")
+
+        viewModel.onSubmit()
+        advanceUntilIdle()
+
+        assertNotNull(viewModel.form.value.urlError)
+        coVerify(exactly = 0) { settings.addMcpServer(any()) }
+    }
+
+    @Test
+    fun `given approval is granted when submitted then the notice clears and the server saves`() =
+        runTest(testDispatcher) {
+            coEvery { settings.approveCleartextOrigin(any()) } answers {
+                approvedOriginsFlow.value = approvedOriginsFlow.value + firstArg<String>()
+            }
+            val viewModel = vm()
+            advanceUntilIdle()
+            viewModel.onUrlChange("http://192.168.1.42:8080/sse")
+
+            viewModel.onApproveCleartext()
+            advanceUntilIdle()
+            assertNull(viewModel.form.value.cleartextConsentOrigin)
+
+            viewModel.onSubmit()
+            advanceUntilIdle()
+
+            coVerify(exactly = 1) { settings.addMcpServer(any()) }
+        }
+
+    @Test
+    fun `given editing a server whose url needs approval when the form loads then the notice is shown`() =
+        runTest(testDispatcher) {
+            // Regression: the notice used to be computed by a collector that could
+            // run before the existing config was loaded, so it saw an empty URL and
+            // produced no banner — leaving a Save that refused with "approve the
+            // connection above" while pointing at nothing.
+            val url = "http://192.168.1.42:8080/sse"
+            mcpServersFlow.value = listOf(McpServerConfig(url = url))
+
+            val viewModel = vm(originalUrl = url)
+            advanceUntilIdle()
+
+            assertEquals("http://192.168.1.42:8080", viewModel.form.value.cleartextConsentOrigin)
+        }
 }

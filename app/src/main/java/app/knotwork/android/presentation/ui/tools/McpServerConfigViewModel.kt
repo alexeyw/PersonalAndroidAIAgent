@@ -57,6 +57,13 @@ class McpServerConfigViewModel @Inject constructor(
     )
     val form: StateFlow<AddMcpServerForm> = _form.asStateFlow()
 
+    /**
+     * Latest snapshot of the approved origins, so [onUrlChange] can recompute
+     * the notice synchronously while the user types rather than waiting for the
+     * collector to run. Written only by that collector.
+     */
+    private var approvedOrigins: Set<String> = emptySet()
+
     /** One-shot terminal events emitted after a successful submission. */
     private val _events = MutableStateFlow<Event?>(null)
     val events: StateFlow<Event?> = _events.asStateFlow()
@@ -67,6 +74,7 @@ class McpServerConfigViewModel @Inject constructor(
         // time — and it stays correct if approval happens from elsewhere.
         viewModelScope.launch {
             settingsRepository.approvedCleartextOrigins.collect { approved ->
+                approvedOrigins = approved
                 _form.update { it.copy(cleartextConsentOrigin = consentOriginFor(it.url, approved)) }
             }
         }
@@ -74,7 +82,23 @@ class McpServerConfigViewModel @Inject constructor(
             viewModelScope.launch {
                 val existing = settingsRepository.mcpServers.first().firstOrNull { it.url == originalUrl }
                 if (existing != null) {
-                    _form.update { it.fromConfig(existing) }
+                    // Read the approved set here rather than relying on the
+                    // collector above having run first: the two coroutines are
+                    // unordered, and if this one wins, the notice would be
+                    // computed from the still-empty URL. The user would then see
+                    // no banner and a Save that refuses with "approve the
+                    // connection above" — pointing at nothing.
+                    // Read the approved set here rather than relying on the
+                    // collector above having run first: the two coroutines are
+                    // unordered, and if this one wins, the notice would be
+                    // computed from the still-empty URL. The user would then see
+                    // no banner and a Save that refuses with "approve the
+                    // connection above" — pointing at nothing.
+                    val approved = settingsRepository.approvedCleartextOrigins.first()
+                    _form.update {
+                        it.fromConfig(existing)
+                            .copy(cleartextConsentOrigin = consentOriginFor(existing.url, approved))
+                    }
                 }
             }
         }
@@ -101,21 +125,13 @@ class McpServerConfigViewModel @Inject constructor(
     }
 
     /**
-     * Latest snapshot of the approved origins, kept so [onUrlChange] can
-     * recompute the notice synchronously while the user types instead of waiting
-     * for the collector to run.
-     */
-    private var approvedOrigins: Set<String> = emptySet()
-
-    /**
      * Origin the user would have to approve for [url], or `null` when nothing
      * needs approving (encrypted, already approved, or a public host — the last
-     * of which is refused outright rather than offered).
+     * of which is refused outright rather than offered). Pure: the caller
+     * supplies the approved set.
      */
-    private fun consentOriginFor(url: String, approved: Set<String>): String? {
-        approvedOrigins = approved
-        return (CleartextPolicy.classify(url, approved) as? CleartextPolicy.Verdict.NeedsApproval)?.origin
-    }
+    private fun consentOriginFor(url: String, approved: Set<String>): String? =
+        (CleartextPolicy.classify(url, approved) as? CleartextPolicy.Verdict.NeedsApproval)?.origin
 
     fun onNameChange(value: String) = _form.update { it.copy(name = value) }
 
