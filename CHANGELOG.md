@@ -453,6 +453,15 @@ details.
 
 ### Changed
 
+- **Build toolchain refreshed to clear the `NewerVersionAvailable` /
+  `AndroidGradlePluginVersion` lint gate.** Gradle `9.6.1` → `9.7.0`, `dev.detekt`
+  `2.0.0-alpha.5` → `2.0.0-alpha.6`, and Roborazzi `1.70.0` → `1.71.0` (plugin
+  plus the three test artefacts). These checks are hard errors in this project on
+  purpose, and a local `check` cannot see them — lint answers from a cached
+  version index, so the failure only appears on a clean CI run. No production
+  code changed, no screenshot baseline moved, and the static-analysis guide now
+  points at the version catalogue instead of restating a version number that
+  goes stale the moment it is bumped.
 - **What long-term memory recalls is now written down.** The user guide gains a
   *"What the agent recalls, and when"* section: memory is searched once per run,
   at the first step that reads it; the similarity threshold is a gate nothing
