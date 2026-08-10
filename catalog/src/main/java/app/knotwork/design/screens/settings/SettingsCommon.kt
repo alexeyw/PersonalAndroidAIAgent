@@ -67,14 +67,13 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
-import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
-import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.chips.ChipStyle
 import app.knotwork.design.components.chips.KnotworkChip
 import app.knotwork.design.components.dialogs.TypedConfirmDialog
 import app.knotwork.design.components.dialogs.TypedConfirmDialogState
 import app.knotwork.design.components.misc.KnotworkLoader
+import app.knotwork.design.components.misc.KnotworkWarningBanner
 import app.knotwork.design.components.misc.StripedPlaceholder
 import app.knotwork.design.components.topbar.KnotworkTopAppBarShell
 import app.knotwork.design.icons.AppIcons
@@ -676,24 +675,12 @@ internal fun ActivePill() {
  */
 @Composable
 internal fun ReembedBanner(text: String, buttonLabel: String, onReembedClick: () -> Unit) {
-    Surface(
-        shape = KnotworkTheme.shapes.md,
-        color = KnotworkTheme.extended.signalWarn.copy(alpha = REEMBED_BANNER_TINT_ALPHA),
-        border = BorderStroke(SectionCardBorder, KnotworkTheme.extended.signalWarn),
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag(MEMORY_REEMBED_BANNER_TAG),
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(KnotworkTheme.spacing.sp3),
-            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-        ) {
-            Text(text = text, style = KnotworkTextStyles.MonoSm, color = KnotworkTheme.extended.onSurfaceMuted)
-            KnotworkSecondaryButton(text = buttonLabel, onClick = onReembedClick, size = KnotworkButtonSize.Sm)
-        }
-    }
+    KnotworkWarningBanner(
+        text = text,
+        actionLabel = buttonLabel,
+        onAction = onReembedClick,
+        testTag = MEMORY_REEMBED_BANNER_TAG,
+    )
 }
 
 /** Re-embed in-flight progress bar + dot loader, `0..100`. */

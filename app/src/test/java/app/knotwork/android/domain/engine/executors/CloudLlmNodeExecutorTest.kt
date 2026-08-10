@@ -8,8 +8,10 @@ import ai.koog.prompt.message.ResponseMetaInfo
 import ai.koog.prompt.streaming.StreamFrame
 import app.knotwork.android.domain.engine.CloudLlmClientFactory
 import app.knotwork.android.domain.engine.CloudLlmModelResolver
+import app.knotwork.android.domain.engine.retry.CloudRetryListener
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.CloudProvider
+import app.knotwork.android.domain.models.ConsoleEventType
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.NodeType
@@ -243,5 +245,39 @@ class CloudLlmNodeExecutorTest {
         val outputs = executor.execute(node, "input", "s1", "Q").toList()
         val result = outputs.filterIsInstance<NodeOutput.Result>().single().result
         assertEquals("hi", result.outputText)
+    }
+
+    @Test
+    fun `given a retry before the first token when execute then the console line precedes the answer`() = runTest {
+        // Timing, not presence. The retry lines used to be buffered and drained
+        // after the stream finished, so on a real run the attempts happened at 1 s
+        // and 3 s while the user saw nothing until the very end. Asserting the
+        // ORDER of the emissions is what pins that: the console line has to come
+        // out before the tokens it preceded in real time.
+        val node = NodeModel("1", NodeType.CLOUD, 0f, 0f, cloudProvider = "anthropic")
+        val client: LLMClient = mockk(relaxed = true)
+        val capturedListener = slot<CloudRetryListener>()
+        coEvery { clientFactory.createClient(CloudProvider.ANTHROPIC, capture(capturedListener)) } returns client
+        coEvery { modelResolver.resolveModel(CloudProvider.ANTHROPIC) } returns AnthropicModels.Sonnet_4_5
+        // Fire the retry callback at the moment the provider is first called —
+        // i.e. before any token exists — exactly as the retry wrapper does.
+        coEvery { client.executeStreaming(any(), any<LLModel>()) } answers {
+            capturedListener.captured.onRetry(provider = "anthropic", attempt = 1, maxRetries = 2)
+            flowOf(StreamFrame.TextDelta("answer"))
+        }
+
+        val outputs = executor.execute(node, "input", "s1", "Q").toList()
+
+        val retryIndex = outputs.indexOfFirst {
+            it is NodeOutput.Console && it.type == ConsoleEventType.CloudRetry
+        }
+        val firstTokenIndex = outputs.indexOfFirst { it is NodeOutput.State }
+        assertTrue("the retry line must be emitted at all", retryIndex >= 0)
+        assertTrue(
+            "the retry line ($retryIndex) must precede the first streamed token ($firstTokenIndex)",
+            retryIndex < firstTokenIndex,
+        )
+        val line = (outputs[retryIndex] as NodeOutput.Console).message
+        assertEquals("Cloud retry 1/2 for anthropic", line)
     }
 }

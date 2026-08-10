@@ -30,6 +30,7 @@ import app.knotwork.android.data.local.dao.TraceStepDao
 import app.knotwork.android.data.local.dao.TriggerDao
 import app.knotwork.android.data.local.dao.TriggerJournalDao
 import app.knotwork.android.data.local.dao.UsageTelemetryDao
+import app.knotwork.android.data.network.CleartextGuardInterceptor
 import app.knotwork.android.data.services.WorkManagerTaskScheduler
 import app.knotwork.android.data.tools.local.AppFunctionDataCodec
 import app.knotwork.android.data.tools.local.LocalAppFunctionManager
@@ -356,6 +357,11 @@ object AppModule {
         .connectTimeout(HTTP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .readTimeout(HTTP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .writeTimeout(HTTP_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        // The manifest permits cleartext app-wide because Android cannot express
+        // "any private-LAN address" in its network-security config; this restores
+        // the public-host half of that protection in app code, on every request,
+        // so a redirect cannot downgrade an https call mid-flight.
+        .addInterceptor(CleartextGuardInterceptor())
         .build()
 
     /**

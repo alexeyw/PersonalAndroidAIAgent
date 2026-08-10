@@ -34,6 +34,8 @@ import app.knotwork.android.domain.constants.SettingsDefaults
 import app.knotwork.android.domain.models.ProviderId
 import app.knotwork.android.domain.repositories.ApiKeyRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.services.CleartextPolicy
+import app.knotwork.design.components.misc.KnotworkWarningBanner
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.screens.settings.KnotworkProviderRow
 import app.knotwork.design.screens.settings.OllamaProviderInputs
@@ -43,6 +45,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.update
@@ -178,6 +181,18 @@ fun ProviderDetailScreen(
                             onOllamaBaseUrlChange = viewModel::updateOllamaBaseUrl,
                             onOllamaContextWindowChange = viewModel::updateOllamaContextWindow,
                         )
+                        // Unencrypted LAN traffic is refused until the user says
+                        // otherwise for this exact address. The notice is a banner
+                        // rather than a dialog because the base URL persists on every
+                        // keystroke — a dialog would open mid-typing.
+                        uiState.cleartextConsentOrigin?.let { origin ->
+                            KnotworkWarningBanner(
+                                text = stringResource(R.string.settings_cleartext_consent_body, origin),
+                                actionLabel = stringResource(R.string.settings_cleartext_consent_action),
+                                onAction = viewModel::approveCleartextOrigin,
+                                testTag = CLEARTEXT_CONSENT_BANNER_TAG,
+                            )
+                        }
                     }
                 }
                 CloudRetrySection(
@@ -301,6 +316,7 @@ data class ProviderDetailUiState(
     val ollamaModel: String = "",
     val ollamaContextWindow: String = "4096",
     val ollamaBaseUrlInvalid: Boolean = false,
+    val cleartextConsentOrigin: String? = null,
     val cloudRetryMaxAttempts: Int = SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_DEFAULT,
     val cloudRetryBaseDelayMs: Long = SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_DEFAULT,
 )
@@ -372,6 +388,22 @@ class ProviderDetailViewModel @Inject constructor(
                 apiKeyRepository.getOllamaBaseUrl()
                     .onEach { v -> _uiState.update { it.copy(ollamaBaseUrl = v.orEmpty()) } }
                     .launchIn(viewModelScope)
+                // The consent notice is derived, not stored: it appears whenever the
+                // saved address is an unencrypted private one the user has not
+                // approved, and disappears the moment either side changes. Combining
+                // both flows (rather than checking once on save) is what keeps it
+                // correct when the URL is edited keystroke by keystroke — this field
+                // persists on every character, so there is no "save" moment to hang a
+                // confirmation off.
+                combine(
+                    apiKeyRepository.getOllamaBaseUrl(),
+                    settingsRepository.approvedCleartextOrigins,
+                ) { url, approved ->
+                    val verdict = CleartextPolicy.classify(url.orEmpty(), approved)
+                    (verdict as? CleartextPolicy.Verdict.NeedsApproval)?.origin
+                }
+                    .onEach { origin -> _uiState.update { it.copy(cleartextConsentOrigin = origin) } }
+                    .launchIn(viewModelScope)
                 apiKeyRepository.getOllamaModelName()
                     .onEach { v -> _uiState.update { it.copy(ollamaModel = v.orEmpty()) } }
                     .launchIn(viewModelScope)
@@ -419,6 +451,16 @@ class ProviderDetailViewModel @Inject constructor(
         viewModelScope.launch { apiKeyRepository.setOllamaBaseUrl(value.takeIf { it.isNotBlank() }) }
     }
 
+    /**
+     * Records the user's consent to talk to the currently-configured Ollama
+     * address over an unencrypted connection. Until this is called, the
+     * cleartext gate refuses the connection outright — see `CleartextPolicy`.
+     */
+    fun approveCleartextOrigin() {
+        val origin = _uiState.value.cleartextConsentOrigin ?: return
+        viewModelScope.launch { settingsRepository.approveCleartextOrigin(origin) }
+    }
+
     fun updateOllamaModel(value: String) {
         viewModelScope.launch { apiKeyRepository.setOllamaModelName(value.takeIf { it.isNotBlank() }) }
     }
@@ -440,3 +482,6 @@ class ProviderDetailViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.setCloudRetryBaseDelayMs(value) }
     }
 }
+
+/** Test tag for the unencrypted-connection consent banner on the Ollama provider screen. */
+const val CLEARTEXT_CONSENT_BANNER_TAG: String = "cleartext_consent_banner"

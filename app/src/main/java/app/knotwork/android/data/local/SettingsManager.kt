@@ -75,6 +75,7 @@ class SettingsManager @Inject constructor(
         val MCP_SERVERS_JSON = stringPreferencesKey("mcp_servers_json")
         val DISABLED_APP_FUNCTIONS = stringSetPreferencesKey("disabled_app_functions")
         val DISABLED_MCP_TOOLS = stringSetPreferencesKey("disabled_mcp_tools")
+        val APPROVED_CLEARTEXT_ORIGINS = stringSetPreferencesKey("approved_cleartext_origins")
 
         // The stored key keeps its original `app_function_risk_overrides` name even
         // though the map now also carries MCP entries: renaming the DataStore key
@@ -798,6 +799,26 @@ class SettingsManager @Inject constructor(
     override suspend fun setDisabledMcpTools(toolIds: Set<String>) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.DISABLED_MCP_TOOLS] = toolIds
+        }
+    }
+
+    override val approvedCleartextOrigins: Flow<Set<String>> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.APPROVED_CLEARTEXT_ORIGINS] ?: emptySet()
+        }
+
+    override suspend fun approveCleartextOrigin(origin: String) {
+        dataStore.edit { preferences ->
+            val current = preferences[PreferencesKeys.APPROVED_CLEARTEXT_ORIGINS] ?: emptySet()
+            preferences[PreferencesKeys.APPROVED_CLEARTEXT_ORIGINS] = current + origin
         }
     }
 

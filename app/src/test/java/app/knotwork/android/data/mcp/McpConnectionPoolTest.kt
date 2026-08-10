@@ -3,14 +3,17 @@ package app.knotwork.android.data.mcp
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.McpAuth
 import app.knotwork.android.domain.models.McpServerConfig
+import app.knotwork.android.domain.repositories.SettingsRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -24,7 +27,24 @@ import org.junit.Test
 class McpConnectionPoolTest {
 
     private val factory: McpClientFactory = mockk()
-    private val config = McpServerConfig(url = "http://localhost:8080")
+    private val config = McpServerConfig(url = "http://10.0.0.5:8080")
+
+    /**
+     * Every fixture URL is loopback / private cleartext, so the pool's cleartext
+     * gate would refuse it unless the origin is approved. Approving everything
+     * here keeps these tests about pooling; the gate itself is covered by
+     * `CleartextPolicyTest` and by the dedicated refusal test below.
+     */
+    private val settingsRepository: SettingsRepository = mockk {
+        every { approvedCleartextOrigins } returns flowOf(
+            setOf(
+                "http://10.0.0.5:8080",
+                "http://10.0.0.1:1",
+                "http://10.0.0.2:2",
+                "http://10.0.0.9:9000",
+            ),
+        )
+    }
 
     private fun client(): McpClient = mockk<McpClient>().also {
         coEvery { it.connect(any()) } returns Unit
@@ -36,7 +56,7 @@ class McpConnectionPoolTest {
     fun `given an equal config when asked twice then the same client is reused`() = runTest {
         val only = client()
         every { factory.create() } returns only
-        val pool = McpConnectionPool(factory)
+        val pool = McpConnectionPool(factory, settingsRepository)
 
         val first = pool.withServer(config.url) { client(config) }
         val second = pool.withServer(config.url) { client(config) }
@@ -52,7 +72,7 @@ class McpConnectionPoolTest {
         val stale = client()
         val fresh = client()
         every { factory.create() } returnsMany listOf(stale, fresh)
-        val pool = McpConnectionPool(factory)
+        val pool = McpConnectionPool(factory, settingsRepository)
 
         pool.withServer(config.url) { client(config) }
         val second = pool.withServer(config.url) {
@@ -67,7 +87,7 @@ class McpConnectionPoolTest {
     fun `given invalidate when peeked then nothing is pooled and the client was disconnected`() = runTest {
         val only = client()
         every { factory.create() } returns only
-        val pool = McpConnectionPool(factory)
+        val pool = McpConnectionPool(factory, settingsRepository)
         pool.withServer(config.url) { client(config) }
 
         pool.withServer(config.url) { invalidate() }
@@ -85,24 +105,24 @@ class McpConnectionPoolTest {
         }
         val alive = client()
         every { factory.create() } returnsMany listOf(dead, alive)
-        val pool = McpConnectionPool(factory)
+        val pool = McpConnectionPool(factory, settingsRepository)
 
         pool.reconcile(
             listOf(
-                McpServerConfig(url = "http://dead:1"),
-                McpServerConfig(url = "http://alive:2"),
+                McpServerConfig(url = "http://10.0.0.1:1"),
+                McpServerConfig(url = "http://10.0.0.2:2"),
             ),
         )
 
-        assertNull(pool.peek("http://dead:1"))
-        assertNotNull(pool.peek("http://alive:2"))
+        assertNull(pool.peek("http://10.0.0.1:1"))
+        assertNotNull(pool.peek("http://10.0.0.2:2"))
     }
 
     @Test
     fun `given a server removed from settings when reconcile then it is disconnected and dropped`() = runTest {
         val only = client()
         every { factory.create() } returns only
-        val pool = McpConnectionPool(factory)
+        val pool = McpConnectionPool(factory, settingsRepository)
         pool.reconcile(listOf(config))
 
         pool.reconcile(emptyList())
@@ -125,7 +145,7 @@ class McpConnectionPoolTest {
         val dead = client()
         val fresh = client()
         every { factory.create() } returnsMany listOf(dead, fresh)
-        val pool = McpConnectionPool(factory)
+        val pool = McpConnectionPool(factory, settingsRepository)
 
         // The agent side connects first and would happily keep this client.
         pool.reconcile(listOf(config))
@@ -146,10 +166,42 @@ class McpConnectionPoolTest {
         val only = client()
         coEvery { only.getTools() } returns listOf(AgentTool("t", "d", "{}"))
         every { factory.create() } returns only
-        val pool = McpConnectionPool(factory)
+        val pool = McpConnectionPool(factory, settingsRepository)
         pool.reconcile(listOf(config))
 
         assertSame(only, pool.peek(config.url))
         coVerify(exactly = 1) { only.connect(any()) }
+    }
+
+    @Test
+    fun `given an unapproved private cleartext server when connecting then the pool refuses`() = runTest {
+        // The cleartext gate. The manifest now permits unencrypted traffic
+        // app-wide (Android cannot express "any private-LAN address" in its
+        // network-security config), so this check is what actually stops an
+        // unapproved unencrypted MCP connection from being opened.
+        every { factory.create() } returns client()
+        every { settingsRepository.approvedCleartextOrigins } returns flowOf(emptySet())
+        val pool = McpConnectionPool(factory, settingsRepository)
+
+        val failure = runCatching { pool.withServer(config.url) { client(config) } }.exceptionOrNull()
+
+        assertNotNull(failure)
+        assertTrue(failure!!.message!!.contains("not been approved"))
+        assertNull(pool.peek(config.url))
+    }
+
+    @Test
+    fun `given a public cleartext server when connecting then the pool refuses and cannot be approved`() = runTest {
+        // Approval only ever unlocks private addresses; a public host stays
+        // refused however the approved set is configured.
+        val publicConfig = McpServerConfig(url = "http://mcp.example.com/sse")
+        every { factory.create() } returns client()
+        every { settingsRepository.approvedCleartextOrigins } returns flowOf(setOf("http://mcp.example.com"))
+        val pool = McpConnectionPool(factory, settingsRepository)
+
+        val failure = runCatching { pool.withServer(publicConfig.url) { client(publicConfig) } }.exceptionOrNull()
+
+        assertNotNull(failure)
+        assertTrue(failure!!.message!!.contains("public address"))
     }
 }

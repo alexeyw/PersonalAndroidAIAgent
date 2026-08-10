@@ -293,17 +293,23 @@ class TaskQueueManagerImpl @Inject constructor(
         // 1. Save user message, carrying any image attachment from the task so
         // it is persisted on the message and rendered in the chat bubble. By
         // contract only the prompt text flows along the pipeline graph.
-        val userMessage = ChatMessage(
-            sessionId = task.sessionId,
-            role = Role.USER,
-            // For an image-only message `displayContent` is the empty caption so
-            // the bubble shows just the thumbnail; `prompt` (the internal default
-            // instruction) still travels the graph.
-            content = task.displayContent ?: task.prompt,
-            timestamp = System.currentTimeMillis(),
-            attachment = task.attachment,
-        )
-        chatRepository.saveMessage(userMessage)
+        //
+        // Skipped when the turn is being re-run after a failure: the user row is
+        // written before the pipeline starts, so it survived the failed attempt,
+        // and writing it again would show the same message twice.
+        if (task.persistUserMessage) {
+            val userMessage = ChatMessage(
+                sessionId = task.sessionId,
+                role = Role.USER,
+                // For an image-only message `displayContent` is the empty caption so
+                // the bubble shows just the thumbnail; `prompt` (the internal default
+                // instruction) still travels the graph.
+                content = task.displayContent ?: task.prompt,
+                timestamp = System.currentTimeMillis(),
+                attachment = task.attachment,
+            )
+            chatRepository.saveMessage(userMessage)
+        }
 
         // 2. Load pipeline. Resolution is a deterministic chain that never
         // depends on the order pipelines come back from the repository:

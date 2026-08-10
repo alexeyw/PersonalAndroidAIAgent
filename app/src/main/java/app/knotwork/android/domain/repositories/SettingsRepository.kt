@@ -219,6 +219,31 @@ interface SettingsRepository {
     suspend fun setDisabledMcpTools(toolIds: Set<String>)
 
     /**
+     * A [Flow] of origins (`http://host[:port]`) the user has explicitly agreed
+     * to talk to **unencrypted**.
+     *
+     * Android's `network_security_config.xml` cannot express "any private-LAN
+     * address", so the cleartext rule lives in app code instead
+     * (`CleartextPolicy`): unencrypted traffic is permitted only to a
+     * loopback / private address present in this set, and never to a public
+     * host. Entries are added when the user confirms the prompt shown while
+     * saving a local Ollama or MCP address.
+     *
+     * An empty set means no unencrypted destination has been approved yet —
+     * which is the state of a fresh install.
+     */
+    val approvedCleartextOrigins: Flow<Set<String>>
+
+    /**
+     * Records the user's agreement to send unencrypted traffic to [origin].
+     *
+     * @param origin canonical `scheme://host[:port]`, as produced by
+     *   `CleartextPolicy.originOf`. Storing anything else would silently fail
+     *   to match at request time.
+     */
+    suspend fun approveCleartextOrigin(origin: String)
+
+    /**
      * A [Flow] of per-tool risk overrides. The map is the user's authoritative
      * voice on what risk class a discovered tool should be treated as; when an
      * entry is present it takes precedence over the conservative `SENSITIVE`

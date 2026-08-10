@@ -34,6 +34,13 @@ import java.util.UUID
  *   user [ChatMessage]; by the phase contract only [prompt] text travels the
  *   pipeline graph, so the attachment rides the message but does not flow
  *   between nodes here.
+ * @property persistUserMessage Whether the queue worker should write the user
+ *   [ChatMessage] when the run starts. `true` for a message the user just sent.
+ *   `false` when the turn is being **re-run** — the Retry action on a failed
+ *   turn, where the user row was already persisted by the attempt that failed
+ *   and writing it again would show the same message twice in the thread. This
+ *   is deliberately not [isResume]: a retry wants a brand-new run, not a
+ *   checkpoint replay of the old one.
  * @property displayContent Text persisted on the saved user [ChatMessage] when
  *   it must differ from [prompt]. Used for an image-only message: the bubble
  *   shows just the thumbnail (empty display content) while [prompt] carries the
@@ -50,5 +57,6 @@ data class AgentTask(
     val origin: RunOrigin = RunOrigin.CHAT,
     val isResume: Boolean = false,
     val attachment: MessageAttachment? = null,
+    val persistUserMessage: Boolean = true,
     val displayContent: String? = null,
 )

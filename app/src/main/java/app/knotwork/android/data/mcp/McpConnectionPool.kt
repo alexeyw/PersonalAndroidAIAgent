@@ -1,7 +1,10 @@
 package app.knotwork.android.data.mcp
 
 import app.knotwork.android.domain.models.McpServerConfig
+import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.services.CleartextPolicy
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import timber.log.Timber
@@ -38,7 +41,10 @@ import javax.inject.Singleton
  * outside the block.
  */
 @Singleton
-class McpConnectionPool @Inject constructor(private val clientFactory: McpClientFactory) {
+class McpConnectionPool @Inject constructor(
+    private val clientFactory: McpClientFactory,
+    private val settingsRepository: SettingsRepository,
+) {
 
     /**
      * A pooled connection plus the [McpServerConfig] it was established with.
@@ -167,6 +173,13 @@ class McpConnectionPool @Inject constructor(private val clientFactory: McpClient
                 disconnectQuietly(pooled.client, "stale config")
                 clients.remove(serverUrl)
             }
+            // Cleartext gate, applied here because this is the only place an MCP
+            // connection is opened. The manifest permits unencrypted traffic
+            // app-wide (Android cannot express "any private-LAN address" there),
+            // so `CleartextPolicy` is what actually enforces it: private and
+            // approved, or refused.
+            val verdict = CleartextPolicy.classify(config.url, settingsRepository.approvedCleartextOrigins.first())
+            CleartextPolicy.refusalMessage(verdict)?.let { reason -> error(reason) }
             val created = clientFactory.create()
             created.connect(config)
             clients[serverUrl] = PooledClient(client = created, config = config)

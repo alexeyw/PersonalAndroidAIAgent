@@ -137,6 +137,26 @@ class ToolsContentSnapshotTest {
         McpServerConfigContent(form = ToolsPreview.editMcpWithHeaders())
     }
 
+    @Test
+    fun tools_colliding_tool_names_light() = snapshot(name = "colliding_tool_names", dark = false) {
+        ToolsContent(state = ToolsPreview.defaultCollidingNames())
+    }
+
+    @Test
+    fun tools_colliding_tool_names_dark() = snapshot(name = "colliding_tool_names", dark = true) {
+        ToolsContent(state = ToolsPreview.defaultCollidingNames())
+    }
+
+    @Test
+    fun add_mcp_cleartext_consent_light() = snapshot(name = "add_mcp_cleartext_consent", dark = false) {
+        McpServerConfigContent(form = ToolsPreview.addMcpNeedingCleartextConsent())
+    }
+
+    @Test
+    fun add_mcp_cleartext_consent_dark() = snapshot(name = "add_mcp_cleartext_consent", dark = true) {
+        McpServerConfigContent(form = ToolsPreview.addMcpNeedingCleartextConsent())
+    }
+
     private fun snapshot(name: String, dark: Boolean, content: @Composable () -> Unit) {
         composeTestRule.setContent {
             KnotworkTheme(darkTheme = dark) {
@@ -225,6 +245,37 @@ internal object ToolsPreview {
             risk = BuiltInToolRisk.Sensitive,
             enabled = false,
         ),
+    )
+
+    /**
+     * Two MCP tools whose names share a long prefix — the collision reported in
+     * the directed MCP run. Ellipsised to one line they rendered identically,
+     * and each row carries its own enable toggle, so the only way to tell them
+     * apart was the description.
+     */
+    private fun collidingNameTools(): List<McpToolEntry> = listOf(
+        McpToolEntry(
+            id = "mcp:abc12345:get-resource-repository-contents",
+            name = "get-resource-repository-contents",
+            description = "Read a file from the repository",
+            risk = BuiltInToolRisk.ReadOnly,
+            enabled = true,
+        ),
+        McpToolEntry(
+            id = "mcp:abc12345:get-resource-repository-metadata",
+            name = "get-resource-repository-metadata",
+            description = "Read the repository description and topics",
+            risk = BuiltInToolRisk.ReadOnly,
+            enabled = true,
+        ),
+    )
+
+    fun defaultCollidingNames(): ToolsViewState = ToolsViewState(
+        visualState = ToolsVisualState.Default,
+        builtInTools = builtIns(),
+        mcpServers = servers().mapIndexed { index, row ->
+            if (index == 0) row.copy(tools = collidingNameTools(), expanded = true) else row
+        },
     )
 
     fun empty(): ToolsViewState = ToolsViewState(visualState = ToolsVisualState.Empty)
@@ -326,6 +377,16 @@ internal object ToolsPreview {
     )
 
     fun addMcpDefault(): AddMcpServerForm = AddMcpServerForm(url = "https://server.example.com/mcp")
+
+    /**
+     * A LAN address typed over plain HTTP: allowed, but only once the user has
+     * agreed to it for this exact origin, so the form shows the consent notice
+     * and refuses to save until it is resolved.
+     */
+    fun addMcpNeedingCleartextConsent(): AddMcpServerForm = AddMcpServerForm(
+        url = "http://192.168.1.42:8080/sse",
+        cleartextConsentOrigin = "http://192.168.1.42:8080",
+    )
 
     fun addMcpInvalid(): AddMcpServerForm = AddMcpServerForm(
         url = "server.example.com",

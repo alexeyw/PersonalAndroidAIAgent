@@ -482,8 +482,6 @@ class ChatHomeViewModel @Inject constructor(
         // travel; the saved message keeps the empty caption so the bubble shows
         // just the thumbnail.
         val content = AttachmentMessageContent.resolve(draftText)
-        val prompt = content.prompt
-        val displayContent = content.displayContent
         _state.update { it.copy(composer = it.composer.copy(value = "", attachment = null)) }
 
         val sessionId = _state.value.thread.currentSessionId
@@ -491,6 +489,42 @@ class ChatHomeViewModel @Inject constructor(
         // The draft has now been sent; drop its per-session buffer so returning
         // to this chat later shows an empty composer, not the just-sent text.
         sessionDrafts.remove(sessionId)
+
+        // Rename from the user's own text, not the effective prompt: an
+        // image-only message (empty draft) must not title the chat with the
+        // internal default instruction.
+        threads.autoRenameIfDefault(sessionId, draftText)
+
+        launchRun(
+            sessionId = sessionId,
+            prompt = content.prompt,
+            displayContent = content.displayContent,
+            readyAttachment = readyAttachment,
+        )
+    }
+
+    /**
+     * Starts a pipeline run for an already-decided prompt and drives the UI from
+     * its state stream.
+     *
+     * Split out of [proceedSend] because [retryAfterError] needs exactly this and
+     * none of the composer bookkeeping around it: a retry re-runs a turn the user
+     * already sent, so clearing the composer (or renaming the chat from the
+     * retried text) would destroy work they did while reading the error.
+     *
+     * @param sessionId chat session the run belongs to.
+     * @param prompt the effective prompt travelling through the pipeline.
+     * @param displayContent what the user's bubble shows, when it differs from
+     *   [prompt] (an image-only message has an empty caption but a real prompt).
+     * @param readyAttachment attachment to carry with the turn, if any.
+     */
+    private fun launchRun(
+        sessionId: String,
+        prompt: String,
+        displayContent: String?,
+        readyAttachment: MessageAttachment?,
+        persistUserMessage: Boolean = true,
+    ) {
         val pipelineId = threads.sessionsSnapshot().firstOrNull { it.id == sessionId }?.pipelineId
 
         // Fresh run = fresh cumulative log upstream; the baseline carried
@@ -511,11 +545,6 @@ class ChatHomeViewModel @Inject constructor(
             )
         }
 
-        // Rename from the user's own text, not the effective prompt: an
-        // image-only message (empty draft) must not title the chat with the
-        // internal default instruction.
-        threads.autoRenameIfDefault(sessionId, draftText)
-
         generationJob?.cancel()
         generationJob = viewModelScope.launch {
             // The per-session orchestrator flow (a replay-1 SharedFlow) replays
@@ -529,7 +558,14 @@ class ChatHomeViewModel @Inject constructor(
             // answer silently lands. The first run worked only because its seed
             // was Idle, which `handleOrchestratorState` already ignores.
             var awaitingFirstRunState = true
-            agentOrchestratorUseCase(sessionId, prompt, pipelineId, readyAttachment, displayContent)
+            agentOrchestratorUseCase(
+                sessionId = sessionId,
+                userPrompt = prompt,
+                pipelineId = pipelineId,
+                attachment = readyAttachment,
+                displayContent = displayContent,
+                persistUserMessage = persistUserMessage,
+            )
                 .catch { error ->
                     _state.update {
                         it.copy(visual = ChatHomeUiState.Error(error.message ?: UNKNOWN_ERROR_FALLBACK))
@@ -605,10 +641,12 @@ class ChatHomeViewModel @Inject constructor(
      * Handles the Retry CTA on the chat error tile.
      *
      *  - Engine healthy: the failure was not a model-load problem (e.g. a
-     *    generation/tool error), so Retry simply clears the error back to the
-     *    resting state. It deliberately does NOT auto-send the composer text —
-     *    otherwise text the user typed while reading the error would be
-     *    dispatched as a brand-new message.
+     *    generation / tool / provider error), so Retry re-runs **the turn that
+     *    failed** — the last user message in the thread, with whatever
+     *    attachment it carried. It deliberately does NOT send the composer
+     *    text: text typed while reading the error is a different message, and
+     *    dispatching it here would both lose the failed turn and send something
+     *    the user never pressed Send on. The composer is left untouched.
      *  - Engine cold with a pending draft: this is the model-not-loaded path;
      *    [loadModelThenSend] loads then resends the retained draft. A further
      *    load failure re-shows the Error (typically "no active model
@@ -617,7 +655,7 @@ class ChatHomeViewModel @Inject constructor(
      */
     fun retryAfterError() {
         if (llmInferenceEngine.isInitialized) {
-            _state.update { it.copy(visual = it.restingVisual()) }
+            retryLastUserTurn()
             return
         }
         val hasDraft = _state.value.composer.value.trim().isNotEmpty() ||
@@ -641,6 +679,48 @@ class ChatHomeViewModel @Inject constructor(
                     },
                 )
             }
+        }
+    }
+
+    /**
+     * Re-runs the most recent user turn of the current session.
+     *
+     * The turn is read back from storage rather than from the composer: the user
+     * message is persisted *before* the pipeline runs, so it survives any
+     * failure after that point — which is exactly the situation the Retry CTA
+     * appears in. Reading the persisted row also recovers the attachment, so
+     * retrying an image message retries the image and not just its caption.
+     *
+     * When there is no user turn to repeat (an empty or agent-only thread), the
+     * error is simply cleared — there is nothing to run, and leaving the tile up
+     * would strand the screen.
+     */
+    private fun retryLastUserTurn() {
+        val sessionId = _state.value.thread.currentSessionId
+        if (sessionId.isBlank()) {
+            _state.update { it.copy(visual = it.restingVisual()) }
+            return
+        }
+        viewModelScope.launch {
+            val lastUserMessage = chatRepository.getMessagesForSession(sessionId).first()
+                .lastOrNull { it.role == Role.USER }
+            if (lastUserMessage == null) {
+                _state.update { it.copy(visual = it.restingVisual()) }
+                return@launch
+            }
+            // Re-resolve through the same helper `proceedSend` uses so an
+            // image-only turn (empty caption) travels with the internal default
+            // instruction instead of an empty prompt.
+            val content = AttachmentMessageContent.resolve(lastUserMessage.content)
+            launchRun(
+                sessionId = sessionId,
+                prompt = content.prompt,
+                displayContent = content.displayContent,
+                readyAttachment = lastUserMessage.attachment,
+                // The failed attempt already persisted this row; re-running must
+                // not add a second copy of the same message to the thread.
+                persistUserMessage = false,
+            )
         }
     }
 
