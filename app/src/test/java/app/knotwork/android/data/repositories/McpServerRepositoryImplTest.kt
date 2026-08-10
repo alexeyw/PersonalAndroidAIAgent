@@ -8,14 +8,17 @@ import app.knotwork.android.domain.models.McpAuth
 import app.knotwork.android.domain.models.McpConnectionStatus
 import app.knotwork.android.domain.models.McpServerConfig
 import app.knotwork.android.domain.models.ToolRisk
+import app.knotwork.android.domain.repositories.SettingsRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -56,7 +59,7 @@ class McpServerRepositoryImplTest {
         )
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
+        val repo = McpServerRepositoryImpl(pool = pool(factory))
 
         val result = repo.fetchToolList(config = config)
 
@@ -79,7 +82,7 @@ class McpServerRepositoryImplTest {
         coEvery { client.connect(any()) } throws IllegalStateException("handshake failed")
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
+        val repo = McpServerRepositoryImpl(pool = pool(factory))
 
         val result = repo.fetchToolList(config = config)
 
@@ -95,7 +98,7 @@ class McpServerRepositoryImplTest {
         coEvery { client.getTools() } returns listOf(AgentTool("a", "d", "{}"))
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
+        val repo = McpServerRepositoryImpl(pool = pool(factory))
         var time = 1_000L
         repo.clockMs = { time }
 
@@ -114,7 +117,7 @@ class McpServerRepositoryImplTest {
         coEvery { client.getTools() } returns listOf(AgentTool("a", "d", "{}"))
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
+        val repo = McpServerRepositoryImpl(pool = pool(factory))
         repo.clockMs = { 1_000L }
 
         repo.fetchToolList(config = config)
@@ -130,7 +133,7 @@ class McpServerRepositoryImplTest {
         coEvery { client.getTools() } returns listOf(AgentTool("a", "d", "{}"))
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
+        val repo = McpServerRepositoryImpl(pool = pool(factory))
 
         repeat(times = 3) { repo.fetchToolList(config = config, forceRefresh = true) }
 
@@ -149,7 +152,7 @@ class McpServerRepositoryImplTest {
         coEvery { client.getTools() } returns listOf(AgentTool("a", "d", "{}"))
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
+        val repo = McpServerRepositoryImpl(pool = pool(factory))
 
         repo.fetchToolList(config = config)
         // Same URL (the pool key), different auth — the new credentials must
@@ -168,7 +171,7 @@ class McpServerRepositoryImplTest {
         coEvery { client.getTools() } throws IllegalStateException("boom") andThen listOf(AgentTool("a", "d", "{}"))
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
+        val repo = McpServerRepositoryImpl(pool = pool(factory))
 
         val failed = repo.fetchToolList(config = config)
         val retried = repo.fetchToolList(config = config, forceRefresh = true)
@@ -192,7 +195,7 @@ class McpServerRepositoryImplTest {
         }
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
+        val repo = McpServerRepositoryImpl(pool = pool(factory))
 
         val job = launch { repo.fetchToolList(config = config) }
         started.await()
@@ -213,7 +216,7 @@ class McpServerRepositoryImplTest {
         coEvery { client.getTools() } returns listOf(AgentTool("a", "d", "{}"))
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
+        val repo = McpServerRepositoryImpl(pool = pool(factory))
 
         repo.fetchToolList(config = config)
         repo.disconnect(serverUrl = url)
@@ -234,7 +237,7 @@ class McpServerRepositoryImplTest {
         coEvery { client.getTools() } returns listOf(AgentTool("a", "d", "{}"))
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
+        val repo = McpServerRepositoryImpl(pool = pool(factory))
         repo.clockMs = { 1_000L }
 
         // 1) First fetch succeeds → cache populated, status = Connected.
@@ -260,7 +263,7 @@ class McpServerRepositoryImplTest {
         coEvery { client.getTools() } returns listOf(AgentTool("a", "d", "{}"))
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
+        val repo = McpServerRepositoryImpl(pool = pool(factory))
 
         // Acquire the status flow first — this is what a live observer holds.
         val statusFlow = repo.observeConnectionStatus(url)
@@ -288,4 +291,16 @@ class McpServerRepositoryImplTest {
         assertTrue(!id1.contains("/"))
         assertTrue(!id1.contains("?"))
     }
+}
+
+/**
+ * Builds the pool these tests drive. Every fixture here uses `https://`, so the
+ * pool's cleartext gate classifies them as "nothing to gate" and no approved
+ * origin is needed — the gate is covered by `CleartextPolicyTest` and by
+ * `McpConnectionPoolTest`.
+ */
+private fun pool(factory: McpClientFactory): McpConnectionPool {
+    val settings = mockk<SettingsRepository>()
+    every { settings.approvedCleartextOrigins } returns flowOf(emptySet())
+    return McpConnectionPool(clientFactory = factory, settingsRepository = settings)
 }

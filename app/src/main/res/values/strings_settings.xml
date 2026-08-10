@@ -48,6 +48,8 @@
     <string name="settings_ollama_base_url_label">Ollama base URL</string>
     <string name="settings_ollama_base_url_placeholder">http://192.168.1.100:11434</string>
     <string name="settings_ollama_base_url_error">Base URL is required</string>
+    <string name="settings_cleartext_consent_body">Traffic to %1$s is not encrypted. Anyone on the same network can read what you send. Approve it only if this address is a machine you trust on your own network.</string>
+    <string name="settings_cleartext_consent_action">Approve unencrypted connection</string>
     <string name="settings_ollama_model_label">Ollama model name</string>
     <string name="settings_ollama_context_label">Ollama context window size</string>
     <string name="settings_provider_api_key_label">%1$s API key</string>

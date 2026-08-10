@@ -1483,7 +1483,12 @@ class SettingsManagerTest {
                 "local_model_backend", "last_init_backend_attempt", "local_backend_failure_streak",
                 "default_pipeline_id", "console_preferred_tab", "last_test_probe_result",
                 "active_embedding_provider_id", "last_reembed_provider_id",
-                "allowed_http_domains",
+                // User-granted network permissions, in the same category as
+                // `allowed_http_domains`: a "reset to recommended defaults" that
+                // silently revoked the approval for a LAN Ollama address would
+                // break a working local setup with no explanation, and one that
+                // silently kept re-granting it would be worse.
+                "allowed_http_domains", "approved_cleartext_origins",
                 "share_target_pipeline_id", "quick_settings_tile_pipeline_id",
             )
 

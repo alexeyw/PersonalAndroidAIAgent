@@ -18,6 +18,8 @@ import app.knotwork.android.domain.engine.retry.CloudRetryListener
 import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.repositories.ApiKeyRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.services.CleartextPolicy
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import timber.log.Timber
 import javax.inject.Inject
@@ -201,6 +203,15 @@ class KoogClientFactory @Inject constructor(
     private suspend fun rawOllama(): LLMClient? {
         val url = apiKeyRepository.getOllamaBaseUrl().firstOrNull()?.trim()
         if (url.isNullOrBlank()) return null
+        // Cleartext gate. The manifest permits unencrypted traffic app-wide
+        // because Android cannot express "any private-LAN address" there; the
+        // rule that replaces it lives in `CleartextPolicy` and is applied at
+        // every point that opens a connection to a user-configured address.
+        val verdict = CleartextPolicy.classify(url, settingsRepository.approvedCleartextOrigins.first())
+        CleartextPolicy.refusalMessage(verdict)?.let { reason ->
+            Timber.w("KoogClientFactory: Ollama client refused — %s", reason)
+            return null
+        }
         return OllamaClient(
             httpClientFactory = httpClientFactory,
             baseUrl = url,

@@ -160,7 +160,6 @@ class ChatHomeViewModelTest {
         // validate-and-delegate wrappers, so stubbing them would test the stub.
         archiveChatUseCase = ArchiveChatUseCase(chatRepository)
         unarchiveChatUseCase = UnarchiveChatUseCase(chatRepository)
-        exportChatUseCase = ExportChatUseCase(chatRepository)
         pipelineRepository = mockk()
         settingsRepository = mockk(relaxed = true)
         getContextWindowUseCase = mockk()
@@ -170,6 +169,7 @@ class ChatHomeViewModelTest {
         loadModelUseCase = mockk()
         saveMessageToMemoryUseCase = mockk()
         pipelineRunRepository = mockk()
+        exportChatUseCase = ExportChatUseCase(chatRepository, pipelineRunRepository)
         runTraceRepository = mockk()
         resumePipelineRunUseCase = mockk()
         pendingInteractionRepository = mockk(relaxed = true)
@@ -548,22 +548,58 @@ class ChatHomeViewModelTest {
     }
 
     @Test
-    fun `retryAfterError on a healthy engine clears the error without sending typed text`() = runTest(testDispatcher) {
-        // A non-model error is showing; the user types new text while reading
-        // it and taps Retry. Retry must clear the error, not fire the text.
-        every { llmInferenceEngine.isInitialized } returns true
-        viewModel = createViewModel()
-        advanceUntilIdle()
-        viewModel.forceState(ChatHomeUiState.Error("boom"))
-        viewModel.onComposerValueChange("typed while reading the error")
+    fun `retryAfterError on a healthy engine re-runs the failed turn and leaves the draft alone`() =
+        runTest(testDispatcher) {
+            // A non-model error is showing; the user types new text while reading
+            // it and taps Retry. Retry must re-run the turn that FAILED — not the
+            // text in the composer, which is a different message the user has not
+            // pressed Send on, and which must survive untouched.
+            every { llmInferenceEngine.isInitialized } returns true
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            val sessionId = viewModel.state.value.thread.currentSessionId
+            every { chatRepository.getMessagesForSession(sessionId) } returns flowOf(
+                listOf(
+                    ChatMessage(sessionId = sessionId, role = Role.USER, content = "the failed turn", timestamp = 1L),
+                ),
+            )
+            viewModel.forceState(ChatHomeUiState.Error("boom"))
+            viewModel.onComposerValueChange("typed while reading the error")
 
-        viewModel.retryAfterError()
-        advanceUntilIdle()
+            viewModel.retryAfterError()
+            advanceUntilIdle()
 
-        coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any()) }
-        assertTrue(viewModel.state.value.visual !is ChatHomeUiState.Error)
-        assertEquals("typed while reading the error", viewModel.state.value.composer.value)
-    }
+            coVerify {
+                agentOrchestratorUseCase(
+                    sessionId = sessionId,
+                    userPrompt = "the failed turn",
+                    pipelineId = any(),
+                    attachment = any(),
+                    displayContent = any(),
+                    // The failed attempt already persisted the user row; re-running
+                    // must not put a second copy of it in the thread.
+                    persistUserMessage = false,
+                )
+            }
+            assertEquals("typed while reading the error", viewModel.state.value.composer.value)
+        }
+
+    @Test
+    fun `retryAfterError with no user turn to repeat clears the error instead of stranding the screen`() =
+        runTest(testDispatcher) {
+            every { llmInferenceEngine.isInitialized } returns true
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            val sessionId = viewModel.state.value.thread.currentSessionId
+            every { chatRepository.getMessagesForSession(sessionId) } returns flowOf(emptyList())
+            viewModel.forceState(ChatHomeUiState.Error("boom"))
+
+            viewModel.retryAfterError()
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any()) }
+            assertTrue(viewModel.state.value.visual !is ChatHomeUiState.Error)
+        }
 
     @Test
     fun `selectThread cancels an in-flight load-then-send so it never fires on the new chat`() =

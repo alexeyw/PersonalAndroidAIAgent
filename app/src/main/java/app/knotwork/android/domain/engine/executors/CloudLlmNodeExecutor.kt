@@ -9,6 +9,7 @@ import app.knotwork.android.domain.constants.PipelineExecutionDefaults
 import app.knotwork.android.domain.engine.CloudErrorSanitizer
 import app.knotwork.android.domain.engine.CloudLlmClientFactory
 import app.knotwork.android.domain.engine.CloudLlmModelResolver
+import app.knotwork.android.domain.engine.retry.CloudRetryListener
 import app.knotwork.android.domain.engine.retry.CollectingCloudRetryListener
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.CloudProvider
@@ -24,10 +25,10 @@ import app.knotwork.android.domain.repositories.NetworkActivityTracker
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.FlowCollector
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flow
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -74,7 +75,7 @@ class CloudLlmNodeExecutor @Inject constructor(
         originalPrompt: String,
         runId: String?,
         scope: ExecutionScope,
-    ): Flow<NodeOutput> = flow {
+    ): Flow<NodeOutput> = channelFlow {
         val systemPromptPrefix = settingsRepository.systemPromptPrefix.first()
         val nodeSystemPrompt = node.systemPrompt ?: DefaultPrompts.Cloud.SYSTEM_FALLBACK
         val baseSystemPrompt = "$systemPromptPrefix\n$nodeSystemPrompt\n"
@@ -100,11 +101,22 @@ class CloudLlmNodeExecutor @Inject constructor(
             CloudProvider.fromId(configuredProvider)
         }
 
-        // Buffers transient-failure retries performed by the Koog retry policy so
-        // each one can be surfaced as a console line after the stream drains
-        // (symmetric to the structured-output repair lines). Retries happen before
-        // the first token, so draining afterwards still reports them in order.
-        val retryCollector = CollectingCloudRetryListener()
+        // Surfaces each transient-failure retry as a console line **at the moment
+        // it happens**. This used to buffer and drain after the stream finished,
+        // which put both lines at the end of the run: measured on the wire the
+        // retries were at 1 s and 3 s, but the user saw nothing at all until the
+        // whole thing failed, then everything at once. `onRetry` is not a suspend
+        // callback, which is why the node is a `channelFlow` — `trySend` is the
+        // only way to publish from inside it. Dropping is not a practical concern:
+        // the channel buffers 64 elements and the retry ceiling is single digits.
+        val retryListener = CloudRetryListener { provider, attempt, maxRetries ->
+            val line = CollectingCloudRetryListener.RetryAttempt(
+                provider = provider,
+                attempt = attempt,
+                maxRetries = maxRetries,
+            ).consoleMessage()
+            trySend(NodeOutput.Console(ConsoleEventType.CloudRetry, line))
+        }
 
         // A node that cannot reach a provider has *failed*; it has not answered.
         // Feeding the explanation into the token stream (as this executor used to do)
@@ -114,9 +126,9 @@ class CloudLlmNodeExecutor @Inject constructor(
         // through the same typed-error path as a mid-stream exception.
         if (selectedProvider == null) {
             emitFailure(NO_PROVIDER_CONFIGURED)
-            return@flow
+            return@channelFlow
         }
-        val client = cloudLlmClientFactory.createClient(selectedProvider, retryCollector) as? LLMClient
+        val client = cloudLlmClientFactory.createClient(selectedProvider, retryListener) as? LLMClient
         if (client == null) {
             // The factory collapses "blocked by policy" and "no credentials" into a
             // single null, but the two need different remedies from the user, so the
@@ -129,7 +141,7 @@ class CloudLlmNodeExecutor @Inject constructor(
                     missingCredentials(selectedProvider.id)
                 },
             )
-            return@flow
+            return@channelFlow
         }
         // The resolver owns the per-provider configured-id ↔ default fallback,
         // so the executor stays out of the data layer's settings plumbing.
@@ -161,10 +173,10 @@ class CloudLlmNodeExecutor @Inject constructor(
                 approximateTokenCount += 1
 
                 if (!emittedThinking) {
-                    emit(NodeOutput.State(AgentOrchestratorState.Thinking(accumulatedResponse.toString())))
+                    send(NodeOutput.State(AgentOrchestratorState.Thinking(accumulatedResponse.toString())))
                     emittedThinking = true
                 } else {
-                    emit(NodeOutput.State(AgentOrchestratorState.Answering(accumulatedResponse.toString())))
+                    send(NodeOutput.State(AgentOrchestratorState.Answering(accumulatedResponse.toString())))
                 }
             }
         } catch (e: CancellationException) {
@@ -188,10 +200,9 @@ class CloudLlmNodeExecutor @Inject constructor(
                 "[NODE_ERR] type=${node.type.name} id=${node.id} " +
                     "CloudLlmNodeExecutor generation failed with ${e::class.simpleName}: $safeMessage",
             )
-            emitRetries(retryCollector)
-            emit(NodeOutput.State(AgentOrchestratorState.Error(safeMessage)))
-            emit(NodeOutput.Result(NodeExecutionResult(error = safeMessage)))
-            return@flow
+            send(NodeOutput.State(AgentOrchestratorState.Error(safeMessage)))
+            send(NodeOutput.Result(NodeExecutionResult(error = safeMessage)))
+            return@channelFlow
         }
 
         // A provider whose connection dies mid-answer does not always raise: the
@@ -200,12 +211,9 @@ class CloudLlmNodeExecutor @Inject constructor(
         // one. Measured on a stub that cut the socket mid-stream: identical frames in both
         // cases apart from `finishReason` (null when cut, "stop" when complete).
         if (providerReportsFinishReason(selectedProvider) && finishReason == null) {
-            emitRetries(retryCollector)
             emitFailure(truncatedResponse(selectedProvider.id))
-            return@flow
+            return@channelFlow
         }
-
-        emitRetries(retryCollector)
 
         val endTime = System.currentTimeMillis()
         metricsRepository.updateMetrics(endTime - startTime, approximateTokenCount)
@@ -225,7 +233,7 @@ class CloudLlmNodeExecutor @Inject constructor(
 
         kotlinx.coroutines.delay(PipelineExecutionDefaults.NODE_RESULT_EMIT_DELAY_MS)
 
-        emit(NodeOutput.Result(NodeExecutionResult(outputText = fullResponseText, tokenCount = approximateTokenCount)))
+        send(NodeOutput.Result(NodeExecutionResult(outputText = fullResponseText, tokenCount = approximateTokenCount)))
     }
 
     /**
@@ -237,22 +245,10 @@ class CloudLlmNodeExecutor @Inject constructor(
      *
      * @param reason User-facing explanation of why no cloud call was attempted.
      */
-    private suspend fun FlowCollector<NodeOutput>.emitFailure(reason: String) {
+    private suspend fun ProducerScope<NodeOutput>.emitFailure(reason: String) {
         Timber.tag("PipelineDebug").e("[NODE_ERR] type=CLOUD $reason")
-        emit(NodeOutput.State(AgentOrchestratorState.Error(reason)))
-        emit(NodeOutput.Result(NodeExecutionResult(error = reason)))
-    }
-
-    /**
-     * Emits one [NodeOutput.Console] per buffered transient-failure retry, so the
-     * user can see the cloud provider blipped before recovering.
-     *
-     * @param collector The listener that buffered the retries during the call.
-     */
-    private suspend fun FlowCollector<NodeOutput>.emitRetries(collector: CollectingCloudRetryListener) {
-        collector.attempts.forEach { attempt ->
-            emit(NodeOutput.Console(ConsoleEventType.CloudRetry, attempt.consoleMessage()))
-        }
+        send(NodeOutput.State(AgentOrchestratorState.Error(reason)))
+        send(NodeOutput.Result(NodeExecutionResult(error = reason)))
     }
 
     /**

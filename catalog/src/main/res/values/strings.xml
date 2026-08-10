@@ -315,6 +315,8 @@
     <string name="knotwork_tools_pill_destructive">Destructive</string>
     <!-- Add-server form header. -->
     <string name="knotwork_tools_add_form_header">ADD NEW MCP SERVER URL</string>
+    <string name="knotwork_tools_cleartext_consent_body">Traffic to %1$s is not encrypted. Anyone on the same network can read what you send, including any token set below. Approve it only if this address is a machine you trust on your own network.</string>
+    <string name="knotwork_tools_cleartext_consent_action">Approve unencrypted connection</string>
     <!-- Add-server form placeholder. -->
     <string name="knotwork_tools_add_form_placeholder">https://… or mcp://host:port</string>
     <!-- Add-server cancel button label. -->
@@ -785,13 +787,9 @@
     <string name="knotwork_node_field_system_prompt">System prompt</string>
     <string name="knotwork_node_field_model">Model</string>
     <string name="knotwork_node_field_temperature">Temperature</string>
-    <string name="knotwork_node_field_top_p">Top-p</string>
-    <string name="knotwork_node_field_max_new_tokens">Max new tokens</string>
-    <string name="knotwork_node_field_max_tokens">Max tokens</string>
     <string name="knotwork_node_field_provider">Provider</string>
     <string name="knotwork_node_field_engine">Engine</string>
     <string name="knotwork_node_field_engine_on_device">On-device</string>
-    <string name="knotwork_node_field_timeout_ms">Timeout (ms)</string>
     <string name="knotwork_node_field_format">Format</string>
     <string name="knotwork_node_field_input_name">Input variable name</string>
     <string name="knotwork_node_field_schema_json">JSON Schema (optional)</string>

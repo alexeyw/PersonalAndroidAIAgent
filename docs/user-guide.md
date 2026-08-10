@@ -147,6 +147,9 @@ app:
   accept the licence on Hugging Face and add a token.
 - **Offline / errors.** If the network is unavailable, the screen shows
   a clear message with a **Retry** button rather than failing silently.
+  In chat, **Retry** re-runs the message that failed — not whatever you
+  have typed since. Anything in the composer is left alone, and the failed
+  message is not added to the conversation a second time.
 
 ### 4. Send a first message
 
@@ -289,6 +292,14 @@ history is portable to any app that handles JSON or plain text.
   cloud-drive app, and so on). Archived chats export the same way, from
   their own row menu on the archive screen — putting a chat away never
   puts it out of reach.
+
+  The file also carries an `unfinishedRuns` list: any run of that chat
+  that failed, was cancelled or was interrupted, with the error text and
+  the timing. A failure never becomes a chat message, so without this a
+  conversation whose only turn failed exported as a lone question with no
+  answer and no explanation — which is exactly the file someone attaches
+  to a bug report. Successful runs are not listed; the answer they
+  produced is already there.
 - **Import** — open the drawer and tap **Import chat**. The system
   file picker opens, filtered to `application/json`. Selecting a
   previously exported file creates a new chat session with the
@@ -1369,7 +1380,8 @@ quietly send your data off the device. The allowlist is the safeguard:
   one reached through a redirect — is refused before the request leaves
   the device.
 - Public domains must use `https`. Plain `http` is allowed only for
-  local addresses (for example a home Ollama server).
+  local addresses (for example a home Ollama server), and only after you
+  have approved that specific address — see *Adding an MCP server*.
 - A request is refused outright if it would carry one of your stored
   provider API keys, so a saved key can't be leaked to a remote host.
 
@@ -1456,6 +1468,20 @@ tools. To add one:
 
 The server's tools become available to the agent on the next run.
 Remove a server by tapping the trash icon next to its row.
+
+**Unencrypted addresses need your approval.** If the URL starts with
+`http://` rather than `https://` and points at a machine on your own
+network, the form shows a notice naming the exact address and a single
+**Approve unencrypted connection** button. Nothing is sent until you press
+it — the app refuses to open the connection, and saving the server is
+blocked while the notice is showing. This is not a formality: on an
+unencrypted connection anyone else on the network can read what you send,
+including any token you set in the Authentication section below.
+
+`http://` to a **public** address is refused outright and cannot be
+approved. Approval is remembered per address *and port* — approving
+`http://192.168.1.42:8080` does not approve port 3000 on the same machine,
+because that is a different server.
 
 MCP connections open lazily — the app only contacts the server when
 a tool from it is needed — and they are wrapped in error-handling
@@ -1831,7 +1857,16 @@ errors (5xx) and connection/read timeouts — are retried with exponential
 backoff; authentication errors are not retried, and stopping a run cancels
 cleanly. **Max attempts** (1–5, default 3; set to **1** to disable retries) and
 **Base delay** (100–10 000 ms, default 1 000) tune it. Each retry shows on the
-agent console as a muted line such as `Cloud retry 1/2 for openai`.
+agent console as a muted line such as `Cloud retry 1/2 for openai`, at the
+moment the retry happens rather than after the answer finishes.
+
+One limitation worth knowing, measured rather than assumed: when a provider
+answers a rate-limit with a `Retry-After` header asking you to wait a specific
+time, that request is **not** honoured — the backoff curve is the same whether
+the header is present or not. The cause is in the upstream client library, and
+working around it would mean building a second retry layer of our own. In
+practice it means that under a real rate limit the app knocks sooner than it was
+asked to.
 
 ### Memory
 

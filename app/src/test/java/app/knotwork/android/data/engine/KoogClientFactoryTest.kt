@@ -73,6 +73,7 @@ class KoogClientFactoryTest {
     @Test
     fun `createOllamaExecutor returns executor when url is present`() = runTest {
         coEvery { apiKeyRepository.getOllamaBaseUrl() } returns flowOf("http://localhost:11434")
+        every { settingsRepository.approvedCleartextOrigins } returns flowOf(setOf("http://localhost:11434"))
         val executor = factory.createOllamaExecutor()
         assertNotNull(executor)
     }
@@ -103,6 +104,7 @@ class KoogClientFactoryTest {
     fun `Ollama is still reachable in local-only mode`() = runTest {
         every { settingsRepository.blockNetworkFromLocalModel } returns MutableStateFlow(true)
         coEvery { apiKeyRepository.getOllamaBaseUrl() } returns flowOf("http://192.168.1.42:11434")
+        every { settingsRepository.approvedCleartextOrigins } returns flowOf(setOf("http://192.168.1.42:11434"))
         assertNotNull(factory.createOllamaExecutor())
     }
 }

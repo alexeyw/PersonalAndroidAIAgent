@@ -147,6 +147,41 @@ details.
 
 ### Fixed
 
+- **A local Ollama or MCP server over plain HTTP now actually works.** The app
+  carried a hard-coded list of fourteen private IP addresses as the only ones it
+  would talk to unencrypted. That list ships inside the app, so you could not add
+  your own, and it matched a real home network only by coincidence — meaning the
+  self-hosted setup this app is built around simply did not connect for most
+  people. Android's own network config cannot express "any address on my
+  network", so the rule now lives in the app: any address on your local network
+  works, once you approve that specific address. Saving a local `http://` address
+  shows a notice naming it, explaining that anyone on the network can read what
+  you send, and asking you to approve it; nothing is sent until you do, and the
+  approval covers that address and port only. Unencrypted connections to public
+  addresses are refused outright and cannot be approved, on every path including
+  a redirect that tries to downgrade a secure connection mid-request.
+- **Retry now retries.** After a failed message the **Retry** button only cleared
+  the error tile — the run it was offering to repeat never happened. It now
+  re-runs the message that failed, with its image if it had one. Text you typed
+  while reading the error is left in the composer rather than being sent, and the
+  failed message is not added to the conversation a second time.
+- **Two tools with similar names were impossible to tell apart.** Tool names in
+  an expanded MCP server were cut to a single line, so `get-resource-…` and
+  `get-resource-…` looked identical while each row carried its own on/off switch
+  — an easy way to disable the wrong tool. Long names now wrap to a second line.
+  Rows whose names already fit are unchanged.
+- **A failed turn is now part of an exported chat.** A run that fails never
+  becomes a message, so exporting a conversation whose only turn failed produced
+  a file with the question, no answer, and no sign anything had gone wrong — the
+  worst possible file to attach to a bug report. The export now also lists the
+  runs that failed, were cancelled or were interrupted, with the error and the
+  timing.
+- **Retry notices reached the console after the fact.** When a cloud provider
+  blipped and the call was retried, the `Cloud retry 1/2` lines were held back
+  until the whole answer finished. On a run where the retries happened in the
+  first seconds and the request ultimately failed, that meant staring at nothing
+  and then receiving everything at once. Each retry is now reported as it
+  happens.
 - **A pipeline step pointed at a local server could quietly switch to a cloud
   one.** The node editor offers a single *OpenAI-compatible* option covering both
   DeepSeek and a self-hosted server such as Ollama, and saving the step's settings
@@ -180,6 +215,19 @@ details.
   is made, and the message says plainly that the tool is not in the available list.
   A near-miss is not silently corrected to the closest match — running a different
   tool than the one named is exactly what the confirmation prompt exists to prevent.
+- **Notifications looked like they came from three different apps.** Every
+  notification the agent posts — a trigger firing, a background task finishing or
+  failing, a question, a request for approval — borrowed a stock Android icon
+  picked for rough resemblance. A finished background task showed the **download
+  complete** icon, so the status bar reported a download from an app that had
+  downloaded nothing, sitting right next to a foreground notification carrying the
+  real Knotwork mark. The approval buttons were worse than mismatched: **Approve**
+  was a media *play* symbol and **Deny** was a *trash can*, so on a destructive
+  confirmation the choice read as "run it" or "delete it" — the opposite of what
+  the buttons do. Notifications now use one deliberate set: the Knotwork mark for
+  anything that needs nothing from you, a plain tick or cross for an outcome, a
+  shield for a decision you have to make, a speech bubble for a question, and a
+  tick/cross pair on the buttons.
 - **Importing a pipeline no longer loses settings without telling you.** When a
   pipeline file contained anything the app could not read, those settings were
   discarded in silence — the graph loaded, looked fine, and part of its node
@@ -496,6 +544,20 @@ details.
 
 ### Changed
 
+- **Controls that did nothing were removed from the step editor.** The Cloud
+  step offered Temperature, Max tokens and Timeout, and the on-device step
+  offered temperature, top-P and max new tokens. All of them were saved, and
+  none of them were read: moving any of these sliders changed nothing about the
+  answer. Timeout was the worst of them — the person reaching for it is the one
+  whose provider has already hung, and it was guaranteed not to help. They are
+  gone until per-step settings actually reach the engine. Existing pipelines are
+  untouched: the saved values stay in the file and keep round-tripping, they are
+  simply no longer presented as something you can change.
+- **What the cloud retry policy does and does not do is now written down.** The
+  user guide states plainly that a provider asking you to wait a specific time
+  (a `Retry-After` header) is not honoured — the backoff is the same with or
+  without it — so under a real rate limit the app knocks sooner than it was
+  asked to. Measured, not assumed; the cause is in the upstream client library.
 - **Build toolchain refreshed to clear the `NewerVersionAvailable` /
   `AndroidGradlePluginVersion` lint gate.** Gradle `9.6.1` → `9.7.0`, `dev.detekt`
   `2.0.0-alpha.5` → `2.0.0-alpha.6`, and Roborazzi `1.70.0` → `1.71.0` (plugin

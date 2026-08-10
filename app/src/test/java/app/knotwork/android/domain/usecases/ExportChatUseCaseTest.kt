@@ -2,8 +2,12 @@ package app.knotwork.android.domain.usecases
 
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
+import app.knotwork.android.domain.models.PipelineRun
+import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Role
+import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.repositories.ChatRepository
+import app.knotwork.android.domain.repositories.PipelineRunRepository
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -37,6 +41,8 @@ class ExportChatUseCaseTest {
 
     private val session = ChatSession(id = SESSION_ID, name = "Trip planning", updatedAt = 1_000L)
 
+    private lateinit var pipelineRunRepository: PipelineRunRepository
+
     private val messages = listOf(
         ChatMessage(sessionId = SESSION_ID, role = Role.USER, content = "Where to?", timestamp = 10L),
         ChatMessage(sessionId = SESSION_ID, role = Role.AGENT, content = "Lisbon.", timestamp = 20L),
@@ -45,7 +51,11 @@ class ExportChatUseCaseTest {
     @Before
     fun setup() {
         chatRepository = mockk()
-        useCase = ExportChatUseCase(chatRepository)
+        pipelineRunRepository = mockk()
+        // Default: the session has no unfinished runs, so the existing
+        // message-shape assertions stay about messages.
+        every { pipelineRunRepository.observeRunsForSession(SESSION_ID) } returns flowOf(emptyList())
+        useCase = ExportChatUseCase(chatRepository, pipelineRunRepository)
     }
 
     @Test
@@ -131,4 +141,59 @@ class ExportChatUseCaseTest {
     private companion object {
         const val SESSION_ID = "session-1"
     }
+
+    @Test
+    fun `given a run that failed when invoked then the export carries the failure`() = runTest {
+        // The reason this exists: a failed run never becomes a chat message, so a
+        // conversation whose only turn failed exported as a lone user line with no
+        // reply and no explanation — someone attaching that file to a bug report
+        // was sending it with the bug removed.
+        coEvery { chatRepository.getSessionById(SESSION_ID) } returns session
+        every { chatRepository.getMessagesForSession(SESSION_ID) } returns flowOf(messages)
+        every { pipelineRunRepository.observeRunsForSession(SESSION_ID) } returns flowOf(
+            listOf(
+                run(status = PipelineRunStatus.COMPLETED, startedAt = 5L, error = null),
+                run(status = PipelineRunStatus.FAILED, startedAt = 30L, error = "provider timed out"),
+            ),
+        )
+
+        val root = JSONObject(useCase(SESSION_ID).getOrThrow().json)
+        val runs = root.getJSONArray("unfinishedRuns")
+
+        // Only the failure: a completed run is already represented by the answer
+        // it produced, and repeating it would double the document for nothing.
+        assertEquals(1, runs.length())
+        val failure = runs.getJSONObject(0)
+        assertEquals("FAILED", failure.getString("status"))
+        assertEquals("provider timed out", failure.getString("error"))
+        assertEquals(30L, failure.getLong("startedAt"))
+    }
+
+    @Test
+    fun `given only completed runs when invoked then the failure list is empty rather than absent`() = runTest {
+        // The key is always present so a consumer never has to distinguish
+        // "no failures" from "an export made before failures were recorded".
+        coEvery { chatRepository.getSessionById(SESSION_ID) } returns session
+        every { chatRepository.getMessagesForSession(SESSION_ID) } returns flowOf(messages)
+        every { pipelineRunRepository.observeRunsForSession(SESSION_ID) } returns flowOf(
+            listOf(run(status = PipelineRunStatus.COMPLETED, startedAt = 5L, error = null)),
+        )
+
+        val root = JSONObject(useCase(SESSION_ID).getOrThrow().json)
+
+        assertEquals(0, root.getJSONArray("unfinishedRuns").length())
+    }
+
+    private fun run(status: PipelineRunStatus, startedAt: Long, error: String?) = PipelineRun(
+        id = "run-$startedAt",
+        sessionId = SESSION_ID,
+        pipelineId = null,
+        origin = RunOrigin.CHAT,
+        status = status,
+        currentNodeId = null,
+        startedAt = startedAt,
+        finishedAt = startedAt + 1,
+        errorMessage = error,
+        graphContentHash = null,
+    )
 }

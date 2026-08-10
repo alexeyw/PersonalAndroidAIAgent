@@ -914,6 +914,35 @@ never used around these suspending calls (it would swallow
 cancellation; see [`docs/api-conventions.md`](api-conventions.md) §
 Model Context Protocol).
 
+### 4.3.1. Cleartext (unencrypted HTTP) policy
+
+Android's `network_security_config.xml` supports neither ranges nor wildcards,
+so "permit HTTP to any private-LAN address" — the scenario a local Ollama or
+MCP server *is* — cannot be expressed there. The manifest therefore permits
+cleartext, and the rule lives in `domain/services/CleartextPolicy.kt`:
+unencrypted traffic is allowed only to a loopback / RFC-1918 address the user
+has explicitly approved, and never to a public host (which cannot be approved
+by construction).
+
+Consent is taken where the address is typed — the Ollama base URL and the MCP
+server URL — not at request time: the network layer is three unrelated stacks
+and none of them can ask a person a question. Approved origins are stored as
+canonical `scheme://host[:port]`, so a different port is a different decision.
+
+Enforcement points, one per stack:
+
+| Stack | Gate |
+|---|---|
+| Koog/Ktor — Ollama | `KoogClientFactory.rawOllama()` |
+| Ktor — MCP | `McpConnectionPool` (the only place a connection is opened) |
+| Shared OkHttp | `CleartextGuardInterceptor`, on every request |
+
+The interceptor runs per request rather than per connection, so it also catches
+a redirect trying to downgrade `https` to `http`. The residual exposure — a
+cleartext redirect inside the third-party Koog / Ktor clients, which the
+platform used to block app-wide — is a deliberate trade recorded in the
+project's decision log.
+
 ### 4.4. Cloud LLM providers
 
 Cloud providers (`openai`, `anthropic`, `google`, `deepseek`, `ollama`)
