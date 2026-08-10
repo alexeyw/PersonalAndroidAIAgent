@@ -1,0 +1,396 @@
+name: Release
+
+# Builds, signs and publishes the release artefacts for a `v*` tag.
+#
+# Why this exists: the release used to be assembled by hand — three artefacts
+# (full APK, full AAB, foss APK) plus signing plus a hand-written GitHub Release.
+# Every step of that is a place where a mistake stays invisible until somebody
+# has already downloaded the result. In particular, the build falls back to the
+# *debug* signing identity whenever release credentials are missing
+# (`resolveReleaseSigning()` in `app/build.gradle.kts`), so an unset secret does
+# not fail the build — it silently ships an unusable artefact. This workflow
+# therefore checks the signing identity twice: once against the keystore before
+# the build starts (fails in seconds instead of after an hour) and once against
+# the finished artefacts.
+#
+# Triggers:
+#   - `push` of a `v*` tag — the real release path.
+#   - `workflow_dispatch` — a dry run. It builds, signs and verifies everything
+#     but does NOT create a GitHub Release, so the workflow itself can be
+#     exercised without minting a throwaway tag.
+#
+# What the maintainer has to provision once (see `docs/release.md` §3):
+#   secrets: RELEASE_KEYSTORE_BASE64, RELEASE_KEYSTORE_PASSWORD,
+#            RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD,
+#            GOOGLE_SERVICES_JSON_BASE64
+#   variables: RELEASE_CERT_SHA256
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build as a dry run (must match the declared versionName, e.g. v0.7.0)'
+        required: true
+        type: string
+
+# Deliberately NOT `${{ github.workflow }}-${{ github.ref }}`: the reusable
+# `check.yml` called below evaluates its own concurrency group in THIS
+# workflow's context, which would render to `Release-<ref>`. Concurrency group
+# names are matched case-insensitively, so a caller group of that shape would
+# deadlock against its own callee — the caller run holds the group while the
+# called job waits for it to free up.
+concurrency:
+  group: release-artifacts-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # The same gate every pull request is measured by, reused rather than
+  # restated, so "green" cannot mean two different things.
+  check:
+    uses: ./.github/workflows/check.yml
+
+  release:
+    name: Build, sign and publish
+    needs: check
+    runs-on: ubuntu-latest
+    # Higher than check.yml's 60. This job runs TWO cold R8 release builds (the
+    # expensive part) on a 2-core runner and cannot reuse the check job's
+    # outputs — separate runner, and the Gradle cache is read-only on a tag. A
+    # timeout here kills a release mid-flight, which is worse than a slow one.
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    env:
+      # Resolved once here so every later step (and the failure messages) agree
+      # on what is being built.
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+      IS_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          # A tag is not `main`, so the cache is read-only and seeded from the
+          # last `main` build — a release must never poison the shared cache.
+          cache-read-only: true
+
+      - name: Resolve release version from the tag
+        id: version
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
+            echo "::error::'$RELEASE_TAG' is not a release tag. Expected v<major>.<minor>.<patch>[-suffix], e.g. v0.7.0."
+            exit 1
+          fi
+          version="${RELEASE_TAG#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          # A tag carrying a pre-release suffix must not be advertised as the
+          # latest stable download; a plain 0.x tag is still the thing users are
+          # meant to install, so pre-1.0 alone does not make it a prerelease.
+          if [[ "$version" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify the tag matches the declared versionName
+        run: ./gradlew :app:verifyReleaseVersion -PreleaseTag="$RELEASE_TAG" --no-daemon
+
+      - name: Materialise the release keystore
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${RELEASE_KEYSTORE_BASE64:-}" ]]; then
+            echo "::error::Secret RELEASE_KEYSTORE_BASE64 is not set. Without it the build would fall back to the debug signing identity and ship an unusable artefact. See docs/release.md §3."
+            exit 1
+          fi
+          # Written to RUNNER_TEMP, never into the workspace: nothing under the
+          # checkout can then sweep the keystore into an uploaded artefact.
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+          chmod 600 "$RUNNER_TEMP/release.keystore"
+          if [[ ! -s "$RUNNER_TEMP/release.keystore" ]]; then
+            echo "::error::RELEASE_KEYSTORE_BASE64 decoded to an empty file — re-encode the keystore (see docs/release.md §3)."
+            exit 1
+          fi
+
+      - name: Verify the signing identity before building
+        env:
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          EXPECTED_CERT_SHA256: ${{ vars.RELEASE_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${EXPECTED_CERT_SHA256:-}" ]]; then
+            echo "::error::Repository variable RELEASE_CERT_SHA256 is not set. It is the SHA-256 fingerprint every released artefact is checked against; without it 'signed' is only verified by eye. See docs/release.md §3."
+            exit 1
+          fi
+          # The password goes in on stdin, not in argv: process arguments are
+          # readable by anything else on the runner. keytool's output is captured
+          # whole before it is filtered — piping straight into `grep -m1` under
+          # `pipefail` fails the step on the SIGPIPE that early exit causes.
+          listing="$(printf '%s\n' "$RELEASE_KEYSTORE_PASSWORD" \
+            | keytool -list -v -keystore "$RUNNER_TEMP/release.keystore" -alias "$RELEASE_KEY_ALIAS")"
+          actual="$(grep -m1 'SHA256:' <<< "$listing" | tr -d ' ' | cut -d: -f2- | tr -d ':' | tr 'A-F' 'a-f')"
+          # `keytool` prints `SHA256: A1:B2:…`, and copying that line whole is the
+          # obvious mistake — so accept the label and drop it, rather than failing
+          # a release on a paste. A fingerprint is 64 hex chars and can never
+          # legitimately begin with `sha256`. Case-folding is `A-Z`, not `A-F`:
+          # the narrower range would turn the label into `SHa256` and leave the
+          # strip below with nothing to match.
+          expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ': ' | tr 'A-Z' 'a-z' | sed 's/^sha256//')"
+          if [[ "$actual" != "$expected" ]]; then
+            echo "::error::The keystore's key '$RELEASE_KEY_ALIAS' has fingerprint $actual, but RELEASE_CERT_SHA256 expects $expected. Either the wrong keystore is provisioned or the variable is stale."
+            exit 1
+          fi
+          echo "Keystore fingerprint matches RELEASE_CERT_SHA256."
+
+      - name: Materialise the real google-services.json
+        env:
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GOOGLE_SERVICES_JSON_BASE64:-}" ]]; then
+            echo "::error::Secret GOOGLE_SERVICES_JSON_BASE64 is not set. The committed app/google-services.json is a placeholder, so the full flavour would ship with crash reporting wired to a Firebase project that does not exist. See docs/release.md §3."
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | base64 -d > app/google-services.json
+          # The plugin's own "No matching client found for package name" error is
+          # the real gate, but it only fires deep into configuration; check the
+          # obvious mistakes (wrong project, still-a-placeholder) up front.
+          # Whitespace-tolerant: a re-serialised or minified copy of the same
+          # file is still the right file, and a false failure here blocks a
+          # release for nothing.
+          if ! grep -qE '"package_name"[[:space:]]*:[[:space:]]*"app\.knotwork\.android"' app/google-services.json; then
+            echo "::error::The decoded google-services.json has no client for app.knotwork.android — wrong Firebase project or a truncated secret."
+            exit 1
+          fi
+          if grep -q 'placeholder' app/google-services.json; then
+            echo "::error::The decoded google-services.json is the placeholder file, not the real one."
+            exit 1
+          fi
+          # Only the debug build type keeps its committed placeholder: it points
+          # at a suffixed package id on purpose so dogfooding never reports into
+          # the real project.
+          echo "Real google-services.json in place for the full flavour."
+
+      - name: Assemble the full flavour (APK + AAB)
+        env:
+          RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        # `verifyFullReleaseKeepRules` already runs as a `finalizedBy` of both
+        # packaging tasks; naming it here keeps the release-critical R8 gate
+        # visible on the command line rather than implied.
+        run: |
+          ./gradlew :app:assembleFullRelease :app:bundleFullRelease \
+            :app:verifyFullReleaseKeepRules --no-daemon --stacktrace
+
+      - name: Assemble the foss flavour (APK)
+        env:
+          RELEASE_KEYSTORE_PATH: ${{ runner.temp }}/release.keystore
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        # A SEPARATE Gradle invocation, and it must stay separate. The
+        # `fossOnlyBuild` guard in `app/build.gradle.kts` skips the proprietary
+        # `google-services` / `firebase-crashlytics` plugins only when no `Full`
+        # task is present in the same invocation. Folding this into the step
+        # above would apply those plugins to the foss variant and stamp the
+        # Firebase `google_app_id` into the artefact that exists precisely to
+        # carry no Google build-time tooling.
+        run: |
+          ./gradlew :app:assembleFossRelease :app:verifyFossReleaseKeepRules --no-daemon --stacktrace
+
+      - name: Verify the foss APK carries no Firebase configuration
+        # The separate invocation above is load-bearing but its violation is
+        # silent: a mixed invocation still produces a working foss APK, just one
+        # with `google_app_id` and `gcm_defaultSenderId` baked into its resource
+        # table. Measured on this repo — `./gradlew check` generates
+        # `processFossReleaseGoogleServices/values/values.xml`, the foss-only
+        # build does not. So assert the property on the artefact itself rather
+        # than trusting the invocation to stay split.
+        run: |
+          set -euo pipefail
+          aapt2="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt2 -type f 2>/dev/null | sort -V | tail -1 || true)"
+          if [[ -z "$aapt2" ]]; then
+            echo "::error::aapt2 not found under \$ANDROID_HOME/build-tools — cannot inspect the foss resource table."
+            exit 1
+          fi
+          foss=app/build/outputs/apk/foss/release/app-foss-release.apk
+          full=app/build/outputs/apk/full/release/app-full-release.apk
+          pattern='google_app_id|gcm_defaultSenderId|firebase_database_url'
+
+          # Each dump is captured whole before it is filtered. Piping straight
+          # into `grep -q` makes grep exit on the first match, SIGPIPEs aapt2,
+          # and under `pipefail` the pipeline then reports failure on the very
+          # case that succeeded — i.e. a match reads as "no match".
+          full_dump="$("$aapt2" dump resources "$full")"
+          foss_dump="$("$aapt2" dump resources "$foss")"
+
+          # Sanity-check the detector against the artefact that MUST contain
+          # these resources. Without this, a broken dump command would let the
+          # foss check pass vacuously — which is the same failure the R8
+          # keep-rule guard exists to avoid.
+          if ! grep -qE "$pattern" <<< "$full_dump"; then
+            echo "::error::The full APK does not contain the Firebase resources, so this check cannot distinguish a clean foss build from a broken detector."
+            exit 1
+          fi
+
+          if grep -E "$pattern" <<< "$foss_dump"; then
+            echo "::error::The foss APK contains Firebase configuration. The foss build must be its own Gradle invocation with no Full task in it, or the google-services plugin applies to it too."
+            exit 1
+          fi
+          echo "The foss APK carries no Firebase configuration."
+
+      - name: Verify the signature of every artefact
+        env:
+          EXPECTED_CERT_SHA256: ${{ vars.RELEASE_CERT_SHA256 }}
+        run: |
+          set -euo pipefail
+          # apksigner is not on PATH; AGP downloads build-tools during the build,
+          # so pick the newest installed copy rather than pinning a version that
+          # would drift from whatever compileSdk pulls in.
+          apksigner="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name apksigner -type f 2>/dev/null | sort -V | tail -1 || true)"
+          if [[ -z "$apksigner" ]]; then
+            echo "::error::apksigner not found under \$ANDROID_HOME/build-tools — cannot verify the signature."
+            exit 1
+          fi
+          # Same normalisation as the pre-build check: colons, spaces, case, and
+          # a pasted `SHA256:` label are all tolerated.
+          expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ': ' | tr 'A-Z' 'a-z' | sed 's/^sha256//')"
+
+          verify_apk() {
+            local apk="$1"
+            echo "── $apk"
+            local out
+            out="$("$apksigner" verify --print-certs --verbose "$apk")"
+            if grep -qi 'CN=Android Debug' <<< "$out"; then
+              echo "::error::$apk is signed with the ANDROID DEBUG key — release signing fell back. Check the RELEASE_* secrets."
+              exit 1
+            fi
+            local actual
+            actual="$(grep -m1 -i 'certificate SHA-256 digest' <<< "$out" | awk '{print $NF}' | tr 'A-F' 'a-f')"
+            if [[ "$actual" != "$expected" ]]; then
+              echo "::error::$apk is signed by $actual, expected $expected."
+              exit 1
+            fi
+            echo "   signature OK ($actual)"
+          }
+
+          verify_apk app/build/outputs/apk/full/release/app-full-release.apk
+          verify_apk app/build/outputs/apk/foss/release/app-foss-release.apk
+
+          # An AAB carries only a v1 (JAR) signature, which apksigner does not
+          # read; keytool prints the signer certificate of a signed JAR directly.
+          aab=app/build/outputs/bundle/fullRelease/app-full-release.aab
+          echo "── $aab"
+          aab_out="$(keytool -printcert -jarfile "$aab")"
+          if grep -qi 'CN=Android Debug' <<< "$aab_out"; then
+            echo "::error::$aab is signed with the ANDROID DEBUG key — Play would reject it."
+            exit 1
+          fi
+          aab_actual="$(grep -m1 'SHA256:' <<< "$aab_out" | tr -d ' ' | cut -d: -f2- | tr -d ':' | tr 'A-F' 'a-f')"
+          if [[ "$aab_actual" != "$expected" ]]; then
+            echo "::error::$aab is signed by $aab_actual, expected $expected."
+            exit 1
+          fi
+          echo "   signature OK ($aab_actual)"
+
+      - name: Collect the release assets
+        id: assets
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          cp app/build/outputs/apk/full/release/app-full-release.apk "release-assets/knotwork-$VERSION-full-release.apk"
+          cp app/build/outputs/apk/foss/release/app-foss-release.apk "release-assets/knotwork-$VERSION-foss-release.apk"
+          cp app/build/outputs/bundle/fullRelease/app-full-release.aab "release-assets/knotwork-$VERSION-full-release.aab"
+          # Checksums travel with the artefacts: the direct-APK channel has no
+          # store to vouch for a download, so a published digest is the only way
+          # a user can tell a mirrored copy from a modified one. Globbed by the
+          # artefact prefix rather than `*`, so a re-run cannot checksum a
+          # SHA256SUMS.txt left behind by the previous one.
+          ( cd release-assets && sha256sum knotwork-* > SHA256SUMS.txt )
+          ls -lh release-assets
+          cat release-assets/SHA256SUMS.txt
+
+      - name: Upload the R8 mapping files
+        # A workflow artefact, not a release asset: the mapping deobfuscates
+        # crash reports and belongs with the maintainer, not on the download page.
+        uses: actions/upload-artifact@v4
+        with:
+          name: r8-mapping-${{ steps.version.outputs.version }}
+          path: |
+            app/build/outputs/mapping/fullRelease/mapping.txt
+            app/build/outputs/mapping/fossRelease/mapping.txt
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload the release assets
+        # Dry runs only. On the real path the draft release already holds these
+        # ~160 MB, so a second copy as a workflow artefact buys nothing; on a
+        # dry run no release is created and this is the only way to inspect
+        # what was built.
+        if: env.IS_DRY_RUN == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-${{ steps.version.outputs.version }}
+          path: release-assets/
+          if-no-files-found: error
+
+      - name: Create the draft GitHub Release
+        if: env.IS_DRY_RUN != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        # A draft, not a published release: publishing is the maintainer's act,
+        # the same way merging a pull request is. The generated notes are a
+        # starting point — the CHANGELOG section for this version replaces them
+        # before the release goes live (docs/release.md §9).
+        run: |
+          set -euo pipefail
+          # Idempotent on purpose. Re-running the workflow for a tag whose
+          # release already exists (a transient failure after this step, a
+          # re-run to pick up a rebuilt artefact) must not dead-end on
+          # "release already exists" and leave the maintainer deleting it by
+          # hand — attach the freshly verified assets to the existing draft
+          # instead.
+          if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists — replacing its assets."
+            gh release upload "$RELEASE_TAG" release-assets/* --clobber
+          else
+            args=(--draft --verify-tag --generate-notes --title "v$VERSION")
+            if [[ "$PRERELEASE" == "true" ]]; then
+              args+=(--prerelease)
+            fi
+            gh release create "$RELEASE_TAG" "${args[@]}" release-assets/*
+            echo "Draft release created for $RELEASE_TAG — review and publish it manually."
+          fi
+
+      - name: Report the dry run
+        if: env.IS_DRY_RUN == 'true'
+        run: |
+          echo "Dry run for $RELEASE_TAG: built, signed and verified. No GitHub Release was created."
+
+      - name: Remove the keystore and restore the placeholder config
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/release.keystore"
+          git checkout -- app/google-services.json || true
