@@ -128,6 +128,39 @@ object DefaultPrompts {
     """.trimIndent()
 
     /**
+     * The language rule for a node whose output is read by the pipeline rather
+     * than by the user.
+     *
+     * A model handed a Russian question answers in Russian, and keeps doing so
+     * for every step downstream — which is correct for prose and wrong for
+     * everything else. A routing keyword, a subtask list, a tool name, a tool
+     * argument or a file path in the user's language stops matching what the
+     * code compares it against, so tool calls fail and routers fall through to
+     * their default branch. The failure is silent: the pipeline runs, it just
+     * takes the wrong path or calls nothing.
+     *
+     * Appended to every prompt whose output is machine-facing. The step that
+     * writes the user-visible answer carries [USER_LANGUAGE_RULE] instead, so
+     * the user still reads their own language.
+     */
+    const val INTERNAL_ENGLISH_RULE = "Write your entire output in English, whatever language the user " +
+        "writes in. This step's output is read by later steps, not by the user — the step that writes " +
+        "the final answer translates it back into the user's language."
+
+    /**
+     * The language rule for a node whose output the user actually reads — the
+     * final answer, a clarifying question, a persona's reply.
+     *
+     * The counterpart to [INTERNAL_ENGLISH_RULE]: internal steps run in English,
+     * and the language comes back here. Stated explicitly rather than left to
+     * the model, because by this point the input it is working from is usually
+     * English, so "continue in the input's language" would give the user an
+     * English answer to a Russian question.
+     */
+    const val USER_LANGUAGE_RULE = "Reply in the user's language (\$LANG), even when the material you " +
+        "were given is in English."
+
+    /**
      * Default `systemPrompt` for an [NodeType.INTENT_ROUTER] node. The model is
      * expected to emit one of the four keywords (`Simple`, `Data`, `Complex`,
      * `Task`) as its full reply — the router uses the response as a routing key.
@@ -137,7 +170,9 @@ object DefaultPrompts {
         "- Simple (if it's a simple chat message or greeting)\n" +
         "- Data (if it requires searching the web or current data)\n" +
         "- Complex (if it requires complex coding, math, or deep reasoning)\n" +
-        "- Task (if it's a multi-step task or requires executing an action/tool)"
+        "- Task (if it's a multi-step task or requires executing an action/tool)\n" +
+        "The keywords above are English literals: output the keyword exactly as written, in English, " +
+        "whatever language the user writes in — the router matches on the literal text."
 
     /**
      * Default `systemPrompt` for an [NodeType.DECOMPOSITION] node. The model is
@@ -145,7 +180,8 @@ object DefaultPrompts {
      * that downstream `QUEUE_PROCESSOR` iterates over.
      */
     const val DECOMPOSITION_PROMPT = "You are a Task Decomposer. Break down the given complex task into a list " +
-        "of simpler, actionable subtasks. Output the result as a JSON array of strings."
+        "of simpler, actionable subtasks. Output the result as a JSON array of strings. " +
+        INTERNAL_ENGLISH_RULE
 
     /**
      * Default `systemPrompt` for an [NodeType.EVALUATION] node. The model is
@@ -155,7 +191,8 @@ object DefaultPrompts {
         "determine if it was successful. Begin your reply with a single verdict token on its own first line — " +
         "exactly one of PASS, RETRY, or FAIL — then explain your reasoning. Use PASS when the result satisfies " +
         "the task, RETRY when another attempt could plausibly fix it, and FAIL when the task cannot be completed. " +
-        "The verdict routes the pipeline through the node's matching output port."
+        "The verdict routes the pipeline through the node's matching output port. " +
+        INTERNAL_ENGLISH_RULE
 
     /**
      * Default `systemPrompt` for an [NodeType.SUMMARY] node. The model is
@@ -164,7 +201,7 @@ object DefaultPrompts {
      * surrounds this prompt at execution time.
      */
     const val SUMMARY_PROMPT = "You are a Summarizer. Given the results of multiple executed subtasks, provide " +
-        "a concise and comprehensive summary of the overall outcome."
+        "a concise and comprehensive summary of the overall outcome. " + USER_LANGUAGE_RULE
 
     /**
      * Opt-in formatter `systemPrompt` for an [NodeType.OUTPUT] node.
@@ -177,7 +214,7 @@ object DefaultPrompts {
      * that embeds this prompt before sending to the LLM.
      */
     const val OUTPUT_FORMAT_PROMPT = "You are a Formatter. Please format the provided input text into a clear, " +
-        "readable markdown response for the user."
+        "readable markdown response for the user. " + USER_LANGUAGE_RULE
 
     /**
      * Default instruction for a [NodeType.CLARIFICATION] node.
@@ -192,7 +229,9 @@ object DefaultPrompts {
         "would help the agent proceed. If a small set of likely answers is obvious, list them " +
         "as options; otherwise return an empty array to ask for free-form input. " +
         "Output STRICTLY valid JSON with this shape and nothing else:\n" +
-        "{\n  \"question\": \"<the question to ask the user>\",\n  \"options\": [\"<option 1>\", \"<option 2>\"]\n}"
+        "{\n  \"question\": \"<the question to ask the user>\",\n  \"options\": [\"<option 1>\", \"<option 2>\"]\n}\n" +
+        "The JSON keys are English literals; the question and the options are what the user reads, so " +
+        "write those in the user's language (\$LANG)."
 
     /** Prompts for [NodeType.LITE_RT] (on-device inference) nodes. */
     object LiteRt {

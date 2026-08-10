@@ -66,7 +66,7 @@
       },
       "label": "Router",
       "config": {
-        "systemPrompt": "Classify the user's request. Output EXACTLY one keyword: Simple (greetings, small talk, single-step factual questions the on-device model can answer) or Complex (multi-step reasoning, research, code, anything that benefits from a larger model). Today is $DATE. Reply with the single keyword and nothing else.",
+        "systemPrompt": "Classify the user's request. Output EXACTLY one keyword: Simple (greetings, small talk, single-step factual questions the on-device model can answer) or Complex (multi-step reasoning, research, code, anything that benefits from a larger model). Today is $DATE. Reply with the single keyword and nothing else.\n\nThe keywords above are English literals: output the keyword exactly as written, in English, whatever language the user writes in.",
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
@@ -101,7 +101,7 @@
             "examples": []
           }
         ],
-        "classifierPrompt": "Classify the user's request. Output EXACTLY one keyword: Simple (greetings, small talk, single-step factual questions the on-device model can answer) or Complex (multi-step reasoning, research, code, anything that benefits from a larger model). Today is $DATE. Reply with the single keyword and nothing else.",
+        "classifierPrompt": "Classify the user's request. Output EXACTLY one keyword: Simple (greetings, small talk, single-step factual questions the on-device model can answer) or Complex (multi-step reasoning, research, code, anything that benefits from a larger model). Today is $DATE. Reply with the single keyword and nothing else.\n\nThe keywords above are English literals: output the keyword exactly as written, in English, whatever language the user writes in.",
         "fallbackClass": "Simple"
       }
     },
