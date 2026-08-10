@@ -55,7 +55,11 @@ jobs:
     name: Build, sign and publish
     needs: check
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # Higher than check.yml's 60. This job runs TWO cold R8 release builds (the
+    # expensive part) on a 2-core runner and cannot reuse the check job's
+    # outputs — separate runner, and the Gradle cache is read-only on a tag. A
+    # timeout here kills a release mid-flight, which is worse than a slow one.
+    timeout-minutes: 90
     permissions:
       contents: write
     env:
@@ -206,6 +210,47 @@ jobs:
         run: |
           ./gradlew :app:assembleFossRelease :app:verifyFossReleaseKeepRules --no-daemon --stacktrace
 
+      - name: Verify the foss APK carries no Firebase configuration
+        # The separate invocation above is load-bearing but its violation is
+        # silent: a mixed invocation still produces a working foss APK, just one
+        # with `google_app_id` and `gcm_defaultSenderId` baked into its resource
+        # table. Measured on this repo — `./gradlew check` generates
+        # `processFossReleaseGoogleServices/values/values.xml`, the foss-only
+        # build does not. So assert the property on the artefact itself rather
+        # than trusting the invocation to stay split.
+        run: |
+          set -euo pipefail
+          aapt2="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -name aapt2 -type f 2>/dev/null | sort -V | tail -1 || true)"
+          if [[ -z "$aapt2" ]]; then
+            echo "::error::aapt2 not found under \$ANDROID_HOME/build-tools — cannot inspect the foss resource table."
+            exit 1
+          fi
+          foss=app/build/outputs/apk/foss/release/app-foss-release.apk
+          full=app/build/outputs/apk/full/release/app-full-release.apk
+          pattern='google_app_id|gcm_defaultSenderId|firebase_database_url'
+
+          # Each dump is captured whole before it is filtered. Piping straight
+          # into `grep -q` makes grep exit on the first match, SIGPIPEs aapt2,
+          # and under `pipefail` the pipeline then reports failure on the very
+          # case that succeeded — i.e. a match reads as "no match".
+          full_dump="$("$aapt2" dump resources "$full")"
+          foss_dump="$("$aapt2" dump resources "$foss")"
+
+          # Sanity-check the detector against the artefact that MUST contain
+          # these resources. Without this, a broken dump command would let the
+          # foss check pass vacuously — which is the same failure the R8
+          # keep-rule guard exists to avoid.
+          if ! grep -qE "$pattern" <<< "$full_dump"; then
+            echo "::error::The full APK does not contain the Firebase resources, so this check cannot distinguish a clean foss build from a broken detector."
+            exit 1
+          fi
+
+          if grep -E "$pattern" <<< "$foss_dump"; then
+            echo "::error::The foss APK contains Firebase configuration. The foss build must be its own Gradle invocation with no Full task in it, or the google-services plugin applies to it too."
+            exit 1
+          fi
+          echo "The foss APK carries no Firebase configuration."
+
       - name: Verify the signature of every artefact
         env:
           EXPECTED_CERT_SHA256: ${{ vars.RELEASE_CERT_SHA256 }}
@@ -290,6 +335,11 @@ jobs:
           retention-days: 90
 
       - name: Upload the release assets
+        # Dry runs only. On the real path the draft release already holds these
+        # ~160 MB, so a second copy as a workflow artefact buys nothing; on a
+        # dry run no release is created and this is the only way to inspect
+        # what was built.
+        if: env.IS_DRY_RUN == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: release-assets-${{ steps.version.outputs.version }}
