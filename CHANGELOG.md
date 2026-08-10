@@ -215,6 +215,20 @@ details.
   is made, and the message says plainly that the tool is not in the available list.
   A near-miss is not silently corrected to the closest match — running a different
   tool than the one named is exactly what the confirmation prompt exists to prevent.
+- **Working in a language other than English broke tool calls and routing.** A
+  model given a Russian question answers in Russian — and then keeps doing so at
+  every step that follows. For an answer that is exactly right; for the machinery
+  in between it is not. The step that splits a task into subtasks was writing
+  those subtasks in the user's language, the step that picks a tool then matched
+  them against an English tool catalogue, and the routing steps compare their
+  answer against fixed English keywords. So the pipeline ran, took a wrong turn or
+  called nothing at all, and said nothing about why. Every bundled pipeline now
+  states which language each of its steps works in: steps whose output is read by
+  the pipeline work in English, and the step that writes the answer translates it
+  back into your language. The starter prompts used by steps you build yourself
+  say the same. Two deliberate exceptions stay as they were — a Wikipedia search
+  term is written in your language so it reaches the right edition of Wikipedia,
+  and the translation pipeline keeps its own target language.
 - **Notifications looked like they came from three different apps.** Every
   notification the agent posts — a trigger firing, a background task finishing or
   failing, a question, a request for approval — borrowed a stock Android icon

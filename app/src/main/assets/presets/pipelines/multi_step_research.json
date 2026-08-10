@@ -67,7 +67,7 @@
       },
       "label": "Decomposition",
       "config": {
-        "systemPrompt": "You are a task decomposer. Break the user's request into a short ordered list of independent research subtasks (typically 2-5). Today is $DATE. Output STRICTLY a JSON array of plain-text strings — no prose, no keys, no trailing commentary.",
+        "systemPrompt": "You are a task decomposer. Break the user's request into a short ordered list of independent research subtasks (typically 2-5). Today is $DATE. Output STRICTLY a JSON array of plain-text strings — no prose, no keys, no trailing commentary.\n\nWrite your entire output in English, whatever language the user writes in. This step's output is read by later steps, not by the user — the step that writes the final answer translates it back into the user's language.",
         "cloudProvider": null,
         "modelPath": null,
         "toolName": null,
@@ -90,7 +90,7 @@
         "v": 1,
         "type": "DECOMPOSITION",
         "title": "Decomposition",
-        "planningPrompt": "You are a task decomposer. Break the user's request into a short ordered list of independent research subtasks (typically 2-5). Today is $DATE. Output STRICTLY a JSON array of plain-text strings — no prose, no keys, no trailing commentary.",
+        "planningPrompt": "You are a task decomposer. Break the user's request into a short ordered list of independent research subtasks (typically 2-5). Today is $DATE. Output STRICTLY a JSON array of plain-text strings — no prose, no keys, no trailing commentary.\n\nWrite your entire output in English, whatever language the user writes in. This step's output is read by later steps, not by the user — the step that writes the final answer translates it back into the user's language.",
         "maxSubtasks": 5
       }
     },

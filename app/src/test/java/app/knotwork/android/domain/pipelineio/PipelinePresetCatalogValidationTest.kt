@@ -116,24 +116,6 @@ class PipelinePresetCatalogValidationTest {
      * labels / verdicts, and `IF_CONDITION` emits `true` / `false`; localising
      * any of them would break routing.
      */
-    private val userTextNodeTypes: Set<NodeType> = setOf(
-        NodeType.LITE_RT,
-        NodeType.CLOUD,
-        NodeType.SUMMARY,
-        NodeType.CLARIFICATION,
-        NodeType.OUTPUT,
-    )
-
-    /**
-     * `<preset>/<node>` pairs exempt from the `$LANG` rule because they fix
-     * their output language deliberately. Keep this list one-entry-per-reason.
-     */
-    private val fixedLanguageNodes: Set<String> = setOf(
-        // The whole point of the preset: it translates INTO a target language
-        // named in the prompt, so the device language must not override it.
-        "styled_translation/node-2",
-    )
-
     private val catalogDir: File = File("src/main/assets/presets/pipelines")
 
     private val variableTokenRegex: Regex = Regex("(?<!\\\\)\\$([A-Z_][A-Z0-9_]*)")
@@ -227,24 +209,6 @@ class PipelinePresetCatalogValidationTest {
                 "presets (deleted, renamed, or now internal).",
             stale.isEmpty(),
         )
-    }
-
-    @Test
-    fun `every node whose text reaches the user declares the language variable`() {
-        forEachBundledFile { file ->
-            val preset = parseAsSuccess(file).preset
-            preset.graph.nodes.forEach { node ->
-                if (node.type !in userTextNodeTypes) return@forEach
-                val prompt = node.systemPrompt?.takeIf { it.isNotBlank() } ?: return@forEach
-                if ("${file.nameWithoutExtension}/${node.id}" in fixedLanguageNodes) return@forEach
-                assertTrue(
-                    "Node \"${node.id}\" (${node.type}) in ${file.name} produces text the user " +
-                        "reads but never mentions \$LANG, so it answers in whatever language the " +
-                        "input happened to use instead of the device language.",
-                    prompt.contains("\$LANG"),
-                )
-            }
-        }
     }
 
     @Test
@@ -394,6 +358,141 @@ class PipelinePresetCatalogValidationTest {
             "Regression guard: validate() must surface at least one error on a clearly invalid graph",
             errors.isNotEmpty(),
         )
+    }
+
+    // ─── Prompt language rule ──────────────────────────────────────────────
+
+    /**
+     * What language each prompted node must work in.
+     *
+     * The rule exists because a model handed a Russian question answers in
+     * Russian and keeps doing so downstream. For prose that is right; for a
+     * routing keyword, a subtask that becomes a tool call, or a file path it is
+     * a silent break — the text stops matching what the code compares against,
+     * so the router falls through and the tool is never called.
+     */
+    private enum class PromptLanguage {
+        /** Machine-facing output: routed, parsed, or turned into tool calls. */
+        ENGLISH,
+
+        /** The user reads this text: a final answer, a question, a persona reply. */
+        USER,
+
+        /**
+         * The language is part of the data, so neither rule applies: a Wikipedia
+         * search term must match the `lang` argument it is sent with, and a
+         * translation node's target language is the whole point of the node.
+         */
+        DATA,
+    }
+
+    /**
+     * Every bundled node that carries a `systemPrompt`, and the language it must
+     * work in. Keyed `<file stem>/<node id>`.
+     *
+     * This table **is** the rule as it applies to the shipped catalogue — it is
+     * meant to be read and argued with in review. A prompted node missing from
+     * it fails the test rather than defaulting to anything, so a new preset
+     * cannot quietly reintroduce the defect this table was written to close.
+     */
+    private val promptLanguageExpectations: Map<String, PromptLanguage> = mapOf(
+        // Simple presets: the LLM node IS the answer the user reads.
+        "clarify_then_act/clarify" to PromptLanguage.USER,
+        "clarify_then_act/lite_rt" to PromptLanguage.USER,
+        "cloud_assist/cloud" to PromptLanguage.USER,
+        "local_only_qa/lite_rt" to PromptLanguage.USER,
+
+        // Research: the plan is machine-facing, the findings are what OUTPUT forwards.
+        "multi_step_research/decomposition" to PromptLanguage.ENGLISH,
+        "multi_step_research/cloud" to PromptLanguage.USER,
+
+        // Routing keyword, then two answering branches.
+        "routed_local_cloud/router" to PromptLanguage.ENGLISH,
+        "routed_local_cloud/lite_rt" to PromptLanguage.USER,
+        "routed_local_cloud/cloud" to PromptLanguage.USER,
+
+        // The captured note is read by the user; the file path is a fixed literal.
+        "share_handler/node-2" to PromptLanguage.USER,
+        "share_handler/node-4" to PromptLanguage.USER,
+
+        // Full agent. The intake restatement and the task plan feed routers and
+        // tool calls — those are the ones that broke tool calling.
+        "showcase_full_agent/node-23" to PromptLanguage.ENGLISH,
+        "showcase_full_agent/node-3" to PromptLanguage.ENGLISH,
+        "showcase_full_agent/node-4" to PromptLanguage.USER,
+        "showcase_full_agent/node-7" to PromptLanguage.DATA,
+        "showcase_full_agent/node-8" to PromptLanguage.USER,
+        "showcase_full_agent/node-9" to PromptLanguage.DATA,
+        "showcase_full_agent/node-12" to PromptLanguage.USER,
+        "showcase_full_agent/node-13" to PromptLanguage.ENGLISH,
+        "showcase_full_agent/node-15" to PromptLanguage.ENGLISH,
+        "showcase_full_agent/node-16" to PromptLanguage.USER,
+        "showcase_full_agent/node-22" to PromptLanguage.ENGLISH,
+
+        // Research to file: the report body is read by the user, the slug is a path.
+        "showcase_research_to_file/query_builder" to PromptLanguage.DATA,
+        "showcase_research_to_file/distiller" to PromptLanguage.ENGLISH,
+        "showcase_research_to_file/synthesis" to PromptLanguage.USER,
+        "showcase_research_to_file/output" to PromptLanguage.USER,
+
+        // The target language is the node's entire purpose.
+        "styled_translation/node-2" to PromptLanguage.DATA,
+
+        // Sub-pipelines composed by the full agent.
+        "subtask_clarify/node-2" to PromptLanguage.USER,
+        "subtask_lookup/node-2" to PromptLanguage.DATA,
+        "subtask_process/node-2" to PromptLanguage.ENGLISH,
+
+        // Tool-using agent.
+        "tool_using_react/query_builder" to PromptLanguage.DATA,
+        "tool_using_react/summary" to PromptLanguage.USER,
+        "tool_using_react/direct_answer" to PromptLanguage.USER,
+
+        // Companion. Only the mood keyword is machine-facing; the private note is
+        // read solely by the persona nodes, which reply in the user's language
+        // anyway — translating personal facts to English and back would lose
+        // nuance for no correctness gain.
+        "virtual_companion_mood_router/node-2" to PromptLanguage.USER,
+        "virtual_companion_mood_router/node-3" to PromptLanguage.ENGLISH,
+        "virtual_companion_mood_router/node-4" to PromptLanguage.USER,
+        "virtual_companion_mood_router/node-5" to PromptLanguage.USER,
+        "virtual_companion_mood_router/node-6" to PromptLanguage.USER,
+        "virtual_companion_mood_router/node-7" to PromptLanguage.USER,
+        "virtual_companion_mood_router/node-8" to PromptLanguage.USER,
+    )
+
+    @Test
+    fun `every prompted bundled node states which language it works in`() {
+        val problems = mutableListOf<String>()
+        val seen = mutableSetOf<String>()
+
+        forEachBundledFile { file ->
+            val stem = file.nameWithoutExtension
+            parseAsSuccess(file).preset.graph.nodes.forEach { node ->
+                val prompt = node.systemPrompt?.takeIf { it.isNotBlank() } ?: return@forEach
+                val key = "$stem/${node.id}"
+                seen += key
+                when (promptLanguageExpectations[key]) {
+                    null ->
+                        problems += "$key has a systemPrompt but no entry in promptLanguageExpectations — " +
+                            "decide whether its output is read by the pipeline (ENGLISH), by the user (USER), " +
+                            "or is language-bearing data (DATA)"
+                    PromptLanguage.ENGLISH -> if (!prompt.contains("in English")) {
+                        problems += "$key is machine-facing but does not tell the model to work in English"
+                    }
+                    PromptLanguage.USER -> if (!prompt.contains("\$LANG")) {
+                        problems += "$key is read by the user but does not reference \$LANG"
+                    }
+                    PromptLanguage.DATA -> Unit
+                }
+            }
+        }
+
+        val stale = promptLanguageExpectations.keys - seen
+        if (stale.isNotEmpty()) {
+            problems += "promptLanguageExpectations lists nodes that no longer carry a prompt: $stale"
+        }
+        assertTrue(problems.joinToString("\n"), problems.isEmpty())
     }
 
     private fun parseAsSuccess(file: File): PipelinePresetImportOutcome.Success {
