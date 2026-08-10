@@ -9,6 +9,7 @@ import app.knotwork.android.domain.models.McpTransport
 import app.knotwork.android.domain.models.UpdateMcpServerResult
 import app.knotwork.android.domain.repositories.McpServerRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.services.CleartextPolicy
 import app.knotwork.design.screens.tools.AddMcpServerForm
 import app.knotwork.design.screens.tools.McpAuthSelector
 import app.knotwork.design.screens.tools.McpHeaderRow
@@ -61,6 +62,14 @@ class McpServerConfigViewModel @Inject constructor(
     val events: StateFlow<Event?> = _events.asStateFlow()
 
     init {
+        // The consent notice is derived from the typed URL and the approved set,
+        // so it appears and disappears as the user edits rather than only at save
+        // time — and it stays correct if approval happens from elsewhere.
+        viewModelScope.launch {
+            settingsRepository.approvedCleartextOrigins.collect { approved ->
+                _form.update { it.copy(cleartextConsentOrigin = consentOriginFor(it.url, approved)) }
+            }
+        }
         if (originalUrl != null) {
             viewModelScope.launch {
                 val existing = settingsRepository.mcpServers.first().firstOrNull { it.url == originalUrl }
@@ -72,7 +81,40 @@ class McpServerConfigViewModel @Inject constructor(
     }
 
     fun onUrlChange(value: String) {
-        _form.update { it.copy(url = value, urlError = validateUrl(input = value, requireNonEmpty = false)) }
+        _form.update {
+            it.copy(
+                url = value,
+                urlError = validateUrl(input = value, requireNonEmpty = false),
+                cleartextConsentOrigin = consentOriginFor(value, approvedOrigins),
+            )
+        }
+    }
+
+    /**
+     * Records the user's consent to reach the typed address over an unencrypted
+     * connection. Without it the connection is refused outright by the cleartext
+     * gate, so saving the server would produce a form that can never connect.
+     */
+    fun onApproveCleartext() {
+        val origin = _form.value.cleartextConsentOrigin ?: return
+        viewModelScope.launch { settingsRepository.approveCleartextOrigin(origin) }
+    }
+
+    /**
+     * Latest snapshot of the approved origins, kept so [onUrlChange] can
+     * recompute the notice synchronously while the user types instead of waiting
+     * for the collector to run.
+     */
+    private var approvedOrigins: Set<String> = emptySet()
+
+    /**
+     * Origin the user would have to approve for [url], or `null` when nothing
+     * needs approving (encrypted, already approved, or a public host — the last
+     * of which is refused outright rather than offered).
+     */
+    private fun consentOriginFor(url: String, approved: Set<String>): String? {
+        approvedOrigins = approved
+        return (CleartextPolicy.classify(url, approved) as? CleartextPolicy.Verdict.NeedsApproval)?.origin
     }
 
     fun onNameChange(value: String) = _form.update { it.copy(name = value) }
@@ -125,6 +167,10 @@ class McpServerConfigViewModel @Inject constructor(
             _form.update { it.copy(urlError = error) }
             return
         }
+        if (current.cleartextConsentOrigin != null) {
+            _form.update { it.copy(urlError = CLEARTEXT_UNAPPROVED_MESSAGE) }
+            return
+        }
         viewModelScope.launch {
             _form.update { it.copy(submitting = true, urlError = null) }
             val config = current.toDomain()
@@ -169,6 +215,8 @@ class McpServerConfigViewModel @Inject constructor(
         private const val URL_SCHEME_REQUIRED_MESSAGE =
             "URL must start with http://, https:// or mcp://."
         private const val URL_HOST_REQUIRED_MESSAGE = "URL needs a host name."
+        private const val CLEARTEXT_UNAPPROVED_MESSAGE =
+            "Approve the unencrypted connection above before saving."
 
         /**
          * Renders a [UpdateMcpServerResult.UrlCollision] into the inline

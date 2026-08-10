@@ -49,6 +49,7 @@ fun McpServerConfigScreen(
         onHeaderRemove = viewModel::onHeaderRemove,
         onSubmit = viewModel::onSubmit,
         onCancel = onCancel,
+        onApproveCleartext = viewModel::onApproveCleartext,
     )
 
     McpServerConfigContent(

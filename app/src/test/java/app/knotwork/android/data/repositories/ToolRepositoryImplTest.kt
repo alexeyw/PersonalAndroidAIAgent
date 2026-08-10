@@ -47,6 +47,19 @@ class ToolRepositoryImplTest {
         every { settingsRepository.disabledAppFunctions } returns flowOf(emptySet())
         every { settingsRepository.disabledMcpTools } returns flowOf(emptySet())
         every { settingsRepository.toolRiskOverrides } returns flowOf(emptyMap())
+        // The fixture server is unencrypted loopback, so the pool's cleartext gate
+        // would refuse it unless the user had approved that origin — which is
+        // exactly what someone running a local MCP server would have done.
+        every { settingsRepository.approvedCleartextOrigins } returns flowOf(
+            setOf(
+                "http://localhost:8080",
+                "http://10.0.0.1:8080",
+                "http://10.0.0.2:8080",
+                "http://10.0.0.3:8080",
+                "http://10.0.0.4:8080",
+                "http://10.0.0.5:8080",
+            ),
+        )
         // http_request stays hidden from getAvailableTools unless a test opts a domain in.
         every { settingsRepository.allowedHttpDomains } returns flowOf(emptyList())
         coEvery { localAppFunctionManager.getAvailableFunctions() } returns
@@ -77,7 +90,7 @@ class ToolRepositoryImplTest {
 
         repository = ToolRepositoryImpl(
             settingsRepository,
-            McpConnectionPool(mcpClientFactory),
+            McpConnectionPool(mcpClientFactory, settingsRepository),
             localAppFunctionManager,
             apiKeyRepository,
             searchTool,
@@ -540,6 +553,19 @@ class ToolRepositoryImplTest {
         // Regression guard for accidental caching: the resolver must observe the latest
         // setting on every call, not the value captured at construction time.
         every { settingsRepository.toolRiskOverrides } returns flowOf(emptyMap())
+        // The fixture server is unencrypted loopback, so the pool's cleartext gate
+        // would refuse it unless the user had approved that origin — which is
+        // exactly what someone running a local MCP server would have done.
+        every { settingsRepository.approvedCleartextOrigins } returns flowOf(
+            setOf(
+                "http://localhost:8080",
+                "http://10.0.0.1:8080",
+                "http://10.0.0.2:8080",
+                "http://10.0.0.3:8080",
+                "http://10.0.0.4:8080",
+                "http://10.0.0.5:8080",
+            ),
+        )
         coEvery { mcpClient.getTools() } returns emptyList()
 
         val firstRisk = repository.getRisk("get_system_time")
@@ -613,8 +639,8 @@ class ToolRepositoryImplTest {
         // same tool name and only one's mcpId can be in the disabled set.
         // The old loop threw immediately on the first disabled hit, robbing
         // the enabled sibling of a chance to execute.
-        val urlA = "http://server-a:8080"
-        val urlB = "http://server-b:8080"
+        val urlA = "http://10.0.0.1:8080"
+        val urlB = "http://10.0.0.2:8080"
         val toolName = "shared_tool"
         val configA = McpServerConfig(url = urlA)
         val configB = McpServerConfig(url = urlB)
@@ -640,8 +666,8 @@ class ToolRepositoryImplTest {
     fun `executeTool throws disabled when every advertising provider has the tool disabled`() = runTest {
         // After the routing rewrite, sawDisabled must still produce the
         // "is disabled" failure shape when nobody else can run the tool.
-        val urlA = "http://server-a:8080"
-        val urlB = "http://server-b:8080"
+        val urlA = "http://10.0.0.1:8080"
+        val urlB = "http://10.0.0.2:8080"
         val toolName = "shared_tool"
         val clientB: McpClient = mockk(relaxed = true)
         every { settingsRepository.mcpServers } returns
@@ -672,8 +698,8 @@ class ToolRepositoryImplTest {
         // Regression: a single break inside the for-loop blew up
         // multi-provider resilience — one flaky server made every other
         // healthy provider unreachable. The fix is to keep walking.
-        val urlA = "http://flaky:8080"
-        val urlB = "http://healthy:8080"
+        val urlA = "http://10.0.0.4:8080"
+        val urlB = "http://10.0.0.5:8080"
         val toolName = "shared_tool"
         val clientB: McpClient = mockk(relaxed = true)
         every { settingsRepository.mcpServers } returns
@@ -704,7 +730,7 @@ class ToolRepositoryImplTest {
         // idempotent side effects. distinctMcpConfigs() now keeps only the
         // first occurrence of each URL before iteration.
         val toolName = "shared_tool"
-        val url = "http://duplicated:8080"
+        val url = "http://10.0.0.3:8080"
         every { settingsRepository.mcpServers } returns flowOf(
             listOf(McpServerConfig(url = url), McpServerConfig(url = url)),
         )
@@ -724,7 +750,7 @@ class ToolRepositoryImplTest {
         // Sibling regression: a duplicated URL row also produced duplicate
         // entries in the advertised tool catalogue, which would inflate the
         // agent's prompt and confuse the LLM's tool-selection pass.
-        val url = "http://duplicated:8080"
+        val url = "http://10.0.0.3:8080"
         val mcpTool = AgentTool(name = "shared_tool", description = "T", parameters = "{}")
         every { settingsRepository.mcpServers } returns flowOf(
             listOf(McpServerConfig(url = url), McpServerConfig(url = url)),
@@ -742,8 +768,8 @@ class ToolRepositoryImplTest {
         // (network error / 5xx / parse failure) instead of a generic
         // "not found across active providers" — which would mislead the
         // operator into thinking the tool was never registered.
-        val urlA = "http://server-a:8080"
-        val urlB = "http://server-b:8080"
+        val urlA = "http://10.0.0.1:8080"
+        val urlB = "http://10.0.0.2:8080"
         val toolName = "shared_tool"
         val clientB: McpClient = mockk(relaxed = true)
         every { settingsRepository.mcpServers } returns

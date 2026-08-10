@@ -1,6 +1,8 @@
 package app.knotwork.android.domain.usecases
 
+import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.repositories.ChatRepository
+import app.knotwork.android.domain.repositories.PipelineRunRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import org.json.JSONArray
@@ -12,9 +14,11 @@ import javax.inject.Inject
  *
  * @property sessionName Human-readable name of the exported session, used as
  *   the share-sheet subject.
- * @property json Pretty-printed JSON document — the session metadata plus its
- *   messages as `role` / `text` / `timestamp` triples. Round-trips through
- *   [app.knotwork.android.domain.repositories.ChatRepository.importChat].
+ * @property json Pretty-printed JSON document — the session metadata, its
+ *   messages as `role` / `text` / `timestamp` triples, and any runs of the
+ *   session that did not complete. Round-trips through
+ *   [app.knotwork.android.domain.repositories.ChatRepository.importChat], which
+ *   reads the messages and ignores the rest.
  */
 data class ChatExportDocument(val sessionName: String, val json: String)
 
@@ -27,9 +31,26 @@ data class ChatExportDocument(val sessionName: String, val json: String)
  * history-transfer path. Both callers therefore produce byte-identical
  * documents, and the shape is covered by one test suite instead of two.
  *
+ * ### Why failed runs are in the document
+ *
+ * A run that fails never becomes a chat message — only the OUTPUT node and the
+ * tool gate persist messages — so a conversation whose only turn failed used to
+ * export as a lone user line with no reply and no explanation. Someone
+ * exporting a chat to attach it to a bug report was therefore sending a file
+ * with the bug removed from it. The unfinished runs of the session are included
+ * so the export can answer "and then what happened".
+ *
+ * Only non-completed runs are listed: a successful run is already represented
+ * by the answer it produced, and repeating it would double the document for no
+ * information.
+ *
  * @property chatRepository Source of the session row and its messages.
+ * @property pipelineRunRepository Source of the session's run outcomes.
  */
-class ExportChatUseCase @Inject constructor(private val chatRepository: ChatRepository) {
+class ExportChatUseCase @Inject constructor(
+    private val chatRepository: ChatRepository,
+    private val pipelineRunRepository: PipelineRunRepository,
+) {
 
     /**
      * Builds the export document for [sessionId].
@@ -65,6 +86,7 @@ class ExportChatUseCase @Inject constructor(private val chatRepository: ChatRepo
                 .put("sessionName", sessionName)
                 .put("exportedAt", System.currentTimeMillis())
                 .put("messages", messagesArray)
+                .put("unfinishedRuns", unfinishedRunsArray(sessionId))
             Result.success(
                 ChatExportDocument(sessionName = sessionName, json = root.toString(JSON_INDENT)),
             )
@@ -73,6 +95,33 @@ class ExportChatUseCase @Inject constructor(private val chatRepository: ChatRepo
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    /**
+     * Builds the `unfinishedRuns` array: every run of [sessionId] that did not
+     * reach [PipelineRunStatus.COMPLETED], newest last, with the status, the
+     * error text the run recorded, and its timing.
+     *
+     * @param sessionId session whose runs to read.
+     * @return the array, empty when every run of the session completed.
+     */
+    private suspend fun unfinishedRunsArray(sessionId: String): JSONArray {
+        val runs = pipelineRunRepository.observeRunsForSession(sessionId).first()
+        val array = JSONArray()
+        runs.asSequence()
+            .filter { it.status != PipelineRunStatus.COMPLETED }
+            .sortedBy { it.startedAt }
+            .forEach { run ->
+                array.put(
+                    JSONObject()
+                        .put("status", run.status.name)
+                        .put("startedAt", run.startedAt)
+                        .put("finishedAt", run.finishedAt ?: JSONObject.NULL)
+                        .put("error", run.errorMessage ?: JSONObject.NULL)
+                        .put("prompt", run.userPrompt ?: JSONObject.NULL),
+                )
+            }
+        return array
     }
 
     /** Serialisation constants of the exported document. */

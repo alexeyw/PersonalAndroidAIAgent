@@ -594,27 +594,13 @@ private fun LiteRtFormBody(
     VariableChipsRow(onInsert = { variable ->
         onChange(config.copy(systemPrompt = config.systemPrompt + variable))
     })
-    FloatSliderField(
-        label = stringResource(R.string.knotwork_node_field_temperature),
-        value = config.temperature,
-        range = 0f..2f,
-        error = errors[FieldId.TEMPERATURE],
-        onChange = { next -> onChange(config.copy(temperature = next)) },
-    )
-    FloatSliderField(
-        label = stringResource(R.string.knotwork_node_field_top_p),
-        value = config.topP,
-        range = 0f..1f,
-        error = errors[FieldId.TOP_P],
-        onChange = { next -> onChange(config.copy(topP = next)) },
-    )
-    IntSliderField(
-        label = stringResource(R.string.knotwork_node_field_max_new_tokens),
-        value = config.maxNewTokens,
-        range = 32..4_096,
-        error = errors[FieldId.MAX_NEW_TOKENS],
-        onChange = { next -> onChange(config.copy(maxNewTokens = next)) },
-    )
+    // Temperature / top-P / max-new-tokens are deliberately NOT offered here.
+    // They round-tripped into the node's JSON but no executor ever read them:
+    // `LiteRtNodeExecutor` calls the engine without a sampler config, so moving
+    // any of these sliders changed nothing about the answer. A control that
+    // silently does nothing is worse than an absent one, so they are gone until
+    // per-node sampling is actually wired to the engine. The fields stay on
+    // `LiteRtConfig` so existing pipeline JSON keeps round-tripping unchanged.
 }
 
 @Composable
@@ -659,27 +645,14 @@ private fun CloudFormBody(
     VariableChipsRow(onInsert = { variable ->
         onChange(config.copy(systemPrompt = config.systemPrompt + variable))
     })
-    FloatSliderField(
-        label = stringResource(R.string.knotwork_node_field_temperature),
-        value = config.temperature,
-        range = 0f..2f,
-        error = errors[FieldId.TEMPERATURE],
-        onChange = { next -> onChange(config.copy(temperature = next)) },
-    )
-    IntSliderField(
-        label = stringResource(R.string.knotwork_node_field_max_tokens),
-        value = config.maxTokens,
-        range = 1..32_768,
-        error = errors[FieldId.MAX_TOKENS],
-        onChange = { next -> onChange(config.copy(maxTokens = next)) },
-    )
-    IntSliderField(
-        label = stringResource(R.string.knotwork_node_field_timeout_ms),
-        value = config.timeoutMs,
-        range = 1_000..600_000,
-        error = errors[FieldId.TIMEOUT_MS],
-        onChange = { next -> onChange(config.copy(timeoutMs = next)) },
-    )
+    // Temperature / max-tokens / timeout are deliberately NOT offered here, for
+    // the same reason as on the LITE_RT node: they persisted but nothing read
+    // them. `CloudLlmNodeExecutor` passes neither sampling parameter to the
+    // provider, and the request deadlines are the fixed ones in
+    // `KoogClientFactory`. Timeout was the most harmful of the three — the
+    // person who reaches for it is the one whose provider has already hung, and
+    // it was the one control guaranteed not to help. The fields stay on
+    // `CloudConfig` so existing pipeline JSON keeps round-tripping unchanged.
 }
 
 @Composable
