@@ -145,7 +145,13 @@ jobs:
           listing="$(printf '%s\n' "$RELEASE_KEYSTORE_PASSWORD" \
             | keytool -list -v -keystore "$RUNNER_TEMP/release.keystore" -alias "$RELEASE_KEY_ALIAS")"
           actual="$(grep -m1 'SHA256:' <<< "$listing" | tr -d ' ' | cut -d: -f2- | tr -d ':' | tr 'A-F' 'a-f')"
-          expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ': ' | tr 'A-F' 'a-f')"
+          # `keytool` prints `SHA256: A1:B2:…`, and copying that line whole is the
+          # obvious mistake — so accept the label and drop it, rather than failing
+          # a release on a paste. A fingerprint is 64 hex chars and can never
+          # legitimately begin with `sha256`. Case-folding is `A-Z`, not `A-F`:
+          # the narrower range would turn the label into `SHa256` and leave the
+          # strip below with nothing to match.
+          expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ': ' | tr 'A-Z' 'a-z' | sed 's/^sha256//')"
           if [[ "$actual" != "$expected" ]]; then
             echo "::error::The keystore's key '$RELEASE_KEY_ALIAS' has fingerprint $actual, but RELEASE_CERT_SHA256 expects $expected. Either the wrong keystore is provisioned or the variable is stale."
             exit 1
@@ -264,7 +270,9 @@ jobs:
             echo "::error::apksigner not found under \$ANDROID_HOME/build-tools — cannot verify the signature."
             exit 1
           fi
-          expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ': ' | tr 'A-F' 'a-f')"
+          # Same normalisation as the pre-build check: colons, spaces, case, and
+          # a pasted `SHA256:` label are all tolerated.
+          expected="$(printf '%s' "$EXPECTED_CERT_SHA256" | tr -d ': ' | tr 'A-Z' 'a-z' | sed 's/^sha256//')"
 
           verify_apk() {
             local apk="$1"

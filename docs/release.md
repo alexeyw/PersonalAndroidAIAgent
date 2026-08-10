@@ -165,8 +165,12 @@ a previous build:
 ```bash
 keytool -list -v -keystore app/release.keystore -alias agent-release \
     | grep 'SHA256:'
-# SHA256: A1:B2:C3:…   ← copy the whole value
+# SHA256: A1:B2:C3:…
+#         ^^^^^^^^^^ copy the fingerprint only, WITHOUT the `SHA256:` label.
 ```
+
+Colons and letter case are stripped before the comparison, so
+`A1:B2:C3:…`, `a1b2c3…` and `A1B2C3…` are all accepted.
 
 **3 — Base64-encode the real `google-services.json`.** The copy committed at
 `app/google-services.json` is a **placeholder**: it keeps a clean checkout
@@ -189,7 +193,7 @@ base64 < ~/Downloads/google-services.json | tr -d '\n' | pbcopy
 | `RELEASE_KEY_ALIAS`           | secret   | Key alias, e.g. `agent-release`.                         |
 | `RELEASE_KEY_PASSWORD`        | secret   | Key password.                                            |
 | `GOOGLE_SERVICES_JSON_BASE64` | secret   | Output of step 3.                                        |
-| `RELEASE_CERT_SHA256`         | **variable** | Fingerprint from step 2 (colons and case are ignored). |
+| `RELEASE_CERT_SHA256`         | **variable** | Fingerprint from step 2, without the `SHA256:` label (colons and case are ignored). |
 
 The fingerprint is a **variable**, not a secret, on purpose. It is public
 information — it is embedded in every APK the project has ever shipped — and
