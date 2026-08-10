@@ -538,4 +538,89 @@ class PipelineJsonSerializerTest {
             ConnectionModel(id = "c1", sourceNodeId = "n1", targetNodeId = "n2", label = null),
         ),
     )
+
+    // ─── Supported versions, migration seam, and what an import discards ───
+
+    @Test
+    fun `every supported schema version parses to Success`() {
+        // The criterion behind this work asks for a test per supported version.
+        // Today the supported set has exactly one member — the stamp has never
+        // held another value — so this loop asserts one case. It is written as a
+        // loop on purpose: adding `2` to SUPPORTED_SCHEMA_VERSIONS without also
+        // making a v2 document parse fails here rather than in the field.
+        PipelineJsonSerializer.SUPPORTED_SCHEMA_VERSIONS.forEach { version ->
+            val json = JSONObject(PipelineJsonSerializer.serialize(sampleGraph))
+                .put("schemaVersion", version)
+                .toString()
+
+            val outcome = PipelineJsonSerializer.parse(json)
+
+            assertTrue("v$version should be supported, got $outcome", outcome is PipelineImportOutcome.Success)
+        }
+    }
+
+    @Test
+    fun `the app's own export reports nothing dropped`() {
+        // The guard on the recognised-key sets: a field added to `serialize`
+        // but forgotten in ROOT_KEYS / NODE_KEYS / CONFIG_KEYS would show up
+        // here as a false "we lost this" on a file the app just wrote.
+        val outcome = PipelineJsonSerializer.parse(PipelineJsonSerializer.serialize(sampleGraph))
+
+        assertEquals(emptyList<String>(), (outcome as PipelineImportOutcome.Success).droppedFields)
+    }
+
+    @Test
+    fun `given unknown fields at a matching schema version then they are reported not silently dropped`() {
+        // The actual defect. The format's rule is that additive fields do NOT
+        // bump `schemaVersion` (`samplePrompts` and `memoryRetrievalQuery` were
+        // both added that way), so a file from a newer build carries settings
+        // this build cannot represent while claiming the very same version — and
+        // a version check could never have caught it.
+        val root = JSONObject(PipelineJsonSerializer.serialize(sampleGraph))
+        root.put("retryPolicy", "aggressive")
+        root.getJSONArray("nodes").getJSONObject(1).getJSONObject("config").put("samplingTopK", 40)
+        root.getJSONArray("nodes").getJSONObject(1).getJSONObject("contextConfig").put("toolSchemas", true)
+        root.getJSONArray("connections").getJSONObject(0).put("weight", 0.5)
+
+        val outcome = PipelineJsonSerializer.parse(root.toString()) as PipelineImportOutcome.Success
+
+        assertEquals(
+            listOf(
+                "retryPolicy",
+                "nodes[1].config.samplingTopK",
+                "nodes[1].contextConfig.toolSchemas",
+                "connections[0].weight",
+            ),
+            outcome.droppedFields,
+        )
+    }
+
+    @Test
+    fun `given an unsupported future version then the mismatch names the lost fields`() {
+        val root = JSONObject(PipelineJsonSerializer.serialize(sampleGraph))
+            .put("schemaVersion", 99)
+            .put("parallelism", 4)
+
+        val outcome = PipelineJsonSerializer.parse(root.toString()) as PipelineImportOutcome.SchemaMismatch
+
+        assertEquals(99, outcome.foundVersion)
+        assertEquals(PipelineJsonSerializer.CURRENT_SCHEMA_VERSION, outcome.expectedVersion)
+        assertEquals(listOf("parallelism"), outcome.droppedFields)
+    }
+
+    @Test
+    fun `given the opaque nodeConfig blob then its contents are never reported as dropped`() {
+        // `nodeConfig` round-trips verbatim into NodeModel.configJson, so nothing
+        // inside it is lost — descending into it would produce a wall of false
+        // warnings on every import.
+        val root = JSONObject(PipelineJsonSerializer.serialize(sampleGraph))
+        root.getJSONArray("nodes").getJSONObject(1).put(
+            "nodeConfig",
+            JSONObject().put("v", 1).put("type", "CLOUD").put("somethingBrandNew", "x"),
+        )
+
+        val outcome = PipelineJsonSerializer.parse(root.toString()) as PipelineImportOutcome.Success
+
+        assertEquals(emptyList<String>(), outcome.droppedFields)
+    }
 }

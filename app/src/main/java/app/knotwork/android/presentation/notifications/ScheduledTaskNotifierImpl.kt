@@ -56,7 +56,7 @@ class ScheduledTaskNotifierImpl @Inject constructor(
             sessionId = sessionId,
             title = context.getString(R.string.notifications_trigger_fired_title),
             body = triggerName,
-            icon = android.R.drawable.ic_popup_sync,
+            icon = R.drawable.ic_stat_agent,
         )
     }
 
@@ -65,7 +65,7 @@ class ScheduledTaskNotifierImpl @Inject constructor(
             sessionId = sessionId,
             title = context.getString(R.string.notifications_task_completed_title),
             body = resultPreview,
-            icon = android.R.drawable.stat_sys_download_done,
+            icon = R.drawable.ic_notif_done,
         )
     }
 
@@ -74,7 +74,7 @@ class ScheduledTaskNotifierImpl @Inject constructor(
             sessionId = sessionId,
             title = context.getString(R.string.notifications_task_failed_title),
             body = reason,
-            icon = android.R.drawable.stat_notify_error,
+            icon = R.drawable.ic_notif_failed,
         )
     }
 

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The agent is waiting for a clarification. The speech-bubble outline reads as
+  "waiting for your words" before the eye has resolved what is inside it.
+
+  Small notification icons use the ALPHA CHANNEL ONLY: the system paints them as
+  a silhouette in its own tint, so the white here is not a colour choice and must
+  not be replaced by a theme attribute. Stroke width is baked into the file
+  because `res/drawable` has no equivalent of the code-supplied width the catalog
+  `I.*` glyphs rely on, and it is heavier than the UI norm because the mark is
+  squeezed to ~18 px in the status bar.
+
+  Source: project_docs/design/icons-src/notifications/.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M2.6,2.5h18.8v14.1H8.6L2.6,20.6z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M9.8,7.4a2.3,2.3,0,1,1,2.3,2.5v.8"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M12.1,13.8h.01"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

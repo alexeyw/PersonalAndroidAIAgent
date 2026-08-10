@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The "View" action button.
+
+  Small notification icons use the ALPHA CHANNEL ONLY: the system paints them as
+  a silhouette in its own tint, so the white here is not a colour choice and must
+  not be replaced by a theme attribute. Stroke width is baked into the file
+  because `res/drawable` has no equivalent of the code-supplied width the catalog
+  `I.*` glyphs rely on, and it is heavier than the UI norm because the mark is
+  squeezed to ~18 px in the status bar.
+
+  Source: project_docs/design/icons-src/notifications/.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M2.4,12c2.6-4.7,5.9-7,9.6-7s7,2.3,9.6,7c-2.6,4.7-5.9,7-9.6,7s-7-2.3-9.6-7z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M9.3,12a2.7,2.7 0 1,0 5.4,0a2.7,2.7 0 1,0 -5.4,0"
+        android:fillColor="#FFFFFFFF" />
+</vector>

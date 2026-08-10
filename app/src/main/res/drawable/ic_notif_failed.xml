@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Background task did not complete. A plain cross in a circle, deliberately not a
+  warning triangle: a background run also fails because the platform killed the
+  process, and an alarming glyph for that devalues the alarming glyph where it
+  is real.
+
+  Small notification icons use the ALPHA CHANNEL ONLY: the system paints them as
+  a silhouette in its own tint, so the white here is not a colour choice and must
+  not be replaced by a theme attribute. Stroke width is baked into the file
+  because `res/drawable` has no equivalent of the code-supplied width the catalog
+  `I.*` glyphs rely on, and it is heavier than the UI norm because the mark is
+  squeezed to ~18 px in the status bar.
+
+  Source: project_docs/design/icons-src/notifications/.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M3.1,12a8.9,8.9,0,1,0,17.8,0a8.9,8.9,0,1,0,-17.8,0"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:pathData="M8.8,8.8l6.4,6.4M15.2,8.8l-6.4,6.4"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

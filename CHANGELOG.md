@@ -229,6 +229,29 @@ details.
   say the same. Two deliberate exceptions stay as they were — a Wikipedia search
   term is written in your language so it reaches the right edition of Wikipedia,
   and the translation pipeline keeps its own target language.
+- **Notifications looked like they came from three different apps.** Every
+  notification the agent posts — a trigger firing, a background task finishing or
+  failing, a question, a request for approval — borrowed a stock Android icon
+  picked for rough resemblance. A finished background task showed the **download
+  complete** icon, so the status bar reported a download from an app that had
+  downloaded nothing, sitting right next to a foreground notification carrying the
+  real Knotwork mark. The approval buttons were worse than mismatched: **Approve**
+  was a media *play* symbol and **Deny** was a *trash can*, so on a destructive
+  confirmation the choice read as "run it" or "delete it" — the opposite of what
+  the buttons do. Notifications now use one deliberate set: the Knotwork mark for
+  anything that needs nothing from you, a plain tick or cross for an outcome, a
+  shield for a decision you have to make, a speech bubble for a question, and a
+  tick/cross pair on the buttons.
+- **Importing a pipeline no longer loses settings without telling you.** When a
+  pipeline file contained anything the app could not read, those settings were
+  discarded in silence — the graph loaded, looked fine, and part of its node
+  configuration was simply gone. The import now names exactly what it could not
+  read, path by path, so you can judge whether the loss matters before keeping
+  the result. This is reported even when the file's version stamp matches the
+  app's: new fields are added to the format without changing that stamp, so a
+  file written by a newer build can claim the same version and still carry
+  settings this one cannot read. That case was previously invisible — a matching
+  version produced no warning at all.
 - **A cloud answer cut off in transit was shown as if it were complete.** When
   the connection to a cloud provider dropped part-way through a reply, some
   providers end the stream so quietly that it looks exactly like a finished

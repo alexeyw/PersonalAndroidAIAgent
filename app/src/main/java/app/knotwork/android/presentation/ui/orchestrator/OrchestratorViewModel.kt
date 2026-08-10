@@ -728,16 +728,28 @@ class OrchestratorViewModel @Inject constructor(
                         val saveErr = invocation.saveResult?.let { res ->
                             res.exceptionOrNull()?.let(::messageForSaveError)
                         }
+                        val saved = collision == null && saveErr == null
                         state.copy(
-                            currentPipeline = if (collision == null && saveErr == null) {
-                                outcome.graph
-                            } else {
-                                state.currentPipeline
-                            },
+                            currentPipeline = if (saved) outcome.graph else state.currentPipeline,
                             isLoading = false,
                             pendingImport = null,
                             pendingCollision = collision,
                             errorMessage = saveErr,
+                            // A matching schemaVersion does not mean nothing was lost:
+                            // the format adds fields without bumping the version, so a
+                            // file from a newer build can carry settings this one cannot
+                            // read. Say so instead of importing a quietly diminished
+                            // pipeline. Only when the import actually landed — a
+                            // collision or save error has its own, louder surface.
+                            feedbackMessage = if (saved && outcome.droppedFields.isNotEmpty()) {
+                                UiText.Plural(
+                                    id = R.plurals.orchestrator_library_import_dropped_feedback,
+                                    quantity = outcome.droppedFields.size,
+                                    args = listOf(outcome.droppedFields.size),
+                                )
+                            } else {
+                                state.feedbackMessage
+                            },
                         )
                     }
                     is PipelineImportOutcome.SchemaMismatch ->
