@@ -2,6 +2,7 @@ package app.knotwork.android.data.repositories
 
 import app.knotwork.android.data.mcp.McpClient
 import app.knotwork.android.data.mcp.McpClientFactory
+import app.knotwork.android.data.mcp.McpConnectionPool
 import app.knotwork.android.data.tools.local.LocalAppFunctionManager
 import app.knotwork.android.data.tools.local.SearchTool
 import app.knotwork.android.domain.models.AgentTool
@@ -76,7 +77,7 @@ class ToolRepositoryImplTest {
 
         repository = ToolRepositoryImpl(
             settingsRepository,
-            mcpClientFactory,
+            McpConnectionPool(mcpClientFactory),
             localAppFunctionManager,
             apiKeyRepository,
             searchTool,

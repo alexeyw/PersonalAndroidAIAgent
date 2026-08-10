@@ -1,7 +1,7 @@
 package app.knotwork.android.data.repositories
 
 import app.knotwork.android.data.mcp.McpClient
-import app.knotwork.android.data.mcp.McpClientFactory
+import app.knotwork.android.data.mcp.McpConnectionPool
 import app.knotwork.android.data.tools.local.LocalAppFunctionManager
 import app.knotwork.android.data.tools.local.SearchTool
 import app.knotwork.android.data.tools.local.executors.AppendFileExecutor
@@ -26,12 +26,9 @@ import app.knotwork.android.domain.services.HttpRequestPolicy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import org.json.JSONException
 import org.json.JSONObject
 import timber.log.Timber
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 /**
@@ -45,44 +42,12 @@ import javax.inject.Inject
  */
 class ToolRepositoryImpl @Inject constructor(
     private val settingsRepository: SettingsRepository,
-    private val mcpClientFactory: McpClientFactory,
+    private val mcpConnectionPool: McpConnectionPool,
     private val localAppFunctionManager: LocalAppFunctionManager,
     private val apiKeyRepository: ApiKeyRepository,
     private val searchTool: SearchTool,
     private val localToolExecutors: Map<String, @JvmSuppressWildcards LocalToolExecutor>,
 ) : ToolRepository {
-
-    /**
-     * Active MCP connection pool keyed by the server URL.
-     *
-     * Each entry carries the live [McpClient] **and** the [McpServerConfig]
-     * it was connected with so that [syncMcpClients] can detect non-URL
-     * changes (auth tier swap, transport switch, custom-header edits) and
-     * tear-down + reconnect on the next call. Keying only by URL would
-     * silently keep a stale connection alive after the user updated
-     * credentials in Settings → External providers, and every subsequent
-     * tool call would fail with the old auth until the process restarted.
-     */
-    private val mcpClients = ConcurrentHashMap<String, ConnectedClient>()
-
-    /**
-     * Serialises [syncMcpClients]. The pool map is a [ConcurrentHashMap], but the
-     * reconcile is a multi-step read-modify-write with a suspending `connect()`
-     * between the per-URL `get` and `put`. Without this lock two concurrent
-     * callers (e.g. the Tools screen refreshing while a pipeline dispatches an
-     * MCP tool) could both observe `existing == null`, both connect, and both
-     * `put` — leaking one live client (socket/SSE) that is never disconnected and
-     * possibly double-connecting a non-idempotent server.
-     */
-    private val mcpSyncMutex = Mutex()
-
-    /**
-     * Snapshot of a live MCP connection: the [client] that owns the
-     * socket / SSE stream and the [config] it was [McpClient.connect]ed
-     * with. The pair is the equality unit [syncMcpClients] compares
-     * against the latest persisted settings.
-     */
-    private data class ConnectedClient(val client: McpClient, val config: McpServerConfig)
 
     private suspend fun getBuiltinTools(): List<AgentTool> {
         val availableModels = mutableListOf<CloudProvider>()
@@ -234,23 +199,6 @@ class ToolRepositoryImpl @Inject constructor(
         )
 
     /**
-     * Reconciles the [mcpClients] pool against [SettingsRepository.mcpServers].
-     *
-     * Three cases per persisted config (keyed by URL):
-     *  1. **Absent** from the pool → factory-build a client, [McpClient.connect],
-     *     store under the URL together with the config snapshot.
-     *  2. **Present with an equal config** → keep the existing connection;
-     *     no work is done so steady-state polling stays cheap.
-     *  3. **Present with a changed config** (auth, transport, headers, or
-     *     display name edited in Settings → External providers) →
-     *     [McpClient.disconnect] the stale client and reconnect from scratch
-     *     so the new credentials / transport take effect immediately.
-     *
-     * URLs no longer in the persisted set are disconnected and removed.
-     * Connection failures (network down, bad auth) are swallowed — the
-     * URL is left out of the pool so the next sync attempt retries.
-     */
-    /**
      * Reads the persisted MCP server list and **deduplicates by URL**, keeping
      * the first occurrence. Defensive measure against a known issue in
      * [app.knotwork.android.data.local.SettingsManager.updateMcpServer], which
@@ -264,52 +212,19 @@ class ToolRepositoryImpl @Inject constructor(
     private suspend fun distinctMcpConfigs(): List<McpServerConfig> =
         settingsRepository.mcpServers.first().distinctBy { it.url }
 
-    private suspend fun syncMcpClients() = mcpSyncMutex.withLock {
-        val configs = distinctMcpConfigs()
-        val persistedUrls = configs.mapTo(mutableSetOf()) { it.url }
-
-        // Disconnect + drop servers that disappeared from settings entirely.
-        (mcpClients.keys.toSet() - persistedUrls).forEach { url ->
-            try {
-                mcpClients[url]?.client?.disconnect()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Timber.w(e, "MCP disconnect of removed server %s failed; dropping from pool anyway", url)
-            }
-            mcpClients.remove(url)
-        }
-
-        // For every persisted config: keep unchanged entries, (re)connect the rest.
-        configs.forEach { config ->
-            val existing = mcpClients[config.url]
-            if (existing != null && existing.config == config) {
-                return@forEach
-            }
-            if (existing != null) {
-                // Config changed (auth / transport / headers / display name) — tear
-                // down the stale connection so the next reconnect actually applies
-                // the new settings instead of holding the old auth.
-                try {
-                    existing.client.disconnect()
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    Timber.w(e, "MCP disconnect of stale config for %s failed; reconnecting anyway", config.url)
-                }
-                mcpClients.remove(config.url)
-            }
-            val client = mcpClientFactory.create()
-            try {
-                client.connect(config)
-                mcpClients[config.url] = ConnectedClient(client = client, config = config)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Timber.w(e, "MCP connect to %s failed; will retry on next sync", config.url)
-            }
-        }
-    }
+    /**
+     * Brings the shared [McpConnectionPool] in line with
+     * [SettingsRepository.mcpServers] before this repository routes anything
+     * through it: unknown servers are connected, servers whose config changed
+     * (auth, transport, headers) are reconnected so the new settings take
+     * effect, and servers no longer persisted are disconnected and dropped.
+     *
+     * The pool is shared with `McpServerRepositoryImpl`, which drives the Tools
+     * screen's health indicator — so the session reported as healthy there is
+     * the same session a tool call lands on here. Connection failures are
+     * swallowed by the pool: the URL is left out so the next sync retries.
+     */
+    private suspend fun syncMcpClients() = mcpConnectionPool.reconcile(distinctMcpConfigs())
 
     /**
      * Retrieves all locally available tools — built-in tools first (stable ordering for
@@ -373,9 +288,9 @@ class ToolRepositoryImpl @Inject constructor(
         // External providers must dictate the probe order so multi-provider
         // routing stays predictable.
         val mcpTools = configs.flatMap { config ->
-            val entry = mcpClients[config.url] ?: return@flatMap emptyList()
+            val client = mcpConnectionPool.peek(config.url) ?: return@flatMap emptyList()
             try {
-                entry.client.getTools().filter { tool ->
+                client.getTools().filter { tool ->
                     McpServerRepositoryImpl.mcpToolId(serverUrl = config.url, toolName = tool.name) !in disabledMcp
                 }
             } catch (e: CancellationException) {
@@ -475,15 +390,15 @@ class ToolRepositoryImpl @Inject constructor(
         // means multi-provider routing is now both deterministic and matches the
         // priority the user actually configured.
         for (config in configs) {
-            val entry = mcpClients[config.url] ?: continue
-            if (!advertisesTool(entry.client, name)) continue
+            val client = mcpConnectionPool.peek(config.url) ?: continue
+            if (!advertisesTool(client, name)) continue
             val mcpId = McpServerRepositoryImpl.mcpToolId(serverUrl = config.url, toolName = name)
             if (mcpId in disabledMcp) {
                 sawDisabled = true
                 continue
             }
             try {
-                return entry.client.executeTool(name, arguments)
+                return client.executeTool(name, arguments)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Throwable) {
@@ -533,8 +448,8 @@ class ToolRepositoryImpl @Inject constructor(
         // executeMcpTool / getAvailableTools. distinctMcpConfigs() defends
         // against a duplicate-URL row that updateMcpServer can persist.
         for (config in distinctMcpConfigs()) {
-            val entry = mcpClients[config.url] ?: continue
-            if (advertisesTool(entry.client, toolName)) {
+            val client = mcpConnectionPool.peek(config.url) ?: continue
+            if (advertisesTool(client, toolName)) {
                 // Keyed per server, not per bare name: a long shared prefix is
                 // normal in MCP catalogues, and two servers advertising the same
                 // `create_issue` must stay independent decisions — the same rule

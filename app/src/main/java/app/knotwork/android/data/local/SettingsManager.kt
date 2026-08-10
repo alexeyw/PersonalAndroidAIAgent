@@ -75,6 +75,7 @@ class SettingsManager @Inject constructor(
         val MCP_SERVERS_JSON = stringPreferencesKey("mcp_servers_json")
         val DISABLED_APP_FUNCTIONS = stringSetPreferencesKey("disabled_app_functions")
         val DISABLED_MCP_TOOLS = stringSetPreferencesKey("disabled_mcp_tools")
+
         // The stored key keeps its original `app_function_risk_overrides` name even
         // though the map now also carries MCP entries: renaming the DataStore key
         // would silently drop every override a user had already set. The Kotlin

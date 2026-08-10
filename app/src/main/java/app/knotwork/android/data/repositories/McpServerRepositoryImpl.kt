@@ -1,19 +1,18 @@
 package app.knotwork.android.data.repositories
 
 import androidx.annotation.VisibleForTesting
-import app.knotwork.android.data.mcp.McpClient
-import app.knotwork.android.data.mcp.McpClientFactory
+import app.knotwork.android.data.mcp.McpConnectionPool
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.McpConnectionStatus
 import app.knotwork.android.domain.models.McpServerConfig
 import app.knotwork.android.domain.models.McpTool
 import app.knotwork.android.domain.repositories.McpServerRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
@@ -21,32 +20,28 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Default [McpServerRepository] implementation backed by per-server [McpClient]
- * instances spun up through the injected [McpClientFactory].
+ * Default [McpServerRepository] implementation.
  *
- * The class is `@Singleton` so the same set of caches, status flows, and live
- * clients is reused across every ViewModel observer of the Tools surface. Per-URL
- * locking via [Mutex] collapses concurrent `fetchToolList` calls into a single
- * round-trip (e.g. two collectors subscribing at once on a cold start would
- * otherwise both connect — wasteful and racy for status emissions).
+ * This class owns the Tools surface's **view** of a server — its TTL-cached tool
+ * list and its observable connection status. It does **not** own the connection:
+ * live clients belong to the shared [McpConnectionPool], which `ToolRepositoryImpl`
+ * uses for the calls the agent actually makes. That sharing is the point. While
+ * each repository kept its own pool, the health indicator described one session
+ * and the agent used another, so the screen could read "13 tools · ok" against a
+ * session that was already dead for execution purposes.
+ *
+ * The class is `@Singleton` so the same caches and status flows are reused across
+ * every ViewModel observer. Concurrent `fetchToolList` calls for one server are
+ * collapsed into a single round-trip by holding that server's pool lock across
+ * the cache check and the fetch — two collectors subscribing at once on a cold
+ * start would otherwise both connect, which is wasteful and races the status
+ * emissions.
  */
 @Singleton
-class McpServerRepositoryImpl @Inject constructor(private val clientFactory: McpClientFactory) : McpServerRepository {
+class McpServerRepositoryImpl @Inject constructor(private val pool: McpConnectionPool) : McpServerRepository {
 
-    /**
-     * A pooled connection plus the [McpServerConfig] it was established with.
-     * The config is the equality unit that decides whether a cached connection
-     * is still valid or has to be torn down and rebuilt.
-     *
-     * @property client live client for the server.
-     * @property config configuration this connection was opened with.
-     */
-    private data class PooledClient(val client: McpClient, val config: McpServerConfig)
-
-    private val clients = ConcurrentHashMap<String, PooledClient>()
     private val statusFlows = ConcurrentHashMap<String, MutableStateFlow<McpConnectionStatus>>()
     private val caches = ConcurrentHashMap<String, CachedToolList>()
-    private val mutexes = ConcurrentHashMap<String, Mutex>()
 
     /**
      * Time source. Overridable from unit tests via a direct assignment so that
@@ -58,9 +53,8 @@ class McpServerRepositoryImpl @Inject constructor(private val clientFactory: Mcp
 
     override suspend fun fetchToolList(config: McpServerConfig, forceRefresh: Boolean): Result<List<McpTool>> {
         val serverUrl = config.url
-        val mutex = mutexes.getOrPut(serverUrl) { Mutex() }
         val flow = statusFlows.getOrPut(serverUrl) { MutableStateFlow(McpConnectionStatus.Connecting) }
-        return mutex.withLock {
+        return pool.withServer(serverUrl) {
             val now = clockMs()
             if (!forceRefresh) {
                 val cached = caches[serverUrl]
@@ -70,7 +64,7 @@ class McpServerRepositoryImpl @Inject constructor(private val clientFactory: Mcp
                     // surface a stale red pill on a perfectly usable server — so reconcile
                     // the status to `Connected` whenever we successfully return cached data.
                     flow.value = McpConnectionStatus.Connected
-                    return@withLock Result.success(cached.tools)
+                    return@withServer Result.success(cached.tools)
                 }
             }
             val statusBeforeFetch = flow.value
@@ -80,81 +74,58 @@ class McpServerRepositoryImpl @Inject constructor(private val clientFactory: Mcp
             // (connect / getTools), and runCatching would trap the
             // CancellationException that must propagate for cooperative
             // cancellation. `Throwable` keeps runCatching's catch surface.
+            //
+            // Cancellation is re-thrown immediately with no work in the clause;
+            // resolving the status on that path is done in `finally`, guarded by
+            // [settled], which is where cleanup that must also run when cancelled
+            // belongs. Success and failure both resolve the status; cancellation
+            // used to resolve nothing, so a fetch abandoned mid-flight (the
+            // caller's scope going away — a settings edit that renavigates, a
+            // screen leaving) pinned the row on "Connecting…" until the user hit
+            // Refresh by hand.
+            var settled = false
             try {
-                val client = connectedClient(serverUrl = serverUrl, config = config)
+                val client = client(config)
                 val tools = client.getTools().map { agentTool -> agentTool.toMcpTool(serverUrl) }
                 caches[serverUrl] = CachedToolList(tools = tools, fetchedAtMs = clockMs())
                 flow.value = McpConnectionStatus.Connected
+                settled = true
                 Result.success(tools)
             } catch (e: CancellationException) {
-                // Success and failure both resolve the status; cancellation used
-                // to resolve nothing, so a fetch abandoned mid-flight (the caller's
-                // scope going away — a settings edit that renavigates, a screen
-                // leaving) pinned the row on "Connecting…" until the user hit
-                // Refresh by hand (phase-40 finding F8).
-                //
-                // Restoring the previous value is not enough: a flow starts life
-                // at `Connecting`, so the very first fetch has nothing better to
-                // fall back to. An abandoned attempt genuinely leaves the server
-                // in an unknown state, and the honest rendering of that is "not
-                // connected, try again" rather than a spinner that never stops.
-                // Assignment does not suspend, so this is safe while cancelling.
-                flow.value = when {
-                    statusBeforeFetch != McpConnectionStatus.Connecting -> statusBeforeFetch
-                    caches[serverUrl] != null -> McpConnectionStatus.Connected
-                    else -> McpConnectionStatus.Error(reason = INTERRUPTED_REASON)
-                }
                 throw e
             } catch (e: Throwable) {
                 Timber.e(e, "MCP tools/list failed for %s", serverUrl)
                 // Drop the pooled entry so the next attempt reconnects instead of
-                // reusing a connection that has already proven unusable.
-                clients.remove(serverUrl)
+                // reusing a connection that has already proven unusable. Because
+                // the pool is shared, this also stops the agent's next tool call
+                // from being routed onto the same dead session.
+                //
+                // `NonCancellable` because this cleanup suspends (the transport's
+                // `disconnect`) inside a catch clause: if the caller's scope is
+                // cancelled while we are retiring a client we have just proven
+                // broken, abandoning it half-retired would leave exactly the stale
+                // entry this whole class exists to avoid.
+                withContext(NonCancellable) { invalidate() }
                 flow.value = McpConnectionStatus.Error(reason = e.localizedMessage ?: e.javaClass.simpleName)
+                settled = true
                 Result.failure(e)
+            } finally {
+                // Only reachable when the fetch was cancelled. Restoring the
+                // previous value is not enough: a flow starts life at
+                // `Connecting`, so the very first fetch has nothing better to fall
+                // back to. An abandoned attempt genuinely leaves the server in an
+                // unknown state, and the honest rendering of that is "not
+                // connected, try again" rather than a spinner that never stops.
+                // Assignment does not suspend, so this is safe while cancelling.
+                if (!settled) {
+                    flow.value = when {
+                        statusBeforeFetch != McpConnectionStatus.Connecting -> statusBeforeFetch
+                        caches[serverUrl] != null -> McpConnectionStatus.Connected
+                        else -> McpConnectionStatus.Error(reason = INTERRUPTED_REASON)
+                    }
+                }
             }
         }
-    }
-
-    /**
-     * Returns a connected client for [serverUrl], connecting only when there is
-     * no usable pooled entry — i.e. on first use, after a failure dropped the
-     * entry, or when [config] differs from the one the pooled connection was
-     * established with (changed auth / transport / headers must actually apply).
-     *
-     * Reconnecting on **every** call, as this used to, opened a fresh MCP
-     * session per manual Refresh: the server kept the abandoned ones (nothing
-     * terminated them) and the in-place transport swap could break a tool call
-     * running concurrently on the same client. Both were observed in the
-     * phase-40 directed MCP test (finding F3).
-     *
-     * Callers hold the per-URL [Mutex], so the check-then-connect sequence here
-     * cannot interleave with another fetch for the same server.
-     *
-     * @param serverUrl pool key and connection identity.
-     * @param config configuration to connect with, compared against the config
-     *   the pooled entry was built from.
-     * @return a connected [McpClient] ready for `getTools`.
-     */
-    private suspend fun connectedClient(serverUrl: String, config: McpServerConfig): McpClient {
-        val pooled = clients[serverUrl]
-        if (pooled != null && pooled.config == config) {
-            return pooled.client
-        }
-        if (pooled != null) {
-            try {
-                pooled.client.disconnect()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                Timber.w(e, "MCP disconnect of stale config for %s failed; reconnecting anyway", serverUrl)
-            }
-            clients.remove(serverUrl)
-        }
-        val client = clientFactory.create()
-        client.connect(config)
-        clients[serverUrl] = PooledClient(client = client, config = config)
-        return client
     }
 
     override fun observeConnectionStatus(serverUrl: String): Flow<McpConnectionStatus> =
@@ -163,22 +134,13 @@ class McpServerRepositoryImpl @Inject constructor(private val clientFactory: Mcp
         }.asStateFlow()
 
     override suspend fun disconnect(serverUrl: String) {
-        // Re-use whatever Mutex an in-flight fetchToolList may already hold so we
-        // serialise with it instead of racing past it. The Mutex entry is intentionally
-        // NOT removed from the map: removing it while another coroutine is suspended
-        // waiting on it would silently drop the lock contract, and a follow-up fetch
-        // would `getOrPut` a fresh Mutex that runs in parallel with the in-flight
-        // disconnect.
-        val mutex = mutexes.getOrPut(serverUrl) { Mutex() }
-        mutex.withLock {
-            val pooled = clients.remove(serverUrl)
-            try {
-                pooled?.client?.disconnect()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Throwable) {
-                Timber.w(e, "MCP disconnect failed for %s", serverUrl)
-            }
+        // Runs under the same per-URL lock an in-flight fetchToolList holds, so this
+        // serialises with it instead of racing past it. The pool never removes its
+        // Mutex entry: dropping it while another coroutine is suspended waiting on
+        // it would silently break the lock contract, and a follow-up fetch would
+        // create a fresh Mutex that runs in parallel with the in-flight disconnect.
+        pool.withServer(serverUrl) {
+            invalidate()
             caches.remove(serverUrl)
             // Status flow entry stays in the map so any active observer keeps a
             // live handle. Removing it here would orphan the observer's

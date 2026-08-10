@@ -2,6 +2,7 @@ package app.knotwork.android.data.repositories
 
 import app.knotwork.android.data.mcp.McpClient
 import app.knotwork.android.data.mcp.McpClientFactory
+import app.knotwork.android.data.mcp.McpConnectionPool
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.McpAuth
 import app.knotwork.android.domain.models.McpConnectionStatus
@@ -55,7 +56,7 @@ class McpServerRepositoryImplTest {
         )
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(clientFactory = factory)
+        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
 
         val result = repo.fetchToolList(config = config)
 
@@ -78,7 +79,7 @@ class McpServerRepositoryImplTest {
         coEvery { client.connect(any()) } throws IllegalStateException("handshake failed")
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(clientFactory = factory)
+        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
 
         val result = repo.fetchToolList(config = config)
 
@@ -94,7 +95,7 @@ class McpServerRepositoryImplTest {
         coEvery { client.getTools() } returns listOf(AgentTool("a", "d", "{}"))
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(clientFactory = factory)
+        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
         var time = 1_000L
         repo.clockMs = { time }
 
@@ -113,7 +114,7 @@ class McpServerRepositoryImplTest {
         coEvery { client.getTools() } returns listOf(AgentTool("a", "d", "{}"))
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(clientFactory = factory)
+        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
         repo.clockMs = { 1_000L }
 
         repo.fetchToolList(config = config)
@@ -129,7 +130,7 @@ class McpServerRepositoryImplTest {
         coEvery { client.getTools() } returns listOf(AgentTool("a", "d", "{}"))
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(clientFactory = factory)
+        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
 
         repeat(times = 3) { repo.fetchToolList(config = config, forceRefresh = true) }
 
@@ -148,7 +149,7 @@ class McpServerRepositoryImplTest {
         coEvery { client.getTools() } returns listOf(AgentTool("a", "d", "{}"))
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(clientFactory = factory)
+        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
 
         repo.fetchToolList(config = config)
         // Same URL (the pool key), different auth — the new credentials must
@@ -167,7 +168,7 @@ class McpServerRepositoryImplTest {
         coEvery { client.getTools() } throws IllegalStateException("boom") andThen listOf(AgentTool("a", "d", "{}"))
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(clientFactory = factory)
+        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
 
         val failed = repo.fetchToolList(config = config)
         val retried = repo.fetchToolList(config = config, forceRefresh = true)
@@ -191,7 +192,7 @@ class McpServerRepositoryImplTest {
         }
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(clientFactory = factory)
+        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
 
         val job = launch { repo.fetchToolList(config = config) }
         started.await()
@@ -212,7 +213,7 @@ class McpServerRepositoryImplTest {
         coEvery { client.getTools() } returns listOf(AgentTool("a", "d", "{}"))
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(clientFactory = factory)
+        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
 
         repo.fetchToolList(config = config)
         repo.disconnect(serverUrl = url)
@@ -233,7 +234,7 @@ class McpServerRepositoryImplTest {
         coEvery { client.getTools() } returns listOf(AgentTool("a", "d", "{}"))
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(clientFactory = factory)
+        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
         repo.clockMs = { 1_000L }
 
         // 1) First fetch succeeds → cache populated, status = Connected.
@@ -259,7 +260,7 @@ class McpServerRepositoryImplTest {
         coEvery { client.getTools() } returns listOf(AgentTool("a", "d", "{}"))
         val factory = mockk<McpClientFactory>()
         coEvery { factory.create() } returns client
-        val repo = McpServerRepositoryImpl(clientFactory = factory)
+        val repo = McpServerRepositoryImpl(pool = McpConnectionPool(clientFactory = factory))
 
         // Acquire the status flow first — this is what a live observer holds.
         val statusFlow = repo.observeConnectionStatus(url)

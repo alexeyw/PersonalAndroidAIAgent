@@ -66,9 +66,14 @@ interface LiteRtRepository {
   flag in isolation. The risk resolves through three layers:
   built-in defaults (`search_tool` → `READ_ONLY`,
   `schedule_task` / `delegate_task` → `SENSITIVE`), per-tool overrides
-  for discovered AppFunctions
-  (`SettingsRepository.setAppFunctionRiskOverride`), then `SENSITIVE` as
-  the conservative fallback for anything else (MCP tools included).
+  for discovered AppFunctions (keyed by tool name) and for MCP tools
+  (keyed per server by the `mcp:<sha8(serverUrl)>:<toolName>` id, so the
+  same tool name on two servers stays two decisions) via
+  `SettingsRepository.setToolRiskOverride`, then `SENSITIVE` as the
+  conservative fallback. The override is the user's voice, never the
+  server's — MCP's `readOnlyHint` / `destructiveHint` annotations are
+  deliberately not consulted, since a server able to declare its own
+  tools read-only could walk straight past the gate.
   `requiresUserConfirmation` is now an opt-in "ask on every single call"
   override and never silences `SENSITIVE` / `DESTRUCTIVE`.
 
@@ -88,9 +93,15 @@ interface Tool {
 ## Model Context Protocol (MCP)
 
 - The MCP client lives in the `data/mcp` package.
-- Each MCP server connection is held in a
-  `ConcurrentHashMap<String, McpClient>` inside `ToolRepositoryImpl`
-  (thread-safe).
+- Live connections have exactly one owner: the `@Singleton`
+  `McpConnectionPool` (`data/mcp/`), keyed by server URL and holding the
+  config each client was connected with. `McpServerRepositoryImpl` (Tools
+  screen health + TTL tool-list cache) and `ToolRepositoryImpl` (the
+  agent's calls) both go through it. Never add a second pool: when these
+  two each kept their own, the health indicator described one session
+  while the agent used another. The pool's per-URL lock is held only
+  across connect / invalidate — never while a caller uses the client, or
+  concurrent tool calls to one server would serialise behind it.
 - Connections are lazy: they open on first use and close when the agent
   session ends.
 - Every MCP call is wrapped in `try`/`catch` that **re-throws

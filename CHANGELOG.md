@@ -147,6 +147,39 @@ details.
 
 ### Fixed
 
+- **A pipeline step pointed at a local server could quietly switch to a cloud
+  one.** The node editor offers a single *OpenAI-compatible* option covering both
+  DeepSeek and a self-hosted server such as Ollama, and saving the step's settings
+  resolved that option to DeepSeek regardless of which one the step actually used.
+  Opening an Ollama step, changing nothing but the title, and saving was enough to
+  repoint it at a third-party endpoint — with no warning, and no visible difference
+  in the editor afterwards. For an app whose premise is that your data stays where
+  you put it, that is the worst possible silent change, so a step now keeps the
+  provider it already had unless you pick a different one yourself. The same fix
+  covers the engine picker on Tool, Condition, Router, Decomposition and Evaluation
+  steps.
+- **The Tools screen could report a healthy server the agent could not reach.**
+  Connection health and the connections the agent actually used were tracked
+  separately, so a session that had already failed for one could still look fine to
+  the other: the screen showed a tool count and an "ok" badge while the next tool
+  call went to a dead connection. Both now share one set of connections, so the
+  badge describes the session your tools will really use, and a failure seen on
+  either side retires it for both.
+- **Risk level of a tool from an external server could not be adjusted.** Every MCP
+  tool was pinned to "ask me first", which sounds safe but cut both ways: a
+  genuinely destructive remote tool could not be raised to the destructive tier
+  (and so was never covered by *Block destructive tools*), and a plainly read-only
+  one could not stop prompting. The per-tool risk setting now covers MCP tools as
+  well, remembered per server so the same tool name on two servers stays two
+  separate decisions. The server's own claim about a tool is deliberately ignored:
+  only you can lower a confirmation prompt, never the server asking to skip it.
+- **A mistyped tool name failed later and more obscurely than it needed to.** When
+  a step let the model choose the tool, the chosen name was not checked against the
+  list the model had been offered, so a mangled name surfaced further down as an
+  internal-sounding "risk lookup failed". The name is now checked where the choice
+  is made, and the message says plainly that the tool is not in the available list.
+  A near-miss is not silently corrected to the closest match — running a different
+  tool than the one named is exactly what the confirmation prompt exists to prevent.
 - **A cloud answer cut off in transit was shown as if it were complete.** When
   the connection to a cloud provider dropped part-way through a reply, some
   providers end the stream so quietly that it looks exactly like a finished
