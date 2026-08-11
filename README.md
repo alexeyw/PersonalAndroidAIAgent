@@ -2,7 +2,7 @@
 
 [![Check](https://github.com/alexeyw/knotwork/actions/workflows/check.yml/badge.svg)](https://github.com/alexeyw/knotwork/actions/workflows/check.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.6.0-orange.svg)
+![Version](https://img.shields.io/badge/version-0.7.0-orange.svg)
 ![Android API](https://img.shields.io/badge/Android-API%2036%2B-3DDC84.svg?logo=android)
 
 > **An AI agent you build, not just prompt.** A local-first Android agent whose
@@ -185,10 +185,12 @@ on an Android 16+ device. Two flavours are published:
 - **`foss`** — zero proprietary dependencies and no crash reporting, suitable
   for F-Droid. See [docs/release.md](docs/release.md) § *FOSS / F-Droid build*.
 
-> **Pre-release signing note:** builds up to and including `0.6.0` are signed
-> with the Android debug keystore. When a real release keystore is configured
-> the signer changes, and Android will refuse to update a debug-signed install
-> in place — you'll need to uninstall the old build first. See the full
+> **Upgrading from `0.6.0` or earlier requires a clean install.** Those builds
+> were signed with the Android debug keystore; `0.7.0` is the first release
+> signed with a real release key. Android refuses to update an install whose
+> signer changed, so you must uninstall the old build — which clears its local
+> data — before installing `0.7.0`. Export anything you want to keep first.
+> This is a one-time break; later releases update in place. See the full
 > pre-release notice below.
 
 ### Build from source
@@ -280,7 +282,7 @@ The full threat model, including what is explicitly *out* of scope, is in
 
 ## Pre-release notice
 
-This project is currently at **version 0.6.0** and is published for review and
+This project is currently at **version 0.7.0** and is published for review and
 experimentation. Expect rough edges:
 
 - There are no stability guarantees for the public surface (Kotlin APIs,
@@ -306,12 +308,14 @@ experimentation. Expect rough edges:
   templates. (Note: *downgrading* to an older build recreates the database
   empty — forward migrations cannot be reversed — so export anything you want
   to keep before installing an older version.)
-- **Signing identity will change before the first signed release.** Builds up
-  to and including `0.6.0` are signed with the Android debug keystore. Once a
-  real release keystore is configured, the signer changes, and Android will
-  **refuse to update a debug-signed install in place** (signature mismatch).
-  When that happens you must uninstall the old build first — which clears its
-  local data — before installing the release-signed one.
+- **The signing identity changed at `0.7.0` — a one-time upgrade break.**
+  Builds up to and including `0.6.0` were signed with the Android debug
+  keystore; `0.7.0` is the first release signed with a real release key.
+  Android **refuses to update an install in place when the signer changes**
+  (signature mismatch), so upgrading from `0.6.0` or earlier means uninstalling
+  the old build first — which clears its local data. Export anything you want
+  to keep before you do. Releases from `0.7.0` onward share one signer and
+  update in place normally.
 
 ## License
 
