@@ -213,10 +213,12 @@ which is unnecessary for this single-variant project.
 
 ## CI integration — deferred
 
-This PR does **not** add a `.github/workflows/coverage.yml` job that publishes
-the HTML report as a PR artefact. The PAT used for the current Git remote
-lacks the `workflow` scope required to push files into `.github/workflows/`,
-so the same constraint that blocked the CI workflow applies here.
+There is still no `.github/workflows/coverage.yml` job publishing the HTML
+report as a PR artefact. The original reason — the Git remote's PAT lacking the
+`workflow` scope — no longer applies (`.github/workflows/` now holds both
+`check.yml` and `release.yml`); what remains is that the build-failing threshold
+is already enforced by `koverVerifyFullDebug` inside `./gradlew check`, so the
+published report would add convenience, not a gate.
 
 The eventual workflow should:
 

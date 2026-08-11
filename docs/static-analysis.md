@@ -349,6 +349,15 @@ downloadable artifact on failure, and is configured with
 `concurrency.cancel-in-progress` so a new push supersedes any older run on the
 same branch.
 
+The same workflow is also exposed as a reusable one (`workflow_call`) and is
+called as the first job of `.github/workflows/release.yml`, so a release cannot
+be built against a definition of "green" that has drifted from the one pull
+requests are measured by. `release.yml` adds the checks that only make sense on
+a release build — the tag ↔ `versionName` agreement, `verify<Variant>KeepRules`
+on both flavours, and a signature check of every published artefact against the
+expected certificate fingerprint. The release procedure itself is documented in
+[`release.md`](release.md) §9.
+
 ---
 
 ## What this gate does **not** do
@@ -357,6 +366,7 @@ same branch.
   coverage — `*Screen.kt` Composables remain outside the Kover scope.
 - It does not run the `release` variant — lint and tests target `debug`. R8
   regressions are therefore invisible here; the release-only guard above
-  (`verify<Variant>KeepRules`) runs as part of the release assemble instead.
+  (`verify<Variant>KeepRules`) runs as part of the release assemble instead,
+  which on CI means `release.yml` rather than this workflow.
 - It does not perform dependency-vulnerability scanning — that is a
   separate workstream.

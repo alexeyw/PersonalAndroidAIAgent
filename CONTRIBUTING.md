@@ -82,14 +82,15 @@ Common commands:
 ./gradlew assembleDebug   # build the debug APK
 ./gradlew test            # run JVM unit tests
 ./gradlew check           # full local quality gate (see below)
-./gradlew bundleRelease   # build the Play-Store-shaped AAB (R8-minified)
+./gradlew bundleFullRelease   # build the Play-Store-shaped AAB (R8-minified)
 ```
 
 The `release` variant runs through R8 + resource shrinking + Jansi-native
 stripping; the keep rules live in [`app/proguard-rules.pro`](app/proguard-rules.pro)
-and the full release playbook (signing posture, AAB build, APK size
-breakdown, future-keystore plan) lives in
-[`docs/release.md`](docs/release.md).
+and the full release playbook (signing, AAB build, APK size breakdown) lives in
+[`docs/release.md`](docs/release.md). Published releases are built by
+`.github/workflows/release.yml` from a `v*` tag rather than by hand — see
+[`docs/release.md`](docs/release.md) §9.
 
 `./gradlew check` aggregates the same checks CI runs on every pull
 request:
@@ -200,7 +201,7 @@ a bug.
 - [`docs/static-analysis.md`](docs/static-analysis.md) — detekt / ktlint
   / lint configuration and severity policy.
 - [`docs/release.md`](docs/release.md) — release-build playbook (R8
-  keep rules, signing posture, AAB build, APK size breakdown).
+  keep rules, signing, AAB build, APK size breakdown, how a release is cut).
 - [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — community standards.
 - [`SECURITY.md`](SECURITY.md) — threat model and how to report a
   vulnerability.
