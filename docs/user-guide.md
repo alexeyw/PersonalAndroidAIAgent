@@ -1558,7 +1558,7 @@ Two deadlines apply, and neither is adjustable:
 
 - **Connecting** — 30 seconds for the handshake. A server that accepts
   the connection and then goes quiet fails outright, instead of leaving
-  the Tools row spinning on *Connecting…* forever.
+  its row stuck on *connecting…* forever.
 - **A tool call** — 60 seconds. Past that the call is abandoned.
 
 Either breach is reported as a **failed tool call**, not as a failed
@@ -1968,12 +1968,15 @@ from documentation:
   minute is dropped. Before this was set explicitly, the app waited **fifteen
   minutes** on a stalled provider.
 - **30 seconds to connect.**
-- **3 attempts, waiting 1 then 2 seconds** — the default retry budget above.
-  So a provider that is down costs at most a few minutes, not a quarter of an
-  hour.
+- **3 attempts, waiting 1 then 2 seconds** — the default retry budget above,
+  which also covers timeouts.
 
-Whichever gives out first ends the call, the error appears in the console, and
-the run stops rather than continuing on a missing answer.
+A timeout ends that *attempt*, not the run: it counts as a transient failure
+and is retried. Only once the retry budget is spent does the error reach the
+console and the run stop, rather than carrying on without an answer. In the
+worst case a dead provider therefore costs about three minutes — three silent
+minutes plus the backoff — where before these limits were set a single attempt
+alone could hold the run for fifteen.
 
 #### An answer that was cut off is not shown as an answer
 

@@ -928,6 +928,17 @@ an alternative here — it does not apply to MCP's SSE-framed response path, so
 installing it removes the engine's own socket timeout without supplying a
 replacement.
 
+The call deadline is backed by a second, independent limit one level up:
+`TaskQueueManagerImpl` is a single serial worker, so an unbounded call does not
+merely stall its own run — it freezes every chat behind it. Its **no-progress
+valve** (`NO_PROGRESS_TIMEOUT_MS`, 5 min) fails a task that has emitted nothing
+for that long. It measures **silence, not duration**, because a healthy
+generation streams per token and must never be cut for being long; and it
+exempts the wait after `WaitingForApproval` / `AwaitingClarification`, where
+silence is the expected state, re-arming at the next emission. Two limits
+rather than one deadline: the transport limit bounds a known call, the valve
+bounds anything that stops making progress for a reason nobody anticipated.
+
 **Capability negotiation.** The client advertises no MCP client capabilities
 (`roots` / `sampling` / `elicitation`), and a spec-abiding server does not
 publish tools that depend on them — against the reference server the app sees
