@@ -13,6 +13,30 @@ details.
 
 ## [Unreleased]
 
+### Changed
+
+- **The known limits of MCP servers and cloud providers are now written down.**
+  A round of directed testing against real MCP servers and cloud providers
+  turned up several behaviours that were true of the app but documented
+  nowhere, and a few of them look like defects until you know what they are.
+  The user guide now says so plainly: the tool count on an MCP server row is
+  the list *that server published to this app*, so a healthy `13 tools · ok`
+  can legitimately be fewer than the server's own catalogue (measured against
+  the protocol's reference server, which offers 16); how long a server or a
+  provider is given to answer, and what the resulting error messages mean; that
+  a cloud answer cut off mid-stream is discarded rather than shown as a
+  finished reply — and, honestly, that this protection covers OpenAI, DeepSeek
+  and Google but **not** Ollama or Anthropic, with the reason for each; that
+  a question can take a different route through a routed pipeline depending on
+  what is already in the conversation, and how to make that repeatable; and
+  that leaving the app can end a background run within seconds unless the app
+  is excluded from battery optimisation, which the app never asks for and
+  cannot grant itself. The contributor guide gained the step a new cloud
+  provider must not skip — deciding, by measurement rather than by reading the
+  provider's documentation, whether a missing completion signal means the
+  answer was truncated. No behaviour change: this is documentation catching up
+  with what was measured.
+
 ## [0.7.0] - 2026-08-10
 
 ### Added

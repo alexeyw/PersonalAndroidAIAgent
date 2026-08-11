@@ -914,6 +914,30 @@ never used around these suspending calls (it would swallow
 cancellation; see [`docs/api-conventions.md`](api-conventions.md) §
 Model Context Protocol).
 
+**Deadlines.** Every round trip carries an explicit deadline applied in our
+own code: **60 s** for a tool call, **30 s** for the connect handshake, both
+via `withTimeoutOrNull` in `KoogMcpClient`. Two constraints shape that. The
+deadline has to sit *below* the transport's own or it is decorative — the
+default OkHttp read timeout resolved through Koog ended every MCP call at
+exactly 10 s before this was set, so the socket floor is deliberately pinned
+above the call deadline rather than left to the engine. And it must be
+`withTimeoutOrNull`, never `withTimeout`: a timeout surfacing as
+`CancellationException` propagates past the tool-error mapping and takes the
+whole run down instead of failing one call. Ktor's `HttpTimeout` plugin is not
+an alternative here — it does not apply to MCP's SSE-framed response path, so
+installing it removes the engine's own socket timeout without supplying a
+replacement.
+
+**Capability negotiation.** The client advertises no MCP client capabilities
+(`roots` / `sampling` / `elicitation`), and a spec-abiding server does not
+publish tools that depend on them — against the reference server the app sees
+13 of 16 tools while the status row reads `ok`. The server behaviour is
+correct; the silence on our side is not, so `docs/user-guide.md` carries an
+explicit note. A missing connection and a missing tool are reported as
+*different* failures on purpose (`IllegalStateException` vs
+`IllegalArgumentException`): telling the agent a torn-down connection means
+"tool not found" makes it plan around a capability it actually has.
+
 ### 4.3.1. Cleartext (unencrypted HTTP) policy
 
 Android's `network_security_config.xml` supports neither ranges nor wildcards,
@@ -967,6 +991,34 @@ Settings → Providers. Koog exposes no per-attempt hook, so a thin
 `RetryObservingLLMClient` sits as the retrying client's delegate and counts
 invocations; a retried `CLOUD` node surfaces each retry on the console as a
 muted `RUNTIME` warning (`Cloud retry 1/2 for openai`).
+
+**Deadlines.** `KoogClientFactory` applies an explicit `ConnectionTimeoutConfig`
+to every client it builds: **60 s socket**, **30 s connect**, **900 s request**.
+The socket value is the load-bearing one, because Ktor applies it *per read* —
+it bounds how long a provider may stay **silent**, not how long a healthy
+answer may take, the same rule the task queue's no-progress valve uses. Passing
+no config is not a neutral choice: Koog's own default is 900 s for both request
+and socket, measured at 900 033 ms against a stalled provider. Unlike the MCP
+SSE path above, `HttpTimeout` *does* apply here.
+
+**A dropped stream is a failure, not an answer.** On the OpenAI-compatible
+clients a socket cut mid-answer ends the flow **normally**, with no exception,
+and the frames are byte-identical to a healthy stream apart from
+`End.finishReason` being `null` instead of `"stop"`. `CloudLlmNodeExecutor`
+therefore rejects a stream that ended without a finish reason
+(`NodeExecutionResult(error = …)`) rather than forwarding half an answer. The
+check is enabled **per provider and only where measured**
+(`providerReportsFinishReason`), because the inverse mistake fails working
+runs: Koog's Ollama client never emits a finish reason at all, and the harness
+could not produce a stream Anthropic's parser accepts, so both are excluded and
+a mid-answer cut on those two still reads as a short but complete reply.
+
+**Error text is scrubbed before it is shown.** Google authenticates by query
+parameter, so an ordinary socket timeout arrives carrying the API key in the
+quoted URL. `CloudErrorSanitizer` (pure `domain`) masks secret-bearing query
+parameters and `Bearer` fragments on the way to the console, the error banner,
+the persisted run trace and logcat, and substitutes the exception type for a
+message that trails off into the literal word `null`.
 
 **Cloud-backed structured output.** A structured node (§3.5) can run its
 validate-and-repair gate against a cloud provider instead of the on-device
