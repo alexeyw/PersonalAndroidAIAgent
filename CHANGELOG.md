@@ -638,7 +638,7 @@ details.
   asked to. Measured, not assumed; the cause is in the upstream client library.
 - **Build toolchain refreshed to clear the `NewerVersionAvailable` /
   `AndroidGradlePluginVersion` lint gate.** Gradle `9.6.1` → `9.7.0`, `dev.detekt`
-  `2.0.0-alpha.5` → `2.0.0-alpha.6`, Roborazzi `1.70.0` → `1.71.0` (plugin
+  `2.0.0-alpha.5` → `2.0.0-alpha.6`, Roborazzi `1.70.0` → `1.72.0` (plugin
   plus the three test artefacts), and the Compose BOM `2026.06.01` →
   `2026.08.00`. These checks are hard errors in this project on
   purpose, and a local `check` cannot always see them — lint answers from a cached
