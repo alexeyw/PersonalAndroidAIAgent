@@ -835,15 +835,15 @@ interface SettingsRepository {
      *
      * When `false`, the implementation must short-circuit every
      * `CrashReportingRepository` call to a no-op so no payload ever leaves
-     * the device. When `true`, Firebase Crashlytics + Analytics collection
-     * is enabled and exceptions / custom keys are forwarded.
+     * the device. When `true`, Firebase Crashlytics collection is enabled
+     * and exceptions / custom keys are forwarded.
      */
     val crashReportingEnabled: Flow<Boolean>
 
     /**
      * Updates the user's opt-in for anonymous crash reporting.
      *
-     * @param enabled `true` to enable Crashlytics + Analytics collection,
+     * @param enabled `true` to enable Crashlytics collection,
      *                `false` to disable and force all reporting calls into a no-op.
      */
     suspend fun setCrashReportingEnabled(enabled: Boolean)

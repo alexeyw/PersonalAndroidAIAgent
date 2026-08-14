@@ -45,6 +45,19 @@ details.
 
 ### Changed
 
+- **Turning on crash reports no longer turns on Firebase Analytics.** The
+  consent toggle is described everywhere — in the setting itself, in the README
+  and in the security policy — as stack traces only. Flipping it also switched
+  on Firebase Analytics collection, quietly adding automatic events to what an
+  opted-in install sent. The app has never logged an analytics event of its own,
+  so the collection bought nothing and contradicted the toggle's own
+  description. Consent now enables Crashlytics and only Crashlytics, and the
+  Analytics SDK is no longer shipped at all — which also drops the
+  advertising-ID and ad-services permissions it added to the full build. What a
+  crash report can contain is unchanged. If you had opted in on an earlier
+  build, updating stops the analytics collection you never asked for; you do not
+  need to do anything.
+
 - **Two builds of the same commit now carry the same build date.** The date
   shown in Settings was stamped from the wall clock while the build ran, which
   made every rebuild of an identical source tree a different binary. It now

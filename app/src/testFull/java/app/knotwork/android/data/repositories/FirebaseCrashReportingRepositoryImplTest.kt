@@ -1,8 +1,8 @@
 package app.knotwork.android.data.repositories
 
 import app.knotwork.android.domain.repositories.SettingsRepository
-import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.crashlytics.FirebaseCrashlytics
+import io.mockk.confirmVerified
 import io.mockk.every
 import io.mockk.justRun
 import io.mockk.mockk
@@ -10,25 +10,29 @@ import io.mockk.verify
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
-import io.mockk.verify as mockkVerify
 
 /**
  * Unit tests for [FirebaseCrashReportingRepositoryImpl].
  *
  * Cover: every public method must be a strict no-op while the user has not
- * opted in (the on-device privacy contract), the Firebase SDK is invoked
- * with the expected payload once the opt-in flag flips to `true`, and the
- * combined Crashlytics/Analytics toggle behaviour of [setEnabled].
+ * opted in (the on-device privacy contract), the Firebase SDK is invoked with
+ * the expected payload once the opt-in flag flips to `true`, and [setEnabled]
+ * drives **Crashlytics collection only**.
+ *
+ * That last one is a boundary, not a detail: the toggle used to flip Firebase
+ * Analytics collection too, which the consent copy never mentioned. The
+ * Analytics SDK is no longer on this build's classpath — so the guarantee is
+ * enforced by the compiler, and this suite would not even build if the call
+ * came back.
  */
 class FirebaseCrashReportingRepositoryImplTest {
 
     private val crashlytics = mockk<FirebaseCrashlytics>(relaxed = true)
-    private val analytics = mockk<FirebaseAnalytics>(relaxed = true)
     private val settingsRepository = mockk<SettingsRepository>()
 
     private fun repositoryWithFlag(enabled: Boolean): FirebaseCrashReportingRepositoryImpl {
         every { settingsRepository.crashReportingEnabled } returns flowOf(enabled)
-        return FirebaseCrashReportingRepositoryImpl(settingsRepository, crashlytics, analytics)
+        return FirebaseCrashReportingRepositoryImpl(settingsRepository, crashlytics)
     }
 
     @Test
@@ -82,27 +86,25 @@ class FirebaseCrashReportingRepositoryImplTest {
     }
 
     @Test
-    fun `setEnabled true toggles both Crashlytics and Analytics collection on`() = runTest {
+    fun `setEnabled true enables Crashlytics collection and nothing else`() = runTest {
         val repository = repositoryWithFlag(enabled = false)
         every { crashlytics.isCrashlyticsCollectionEnabled = true } returns Unit
-        justRun { analytics.setAnalyticsCollectionEnabled(true) }
 
         repository.setEnabled(true)
 
-        mockkVerify(exactly = 1) { crashlytics.isCrashlyticsCollectionEnabled = true }
-        mockkVerify(exactly = 1) { analytics.setAnalyticsCollectionEnabled(true) }
+        verify(exactly = 1) { crashlytics.isCrashlyticsCollectionEnabled = true }
+        confirmVerified(crashlytics)
     }
 
     @Test
-    fun `setEnabled false toggles both Crashlytics and Analytics collection off`() = runTest {
+    fun `setEnabled false disables Crashlytics collection and nothing else`() = runTest {
         val repository = repositoryWithFlag(enabled = true)
         every { crashlytics.isCrashlyticsCollectionEnabled = false } returns Unit
-        justRun { analytics.setAnalyticsCollectionEnabled(false) }
 
         repository.setEnabled(false)
 
-        mockkVerify(exactly = 1) { crashlytics.isCrashlyticsCollectionEnabled = false }
-        mockkVerify(exactly = 1) { analytics.setAnalyticsCollectionEnabled(false) }
+        verify(exactly = 1) { crashlytics.isCrashlyticsCollectionEnabled = false }
+        confirmVerified(crashlytics)
     }
 
     @Test

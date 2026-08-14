@@ -18,13 +18,15 @@ package app.knotwork.android.domain.repositories
 interface CrashReportingRepository {
 
     /**
-     * Toggles anonymous crash reporting (and the underlying Firebase
-     * Analytics collection that Crashlytics requires) on or off.
+     * Toggles anonymous crash reporting on or off.
+     *
+     * Crash reporting is the whole of it: analytics collection is deliberately
+     * not part of this contract, and no implementation may quietly widen it.
      *
      * The implementation persists the choice through the Firebase SDK so it
      * survives process death even before the next [SettingsRepository] read.
      *
-     * @param enabled `true` to enable Crashlytics + Analytics collection,
+     * @param enabled `true` to enable Crashlytics collection,
      *                `false` to disable it and prevent any further egress.
      */
     suspend fun setEnabled(enabled: Boolean)

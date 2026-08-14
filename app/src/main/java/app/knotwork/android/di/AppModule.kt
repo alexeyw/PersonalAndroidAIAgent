@@ -390,7 +390,7 @@ object AppModule {
     @Singleton
     fun provideTaskScheduler(impl: WorkManagerTaskScheduler): TaskScheduler = impl
 
-    // The Firebase Crashlytics / Analytics singleton providers (and the
+    // The Firebase Crashlytics singleton provider (and the
     // `CrashReportingRepository` binding) live in the `full`-flavour
     // `CrashReportingModule` (under `src/full`) so the shared `main` DI graph
     // never references the Firebase SDK. The `foss` flavour binds a no-op

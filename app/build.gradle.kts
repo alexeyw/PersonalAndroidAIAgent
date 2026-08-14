@@ -263,7 +263,7 @@ android {
         }
     }
 
-    // Distribution flavours. `full` ships Firebase Crashlytics/Analytics and is
+    // Distribution flavours. `full` ships Firebase Crashlytics and is
     // the default for day-to-day development and the Play/direct-APK channel.
     // `foss` is the F-Droid-compatible build: it carries no Firebase/Google
     // dependency (see the flavour-scoped `fullImplementation(...)` block and
@@ -977,7 +977,11 @@ dependencies {
     // JSON Serialization
     implementation(libs.gson)
 
-    // Firebase — Crashlytics + Analytics (Analytics is required by Crashlytics).
+    // Firebase — Crashlytics only. Analytics is deliberately NOT declared:
+    // Crashlytics depends on `firebase-measurement-connector`, not on
+    // `firebase-analytics`, and the app logs no analytics events. Declaring it
+    // used to drag `play-services-measurement` in, which added an advertising-ID
+    // permission set to the `full` manifest for a collector nothing ever fed.
     // Scoped to the `full` flavour ONLY (`fullImplementation`) so the `foss`
     // build carries no `com.google.firebase` artifact on any classpath — the
     // hard requirement for F-Droid. The BoM (Bill of Materials) pins
@@ -986,7 +990,6 @@ dependencies {
     // base modules and removed.
     "fullImplementation"(platform(libs.firebase.bom))
     "fullImplementation"(libs.firebase.crashlytics)
-    "fullImplementation"(libs.firebase.analytics)
 
     testImplementation(libs.json)
     testImplementation(libs.junit)

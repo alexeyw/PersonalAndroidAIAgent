@@ -5,11 +5,14 @@
     has no Firebase on its classpath and therefore carries none of these
     entries.
 
-    Firebase Crashlytics / Analytics auto-collection is disabled by default to
-    enforce the opt-in flow. The runtime
-    `CrashReportingRepository.setEnabled(true)` flips this on once the user
-    accepts the in-app consent dialog; the setting is persisted by Firebase
-    across launches until cleared.
+    Firebase Crashlytics auto-collection is disabled by default to enforce the
+    opt-in flow. The runtime `CrashReportingRepository.setEnabled(true)` flips
+    the Crashlytics flag on once the user accepts the in-app consent dialog, and
+    Firebase persists that choice across launches until it is cleared.
+
+    The Analytics flag is never overridden at runtime: the `full` build declares
+    no Analytics SDK and logs no analytics events. The meta-data entry stays as
+    belt-and-braces in case the artifact ever returns transitively.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 

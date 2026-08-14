@@ -368,11 +368,10 @@ build-time tooling**. The `foss` flavour is exactly that build, and the
 
 How the freedom is guaranteed:
 
-- **No crash-reporting / telemetry SDK.** Firebase Crashlytics + Analytics are
-  declared as `fullImplementation(...)` in `app/build.gradle.kts`, so the
-  Crashlytics/Analytics SDKs (and their `firebase-common` /
-  `firebase-installations` / `play-services` transitive graph) are on the `full`
-  classpath only. Verify the `foss` classpath carries none of them:
+- **No crash-reporting / telemetry SDK.** Firebase Crashlytics is declared as
+  `fullImplementation(...)` in `app/build.gradle.kts`, so the Crashlytics SDK
+  (and its `firebase-common` / `firebase-installations` transitive graph) is on
+  the `full` classpath only. Analytics is not declared in either flavour. Verify the `foss` classpath carries none of them:
 
   ```bash
   ./gradlew :app:dependencies --configuration fossReleaseRuntimeClasspath \

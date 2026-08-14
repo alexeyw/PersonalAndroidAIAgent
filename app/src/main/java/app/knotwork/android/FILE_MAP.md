@@ -750,7 +750,7 @@ above:
 - `app/src/full/` - Full distribution (Play / direct APK): Firebase Crashlytics.
   - `AndroidManifest.xml` - Overlay adding the `firebase_crashlytics_collection_enabled` / `firebase_analytics_collection_enabled` opt-in meta-data.
   - `data/repositories/FirebaseCrashReportingRepositoryImpl.kt` - Firebase-backed `CrashReportingRepository` (gated on the opt-in flag).
-  - `di/CrashReportingModule.kt` - Binds the Firebase impl to `CrashReportingRepository` and provides the `FirebaseCrashlytics` / `FirebaseAnalytics` singletons.
+  - `di/CrashReportingModule.kt` - Binds the Firebase impl to `CrashReportingRepository` and provides the `FirebaseCrashlytics` singleton.
 - `app/src/foss/` - F-Droid distribution: zero Firebase/Google dependency.
   - `data/repositories/NoOpCrashReportingRepository.kt` - No-op `CrashReportingRepository`; records and transmits nothing.
   - `di/CrashReportingModule.kt` - Binds the no-op impl (same FQN as the `full` module; exactly one is compiled per build).

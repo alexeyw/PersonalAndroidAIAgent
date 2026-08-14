@@ -4,7 +4,6 @@ import android.content.Context
 import app.knotwork.android.data.repositories.FirebaseCrashReportingRepositoryImpl
 import app.knotwork.android.domain.repositories.CrashReportingRepository
 import com.google.firebase.FirebaseApp
-import com.google.firebase.analytics.FirebaseAnalytics
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import dagger.Binds
 import dagger.Module
@@ -24,9 +23,9 @@ import javax.inject.Singleton
  * classpath.
  *
  * The module binds the Firebase-backed [CrashReportingRepository] and provides
- * the [FirebaseCrashlytics] / [FirebaseAnalytics] singletons it depends on. The
- * Firebase providers were previously in `AppModule`; they were moved here so the
- * shared `main` DI graph never references the Firebase SDK.
+ * the [FirebaseCrashlytics] singleton it depends on. The Firebase providers were
+ * previously in `AppModule`; they were moved here so the shared `main` DI graph
+ * never references the Firebase SDK.
  */
 @Module
 @InstallIn(SingletonComponent::class)
@@ -70,21 +69,6 @@ abstract class CrashReportingModule {
         fun provideFirebaseCrashlytics(@ApplicationContext appContext: Context): FirebaseCrashlytics {
             ensureFirebaseInitialised(context = appContext)
             return FirebaseCrashlytics.getInstance()
-        }
-
-        /**
-         * Provides the Firebase Analytics singleton. Analytics is required as a
-         * transitive dependency of Crashlytics; both opt-in flags toggle
-         * together inside [FirebaseCrashReportingRepositoryImpl].
-         *
-         * Shares the same `:phoenix`-process resilience as
-         * [provideFirebaseCrashlytics].
-         */
-        @Provides
-        @Singleton
-        fun provideFirebaseAnalytics(@ApplicationContext appContext: Context): FirebaseAnalytics {
-            ensureFirebaseInitialised(context = appContext)
-            return FirebaseAnalytics.getInstance(appContext)
         }
 
         /**
