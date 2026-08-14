@@ -2,7 +2,7 @@
 
 **Effective date:** 14 August 2026
 **Applies to:** the Knotwork Android application (package `app.knotwork.android`),
-both published distributions — `full` and `foss` — from version `0.7.0` onward.
+both published distributions — `full` and `foss` — from version `0.7.1` onward.
 
 ---
 
@@ -32,9 +32,11 @@ Knotwork is an independent open-source project maintained by a single
 developer. There is no company, no data-processing infrastructure, and no
 analytics back end behind it.
 
-- Source code, issues and contact: <https://github.com/alexeyw/knotwork>
+- Source code and issue tracker: <https://github.com/alexeyw/knotwork>
+- Privacy point of contact: <alexeyw+knotwork@gmail.com>
 - Security reports: the private advisory channel described in
-  [SECURITY.md](SECURITY.md#reporting-a-vulnerability)
+  [SECURITY.md](SECURITY.md#reporting-a-vulnerability) — not the address above,
+  so that a vulnerability report stays private until a fix ships
 
 Because the developer operates no server, the developer receives **none** of
 the data described in section 3 except crash reports (section 3.5), and those
@@ -219,7 +221,8 @@ repository, so any change can be diffed.
 
 ## 10. Contact
 
-Questions about this policy: open an issue at
-<https://github.com/alexeyw/knotwork/issues>. Suspected vulnerabilities should
-go through the private channel described in
+Questions about this policy, or a request about your data: write to
+<alexeyw+knotwork@gmail.com>, or open an issue at
+<https://github.com/alexeyw/knotwork/issues> if the question is not private.
+Suspected vulnerabilities should go through the private channel described in
 [SECURITY.md](SECURITY.md#reporting-a-vulnerability) instead.
