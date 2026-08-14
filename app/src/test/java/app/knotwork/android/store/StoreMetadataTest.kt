@@ -81,6 +81,32 @@ class StoreMetadataTest {
     }
 
     @Test
+    fun `given the feature graphic when measured then it is 1024x500 and free of an alpha channel`() {
+        val candidates = FEATURE_GRAPHIC_NAMES.map { localeDir("en-US").resolve("images/$it") }
+        val graphic = candidates.firstOrNull { it.isFile }
+
+        // Play will not publish a listing without one, so its absence is a
+        // build failure rather than a surprise at submission time.
+        assertTrue("no feature graphic — Play cannot publish the listing without one", graphic != null)
+        requireNotNull(graphic)
+
+        val (width, height) = imageSize(graphic)
+        assertEquals("feature graphic width", FEATURE_GRAPHIC_WIDTH_PX, width)
+        assertEquals("feature graphic height", FEATURE_GRAPHIC_HEIGHT_PX, height)
+
+        // Play accepts JPEG or a 24-bit PNG — a PNG carrying an alpha channel is
+        // refused even when every pixel in it is opaque, which is invisible in
+        // any image viewer and therefore worth a machine check.
+        if (graphic.extension.lowercase() == "png") {
+            val colourType = graphic.readBytes()[PNG_COLOUR_TYPE_OFFSET].toInt() and BYTE_MASK
+            assertTrue(
+                "feature graphic is a PNG with colour type $colourType (has alpha) — Play requires 24-bit or JPEG",
+                colourType !in PNG_COLOUR_TYPES_WITH_ALPHA,
+            )
+        }
+    }
+
+    @Test
     fun `given the listing icon when measured then it is the 512 square Play expects`() {
         val (width, height) = imageSize(localeDir("en-US").resolve("images/icon.png"))
 
@@ -194,6 +220,17 @@ class StoreMetadataTest {
         const val MIN_SCREENSHOT_PX = 320
         const val MAX_SCREENSHOT_PX = 3840
         const val ICON_PX = 512
+
+        /** Accepted file names for the feature graphic, in preference order. */
+        val FEATURE_GRAPHIC_NAMES = listOf("featureGraphic.jpg", "featureGraphic.jpeg", "featureGraphic.png")
+        const val FEATURE_GRAPHIC_WIDTH_PX = 1024
+        const val FEATURE_GRAPHIC_HEIGHT_PX = 500
+
+        /** Byte offset of the colour-type field inside a PNG `IHDR` chunk. */
+        const val PNG_COLOUR_TYPE_OFFSET = 25
+
+        /** PNG colour types that carry an alpha channel: greyscale+alpha and truecolour+alpha. */
+        val PNG_COLOUR_TYPES_WITH_ALPHA = setOf(4, 6)
 
         /** Byte offset of the width field inside a PNG `IHDR` chunk. */
         const val PNG_WIDTH_OFFSET = 16

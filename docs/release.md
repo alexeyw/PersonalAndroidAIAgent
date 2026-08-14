@@ -537,7 +537,7 @@ fastlane/metadata/android/
 │   ├── changelogs/<versionCode>.txt  # ≤ 500
 │   └── images/
 │       ├── icon.png                # 512 × 512
-│       ├── featureGraphic.png      # 1024 × 500, no alpha — required by Play
+│       ├── featureGraphic.jpg      # 1024 × 500 — required by Play
 │       └── phoneScreenshots/       # 1.png, 2.jpg, …
 └── ru-RU/                          # texts only; falls back to en-US graphics
 ```
@@ -565,6 +565,12 @@ same change — the numbering (`store_phone_<n>_<name>.png` → `<n>.png`) is wh
 keeps the carousel order stable. Slot 2 is the phone capture of the editor
 canvas (`docs/images/hero-pipeline-canvas.jpg`), which has no design-system
 counterpart to render from.
+
+**The feature graphic is a JPEG on purpose.** Play accepts JPEG or a *24-bit*
+PNG and refuses a PNG that carries an alpha channel — even one whose every pixel
+is opaque, which no image viewer will show you. `StoreMetadataTest` reads the
+PNG colour-type byte and fails the build rather than letting that reach a
+submission.
 
 The privacy policy Play requires as a URL is [`PRIVACY.md`](../PRIVACY.md) at
 the repository root; the About screen links to the same file, so the store, the
