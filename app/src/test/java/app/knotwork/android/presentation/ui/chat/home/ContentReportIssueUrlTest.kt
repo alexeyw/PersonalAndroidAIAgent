@@ -42,6 +42,18 @@ class ContentReportIssueUrlTest {
     }
 
     @Test
+    fun `given an oversized body when the url is built then it keeps as much as the limit allows`() {
+        // A truncation that fits is not enough: a coarse search (halving) also
+        // fits, while discarding most of a report the maintainer has to read.
+        val url = contentReportIssueUrl(subject = "Content report: other", body = "x".repeat(OVERSIZED_CHARS))
+
+        assertTrue(
+            "url is only ${url.length} characters — the report was cut far shorter than the limit requires",
+            url.length >= MAX_URL_CHARS * MIN_BUDGET_USED_PERCENT / 100,
+        )
+    }
+
+    @Test
     fun `given multi byte text when the url is built then the encoded form still fits`() {
         // Percent-encoding expands a multi-byte character up to ninefold, so a
         // body well under the character bound can still blow past it encoded.
@@ -59,5 +71,8 @@ class ContentReportIssueUrlTest {
 
         /** Enough emoji that the encoded form exceeds the bound on its own. */
         const val MULTIBYTE_CHARS = 2_000
+
+        /** How much of the URL budget a truncated report must still occupy. */
+        const val MIN_BUDGET_USED_PERCENT = 90
     }
 }

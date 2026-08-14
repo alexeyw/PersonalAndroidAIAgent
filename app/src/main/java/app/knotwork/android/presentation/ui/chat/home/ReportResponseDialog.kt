@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -13,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import app.knotwork.android.R
 import app.knotwork.android.domain.report.ContentReportReason
+import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.KnotworkFilterChip
 import app.knotwork.design.components.controls.KnotworkTextArea
@@ -92,6 +94,15 @@ internal fun ReportResponseDialog(
                     style = KnotworkTextStyles.BodySm,
                     color = KnotworkTheme.extended.onSurfaceDim,
                 )
+                // "Copy report" lives in the body rather than in a button slot
+                // because the two slots are spoken for: a dialog raised from a
+                // long-press menu needs a visible way out, and "tap outside" is
+                // not one for anyone driving the screen with a reader.
+                KnotworkSecondaryButton(
+                    text = stringResource(R.string.chat_report_dialog_copy),
+                    onClick = onCopy,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
         },
         confirmButton = {
@@ -102,8 +113,8 @@ internal fun ReportResponseDialog(
         },
         dismissButton = {
             KnotworkTextButton(
-                text = stringResource(R.string.chat_report_dialog_copy),
-                onClick = onCopy,
+                text = stringResource(R.string.chat_report_dialog_cancel),
+                onClick = onDismiss,
             )
         },
     )
@@ -128,14 +139,19 @@ internal fun contentReportIssueUrl(subject: String, body: String): String {
     var encodedBody = encode(candidate)
     val budget = MAX_ISSUE_URL_CHARS - ISSUE_TRACKER_NEW_URL.length - encodedSubject.length - QUERY_OVERHEAD_CHARS
     if (encodedBody.length > budget) {
-        // Percent-encoding expands by an unknown factor (1x for plain ASCII,
-        // up to 9x for a multi-byte character), so the fitting length cannot be
-        // computed — it is searched for by halving until the encoded form fits.
-        var keep = candidate.length
-        while (encodedBody.length > budget && keep > 0) {
-            keep /= 2
+        // Percent-encoding expands by a factor that depends on the text (1x for
+        // plain ASCII, up to 9x for one multi-byte character), so the fitting
+        // length cannot be computed directly. Estimate it from the ratio the
+        // full body just produced, then shave in small steps — a coarser search
+        // (halving, say) fits just as well but throws away far more of the
+        // report than the limit actually requires, and what it throws away is
+        // the part the maintainer needs.
+        var keep = (body.length.toLong() * budget / encodedBody.length).toInt()
+        while (keep > 0) {
             candidate = body.take(keep) + ISSUE_TRUNCATION_MARKER
             encodedBody = encode(candidate)
+            if (encodedBody.length <= budget) break
+            keep -= (keep / SHAVE_DIVISOR).coerceAtLeast(1)
         }
     }
     return "$ISSUE_TRACKER_NEW_URL?title=$encodedSubject&body=$encodedBody"
@@ -161,6 +177,9 @@ private const val MAX_ISSUE_URL_CHARS = 8000
 
 /** Room reserved for `?title=` and `&body=` around the encoded values. */
 private const val QUERY_OVERHEAD_CHARS = 16
+
+/** Each shave step removes a twentieth of the remaining text (5%). */
+private const val SHAVE_DIVISOR = 20
 
 /** Appended to a report body that had to be shortened to fit the URL. */
 private const val ISSUE_TRUNCATION_MARKER =
