@@ -572,15 +572,6 @@ details.
 
 ### Changed
 
-- **The README now shows a real pipeline instead of a stack of node cards.**
-  The *Pipeline editor* screenshot was rendered from the design-system
-  regression baseline, which meant it showed one card per node type in a
-  vertical list — an accurate picture of the catalogue and a misleading picture
-  of the product. It is now a capture from a phone: a 22-node pipeline on the
-  canvas, with routers, nested sub-pipelines, queues and tool steps wired
-  together, in both themes. The other three screenshots are still rendered from
-  baselines and say so; the canvas has no baseline to render from because it is
-  an app screen rather than a design-system component.
 - **The signing identity changed — updating from an earlier build means
   uninstalling it first.** Builds up to and including `0.6.0` were signed with
   the Android debug keystore; this is the first release signed with a real
@@ -590,6 +581,15 @@ details.
   data (chats, memory, custom pipelines). Export anything you want to keep
   before you do. This is a one-time break: releases from `0.7.0` onward share
   one signer and update normally.
+- **The README now shows a real pipeline instead of a stack of node cards.**
+  The *Pipeline editor* screenshot was rendered from the design-system
+  regression baseline, which meant it showed one card per node type in a
+  vertical list — an accurate picture of the catalogue and a misleading picture
+  of the product. It is now a capture from a phone: a 22-node pipeline on the
+  canvas, with routers, nested sub-pipelines, queues and tool steps wired
+  together, in both themes. The other three screenshots are still rendered from
+  baselines and say so; the canvas has no baseline to render from because it is
+  an app screen rather than a design-system component.
 - **The known limits of MCP servers and cloud providers are now written down.**
   A round of directed testing against real MCP servers and cloud providers
   turned up several behaviours that were true of the app but documented
