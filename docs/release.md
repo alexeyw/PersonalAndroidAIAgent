@@ -454,7 +454,11 @@ maintainer's part is the version bump, the tag, and the decision to publish.
    called. `versionCode` must increase monotonically — Play rejects a re-used
    one, and Android refuses the in-place upgrade.
 2. Move the `[Unreleased]` section of [`CHANGELOG.md`](../CHANGELOG.md) under
-   the new version heading.
+   the new version heading, and **set that heading's date to the day the tag is
+   pushed** — not the day the section was first cut. A heading written ahead of
+   the tag goes stale as soon as anything else lands, and anything that lands
+   between the cut and the tag ships in *this* release, so it belongs above the
+   heading, not under `[Unreleased]`.
 3. Land both on `main` through the normal review path.
 
 **Tagging**

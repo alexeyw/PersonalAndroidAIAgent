@@ -13,30 +13,6 @@ details.
 
 ## [Unreleased]
 
-### Changed
-
-- **The known limits of MCP servers and cloud providers are now written down.**
-  A round of directed testing against real MCP servers and cloud providers
-  turned up several behaviours that were true of the app but documented
-  nowhere, and a few of them look like defects until you know what they are.
-  The user guide now says so plainly: the tool count on an MCP server row is
-  the list *that server published to this app*, so a healthy `13 tools · ok`
-  can legitimately be fewer than the server's own catalogue (measured against
-  the protocol's reference server, which offers 16); how long a server or a
-  provider is given to answer, and what the resulting error messages mean; that
-  a cloud answer cut off mid-stream is discarded rather than shown as a
-  finished reply — and, honestly, that this protection covers OpenAI, DeepSeek
-  and Google but **not** Ollama or Anthropic, with the reason for each; that
-  a question can take a different route through a routed pipeline depending on
-  what is already in the conversation, and how to make that repeatable; and
-  that leaving the app can end a background run within seconds unless the app
-  is excluded from battery optimisation, which the app never asks for and
-  cannot grant itself. The contributor guide gained the step a new cloud
-  provider must not skip — deciding, by measurement rather than by reading the
-  provider's documentation, whether a missing completion signal means the
-  answer was truncated. No behaviour change: this is documentation catching up
-  with what was measured.
-
 ## [0.7.0] - 2026-08-10
 
 ### Added
@@ -118,6 +94,18 @@ details.
   task (wired into `./gradlew check`, unit-tested in `buildSrc`) fails the
   build if any public-contour Markdown file reintroduces an LLM tool-call
   wrapper artifact or a reference to an internal-only planning document.
+- **Releases are built, signed and published by the CI workflow, from a tag.**
+  Pushing a `v*` tag now runs the full `check` gate and then assembles the three
+  release artefacts — `full` APK, `full` AAB and `foss` APK — signs them, and
+  attaches them to a GitHub Release generated from this file. The release
+  build falls back to the *debug* signing identity when signing credentials are
+  missing rather than failing, so the workflow verifies the signer twice: once
+  against the keystore before the build starts, and once against the finished
+  artefacts, refusing to publish anything not signed by the expected
+  certificate. It also refuses a tag that disagrees with the declared
+  `versionName`. `workflow_dispatch` runs the whole thing as a dry run without
+  creating a Release. Procedure and one-time provisioning:
+  [`docs/release.md`](docs/release.md).
 - **Groundwork for a trigger-evaluation journal.** A new on-device,
   SQLCipher-encrypted store records why each automation trigger did or did
   not fire (fired / re-armed / a typed skip reason) and the eventual outcome
@@ -584,6 +572,56 @@ details.
 
 ### Changed
 
+- **The signing identity changed — updating from an earlier build means
+  uninstalling it first.** Builds up to and including `0.6.0` were signed with
+  the Android debug keystore; this is the first release signed with a real
+  release key. Android refuses to update an installed app in place when the
+  signer changes, so an update over `0.6.0` or earlier fails with a signature
+  mismatch and the old build has to be uninstalled — which deletes its local
+  data (chats, memory, custom pipelines). Export anything you want to keep
+  before you do. This is a one-time break: releases from `0.7.0` onward share
+  one signer and update normally.
+- **The roadmap no longer describes shipped work as upcoming.** It still
+  announced the previous release line as current, and its near-term section
+  listed four directions — proven background execution, a repeatable
+  time-to-first-value measurement, memory and preset quality, and a chat
+  archive — that have all since shipped, alongside a section awaiting the first
+  release-signed build that this release *is*. Those are now stated as things
+  the product does, and the near-term section says what is actually next:
+  getting the app into F-Droid and Play (including the open question of whether
+  a prebuilt native inference library clears F-Droid's inclusion policy), a
+  cookbook of recipes per node type, and whatever the first outside reports turn
+  up.
+- **The README now shows a real pipeline instead of a stack of node cards.**
+  The *Pipeline editor* screenshot was rendered from the design-system
+  regression baseline, which meant it showed one card per node type in a
+  vertical list — an accurate picture of the catalogue and a misleading picture
+  of the product. It is now a capture from a phone: a 22-node pipeline on the
+  canvas, with routers, nested sub-pipelines, queues and tool steps wired
+  together, in both themes. The other three screenshots are still rendered from
+  baselines and say so; the canvas has no baseline to render from because it is
+  an app screen rather than a design-system component.
+- **The known limits of MCP servers and cloud providers are now written down.**
+  A round of directed testing against real MCP servers and cloud providers
+  turned up several behaviours that were true of the app but documented
+  nowhere, and a few of them look like defects until you know what they are.
+  The user guide now says so plainly: the tool count on an MCP server row is
+  the list *that server published to this app*, so a healthy `13 tools · ok`
+  can legitimately be fewer than the server's own catalogue (measured against
+  the protocol's reference server, which offers 16); how long a server or a
+  provider is given to answer, and what the resulting error messages mean; that
+  a cloud answer cut off mid-stream is discarded rather than shown as a
+  finished reply — and, honestly, that this protection covers OpenAI, DeepSeek
+  and Google but **not** Ollama or Anthropic, with the reason for each; that
+  a question can take a different route through a routed pipeline depending on
+  what is already in the conversation, and how to make that repeatable; and
+  that leaving the app can end a background run within seconds unless the app
+  is excluded from battery optimisation, which the app never asks for and
+  cannot grant itself. The contributor guide gained the step a new cloud
+  provider must not skip — deciding, by measurement rather than by reading the
+  provider's documentation, whether a missing completion signal means the
+  answer was truncated. No behaviour change: this is documentation catching up
+  with what was measured.
 - **Controls that did nothing were removed from the step editor.** The Cloud
   step offered Temperature, Max tokens and Timeout, and the on-device step
   offered temperature, top-P and max new tokens. All of them were saved, and
@@ -600,13 +638,17 @@ details.
   asked to. Measured, not assumed; the cause is in the upstream client library.
 - **Build toolchain refreshed to clear the `NewerVersionAvailable` /
   `AndroidGradlePluginVersion` lint gate.** Gradle `9.6.1` → `9.7.0`, `dev.detekt`
-  `2.0.0-alpha.5` → `2.0.0-alpha.6`, and Roborazzi `1.70.0` → `1.71.0` (plugin
-  plus the three test artefacts). These checks are hard errors in this project on
-  purpose, and a local `check` cannot see them — lint answers from a cached
-  version index, so the failure only appears on a clean CI run. No production
+  `2.0.0-alpha.5` → `2.0.0-alpha.6`, Roborazzi `1.70.0` → `1.71.0` (plugin
+  plus the three test artefacts), and the Compose BOM `2026.06.01` →
+  `2026.08.00`. These checks are hard errors in this project on
+  purpose, and a local `check` cannot always see them — lint answers from a cached
+  version index, so the failure can appear only on a clean CI run. No production
   code changed, no screenshot baseline moved, and the static-analysis guide now
   points at the version catalogue instead of restating a version number that
-  goes stale the moment it is bumped.
+  goes stale the moment it is bumped. One dependency is deliberately held back:
+  the on-device inference engine stays on its current version, because the newer
+  release adds nothing for the Android path and no automated check on this
+  project can exercise a native inference binary.
 - **What long-term memory recalls is now written down.** The user guide gains a
   *"What the agent recalls, and when"* section: memory is searched once per run,
   at the first step that reads it; the similarity threshold is a gate nothing
