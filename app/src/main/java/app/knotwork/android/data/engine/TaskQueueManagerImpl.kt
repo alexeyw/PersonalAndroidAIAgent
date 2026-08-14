@@ -32,11 +32,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.PriorityQueue
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -67,6 +69,19 @@ class TaskQueueManagerImpl @Inject constructor(
         }
 
     internal var scope = CoroutineScope(dispatcher + SupervisorJob())
+
+    /**
+     * How long a run may go without emitting anything before the worker gives
+     * up on it. See [NO_PROGRESS_TIMEOUT_MS].
+     *
+     * A non-positive value disables the valve. That exists for the integration
+     * harnesses that drive real `Dispatchers.IO` work under a virtual clock:
+     * `advanceUntilIdle()` skips the whole window forward while the run is in
+     * fact progressing on threads the test scheduler cannot see, so there the
+     * measurement would be meaningless rather than merely inconvenient.
+     */
+    @VisibleForTesting
+    internal var noProgressTimeoutMs: Long = NO_PROGRESS_TIMEOUT_MS
 
     private val _globalState = MutableStateFlow<AgentOrchestratorState>(AgentOrchestratorState.Idle)
     override val globalState: StateFlow<AgentOrchestratorState> = _globalState.asStateFlow()
@@ -115,6 +130,113 @@ class TaskQueueManagerImpl @Inject constructor(
          */
         @VisibleForTesting
         internal const val CONSOLE_EVENT_BUFFER_CAPACITY = 256
+
+        /**
+         * Longest silence tolerated from a running task before the worker
+         * declares it stalled and moves on — the safety valve for phase-40
+         * finding F13.
+         *
+         * The worker is a **single serial loop**, so one task that never
+         * finishes stops every chat in the app: new messages are accepted,
+         * their title is written, and they sit on "Generating…" forever with
+         * an empty console. That was observed for 1.5 hours against an MCP
+         * server that simply never answered.
+         *
+         * The window measures *silence*, not total duration, because a long
+         * run is not a stalled one: generation streams a state per token, so a
+         * legitimately slow run keeps the window open indefinitely while a
+         * hung network call trips it immediately. Five minutes clears every
+         * legitimate quiet stretch by a wide margin — a live approval gate
+         * waits 60 s, MCP and cloud calls are capped at 60 s each — while
+         * still reacting long before a person concludes the app is broken.
+         *
+         * Scope, stated plainly: the valve guards the engine phase of a task.
+         * The short prologue before it — resolving the pipeline, writing the
+         * user message — is not covered, so a hang in those repository calls
+         * would still stop the queue. Nothing in the phase-40 run pointed at
+         * that path, and widening the guard there would mean failing a task on
+         * a database stall it could not explain.
+         */
+        @VisibleForTesting
+        internal const val NO_PROGRESS_TIMEOUT_MS = 5 * 60 * 1000L
+
+        /**
+         * User-facing explanation written to the run record when
+         * [NO_PROGRESS_TIMEOUT_MS] elapses. Names the consequence, not the
+         * internals: the alternative to this message is the silent
+         * "Generating…" that F13 documented.
+         */
+        @VisibleForTesting
+        internal const val STALLED_MESSAGE =
+            "The task stopped responding and was ended so other messages can run. " +
+                "A step it was waiting on — most often an external tool — never answered."
+    }
+
+    /** Raised by [failIfStalled] when a run goes quiet for too long. */
+    private class RunStalledException : Exception(STALLED_MESSAGE)
+
+    /**
+     * Fails the flow with [RunStalledException] when more than [timeoutMs]
+     * passes between two upstream emissions, cancelling the upstream in the
+     * process so the worker is free again.
+     *
+     * Written as an explicit relay rather than `Flow.timeout` because that
+     * operator reports the stall as a [kotlinx.coroutines.TimeoutCancellationException];
+     * cancellation travels a different path through [executeRun] (re-thrown,
+     * killing the worker coroutine) than a failure does, and the queue must
+     * settle the run as FAILED and keep going.
+     *
+     * A slow *collector* can never be mistaken for a stalled *producer*: when
+     * the consumer lags, this loop is suspended in `send`, not in the timed
+     * receive. The relay itself is a rendezvous channel so the engine still
+     * feels back-pressure — though `channelFlow` adds its own bounded buffer
+     * downstream, so the engine now runs up to that buffer ahead of the
+     * collector rather than in lock-step with it.
+     *
+     * Silence that follows a **human-wait** state is exempt: a run showing an
+     * approval or clarification prompt is not stalled, it is waiting for a
+     * person, and that wait is visible in the UI and bounded by the gate's own
+     * timeout (after which the run parks durably). The exemption ends at the
+     * next emission — the gate emits [AgentOrchestratorState.ExecutingTool]
+     * before it runs the approved tool, so the call that follows an approval is
+     * guarded again. Without this, a clarification node configured to wait
+     * longer than the window would be killed while behaving exactly as
+     * configured.
+     *
+     * @param timeoutMs Maximum silence tolerated between emissions; a
+     *   non-positive value returns the receiver unguarded (see [noProgressTimeoutMs]).
+     * @return The same values as the receiver, or a failure once silence exceeds the window.
+     */
+    private fun Flow<AgentOrchestratorState>.failIfStalled(timeoutMs: Long): Flow<AgentOrchestratorState> {
+        if (timeoutMs <= 0) return this
+        return channelFlow {
+            val relay = Channel<AgentOrchestratorState>()
+            val pump = launch { collect { relay.send(it) } }
+            // Close on *every* exit path, carrying the cause: a
+            // `CancellationException` from upstream cancels this child only — it
+            // does not fail the enclosing channelFlow — so without the cause
+            // travelling across the relay a cancelled run would sit in the
+            // receive below until the window elapsed and then be misreported as
+            // stalled instead of cancelled. `invokeOnCompletion` covers normal
+            // completion (null cause), failure and cancellation in one place.
+            pump.invokeOnCompletion { cause -> relay.close(cause) }
+            var awaitingUser = false
+            while (true) {
+                val received = if (awaitingUser) {
+                    relay.receiveCatching()
+                } else {
+                    withTimeoutOrNull(timeoutMs) { relay.receiveCatching() } ?: throw RunStalledException()
+                }
+                if (received.isClosed) {
+                    received.exceptionOrNull()?.let { throw it }
+                    break
+                }
+                val state = received.getOrThrow()
+                awaitingUser = state is AgentOrchestratorState.WaitingForApproval ||
+                    state is AgentOrchestratorState.AwaitingClarification
+                send(state)
+            }
+        }
     }
 
     private fun updateActiveSessionsState() {
@@ -171,17 +293,23 @@ class TaskQueueManagerImpl @Inject constructor(
         // 1. Save user message, carrying any image attachment from the task so
         // it is persisted on the message and rendered in the chat bubble. By
         // contract only the prompt text flows along the pipeline graph.
-        val userMessage = ChatMessage(
-            sessionId = task.sessionId,
-            role = Role.USER,
-            // For an image-only message `displayContent` is the empty caption so
-            // the bubble shows just the thumbnail; `prompt` (the internal default
-            // instruction) still travels the graph.
-            content = task.displayContent ?: task.prompt,
-            timestamp = System.currentTimeMillis(),
-            attachment = task.attachment,
-        )
-        chatRepository.saveMessage(userMessage)
+        //
+        // Skipped when the turn is being re-run after a failure: the user row is
+        // written before the pipeline starts, so it survived the failed attempt,
+        // and writing it again would show the same message twice.
+        if (task.persistUserMessage) {
+            val userMessage = ChatMessage(
+                sessionId = task.sessionId,
+                role = Role.USER,
+                // For an image-only message `displayContent` is the empty caption so
+                // the bubble shows just the thumbnail; `prompt` (the internal default
+                // instruction) still travels the graph.
+                content = task.displayContent ?: task.prompt,
+                timestamp = System.currentTimeMillis(),
+                attachment = task.attachment,
+            )
+            chatRepository.saveMessage(userMessage)
+        }
 
         // 2. Load pipeline. Resolution is a deterministic chain that never
         // depends on the order pipelines come back from the repository:
@@ -340,6 +468,9 @@ class TaskQueueManagerImpl @Inject constructor(
                 // (DESCRIPTION.md §6.10.1).
                 origin = task.origin,
             )
+                // Safety valve: the worker is serial, so a run that never
+                // emits again would hold every other chat hostage (F13).
+                .failIfStalled(noProgressTimeoutMs)
                 .collect { state ->
                     // Terminal engine states are mirrored into the persistent run
                     // record as they pass through, so the record is already

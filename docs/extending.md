@@ -303,11 +303,24 @@ from other packages), the default is `SENSITIVE` — the platform
 `AppFunctionManager` metadata gives no trustworthy signal about side
 effects. The user can downgrade a specific tool to `READ_ONLY` (or
 upgrade it to `DESTRUCTIVE`) via
-[`SettingsRepository.setAppFunctionRiskOverride(toolName, risk)`](../app/src/main/java/app/knotwork/android/domain/repositories/SettingsRepository.kt),
-which writes into the `appFunctionRiskOverrides` flow persisted under
+[`SettingsRepository.setToolRiskOverride(toolKey, risk)`](../app/src/main/java/app/knotwork/android/domain/repositories/SettingsRepository.kt),
+which writes into the `toolRiskOverrides` flow persisted under
 DataStore key `app_function_risk_overrides`. `ToolRepository.getRisk(name)`
 consults the override map first and falls back to the conservative
 default.
+
+**MCP tools** work the same way and share that map, with one difference:
+they are keyed per server, by the tool's `mcp:<sha8(serverUrl)>:<toolName>`
+id rather than its bare name. A long shared prefix is normal in MCP
+catalogues, and two servers advertising `create_issue` must stay
+independent decisions — the same rule `disabledMcpTools` already follows.
+The override is the **user's** voice and never the server's: MCP's
+`readOnlyHint` / `destructiveHint` tool annotations are deliberately not
+consulted, because a remote server able to declare its own tools
+read-only could walk straight past the confirmation gate.
+
+There is no settings screen for risk overrides yet — the API is reachable
+programmatically only.
 
 Most tools have a single, static risk. A tool whose risk depends on the
 *call* rather than its name (the built-in `http_request`, whose `GET` is
@@ -334,8 +347,9 @@ If you want a third-party app to be able to call your tool through the
 system [`AppFunctionManager`](https://developer.android.com/reference/android/app/appfunctions/AppFunctionManager),
 add an `@AppFunction`-annotated wrapper next to the existing
 [`SearchAppFunction`](../app/src/main/java/app/knotwork/android/data/tools/local/appfunctions/SearchAppFunction.kt).
-The library's
-[`PlatformAppFunctionService`](https://developer.android.com/reference/androidx/appfunctions/service/PlatformAppFunctionService)
+The library's `PlatformAppFunctionService` (from
+[`androidx.appfunctions`](https://developer.android.com/reference/androidx/appfunctions/package-summary),
+still alpha — the service class itself has no published reference page yet)
 is auto-merged from `appfunctions-service` and dispatches incoming
 requests through KSP-generated invokers — you do **not** subclass
 `AppFunctionService` or write a manual router.
@@ -631,11 +645,48 @@ The catalog composables that power these screens:
 - `KnotworkParamSlider` — branded labelled slider.
 - `KnotworkMonoTextArea` — multi-line mono text input.
 
-### 3.6. Tests
+### 3.6. Decide whether an absent finish reason means truncation
+
+[`CloudLlmNodeExecutor.providerReportsFinishReason(...)`](../app/src/main/java/app/knotwork/android/domain/engine/executors/CloudLlmNodeExecutor.kt)
+is exhaustive over `CloudProvider`, so a new constant will not compile
+until you answer this. Answer it by **measuring, not by reading the
+provider's docs** — this is the one step in the recipe where a plausible
+guess causes a user-visible defect either way.
+
+The question is what the client does when the connection dies in the
+middle of a streamed answer. Some clients raise; the OpenAI-compatible
+ones end the flow *normally*, emitting frames byte-identical to a healthy
+stream except that `End.finishReason` is `null` instead of `"stop"`. For
+those, a missing finish reason is the only evidence that the answer was
+cut off, and returning `true` makes the executor reject the partial text
+instead of passing half an answer down the graph.
+
+Return `false` when you have no evidence, and say why in the KDoc:
+
+- **A client that never emits a finish reason** (Koog's Ollama client) —
+  returning `true` fails *every healthy run*, because absence carries no
+  information.
+- **A client you could not test** (Anthropic, whose parser rejected the
+  crafted SSE fixture) — the existing entries record "excluded pending
+  measurement" rather than a guess, and so should yours.
+
+To measure it, point the client's `baseUrl` at a local socket stub from a
+JVM test and cut the socket mid-stream: the Koog clients accept `baseUrl`
+in their settings, so this exercises the real SSE branch on the same
+engine the device uses. Compare the terminal frame of a cut stream
+against a complete one. Whatever you conclude, write the evidence into
+the KDoc entry — the table is only trustworthy while every row says what
+it is based on.
+
+### 3.7. Tests
 
 - Unit test the new branch in `KoogClientFactory` with a fake key.
 - Unit test the resolver branch — both the "known model id" and the
   "fallback to default model" paths.
+- Cover the finish-reason decision from §3.6 in
+  `CloudLlmNodeExecutorTest`: a stream that ends without a finish reason
+  must fail the node when the provider is `true`, and must succeed when
+  it is `false`.
 - If the Settings UI gained a new field, add a Compose test that
   verifies the field round-trips through the ViewModel.
 
@@ -1285,7 +1336,7 @@ double-check it for every recipe in this guide.**
 | A new `Tool`                 | a new `LocalToolExecutor` implementation · `di/LocalToolsModule.kt` (`@Binds @IntoMap @StringKey`) · declare `ToolRisk` correctly · executor unit test · optional Compose test if new UI                                                                            |
 | A new **workspace tool**     | a new `LocalToolExecutor` that goes through `AgentWorkspace` (never raw `File`) · `di/LocalToolsModule.kt` (`@Binds @IntoMap @StringKey`) · risk tier in `ToolRepositoryImpl` built-in list · `docs/user-guide.md` (built-in-tools table) · executor unit test against a `@TempDir`-backed `AgentWorkspace` (happy path + `../` traversal + quota/not-found) |
 | A new callee-side AppFunction | a new `@AppFunction`-annotated wrapper under `data/tools/local/appfunctions/` (first param `AppFunctionContext`) · `App.appFunctionConfiguration` (`addEnclosingClassFactory(...)`) · wrapper unit test with a mocked `AppFunctionContext` · scenario in `AppFunctionsEndToEndTest` |
-| A new cloud provider         | `domain/models/CloudProvider.kt` · `data/engine/KoogClientFactory.kt` · `data/engine/KoogCloudLlmModelResolver.kt` · `data/local/ApiKeyManager.kt` · `presentation/ui/settings/SettingsScreen.kt` · factory / resolver unit tests                                    |
+| A new cloud provider         | `domain/models/CloudProvider.kt` · `data/engine/KoogClientFactory.kt` · `data/engine/KoogCloudLlmModelResolver.kt` · `data/local/ApiKeyManager.kt` · `presentation/ui/settings/SettingsScreen.kt` · **`domain/engine/executors/CloudLlmNodeExecutor.kt`** (`providerReportsFinishReason` — exhaustive `when`, decide it by measurement per §3.6) · `docs/user-guide.md` (the truncated-answer table under Settings → Models) · factory / resolver / executor unit tests |
 | A new prompt variable        | a new `PromptVariableProvider` implementation · `di/PromptTemplateModule.kt` (`@Binds @IntoSet`) · **`pipeline-editor.html`** (`PROMPT_VARIABLES`) · `docs/user-guide.md` (variables table) · provider unit test · `PromptTemplateEngine` round-trip test           |
 | A new bundled pipeline preset | a JSON file under `assets/presets/pipelines/` · `PipelinePresetCatalogValidationTest.expectedFileNames` · **`pipeline-editor.html`** (`BUILTIN_PIPELINE_PRESETS`, **📚 Presets → Bundled** tab — maintained by hand) · catalogue + `PipelinePresetIntegrationTest` already cover the directory |
 | A new bundled prompt preset  | a JSON file under `assets/presets/prompts/` · `PromptPresetCatalogValidationTest.expectedFileNames` · catalogue + `PromptPresetIntegrationTest` already cover the directory                                                                                          |

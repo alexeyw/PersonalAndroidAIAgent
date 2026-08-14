@@ -1,6 +1,7 @@
 package app.knotwork.android.domain.engine
 
 import app.knotwork.android.domain.models.AppError
+import app.knotwork.android.domain.models.LocalBackend
 import app.knotwork.android.domain.models.Result
 import kotlinx.coroutines.flow.Flow
 
@@ -67,6 +68,19 @@ interface LlmInferenceEngine {
      * audio-enabling re-initialization of an already-loaded model.
      */
     val isAudioEnabled: Boolean
+
+    /**
+     * The backend the loaded engine is **actually running on**, or `null` when
+     * no model is loaded.
+     *
+     * Deliberately distinct from the backend saved in settings: the two diverge
+     * whenever the engine falls back at load time (a previous init that never
+     * finished downgrades the session to CPU). Reporting the saved preference as
+     * if it were the live one hides that divergence — the user believes they are
+     * on GPU while every token is decoded on CPU. Surfaced in the chat status
+     * line so the running backend is observable without reading logs.
+     */
+    val activeBackend: LocalBackend?
 
     /**
      * Transcribes a single audio clip into text using the loaded multimodal

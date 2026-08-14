@@ -1,10 +1,15 @@
 package app.knotwork.android.data.engine
 
 import ai.koog.http.client.ktor.KtorKoogHttpClient
+import ai.koog.prompt.executor.clients.ConnectionTimeoutConfig
 import ai.koog.prompt.executor.clients.LLMClient
+import ai.koog.prompt.executor.clients.anthropic.AnthropicClientSettings
 import ai.koog.prompt.executor.clients.anthropic.AnthropicLLMClient
+import ai.koog.prompt.executor.clients.deepseek.DeepSeekClientSettings
 import ai.koog.prompt.executor.clients.deepseek.DeepSeekLLMClient
+import ai.koog.prompt.executor.clients.google.GoogleClientSettings
 import ai.koog.prompt.executor.clients.google.GoogleLLMClient
+import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
 import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
 import ai.koog.prompt.executor.ollama.client.OllamaClient
 import app.knotwork.android.data.engine.retry.CloudRetryWrapper
@@ -13,6 +18,8 @@ import app.knotwork.android.domain.engine.retry.CloudRetryListener
 import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.repositories.ApiKeyRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.services.CleartextPolicy
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import timber.log.Timber
 import javax.inject.Inject
@@ -51,6 +58,29 @@ class KoogClientFactory @Inject constructor(
      * services file restored.
      */
     private val httpClientFactory = KtorKoogHttpClient.Factory()
+
+    /**
+     * Network deadlines applied to every cloud client.
+     *
+     * Koog's own default is 900 s for both the request and the socket, and the factory
+     * never overrode it — so a provider that accepted the request and then went quiet
+     * held the node for fifteen minutes. Measured, not assumed: a stalled stub was still
+     * connected after 120 s under the shipped configuration, while an explicit config on
+     * the same SSE path cut at its stated value.
+     *
+     * The load-bearing value is [SOCKET_TIMEOUT_MS], because it is applied **per read**:
+     * it bounds how long the provider may stay *silent*, not how long a healthy answer
+     * may take. That is deliberately the same rule the task queue's no-progress valve
+     * uses — a long, steadily-streaming generation must never be cut for being long,
+     * while a dead connection must not survive. [REQUEST_TIMEOUT_MS] is left at Koog's
+     * generous value as a backstop for the pathological case of a provider that dribbles
+     * bytes forever.
+     */
+    private val timeoutConfig = ConnectionTimeoutConfig(
+        requestTimeoutMillis = REQUEST_TIMEOUT_MS,
+        connectTimeoutMillis = CONNECT_TIMEOUT_MS,
+        socketTimeoutMillis = SOCKET_TIMEOUT_MS,
+    )
 
     /**
      * Provider-keyed dispatch used by domain-side consumers. Exhaustive on
@@ -130,40 +160,83 @@ class KoogClientFactory @Inject constructor(
         if (isLocalOnlyMode()) return null
         val key = apiKeyRepository.getOpenAIKey().firstOrNull()?.trim()
         if (key.isNullOrBlank()) return null
-        return OpenAILLMClient(apiKey = key, httpClientFactory = httpClientFactory)
+        return OpenAILLMClient(
+            apiKey = key,
+            settings = OpenAIClientSettings(timeoutConfig = timeoutConfig),
+            httpClientFactory = httpClientFactory,
+        )
     }
 
     private suspend fun rawAnthropic(): LLMClient? {
         if (isLocalOnlyMode()) return null
         val key = apiKeyRepository.getAnthropicKey().firstOrNull()?.trim()
         if (key.isNullOrBlank()) return null
-        return AnthropicLLMClient(apiKey = key, httpClientFactory = httpClientFactory)
+        return AnthropicLLMClient(
+            apiKey = key,
+            settings = AnthropicClientSettings(timeoutConfig = timeoutConfig),
+            httpClientFactory = httpClientFactory,
+        )
     }
 
     private suspend fun rawGoogle(): LLMClient? {
         if (isLocalOnlyMode()) return null
         val key = apiKeyRepository.getGoogleKey().firstOrNull()?.trim()
         if (key.isNullOrBlank()) return null
-        return GoogleLLMClient(apiKey = key, httpClientFactory = httpClientFactory)
+        return GoogleLLMClient(
+            apiKey = key,
+            settings = GoogleClientSettings(timeoutConfig = timeoutConfig),
+            httpClientFactory = httpClientFactory,
+        )
     }
 
     private suspend fun rawDeepSeek(): LLMClient? {
         if (isLocalOnlyMode()) return null
         val key = apiKeyRepository.getDeepSeekKey().firstOrNull()?.trim()
         if (key.isNullOrBlank()) return null
-        return DeepSeekLLMClient(apiKey = key, httpClientFactory = httpClientFactory)
+        return DeepSeekLLMClient(
+            apiKey = key,
+            settings = DeepSeekClientSettings(timeoutConfig = timeoutConfig),
+            httpClientFactory = httpClientFactory,
+        )
     }
 
     private suspend fun rawOllama(): LLMClient? {
         val url = apiKeyRepository.getOllamaBaseUrl().firstOrNull()?.trim()
         if (url.isNullOrBlank()) return null
-        return OllamaClient(httpClientFactory = httpClientFactory, baseUrl = url)
+        // Cleartext gate. The manifest permits unencrypted traffic app-wide
+        // because Android cannot express "any private-LAN address" there; the
+        // rule that replaces it lives in `CleartextPolicy` and is applied at
+        // every point that opens a connection to a user-configured address.
+        val verdict = CleartextPolicy.classify(url, settingsRepository.approvedCleartextOrigins.first())
+        CleartextPolicy.refusalMessage(verdict)?.let { reason ->
+            Timber.w("KoogClientFactory: Ollama client refused — %s", reason)
+            return null
+        }
+        return OllamaClient(
+            httpClientFactory = httpClientFactory,
+            baseUrl = url,
+            timeoutConfig = timeoutConfig,
+        )
     }
 
     /**
      * Reads the local-only mode flag. Logs (at info level) when the gate
      * fires so the user can trace why a cloud client returned `null`.
      */
+    private companion object {
+        /**
+         * Longest the provider may stay silent between bytes. Applied per read, so a
+         * healthy long generation is untouched and a dead stream is not.
+         */
+        const val SOCKET_TIMEOUT_MS: Long = 60_000
+
+        /** Connection establishment budget — a person is usually waiting on this. */
+        const val CONNECT_TIMEOUT_MS: Long = 30_000
+
+        /** Outer backstop for a request that never ends despite continuous bytes. */
+        const val REQUEST_TIMEOUT_MS: Long = 900_000
+    }
+
     private suspend fun isLocalOnlyMode(): Boolean {
         val blocked = settingsRepository.blockNetworkFromLocalModel.firstOrNull() ?: false
         if (blocked) Timber.i("KoogClientFactory: cloud provider gated by local-only mode")

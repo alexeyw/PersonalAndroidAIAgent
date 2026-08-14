@@ -6,6 +6,7 @@ import app.knotwork.android.data.local.dao.UsageTelemetryDao
 import app.knotwork.android.domain.models.OnboardingMilestone
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.usecases.CalculateUsageRetentionUseCase
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -60,9 +61,12 @@ class UsageTelemetryRepositoryImplTest {
         database.close()
     }
 
-    private fun repository(): UsageTelemetryRepositoryImpl =
-        UsageTelemetryRepositoryImpl(dao, settingsRepository, { Clock.fixed(Instant.ofEpochMilli(day1), zone) })
-            .apply { dispatcher = Dispatchers.Unconfined }
+    private fun repository(nowMillis: Long = day1): UsageTelemetryRepositoryImpl = UsageTelemetryRepositoryImpl(
+        dao = dao,
+        settingsRepository = settingsRepository,
+        calculateRetention = CalculateUsageRetentionUseCase(),
+        clockProvider = { Clock.fixed(Instant.ofEpochMilli(nowMillis), zone) },
+    ).apply { dispatcher = Dispatchers.Unconfined }
 
     @Test
     fun `given recording enabled when a root run finishes then it is tallied by pipeline outcome and day`() = runTest {
@@ -254,6 +258,81 @@ class UsageTelemetryRepositoryImplTest {
         val journey = repository.summary.first().onboarding
         assertEquals(1, journey.milestones.size)
         assertEquals(day1, journey.startedAtMillis)
+    }
+
+    @Test
+    fun `given runs across days when read then the retention window reflects them`() = runTest {
+        val repository = repository(nowMillis = day2)
+        repository.recordPipelineRunOutcome("pipe-1", PipelineRunStatus.COMPLETED, day1)
+        repository.recordPipelineRunOutcome("pipe-2", PipelineRunStatus.FAILED, day2)
+        // Same pipeline twice in a day is one (day, pipeline) pair, not two.
+        repository.recordPipelineRunOutcome("pipe-2", PipelineRunStatus.COMPLETED, day2)
+
+        val retention = repository.summary.first().retention
+        assertEquals(2, retention.activeDaysInWindow)
+        assertEquals(0, retention.activeDaysInPreviousWindow)
+        assertEquals(listOf("pipe-1", "pipe-2"), retention.livePipelineIds)
+        assertEquals(2, retention.currentStreakDays)
+        assertEquals(0, retention.returnsAfterBreak)
+        assertNull(retention.firstWeekActiveDays)
+    }
+
+    @Test
+    fun `given a run with no resolved pipeline when recorded then it makes no pipeline live`() = runTest {
+        // An unattributable run is still usage (it marks the day active), but it
+        // cannot make any particular pipeline count as alive this week.
+        val repository = repository()
+
+        repository.recordPipelineRunOutcome(null, PipelineRunStatus.INTERRUPTED, day1)
+
+        val retention = repository.summary.first().retention
+        assertEquals(1, retention.activeDaysInWindow)
+        assertEquals(emptyList<String>(), retention.livePipelineIds)
+        assertEquals(0, retention.livePipelinesInWindow)
+    }
+
+    @Test
+    fun `given activity outside the window when read then it is excluded from the week`() = runTest {
+        // 2026-06-25 is nine days before 2026-07-04, so it sits outside the
+        // window but inside the previous one.
+        val later = Instant.parse("2026-07-04T09:00:00Z").toEpochMilli()
+        val repository = repository(nowMillis = later)
+        repository.recordPipelineRunOutcome("pipe-1", PipelineRunStatus.COMPLETED, day1)
+        repository.recordPipelineRunOutcome("pipe-2", PipelineRunStatus.COMPLETED, later)
+
+        val retention = repository.summary.first().retention
+        assertEquals(1, retention.activeDaysInWindow)
+        assertEquals(1, retention.activeDaysInPreviousWindow)
+        assertEquals(listOf("pipe-2"), retention.livePipelineIds)
+        // Eight inactive days between the two runs — a break the user returned from.
+        assertEquals(1, retention.returnsAfterBreak)
+        assertEquals(8, retention.longestBreakDays)
+        assertEquals(1, retention.firstWeekActiveDays)
+    }
+
+    @Test
+    fun `given recorded pipeline days when reset then the per-day activity is cleared too`() = runTest {
+        val repository = repository()
+        repository.recordPipelineRunOutcome("pipe-1", PipelineRunStatus.COMPLETED, day1)
+
+        repository.reset()
+
+        val summary = repository.summary.first()
+        assertEquals(0, summary.retention.livePipelinesInWindow)
+        assertEquals(0, summary.retention.activeDaysInWindow)
+    }
+
+    @Test
+    fun `given an unparseable active day in the store when aggregated then it is ignored`() = runTest {
+        val repository = repository()
+        repository.recordPipelineRunOutcome("pipe-1", PipelineRunStatus.COMPLETED, day1)
+        // A day written in some future format must not take the screen down.
+        dao.recordActiveDay("not-a-day")
+
+        val summary = repository.summary.first()
+        assertEquals(1, summary.activeDays)
+        assertEquals("2026-06-25", summary.lastActiveDay)
+        assertEquals(1, summary.retention.activeDaysInWindow)
     }
 
     @Test

@@ -75,7 +75,13 @@ class SettingsManager @Inject constructor(
         val MCP_SERVERS_JSON = stringPreferencesKey("mcp_servers_json")
         val DISABLED_APP_FUNCTIONS = stringSetPreferencesKey("disabled_app_functions")
         val DISABLED_MCP_TOOLS = stringSetPreferencesKey("disabled_mcp_tools")
-        val APP_FUNCTION_RISK_OVERRIDES = stringPreferencesKey("app_function_risk_overrides")
+        val APPROVED_CLEARTEXT_ORIGINS = stringSetPreferencesKey("approved_cleartext_origins")
+
+        // The stored key keeps its original `app_function_risk_overrides` name even
+        // though the map now also carries MCP entries: renaming the DataStore key
+        // would silently drop every override a user had already set. The Kotlin
+        // surface (`toolRiskOverrides`) is the honest name; this string is history.
+        val TOOL_RISK_OVERRIDES = stringPreferencesKey("app_function_risk_overrides")
         val CURRENT_CHAT_SESSION_ID = stringPreferencesKey("current_chat_session_id")
         val MEMORY_LAST_COMPACTED_AT =
             androidx.datastore.preferences.core.longPreferencesKey("memory_last_compacted_at")
@@ -99,6 +105,13 @@ class SettingsManager @Inject constructor(
          * to CPU automatically.
          */
         val LAST_INIT_BACKEND_ATTEMPT = stringPreferencesKey("last_init_backend_attempt")
+
+        /**
+         * Consecutive cold starts that found [LAST_INIT_BACKEND_ATTEMPT] still
+         * set. Absent means zero — a permanent downgrade needs corroboration
+         * across two starts, not one unexplained process death.
+         */
+        val LOCAL_BACKEND_FAILURE_STREAK = intPreferencesKey("local_backend_failure_streak")
         val TOOL_CALL_TIMEOUT_MS = androidx.datastore.preferences.core.longPreferencesKey("tool_call_timeout_ms")
         val WORKSPACE_MAX_FILE_SIZE_BYTES =
             androidx.datastore.preferences.core.longPreferencesKey("workspace_max_file_size_bytes")
@@ -789,7 +802,7 @@ class SettingsManager @Inject constructor(
         }
     }
 
-    override val appFunctionRiskOverrides: Flow<Map<String, ToolRisk>> = dataStore.data
+    override val approvedCleartextOrigins: Flow<Set<String>> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
                 Timber.e(exception, "Error reading preferences")
@@ -799,14 +812,34 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
-            decodeRiskOverrides(preferences[PreferencesKeys.APP_FUNCTION_RISK_OVERRIDES])
+            preferences[PreferencesKeys.APPROVED_CLEARTEXT_ORIGINS] ?: emptySet()
         }
 
-    override suspend fun setAppFunctionRiskOverride(toolName: String, risk: ToolRisk) {
+    override suspend fun approveCleartextOrigin(origin: String) {
         dataStore.edit { preferences ->
-            val current = decodeRiskOverrides(preferences[PreferencesKeys.APP_FUNCTION_RISK_OVERRIDES])
-            val merged = current + (toolName to risk)
-            preferences[PreferencesKeys.APP_FUNCTION_RISK_OVERRIDES] = encodeRiskOverrides(merged)
+            val current = preferences[PreferencesKeys.APPROVED_CLEARTEXT_ORIGINS] ?: emptySet()
+            preferences[PreferencesKeys.APPROVED_CLEARTEXT_ORIGINS] = current + origin
+        }
+    }
+
+    override val toolRiskOverrides: Flow<Map<String, ToolRisk>> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            decodeRiskOverrides(preferences[PreferencesKeys.TOOL_RISK_OVERRIDES])
+        }
+
+    override suspend fun setToolRiskOverride(toolKey: String, risk: ToolRisk) {
+        dataStore.edit { preferences ->
+            val current = decodeRiskOverrides(preferences[PreferencesKeys.TOOL_RISK_OVERRIDES])
+            val merged = current + (toolKey to risk)
+            preferences[PreferencesKeys.TOOL_RISK_OVERRIDES] = encodeRiskOverrides(merged)
         }
     }
 
@@ -1325,6 +1358,27 @@ class SettingsManager @Inject constructor(
                 preferences.remove(PreferencesKeys.LAST_INIT_BACKEND_ATTEMPT)
             } else {
                 preferences[PreferencesKeys.LAST_INIT_BACKEND_ATTEMPT] = backendKey
+            }
+        }
+    }
+
+    override val localBackendFailureStreak: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences -> preferences[PreferencesKeys.LOCAL_BACKEND_FAILURE_STREAK] ?: 0 }
+
+    override suspend fun setLocalBackendFailureStreak(streak: Int) {
+        dataStore.edit { preferences ->
+            if (streak <= 0) {
+                preferences.remove(PreferencesKeys.LOCAL_BACKEND_FAILURE_STREAK)
+            } else {
+                preferences[PreferencesKeys.LOCAL_BACKEND_FAILURE_STREAK] = streak
             }
         }
     }

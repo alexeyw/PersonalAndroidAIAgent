@@ -1,8 +1,8 @@
 # Knotwork — on-device AI agent for Android
 
-[![Check](https://github.com/alexeyw/PersonalAndroidAIAgent/actions/workflows/check.yml/badge.svg)](https://github.com/alexeyw/PersonalAndroidAIAgent/actions/workflows/check.yml)
+[![Check](https://github.com/alexeyw/knotwork/actions/workflows/check.yml/badge.svg)](https://github.com/alexeyw/knotwork/actions/workflows/check.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.6.0-orange.svg)
+![Version](https://img.shields.io/badge/version-0.7.0-orange.svg)
 ![Android API](https://img.shields.io/badge/Android-API%2036%2B-3DDC84.svg?logo=android)
 
 > **An AI agent you build, not just prompt.** A local-first Android agent whose
@@ -30,13 +30,14 @@ Inference runs **on-device** via [LiteRT-LM](https://ai.google.dev/edge)
 and replies stay on the phone unless you deliberately reach for a cloud model.
 
 What makes it Knotwork rather than another chat box is that **you build the
-behaviour**. Every conversation is processed by a pipeline — a graph of typed
-nodes (input, on-device LLM, optional cloud LLM, tool calls, routing,
-decomposition, evaluation, clarifications, output) that you can edit inside the
-app or in a standalone browser editor. Automations that can act on their own
-still can't act *unsupervised*: destructive or sensitive tool calls pass
-through a human-in-the-loop gate, so the agent never sends a message or writes a
-file without showing you the request first.
+behaviour**. Every conversation is processed by a pipeline — what Tasker, n8n,
+or Zapier would call a *workflow*: a graph of typed nodes (input, on-device LLM,
+optional cloud LLM, tool calls, routing, decomposition, evaluation,
+clarifications, output) that you can edit inside the app or in a standalone
+browser editor. Automations that can act on their own still can't act
+*unsupervised*: destructive or sensitive tool calls pass through a
+human-in-the-loop gate, so the agent never sends a message or writes a file
+without showing you the request first.
 
 ## Who it's for
 
@@ -118,19 +119,22 @@ The full feature tour lives in the [user guide](docs/user-guide.md).
 
 ## Screenshots
 
-Every image below is captured at 1080 × 2400 from a Roborazzi baseline
+The pipeline editor below is a capture from a phone running the app. The other
+three are rendered at 1080 × 2400 from a Roborazzi baseline
 (`./gradlew :catalog:recordRoborazziDebug --tests "*HeroSnapshotTest*"`), which
-keeps the README and the design-system regression suite in sync. Hover over (or
-tap) an image to see the dark variant via your browser's `prefers-color-scheme`.
+keeps them and the design-system regression suite in sync — the editor canvas is
+an app screen rather than a design-system component, so it has no baseline to
+render from. Hover over (or tap) an image to see the dark variant via your
+browser's `prefers-color-scheme`.
 
 <table>
   <tr>
     <td align="center">
       <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-pipeline-editor-dark.png">
-        <img alt="Pipeline editor — typed nodes per type" src="docs/images/hero-pipeline-editor.png" width="270">
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-pipeline-canvas-dark.jpg">
+        <img alt="Pipeline editor on a phone: a 22-node pipeline on the canvas, with routers, nested sub-pipelines, queues and tool steps wired together" src="docs/images/hero-pipeline-canvas.jpg" width="270">
       </picture>
-      <br><sub><b>Pipeline editor</b> — typed nodes (input · output · LiteRT · cloud · intent router · if · clarify · …)</sub>
+      <br><sub><b>Pipeline editor</b> — a 22-node pipeline on the canvas: routers, nested sub-pipelines, queues, tools, on-device and cloud steps</sub>
     </td>
     <td align="center">
       <picture>
@@ -176,25 +180,27 @@ tap) an image to see the dark variant via your browser's `prefers-color-scheme`.
 ### From a release build
 
 Grab the latest APK from the
-[**Releases**](https://github.com/alexeyw/PersonalAndroidAIAgent/releases) page
-and install it on an Android 16+ device. Two flavours are published:
+[**Releases**](https://github.com/alexeyw/knotwork/releases) page and install it
+on an Android 16+ device. Two flavours are published:
 
 - **`full`** — the standard build, with opt-in Firebase Crashlytics for
   anonymous crash reporting (off by default, never collects message content).
 - **`foss`** — zero proprietary dependencies and no crash reporting, suitable
   for F-Droid. See [docs/release.md](docs/release.md) § *FOSS / F-Droid build*.
 
-> **Pre-release signing note:** builds up to and including `0.6.0` are signed
-> with the Android debug keystore. When a real release keystore is configured
-> the signer changes, and Android will refuse to update a debug-signed install
-> in place — you'll need to uninstall the old build first. See the full
+> **Upgrading from `0.6.0` or earlier requires a clean install.** Those builds
+> were signed with the Android debug keystore; `0.7.0` is the first release
+> signed with a real release key. Android refuses to update an install whose
+> signer changed, so you must uninstall the old build — which clears its local
+> data — before installing `0.7.0`. Export anything you want to keep first.
+> This is a one-time break; later releases update in place. See the full
 > pre-release notice below.
 
 ### Build from source
 
 ```bash
-git clone https://github.com/alexeyw/PersonalAndroidAIAgent.git
-cd PersonalAndroidAIAgent
+git clone https://github.com/alexeyw/knotwork.git
+cd knotwork
 ./gradlew assembleFullDebug
 adb install app/build/outputs/apk/full/debug/app-full-debug.apk
 ```
@@ -231,6 +237,36 @@ first message once it loads.
 | Testing          | JUnit + MockK                                           |
 | Architecture tests | Konsist (Clean-Architecture layer guard, in `check`)  |
 
+## Privacy
+
+Knotwork has no account, no sign-in, and no server of its own. There is nothing
+to log into, and nothing is uploaded for the app to work.
+
+- **Conversations stay on the device by default.** Inference runs locally
+  through LiteRT-LM. Data leaves the phone only through a path you configured
+  yourself: a cloud LLM node with your own API key, or an MCP server you added.
+  Both are opt-in and both are visible in the pipeline you built.
+- **Usage statistics are local-only.** The in-app statistics are computed and
+  stored on the device and are never transmitted; a build-time architecture
+  guard fails the build if any network dependency reaches that code. Exporting
+  them is a manual action you take.
+- **Crash reporting is opt-in and off by default.** In the `full` flavour you
+  can enable anonymous crash reports (stack traces, device model, Android and
+  app version, the active pipeline and model identifiers). Message content,
+  prompts, memory, and API keys are never included. The `foss` flavour has no
+  crash-reporting dependency at all and hides the setting.
+- **Sensitive data is encrypted at rest.** The local database — chats, long-term
+  memory, run traces — is SQLCipher-encrypted, and API keys, the Hugging Face
+  token, and MCP credentials are sealed with AES-GCM under a dedicated Android
+  Keystore key.
+- **The agent asks before it acts.** Destructive and sensitive tool calls stop
+  at a human-in-the-loop confirmation, including when a pipeline runs in the
+  background from a trigger.
+
+The full threat model, including what is explicitly *out* of scope, is in
+[SECURITY.md](SECURITY.md); the per-feature behaviour is in the
+[user guide](docs/user-guide.md).
+
 ## Documentation
 
 - Architecture overview — [docs/architecture.md](docs/architecture.md).
@@ -249,25 +285,40 @@ first message once it loads.
 
 ## Pre-release notice
 
-This project is currently at **version 0.6.0** and is published for review and
+This project is currently at **version 0.7.0** and is published for review and
 experimentation. Expect rough edges:
 
 - There are no stability guarantees for the public surface (Kotlin APIs,
   pipeline JSON schema, settings layout) between versions.
 - On-device storage formats (encrypted preferences, exported pipeline JSON)
   may still change between versions.
+- **Shared pipeline files are not yet a compatibility contract.** Exported
+  pipelines and bundles carry a version stamp (`schemaVersion: 1`,
+  `bundleVersion: 1`), but before 1.0 that stamp is a marker, not a promise:
+  the schema may change without a major bump, and no import-time migration is
+  provided. A file whose stamp does not match the build importing it is not
+  rejected — it is imported on a **best-effort** basis behind an explicit
+  warning. What the import *does* now tell you is exactly which settings it
+  could not read, by name, whether or not the stamp matches — because the
+  format adds fields without bumping the stamp, so a matching version is no
+  guarantee that nothing was lost. Keep the original file anyway: naming the
+  loss is not the same as preventing it. At 1.0 at
+  the latest the format becomes a semantic-versioning contract: a breaking
+  change then means a major `schemaVersion` plus a migration applied on import.
 - **Upgrades preserve local data.** Every Room schema-version bump ships with
   an explicit migration, so an in-place update keeps your chat history,
   long-term memory, run traces, custom pipelines, and saved presets / prompt
   templates. (Note: *downgrading* to an older build recreates the database
   empty — forward migrations cannot be reversed — so export anything you want
   to keep before installing an older version.)
-- **Signing identity will change before the first signed release.** Builds up
-  to and including `0.6.0` are signed with the Android debug keystore. Once a
-  real release keystore is configured, the signer changes, and Android will
-  **refuse to update a debug-signed install in place** (signature mismatch).
-  When that happens you must uninstall the old build first — which clears its
-  local data — before installing the release-signed one.
+- **The signing identity changed at `0.7.0` — a one-time upgrade break.**
+  Builds up to and including `0.6.0` were signed with the Android debug
+  keystore; `0.7.0` is the first release signed with a real release key.
+  Android **refuses to update an install in place when the signer changes**
+  (signature mismatch), so upgrading from `0.6.0` or earlier means uninstalling
+  the old build first — which clears its local data. Export anything you want
+  to keep before you do. Releases from `0.7.0` onward share one signer and
+  update in place normally.
 
 ## License
 

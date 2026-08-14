@@ -1,6 +1,7 @@
 import app.knotwork.android.buildtools.BrowserEditorConstantsGenerator
 import app.knotwork.android.buildtools.DocsHygieneChecker
 import app.knotwork.android.buildtools.R8MappingChecker
+import app.knotwork.android.buildtools.ReleaseVersionChecker
 import com.android.build.api.artifact.SingleArtifact
 import dev.detekt.gradle.Detekt
 import java.util.Properties
@@ -121,8 +122,8 @@ android {
         applicationId = "app.knotwork.android"
         minSdk = 36
         targetSdk = 37
-        versionCode = 6
-        versionName = "0.6.0"
+        versionCode = 7
+        versionName = "0.7.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -1049,5 +1050,34 @@ androidComponents {
         // this `onVariants` callback runs, so eager lookup fails here.
         val packagingTasks = setOf("assemble$variantName", "bundle$variantName")
         tasks.matching { it.name in packagingTasks }.configureEach { finalizedBy(verifyKeepRules) }
+    }
+}
+
+// ─── Release tag ↔ versionName agreement ─────────────────────────────────────
+// A release is cut by pushing a `v<x>.<y>.<z>` tag, and the release workflow
+// names every artefact after that tag — but the version compiled into the APK
+// comes from `versionName` above. Nothing else forces the two to agree, and the
+// mismatch is invisible until someone reads the About screen of a file called
+// `knotwork-0.7.0-full-release.apk` and sees `0.6.0`.
+//
+// `versionName` stays the source of truth (the F-Droid recipe builds a tag with
+// no Gradle properties injected and must still get the right number), so this
+// task asserts the agreement rather than overwriting anything. It is invoked
+// explicitly by `.github/workflows/release.yml` before the release build, and is
+// deliberately NOT wired into `check`: the tag only exists at release time.
+tasks.register("verifyReleaseVersion") {
+    group = "verification"
+    description = "Fails when `-PreleaseTag=<tag>` disagrees with the versionName declared in this build."
+    val releaseTag = providers.gradleProperty("releaseTag")
+    val declaredVersionName = android.defaultConfig.versionName.orEmpty()
+    doLast {
+        val tag = releaseTag.orNull
+            ?: throw GradleException(
+                "`verifyReleaseVersion` needs the release tag: " +
+                    "run it as `./gradlew :app:verifyReleaseVersion -PreleaseTag=v<major>.<minor>.<patch>`.",
+            )
+        ReleaseVersionChecker.verify(tag = tag, declaredVersionName = declaredVersionName)
+            ?.let { throw GradleException(it) }
+        logger.lifecycle("Release tag `$tag` matches the declared versionName `$declaredVersionName`.")
     }
 }

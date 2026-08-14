@@ -17,6 +17,7 @@ import app.knotwork.android.domain.models.ResumeContext
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.TaskPriority
+import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
@@ -34,6 +35,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -41,6 +43,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -413,7 +416,11 @@ class TaskQueueManagerImplTest {
         taskQueueManager.enqueueTask(
             AgentTask(sessionId = sessionId, prompt = "p", priority = TaskPriority.NORMAL),
         )
-        advanceUntilIdle() // Task is now suspended inside the engine flow.
+        // Task is now suspended inside the engine flow. `runCurrent` rather
+        // than `advanceUntilIdle`: advancing virtual time would trip the
+        // no-progress valve on a run that is deliberately silent, and this
+        // test is about cancellation, not about the valve.
+        runCurrent()
 
         taskQueueManager.scope.cancel()
         advanceUntilIdle()
@@ -602,7 +609,10 @@ class TaskQueueManagerImplTest {
 
         val task = AgentTask(sessionId = "session_run_cancel", prompt = "p")
         taskQueueManager.enqueueTask(task)
-        advanceUntilIdle()
+        // `runCurrent`, not `advanceUntilIdle`: the run is deliberately silent
+        // here, and skipping virtual time forward would let the no-progress
+        // valve settle it as FAILED before the cancellation under test lands.
+        runCurrent()
 
         taskQueueManager.scope.cancel()
         advanceUntilIdle()
@@ -780,6 +790,126 @@ class TaskQueueManagerImplTest {
             val state = taskQueueManager.observeTaskState(sessionId).first()
             assertTrue("Expected Idle after park, got $state", state is AgentOrchestratorState.Idle)
         }
+
+    // endregion
+
+    // region No-progress safety valve (phase-40 finding F13)
+
+    /**
+     * The worker is a single serial loop, so a run that never emits again does
+     * not merely lose its own chat — it stops every chat in the app. On the
+     * device that showed up as a permanent, silent "Generating…" everywhere,
+     * for 1.5 hours, after one MCP server accepted a call and never answered.
+     *
+     * The stalled run must settle as FAILED with an explanation, and — the
+     * part that actually matters — the task queued behind it must still run.
+     */
+    @Test
+    fun `given a run that stops emitting then it is failed and the next task still runs`() = testScope.runTest {
+        val stalling = AgentTask(sessionId = "session_stalled", prompt = "p")
+        val following = AgentTask(sessionId = "session_next", prompt = "p")
+        every { graphExecutionEngine.invoke(any(), any(), any(), any()) } returns flow {
+            emit(AgentOrchestratorState.Loading)
+            awaitCancellation()
+        } andThen flowOf(AgentOrchestratorState.Completed("ok"))
+
+        taskQueueManager.enqueueTask(stalling)
+        advanceUntilIdle()
+        taskQueueManager.enqueueTask(following)
+        advanceUntilIdle()
+
+        coVerify {
+            pipelineRunRepository.finishRun(
+                stalling.id,
+                PipelineRunStatus.FAILED,
+                TaskQueueManagerImpl.STALLED_MESSAGE,
+            )
+        }
+        coVerify { pipelineRunRepository.finishRun(following.id, PipelineRunStatus.COMPLETED) }
+        // The chat must say what happened — the defect this replaces was a
+        // permanent, wordless "Generating…".
+        val state = taskQueueManager.observeTaskState("session_stalled").first()
+        assertTrue("A stalled run must not end silently, got $state", state is AgentOrchestratorState.Error)
+        assertEquals(
+            TaskQueueManagerImpl.STALLED_MESSAGE,
+            (state as AgentOrchestratorState.Error).message,
+        )
+    }
+
+    /**
+     * The counter-case that keeps the valve from becoming a wall-clock cap: a
+     * run may take far longer than the window as long as it keeps emitting.
+     * Generation streams a state per token, so this is the common case — a
+     * total-duration limit would cut healthy long runs short.
+     */
+    @Test
+    fun `given a slow run that keeps emitting then it is not failed`() = testScope.runTest {
+        val window = taskQueueManager.noProgressTimeoutMs
+        every { graphExecutionEngine.invoke(any(), any(), any(), any()) } returns flow {
+            repeat(4) {
+                delay(window - 1)
+                emit(AgentOrchestratorState.Loading)
+            }
+            emit(AgentOrchestratorState.Completed("ok"))
+        }
+
+        val task = AgentTask(sessionId = "session_slow", prompt = "p")
+        taskQueueManager.enqueueTask(task)
+        advanceUntilIdle()
+
+        coVerify { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.COMPLETED) }
+        coVerify(exactly = 0) { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, any()) }
+    }
+
+    /**
+     * A run showing an approval prompt is not stalled — it is waiting for a
+     * person, visibly, and the gate bounds that wait itself. Killing it would
+     * turn a correctly configured long wait (a CLARIFICATION node's reply
+     * window is user-configurable) into "the task stopped responding".
+     */
+    @Test
+    fun `given a run waiting on an approval gate then the window does not apply`() = testScope.runTest {
+        val window = taskQueueManager.noProgressTimeoutMs
+        every { graphExecutionEngine.invoke(any(), any(), any(), any()) } returns flow {
+            emit(AgentOrchestratorState.WaitingForApproval("echo", "{}", ToolRisk.SENSITIVE))
+            delay(window * 3)
+            emit(AgentOrchestratorState.Completed("approved and done"))
+        }
+
+        val task = AgentTask(sessionId = "session_gate", prompt = "p")
+        taskQueueManager.enqueueTask(task)
+        advanceUntilIdle()
+
+        coVerify { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.COMPLETED) }
+        coVerify(exactly = 0) { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, any()) }
+    }
+
+    /**
+     * The other half of that exemption: it lasts exactly until the next
+     * emission. The gate emits `ExecutingTool` before running an approved tool,
+     * so the hung call that follows an approval — the shape of the defect this
+     * valve exists for — is guarded again.
+     */
+    @Test
+    fun `given silence after an approved tool starts then the run is still failed`() = testScope.runTest {
+        every { graphExecutionEngine.invoke(any(), any(), any(), any()) } returns flow {
+            emit(AgentOrchestratorState.WaitingForApproval("echo", "{}", ToolRisk.SENSITIVE))
+            emit(AgentOrchestratorState.ExecutingTool("echo", "{}"))
+            awaitCancellation()
+        }
+
+        val task = AgentTask(sessionId = "session_gate_then_hang", prompt = "p")
+        taskQueueManager.enqueueTask(task)
+        advanceUntilIdle()
+
+        coVerify {
+            pipelineRunRepository.finishRun(
+                task.id,
+                PipelineRunStatus.FAILED,
+                TaskQueueManagerImpl.STALLED_MESSAGE,
+            )
+        }
+    }
 
     // endregion
 }

@@ -70,6 +70,7 @@ import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.misc.EmptyState
+import app.knotwork.design.components.misc.KnotworkWarningBanner
 import app.knotwork.design.components.misc.StripedPlaceholder
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
@@ -694,7 +695,13 @@ private fun McpToolEntryRowView(entry: McpToolEntry, callbacks: ToolsCallbacks, 
                     text = entry.name,
                     style = KnotworkTextStyles.MonoBase.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
+                    // Two lines, not one. MCP catalogues routinely advertise tools
+                    // sharing a long prefix (`create_issue` / `create_pull_request`,
+                    // `get-resource-a` / `get-resource-b`); ellipsised to one line
+                    // they rendered identically, and every row here carries a
+                    // toggle — which is how someone disables the wrong tool. Rows
+                    // with names that already fit are unchanged.
+                    maxLines = MCP_TOOL_NAME_MAX_LINES,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
@@ -1090,6 +1097,17 @@ fun McpServerConfigContent(
                     color = KnotworkTheme.extended.signalError,
                 )
             }
+            // Unencrypted traffic to a private address is refused until the user
+            // approves this exact origin. Shown inline rather than as a dialog so
+            // it is visible while the address is still being typed.
+            form.cleartextConsentOrigin?.let { origin ->
+                KnotworkWarningBanner(
+                    text = stringResource(R.string.knotwork_tools_cleartext_consent_body, origin),
+                    actionLabel = stringResource(R.string.knotwork_tools_cleartext_consent_action),
+                    onAction = callbacks.onApproveCleartext,
+                    testTag = MCP_CLEARTEXT_CONSENT_TAG,
+                )
+            }
 
             FormSectionLabel(text = stringResource(R.string.knotwork_tools_form_name_label))
             OutlinedFormTextField(
@@ -1169,3 +1187,13 @@ fun McpServerConfigContent(
         }
     }
 }
+
+/**
+ * Lines allowed for an MCP tool's name in the expanded server list. See the
+ * comment at the call site: one line made same-prefix tools indistinguishable
+ * in a list where each row has its own enable toggle.
+ */
+private const val MCP_TOOL_NAME_MAX_LINES = 2
+
+/** Test tag for the unencrypted-connection consent banner in the MCP server form. */
+const val MCP_CLEARTEXT_CONSENT_TAG: String = "mcp_cleartext_consent_banner"

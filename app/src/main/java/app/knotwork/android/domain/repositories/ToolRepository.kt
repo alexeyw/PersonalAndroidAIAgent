@@ -46,13 +46,22 @@ interface ToolRepository {
      *
      * Resolution order:
      * 1. Built-in tools (`schedule_task`, `search_tool`, `delegate_task`) return
-     *    their hard-coded risk constants.
+     *    their hard-coded risk constants. They are part of the app's own
+     *    contract and are deliberately not overridable.
      * 2. Discovered AppFunctions return the user override from
-     *    `SettingsRepository.appFunctionRiskOverrides` if set, otherwise
-     *    [ToolRisk.SENSITIVE] (we cannot trust the AppFunctionManager metadata
-     *    for side-effect signal).
-     * 3. MCP tools return a blanket [ToolRisk.SENSITIVE] until a finer-grained
-     *    per-server policy is introduced.
+     *    `SettingsRepository.toolRiskOverrides` (keyed by the AppFunction's tool
+     *    name) if set, otherwise [ToolRisk.SENSITIVE] (we cannot trust the
+     *    AppFunctionManager metadata for side-effect signal).
+     * 3. MCP tools return the user override from the same map, keyed by the
+     *    `mcp:<sha8(serverUrl)>:<toolName>` id of the server that advertised the
+     *    tool, otherwise [ToolRisk.SENSITIVE].
+     *
+     * The override is the **user's** voice, never the server's. MCP's
+     * `readOnlyHint` / `destructiveHint` tool annotations are deliberately not
+     * consulted: they are self-declared by the remote server, and letting a
+     * server lower its own tools to `READ_ONLY` would let it walk straight past
+     * the HITL gate. A hint may be surfaced as advice one day; it must never
+     * be an input to this function.
      *
      * Most tools have a single static risk and ignore [arguments]. The exception
      * is `http_request`, whose risk depends on the HTTP method carried in the

@@ -147,6 +147,9 @@ app:
   accept the licence on Hugging Face and add a token.
 - **Offline / errors.** If the network is unavailable, the screen shows
   a clear message with a **Retry** button rather than failing silently.
+  In chat, **Retry** re-runs the message that failed — not whatever you
+  have typed since. Anything in the composer is left alone, and the failed
+  message is not added to the conversation a second time.
 
 ### 4. Send a first message
 
@@ -289,6 +292,14 @@ history is portable to any app that handles JSON or plain text.
   cloud-drive app, and so on). Archived chats export the same way, from
   their own row menu on the archive screen — putting a chat away never
   puts it out of reach.
+
+  The file also carries an `unfinishedRuns` list: any run of that chat
+  that failed, was cancelled or was interrupted, with the error text and
+  the timing. A failure never becomes a chat message, so without this a
+  conversation whose only turn failed exported as a lone question with no
+  answer and no explanation — which is exactly the file someone attaches
+  to a bug report. Successful runs are not listed; the answer they
+  produced is already there.
 - **Import** — open the drawer and tap **Import chat**. The system
   file picker opens, filtered to `application/json`. Selecting a
   previously exported file creates a new chat session with the
@@ -622,6 +633,26 @@ chat-level details live in [Chats](#chats).
   conversation as usual; open the chat and the full console trace is
   there to replay.
 
+#### Battery settings decide whether any of this happens
+
+The first bullet above describes what happens when the system lets the
+app keep running. Whether it does is not the app's decision. On a device
+with the default battery setting, leaving the app can end a run within
+seconds — measured at roughly **ten seconds** on the reference device,
+after which the process is gone and the run comes back as *interrupted*
+on the next start. This is the platform doing what it is designed to do,
+not a defect, but the effect is the same for you: background work does
+not finish.
+
+To let it finish, exclude the app from battery optimisation. On stock
+Android that is **system Settings → Apps → Knotwork → Battery →
+Unrestricted**; the exact path differs by manufacturer, and phones with
+an extra vendor layer (Samsung, Xiaomi, OnePlus and others) usually need
+the app taken out of a separate "sleeping apps" list as well. The app
+never asks you for this and cannot grant it to itself — if long
+background runs, scheduled tasks or triggers matter to you, it is worth
+setting once by hand.
+
 ### Notifications
 
 | Notification | When | Actions |
@@ -894,7 +925,9 @@ location and SMS triggers are intentionally deferred.
 A **pipeline** is the recipe the agent follows when it processes a
 message. It is a graph of typed nodes (for example, a local-LLM call,
 a cloud-LLM call, a tool invocation, an output formatter) connected
-by arrows that describe the flow of data.
+by arrows that describe the flow of data. If you come from Tasker, n8n,
+or Zapier, this is the thing those tools call a *workflow* — the app
+says "pipeline" everywhere, including in the menus.
 
 You do not need to design a pipeline yourself — the app ships with a
 sensible default — but the orchestrator lets you tweak how the agent
@@ -1099,6 +1132,27 @@ sheet lets you grow / shrink the class list: each row has a small
 (disabled above the 6-class maximum). The new class shows up as an
 additional outbound port on the node card immediately on Save.
 
+#### Why the same question can take a different route
+
+In a pipeline that routes with an **IntentRouter**, asking the same thing
+twice can send it down two different branches — kept on the device one
+time, handed to a cloud provider the next. That looks like the app being
+unpredictable, and it is worth knowing that it is not random.
+
+The router is a model deciding which class your message belongs to, and
+by default it is shown the **chat history** as well as the message
+itself, because a router judging "is this a follow-up?" needs to see what
+came before. So the same sentence genuinely is a different question in an
+empty chat than it is after ten turns about something else, and the
+router can reasonably classify it differently. Cloud nodes are set up the
+same way for the same reason.
+
+If you would rather a router decided on the message alone, open its
+configuration sheet and turn **Chat history** off under **Input Data**.
+The classification becomes repeatable, at the cost of the router no
+longer understanding follow-up questions. Starting a fresh chat has much
+the same effect without changing the pipeline.
+
 The nodes that produce a structured result — **IntentRouter**,
 **IfCondition**, **Evaluation**, **Decomposition** and **Tool** — run their
 output through a validate-and-repair step: if the model's first reply is
@@ -1289,6 +1343,40 @@ dangling references. A **bundle** solves this: it packs the pipeline
 Bundles carry pipelines only — not triggers, tool/MCP settings, prompt
 presets, or chat history. Those stay on the device they were set up on.
 
+### Sharing pipeline files: what compatibility you can count on
+
+Every exported file carries a version stamp — `schemaVersion` for a
+pipeline or preset, `bundleVersion` for a bundle. Before version 1.0 that
+stamp is a **marker, not a promise**: the format may change without a
+major bump, and no import-time migration is provided.
+
+What that means when you hand a file to someone else, or open your own
+file in a later build:
+
+- **A stamp mismatch does not block the import.** Both the app and the
+  browser editor warn you that the file came from a different version
+  and let you continue.
+- **Continuing is a best-effort import.** The graph loads, but any field
+  the importing build does not recognise is dropped — the pipeline can
+  come back with part of its node configuration missing.
+- **The import now names what it dropped.** The warning lists the exact
+  settings it could not read (`nodes[1].config.samplingTopK`, and so on),
+  so you can judge whether the loss matters instead of guessing.
+- **A matching stamp is not a guarantee that nothing was lost.** The
+  format adds new fields without bumping the version, so a file written
+  by a newer build can claim the same `schemaVersion` and still contain
+  settings this build cannot read. That case used to be completely
+  invisible; it is now reported the same way, as a notice after the
+  import.
+- **So keep the original file.** Naming the loss is not preventing it,
+  and re-exporting after a lossy import overwrites the only complete copy
+  you had.
+
+From 1.0 onwards the format is a semantic-versioning contract: a breaking
+change means a major `schemaVersion` and a migration applied on import.
+Until then, treat shared pipelines the way you would treat a config file
+from a pre-release tool.
+
 ---
 
 ## Tools and MCP
@@ -1333,7 +1421,8 @@ quietly send your data off the device. The allowlist is the safeguard:
   one reached through a redirect — is refused before the request leaves
   the device.
 - Public domains must use `https`. Plain `http` is allowed only for
-  local addresses (for example a home Ollama server).
+  local addresses (for example a home Ollama server), and only after you
+  have approved that specific address — see *Adding an MCP server*.
 - A request is refused outright if it would carry one of your stored
   provider API keys, so a saved key can't be leaked to a remote host.
 
@@ -1421,11 +1510,73 @@ tools. To add one:
 The server's tools become available to the agent on the next run.
 Remove a server by tapping the trash icon next to its row.
 
+**Unencrypted addresses need your approval.** If the URL starts with
+`http://` rather than `https://` and points at a machine on your own
+network, the form shows a notice naming the exact address and a single
+**Approve unencrypted connection** button. Nothing is sent until you press
+it — the app refuses to open the connection, and saving the server is
+blocked while the notice is showing. This is not a formality: on an
+unencrypted connection anyone else on the network can read what you send,
+including any token you set in the Authentication section below.
+
+`http://` to a **public** address is refused outright and cannot be
+approved. Approval is remembered per address *and port* — approving
+`http://192.168.1.42:8080` does not approve port 3000 on the same machine,
+because that is a different server.
+
 MCP connections open lazily — the app only contacts the server when
 a tool from it is needed — and they are wrapped in error-handling
 so an unreachable server does not crash the chat. If a tool that
 relied on an MCP server stops responding, you will see an error
 event in the console rather than a silent failure.
+
+#### What the tool count on a server row means
+
+A connected server shows something like `13 tools · ok`. That number is
+the list **the server published to this app**, which is not always
+everything the server can do.
+
+Some tools only work if the client on the other end supports an extra
+conversation the tool needs — asking the client's own model to generate
+something mid-call, requesting access to a folder on the client, or
+popping a follow-up question at you while the call is in flight. This
+app supports none of those yet, and a server that plays by the rules
+simply leaves such tools out of the list it hands over. Nothing is
+broken, nothing is misconfigured, and the row correctly says `ok`.
+Measured against the protocol's own reference server, the app sees
+**13 of the 16** tools that server can offer.
+
+So if a tool you know a server has never turns up in the agent's
+catalogue while the server itself is healthy, that is the most likely
+explanation — the tool needs a client feature the app does not have.
+Tools that just take arguments and return a result are unaffected, and
+that is the large majority of what MCP servers publish.
+
+#### How long a server is given to answer
+
+Two deadlines apply, and neither is adjustable:
+
+- **Connecting** — 30 seconds for the handshake. A server that accepts
+  the connection and then goes quiet fails outright, instead of leaving
+  its row stuck on *connecting…* forever.
+- **A tool call** — 60 seconds. Past that the call is abandoned.
+
+Either breach is reported as a **failed tool call**, not as a failed
+run: the console shows the error, the agent is told the tool did not
+answer, and the pipeline continues and can try something else. One
+unresponsive server also cannot hold up work in your other chats — a
+call that goes quiet for too long is ended rather than left to block the
+queue behind it.
+
+#### What the common MCP errors mean
+
+| What you see | What it means |
+|---|---|
+| *…did not complete the handshake within 30s* | The address answered but never finished the MCP handshake. Usually a wrong URL path, or a server expecting the other transport. |
+| *MCP tool … did not respond within 60s* | The call hit the deadline above. The server may still be working on it; nothing was cancelled on its side. |
+| *Tool … not found across active providers* | No connected server publishes a tool by that name. Read the tool-count note above before concluding the server is broken. |
+| *MCP client is not connected; cannot execute …* | The connection dropped between planning the call and making it. This is deliberately worded differently from *not found*, because the tool does exist — trying again normally reconnects. |
+| *Tool … is disabled* | The tool exists but its switch is off on the Tools screen. |
 
 ---
 
@@ -1795,7 +1946,62 @@ errors (5xx) and connection/read timeouts — are retried with exponential
 backoff; authentication errors are not retried, and stopping a run cancels
 cleanly. **Max attempts** (1–5, default 3; set to **1** to disable retries) and
 **Base delay** (100–10 000 ms, default 1 000) tune it. Each retry shows on the
-agent console as a muted line such as `Cloud retry 1/2 for openai`.
+agent console as a muted line such as `Cloud retry 1/2 for openai`, at the
+moment the retry happens rather than after the answer finishes.
+
+One limitation worth knowing, measured rather than assumed: when a provider
+answers a rate-limit with a `Retry-After` header asking you to wait a specific
+time, that request is **not** honoured — the backoff curve is the same whether
+the header is present or not. The cause is in the upstream client library, and
+working around it would mean building a second retry layer of our own. In
+practice it means that under a real rate limit the app knocks sooner than it was
+asked to.
+
+#### How long a cloud provider is given, and how many tries it gets
+
+These figures were measured against real and stalled providers, not assumed
+from documentation:
+
+- **60 seconds of silence.** The limit applies to each *read*, not to the
+  answer as a whole: a long reply that keeps streaming is never cut for being
+  long, while a provider that accepts the request and then says nothing for a
+  minute is dropped. Before this was set explicitly, the app waited **fifteen
+  minutes** on a stalled provider.
+- **30 seconds to connect.**
+- **3 attempts, waiting 1 then 2 seconds** — the default retry budget above,
+  which also covers timeouts.
+
+A timeout ends that *attempt*, not the run: it counts as a transient failure
+and is retried. Only once the retry budget is spent does the error reach the
+console and the run stop, rather than carrying on without an answer. In the
+worst case a dead provider therefore costs about three minutes — three silent
+minutes plus the backoff — where before these limits were set a single attempt
+alone could hold the run for fifteen.
+
+#### An answer that was cut off is not shown as an answer
+
+If the connection dies halfway through a reply, most providers do not raise an
+error. The stream simply ends, and the only difference from a healthy one is a
+missing "I have finished" marker — so a half-written answer can look exactly
+like a complete one. The app checks for that marker and, when it is absent,
+discards the partial text and tells you the reply was cut off, rather than
+handing you an answer that stops mid-sentence as though the model meant it.
+
+Which providers this protection covers was decided by measurement only, because
+the opposite mistake — treating a healthy reply as truncated — would break
+working setups:
+
+| Provider | Truncated answers caught? |
+|---|---|
+| **OpenAI**, **DeepSeek** | Yes — measured. |
+| **Google** | Yes — its client reports a broken stream as an error on its own. |
+| **Ollama** | **No.** Its client never sends the finishing marker at all, so its absence proves nothing; checking for it would fail every healthy run. |
+| **Anthropic** | **No.** We could not produce a trustworthy test either way, and guessing is exactly the failure this check exists to prevent. |
+
+For the bottom two rows a connection that drops mid-answer can still leave you
+with a reply that is shorter than it should be and looks finished. If an answer
+from one of those ends abruptly for no obvious reason, ask again before
+concluding the model had nothing more to say.
 
 ### Memory
 
@@ -1936,6 +2142,17 @@ anywhere on this path (a build-time guard enforces that). The screen shows:
   (schedule / daily / charging / network) fired.
 - **Active days** — the number of distinct days with any activity, plus the
   first and last.
+- **This week** — whether the app is actually sticking. Active days out of the
+  last seven (with the week before it for comparison), how many distinct
+  pipelines you ran in that window, your current run of consecutive days, how
+  many times you came back after a break of three days or more, the longest such
+  break, and how many days you used the app in your first week after installing.
+  The first-week figure stays blank (`—`) until that week has actually passed, so
+  a fresh install is never labelled with a number it has not earned yet. The
+  day-based figures use the day history the app was already keeping, so they are
+  meaningful right after updating; **Pipelines used** starts at zero after an
+  update, because which pipeline ran on which day was not recorded before and is
+  not back-filled.
 - **Setup** — how long your first run took to arrive: the time from opening
   onboarding to your first successful run, how much of that was the model
   download, and the two subtracted (`mm:ss`). The download depends on your
@@ -2203,6 +2420,32 @@ Two common causes:
   Open the **Tools** screen and confirm the server is still listed
   under **MCP Servers**; if the URL changed or the server is down,
   the tool will fail with an error event in the console.
+
+### An MCP server is connected but a tool I expect isn't there
+
+If the server row says `ok` and the tool still never appears, the server
+is probably not publishing it to this app. Some tools only work with
+clients that support extra features Knotwork does not have yet, and a
+well-behaved server leaves those out of the list rather than offering
+something that would fail. See [What the tool count on a server row
+means](#what-the-tool-count-on-a-server-row-means) — it is a real
+limitation, not a misconfiguration you can fix from the Tools screen.
+
+### The same question goes to the cloud one time and stays local the next
+
+That is usually the router reading the conversation, not a bug. See [Why
+the same question can take a different
+route](#why-the-same-question-can-take-a-different-route) for what to
+change if you want the decision to be repeatable.
+
+### A background run dies the moment I leave the app
+
+Almost always battery restrictions rather than the app: with the default
+setting, the system can reclaim the process within seconds of the app
+going away. See [Battery settings decide whether any of this
+happens](#battery-settings-decide-whether-any-of-this-happens). The same
+cause is behind most triggers and scheduled tasks that never produce a
+result.
 
 ### A pipeline went missing
 

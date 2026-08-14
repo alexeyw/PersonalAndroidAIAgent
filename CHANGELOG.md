@@ -13,7 +13,28 @@ details.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-10
+
 ### Added
+
+- **Usage statistics now show whether the app actually stuck.** The on-device
+  dashboard gained a **This week** section: active days out of the last seven
+  with the previous week beside them for comparison, how many distinct pipelines
+  you ran in that window, your current run of consecutive days, how often you
+  came back after a break of three days or more, the longest such break, and how
+  many days you used the app in your first week after installing. Everything is
+  derived from counts the app already kept, plus one addition — which pipelines
+  were used on which day — so the week can be told apart from the all-time
+  totals. Nothing leaves the device: the same build-time guard that forbids any
+  network call on this path covers the new code as well. The first-week figure
+  stays blank until that week has actually elapsed rather than showing a number
+  a two-day-old install has not earned, and the JSON export carries the window
+  definition next to the figures so a saved snapshot still explains itself
+  months later. Your day-by-day history was already being recorded, so the
+  day-based figures are meaningful immediately after updating; **Pipelines
+  used** is the one that starts at zero, because which pipeline ran on which day
+  was never stored before and inventing that history would be worse than a week
+  of honest zeros.
 
 - **Archive chats instead of deleting them.** A chat list that only grows
   eventually stops being useful, and until now the only way to shorten it was to
@@ -73,6 +94,18 @@ details.
   task (wired into `./gradlew check`, unit-tested in `buildSrc`) fails the
   build if any public-contour Markdown file reintroduces an LLM tool-call
   wrapper artifact or a reference to an internal-only planning document.
+- **Releases are built, signed and published by the CI workflow, from a tag.**
+  Pushing a `v*` tag now runs the full `check` gate and then assembles the three
+  release artefacts — `full` APK, `full` AAB and `foss` APK — signs them, and
+  attaches them to a GitHub Release generated from this file. The release
+  build falls back to the *debug* signing identity when signing credentials are
+  missing rather than failing, so the workflow verifies the signer twice: once
+  against the keystore before the build starts, and once against the finished
+  artefacts, refusing to publish anything not signed by the expected
+  certificate. It also refuses a tag that disagrees with the declared
+  `versionName`. `workflow_dispatch` runs the whole thing as a dry run without
+  creating a Release. Procedure and one-time provisioning:
+  [`docs/release.md`](docs/release.md).
 - **Groundwork for a trigger-evaluation journal.** A new on-device,
   SQLCipher-encrypted store records why each automation trigger did or did
   not fire (fired / re-armed / a typed skip reason) and the eventual outcome
@@ -127,6 +160,264 @@ details.
   back — only you do.
 
 ### Fixed
+
+- **A local Ollama or MCP server over plain HTTP now actually works.** The app
+  carried a hard-coded list of fourteen private IP addresses as the only ones it
+  would talk to unencrypted. That list ships inside the app, so you could not add
+  your own, and it matched a real home network only by coincidence — meaning the
+  self-hosted setup this app is built around simply did not connect for most
+  people. Android's own network config cannot express "any address on my
+  network", so the rule now lives in the app: any address on your local network
+  works, once you approve that specific address. Saving a local `http://` address
+  shows a notice naming it, explaining that anyone on the network can read what
+  you send, and asking you to approve it; nothing is sent until you do, and the
+  approval covers that address and port only. Unencrypted connections to public
+  addresses are refused outright and cannot be approved, on every path including
+  a redirect that tries to downgrade a secure connection mid-request.
+- **Retry now retries.** After a failed message the **Retry** button only cleared
+  the error tile — the run it was offering to repeat never happened. It now
+  re-runs the message that failed, with its image if it had one. Text you typed
+  while reading the error is left in the composer rather than being sent, and the
+  failed message is not added to the conversation a second time.
+- **Two tools with similar names were impossible to tell apart.** Tool names in
+  an expanded MCP server were cut to a single line, so `get-resource-…` and
+  `get-resource-…` looked identical while each row carried its own on/off switch
+  — an easy way to disable the wrong tool. Long names now wrap to a second line.
+  Rows whose names already fit are unchanged.
+- **A failed turn is now part of an exported chat.** A run that fails never
+  becomes a message, so exporting a conversation whose only turn failed produced
+  a file with the question, no answer, and no sign anything had gone wrong — the
+  worst possible file to attach to a bug report. The export now also lists the
+  runs that failed, were cancelled or were interrupted, with the error and the
+  timing.
+- **Retry notices reached the console after the fact.** When a cloud provider
+  blipped and the call was retried, the `Cloud retry 1/2` lines were held back
+  until the whole answer finished. On a run where the retries happened in the
+  first seconds and the request ultimately failed, that meant staring at nothing
+  and then receiving everything at once. Each retry is now reported as it
+  happens.
+- **A pipeline step pointed at a local server could quietly switch to a cloud
+  one.** The node editor offers a single *OpenAI-compatible* option covering both
+  DeepSeek and a self-hosted server such as Ollama, and saving the step's settings
+  resolved that option to DeepSeek regardless of which one the step actually used.
+  Opening an Ollama step, changing nothing but the title, and saving was enough to
+  repoint it at a third-party endpoint — with no warning, and no visible difference
+  in the editor afterwards. For an app whose premise is that your data stays where
+  you put it, that is the worst possible silent change, so a step now keeps the
+  provider it already had unless you pick a different one yourself. The same fix
+  covers the engine picker on Tool, Condition, Router, Decomposition and Evaluation
+  steps.
+- **The Tools screen could report a healthy server the agent could not reach.**
+  Connection health and the connections the agent actually used were tracked
+  separately, so a session that had already failed for one could still look fine to
+  the other: the screen showed a tool count and an "ok" badge while the next tool
+  call went to a dead connection. Both now share one set of connections, so the
+  badge describes the session your tools will really use, and a failure seen on
+  either side retires it for both.
+- **Risk level of a tool from an external server could not be adjusted.** Every MCP
+  tool was pinned to "ask me first", which sounds safe but cut both ways: a
+  genuinely destructive remote tool could not be raised to the destructive tier
+  (and so was never covered by *Block destructive tools*), and a plainly read-only
+  one could not stop prompting. The per-tool risk setting now covers MCP tools as
+  well, remembered per server so the same tool name on two servers stays two
+  separate decisions. The server's own claim about a tool is deliberately ignored:
+  only you can lower a confirmation prompt, never the server asking to skip it.
+- **A mistyped tool name failed later and more obscurely than it needed to.** When
+  a step let the model choose the tool, the chosen name was not checked against the
+  list the model had been offered, so a mangled name surfaced further down as an
+  internal-sounding "risk lookup failed". The name is now checked where the choice
+  is made, and the message says plainly that the tool is not in the available list.
+  A near-miss is not silently corrected to the closest match — running a different
+  tool than the one named is exactly what the confirmation prompt exists to prevent.
+- **Working in a language other than English broke tool calls and routing.** A
+  model given a Russian question answers in Russian — and then keeps doing so at
+  every step that follows. For an answer that is exactly right; for the machinery
+  in between it is not. The step that splits a task into subtasks was writing
+  those subtasks in the user's language, the step that picks a tool then matched
+  them against an English tool catalogue, and the routing steps compare their
+  answer against fixed English keywords. So the pipeline ran, took a wrong turn or
+  called nothing at all, and said nothing about why. Every bundled pipeline now
+  states which language each of its steps works in: steps whose output is read by
+  the pipeline work in English, and the step that writes the answer translates it
+  back into your language. The starter prompts used by steps you build yourself
+  say the same. Two deliberate exceptions stay as they were — a Wikipedia search
+  term is written in your language so it reaches the right edition of Wikipedia,
+  and the translation pipeline keeps its own target language.
+- **Notifications looked like they came from three different apps.** Every
+  notification the agent posts — a trigger firing, a background task finishing or
+  failing, a question, a request for approval — borrowed a stock Android icon
+  picked for rough resemblance. A finished background task showed the **download
+  complete** icon, so the status bar reported a download from an app that had
+  downloaded nothing, sitting right next to a foreground notification carrying the
+  real Knotwork mark. The approval buttons were worse than mismatched: **Approve**
+  was a media *play* symbol and **Deny** was a *trash can*, so on a destructive
+  confirmation the choice read as "run it" or "delete it" — the opposite of what
+  the buttons do. Notifications now use one deliberate set: the Knotwork mark for
+  anything that needs nothing from you, a plain tick or cross for an outcome, a
+  shield for a decision you have to make, a speech bubble for a question, and a
+  tick/cross pair on the buttons.
+- **Importing a pipeline no longer loses settings without telling you.** When a
+  pipeline file contained anything the app could not read, those settings were
+  discarded in silence — the graph loaded, looked fine, and part of its node
+  configuration was simply gone. The import now names exactly what it could not
+  read, path by path, so you can judge whether the loss matters before keeping
+  the result. This is reported even when the file's version stamp matches the
+  app's: new fields are added to the format without changing that stamp, so a
+  file written by a newer build can claim the same version and still carry
+  settings this one cannot read. That case was previously invisible — a matching
+  version produced no warning at all.
+- **A cloud answer cut off in transit was shown as if it were complete.** When
+  the connection to a cloud provider dropped part-way through a reply, some
+  providers end the stream so quietly that it looks exactly like a finished
+  answer — the only difference is that the provider never says *why* it stopped.
+  The half-written reply was accepted, passed to the next step of the pipeline
+  and shown as the result. A reply that never reported a completion is now
+  treated as the failure it is: the partial text is discarded and the run says
+  the response was cut off, so nothing incomplete is presented as final.
+- **A resumed run could pay for the same cloud call twice.** When a run was
+  interrupted, a cloud step that had already completed was supposed to be
+  replayed from its record rather than re-sent. That record was written to a
+  buffer that only reaches storage every half-second, so a process death inside
+  that window lost it — and the resumed run called the provider again, at real
+  cost. The record is now saved the moment a cloud step finishes, as was already
+  done for tool calls.
+- **A cloud provider that stopped responding could hold a run for 15 minutes.**
+  Cloud requests inherited a 900-second network deadline that nothing in the app
+  had chosen. Cloud calls now allow 60 seconds of *silence* from the provider
+  before giving up — measured between pieces of the answer, so a long reply that
+  is still arriving is never cut short, while a dead connection is no longer
+  waited on for a quarter of an hour.
+- **A Cloud step that could not run said so in the reply instead of failing.**
+  When no provider was configured, or the selected one had no API key, the
+  explanation was passed down the pipeline as though the model had written it —
+  a run could end "successfully" with the words *"Error: … not configured"* as
+  its answer. Such a step now fails properly and the run stops with the reason.
+  Relatedly, when cloud access was switched off by the **Block network from
+  local model** restriction, the message blamed a missing API key and sent you
+  to the wrong screen; it now names the restriction that is actually in force.
+- **The status line claimed your device was generating an answer the cloud was
+  producing.** While a Cloud step streamed, the pill still named the on-device
+  backend (`gpu` / `cpu`) — the one place a local-first app must not be vague
+  about where a prompt is being processed. It now reads `cloud` for cloud steps
+  and keeps naming the real device backend for on-device ones, which is what
+  makes a silent fallback to CPU visible. The label also lost a redundant word
+  so it fits on one line.
+- **A dropped cloud connection could report itself as the word "null".** When the
+  provider cut the connection mid-answer, the underlying failure carried no
+  message of its own and the error card ended up reading *"Exception during
+  streaming: null"* — a correct failure with an unreadable reason. The kind of
+  failure is now named instead.
+- **Cloud error messages opened with the same line twice.** A failed cloud call
+  showed its client name on two consecutive lines before the actual diagnosis,
+  costing a line in a card the user is meant to read quickly. The repeat is now
+  collapsed.
+- **A provider error could carry your API key into the logs.** One provider
+  authenticates by putting the key in the request address, so an ordinary
+  network error arrived with the key inside its text — and that text reached the
+  run console, the saved run history and the device log. Credentials are now
+  stripped from provider errors before they are shown or stored.
+- **One external tool that never answered could freeze every chat in the app.**
+  Messages are processed one at a time, so a tool call that hung took the whole
+  queue with it: new messages in any chat were accepted, given a title, and
+  then sat on "Generating…" forever with an empty console and no explanation —
+  observed for an hour and a half against a server that simply stopped
+  replying. Two independent limits now apply. A call to an MCP server gives up
+  after 60 seconds and is reported as a failed tool call, like any other tool
+  error; the previous limit was an accident of whichever HTTP engine happened
+  to be bundled — 10 seconds, too short for tools that search or run a model of
+  their own, and liable to change silently on any dependency upgrade. And
+  independently of any one tool, a run that goes five minutes without a single
+  sign of progress is ended with a message saying so, and the queue moves on.
+  The five minutes count silence, not length: a long answer streams
+  continuously, so slow-but-working runs are never cut short.
+
+- **A tool could run twice after the app was killed mid-task.** When a task is
+  interrupted — the app swiped away, the system reclaiming memory — resuming it
+  replays the steps that already finished instead of repeating them, and that
+  guarantee matters most for tools, which have already acted on the world. It
+  held only once the record of the finished step reached storage, and records
+  are written in batches up to half a second apart. A process death inside that
+  window lost the record, and the resumed task called the same tool a second
+  time: for a tool that asks permission you were asked again, but anything set
+  to run without asking simply repeated its effect. A finished tool call is now
+  recorded durably the moment it returns.
+
+- **A tool list that would not stop loading.** A server that accepted the
+  connection and then went quiet left its row spinning on "Connecting…" for as
+  long as the app stayed open. The handshake now gives up after 30 seconds and
+  says what happened.
+
+- **Any tool whose input was not text was unusable.** Every parameter an MCP
+  server declared was passed on to the model as free text, dropping both its
+  real type and its description. Asked for a duration of 300 seconds, the model
+  would faithfully send the *word* "300", and the server rejected the call —
+  so a tool taking a number, a switch, a list or a choice from a fixed set
+  could never be called successfully. Types and descriptions now reach the
+  model as declared.
+
+- **A server could stay stuck on "Connecting…" after you edited it.** Saving a
+  change while its tool list was mid-load — or simply leaving the screen —
+  cancelled the load without resolving the row, which then span indefinitely
+  until refreshed by hand. Cancellation now settles the row honestly: back to
+  connected if a usable tool list is already held, otherwise a plain
+  "Connection attempt was interrupted".
+
+- **A background approval you did not answer within the first minute could
+  never be granted afterwards.** When nobody responds straight away the run
+  parks and waits for you — for up to a day by default. Tapping **Approve** on
+  the notification after that point did nothing useful: the run refused to
+  continue, and in the chat it sat on "generating…" indefinitely, surviving
+  restarts. The cause was bookkeeping: while the request waited, ordinary
+  progress messages from the step doing the work were mistaken for the wait
+  having ended, so the run stopped advertising itself as waiting and no answer
+  could be applied to it any more. Any pipeline that runs another pipeline
+  inside it was affected. Such a run now stays answerable for its whole window,
+  and a run that genuinely cannot be continued is stopped with a reason instead
+  of being left hanging.
+
+- **An unrelated crash could quietly move you off GPU for good.** Before trying
+  a GPU or NPU backend the app leaves a marker, because a missing driver can
+  kill the process outright before any error handling runs; finding that marker
+  on the next start meant the backend was blamed and switched to CPU
+  permanently. But the marker only records that the app died while starting the
+  model — not why. Being swiped away, or reclaimed by the system for memory, or
+  frozen by the device's battery manager leaves exactly the same trace, so a
+  single unrelated kill was enough to cost you GPU acceleration silently and
+  for good. A first unexplained failure now only runs that one session on CPU
+  and leaves your choice untouched; the saved setting changes only if a second
+  start in a row fails the same way. The status line beside the answer also
+  names the backend actually in use — `generating (GPU) · 65 tok` — so a
+  fallback is visible while it is happening rather than discovered later by its
+  slowness.
+
+- **A background run could die the moment it started, right after you closed
+  the app.** Swiping the app away tells Android to reclaim what it can, and the
+  model is unloaded in response — correct when nothing is running, but the
+  unload could not take effect immediately and instead landed a moment later,
+  by which time a trigger-started run had already loaded the model for itself.
+  The run then failed with "LLM Engine not initialized" seconds after firing.
+  An unload now applies only to the model it was actually asked to release, so
+  one that arrives late leaves a newly loaded model alone. Going to the
+  background also no longer interrupts work already under way: a run that is
+  generating keeps the model until it finishes. Genuine memory pressure still
+  frees the model immediately, in-flight generation included — being killed
+  outright is worse than losing one answer.
+
+- **Refreshing an MCP server's tool list could break a tool call in progress —
+  and told the agent the tool did not exist.** Tapping the refresh icon next to
+  a server (or any tool-list fetch that had outlived its five-minute cache)
+  re-established the connection from scratch instead of simply asking for the
+  tools again. If the agent happened to be calling a tool from that server at
+  the same moment, the connection was pulled out from under the call, which
+  then failed as either "tool not found" or a session error — the first of
+  which is actively misleading, since the agent would go on to plan around a
+  capability it still had. Refreshing now re-lists the tools over the existing
+  connection and reconnects only when there is no usable one, when the server's
+  address, credentials or transport changed, or after a failure; and a call in
+  progress can no longer observe a half-replaced connection. Disconnecting also
+  ends the session on the server rather than just dropping the socket, so
+  servers no longer accumulate abandoned sessions — one run of the reference
+  server had collected four.
 
 - **A task the agent scheduled for itself could not be found, let alone
   stopped.** Every scheduled task showed up under **More → Active tasks** as
@@ -270,8 +561,94 @@ details.
   affected, which is why this survived undetected — anyone running a release
   build of `0.6.0` should update.
 
+- **"Privacy policy" in About opened a link to nowhere.** The button pointed at
+  the `#privacy` section of the project README — a section that did not exist,
+  so the link quietly dropped you at the top of the page instead. The README now
+  has a real **Privacy** section (no account, on-device by default, local-only
+  statistics, opt-in crash reporting, encryption at rest, confirmation before
+  the agent acts), and the button lands on it. A new build-time guard resolves
+  the link's anchor against the README's actual headings, so renaming the
+  heading on either side now fails the build rather than shipping a dead link.
+
 ### Changed
 
+- **The signing identity changed — updating from an earlier build means
+  uninstalling it first.** Builds up to and including `0.6.0` were signed with
+  the Android debug keystore; this is the first release signed with a real
+  release key. Android refuses to update an installed app in place when the
+  signer changes, so an update over `0.6.0` or earlier fails with a signature
+  mismatch and the old build has to be uninstalled — which deletes its local
+  data (chats, memory, custom pipelines). Export anything you want to keep
+  before you do. This is a one-time break: releases from `0.7.0` onward share
+  one signer and update normally.
+- **The roadmap no longer describes shipped work as upcoming.** It still
+  announced the previous release line as current, and its near-term section
+  listed four directions — proven background execution, a repeatable
+  time-to-first-value measurement, memory and preset quality, and a chat
+  archive — that have all since shipped, alongside a section awaiting the first
+  release-signed build that this release *is*. Those are now stated as things
+  the product does, and the near-term section says what is actually next:
+  getting the app into F-Droid and Play (including the open question of whether
+  a prebuilt native inference library clears F-Droid's inclusion policy), a
+  cookbook of recipes per node type, and whatever the first outside reports turn
+  up.
+- **The README now shows a real pipeline instead of a stack of node cards.**
+  The *Pipeline editor* screenshot was rendered from the design-system
+  regression baseline, which meant it showed one card per node type in a
+  vertical list — an accurate picture of the catalogue and a misleading picture
+  of the product. It is now a capture from a phone: a 22-node pipeline on the
+  canvas, with routers, nested sub-pipelines, queues and tool steps wired
+  together, in both themes. The other three screenshots are still rendered from
+  baselines and say so; the canvas has no baseline to render from because it is
+  an app screen rather than a design-system component.
+- **The known limits of MCP servers and cloud providers are now written down.**
+  A round of directed testing against real MCP servers and cloud providers
+  turned up several behaviours that were true of the app but documented
+  nowhere, and a few of them look like defects until you know what they are.
+  The user guide now says so plainly: the tool count on an MCP server row is
+  the list *that server published to this app*, so a healthy `13 tools · ok`
+  can legitimately be fewer than the server's own catalogue (measured against
+  the protocol's reference server, which offers 16); how long a server or a
+  provider is given to answer, and what the resulting error messages mean; that
+  a cloud answer cut off mid-stream is discarded rather than shown as a
+  finished reply — and, honestly, that this protection covers OpenAI, DeepSeek
+  and Google but **not** Ollama or Anthropic, with the reason for each; that
+  a question can take a different route through a routed pipeline depending on
+  what is already in the conversation, and how to make that repeatable; and
+  that leaving the app can end a background run within seconds unless the app
+  is excluded from battery optimisation, which the app never asks for and
+  cannot grant itself. The contributor guide gained the step a new cloud
+  provider must not skip — deciding, by measurement rather than by reading the
+  provider's documentation, whether a missing completion signal means the
+  answer was truncated. No behaviour change: this is documentation catching up
+  with what was measured.
+- **Controls that did nothing were removed from the step editor.** The Cloud
+  step offered Temperature, Max tokens and Timeout, and the on-device step
+  offered temperature, top-P and max new tokens. All of them were saved, and
+  none of them were read: moving any of these sliders changed nothing about the
+  answer. Timeout was the worst of them — the person reaching for it is the one
+  whose provider has already hung, and it was guaranteed not to help. They are
+  gone until per-step settings actually reach the engine. Existing pipelines are
+  untouched: the saved values stay in the file and keep round-tripping, they are
+  simply no longer presented as something you can change.
+- **What the cloud retry policy does and does not do is now written down.** The
+  user guide states plainly that a provider asking you to wait a specific time
+  (a `Retry-After` header) is not honoured — the backoff is the same with or
+  without it — so under a real rate limit the app knocks sooner than it was
+  asked to. Measured, not assumed; the cause is in the upstream client library.
+- **Build toolchain refreshed to clear the `NewerVersionAvailable` /
+  `AndroidGradlePluginVersion` lint gate.** Gradle `9.6.1` → `9.7.0`, `dev.detekt`
+  `2.0.0-alpha.5` → `2.0.0-alpha.6`, Roborazzi `1.70.0` → `1.72.0` (plugin
+  plus the three test artefacts), and the Compose BOM `2026.06.01` →
+  `2026.08.00`. These checks are hard errors in this project on
+  purpose, and a local `check` cannot always see them — lint answers from a cached
+  version index, so the failure can appear only on a clean CI run. No production
+  code changed, no screenshot baseline moved, and the static-analysis guide now
+  points at the version catalogue instead of restating a version number that
+  goes stale the moment it is bumped. One dependency is deliberately held back:
+  the on-device inference engine stays on its current version, because the newer
+  release adds nothing for the Android path and no automated check on this
+  project can exercise a native inference binary.
 - **What long-term memory recalls is now written down.** The user guide gains a
   *"What the agent recalls, and when"* section: memory is searched once per run,
   at the first step that reads it; the similarity threshold is a gate nothing
@@ -302,6 +679,30 @@ details.
   the end of `README.md` was removed, several dangling references to
   internal-only documents were inlined or dropped, and duplicated version
   numbers were replaced with a single source of truth.
+
+- **The repository is now `knotwork`.** It carried the old working title
+  `PersonalAndroidAIAgent` while the app itself had long since become Knotwork.
+  GitHub redirects the old URL — existing clones, links and `git` remotes keep
+  working — but every link in the documentation, the CI badge, the clone
+  command, the issue-template URLs and the in-app privacy link were rewritten to
+  the new address rather than left to lean on that redirect, which disappears
+  permanently if anyone ever creates a repository under the old name.
+
+- **What you can expect when you share a pipeline file is now stated outright.**
+  Exported pipelines and bundles carry a version stamp, and it was never
+  explained what that stamp is worth. Before 1.0 it is a marker, not a promise:
+  a file whose stamp does not match the build importing it is not rejected — it
+  loads on a best-effort basis behind a warning, and any field the build does
+  not recognise is dropped without saying which. The README pre-release notice
+  now says so, and the user guide gains a *Sharing pipeline files* section with
+  the practical consequence spelled out (keep the original — re-exporting after
+  a lossy import overwrites your only complete copy). From 1.0 the format
+  becomes a semantic-versioning contract with migration on import.
+
+- **A pointer for people arriving from Tasker, n8n or Zapier.** The README and
+  the user guide now say once, in plain terms, that a *pipeline* is what those
+  tools call a *workflow*. The app's own wording is unchanged: it says
+  "pipeline" on every screen, and the docs match it.
 
 ## [0.6.0] - 2026-07-16
 
@@ -4127,10 +4528,11 @@ that produced the initial 0.1.0 snapshot.
 - **Master key**: `EncryptedSharedPreferences` is rooted in the Android
   Keystore, so the master key is hardware-backed where available.
 
-[Unreleased]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.6.0...HEAD
-[0.6.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.5.0...v0.6.0
-[0.5.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.4.0...v0.5.0
-[0.4.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/alexeyw/PersonalAndroidAIAgent/releases/tag/v0.1.0
+[Unreleased]: https://github.com/alexeyw/knotwork/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/alexeyw/knotwork/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/alexeyw/knotwork/compare/v0.5.0...v0.6.0
+[0.5.0]: https://github.com/alexeyw/knotwork/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/alexeyw/knotwork/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/alexeyw/knotwork/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/alexeyw/knotwork/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/alexeyw/knotwork/releases/tag/v0.1.0

@@ -49,7 +49,7 @@ class LongRunningTaskNotifierImpl @Inject constructor(
         if (!hasPostNotificationsPermission()) return
         val elapsedSeconds = elapsedMs / MS_PER_SECOND
         val notification = NotificationCompat.Builder(context, NotificationChannels.LONG_RUNNING_TASKS)
-            .setSmallIcon(android.R.drawable.stat_notify_sync)
+            .setSmallIcon(R.drawable.ic_stat_agent)
             .setContentTitle(pipelineName)
             .setContentText(
                 context.getString(R.string.notifications_long_running_body, elapsedSeconds),

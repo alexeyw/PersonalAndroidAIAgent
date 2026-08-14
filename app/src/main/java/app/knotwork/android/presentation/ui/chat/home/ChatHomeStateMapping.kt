@@ -111,7 +111,7 @@ fun ChatHomeScreenState.toViewState(fixtures: ChatHomeFixtures = ChatHomeFixture
             agentStatusLine = if (visual.preparingModel) {
                 fixtures.statusPreparingModel
             } else {
-                formatGeneratingStatus(fixtures.statusGenerating, tokens.streaming)
+                formatGeneratingStatus(fixtures.statusGenerating, tokens.streaming, tokens.backend)
             },
             console = console,
         )
@@ -502,8 +502,13 @@ internal fun debugConsoleSnapForId(id: String): ConsoleSnap? = when (id) {
  *   [ChatHomeFixtures.statusGenerating].
  * @param tokens approximate streamed-token count.
  */
-internal fun formatGeneratingStatus(baseLabel: String, tokens: Int): String =
-    if (tokens > 0) "$baseLabel · $tokens tok" else baseLabel
+internal fun formatGeneratingStatus(baseLabel: String, tokens: Int, backend: String? = null): String {
+    // The backend hint rides in the label rather than a separate chip: it is only
+    // meaningful while tokens are being produced, and it exists to make a silent
+    // fallback to CPU visible at the moment it costs the user speed.
+    val label = if (backend.isNullOrBlank()) baseLabel else "$baseLabel ($backend)"
+    return if (tokens > 0) "$label · $tokens tok" else label
+}
 
 /**
  * Resolves the empty-state suggestion cards for the active chat: the cards

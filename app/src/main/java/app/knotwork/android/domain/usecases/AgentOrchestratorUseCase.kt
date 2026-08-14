@@ -91,6 +91,7 @@ class AgentOrchestratorUseCase @Inject constructor(private val taskQueueManager:
         attachment: MessageAttachment? = null,
         displayContent: String? = null,
         origin: RunOrigin = RunOrigin.CHAT,
+        persistUserMessage: Boolean = true,
     ): Flow<AgentOrchestratorState> {
         val task = AgentTask(
             sessionId = sessionId,
@@ -100,6 +101,7 @@ class AgentOrchestratorUseCase @Inject constructor(private val taskQueueManager:
             attachment = attachment,
             displayContent = displayContent,
             origin = origin,
+            persistUserMessage = persistUserMessage,
         )
         taskQueueManager.enqueueTask(task)
         return taskQueueManager.observeTaskState(sessionId)

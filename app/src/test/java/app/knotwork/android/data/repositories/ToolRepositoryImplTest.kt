@@ -2,6 +2,7 @@ package app.knotwork.android.data.repositories
 
 import app.knotwork.android.data.mcp.McpClient
 import app.knotwork.android.data.mcp.McpClientFactory
+import app.knotwork.android.data.mcp.McpConnectionPool
 import app.knotwork.android.data.tools.local.LocalAppFunctionManager
 import app.knotwork.android.data.tools.local.SearchTool
 import app.knotwork.android.domain.models.AgentTool
@@ -45,7 +46,20 @@ class ToolRepositoryImplTest {
         every { settingsRepository.mcpServers } returns flowOf(listOf(McpServerConfig(url = "http://localhost:8080")))
         every { settingsRepository.disabledAppFunctions } returns flowOf(emptySet())
         every { settingsRepository.disabledMcpTools } returns flowOf(emptySet())
-        every { settingsRepository.appFunctionRiskOverrides } returns flowOf(emptyMap())
+        every { settingsRepository.toolRiskOverrides } returns flowOf(emptyMap())
+        // The fixture server is unencrypted loopback, so the pool's cleartext gate
+        // would refuse it unless the user had approved that origin — which is
+        // exactly what someone running a local MCP server would have done.
+        every { settingsRepository.approvedCleartextOrigins } returns flowOf(
+            setOf(
+                "http://localhost:8080",
+                "http://10.0.0.1:8080",
+                "http://10.0.0.2:8080",
+                "http://10.0.0.3:8080",
+                "http://10.0.0.4:8080",
+                "http://10.0.0.5:8080",
+            ),
+        )
         // http_request stays hidden from getAvailableTools unless a test opts a domain in.
         every { settingsRepository.allowedHttpDomains } returns flowOf(emptyList())
         coEvery { localAppFunctionManager.getAvailableFunctions() } returns
@@ -76,7 +90,7 @@ class ToolRepositoryImplTest {
 
         repository = ToolRepositoryImpl(
             settingsRepository,
-            mcpClientFactory,
+            McpConnectionPool(mcpClientFactory, settingsRepository),
             localAppFunctionManager,
             apiKeyRepository,
             searchTool,
@@ -423,7 +437,7 @@ class ToolRepositoryImplTest {
     @Test
     fun `given discovered AppFunction without override when getRisk then returns SENSITIVE`() = runTest {
         // Setup already mocks `localAppFunctionManager.getAvailableFunctions()` to return `get_system_time`
-        // and `settingsRepository.appFunctionRiskOverrides` to emit an empty map.
+        // and `settingsRepository.toolRiskOverrides` to emit an empty map.
         coEvery { mcpClient.getTools() } returns emptyList()
 
         val risk = repository.getRisk("get_system_time")
@@ -433,7 +447,7 @@ class ToolRepositoryImplTest {
 
     @Test
     fun `given discovered AppFunction with READ_ONLY override when getRisk then returns READ_ONLY`() = runTest {
-        every { settingsRepository.appFunctionRiskOverrides } returns
+        every { settingsRepository.toolRiskOverrides } returns
             flowOf(mapOf("get_system_time" to ToolRisk.READ_ONLY))
         coEvery { mcpClient.getTools() } returns emptyList()
 
@@ -444,7 +458,7 @@ class ToolRepositoryImplTest {
 
     @Test
     fun `given discovered AppFunction with DESTRUCTIVE override when getRisk then returns DESTRUCTIVE`() = runTest {
-        every { settingsRepository.appFunctionRiskOverrides } returns
+        every { settingsRepository.toolRiskOverrides } returns
             flowOf(mapOf("get_system_time" to ToolRisk.DESTRUCTIVE))
         coEvery { mcpClient.getTools() } returns emptyList()
 
@@ -463,6 +477,68 @@ class ToolRepositoryImplTest {
     }
 
     @Test
+    fun `given MCP tool with DESTRUCTIVE override when getRisk then returns DESTRUCTIVE`() = runTest {
+        // Raising the gate. Before the override path reached MCP, `DESTRUCTIVE` was
+        // unreachable by construction for every MCP tool — the blanket `SENSITIVE`
+        // meant `blockDestructiveTools` could never apply to a remote tool.
+        coEvery { mcpClient.getTools() } returns listOf(AgentTool("delete_repo", "desc", "{}"))
+        every { settingsRepository.toolRiskOverrides } returns
+            flowOf(mapOf(mcpKey("delete_repo") to ToolRisk.DESTRUCTIVE))
+
+        val risk = repository.getRisk("delete_repo")
+
+        assertEquals(ToolRisk.DESTRUCTIVE, risk)
+    }
+
+    @Test
+    fun `given MCP tool with READ_ONLY override when getRisk then returns READ_ONLY`() = runTest {
+        // Lowering the gate: a genuinely read-only remote tool should not prompt on
+        // every call once the user has said so.
+        coEvery { mcpClient.getTools() } returns listOf(AgentTool("list_issues", "desc", "{}"))
+        every { settingsRepository.toolRiskOverrides } returns
+            flowOf(mapOf(mcpKey("list_issues") to ToolRisk.READ_ONLY))
+
+        val risk = repository.getRisk("list_issues")
+
+        assertEquals(ToolRisk.READ_ONLY, risk)
+    }
+
+    @Test
+    fun `given MCP override keyed by bare tool name when getRisk then it is ignored`() = runTest {
+        // The key namespace is per server (`mcp:<sha8(url)>:<name>`), not the bare
+        // name — otherwise an override meant for one server would silently follow the
+        // same tool name onto every other connected server.
+        coEvery { mcpClient.getTools() } returns listOf(AgentTool("create_issue", "desc", "{}"))
+        every { settingsRepository.toolRiskOverrides } returns
+            flowOf(mapOf("create_issue" to ToolRisk.READ_ONLY))
+
+        val risk = repository.getRisk("create_issue")
+
+        assertEquals(ToolRisk.SENSITIVE, risk)
+    }
+
+    @Test
+    fun `given override for a different MCP server when getRisk then the local server keeps SENSITIVE`() = runTest {
+        // Same tool name on two servers is normal in MCP catalogues. An override set
+        // on the other server must not leak onto this one.
+        coEvery { mcpClient.getTools() } returns listOf(AgentTool("create_issue", "desc", "{}"))
+        val otherServerKey = McpServerRepositoryImpl.mcpToolId(
+            serverUrl = "http://other-host:9000",
+            toolName = "create_issue",
+        )
+        every { settingsRepository.toolRiskOverrides } returns
+            flowOf(mapOf(otherServerKey to ToolRisk.READ_ONLY))
+
+        val risk = repository.getRisk("create_issue")
+
+        assertEquals(ToolRisk.SENSITIVE, risk)
+    }
+
+    /** Builds the per-server override key for the single MCP server the setup configures. */
+    private fun mcpKey(toolName: String): String =
+        McpServerRepositoryImpl.mcpToolId(serverUrl = "http://localhost:8080", toolName = toolName)
+
+    @Test
     fun `given unknown tool when getRisk then throws IllegalArgumentException`() = runTest {
         coEvery { mcpClient.getTools() } returns emptyList()
 
@@ -476,13 +552,26 @@ class ToolRepositoryImplTest {
     fun `given override is set after first lookup when getRisk runs again then override wins`() = runTest {
         // Regression guard for accidental caching: the resolver must observe the latest
         // setting on every call, not the value captured at construction time.
-        every { settingsRepository.appFunctionRiskOverrides } returns flowOf(emptyMap())
+        every { settingsRepository.toolRiskOverrides } returns flowOf(emptyMap())
+        // The fixture server is unencrypted loopback, so the pool's cleartext gate
+        // would refuse it unless the user had approved that origin — which is
+        // exactly what someone running a local MCP server would have done.
+        every { settingsRepository.approvedCleartextOrigins } returns flowOf(
+            setOf(
+                "http://localhost:8080",
+                "http://10.0.0.1:8080",
+                "http://10.0.0.2:8080",
+                "http://10.0.0.3:8080",
+                "http://10.0.0.4:8080",
+                "http://10.0.0.5:8080",
+            ),
+        )
         coEvery { mcpClient.getTools() } returns emptyList()
 
         val firstRisk = repository.getRisk("get_system_time")
         assertEquals(ToolRisk.SENSITIVE, firstRisk)
 
-        every { settingsRepository.appFunctionRiskOverrides } returns
+        every { settingsRepository.toolRiskOverrides } returns
             flowOf(mapOf("get_system_time" to ToolRisk.READ_ONLY))
 
         val secondRisk = repository.getRisk("get_system_time")
@@ -550,8 +639,8 @@ class ToolRepositoryImplTest {
         // same tool name and only one's mcpId can be in the disabled set.
         // The old loop threw immediately on the first disabled hit, robbing
         // the enabled sibling of a chance to execute.
-        val urlA = "http://server-a:8080"
-        val urlB = "http://server-b:8080"
+        val urlA = "http://10.0.0.1:8080"
+        val urlB = "http://10.0.0.2:8080"
         val toolName = "shared_tool"
         val configA = McpServerConfig(url = urlA)
         val configB = McpServerConfig(url = urlB)
@@ -577,8 +666,8 @@ class ToolRepositoryImplTest {
     fun `executeTool throws disabled when every advertising provider has the tool disabled`() = runTest {
         // After the routing rewrite, sawDisabled must still produce the
         // "is disabled" failure shape when nobody else can run the tool.
-        val urlA = "http://server-a:8080"
-        val urlB = "http://server-b:8080"
+        val urlA = "http://10.0.0.1:8080"
+        val urlB = "http://10.0.0.2:8080"
         val toolName = "shared_tool"
         val clientB: McpClient = mockk(relaxed = true)
         every { settingsRepository.mcpServers } returns
@@ -609,8 +698,8 @@ class ToolRepositoryImplTest {
         // Regression: a single break inside the for-loop blew up
         // multi-provider resilience — one flaky server made every other
         // healthy provider unreachable. The fix is to keep walking.
-        val urlA = "http://flaky:8080"
-        val urlB = "http://healthy:8080"
+        val urlA = "http://10.0.0.4:8080"
+        val urlB = "http://10.0.0.5:8080"
         val toolName = "shared_tool"
         val clientB: McpClient = mockk(relaxed = true)
         every { settingsRepository.mcpServers } returns
@@ -641,7 +730,7 @@ class ToolRepositoryImplTest {
         // idempotent side effects. distinctMcpConfigs() now keeps only the
         // first occurrence of each URL before iteration.
         val toolName = "shared_tool"
-        val url = "http://duplicated:8080"
+        val url = "http://10.0.0.3:8080"
         every { settingsRepository.mcpServers } returns flowOf(
             listOf(McpServerConfig(url = url), McpServerConfig(url = url)),
         )
@@ -661,7 +750,7 @@ class ToolRepositoryImplTest {
         // Sibling regression: a duplicated URL row also produced duplicate
         // entries in the advertised tool catalogue, which would inflate the
         // agent's prompt and confuse the LLM's tool-selection pass.
-        val url = "http://duplicated:8080"
+        val url = "http://10.0.0.3:8080"
         val mcpTool = AgentTool(name = "shared_tool", description = "T", parameters = "{}")
         every { settingsRepository.mcpServers } returns flowOf(
             listOf(McpServerConfig(url = url), McpServerConfig(url = url)),
@@ -679,8 +768,8 @@ class ToolRepositoryImplTest {
         // (network error / 5xx / parse failure) instead of a generic
         // "not found across active providers" — which would mislead the
         // operator into thinking the tool was never registered.
-        val urlA = "http://server-a:8080"
-        val urlB = "http://server-b:8080"
+        val urlA = "http://10.0.0.1:8080"
+        val urlB = "http://10.0.0.2:8080"
         val toolName = "shared_tool"
         val clientB: McpClient = mockk(relaxed = true)
         every { settingsRepository.mcpServers } returns

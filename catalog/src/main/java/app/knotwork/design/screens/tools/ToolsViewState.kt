@@ -171,6 +171,7 @@ data class AddMcpServerForm(
     val headers: List<McpHeaderRow> = emptyList(),
     val submitting: Boolean = false,
     val editingUrl: String? = null,
+    val cleartextConsentOrigin: String? = null,
 ) {
     val canSubmit: Boolean get() = url.isNotBlank() && urlError == null && !submitting
     val isEdit: Boolean get() = editingUrl != null
@@ -266,6 +267,7 @@ class McpServerConfigCallbacks(
     val onHeaderRemove: (index: Int) -> Unit = {},
     val onSubmit: () -> Unit = {},
     val onCancel: () -> Unit = {},
+    val onApproveCleartext: () -> Unit = {},
 )
 
 fun noopMcpServerConfigCallbacks(): McpServerConfigCallbacks = McpServerConfigCallbacks()

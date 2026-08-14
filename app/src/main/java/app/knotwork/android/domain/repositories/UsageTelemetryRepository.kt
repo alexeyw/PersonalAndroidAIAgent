@@ -34,10 +34,15 @@ import kotlinx.coroutines.flow.Flow
 interface UsageTelemetryRepository {
 
     /**
-     * Live aggregate of every local counter. Emits a fresh
+     * Live aggregate of every local counter, including the derived weekly
+     * retention figures ([UsageTelemetrySummary.retention]). Emits a fresh
      * [UsageTelemetrySummary] whenever any counter changes (and
      * [UsageTelemetrySummary.EMPTY] when nothing has been recorded yet or the
      * statistics were just reset).
+     *
+     * The retention window is anchored to the device-local "today" resolved when
+     * a collector subscribes, so a long-lived collector keeps its anchor until it
+     * re-subscribes.
      */
     val summary: Flow<UsageTelemetrySummary>
 
@@ -52,7 +57,9 @@ interface UsageTelemetryRepository {
     suspend fun isEnabled(): Boolean
 
     /**
-     * Records the terminal outcome of one **root** pipeline run.
+     * Records the terminal outcome of one **root** pipeline run — the per-pipeline
+     * and per-outcome tallies, the active day, and (when the pipeline is known)
+     * the `(day, pipeline)` pair the weekly "live pipelines" figure is built from.
      *
      * Callers must pass only root-level runs (no nested sub-pipeline runs), so a
      * composed pipeline counts as a single run. A no-op when recording is

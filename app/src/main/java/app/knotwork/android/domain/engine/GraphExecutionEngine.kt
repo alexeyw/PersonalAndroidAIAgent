@@ -887,6 +887,25 @@ class GraphExecutionEngine @Inject constructor(
                             depth = depth,
                         ),
                     )
+                    // A tool call is the one node whose re-execution is not free:
+                    // it acted on the world. The trace is write-buffered (flushed
+                    // on size, on a 500 ms timer, or at suspension points), so a
+                    // process death inside that window used to lose the record of
+                    // a tool that had already run — and the resume then called it
+                    // a second time. Measured on the reference device: killed
+                    // 112 ms after the tool returned, the resumed run re-invoked
+                    // it (second `tools/call` on the wire); killed 1.2 s after, it
+                    // replayed as designed. Flushing here closes the window at the
+                    // cost of one batch insert per tool call.
+                    // A CLOUD node earns the same treatment for a different reason:
+                    // re-running it is not free either, but the cost is money and the
+                    // provider's rate limit rather than a side effect on the world. The
+                    // original TOOL-only rule reasoned that for every other node type a
+                    // repeat is "lost time, not a side effect" — that holds for on-device
+                    // nodes and not for a billed API call.
+                    if (currentNode.type == NodeType.TOOL || currentNode.type == NodeType.CLOUD) {
+                        runTraceRepository.flush()
+                    }
                 }
                 emit(AgentOrchestratorState.PipelineTrace(traceSteps.toList()))
                 // Surface the per-node I/O pair for the Vars tab of the
@@ -1178,6 +1197,16 @@ class GraphExecutionEngine @Inject constructor(
             runTraceRepository.flush()
             true
         }
+        // Console lines and node-I/O snapshots are observations *about* the run,
+        // not progress of it: they keep arriving while a HITL gate is waiting
+        // (a sub-pipeline forwards its child's console traffic upwards). Letting
+        // them fall through to the branch below made the first such line read as
+        // "the wait ended" and flip the record back to RUNNING while the gate was
+        // still open. For a nested pipeline that left the root RUNNING and the
+        // child WAITING_APPROVAL, so `ResumePipelineRunUseCase` — which requires
+        // a resumable *root* — rejected every attempt to answer the parked
+        // notification (phase-40 finding F7).
+        state is AgentOrchestratorState.ConsoleLog || state is AgentOrchestratorState.NodeIO -> wasSuspended
         wasSuspended -> {
             pipelineRunRepository.updateStatus(runId, PipelineRunStatus.RUNNING)
             false

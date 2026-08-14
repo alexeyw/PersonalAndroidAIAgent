@@ -94,7 +94,7 @@ class PipelineEditorNodeConfigSheetTest {
     }
 
     @Test
-    fun liteRtForm_rendersSystemPromptAndTemperature() {
+    fun liteRtForm_rendersSystemPromptAndOmitsInertSamplingControls() {
         val config: NodeConfig = LiteRtConfig(title = "Local LLM")
         composeTestRule.setContent {
             MaterialTheme {
@@ -111,9 +111,13 @@ class PipelineEditorNodeConfigSheetTest {
         composeTestRule
             .onNodeWithText(ctx.getString(KnotworkR.string.knotwork_node_field_system_prompt))
             .assertIsDisplayed()
+        // The sampling sliders are deliberately gone: they persisted but no
+        // executor ever read them, so moving one changed nothing about the
+        // answer. This assertion is the guard against them drifting back in
+        // before the engine actually honours them.
         composeTestRule
             .onNodeWithText(ctx.getString(KnotworkR.string.knotwork_node_field_temperature))
-            .assertIsDisplayed()
+            .assertDoesNotExist()
     }
 
     @Test

@@ -66,9 +66,14 @@ interface LiteRtRepository {
   flag in isolation. The risk resolves through three layers:
   built-in defaults (`search_tool` → `READ_ONLY`,
   `schedule_task` / `delegate_task` → `SENSITIVE`), per-tool overrides
-  for discovered AppFunctions
-  (`SettingsRepository.setAppFunctionRiskOverride`), then `SENSITIVE` as
-  the conservative fallback for anything else (MCP tools included).
+  for discovered AppFunctions (keyed by tool name) and for MCP tools
+  (keyed per server by the `mcp:<sha8(serverUrl)>:<toolName>` id, so the
+  same tool name on two servers stays two decisions) via
+  `SettingsRepository.setToolRiskOverride`, then `SENSITIVE` as the
+  conservative fallback. The override is the user's voice, never the
+  server's — MCP's `readOnlyHint` / `destructiveHint` annotations are
+  deliberately not consulted, since a server able to declare its own
+  tools read-only could walk straight past the gate.
   `requiresUserConfirmation` is now an opt-in "ask on every single call"
   override and never silences `SENSITIVE` / `DESTRUCTIVE`.
 
@@ -88,9 +93,15 @@ interface Tool {
 ## Model Context Protocol (MCP)
 
 - The MCP client lives in the `data/mcp` package.
-- Each MCP server connection is held in a
-  `ConcurrentHashMap<String, McpClient>` inside `ToolRepositoryImpl`
-  (thread-safe).
+- Live connections have exactly one owner: the `@Singleton`
+  `McpConnectionPool` (`data/mcp/`), keyed by server URL and holding the
+  config each client was connected with. `McpServerRepositoryImpl` (Tools
+  screen health + TTL tool-list cache) and `ToolRepositoryImpl` (the
+  agent's calls) both go through it. Never add a second pool: when these
+  two each kept their own, the health indicator described one session
+  while the agent used another. The pool's per-URL lock is held only
+  across connect / invalidate — never while a caller uses the client, or
+  concurrent tool calls to one server would serialise behind it.
 - Connections are lazy: they open on first use and close when the agent
   session ends.
 - Every MCP call is wrapped in `try`/`catch` that **re-throws
@@ -98,6 +109,15 @@ interface Tool {
   other failures to `ToolResult.Error`. `runCatching` is never used around
   these (suspending) calls — it would swallow cancellation; see
   [code-style.md](code-style.md) § Coroutines & Flow.
+- Every network round-trip carries an **explicit deadline applied in our own
+  code**: `withTimeoutOrNull` around the call inside `KoogMcpClient` — 60 s for
+  a tool call (matching the cloud-LLM budget below), 30 s for the connect
+  handshake. Ktor's `HttpTimeout` plugin is deliberately **not** used: it does
+  not apply to MCP's SSE-framed response path, so installing it removes the
+  engine's own socket timeout without supplying a replacement and leaves the
+  call unbounded. `withTimeoutOrNull` rather than `withTimeout`, because a
+  timeout surfacing as a `CancellationException` would propagate past the
+  tool-error mapping and cancel the entire run.
 - **MCP credentials** (Bearer tokens, Basic passwords, API-key values) are
   stored in the **Keystore-backed encrypted store**, keyed per server by a hash
   of its URL — never in the plain `mcp_servers_json` DataStore entry, which
@@ -120,7 +140,25 @@ interface Tool {
   Discover screen lives in the **same Keystore-backed store** (keyed
   `hugging_face_token`), never in plain DataStore. It is sent only on the file
   download that needs it — discovery browsing and metadata calls are anonymous.
-- Requests include a `timeout` of 60 seconds (OkHttp).
+- **Every cloud client carries an explicit `ConnectionTimeoutConfig`**, applied in
+  `KoogClientFactory`: 60 s socket, 30 s connect, 900 s request. The socket value
+  is the load-bearing one because Ktor applies it *per read* — it bounds how long
+  the provider may stay **silent**, not how long a healthy answer may take, so a
+  long streaming reply is never cut short for being long. Do not "simplify" this
+  to a single overall timeout. Leaving the config off is not neutral: Koog's own
+  default is 900 s for both request and socket, measured to hold a node for
+  900 033 ms against a stalled provider.
+- **A stream that ends without a finish reason is a failure, not an answer.** The
+  OpenAI-compatible clients end a dropped stream normally and simply omit the
+  finish reason, so the only signal that a reply was truncated is the absent
+  `StreamFrame.End.finishReason`. `CloudLlmNodeExecutor` rejects such a response
+  instead of forwarding a half-written answer. The check is per provider and
+  enabled only where the behaviour was measured — Koog's Ollama client never
+  emits a finish reason at all, so enabling it there would fail healthy runs.
+- **Provider error text is scrubbed before it is shown, logged or stored**
+  (`CloudErrorSanitizer`). Google authenticates by query parameter, so its
+  transport errors arrive carrying the API key; credentials must never reach the
+  run console, the run trace or logcat.
 - Use the unified `CLOUD` pipeline node with a `provider` parameter — do
   not add per-provider node types to the pipeline graph.
 

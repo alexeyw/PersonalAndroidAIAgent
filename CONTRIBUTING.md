@@ -25,11 +25,11 @@ By participating in this project you agree to abide by our
 - The [roadmap](docs/roadmap.md) describes where the project is headed
   and which directions welcome outside help.
 - Issues labelled
-  [`good first issue`](https://github.com/alexeyw/PersonalAndroidAIAgent/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
+  [`good first issue`](https://github.com/alexeyw/knotwork/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)
   are scoped to be approachable without deep knowledge of the codebase:
   each one states the motivation, the files involved, and concrete
   acceptance criteria. Issues labelled
-  [`help wanted`](https://github.com/alexeyw/PersonalAndroidAIAgent/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22)
+  [`help wanted`](https://github.com/alexeyw/knotwork/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22)
   mark work where contributions are especially welcome.
 - [`docs/extending.md`](docs/extending.md) has step-by-step recipes for
   the most self-contained contributions — new node types, tools, cloud
@@ -82,14 +82,15 @@ Common commands:
 ./gradlew assembleDebug   # build the debug APK
 ./gradlew test            # run JVM unit tests
 ./gradlew check           # full local quality gate (see below)
-./gradlew bundleRelease   # build the Play-Store-shaped AAB (R8-minified)
+./gradlew bundleFullRelease   # build the Play-Store-shaped AAB (R8-minified)
 ```
 
 The `release` variant runs through R8 + resource shrinking + Jansi-native
 stripping; the keep rules live in [`app/proguard-rules.pro`](app/proguard-rules.pro)
-and the full release playbook (signing posture, AAB build, APK size
-breakdown, future-keystore plan) lives in
-[`docs/release.md`](docs/release.md).
+and the full release playbook (signing, AAB build, APK size breakdown) lives in
+[`docs/release.md`](docs/release.md). Published releases are built by
+`.github/workflows/release.yml` from a `v*` tag rather than by hand — see
+[`docs/release.md`](docs/release.md) §9.
 
 `./gradlew check` aggregates the same checks CI runs on every pull
 request:
@@ -120,7 +121,7 @@ long-lived branch before reaching `main`:
   integration branch is merged into `main` with a merge commit and
   deleted.
 - If no `phase/<N>` branch is currently open (check the
-  [branch list](https://github.com/alexeyw/PersonalAndroidAIAgent/branches)),
+  [branch list](https://github.com/alexeyw/knotwork/branches)),
   target `main` directly. When in doubt, open the PR against `main` —
   maintainers will retarget it if an integration branch is active.
 - Direct pushes to `main` are not permitted; every change lands through a
@@ -200,7 +201,7 @@ a bug.
 - [`docs/static-analysis.md`](docs/static-analysis.md) — detekt / ktlint
   / lint configuration and severity policy.
 - [`docs/release.md`](docs/release.md) — release-build playbook (R8
-  keep rules, signing posture, AAB build, APK size breakdown).
+  keep rules, signing, AAB build, APK size breakdown, how a release is cut).
 - [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) — community standards.
 - [`SECURITY.md`](SECURITY.md) — threat model and how to report a
   vulnerability.

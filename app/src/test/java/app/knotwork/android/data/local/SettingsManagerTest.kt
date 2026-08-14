@@ -104,7 +104,7 @@ class SettingsManagerTest {
     private val traceRetentionMaxAgeDaysKey =
         androidx.datastore.preferences.core.intPreferencesKey("trace_retention_max_age_days")
     private val crashReportingEnabledKey = booleanPreferencesKey("crash_reporting_enabled")
-    private val appFunctionRiskOverridesKey = stringPreferencesKey("app_function_risk_overrides")
+    private val toolRiskOverridesKey = stringPreferencesKey("app_function_risk_overrides")
     private val hasCompletedOnboardingKey = booleanPreferencesKey("has_completed_onboarding")
     private val activeEmbeddingProviderIdKey = stringPreferencesKey("active_embedding_provider_id")
     private val memorySearchTopKKey = androidx.datastore.preferences.core.intPreferencesKey("memory_search_top_k")
@@ -781,25 +781,25 @@ class SettingsManagerTest {
     }
 
     @Test
-    fun `appFunctionRiskOverrides returns empty map when nothing is stored`() = runTest {
+    fun `toolRiskOverrides returns empty map when nothing is stored`() = runTest {
         val prefs = mockk<Preferences>()
-        every { prefs[appFunctionRiskOverridesKey] } returns null
+        every { prefs[toolRiskOverridesKey] } returns null
         every { dataStore.data } returns flowOf(prefs)
 
         val settingsManager = SettingsManager(dataStore, secretStore)
-        val result = settingsManager.appFunctionRiskOverrides.first()
+        val result = settingsManager.toolRiskOverrides.first()
         assertTrue(result.isEmpty())
     }
 
     @Test
-    fun `appFunctionRiskOverrides parses stored JSON map into typed risks`() = runTest {
+    fun `toolRiskOverrides parses stored JSON map into typed risks`() = runTest {
         val prefs = mockk<Preferences>()
-        every { prefs[appFunctionRiskOverridesKey] } returns
+        every { prefs[toolRiskOverridesKey] } returns
             "{\"echo\":\"READ_ONLY\",\"send_email\":\"DESTRUCTIVE\"}"
         every { dataStore.data } returns flowOf(prefs)
 
         val settingsManager = SettingsManager(dataStore, secretStore)
-        val result = settingsManager.appFunctionRiskOverrides.first()
+        val result = settingsManager.toolRiskOverrides.first()
 
         assertEquals(2, result.size)
         assertEquals(ToolRisk.READ_ONLY, result["echo"])
@@ -807,14 +807,14 @@ class SettingsManagerTest {
     }
 
     @Test
-    fun `appFunctionRiskOverrides drops entries with unknown risk values`() = runTest {
+    fun `toolRiskOverrides drops entries with unknown risk values`() = runTest {
         val prefs = mockk<Preferences>()
-        every { prefs[appFunctionRiskOverridesKey] } returns
+        every { prefs[toolRiskOverridesKey] } returns
             "{\"echo\":\"READ_ONLY\",\"bogus\":\"NOT_A_REAL_RISK\"}"
         every { dataStore.data } returns flowOf(prefs)
 
         val settingsManager = SettingsManager(dataStore, secretStore)
-        val result = settingsManager.appFunctionRiskOverrides.first()
+        val result = settingsManager.toolRiskOverrides.first()
 
         assertEquals(1, result.size)
         assertEquals(ToolRisk.READ_ONLY, result["echo"])
@@ -822,22 +822,22 @@ class SettingsManagerTest {
     }
 
     @Test
-    fun `appFunctionRiskOverrides returns empty map on malformed JSON`() = runTest {
+    fun `toolRiskOverrides returns empty map on malformed JSON`() = runTest {
         val prefs = mockk<Preferences>()
-        every { prefs[appFunctionRiskOverridesKey] } returns "this is not json"
+        every { prefs[toolRiskOverridesKey] } returns "this is not json"
         every { dataStore.data } returns flowOf(prefs)
 
         val settingsManager = SettingsManager(dataStore, secretStore)
-        val result = settingsManager.appFunctionRiskOverrides.first()
+        val result = settingsManager.toolRiskOverrides.first()
         assertTrue(result.isEmpty())
     }
 
     @Test
-    fun `appFunctionRiskOverrides handles IOException and falls back to empty map`() = runTest {
+    fun `toolRiskOverrides handles IOException and falls back to empty map`() = runTest {
         every { dataStore.data } returns flow { throw IOException("Test") }
 
         val settingsManager = SettingsManager(dataStore, secretStore)
-        val result = settingsManager.appFunctionRiskOverrides.first()
+        val result = settingsManager.toolRiskOverrides.first()
         assertTrue(result.isEmpty())
     }
 
@@ -1475,10 +1475,20 @@ class SettingsManagerTest {
                 "mcp_server_urls", "mcp_servers_json",
                 "disabled_app_functions", "disabled_mcp_tools", "app_function_risk_overrides",
                 "current_chat_session_id", "memory_last_compacted_at",
-                "local_model_backend", "last_init_backend_attempt",
+                // Backend choice plus the two crash-recovery breadcrumbs that
+                // qualify it. The streak belongs with the attempt sentinel: both
+                // describe how the last inits went on *this* device, and a
+                // settings reset is not evidence that a backend which failed
+                // twice now works.
+                "local_model_backend", "last_init_backend_attempt", "local_backend_failure_streak",
                 "default_pipeline_id", "console_preferred_tab", "last_test_probe_result",
                 "active_embedding_provider_id", "last_reembed_provider_id",
-                "allowed_http_domains",
+                // User-granted network permissions, in the same category as
+                // `allowed_http_domains`: a "reset to recommended defaults" that
+                // silently revoked the approval for a LAN Ollama address would
+                // break a working local setup with no explanation, and one that
+                // silently kept re-granting it would be worse.
+                "allowed_http_domains", "approved_cleartext_origins",
                 "share_target_pipeline_id", "quick_settings_tile_pipeline_id",
             )
 

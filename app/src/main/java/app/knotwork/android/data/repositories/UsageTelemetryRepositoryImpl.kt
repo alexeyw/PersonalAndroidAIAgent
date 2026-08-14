@@ -1,39 +1,49 @@
 package app.knotwork.android.data.repositories
 
 import androidx.annotation.VisibleForTesting
-import app.knotwork.android.data.local.dao.ActiveDayStats
 import app.knotwork.android.data.local.dao.UsageTelemetryCategories
 import app.knotwork.android.data.local.dao.UsageTelemetryDao
 import app.knotwork.android.data.local.models.OnboardingMilestoneEntity
 import app.knotwork.android.data.local.models.UsageCounterEntity
+import app.knotwork.android.data.local.models.UsagePipelineDayEntity
 import app.knotwork.android.domain.models.OnboardingJourney
 import app.knotwork.android.domain.models.OnboardingMilestone
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.PipelineRunTally
+import app.knotwork.android.domain.models.UsagePipelineDay
+import app.knotwork.android.domain.models.UsageRetention
 import app.knotwork.android.domain.models.UsageTelemetrySummary
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.UsageTelemetryRepository
+import app.knotwork.android.domain.usecases.CalculateUsageRetentionUseCase
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.time.Clock
 import java.time.Instant
+import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import java.time.format.DateTimeParseException
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * Room-backed implementation of [UsageTelemetryRepository].
  *
- * Aggregates the three on-device tables (`usage_counter`, `usage_active_day`,
- * `onboarding_milestone`) into a live [UsageTelemetrySummary] and records terminal
- * run outcomes / trigger firings / onboarding markers behind the opt-in flag.
+ * Aggregates the four on-device tables (`usage_counter`, `usage_active_day`,
+ * `usage_pipeline_day`, `onboarding_milestone`) into a live
+ * [UsageTelemetrySummary] — including the weekly-retention figures, whose
+ * arithmetic is delegated to the pure [CalculateUsageRetentionUseCase] — and
+ * records terminal run outcomes / trigger firings / onboarding markers behind
+ * the opt-in flag.
  * **No method here ever touches the network** — the whole class reads and writes
  * only the local (SQLCipher-encrypted) database, which is the privacy guarantee
  * the feature is built around (enforced structurally by
@@ -48,6 +58,8 @@ import javax.inject.Singleton
  * @property dao The telemetry DAO.
  * @property settingsRepository Source of the [SettingsRepository.usageTelemetryEnabled]
  *   opt-in flag that gates every write.
+ * @property calculateRetention Pure domain calculator folding the activity set
+ *   into the weekly-retention aggregate.
  * @property clockProvider Supplies the [Clock] (carrying the device zone) used to
  *   derive the device-local active day from an event's epoch-millis. A supplier
  *   (not a snapshot) so a runtime time-zone change is picked up live, mirroring
@@ -57,6 +69,7 @@ import javax.inject.Singleton
 class UsageTelemetryRepositoryImpl internal constructor(
     private val dao: UsageTelemetryDao,
     private val settingsRepository: SettingsRepository,
+    private val calculateRetention: CalculateUsageRetentionUseCase,
     private val clockProvider: () -> Clock,
 ) : UsageTelemetryRepository {
 
@@ -66,9 +79,14 @@ class UsageTelemetryRepositoryImpl internal constructor(
      * default-valued parameter on an `@Inject` primary constructor.
      */
     @Inject
-    constructor(dao: UsageTelemetryDao, settingsRepository: SettingsRepository) : this(
+    constructor(
+        dao: UsageTelemetryDao,
+        settingsRepository: SettingsRepository,
+        calculateRetention: CalculateUsageRetentionUseCase,
+    ) : this(
         dao = dao,
         settingsRepository = settingsRepository,
+        calculateRetention = calculateRetention,
         clockProvider = { Clock.systemDefaultZone() },
     )
 
@@ -77,11 +95,25 @@ class UsageTelemetryRepositoryImpl internal constructor(
     internal var dispatcher: CoroutineDispatcher = Dispatchers.IO
 
     override val summary: Flow<UsageTelemetrySummary>
-        get() = combine(
-            dao.observeCounters(),
-            dao.observeActiveDayStats(),
-            dao.observeMilestones(),
-        ) { counters, dayStats, milestones -> aggregate(counters, dayStats, journey(milestones)) }
+        // `today` is resolved once per collection and then drives both the SQL
+        // window bound and the retention arithmetic, so the two can never
+        // disagree about where the week starts. A collector that outlives
+        // midnight keeps its anchor until it re-subscribes — which the screen
+        // does on every return to it.
+        get() = flow {
+            val today = LocalDate.now(clockProvider())
+            val windowStart = today.minusDays((UsageRetention.WINDOW_DAYS - 1).toLong()).toString()
+            emitAll(
+                combine(
+                    dao.observeCounters(),
+                    dao.observeActiveDays(),
+                    dao.observeMilestones(),
+                    dao.observePipelineDaysSince(windowStart),
+                ) { counters, activeDays, milestones, pipelineDays ->
+                    aggregate(counters, activeDays, journey(milestones), pipelineDays, today)
+                },
+            )
+        }
             // Degrade to EMPTY on a DAO/SQLCipher read error rather than letting
             // the exception cancel the screen's collector (best-effort read).
             .catch { e ->
@@ -161,12 +193,17 @@ class UsageTelemetryRepositoryImpl internal constructor(
     private fun milestoneOrNull(key: String): OnboardingMilestone? =
         OnboardingMilestone.entries.firstOrNull { it.name == key }
 
-    /** Folds the raw counter rows + active-day aggregate + markers into the domain summary. */
+    /** Folds the raw counter rows + activity set + markers into the domain summary. */
     private fun aggregate(
         counters: List<UsageCounterEntity>,
-        dayStats: ActiveDayStats,
+        activeDays: List<String>,
         onboarding: OnboardingJourney,
+        pipelineDays: List<UsagePipelineDayEntity>,
+        today: LocalDate,
     ): UsageTelemetrySummary {
+        // A day that no longer parses (a row written by some future format) is
+        // dropped rather than allowed to take the whole screen down with it.
+        val parsedDays = activeDays.mapNotNull(::parseDayOrNull)
         val runsByPipeline = counters
             .filter { it.category == UsageTelemetryCategories.PIPELINE_RUN }
             .sortedByDescending { it.count }
@@ -187,11 +224,26 @@ class UsageTelemetryRepositoryImpl internal constructor(
             runsByPipeline = runsByPipeline,
             runsByOutcome = runsByOutcome,
             triggerFiresByKind = triggerFiresByKind,
-            activeDays = dayStats.dayCount,
-            firstActiveDay = dayStats.firstDay,
-            lastActiveDay = dayStats.lastDay,
+            activeDays = parsedDays.size,
+            firstActiveDay = parsedDays.minOrNull()?.toString(),
+            lastActiveDay = parsedDays.maxOrNull()?.toString(),
             onboarding = onboarding,
+            retention = calculateRetention(
+                activeDays = parsedDays,
+                pipelineDays = pipelineDays.mapNotNull { row ->
+                    parseDayOrNull(row.day)?.let { UsagePipelineDay(day = it, pipelineId = row.pipelineId) }
+                },
+                today = today,
+            ),
         )
+    }
+
+    /** Parses a stored ISO `yyyy-MM-dd` day, or `null` when the row is unreadable. */
+    private fun parseDayOrNull(day: String): LocalDate? = try {
+        LocalDate.parse(day)
+    } catch (e: DateTimeParseException) {
+        Timber.tag(TAG).w(e, "Dropping an unparseable usage-telemetry day: %s", day)
+        null
     }
 
     /** Resolves a stored status name to a terminal [PipelineRunStatus], or `null` if unrecognised. */

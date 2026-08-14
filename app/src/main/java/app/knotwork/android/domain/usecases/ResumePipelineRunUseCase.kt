@@ -9,6 +9,7 @@ import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import kotlinx.coroutines.flow.first
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -83,6 +84,16 @@ class ResumePipelineRunUseCase @Inject constructor(
     suspend operator fun invoke(runId: String): ResumeOutcome {
         val acted = pipelineRunRepository.getRun(runId)
         if (acted == null || acted.status !in RESUMABLE_STATUSES) {
+            // `NotResumable` is returned from five distinct preconditions and
+            // reaches the user as one indistinguishable "nothing to resume".
+            // When a park legitimately cannot be continued, which precondition
+            // rejected it is the only thing that explains the run's fate — so
+            // each site names itself.
+            Timber.w(
+                "Resume rejected for %s: acted run %s",
+                runId,
+                if (acted == null) "not found" else "status ${acted.status}",
+            )
             return ResumeOutcome.NotResumable
         }
         // Window precondition on the acted-on run (interruption age, or the
@@ -93,6 +104,16 @@ class ResumePipelineRunUseCase @Inject constructor(
         // continued internally by its parent PIPELINE node on replay.
         val root = resolveRoot(acted)
         if (root == null || root.status !in RESUMABLE_STATUSES || root.userPrompt == null || root.pipelineId == null) {
+            Timber.w(
+                "Resume rejected for %s: root %s",
+                runId,
+                when {
+                    root == null -> "not resolvable from parentRunId chain"
+                    root.status !in RESUMABLE_STATUSES -> "status ${root.status} (id=${root.id})"
+                    root.userPrompt == null -> "carries no userPrompt (id=${root.id})"
+                    else -> "carries no pipelineId (id=${root.id})"
+                },
+            )
             return ResumeOutcome.NotResumable
         }
         // Graph precondition on the root graph the re-enqueued task executes.
@@ -113,6 +134,12 @@ class ResumePipelineRunUseCase @Inject constructor(
             )
             ResumeOutcome.Resumed
         } else {
+            Timber.w(
+                "Resume rejected for %s: guarded transition from %s lost the race (root=%s)",
+                runId,
+                root.status,
+                root.id,
+            )
             ResumeOutcome.NotResumable
         }
     }
@@ -165,7 +192,10 @@ class ResumePipelineRunUseCase @Inject constructor(
         }
         // WAITING_* park: without a pending record the wait is still live in
         // this process — there is no parked state to resume.
-        val pending = pendingInteractionRepository.getForRun(run.id) ?: return ResumeOutcome.NotResumable
+        val pending = pendingInteractionRepository.getForRun(run.id) ?: run {
+            Timber.w("Resume rejected for %s: WAITING_* run holds no pending-interaction record", run.id)
+            return ResumeOutcome.NotResumable
+        }
         val windowHours = settingsRepository.backgroundApprovalWindowHours.first()
         return if (System.currentTimeMillis() - pending.requestedAt > windowHours * MILLIS_PER_HOUR) {
             ResumeOutcome.Expired

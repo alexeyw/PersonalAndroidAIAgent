@@ -8,6 +8,7 @@ import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.ClarificationRequest
+import app.knotwork.android.domain.models.LocalBackend
 import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.MessageAttachment
 import app.knotwork.android.domain.models.NodeModel
@@ -159,7 +160,6 @@ class ChatHomeViewModelTest {
         // validate-and-delegate wrappers, so stubbing them would test the stub.
         archiveChatUseCase = ArchiveChatUseCase(chatRepository)
         unarchiveChatUseCase = UnarchiveChatUseCase(chatRepository)
-        exportChatUseCase = ExportChatUseCase(chatRepository)
         pipelineRepository = mockk()
         settingsRepository = mockk(relaxed = true)
         getContextWindowUseCase = mockk()
@@ -169,6 +169,7 @@ class ChatHomeViewModelTest {
         loadModelUseCase = mockk()
         saveMessageToMemoryUseCase = mockk()
         pipelineRunRepository = mockk()
+        exportChatUseCase = ExportChatUseCase(chatRepository, pipelineRunRepository)
         runTraceRepository = mockk()
         resumePipelineRunUseCase = mockk()
         pendingInteractionRepository = mockk(relaxed = true)
@@ -412,6 +413,58 @@ class ChatHomeViewModelTest {
     }
 
     @Test
+    fun `given a cloud node streaming then the status names the cloud not the device backend`() =
+        runTest(testDispatcher) {
+            // The status pill exists to say where the prompt is being processed. While a
+            // CLOUD node streams, nothing is decoding on this device, so reporting the
+            // local GPU/CPU backend would be a false claim about exactly that.
+            every { llmInferenceEngine.activeBackend } returns LocalBackend.GPU
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            val sessionId = viewModel.state.value.thread.currentSessionId
+            coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+                emit(
+                    AgentOrchestratorState.PipelineStage(
+                        AgentOrchestratorState.PipelineStepInfo(1, 3, "CLOUD"),
+                    ),
+                )
+                emit(AgentOrchestratorState.Answering("some streamed text"))
+            }
+
+            viewModel.onComposerValueChange("hi")
+            viewModel.sendMessage()
+            advanceUntilIdle()
+
+            assertEquals("cloud", viewModel.state.value.tokens.backend)
+        }
+
+    @Test
+    fun `given a local node streaming then the status still names the device backend`() = runTest(testDispatcher) {
+        // The counter-case: the backend hint exists to expose a silent CPU fallback,
+        // so it must survive for on-device nodes.
+        every { llmInferenceEngine.activeBackend } returns LocalBackend.GPU
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(
+                AgentOrchestratorState.PipelineStage(
+                    AgentOrchestratorState.PipelineStepInfo(1, 3, "LITE_RT"),
+                ),
+            )
+            emit(AgentOrchestratorState.Answering("some streamed text"))
+        }
+
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        assertEquals(LocalBackend.GPU.key, viewModel.state.value.tokens.backend)
+    }
+
+    @Test
     fun `sendMessage auto-loads the model then sends when it was not initialized`() = runTest(testDispatcher) {
         // The model starts unloaded and becomes ready once the load succeeds —
         // the send must then proceed automatically, in a single user tap.
@@ -495,22 +548,58 @@ class ChatHomeViewModelTest {
     }
 
     @Test
-    fun `retryAfterError on a healthy engine clears the error without sending typed text`() = runTest(testDispatcher) {
-        // A non-model error is showing; the user types new text while reading
-        // it and taps Retry. Retry must clear the error, not fire the text.
-        every { llmInferenceEngine.isInitialized } returns true
-        viewModel = createViewModel()
-        advanceUntilIdle()
-        viewModel.forceState(ChatHomeUiState.Error("boom"))
-        viewModel.onComposerValueChange("typed while reading the error")
+    fun `retryAfterError on a healthy engine re-runs the failed turn and leaves the draft alone`() =
+        runTest(testDispatcher) {
+            // A non-model error is showing; the user types new text while reading
+            // it and taps Retry. Retry must re-run the turn that FAILED — not the
+            // text in the composer, which is a different message the user has not
+            // pressed Send on, and which must survive untouched.
+            every { llmInferenceEngine.isInitialized } returns true
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            val sessionId = viewModel.state.value.thread.currentSessionId
+            every { chatRepository.getMessagesForSession(sessionId) } returns flowOf(
+                listOf(
+                    ChatMessage(sessionId = sessionId, role = Role.USER, content = "the failed turn", timestamp = 1L),
+                ),
+            )
+            viewModel.forceState(ChatHomeUiState.Error("boom"))
+            viewModel.onComposerValueChange("typed while reading the error")
 
-        viewModel.retryAfterError()
-        advanceUntilIdle()
+            viewModel.retryAfterError()
+            advanceUntilIdle()
 
-        coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any()) }
-        assertTrue(viewModel.state.value.visual !is ChatHomeUiState.Error)
-        assertEquals("typed while reading the error", viewModel.state.value.composer.value)
-    }
+            coVerify {
+                agentOrchestratorUseCase(
+                    sessionId = sessionId,
+                    userPrompt = "the failed turn",
+                    pipelineId = any(),
+                    attachment = any(),
+                    displayContent = any(),
+                    // The failed attempt already persisted the user row; re-running
+                    // must not put a second copy of it in the thread.
+                    persistUserMessage = false,
+                )
+            }
+            assertEquals("typed while reading the error", viewModel.state.value.composer.value)
+        }
+
+    @Test
+    fun `retryAfterError with no user turn to repeat clears the error instead of stranding the screen`() =
+        runTest(testDispatcher) {
+            every { llmInferenceEngine.isInitialized } returns true
+            viewModel = createViewModel()
+            advanceUntilIdle()
+            val sessionId = viewModel.state.value.thread.currentSessionId
+            every { chatRepository.getMessagesForSession(sessionId) } returns flowOf(emptyList())
+            viewModel.forceState(ChatHomeUiState.Error("boom"))
+
+            viewModel.retryAfterError()
+            advanceUntilIdle()
+
+            coVerify(exactly = 0) { agentOrchestratorUseCase(any(), any(), any()) }
+            assertTrue(viewModel.state.value.visual !is ChatHomeUiState.Error)
+        }
 
     @Test
     fun `selectThread cancels an in-flight load-then-send so it never fires on the new chat`() =

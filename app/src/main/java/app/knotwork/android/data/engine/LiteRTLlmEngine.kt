@@ -58,6 +58,14 @@ class LiteRTLlmEngine @Inject constructor(
     private var _isAudioEnabled: Boolean = false
 
     /**
+     * Backend the live engine was actually built with — set on every successful
+     * init, cleared on teardown. May differ from the persisted preference when
+     * crash-recovery downgraded this session to CPU.
+     */
+    @Volatile
+    private var _activeBackend: LocalBackend? = null
+
+    /**
      * The coroutine [Job] of the generation currently holding [generationMutex],
      * or `null` when none is streaming. Captured so a memory-pressure unload
      * ([onTrimMemory] / [onLowMemory]) can **cancel** the in-flight decode rather
@@ -68,6 +76,26 @@ class LiteRTLlmEngine @Inject constructor(
      */
     @Volatile
     private var activeGenerationJob: Job? = null
+
+    /**
+     * Identity of the currently-loaded native engine, incremented on every
+     * successful [initialize].
+     *
+     * A memory-pressure unload cannot run inline — it has to queue behind
+     * [generationMutex] — so by the time it acquires the lock the engine it was
+     * asked to release may already be gone and a **different** one loaded in its
+     * place. Without this counter the deferred unload happily tore down the new
+     * engine, and the run that had just loaded it failed with "Engine is not
+     * initialized" milliseconds later. Observed on device during the phase-40
+     * directed test (finding F4): a trigger-started background run loaded the
+     * engine at `03:09:08.461` and a unload queued 13 seconds earlier freed it at
+     * `03:09:08.596`.
+     *
+     * `@Volatile` for the same reason as [activeGenerationJob]: written on
+     * coroutine threads, read from the system `ComponentCallbacks2` thread.
+     */
+    @Volatile
+    private var loadGeneration: Long = 0L
 
     /**
      * Serialises every native-session access: each [generateResponseStream]
@@ -103,6 +131,12 @@ class LiteRTLlmEngine @Inject constructor(
      * Whether the loaded engine was constructed with its audio backend enabled.
      */
     override val isAudioEnabled: Boolean get() = _isAudioEnabled
+
+    /**
+     * The backend the loaded engine is really running on, or `null` when no
+     * model is loaded.
+     */
+    override val activeBackend: LocalBackend? get() = _activeBackend
 
     init {
         context.registerComponentCallbacks(this)
@@ -141,7 +175,17 @@ class LiteRTLlmEngine @Inject constructor(
             // loads cannot interleave a teardown with another's freshly built
             // engine, and the second observes the first's result.
             generationMutex.withLock {
-                initializeInternal(modelPath, enableVision, enableAudio)
+                initializeInternal(modelPath, enableVision, enableAudio).also { outcome ->
+                    // Stamp a new engine identity on **every** successful load —
+                    // including the reuse fast-path, which returns without
+                    // touching the native handles. Reuse still means a caller
+                    // has just asserted it needs this engine, so an unload
+                    // queued before that assertion is stale and must not be
+                    // honoured (see [loadGeneration]).
+                    if (outcome is Result.Success) {
+                        loadGeneration += 1
+                    }
+                }
             }
         } catch (e: CancellationException) {
             throw e
@@ -215,23 +259,40 @@ class LiteRTLlmEngine @Inject constructor(
         val configuredKey = settingsRepository.localModelBackend.first()
         val configured = LocalBackend.fromKey(configuredKey) ?: LocalBackend.CPU
 
-        // Crash-recovery: if the previous attempt crashed the process
-        // mid-init with this exact backend (sentinel still set), force
-        // CPU and reset the persisted backend so subsequent restarts
-        // are stable. The native LiteRT dispatch failure ("No dispatch
-        // library found …" for GPU / NPU on devices that don't ship
-        // one) can SIGABRT before Kotlin try/catch fires, so we have
-        // to gate the attempt before it starts.
+        // Crash-recovery: if the previous attempt died mid-init with this exact
+        // backend (sentinel still set), run this session on CPU. The native
+        // LiteRT dispatch failure ("No dispatch library found …" for GPU / NPU
+        // on devices that don't ship one) can SIGABRT before Kotlin try/catch
+        // fires, so the attempt has to be gated before it starts.
+        //
+        // The sentinel proves the process died in that window — not *why*. Being
+        // swiped from recents, reclaimed by the low-memory killer or frozen by
+        // an OEM leaves exactly the same trace as a broken driver. So the first
+        // strike only downgrades **this session** and leaves the user's saved
+        // choice alone; the backend is overwritten for good only once a second
+        // consecutive start finds the same evidence. One unexplained kill
+        // silently and permanently costing the device its GPU is the failure
+        // this guards against (phase-40 finding F6).
         val previousAttempt = settingsRepository.lastInitBackendAttempt.first()
-        val resolved = if (
-            configured != LocalBackend.CPU &&
-            previousAttempt == configured.key
-        ) {
-            Timber.w(
-                "LiteRT backend '%s' crashed during previous init — falling back to CPU.",
-                configured.key,
-            )
-            settingsRepository.setLocalModelBackend(LocalBackend.CPU.key)
+        val crashedLastTime = configured != LocalBackend.CPU && previousAttempt == configured.key
+        val resolved = if (crashedLastTime) {
+            val streak = settingsRepository.localBackendFailureStreak.first() + 1
+            settingsRepository.setLocalBackendFailureStreak(streak)
+            if (streak >= BACKEND_FAILURE_STREAK_LIMIT) {
+                Timber.w(
+                    "LiteRT backend '%s' failed to initialise %d starts in a row — switching to CPU for good.",
+                    configured.key,
+                    streak,
+                )
+                settingsRepository.setLocalModelBackend(LocalBackend.CPU.key)
+                settingsRepository.setLocalBackendFailureStreak(0)
+            } else {
+                Timber.w(
+                    "Previous init with '%s' did not finish — running on CPU this session, '%s' stays selected.",
+                    configured.key,
+                    configured.key,
+                )
+            }
             settingsRepository.setLastInitBackendAttempt(null)
             LocalBackend.CPU
         } else {
@@ -283,8 +344,11 @@ class LiteRTLlmEngine @Inject constructor(
         _isVisionEnabled = enableVision
         _isAudioEnabled = enableAudio
         // Init succeeded — clear the crash-recovery breadcrumb so the
-        // next launch trusts the persisted backend.
+        // next launch trusts the persisted backend, and drop the failure
+        // streak: whatever killed earlier attempts is evidently not fatal.
         settingsRepository.setLastInitBackendAttempt(null)
+        settingsRepository.setLocalBackendFailureStreak(0)
+        _activeBackend = resolved
         Timber.i(
             "LiteRT-LM Engine successfully initialized with $modelPath " +
                 "(vision=$enableVision, audio=$enableAudio)",
@@ -438,6 +502,7 @@ class LiteRTLlmEngine @Inject constructor(
             _currentModelPath = null
             _isVisionEnabled = false
             _isAudioEnabled = false
+            _activeBackend = null
         }
     }
 
@@ -493,15 +558,48 @@ class LiteRTLlmEngine @Inject constructor(
      * @param level The context of the trim, giving a hint of the amount of trimming the application may like to perform.
      */
     override fun onTrimMemory(level: Int) {
-        if (level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
-            Timber.w("onTrimMemory called with level %d, unloading engine", level)
-            // Cancel the in-flight decode so the memory-pressure unload frees the
-            // engine promptly instead of waiting for the whole generation; the
-            // cancelled stream still tears its native session down safely in its
-            // `finally`, and `unload()` then acquires the released mutex.
-            cancelActiveGeneration()
-            appScope.launch { unload() }
+        if (level < ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) return
+
+        // TRIM_MEMORY_BACKGROUND means "you just went to background and are a
+        // candidate for killing" — it is a lifecycle signal, not actual memory
+        // pressure. A trigger-started background run arrives in exactly that
+        // state, and it is *not* the "agent inactive in background" case the
+        // deallocation rule targets, so working through it must not be cancelled.
+        // Genuine pressure (MODERATE and above) still wins over the running job:
+        // being killed by the OS is worse than losing one generation.
+        val underRealPressure = level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE
+        if (!underRealPressure && activeGenerationJob != null) {
+            Timber.i("onTrimMemory level %d ignored: a generation is in flight", level)
+            return
         }
+
+        Timber.w("onTrimMemory called with level %d, unloading engine", level)
+        // Cancel the in-flight decode so the memory-pressure unload frees the
+        // engine promptly instead of waiting for the whole generation; the
+        // cancelled stream still tears its native session down safely in its
+        // `finally`, and the unload then acquires the released mutex.
+        cancelActiveGeneration()
+        val target = loadGeneration
+        appScope.launch { unloadGeneration(target) }
+    }
+
+    /**
+     * Unloads the engine **only if** it is still the one identified by [target].
+     *
+     * The check happens under [generationMutex], i.e. at the moment teardown
+     * would actually run, which is the only point where "is this still the engine
+     * I was asked to free?" can be answered truthfully. When the identity has
+     * moved on, a newer [initialize] owns the native handles and freeing them
+     * here would break whoever loaded them — the F4 failure mode.
+     *
+     * @param target the [loadGeneration] value captured when the unload was requested.
+     */
+    private suspend fun unloadGeneration(target: Long) = generationMutex.withLock {
+        if (loadGeneration != target) {
+            Timber.i("Stale unload for engine generation %d skipped; %d is live", target, loadGeneration)
+            return@withLock
+        }
+        unloadInternal()
     }
 
     /**
@@ -564,5 +662,18 @@ class LiteRTLlmEngine @Inject constructor(
          * that keeps emitting the same malformed shape.
          */
         const val REPAIR_SAMPLER_SEED: Int = 0
+
+        /**
+         * Consecutive unfinished inits with the same non-CPU backend before the
+         * persisted preference is overwritten with CPU.
+         *
+         * Two, not one: the crash breadcrumb records *that* the process died
+         * inside the init window, never *why*, and a swipe-away or a low-memory
+         * kill leaves the identical trace as a broken driver. One strike still
+         * downgrades the current session — a genuinely crashing backend must not
+         * be retried into a boot loop — but only a second consecutive strike is
+         * accepted as proof about the hardware.
+         */
+        const val BACKEND_FAILURE_STREAK_LIMIT: Int = 2
     }
 }

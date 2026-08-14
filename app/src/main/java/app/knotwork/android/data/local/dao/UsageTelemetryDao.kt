@@ -5,6 +5,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import app.knotwork.android.data.local.models.OnboardingMilestoneEntity
 import app.knotwork.android.data.local.models.UsageCounterEntity
+import app.knotwork.android.data.local.models.UsagePipelineDayEntity
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -33,7 +34,7 @@ object UsageTelemetryCategories {
 
 /**
  * Data Access Object for the local usage-telemetry tables (`usage_counter`,
- * `usage_active_day`, `onboarding_milestone`).
+ * `usage_active_day`, `usage_pipeline_day`, `onboarding_milestone`).
  *
  * Counters are advanced through atomic SQLite `UPSERT` statements so concurrent
  * recorders cannot lose an increment, and active days are recorded with
@@ -70,8 +71,24 @@ interface UsageTelemetryDao {
     suspend fun recordActiveDay(day: String)
 
     /**
+     * Records that [pipelineId] had activity on [day]. `INSERT OR IGNORE` makes a
+     * repeat within the same day a no-op, so the table stays the set of
+     * `(day, pipeline)` pairs rather than a second run counter.
+     *
+     * @param day Device-local active day as an ISO `yyyy-MM-dd` string.
+     * @param pipelineId Id of the pipeline that ran.
+     */
+    @Query("INSERT OR IGNORE INTO usage_pipeline_day (day, pipelineId) VALUES (:day, :pipelineId)")
+    suspend fun recordPipelineDay(day: String, pipelineId: String)
+
+    /**
      * Records one terminal **root** run: bumps both the per-pipeline and the
-     * per-outcome tally and marks [day] active, atomically.
+     * per-outcome tally, marks [day] active and — when the pipeline was
+     * resolved — marks that pipeline alive on [day], atomically.
+     *
+     * A run with an unresolved pipeline (the sentinel key) is deliberately left
+     * out of the per-day set: it still counts as usage, but it cannot make any
+     * particular pipeline "live".
      *
      * @param pipelineKey Pipeline id, or [UsageTelemetryCategories.NULL_PIPELINE_KEY].
      * @param statusName Terminal `PipelineRunStatus.name`.
@@ -82,6 +99,9 @@ interface UsageTelemetryDao {
         incrementCounter(UsageTelemetryCategories.PIPELINE_RUN, pipelineKey)
         incrementCounter(UsageTelemetryCategories.RUN_OUTCOME, statusName)
         recordActiveDay(day)
+        if (pipelineKey != UsageTelemetryCategories.NULL_PIPELINE_KEY) {
+            recordPipelineDay(day, pipelineKey)
+        }
     }
 
     /**
@@ -106,13 +126,28 @@ interface UsageTelemetryDao {
     fun observeCounters(): Flow<List<UsageCounterEntity>>
 
     /**
-     * Live projection of the active-day aggregate (count, earliest, latest).
+     * Live projection of the recorded active days, oldest first.
      *
-     * @return A [Flow] emitting the [ActiveDayStats]; on an empty table the
-     *   count is `0` and both bounds are `null`.
+     * The whole set (rather than a `COUNT/MIN/MAX` aggregate) because the window,
+     * streak and break figures need the individual days; the all-time count and
+     * bounds are then derived from the same list, so the two readings of "active
+     * days" cannot disagree.
+     *
+     * @return A [Flow] emitting every recorded ISO `yyyy-MM-dd` day on each change.
      */
-    @Query("SELECT COUNT(*) AS dayCount, MIN(day) AS firstDay, MAX(day) AS lastDay FROM usage_active_day")
-    fun observeActiveDayStats(): Flow<ActiveDayStats>
+    @Query("SELECT day FROM usage_active_day ORDER BY day ASC")
+    fun observeActiveDays(): Flow<List<String>>
+
+    /**
+     * Live projection of the `(day, pipeline)` activity pairs from [minDay]
+     * onwards — bounded in SQL because only the current window is ever consulted.
+     *
+     * @param minDay Inclusive lower bound as an ISO `yyyy-MM-dd` string (the ISO
+     *   form sorts chronologically, so a plain string comparison is correct).
+     * @return A [Flow] emitting the matching pairs on every change.
+     */
+    @Query("SELECT * FROM usage_pipeline_day WHERE day >= :minDay")
+    fun observePipelineDaysSince(minDay: String): Flow<List<UsagePipelineDayEntity>>
 
     /**
      * Records an onboarding marker, keeping the **first** occurrence:
@@ -154,27 +189,24 @@ interface UsageTelemetryDao {
     @Query("DELETE FROM usage_active_day")
     suspend fun clearActiveDays()
 
+    /** Deletes every `(day, pipeline)` activity row. */
+    @Query("DELETE FROM usage_pipeline_day")
+    suspend fun clearPipelineDays()
+
     /** Deletes every onboarding marker row. */
     @Query("DELETE FROM onboarding_milestone")
     suspend fun clearMilestones()
 
     /**
-     * Clears all telemetry — counters, active days and onboarding markers — in one
-     * transaction so a reset can never leave a half-cleared store.
+     * Clears all telemetry — counters, active days, per-day pipeline activity and
+     * onboarding markers — in one transaction so a reset can never leave a
+     * half-cleared store.
      */
     @Transaction
     suspend fun clearAll() {
         clearCounters()
         clearActiveDays()
+        clearPipelineDays()
         clearMilestones()
     }
 }
-
-/**
- * Aggregate projection of the `usage_active_day` table.
- *
- * @property dayCount Number of distinct active days.
- * @property firstDay Earliest active day (ISO `yyyy-MM-dd`), or `null` when empty.
- * @property lastDay Latest active day (ISO `yyyy-MM-dd`), or `null` when empty.
- */
-data class ActiveDayStats(val dayCount: Int, val firstDay: String?, val lastDay: String?)
