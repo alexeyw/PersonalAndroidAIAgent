@@ -326,7 +326,8 @@ The same menu on a message the model produced also offers **Report
 response**. Pick a category (harmful or unsafe, sexually explicit, hate or
 harassment, misleading, something else), add a note in your own words, and
 the app assembles a report: your note, the category, the reported text, and
-the app version, device and model that produced it.
+the app version, device and currently selected model. That last one is the model
+selected now, which is the one that answered unless you have switched since.
 
 Nothing is transmitted. There is no reporting server behind this app, and
 adding one would contradict everything else on this page. Instead you get

@@ -476,7 +476,17 @@ maintainer's part is the version bump, the tag, and the decision to publish.
    the tag goes stale as soon as anything else lands, and anything that lands
    between the cut and the tag ships in *this* release, so it belongs above the
    heading, not under `[Unreleased]`.
-3. Land both on `main` through the normal review path.
+3. Add `fastlane/metadata/android/<locale>/changelogs/<versionCode>.txt` for
+   the new `versionCode`, in every locale (§10). This is not optional bookkeeping:
+   `StoreMetadataTest` fails `./gradlew check` without it, because a version that
+   reaches a store with no release notes is a version nobody can tell apart from
+   the last one.
+4. Update the link definitions at the foot of `CHANGELOG.md` — point
+   `[Unreleased]` at the new tag and add a `[<version>]` line for it. Every
+   version heading in that file is a reference link, so a heading without its
+   definition renders as literal brackets, in the repository and in the release
+   notes pasted from it.
+5. Land all of it on `main` through the normal review path.
 
 **Tagging**
 
@@ -556,13 +566,15 @@ rendered separately, at 1080 × 2160:
 
 ```bash
 ./gradlew :catalog:recordRoborazziDebug --tests "*StoreScreenshotTest*"
-cp catalog/src/test/snapshots/store_phone_*.png \
-   fastlane/metadata/android/en-US/images/phoneScreenshots/
+for f in catalog/src/test/snapshots/store_phone_*.png; do
+    n=$(basename "$f" | cut -d_ -f3)          # store_phone_4_pipelines.png -> 4
+    cp "$f" "fastlane/metadata/android/en-US/images/phoneScreenshots/$n.png"
+done
 ```
 
-The copy step is manual and nothing verifies it, so re-record and re-copy in the
-same change — the numbering (`store_phone_<n>_<name>.png` → `<n>.png`) is what
-keeps the carousel order stable. Slot 2 is the phone capture of the editor
+The rename is the point: both stores order the carousel by file name, so the
+baselines land as `<n>.png` rather than under their own names. The step is
+manual and nothing verifies it, so re-record and re-copy in the same change. Slot 2 is the phone capture of the editor
 canvas (`docs/images/hero-pipeline-canvas.jpg`), which has no design-system
 counterpart to render from.
 

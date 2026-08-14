@@ -13,19 +13,22 @@ details.
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-08-14
+
 ### Added
 
 - **Report a response you think is wrong.** Long-pressing a message the model
   produced now offers **Report response**: pick a category (harmful or unsafe,
   sexually explicit, hate or harassment, misleading, something else), add a note
   in your own words, and the app assembles a report carrying your note, the
-  reported text, and the app version, device and model behind it. Nothing is
+  reported text, and the app version, device and currently selected model. Nothing is
   transmitted — there is no reporting server behind this app and adding one
   would contradict everything else it claims. You hand the report over yourself:
   **Copy report** puts it on the clipboard, **Open issue** opens the public
   tracker with it prefilled. The dialog says so plainly, and warns that the
-  tracker is public before you submit anything. Reporting is offered only on
-  messages the model wrote; your own text has nobody to be reported to.
+  tracker is public before you submit anything. Reporting is offered on what the agent
+  produced — model replies and tool output — but not on your own messages, which
+  have nobody to be reported to.
 
 - **A standalone privacy policy.** `PRIVACY.md` now documents, in one place,
   what the app stores on the device, every path that can send data off it (a
@@ -36,12 +39,16 @@ details.
   points at it — one document behind the app, the README and any store listing,
   rather than three descriptions drifting apart.
 
-- **Store listing metadata lives in the repository.** Listing texts, release
-  notes and screenshots for both English and Russian now sit under
-  `fastlane/metadata/android/`, the layout Google Play and F-Droid both read, so
-  the two stores cannot describe the app differently. A test enforces the length
-  limits, the presence of release notes for the shipping version, and the
-  screenshot geometry the stores accept.
+- **Store listing metadata lives in the repository.** Listing texts and release
+  notes for both English and Russian, plus the screenshots, the 512 icon and the
+  feature graphic, now sit under `fastlane/metadata/android/` — the layout
+  Google Play and F-Droid both read, so the two listings are edited in one place
+  instead of drifting apart in two consoles. The graphics are English-only and
+  the Russian listing falls back to them, since the app's own interface is
+  English. A test enforces the length limits, the presence of release notes for
+  the shipping version, the screenshot geometry the stores accept, and the
+  feature graphic's size and alpha-free format — Play refuses a PNG carrying an
+  alpha channel even when every pixel in it is opaque.
 
 ### Changed
 
@@ -4580,7 +4587,8 @@ that produced the initial 0.1.0 snapshot.
 - **Master key**: `EncryptedSharedPreferences` is rooted in the Android
   Keystore, so the master key is hardware-backed where available.
 
-[Unreleased]: https://github.com/alexeyw/knotwork/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/alexeyw/knotwork/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/alexeyw/knotwork/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/alexeyw/knotwork/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/alexeyw/knotwork/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/alexeyw/knotwork/compare/v0.4.0...v0.5.0
