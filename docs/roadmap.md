@@ -15,7 +15,7 @@ release cadence settles.
 
 ## Where the project is today
 
-The current pre-release line (`0.6.x`) already covers the core loop
+The current pre-release line (`0.7.x`) already covers the core loop
 end-to-end:
 
 - On-device LLM inference through LiteRT-LM, with optional
@@ -36,44 +36,63 @@ end-to-end:
   background on a schedule, on charging, or on connectivity, and reach the
   agent from the system Share sheet, launcher shortcuts, and a Quick
   Settings tile.
-- Local, on-device usage statistics that never leave the device, and a
+- Local, on-device usage statistics — including a weekly view of whether
+  the app is actually being used — that never leave the device, and a
   Firebase-free FOSS build flavour for the F-Droid channel.
+- A chat archive, so a chat list that grows with daily use stays usable.
+- Releases built, signed and published by CI from a tag, with the signing
+  identity verified before and after the build (see
+  [release.md](release.md)).
 
 See [README.md](../README.md) for the full feature list and
 [architecture.md](architecture.md) for how the pieces fit together.
 
 ## Near term
 
-### Reliability and quality of what already exists
+The previous near-term entry here was reliability and quality of what
+already exists — proven background execution, a repeatable time-to-first-
+value measurement, memory and preset quality, and a chat archive. All four
+have shipped, along with the first release-signed build; they are listed
+above as things the product does, and [CHANGELOG.md](../CHANGELOG.md) is
+the authoritative record of what each turned into. What follows is what is
+near-term now.
 
-The nearest-term focus is not new surface area but hardening the loop that
-already ships end-to-end. Concrete directions:
+### Getting the app into the places people look for it
 
-- **Proven background execution.** Make a bound pipeline that runs on a
-  trigger a dependable, observable thing: a visible log of when triggers
-  fired and what each run did, and behaviour that survives Doze and long
-  idle stretches rather than silently missing.
-- **Time-to-first-value.** Measure the path from install to a working,
-  useful agent (the scenario-onboarding flow) and keep that measurement
-  repeatable, so regressions in the slowest step — model download — are
-  caught rather than discovered by users.
-- **Memory and preset quality.** Tighten the long-term memory subsystem
-  (retrieval relevance, extraction, compaction) and consolidate the
-  bundled pipeline presets — the presets are the product's first
-  impression in the scenario gallery, so their quality matters directly.
-- **Chat archive.** Heavy day-to-day use fills the chat list quickly;
-  archiving or collapsing old sessions keeps the primary surface usable as
-  the amount of history grows.
+Today the only way to install Knotwork is an APK from GitHub Releases.
+The `foss` flavour exists precisely so the app can be built without
+proprietary telemetry, and both channels are the near-term work:
 
-### First release-signed build
+- **F-Droid.** The open question is not the build but the inclusion
+  policy: the on-device inference engine ships as a prebuilt native
+  library, and whether that is acceptable has to be settled before an
+  RFP is worth filing. A reproducible build (a pinned `SOURCE_DATE_EPOCH`)
+  is the other piece.
+- **Google Play.** Store listing, the data-safety declaration matching
+  the privacy model this app actually implements, and a decision about
+  which channel goes first.
 
-Builds so far are debug-signed; the signing infrastructure for a real
-release keystore is already in place (see [release.md](release.md)). The
-remaining step is provisioning a production keystore and shipping the
-first release-signed build — after which in-place updates carry forward
-across releases. Note the one-time migration cost described in the
-*Pre-release notice* of [README.md](../README.md): updating a debug-signed
-install to a release-signed one requires a reinstall.
+Note the one-time migration cost described in the *Pre-release notice* of
+[README.md](../README.md): `0.7.0` is the first release-signed build, so
+updating a debug-signed install to it requires a reinstall. Releases from
+`0.7.0` onward update in place.
+
+### A cookbook for the node types
+
+[extending.md](extending.md) and [user-guide.md](user-guide.md) document
+the extension points and the screens, but neither is the document you
+want open while wiring a pipeline: what each node type is for, what it
+does with its input, and which combinations are worth copying. Recipes
+per node type are the missing middle, and they matter more than any
+feature here — a pipeline editor is only as approachable as its examples.
+
+### Whatever the first users run into
+
+The product has not yet met an audience. The first reports from people
+who did not write it will reshape this list, and that is the point of
+publishing it. Bug reports with reproduction steps and "I tried to build
+X and got stuck at Y" are both useful; see
+[How to get involved](#how-to-get-involved).
 
 ## Mid term
 

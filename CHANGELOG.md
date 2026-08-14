@@ -581,6 +581,17 @@ details.
   data (chats, memory, custom pipelines). Export anything you want to keep
   before you do. This is a one-time break: releases from `0.7.0` onward share
   one signer and update normally.
+- **The roadmap no longer describes shipped work as upcoming.** It still
+  announced the previous release line as current, and its near-term section
+  listed four directions — proven background execution, a repeatable
+  time-to-first-value measurement, memory and preset quality, and a chat
+  archive — that have all since shipped, alongside a section awaiting the first
+  release-signed build that this release *is*. Those are now stated as things
+  the product does, and the near-term section says what is actually next:
+  getting the app into F-Droid and Play (including the open question of whether
+  a prebuilt native inference library clears F-Droid's inclusion policy), a
+  cookbook of recipes per node type, and whatever the first outside reports turn
+  up.
 - **The README now shows a real pipeline instead of a stack of node cards.**
   The *Pipeline editor* screenshot was rendered from the design-system
   regression baseline, which meant it showed one card per node type in a
