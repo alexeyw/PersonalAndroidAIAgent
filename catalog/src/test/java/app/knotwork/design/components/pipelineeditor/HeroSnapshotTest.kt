@@ -22,19 +22,24 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Roborazzi baseline for the README "Pipeline editor" hero shot at the
- * canonical 1080 × 2400 resolution.
+ * Roborazzi baseline of the editor's node-card surface at the canonical
+ * 1080 × 2400 resolution, in both themes.
  *
  * The catalog harness [PipelineEditorCatalogContent] is intentionally long
  * (it exercises every editor component in a scrollable column for
- * regression diffs); for the marketing-style hero we clip it to a
- * 360 × 800 dp viewport via a `requiredSize + clipToBounds` wrapper so
- * the top of the harness (the per-NodeType card grid — the editor's most
- * recognisable surface) fills the entire frame.
+ * regression diffs); this baseline clips it to a 360 × 800 dp viewport via a
+ * `requiredSize + clipToBounds` wrapper so the top of the harness — the
+ * per-NodeType card grid — fills the entire frame, which makes a theme or
+ * token regression on the node cards obvious in the diff.
  *
- * After the test passes, the generated baselines should be copied from
- * `catalog/src/test/snapshots/hero_pipeline_editor_{light,dark}.png` into
- * `docs/images/hero-pipeline-editor{,-dark}.png`.
+ * **This baseline is not copied anywhere.** It used to be the README's
+ * "Pipeline editor" hero shot; that slot now holds a capture from a phone
+ * (`docs/images/hero-pipeline-canvas{,-dark}.jpg`), because a stack of node
+ * cards shows the component catalogue rather than a pipeline. The canvas
+ * itself — edges, pan/zoom, minimap — lives in `app/presentation` and has no
+ * catalog counterpart to render, so do **not** re-point the README at this
+ * file: a `recordRoborazzi` run would then silently overwrite the phone
+ * capture with a card stack again.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)

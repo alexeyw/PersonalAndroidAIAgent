@@ -119,19 +119,22 @@ The full feature tour lives in the [user guide](docs/user-guide.md).
 
 ## Screenshots
 
-Every image below is captured at 1080 × 2400 from a Roborazzi baseline
+The pipeline editor below is a capture from a phone running the app. The other
+three are rendered at 1080 × 2400 from a Roborazzi baseline
 (`./gradlew :catalog:recordRoborazziDebug --tests "*HeroSnapshotTest*"`), which
-keeps the README and the design-system regression suite in sync. Hover over (or
-tap) an image to see the dark variant via your browser's `prefers-color-scheme`.
+keeps them and the design-system regression suite in sync — the editor canvas is
+an app screen rather than a design-system component, so it has no baseline to
+render from. Hover over (or tap) an image to see the dark variant via your
+browser's `prefers-color-scheme`.
 
 <table>
   <tr>
     <td align="center">
       <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-pipeline-editor-dark.png">
-        <img alt="Pipeline editor — typed nodes per type" src="docs/images/hero-pipeline-editor.png" width="270">
+        <source media="(prefers-color-scheme: dark)" srcset="docs/images/hero-pipeline-canvas-dark.jpg">
+        <img alt="Pipeline editor on a phone: a 22-node pipeline on the canvas, with routers, nested sub-pipelines, queues and tool steps wired together" src="docs/images/hero-pipeline-canvas.jpg" width="270">
       </picture>
-      <br><sub><b>Pipeline editor</b> — typed nodes (input · output · LiteRT · cloud · intent router · if · clarify · …)</sub>
+      <br><sub><b>Pipeline editor</b> — a 22-node pipeline on the canvas: routers, nested sub-pipelines, queues, tools, on-device and cloud steps</sub>
     </td>
     <td align="center">
       <picture>
