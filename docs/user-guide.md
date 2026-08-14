@@ -320,6 +320,22 @@ stores the message verbatim in long-term memory as a manual entry and
 confirms with a *Saved to memory* snackbar. Saved entries show up under
 **More → Memory** with the **Manual** source.
 
+### Reporting a response
+
+The same menu on a message the model produced also offers **Report
+response**. Pick a category (harmful or unsafe, sexually explicit, hate or
+harassment, misleading, something else), add a note in your own words, and
+the app assembles a report: your note, the category, the reported text, and
+the app version, device and model that produced it.
+
+Nothing is transmitted. There is no reporting server behind this app, and
+adding one would contradict everything else on this page. Instead you get
+two ways to hand the report over yourself: **Copy report** puts it on the
+clipboard, and **Open issue** opens the public issue tracker with the report
+prefilled. The tracker is public, so read the text and remove anything
+private before you submit it — the reported response is quoted in full (up
+to a length cap, which the report states when it applies).
+
 ### Attaching an image
 
 Tap the **image** button in the composer to attach a picture to your next

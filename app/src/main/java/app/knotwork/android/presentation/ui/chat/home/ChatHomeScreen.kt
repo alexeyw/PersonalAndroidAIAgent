@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -60,9 +61,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
+import androidx.core.net.toUri
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import app.knotwork.android.BuildConfig
 import app.knotwork.android.R
+import app.knotwork.android.domain.report.ContentReport
+import app.knotwork.android.domain.report.ContentReportComposer
+import app.knotwork.android.domain.report.ContentReportReason
 import app.knotwork.android.presentation.ui.chat.CHAT_EXPORT_MIME_JSON
 import app.knotwork.android.presentation.ui.chat.toShareChooser
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
@@ -194,6 +200,12 @@ fun ChatHomeScreen(
     var modelPickerVisible by remember { mutableStateOf(false) }
     var deleteDialogVisible by remember { mutableStateOf(false) }
     var deleteThreadTargetId by remember { mutableStateOf<String?>(null) }
+    // Report dialog state: the flagged row plus the category and note the user
+    // is composing. Local to the screen because a report is never persisted —
+    // it exists between opening the dialog and handing the text to the user.
+    var reportTargetRowId by remember { mutableStateOf<String?>(null) }
+    var reportReason by remember { mutableStateOf(ContentReportReason.HARMFUL_OR_UNSAFE) }
+    var reportNote by remember { mutableStateOf("") }
     // The in-flight archive-undo snackbar, so a second archive supersedes it.
     var archiveSnackbarJob by remember { mutableStateOf<Job?>(null) }
 
@@ -209,6 +221,8 @@ fun ChatHomeScreen(
     val importUnreadableMessage = stringResource(R.string.chat_import_unreadable)
     val messageCopiedMessage = stringResource(R.string.chat_snackbar_copied)
     val rateComingSoonMessage = stringResource(R.string.chat_message_rate_coming_soon)
+    val reportCopiedMessage = stringResource(R.string.chat_report_snackbar_copied)
+    val reportNoBrowserMessage = stringResource(R.string.chat_report_snackbar_no_browser)
     val savedToMemoryMessage = stringResource(R.string.chat_snackbar_saved_to_memory)
     val attachmentFailedMessage = stringResource(R.string.chat_snackbar_attachment_failed)
     val voiceFailedMessage = stringResource(R.string.chat_snackbar_voice_failed)
@@ -460,6 +474,11 @@ fun ChatHomeScreen(
                         snackbarHostState.showSnackbar(message = rateComingSoonMessage)
                     }
                 }
+                ChatContextAction.Report -> {
+                    reportReason = ContentReportReason.HARMFUL_OR_UNSAFE
+                    reportNote = ""
+                    reportTargetRowId = rowId
+                }
             }
         },
     )
@@ -621,6 +640,64 @@ fun ChatHomeScreen(
                         onClick = { deleteDialogVisible = false },
                     )
                 },
+            )
+        }
+        reportTargetRowId?.let { rowId ->
+            // The report is rendered on demand from the row's current text: the
+            // dialog holds the user's words, never a snapshot of the message.
+            val renderReport = {
+                ContentReport(
+                    reason = reportReason,
+                    note = reportNote,
+                    messageText = viewModel.transfer.textForRow(rowId).orEmpty(),
+                    appVersion = BuildConfig.VERSION_NAME,
+                    buildIdentifier = BuildConfig.GIT_SHA,
+                    device = "${Build.MANUFACTURER} ${Build.MODEL}",
+                    androidVersion = Build.VERSION.RELEASE.orEmpty(),
+                    // The model's display name, not its row id: a local
+                    // database id means nothing to whoever reads the report.
+                    modelIdentifier = screenState.model.installed
+                        .firstOrNull { it.id == screenState.model.activeId }
+                        ?.name,
+                )
+            }
+            val copyReport = {
+                val report = renderReport()
+                clipboardManager.setText(AnnotatedString(ContentReportComposer.body(report)))
+            }
+            ReportResponseDialog(
+                reason = reportReason,
+                onReasonChange = { reportReason = it },
+                note = reportNote,
+                onNoteChange = { reportNote = it },
+                onCopy = {
+                    copyReport()
+                    reportTargetRowId = null
+                    coroutineScope.launch {
+                        snackbarHostState.showSnackbar(message = reportCopiedMessage)
+                    }
+                },
+                onOpenIssue = {
+                    val report = renderReport()
+                    val url = contentReportIssueUrl(
+                        subject = ContentReportComposer.subject(report),
+                        body = ContentReportComposer.body(report),
+                    )
+                    // No browser is a real state on a stripped device, and a
+                    // silent no-op would look like the report was filed. Fall
+                    // back to the clipboard and say so.
+                    val opened = runCatching {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
+                    }.isSuccess
+                    if (!opened) copyReport()
+                    reportTargetRowId = null
+                    if (!opened) {
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(message = reportNoBrowserMessage)
+                        }
+                    }
+                },
+                onDismiss = { reportTargetRowId = null },
             )
         }
         renameTargetId?.let { targetId ->

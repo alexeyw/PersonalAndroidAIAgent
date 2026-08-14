@@ -1,0 +1,228 @@
+# Privacy Policy — Knotwork
+
+**Effective date:** 14 August 2026
+**Applies to:** the Knotwork Android application (package `app.knotwork.android`),
+both published distributions — `full` and `foss` — from version `0.7.1` onward.
+
+---
+
+## Summary
+
+Knotwork is an on-device AI agent. There is **no account, no sign-in, and no
+server operated by the developer**. Nothing is uploaded for the app to work,
+and there is no back end that could hold your data.
+
+The app processes your conversations **on your phone**, using a language model
+you download to the device. Data leaves the device only along a path **you
+configured yourself** — a cloud model node carrying your own API key, an MCP
+server you added, a model download, an outbound request from a tool you
+explicitly allowed, or (in the `full` build only) crash reports you opted in to.
+Each of those is listed below with what it sends, where, and how to turn it off.
+
+This document is the privacy policy. The engineering-level threat model, the
+attack surfaces the app defends against, and what is explicitly *out* of scope
+live in [SECURITY.md](SECURITY.md); per-feature behaviour is described in the
+[user guide](docs/user-guide.md).
+
+---
+
+## 1. Who is responsible
+
+Knotwork is an independent open-source project maintained by a single
+developer. There is no company, no data-processing infrastructure, and no
+analytics back end behind it.
+
+- Source code and issue tracker: <https://github.com/alexeyw/knotwork>
+- Privacy point of contact: <alexeyw+knotwork@gmail.com>
+- Security reports: the private advisory channel described in
+  [SECURITY.md](SECURITY.md#reporting-a-vulnerability) — not the address above,
+  so that a vulnerability report stays private until a fix ships
+
+Because the developer operates no server, the developer receives **none** of
+the data described in section 3 except crash reports (section 3.5), and those
+only if you switch them on.
+
+---
+
+## 2. What the app stores on your device
+
+All of the following is created by your use of the app and stays in the app's
+private storage on your device:
+
+- Chat sessions and messages, including image and audio attachments you add.
+- Long-term memory entries derived from your conversations.
+- Pipelines, presets, prompt templates, and their run traces.
+- Triggers, scheduled tasks, and the trigger journal.
+- Settings, including the list of cloud providers, MCP servers, and allowed
+  domains you configured.
+- Local usage statistics (section 4).
+- API keys, the Hugging Face access token, and MCP credentials you entered.
+
+**Encryption at rest.** The local database — chats, memory, run traces — is
+encrypted with SQLCipher. API keys, the Hugging Face token, and MCP credentials
+are sealed with AES-GCM under a dedicated Android Keystore key. Details and
+limits are in [SECURITY.md](SECURITY.md#threat-model).
+
+**Deletion.** Uninstalling the app removes all of it. Individual chats,
+memories, pipelines, and run history can be deleted from inside the app, and
+run history is also pruned automatically according to the retention setting.
+
+---
+
+## 3. What can leave your device — and only if you set it up
+
+Every item in this section is **off until you configure it**. None of it is
+required for the app to work, and none of it sends data to the developer.
+
+### 3.1 Cloud model providers (opt-in, your own key)
+
+If you place a cloud node in a pipeline and enter your own API key, the text
+that node processes — the prompt, the relevant conversation context, and any
+attachments that node consumes — is sent to the provider you selected
+(OpenAI, Anthropic, Google Gemini, DeepSeek, or an Ollama endpoint you name).
+
+The request goes **directly from your device to that provider**. It does not
+pass through any infrastructure of the developer. Once it arrives, the
+provider's own privacy policy and data-retention terms govern it — including
+whether they retain or train on it. Review the policy of whichever provider
+you choose.
+
+A pipeline without a cloud node never contacts a cloud provider. Cloud nodes
+are visible in the pipeline editor, so you can see whether one is present.
+
+### 3.2 MCP servers (opt-in)
+
+If you add a Model Context Protocol server, the app connects to that server's
+URL to list its tools and to invoke them. Tool arguments produced during a run
+— which may contain content from your conversation — are sent to that server,
+along with any credentials you stored for it. The operator of that server
+determines what happens to that data.
+
+### 3.3 Model downloads
+
+Downloading an on-device model contacts the host serving it: Hugging Face for
+the models offered in the app, or any URL you paste yourself. These are
+ordinary file downloads. If a model is gated, your Hugging Face access token is
+sent to that host to authorise the download, and only for that download —
+browsing the catalogue is anonymous.
+
+### 3.4 Outbound requests from tools
+
+The `http_request` tool can reach only hosts you have added to the
+allowed-domains list; while that list is empty the tool is not offered to the
+model at all. Every call passes a confirmation prompt showing the destination
+and the arguments before anything is sent. The layered restrictions on this
+path are documented in
+[SECURITY.md](SECURITY.md#outbound-http-and-the-exfiltration-chain).
+
+### 3.5 Crash reporting (`full` build only, opt-in, off by default)
+
+The `full` distribution can send anonymous crash reports to Firebase
+Crashlytics (Google) — **only** after you enable
+*Settings → Privacy → Send anonymous crash reports*, which is off by default.
+
+When enabled, a report may contain: the stack trace, device model, Android and
+app version, and two identifiers describing which pipeline and model were
+active. It **never** contains message content, prompts, model replies, memory
+entries, tool inputs or outputs, API keys, or anything stored in the encrypted
+stores. Full detail is in
+[SECURITY.md](SECURITY.md#what-is-collected-crash-reporting).
+
+You can revoke consent at any time from the same setting. The `foss`
+distribution contains no crash-reporting dependency at all and hides the
+setting.
+
+---
+
+## 4. What never leaves your device
+
+- **Usage statistics.** The in-app statistics — how many pipelines you ran,
+  which days you were active, and so on — are computed and stored on the
+  device and are never transmitted. This is enforced at build time: an
+  architecture test fails the build if any network dependency ever reaches
+  that code. Exporting the statistics as a file is a manual action you take,
+  and the resulting file goes wherever you send it.
+- **Your keys and credentials.** API keys, the Hugging Face token, and MCP
+  credentials are used only to authenticate to the service you entered them
+  for. They are never sent anywhere else, and a saved provider key found in an
+  outgoing `http_request` causes that request to be refused outright.
+- **Attachments.** Images and audio you attach are processed by the on-device
+  model unless a cloud node in your pipeline consumes them (section 3.1).
+- **Nothing is sent to the developer** other than the optional crash reports
+  described in section 3.5.
+
+---
+
+## 5. Permissions and why they are requested
+
+| Permission | Why | When |
+|---|---|---|
+| Internet, network state | Model downloads, and the opt-in cloud/MCP/tool paths above | Always declared; used only for the paths you configure |
+| Notifications | Run progress, background-run results, confirmation prompts | Asked on first run |
+| Microphone | Voice input you record for a message; processed on-device | Asked when you first record audio |
+| Approximate and precise location | Only to match a Wi-Fi trigger against specific network names — Android ties Wi-Fi identity to location | Asked only if you scope a Wi-Fi trigger to named networks |
+| Foreground service, wake lock | Keeping a model download or a running pipeline alive while the screen is off | Used only while such work is running |
+| Execute app functions | Calling tool functions exposed by apps on the device | Used only when a pipeline invokes such a tool |
+
+The Wi-Fi network name obtained under the location permission is used on the
+device to decide whether a trigger fires, and never leaves it. Background
+location is **not** requested.
+
+---
+
+## 6. Children
+
+Knotwork is not directed to children. The intended audience is adults
+(18 and over). The app does not knowingly process data from children, and it
+collects no age information because it collects no personal profile at all.
+
+---
+
+## 7. Legal bases and your rights
+
+Since the developer operates no server and receives no personal data, there is
+no data controller holding a copy of your information to grant access to,
+export, or erase on request — the data is in your possession, on your device,
+and you can inspect, export, or delete it there at any time.
+
+Where crash reporting is enabled (section 3.5), the legal basis is your
+explicit consent, which you may withdraw at any time in the app. Data you send
+to a cloud provider or an MCP server is governed by your relationship with that
+operator; exercise any rights over it with them directly.
+
+---
+
+## 8. Third parties
+
+The app contacts a third party only along the paths in section 3. Depending on
+what you configure, those may be:
+
+- The cloud model provider whose key you entered (OpenAI, Anthropic, Google,
+  DeepSeek, or an Ollama endpoint you name).
+- Hugging Face, or any host you paste a model URL for.
+- MCP servers you add.
+- A host you added to the allowed-domains list for the `http_request` tool.
+- Google (Firebase Crashlytics), in the `full` build, if you opted in to crash
+  reporting.
+
+Each is governed by its own privacy policy. The developer has no agreement with
+them on your behalf and receives nothing from them.
+
+---
+
+## 9. Changes to this policy
+
+Material changes are recorded in [CHANGELOG.md](CHANGELOG.md) alongside the
+release that introduces them, and the effective date at the top of this
+document is updated. The version history of this file is public in the
+repository, so any change can be diffed.
+
+---
+
+## 10. Contact
+
+Questions about this policy, or a request about your data: write to
+<alexeyw+knotwork@gmail.com>, or open an issue at
+<https://github.com/alexeyw/knotwork/issues> if the question is not private.
+Suspected vulnerabilities should go through the private channel described in
+[SECURITY.md](SECURITY.md#reporting-a-vulnerability) instead.

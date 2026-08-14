@@ -1126,7 +1126,7 @@ between them:
 
 Each flavour source set ships its own `di/CrashReportingModule` (same FQN,
 exactly one compiled per build) that binds the interface to the flavour's impl;
-the `full` module also provides the `FirebaseCrashlytics` / `FirebaseAnalytics`
+the `full` module also provides the `FirebaseCrashlytics`
 singletons. The shared `main` graph contains no Firebase binding at all — a
 Konsist guard (`FirebaseIsolationKonsistTest`) fails the build if any `main`
 source imports `com.google.firebase.*`. The `foss` build additionally hides the

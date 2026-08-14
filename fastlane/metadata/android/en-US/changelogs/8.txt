@@ -1,0 +1,3 @@
+• Report a model response you consider harmful or wrong straight from the message menu: pick a category, add a note, and either copy the report or open a prefilled issue. Nothing is sent automatically.
+• A standalone privacy policy now documents every path that can send data off the device, and the About screen links to it.
+• Builds of the same commit now carry the same build date, so a release can be reproduced from source.

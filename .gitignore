@@ -44,7 +44,19 @@ secrets.properties
 *-actual.png
 *_actual.png
 
+# Runtime output of the fastlane tool, if it is ever run locally. The metadata
+# tree itself is NOT ignored — see the note below.
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/
+fastlane/test_output/
+
 # NOTE — intentionally tracked, do NOT add to this file:
+#   * fastlane/metadata/android/**                      — store listing texts,
+#     screenshots and changelogs. F-Droid builds its index from the metadata it
+#     finds in the *source repository*, so ignoring this directory would make
+#     the F-Droid listing empty; the same files are what `supply` uploads to
+#     Play, and `StoreMetadataTest` verifies their limits in CI.
 #   * app/google-services.json                          — placeholder Firebase
 #     config (project_id "android-ai-agent-placeholder", zeroed project_number,
 #     placeholder API key) required for local & CI builds; carries no real

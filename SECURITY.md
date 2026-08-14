@@ -511,6 +511,12 @@ enabled:
 - Personally identifying information beyond the device/app metadata listed
   above.
 
+Firebase Analytics collection is never enabled, and the Analytics SDK is not
+shipped in either flavour: the consent toggle enables Crashlytics alone, and no
+analytics events — automatic or custom — are collected. An earlier build did
+flip Analytics collection alongside Crashlytics; that call, and the dependency
+behind it, are gone.
+
 The user can revoke consent at any time from the same settings entry; the
 runtime gate then returns every reporting call to a no-op.
 

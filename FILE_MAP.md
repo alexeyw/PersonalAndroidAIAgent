@@ -20,6 +20,9 @@
 - `docs/` - Project documentation (architecture, user guide, extending, code style, testing, API conventions, static analysis, coverage baseline, roadmap).
   - `images/` - Hero screenshots referenced from `README.md` (light + dark variants).
   - `screenshots/` - Empty placeholder directory (kept by `.gitkeep`); current screenshots live in `docs/images/`.
+- `fastlane/` - Store-listing metadata, tracked on purpose: the single source both Google Play (`fastlane supply`) and F-Droid read.
+  - `metadata/android/<locale>/` - `title.txt` / `short_description.txt` / `full_description.txt`, `changelogs/<versionCode>.txt`, and `images/` (icon, feature graphic, `phoneScreenshots/`). Limits and screenshot geometry are enforced by `StoreMetadataTest`; `ru-RU` carries texts only and falls back to the `en-US` graphics. See `docs/release.md` § *Store listing metadata*.
+- `PRIVACY.md` - Public privacy policy: what stays on the device, every path that can send data off it, and how to switch each one off. The URL app stores require, and the target of the About screen's privacy link.
 - `CONTRIBUTING.md` - Contributor guide: dev setup, build & test, branch model, Conventional Commits, PR checklist, language policy.
 - `CODE_OF_CONDUCT.md` - Contributor Covenant 2.1 community standards and enforcement guidelines.
 - `gradle/` - Gradle wrapper and global dependency versions configuration.

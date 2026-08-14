@@ -14,8 +14,8 @@ import javax.inject.Singleton
  * This module lives in the `foss` source set only and binds the
  * [NoOpCrashReportingRepository], which has zero Firebase/Google dependencies.
  * Its `full`-flavour counterpart (same fully-qualified name, under `src/full`)
- * binds the Firebase-backed implementation and provides the Crashlytics /
- * Analytics singletons. Exactly one of the two is compiled into any given
+ * binds the Firebase-backed implementation and provides the Crashlytics
+ * singleton. Exactly one of the two is compiled into any given
  * build, so Hilt always sees a single binding for [CrashReportingRepository].
  */
 @Module

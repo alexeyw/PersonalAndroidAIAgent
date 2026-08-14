@@ -26,6 +26,7 @@
     <string name="knotwork_chat_message_action_rerun">Re-run</string>
     <string name="knotwork_chat_message_action_rate">Rate</string>
     <string name="knotwork_chat_message_action_save_to_memory">Save to memory</string>
+    <string name="knotwork_chat_message_action_report">Report response</string>
 
     <!-- Retry button on the inline ChatContent.Error tile. -->
     <string name="knotwork_chat_message_error_retry">Retry</string>

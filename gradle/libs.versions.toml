@@ -33,7 +33,7 @@ markdown-renderer = "0.43.0"
 work = "2.11.2"
 hiltWork = "1.4.0"
 gson = "2.14.0"
-json = "20260719"
+json = "20260814"
 sqlcipher = "4.17.0"
 detekt = "2.0.0-alpha.6"
 ktlint = "14.2.0"
@@ -118,7 +118,6 @@ gson = { group = "com.google.code.gson", name = "gson", version.ref = "gson" }
 sqlcipher-android = { group = "net.zetetic", name = "sqlcipher-android", version.ref = "sqlcipher" }
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics" }
-firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
 androidx-core-splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "coreSplashscreen" }
 roborazzi = { group = "io.github.takahirom.roborazzi", name = "roborazzi", version.ref = "roborazzi" }
 roborazzi-compose = { group = "io.github.takahirom.roborazzi", name = "roborazzi-compose", version.ref = "roborazzi" }

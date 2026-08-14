@@ -27,6 +27,47 @@ fun Project.resolveGitSha(): String = runCatching {
 }.getOrDefault("unknown")
 
 /**
+ * Resolves the build timestamp (epoch milliseconds) baked into `BuildConfig`.
+ *
+ * Resolution order, most authoritative first:
+ *
+ * 1. **`SOURCE_DATE_EPOCH`** (seconds since the epoch) — the cross-ecosystem
+ *    convention for reproducible builds. A rebuilder sets it to the commit
+ *    timestamp and expects a bit-identical artefact; reading the wall clock
+ *    instead is precisely what makes a build unreproducible.
+ * 2. **The `HEAD` commit date** — deterministic for a given checkout, and the
+ *    honest answer to "when was this source built from".
+ * 3. **The wall clock** — last resort for a build with neither (a tarball with
+ *    no git history and no environment override).
+ *
+ * The value is surfaced in the Settings top-app-bar subtitle, so it must stay a
+ * real date in all three cases rather than a sentinel.
+ *
+ * @return Epoch milliseconds for the build stamp.
+ */
+fun Project.resolveBuildTimestampMs(): Long {
+    val millisPerSecond = 1_000L
+    val sourceDateEpoch = providers.environmentVariable("SOURCE_DATE_EPOCH").orNull
+        ?.trim()
+        ?.toLongOrNull()
+    if (sourceDateEpoch != null) return sourceDateEpoch * millisPerSecond
+
+    val commitEpochSeconds = runCatching {
+        val output = providers.exec {
+            commandLine("git", "log", "-1", "--pretty=%ct")
+            isIgnoreExitValue = true
+        }
+        if (output.result.get().exitValue == 0) {
+            output.standardOutput.asText.get().trim().toLongOrNull()
+        } else {
+            null
+        }
+    }.getOrNull()
+
+    return commitEpochSeconds?.times(millisPerSecond) ?: System.currentTimeMillis()
+}
+
+/**
  * Resolved release-signing credentials sourced from `local.properties` or
  * environment variables. Carries the validated keystore file plus its
  * passwords and key alias so the `signingConfigs.release` block can be
@@ -122,8 +163,8 @@ android {
         applicationId = "app.knotwork.android"
         minSdk = 36
         targetSdk = 37
-        versionCode = 7
-        versionName = "0.7.0"
+        versionCode = 8
+        versionName = "0.7.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -143,13 +184,15 @@ android {
         // Build date surfaced in the Settings top-app-bar
         // subtitle (`v0.9.2 · alpha · 2026.05.18`). Captured at configuration
         // time as an epoch-millis Long so the formatter on the screen owns
-        // the locale-specific rendering. Stable across CI builds — the value
-        // reflects when the APK was assembled, not when the binary is
-        // installed.
+        // the locale-specific rendering. Derived from `SOURCE_DATE_EPOCH` or
+        // the HEAD commit date (see `resolveBuildTimestampMs`), so two builds
+        // of the same commit agree — reading the wall clock here used to make
+        // every rebuild a different binary, which is the one thing a
+        // reproducible build may not do.
         buildConfigField(
             "long",
             "GIT_COMMIT_DATE_EPOCH_MS",
-            "${System.currentTimeMillis()}L",
+            "${resolveBuildTimestampMs()}L",
         )
     }
 
@@ -220,7 +263,7 @@ android {
         }
     }
 
-    // Distribution flavours. `full` ships Firebase Crashlytics/Analytics and is
+    // Distribution flavours. `full` ships Firebase Crashlytics and is
     // the default for day-to-day development and the Play/direct-APK channel.
     // `foss` is the F-Droid-compatible build: it carries no Firebase/Google
     // dependency (see the flavour-scoped `fullImplementation(...)` block and
@@ -816,6 +859,18 @@ val verifyDocsHygiene by tasks.registering {
 }
 tasks.named("check") { dependsOn(verifyDocsHygiene) }
 
+// `StoreMetadataTest` reads the store listing under `fastlane/metadata/` — the
+// text limits, the changelog for the shipping versionCode, and the screenshot
+// geometry Play enforces. Those files are not on any compile classpath, so
+// without this declaration the test task stays UP-TO-DATE after a metadata edit
+// and the guard reports a stale pass: exactly the failure mode it exists to
+// prevent, only quieter.
+tasks.withType<Test>().configureEach {
+    inputs.dir(rootProject.file("fastlane/metadata"))
+        .withPropertyName("storeMetadata")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 // Hilt/Dagger reads Kotlin metadata via `kotlin-metadata-jvm`, which is unshaded
 // since Dagger 2.57 and therefore resolved through Gradle. Each Kotlin bump raises
 // the emitted metadata version, so the processor must use a matching reader or it
@@ -922,7 +977,11 @@ dependencies {
     // JSON Serialization
     implementation(libs.gson)
 
-    // Firebase — Crashlytics + Analytics (Analytics is required by Crashlytics).
+    // Firebase — Crashlytics only. Analytics is deliberately NOT declared:
+    // Crashlytics depends on `firebase-measurement-connector`, not on
+    // `firebase-analytics`, and the app logs no analytics events. Declaring it
+    // used to drag `play-services-measurement` in, which added an advertising-ID
+    // permission set to the `full` manifest for a collector nothing ever fed.
     // Scoped to the `full` flavour ONLY (`fullImplementation`) so the `foss`
     // build carries no `com.google.firebase` artifact on any classpath — the
     // hard requirement for F-Droid. The BoM (Bill of Materials) pins
@@ -931,7 +990,6 @@ dependencies {
     // base modules and removed.
     "fullImplementation"(platform(libs.firebase.bom))
     "fullImplementation"(libs.firebase.crashlytics)
-    "fullImplementation"(libs.firebase.analytics)
 
     testImplementation(libs.json)
     testImplementation(libs.junit)

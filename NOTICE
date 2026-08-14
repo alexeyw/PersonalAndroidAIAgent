@@ -38,7 +38,7 @@ required for their redistribution beyond this acknowledgment:
   * Multiplatform Markdown Renderer — Mike Penz
   * Timber — Jake Wharton
   * ProcessPhoenix — Jake Wharton
-  * Firebase Android SDK (Crashlytics, Analytics) — Google LLC
+  * Firebase Android SDK (Crashlytics) — Google LLC
 
 --------------------------------------------------------------------------------
 SQLCipher for Android — BSD 3-Clause License

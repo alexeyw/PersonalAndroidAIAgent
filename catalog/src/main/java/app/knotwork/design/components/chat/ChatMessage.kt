@@ -544,6 +544,18 @@ private fun ChatBubbleChrome(
                         onContextAction(ChatContextAction.SaveToMemory)
                     },
                 )
+                // Reporting applies to model output, so the row is absent on the
+                // user's own bubbles: there is nobody to report your own text to.
+                if (role != ChatRole.User) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.knotwork_chat_message_action_report)) },
+                        leadingIcon = { Icon(AppIcons.Warn, contentDescription = null) },
+                        onClick = {
+                            menuExpanded = false
+                            onContextAction(ChatContextAction.Report)
+                        },
+                    )
+                }
             }
         }
     }
