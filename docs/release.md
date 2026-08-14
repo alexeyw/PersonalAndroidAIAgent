@@ -416,25 +416,43 @@ are inherent to the product, not to crash reporting, and are tracked separately:
   the `foss` configuration, but MediaPipe declares `datatransport` for its own
   logging, so an exclusion needs an on-device smoke of the embeddings / text
   tasks before it can be trusted.
-- **Proprietary on-device inference binaries.** `com.google.ai.edge.litertlm`
-  and `com.google.mediapipe:tasks-text` ship prebuilt, non-free native
-  libraries. The official F-Droid repo cannot build these from source, so true
-  inclusion there requires either a free inference backend or F-Droid's
-  prebuilt-binary allowance. This is a product-architecture decision well beyond
-  the crash-reporting split.
+- **Prebuilt on-device inference binaries.** `com.google.ai.edge.litertlm` and
+  `com.google.mediapipe:tasks-core` ship large prebuilt native libraries that
+  F-Droid's build server does not compile from source. They are **freely
+  licensed** — the LiteRT-LM POM declares Apache-2.0 and the AAR carries both
+  the licence text and a third-party notice listing only free licences, with
+  sources at `github.com/google-ai-edge/LiteRT-LM`; MediaPipe is Apache-2.0 as
+  well. (An earlier revision of this document called them "non-free". That was
+  wrong, and the distinction matters: the open question is not the licence but
+  whether a reviewer accepts a prebuilt binary under F-Droid's allowance for
+  freely-licensed artefacts from trusted Maven repositories, Google Maven
+  included.) The `foss` release APK contains exactly five native libraries —
+  `liblitertlm_jni.so`, `libmediapipe_tasks_jni.so`, `libsqlcipher.so`,
+  `libandroidx.graphics.path.so` and `libdatastore_shared_counter.so` — all
+  from freely-licensed upstreams.
 
 ### Reproducible builds
 
-F-Droid prefers builds it can reproduce bit-for-bit from source. Two known
-sources of non-determinism in this project:
+F-Droid prefers builds it can reproduce bit-for-bit from source. Both
+`BuildConfig` stamps are now deterministic for a given checkout:
 
-- `BuildConfig.GIT_COMMIT_DATE_EPOCH_MS` is stamped from
-  `System.currentTimeMillis()` at configuration time (see `defaultConfig` in
-  `app/build.gradle.kts`). For a reproducible F-Droid build this should be
-  pinned to the commit timestamp (e.g. `SOURCE_DATE_EPOCH`) by the F-Droid
-  recipe rather than read from the wall clock.
+- `BuildConfig.GIT_COMMIT_DATE_EPOCH_MS` resolves, in order, from the
+  `SOURCE_DATE_EPOCH` environment variable (the cross-ecosystem convention,
+  in seconds), then the `HEAD` commit date, and only then the wall clock —
+  see `resolveBuildTimestampMs()` in `app/build.gradle.kts`. Two builds of one
+  commit therefore agree; before this, every rebuild differed by construction.
+
+  ```bash
+  SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct) ./gradlew :app:assembleFossRelease
+  ```
+
 - `BuildConfig.GIT_SHA` resolves the short commit SHA, which is deterministic
   for a given checkout.
+
+What this does *not* establish is that the whole artefact reproduces
+bit-for-bit: that can only be confirmed against a build produced by F-Droid's
+own server, which does not exist yet. The claim here is narrow and true — the
+one identified source of non-determinism is gone.
 
 The `foss` release is otherwise a standard R8-minified arm64-v8a build (§4); the
 F-Droid build recipe should disable any signing config so F-Droid applies its
@@ -504,3 +522,51 @@ It still requires the tag to match the declared `versionName`.
 **A tag with a pre-release suffix** (`v0.7.0-rc1`) is marked as a prerelease on
 GitHub and does not become the "Latest" download. A plain `0.x` tag does not —
 pre-1.0 is still the version users are meant to install.
+
+## 10. Store listing metadata
+
+The listing texts, screenshots and per-version release notes live in the
+repository, under the layout both Google Play (`fastlane supply`) and F-Droid
+read:
+
+```
+fastlane/metadata/android/
+├── en-US/
+│   ├── title.txt                   # ≤ 30 characters (Play's limit; F-Droid allows 50)
+│   ├── short_description.txt       # ≤ 80
+│   ├── full_description.txt        # ≤ 4000
+│   ├── changelogs/<versionCode>.txt  # ≤ 500
+│   └── images/
+│       ├── icon.png                # 512 × 512
+│       ├── featureGraphic.png      # 1024 × 500, no alpha — required by Play
+│       └── phoneScreenshots/       # 1.png, 2.jpg, …
+└── ru-RU/                          # texts only; falls back to en-US graphics
+```
+
+One directory rather than two keeps the two stores from drifting apart, and
+`StoreMetadataTest` (in the `:app` unit-test suite, wired into `check`) enforces
+the limits, the presence of a changelog for the **current** `versionCode`, and
+the screenshot rules below. A version bump without a matching
+`changelogs/<versionCode>.txt` fails the build rather than shipping a release
+with no notes.
+
+**Screenshot geometry is a real gate, not a guideline.** Play rejects any
+screenshot whose longer side exceeds twice its shorter side, and the README hero
+baselines are 1080 × 2400 — over the line. The store captures are therefore
+rendered separately, at 1080 × 2160:
+
+```bash
+./gradlew :catalog:recordRoborazziDebug --tests "*StoreScreenshotTest*"
+cp catalog/src/test/snapshots/store_phone_*.png \
+   fastlane/metadata/android/en-US/images/phoneScreenshots/
+```
+
+The copy step is manual and nothing verifies it, so re-record and re-copy in the
+same change — the numbering (`store_phone_<n>_<name>.png` → `<n>.png`) is what
+keeps the carousel order stable. Slot 2 is the phone capture of the editor
+canvas (`docs/images/hero-pipeline-canvas.jpg`), which has no design-system
+counterpart to render from.
+
+The privacy policy Play requires as a URL is [`PRIVACY.md`](../PRIVACY.md) at
+the repository root; the About screen links to the same file, so the store, the
+README and the app cannot describe three different policies.

@@ -13,6 +13,45 @@ details.
 
 ## [Unreleased]
 
+### Added
+
+- **Report a response you think is wrong.** Long-pressing a message the model
+  produced now offers **Report response**: pick a category (harmful or unsafe,
+  sexually explicit, hate or harassment, misleading, something else), add a note
+  in your own words, and the app assembles a report carrying your note, the
+  reported text, and the app version, device and model behind it. Nothing is
+  transmitted — there is no reporting server behind this app and adding one
+  would contradict everything else it claims. You hand the report over yourself:
+  **Copy report** puts it on the clipboard, **Open issue** opens the public
+  tracker with it prefilled. The dialog says so plainly, and warns that the
+  tracker is public before you submit anything. Reporting is offered only on
+  messages the model wrote; your own text has nobody to be reported to.
+
+- **A standalone privacy policy.** `PRIVACY.md` now documents, in one place,
+  what the app stores on the device, every path that can send data off it (a
+  cloud node with your key, an MCP server you added, a model download, an
+  outbound request from a tool you allowed, opt-in crash reports), what never
+  leaves at all, and why each permission is requested. It replaces the README
+  section as the canonical answer, and the About screen's privacy link now
+  points at it — one document behind the app, the README and any store listing,
+  rather than three descriptions drifting apart.
+
+- **Store listing metadata lives in the repository.** Listing texts, release
+  notes and screenshots for both English and Russian now sit under
+  `fastlane/metadata/android/`, the layout Google Play and F-Droid both read, so
+  the two stores cannot describe the app differently. A test enforces the length
+  limits, the presence of release notes for the shipping version, and the
+  screenshot geometry the stores accept.
+
+### Changed
+
+- **Two builds of the same commit now carry the same build date.** The date
+  shown in Settings was stamped from the wall clock while the build ran, which
+  made every rebuild of an identical source tree a different binary. It now
+  comes from `SOURCE_DATE_EPOCH` when set, otherwise from the commit itself —
+  the groundwork for a release anyone can reproduce from source and check
+  against the published artefact.
+
 ## [0.7.0] - 2026-08-13
 
 ### Added

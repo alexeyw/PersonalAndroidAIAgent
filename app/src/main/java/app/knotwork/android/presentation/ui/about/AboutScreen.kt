@@ -68,8 +68,8 @@ fun AboutScreen(modifier: Modifier = Modifier, onBack: () -> Unit) {
  *
  * `internal` rather than file-private so `AboutLinksTest` can assert they still
  * resolve: both are hand-written strings that no compiler check covers, and the
- * privacy link additionally depends on a heading anchor living in another file
- * (the repository `README.md`). A rename on either side silently turns the
+ * privacy link additionally depends on a file living outside this module (the
+ * repository `PRIVACY.md`). A rename on either side silently turns the
  * user-facing button into a link to nowhere, which is exactly what the guard
  * exists to catch.
  */
@@ -79,11 +79,16 @@ internal object AboutLinks {
     const val LICENSE_URL = "https://www.apache.org/licenses/LICENSE-2.0"
 
     /**
-     * Privacy policy URL — points at the `## Privacy` section of the repository
-     * README until a dedicated page ships. Replace once the privacy.html page is
-     * published.
+     * Privacy policy URL — the standalone `PRIVACY.md` at the repository root.
+     *
+     * This is the same URL submitted to the app stores as the privacy-policy
+     * link, so the three surfaces (store listing, README, About screen) resolve
+     * to one document rather than three drifting descriptions. It deliberately
+     * no longer points at a README heading anchor: an anchor silently survives
+     * the heading being renamed, landing the user at the top of an unrelated
+     * page, and a store review will not accept a fragment link into a README.
      */
-    const val PRIVACY_URL = "https://github.com/alexeyw/knotwork#privacy"
+    const val PRIVACY_URL = "https://github.com/alexeyw/knotwork/blob/main/PRIVACY.md"
 }
 
 /**

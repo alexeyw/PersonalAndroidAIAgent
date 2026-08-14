@@ -2,7 +2,7 @@
 
 [![Check](https://github.com/alexeyw/knotwork/actions/workflows/check.yml/badge.svg)](https://github.com/alexeyw/knotwork/actions/workflows/check.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.7.0-orange.svg)
+![Version](https://img.shields.io/badge/version-0.7.1-orange.svg)
 ![Android API](https://img.shields.io/badge/Android-API%2036%2B-3DDC84.svg?logo=android)
 
 > **An AI agent you build, not just prompt.** A local-first Android agent whose
@@ -263,7 +263,9 @@ to log into, and nothing is uploaded for the app to work.
   at a human-in-the-loop confirmation, including when a pipeline runs in the
   background from a trigger.
 
-The full threat model, including what is explicitly *out* of scope, is in
+The policy in full — what is stored on the device, every path that can send
+data off it, and how to switch each one off — is [PRIVACY.md](PRIVACY.md). The
+threat model behind it, including what is explicitly *out* of scope, is in
 [SECURITY.md](SECURITY.md); the per-feature behaviour is in the
 [user guide](docs/user-guide.md).
 
@@ -280,12 +282,13 @@ The full threat model, including what is explicitly *out* of scope, is in
 - Roadmap — [docs/roadmap.md](docs/roadmap.md).
 - Contributing guide — [CONTRIBUTING.md](CONTRIBUTING.md).
 - Code of Conduct — [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
+- Privacy policy — [PRIVACY.md](PRIVACY.md).
 - Security policy and threat model — [SECURITY.md](SECURITY.md).
 - Release notes and version history — [CHANGELOG.md](CHANGELOG.md).
 
 ## Pre-release notice
 
-This project is currently at **version 0.7.0** and is published for review and
+This project is currently at **version 0.7.1** and is published for review and
 experimentation. Expect rough edges:
 
 - There are no stability guarantees for the public surface (Kotlin APIs,

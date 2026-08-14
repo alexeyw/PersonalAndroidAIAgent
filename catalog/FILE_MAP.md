@@ -486,6 +486,12 @@ project — `:app` consumes it as an `implementation` dependency.
       container).
     - `TriggersPreview.kt` — deterministic fixtures behind the triggers
       `@Preview`s and the Roborazzi baselines (list, editor, detail).
+- `src/test/java/app/knotwork/design/store/StoreScreenshotTest.kt` —
+  Roborazzi baselines for the app-store listing, rendered at
+  `w360dp-h720dp-xxhdpi` = 1080 × 2160 because Play rejects a screenshot
+  whose longer side exceeds twice the shorter one (the 1080 × 2400 hero
+  baselines do). Copied by hand into `fastlane/metadata/android/en-US/
+  images/phoneScreenshots/`.
 - `src/test/java/app/knotwork/design/tokens/KnotworkTokensTest.kt` —
   pure-JVM sanity tests for the token data classes (no Compose runtime).
 - `src/test/java/app/knotwork/design/theme/KnotworkThemeTest.kt` —
