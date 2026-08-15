@@ -148,8 +148,11 @@ setting.
   outgoing `http_request` causes that request to be refused outright.
 - **Attachments.** Images and audio you attach are processed by the on-device
   model unless a cloud node in your pipeline consumes them (section 3.1).
-- **Nothing is sent to the developer** other than the optional crash reports
-  described in section 3.5.
+- **Nothing is sent to the developer on its own.** The only two paths that can
+  reach the developer at all are the optional crash reports of section 3.5 and
+  a report you compose yourself: flagging a model response opens a prefilled
+  message you can edit, and it travels only if you send it. Neither happens in
+  the background.
 
 ---
 
@@ -162,6 +165,7 @@ setting.
 | Microphone | Voice input you record for a message; processed on-device | Asked when you first record audio |
 | Approximate and precise location | Only to match a Wi-Fi trigger against specific network names — Android ties Wi-Fi identity to location | Asked only if you scope a Wi-Fi trigger to named networks |
 | Foreground service, wake lock | Keeping a model download or a running pipeline alive while the screen is off | Used only while such work is running |
+| Run at boot | Re-arming your scheduled triggers after a restart, so an automation you set up does not silently stop | Declared by the scheduling library; used only if you created a trigger |
 | Execute app functions | Calling tool functions exposed by apps on the device | Used only when a pipeline invokes such a tool |
 
 The Wi-Fi network name obtained under the location permission is used on the

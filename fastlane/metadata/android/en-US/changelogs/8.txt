@@ -1,3 +1,4 @@
-• Report a model response you consider harmful or wrong straight from the message menu: pick a category, add a note, and either copy the report or open a prefilled issue. Nothing is sent automatically.
-• A standalone privacy policy now documents every path that can send data off the device, and the About screen links to it.
-• Builds of the same commit now carry the same build date, so a release can be reproduced from source.
+• Report a model response you find harmful or wrong from the message menu: pick a category, add a note, then copy the report or open a prefilled issue. Nothing is sent automatically.
+• Turning on crash reports no longer turns on Firebase Analytics: consent covers crash reporting alone, and the Analytics SDK is not shipped.
+• A standalone privacy policy documents every path that can send data off the device, linked from the About screen.
+• Two builds of one commit now carry the same build date.
