@@ -1,0 +1,5 @@
+Long-term memory works in a released build - it did not, in any of them.
+
+Saving failed with "Couldn't save to memory", and so did everything else that turns text into a vector: semantic retrieval, automatic fact extraction, memory-aware pipeline steps. Only release builds were affected, which is why it lasted: development happens in debug builds, where the code that broke it does not run.
+
+Nothing was lost or corrupted. Saving simply refused to happen. It happens now.

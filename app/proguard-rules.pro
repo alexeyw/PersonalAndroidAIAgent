@@ -70,6 +70,27 @@
 -keep class com.google.common.flogger.** { *; }
 -dontwarn com.google.common.flogger.**
 
+# ─── Protobuf lite (MediaPipe's graph configuration) ─────────────────────────
+# MediaPipe describes its task graph as a protobuf and parses it on every
+# `TextEmbedder.createFromOptions`. protobuf-javalite never calls a constructor:
+# `getDefaultInstance()` materialises the message through
+# `Unsafe.allocateInstance`. R8 in full mode sees no allocation site, concludes
+# the class is never instantiated, and marks it **abstract** — after which the
+# same call throws `InstantiationException: Can't instantiate abstract class
+# com.google.protobuf.Any`, `TextEmbedder` never initialises, and every
+# save-to-memory fails with "Couldn't save to memory".
+#
+# Release-only and silent: debug builds skip R8 entirely, and the failure is
+# caught and shown as a snackbar rather than a crash, so no stack trace reaches
+# logcat in a release build (which plants no Timber tree). It was found by
+# building a minified APK that logs.
+-keep class com.google.protobuf.** { *; }
+-keep class * extends com.google.protobuf.GeneratedMessageLite { *; }
+-keepclassmembers class * extends com.google.protobuf.GeneratedMessageLite {
+    <fields>;
+}
+-dontwarn com.google.protobuf.**
+
 # ─── MediaPipe + LiteRT (native + reflection) ────────────────────────────────
 # JNI bindings reach into Java classes by name; R8 cannot follow native frame.
 -keep class com.google.mediapipe.** { *; }
