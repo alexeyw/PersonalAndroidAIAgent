@@ -13,6 +13,8 @@ details.
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-08-16
+
 ### Changed
 
 - **The FOSS build no longer declares any Google components.** MediaPipe brings
@@ -4607,7 +4609,8 @@ that produced the initial 0.1.0 snapshot.
 - **Master key**: `EncryptedSharedPreferences` is rooted in the Android
   Keystore, so the master key is hardware-backed where available.
 
-[Unreleased]: https://github.com/alexeyw/knotwork/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/alexeyw/knotwork/compare/v0.7.2...HEAD
+[0.7.2]: https://github.com/alexeyw/knotwork/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/alexeyw/knotwork/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/alexeyw/knotwork/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/alexeyw/knotwork/compare/v0.5.0...v0.6.0
