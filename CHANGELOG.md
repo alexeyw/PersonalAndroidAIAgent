@@ -13,6 +13,35 @@ details.
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-08-16
+
+### Fixed
+
+- **Long-term memory works in a released build.** It did not, in any of them.
+  Saving a message to memory failed with *Couldn't save to memory*, and anything
+  else that needed to turn text into a vector failed the same way — semantic
+  retrieval, automatic fact extraction, the memory-aware pipeline nodes. Only
+  release builds were affected, which is why it survived so long: the app is
+  developed and tested in debug builds, where the code that broke it does not
+  run.
+
+  What broke it: the release build's optimiser makes a class abstract when it
+  can see no code creating an instance of it. The library that parses the
+  on-device embedding model's configuration never creates instances the visible
+  way — it allocates them directly, which the optimiser cannot see. So it
+  removed the ability to instantiate exactly the classes that get instantiated,
+  and the embedder failed on its first call. The failure was caught and shown as
+  a small message rather than a crash, so it never appeared in a crash report,
+  and nothing in the automated checks runs the optimised build.
+
+  The build now verifies, on the packaged app itself, that those classes are
+  still there and still instantiable — the property that was broken, rather than
+  the one the previous check happened to look at. That check fails the build,
+  and it has been confirmed to reject both previously published versions.
+
+  If you had given up on memory: nothing was lost or corrupted, and nothing
+  needs to be reset. Saving simply refused to happen. It happens now.
+
 ## [0.7.2] - 2026-08-16
 
 ### Changed
@@ -4609,7 +4638,8 @@ that produced the initial 0.1.0 snapshot.
 - **Master key**: `EncryptedSharedPreferences` is rooted in the Android
   Keystore, so the master key is hardware-backed where available.
 
-[Unreleased]: https://github.com/alexeyw/knotwork/compare/v0.7.2...HEAD
+[Unreleased]: https://github.com/alexeyw/knotwork/compare/v0.7.3...HEAD
+[0.7.3]: https://github.com/alexeyw/knotwork/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/alexeyw/knotwork/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/alexeyw/knotwork/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/alexeyw/knotwork/compare/v0.6.0...v0.7.0

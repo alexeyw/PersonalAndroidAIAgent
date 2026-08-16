@@ -355,6 +355,41 @@ lint through `lintVital<Variant>Release`, which AGP wires into every release
 assemble. That is the fatal-severity subset of `lintFullRelease`, so running the
 command above before tagging still buys something the release pipeline does not.
 
+### Two guards on the minified artefact
+
+`./gradlew check` never runs R8's output, so a release-only defect has exactly
+one place left to be caught: the artefact itself. Two tasks run after release
+packaging, and they check different properties — the second exists because the
+first was green while the app was broken.
+
+- **`verify<Variant>KeepRules`** reads the R8 mapping and asserts that protected
+  packages stayed identity-mapped. It catches a keep rule that stopped pinning
+  *names* — the failure behind the flogger crash, where a renamed frame broke a
+  stack walk.
+- **`verify<Variant>Instantiable`** opens the packaged APK, parses the dex
+  `class_defs` table and asserts that classes the app instantiates reflectively
+  are present and carry neither `ACC_ABSTRACT` nor `ACC_INTERFACE`.
+
+The second was added after long-term memory turned out to have never worked in
+any released build. R8 in full mode left `com.google.protobuf.Any` with its own
+name — so the mapping check passed — and made the class **abstract**, because
+protobuf-javalite instantiates through `Unsafe.allocateInstance`, which R8
+cannot see. MediaPipe parses its task graph as a protobuf, so every
+`TextEmbedder.createFromOptions` threw `InstantiationException`. The exception
+was caught and shown as a snackbar, so nothing reached logcat or Crashlytics.
+
+The lists live in `app/build.gradle.kts` (`r8ProtectedPackages`,
+`r8RequiredInstantiableClasses`); the checkers are unit-tested in `buildSrc`
+(`./gradlew -p buildSrc test`). Both published versions, `0.7.1` and `0.7.2`,
+fail the instantiability check — it was verified against them before being
+trusted.
+
+**Diagnosing a release-only failure.** A release build plants no Timber tree, so
+`adb logcat` shows nothing from the app. Build a diagnostic APK instead: plant
+`Timber.DebugTree()` unconditionally and give the release build type an
+`applicationIdSuffix`, so it installs beside the real one and leaves its data
+alone. That is how the protobuf failure was found.
+
 ## 8. FOSS / F-Droid build
 
 F-Droid requires a build that is **free of proprietary dependencies and

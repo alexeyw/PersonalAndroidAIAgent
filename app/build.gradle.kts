@@ -1,10 +1,12 @@
 import app.knotwork.android.buildtools.BrowserEditorConstantsGenerator
+import app.knotwork.android.buildtools.DexInstantiabilityChecker
 import app.knotwork.android.buildtools.DocsHygieneChecker
 import app.knotwork.android.buildtools.R8MappingChecker
 import app.knotwork.android.buildtools.ReleaseVersionChecker
 import com.android.build.api.artifact.SingleArtifact
 import dev.detekt.gradle.Detekt
 import java.util.Properties
+import java.util.zip.ZipFile
 
 /**
  * Resolves the current short git SHA (e.g. `19b9c8f`) via
@@ -163,8 +165,8 @@ android {
         applicationId = "app.knotwork.android"
         minSdk = 36
         targetSdk = 37
-        versionCode = 9
-        versionName = "0.7.2"
+        versionCode = 10
+        versionName = "0.7.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -1086,6 +1088,16 @@ tasks.matching { it.name in probeInstallHostTasks }
 // release packaging task — APK and AAB alike — so a dropped rule fails the build
 // rather than the user's first message.
 val r8ProtectedPackages: List<String> = listOf("com.google.common.flogger.")
+
+// Classes the app never constructs with `new`: protobuf-javalite materialises
+// them through `Unsafe.allocateInstance` from `getDefaultInstance()`, which R8
+// cannot see. MediaPipe parses its task graph as a protobuf on every
+// `TextEmbedder.createFromOptions`, so an abstractified message class breaks
+// the on-device embedding path — and therefore all of long-term memory.
+val r8RequiredInstantiableClasses: List<String> = listOf(
+    "com.google.protobuf.Any",
+    "com.google.protobuf.UnknownFieldSetLite",
+)
 androidComponents {
     onVariants { variant ->
         if (variant.buildType != "release") return@onVariants
@@ -1121,6 +1133,51 @@ androidComponents {
                 }
             }
         }
+        // Second guard, checking a property the first one cannot see. The
+        // mapping proves a class kept its NAME; it says nothing about whether
+        // the class can still be instantiated. R8 in full mode left
+        // `com.google.protobuf.Any` identity-mapped and made it abstract, and
+        // since protobuf-javalite instantiates through `Unsafe.allocateInstance`
+        // — invisible to R8 — every `TextEmbedder.createFromOptions` threw, so
+        // long-term memory failed on every release build while the mapping check
+        // stayed green. This one reads the packaged dex.
+        val apkDir = variant.artifacts.get(SingleArtifact.APK)
+        val verifyInstantiable = tasks.register("verify${variantName}Instantiable") {
+            group = "verification"
+            description = "Fails the release build if a reflectively-instantiated class was made abstract or removed."
+            inputs.files(apkDir).withPropertyName("packagedApk")
+            val requiredClasses = r8RequiredInstantiableClasses
+            val checkedVariant = variant.name
+            val loader = variant.artifacts.getBuiltArtifactsLoader()
+            doLast {
+                val apk = loader.load(apkDir.get())
+                    ?.elements
+                    ?.map { File(it.outputFile) }
+                    ?.firstOrNull { it.exists() }
+                    ?: throw GradleException(
+                        "Instantiability check cannot run for `$checkedVariant`: no packaged APK was found.",
+                    )
+                val dexFiles = ZipFile(apk).use { zip ->
+                    zip.entries().asSequence()
+                        .filter { it.name.endsWith(".dex") }
+                        .map { zip.getInputStream(it).readBytes() }
+                        .toList()
+                }
+                if (dexFiles.isEmpty()) {
+                    throw GradleException("Instantiability check found no dex in ${apk.name}.")
+                }
+                val violations = DexInstantiabilityChecker.verify(dexFiles, requiredClasses)
+                if (violations.isNotEmpty()) {
+                    throw GradleException(
+                        "Reflectively-instantiated classes are unusable in `$checkedVariant` " +
+                            "(${violations.size} violation(s)):\n" +
+                            violations.joinToString(separator = "\n") { it.format() } +
+                            "\n\nAdd or restore the keep rule in `app/proguard-rules.pro`.",
+                    )
+                }
+            }
+        }
+
         // Both packaging paths, not just the APK: the distribution artefact for
         // Play is the AAB, and a guard that only watches `assemble` would wave
         // through exactly the build that ships.
@@ -1129,6 +1186,9 @@ androidComponents {
         // this `onVariants` callback runs, so eager lookup fails here.
         val packagingTasks = setOf("assemble$variantName", "bundle$variantName")
         tasks.matching { it.name in packagingTasks }.configureEach { finalizedBy(verifyKeepRules) }
+        // The dex guard needs a packaged APK, so it rides `assemble` only;
+        // the AAB carries the same dex from the same R8 run.
+        tasks.matching { it.name == "assemble$variantName" }.configureEach { finalizedBy(verifyInstantiable) }
     }
 }
 
