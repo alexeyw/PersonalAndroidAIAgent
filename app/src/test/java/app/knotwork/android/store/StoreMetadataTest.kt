@@ -13,7 +13,11 @@ import java.io.File
  * Every rule here corresponds to a rejection that otherwise surfaces only at
  * submission time, days after the commit that caused it:
  *
- * - **Length limits.** Play truncates nothing; it refuses the listing.
+ * - **Length limits**, in characters — the unit Google Play and F-Droid both
+ *   document. Play truncates nothing; it refuses the listing. (A byte-measured,
+ *   ASCII-only reading of the changelog limit exists in at least one
+ *   F-Droid-compatible index; the English listing satisfies it by being ASCII,
+ *   and the Russian one cannot and is not expected to.)
  * - **Screenshot geometry.** Play rejects an image whose longer side exceeds
  *   twice its shorter side — which is exactly what the 1080 × 2400 README hero
  *   baselines are, so "just reuse the hero shots" is a trap with a delayed
@@ -51,11 +55,22 @@ class StoreMetadataTest {
     }
 
     @Test
-    fun `given the english listing when read then it carries no cyrillic`() {
-        REQUIRED_FILES.forEach { name ->
+    fun `given the english listing when read then it is plain ascii`() {
+        // Stricter than "no Cyrillic", and for a reason beyond the language
+        // rule: every store documents these limits in *characters*, but at
+        // least one F-Droid-compatible index measures the changelog in **bytes**
+        // and requires ASCII. An English listing has no reason to spend three
+        // bytes on a typographic bullet, and staying ASCII keeps the English
+        // files inside the strictest reading of the limit for free. The
+        // Russian listing cannot follow this rule and does not try to.
+        (REQUIRED_FILES + "changelogs/${BuildConfig.VERSION_CODE}.txt").forEach { name ->
             val text = localeDir("en-US").resolve(name).readText()
-            val offender = text.firstOrNull { it in 'а'..'я' || it in 'А'..'Я' || it == 'ё' || it == 'Ё' }
-            assertTrue("en-US/$name contains Cyrillic ('$offender')", offender == null)
+            val offender = text.firstOrNull { it.code > MAX_ASCII_CODE }
+            assertTrue(
+                "en-US/$name contains the non-ASCII character '$offender' — " +
+                    "keep the English listing to plain ASCII",
+                offender == null,
+            )
         }
     }
 
@@ -215,6 +230,9 @@ class StoreMetadataTest {
         const val MAX_SHORT_DESCRIPTION_CHARS = 80
         const val MAX_FULL_DESCRIPTION_CHARS = 4000
         const val MAX_CHANGELOG_CHARS = 500
+
+        /** Highest code point that is still plain ASCII. */
+        const val MAX_ASCII_CODE = 127
 
         const val MIN_SCREENSHOTS = 2
         const val MIN_SCREENSHOT_PX = 320

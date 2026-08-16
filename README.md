@@ -2,7 +2,7 @@
 
 [![Check](https://github.com/alexeyw/knotwork/actions/workflows/check.yml/badge.svg)](https://github.com/alexeyw/knotwork/actions/workflows/check.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.7.1-orange.svg)
+![Version](https://img.shields.io/badge/version-0.7.2-orange.svg)
 ![Android API](https://img.shields.io/badge/Android-API%2036%2B-3DDC84.svg?logo=android)
 
 > **An AI agent you build, not just prompt.** A local-first Android agent whose
@@ -288,7 +288,7 @@ threat model behind it, including what is explicitly *out* of scope, is in
 
 ## Pre-release notice
 
-This project is currently at **version 0.7.1** and is published for review and
+This project is currently at **version 0.7.2** and is published for review and
 experimentation. Expect rough edges:
 
 - There are no stability guarantees for the public surface (Kotlin APIs,

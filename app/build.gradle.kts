@@ -163,8 +163,8 @@ android {
         applicationId = "app.knotwork.android"
         minSdk = 36
         targetSdk = 37
-        versionCode = 8
-        versionName = "0.7.1"
+        versionCode = 9
+        versionName = "0.7.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -298,6 +298,20 @@ android {
         compose = true
         buildConfig = true
         resValues = true
+    }
+
+    // AGP stamps a Google-encrypted blob of the dependency list into every
+    // artefact. It is opaque by construction — only Google can read it — which
+    // is a poor fit for an APK distributed as the FOSS build and inspected by
+    // people who chose it precisely to see what is inside.
+    //
+    // The asymmetry is deliberate: the bundle keeps its copy, because that is
+    // consumed by Play, which uses the block to warn about known-vulnerable
+    // dependencies. Dropping it there would trade a real security signal for
+    // nothing, since no user ever receives the .aab.
+    dependenciesInfo {
+        includeInApk = false
+        includeInBundle = true
     }
 
     testOptions {
@@ -936,7 +950,14 @@ dependencies {
     // LiteRT LLM Inference
     implementation(libs.litertlm)
 
-    // MediaPipe Tasks Text
+    // MediaPipe Tasks Text.
+    //
+    // It drags `com.google.android.datatransport` in for its own logging, which
+    // put three Google components — an alarm receiver, a job service and a
+    // backend-discovery holder — into the FOSS manifest. They are removed in
+    // `src/foss/AndroidManifest.xml`; the dependency itself stays, because
+    // excluding it leaves MediaPipe's own code referencing classes that are no
+    // longer there. See `docs/release.md` § FOSS / F-Droid build.
     implementation(libs.mediapipe.tasks.text)
 
     // Koog Framework

@@ -1,0 +1,4 @@
+No change to what the app does - two cleanups in what it ships.
+
+- The FOSS build no longer declares any Google components. They arrived with a logging library, could never send anything, and a manifest that advertises a collector invites exactly the wrong question.
+- The sideloaded APK no longer carries the encrypted dependency blob the build tools stamp into it. The Play upload keeps it, where it powers vulnerability warnings.

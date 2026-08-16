@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    `foss`-flavour manifest overlay. Merged on top of the shared `main`
+    manifest for the F-Droid distribution only.
+
+    MediaPipe declares `com.google.android.datatransport` for its own logging,
+    and the manifest merger hoists three of that library's components into the
+    application: an alarm-scheduler broadcast receiver, a job service, and the
+    backend-discovery meta-data holder. They were the only `com.google.*`
+    entries in the manifest of a build whose entire claim is that it carries no
+    Google dependency — visible to anyone who unzips the APK, and to the
+    scanners F-Droid-compatible indexes run.
+
+    Nothing was ever sent through them: R8 strips the transport implementation,
+    and no CCT endpoint survives into the dex. The components are removed here
+    so the manifest stops advertising a collector that does not exist.
+
+    Why remove the components rather than exclude the dependency: excluding
+    `com.google.android.datatransport` from the `foss` configurations builds,
+    but leaves MediaPipe's own code referencing classes that are no longer in
+    the APK. The path that would touch them is its logging path, reached from
+    `TextEmbedder.createFromOptions` — the same on-device embedding path that
+    produced a release-only crash once before (see the flogger section of
+    `proguard-rules.pro`). A `NoClassDefFoundError` there would be invisible to
+    the JVM gate and fatal to long-term memory. Removing three manifest entries
+    achieves what is actually wanted — no Google components declared — with no
+    runtime surface at all.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <service
+            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService"
+            tools:node="remove" />
+
+        <receiver
+            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
+            tools:node="remove" />
+
+        <!-- Declared as a `service` in transport-runtime's own manifest, not a
+             provider — the element type has to match or the merger keeps it. -->
+        <service
+            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
+            tools:node="remove" />
+    </application>
+</manifest>
