@@ -1,33 +1,33 @@
-Knotwork is an AI agent that runs its model on the phone. Instead of a prompt box wired to somebody's API, every conversation runs through a pipeline you can open and edit: a graph of typed nodes — input, on-device LLM, optional cloud LLM, tool call, routing, decomposition, evaluation, clarification, output. When a step wants to do something destructive or sensitive, it stops and asks you first — including in the background, where the confirmation arrives as a notification.
+Knotwork is an AI agent that runs its model on the phone. Instead of a prompt box wired to somebody's API, every conversation runs through a pipeline you can open and edit: a graph of typed nodes - input, on-device LLM, optional cloud LLM, tool call, routing, decomposition, evaluation, clarification, output. When a step wants to do something destructive or sensitive, it stops and asks you first - including in the background, where the confirmation arrives as a notification.
 
 WHAT IT DOES
 
-• Runs on your device. On-device inference through LiteRT-LM, with optional NPU/GPU acceleration; CPU-only works, just slower. Cloud providers (OpenAI, Anthropic, Google Gemini, DeepSeek, Ollama) are optional, opt-in and bring-your-own-key.
-• You build the behaviour. A drag-and-drop editor with pan and pinch-zoom, snap-to-grid, auto-layout, inline validation and a run-trace overlay, across 14 node types. Prompt variables such as $DATE, $TIME, $TOOLS, $MODEL and $MEMORY_SUMMARY render fresh on every run.
-• Tools, gated by you. Local actions through AppFunctions and external servers through the Model Context Protocol (MCP). Every sensitive or destructive call stops for explicit confirmation, enforced where the tool executes, not merely suggested to the model.
-• Reaches you from outside the app. A share target, launcher shortcuts and a Quick Settings tile run your chosen pipeline over shared text or images. Triggers (time, charging, Wi-Fi, network) fire a pipeline on their own and report back. Every entry surface stays inert until you bind a pipeline to it.
-• Remembers what matters. Long-term memory with semantic retrieval over past conversations, automatic fact extraction, search and export.
+- Runs on your device. On-device inference through LiteRT-LM, with optional NPU/GPU acceleration; CPU-only works, just slower. Cloud providers (OpenAI, Anthropic, Google Gemini, DeepSeek, Ollama) are optional, opt-in and bring-your-own-key.
+- You build the behaviour. A drag-and-drop editor with pan and pinch-zoom, snap-to-grid, auto-layout, inline validation and a run-trace overlay, across 14 node types. Prompt variables such as $DATE, $TIME, $TOOLS, $MODEL and $MEMORY_SUMMARY render fresh on every run.
+- Tools, gated by you. Local actions through AppFunctions and external servers through the Model Context Protocol (MCP). Every sensitive or destructive call stops for explicit confirmation, enforced where the tool executes, not merely suggested to the model.
+- Reaches you from outside the app. A share target, launcher shortcuts and a Quick Settings tile run your chosen pipeline over shared text or images. Triggers (time, charging, Wi-Fi, network) fire a pipeline on their own and report back. Every entry surface stays inert until you bind a pipeline to it.
+- Remembers what matters. Long-term memory with semantic retrieval over past conversations, automatic fact extraction, search and export.
 
 WHO IT IS FOR
 
 It is for the person who already runs Tasker, Obsidian, Home Assistant or a local model on their own hardware, and who wants to know exactly what their agent does with their data.
 
-It is deliberately not a mass-market "ask a question, get an answer" assistant — Gemini is free and built into the OS, and competing there is a losing bet.
+It is deliberately not a mass-market "ask a question, get an answer" assistant - Gemini is free and built into the OS, and competing there is a losing bet.
 
 PRIVACY
 
-There is no account, no sign-in and no server of mine. Inference runs on the phone, so a normal conversation never leaves it. Data goes out only along a path you built yourself: a cloud node with your own key, or an MCP server you added — both visible in the pipeline. Usage statistics stay on the device and are never transmitted; a build-time check fails the build if any network dependency reaches that code. The database — chats, memory, run traces — is SQLCipher-encrypted, and API keys are sealed under an Android Keystore key. Crash reporting is opt-in, off by default, and absent entirely from the FOSS build.
+There is no account, no sign-in and no server of mine. Inference runs on the phone, so a normal conversation never leaves it. Data goes out only along a path you built yourself: a cloud node with your own key, or an MCP server you added - both visible in the pipeline. Usage statistics stay on the device and are never transmitted; a build-time check fails the build if any network dependency reaches that code. The database - chats, memory, run traces - is SQLCipher-encrypted, and API keys are sealed under an Android Keystore key. Crash reporting is opt-in, off by default, and absent entirely from the FOSS build.
 
 KNOWN LIMITATIONS
 
 This is a pre-release. The public surface, the settings layout and the on-device storage formats can still change between versions.
 
-• Android 16+ and about 2 GB of free RAM — a deliberate floor, not an oversight.
-• Shared pipeline files are not a compatibility contract yet: exports carry a version stamp, but before 1.0 that stamp is a marker, not a promise. Keep the original.
-• The reliability numbers come from one device and one operator: a scheduled pipeline ran 7.14 days without the app being opened and completed 55 of 55 firings with no unexplained misses. That is a real measurement, and it is not external validation.
-• Background runs need the battery setting on Unrestricted. Without it Android reclaims the process in about ten seconds — the platform's rule, not a bug, but until you grant it background pipelines will not run.
-• Cloud failure behaviour differs by provider: detection of a stream that dies mid-answer is enabled only where it was measured.
-• Third-party apps cannot expose AppFunctions — only the device maker's system apps and Google can. The local tool catalogue is what ships, plus whatever you connect over MCP.
-• One maintainer, no company behind it.
+- Android 16+ and about 2 GB of free RAM - a deliberate floor, not an oversight.
+- Shared pipeline files are not a compatibility contract yet: exports carry a version stamp, but before 1.0 that stamp is a marker, not a promise. Keep the original.
+- The reliability numbers come from one device and one operator: a scheduled pipeline ran 7.14 days without the app being opened and completed 55 of 55 firings with no unexplained misses. That is a real measurement, and it is not external validation.
+- Background runs need the battery setting on Unrestricted. Without it Android reclaims the process in about ten seconds - the platform's rule, not a bug, but until you grant it background pipelines will not run.
+- Cloud failure behaviour differs by provider: detection of a stream that dies mid-answer is enabled only where it was measured.
+- Third-party apps cannot expose AppFunctions - only the device maker's system apps and Google can. The local tool catalogue is what ships, plus whatever you connect over MCP.
+- One maintainer, no company behind it.
 
 Open source under the Apache License 2.0; source and documentation are on the developer website.

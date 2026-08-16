@@ -411,10 +411,26 @@ are inherent to the product, not to crash reporting, and are tracked separately:
   `foss` classpath. They are **not** the telemetry SDK — they are Apache-2.0
   serialization utilities pulled transitively by MediaPipe
   (`com.google.mediapipe:tasks-text` → `com.google.android.datatransport` →
-  `firebase-encoders`), present in **both** flavours. They could be excluded from
-  the `foss` configuration, but MediaPipe declares `datatransport` for its own
-  logging, so an exclusion needs an on-device smoke of the embeddings / text
-  tasks before it can be trusted.
+  `firebase-encoders`), present in **both** flavours.
+
+  The same chain used to put three of Google's data-transport **components**
+  into the FOSS manifest — an alarm receiver, a job service and a
+  backend-discovery service, the only `com.google.*` entries in a manifest whose
+  build is described as carrying no Google dependency. Nothing could be sent
+  through them (R8 strips the transport implementation; no CCT endpoint survives
+  into the dex), but a manifest that advertises a collector invites exactly the
+  question the FOSS build exists to answer. They are removed in
+  `app/src/foss/AndroidManifest.xml` with `tools:node="remove"`.
+
+  **Removing the components rather than the dependency is deliberate.**
+  Excluding `com.google.android.datatransport` from the `foss` configurations
+  builds — after two extra `-dontwarn` rules — but leaves MediaPipe's own code
+  referencing classes that are no longer in the APK. The path that would touch
+  them is its logging path, reached from `TextEmbedder.createFromOptions`: the
+  same on-device embedding path that produced a release-only crash once before
+  (see the flogger section of `proguard-rules.pro`). A `NoClassDefFoundError`
+  there is invisible to the JVM gate and fatal to long-term memory. The manifest
+  route reaches the same observable end state with no runtime surface.
 - **Prebuilt on-device inference binaries.** `com.google.ai.edge.litertlm` and
   `com.google.mediapipe:tasks-core` ship large prebuilt native libraries that
   F-Droid's build server does not compile from source. They are **freely
@@ -429,6 +445,25 @@ are inherent to the product, not to crash reporting, and are tracked separately:
   `liblitertlm_jni.so`, `libmediapipe_tasks_jni.so`, `libsqlcipher.so`,
   `libandroidx.graphics.path.so` and `libdatastore_shared_counter.so` — all
   from freely-licensed upstreams.
+
+### The Google dependency-metadata block
+
+AGP stamps a Google-encrypted description of the dependency graph into every
+artefact it packages. `dependenciesInfo` in `app/build.gradle.kts` turns it off
+for the **APK** and leaves it on for the **bundle**:
+
+```kotlin
+dependenciesInfo {
+    includeInApk = false
+    includeInBundle = true
+}
+```
+
+The asymmetry is the point. The APK is what a user sideloads and what an
+F-Droid-compatible index unpacks and inspects; an opaque blob only Google can
+read has no business in it. The bundle is consumed by Play, which uses that same
+block to warn about known-vulnerable dependencies — a real signal, and one no
+user ever receives a copy of.
 
 ### Reproducible builds
 

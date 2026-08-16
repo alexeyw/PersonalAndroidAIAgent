@@ -13,6 +13,26 @@ details.
 
 ## [Unreleased]
 
+### Changed
+
+- **The FOSS build no longer declares any Google components.** MediaPipe brings
+  Google's data-transport library along for its own logging, and three of that
+  library's components — an alarm receiver, a job service and a
+  backend-discovery service — ended up declared in the manifest of the build
+  whose whole point is that it carries no Google dependency. Nothing could be
+  sent through them: the transport implementation is stripped from the release
+  build and no collection endpoint reaches the app. That made them worse than
+  useless, because a manifest advertising a collector is exactly what someone
+  who chose the FOSS build will look for. They are gone. Nothing about the app's
+  behaviour changes; what changes is that the artefact now matches its own
+  description.
+
+- **The APK no longer carries Google's encrypted dependency blob.** The build
+  tools stamp a description of the dependency graph into every artefact, in a
+  form only Google can read. It is now omitted from the APK — the file you
+  sideload and can inspect — and kept only in the bundle uploaded to Play, which
+  uses it to warn about known-vulnerable dependencies.
+
 ## [0.7.1] - 2026-08-14
 
 ### Added
