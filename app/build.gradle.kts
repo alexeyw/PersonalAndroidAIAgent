@@ -367,12 +367,38 @@ android {
         // (every `minSdk = 36` device is 64-bit). ChromeOS support is not in
         // scope for v0.1 — disable the lint check that demands an x86 binary.
         disable += "ChromeOsAbiSupport"
-        // `NewerVersionAvailable` / `GradleDependency` (the "a newer version of
-        // X is available" checks) are kept ENABLED on purpose: surfacing an
-        // outdated dependency is the whole point of the analysis, so we update
-        // the dependency rather than silence the check. Genuine false positives
-        // (e.g. date-versioned artefacts whose "newer" version is actually
-        // older) are grandfathered individually in `lint-baseline.xml`.
+        // Version-freshness and deadline checks stay ENABLED, but are demoted to
+        // INFORMATIONAL so they report instead of gating. Their verdict is a
+        // function of an external version index (or of the calendar), not of the
+        // contents of this repository: the same commit is green today and red
+        // tomorrow without a single edit, and green locally while red in CI,
+        // because the two version indexes refresh at different times. A check
+        // whose verdict changes without the checked object changing is a report,
+        // not a gate — `decisions.md` §35, which generalises the rule to any
+        // future check that depends on external state.
+        //
+        // Demoted, NOT disabled. `disable` maps to `Severity.IGNORE`, which drops
+        // the incident before any reporter sees it; the signal has to survive.
+        // INFORMATIONAL findings still run, still match the baseline and still
+        // appear in the HTML/XML reports, which CI uploads on every run (see
+        // `.github/workflows/check.yml`). `warningsAsErrors` cannot undo the
+        // demotion: lint promotes `Severity.WARNING` only, and INFORMATIONAL is
+        // documented as exempt.
+        //
+        // Two deliberate exclusions:
+        // - `ExpiredTargetSdkVersion` keeps its FATAL severity. It is calendar-
+        //   driven too, but it encodes a store publishing deadline the project
+        //   genuinely must meet, so that interrupt is wanted.
+        // - Do NOT add `ignoreWarnings = true` alongside this. Unlike
+        //   `warningsAsErrors` it tests `<= WARNING`, so it would swallow
+        //   INFORMATIONAL as well and silently delete the drift report.
+        informational +=
+            listOf(
+                "GradleDependency",
+                "AndroidGradlePluginVersion",
+                "NewerVersionAvailable",
+                "ExpiringTargetSdkVersion",
+            )
     }
 }
 

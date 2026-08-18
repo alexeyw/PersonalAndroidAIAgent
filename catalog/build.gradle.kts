@@ -61,6 +61,21 @@ android {
         checkDependencies = true
         htmlReport = true
         xmlReport = true
+        // Mirrors `:app` for the version-freshness and deadline checks: they stay
+        // enabled but report at INFORMATIONAL severity instead of failing the
+        // build, because their verdict depends on an external version index (or
+        // on the calendar) rather than on the contents of this repository — see
+        // the long rationale in `app/build.gradle.kts` and `decisions.md` §35.
+        // This module is not optional to cover: it mirrors `:app`'s strict mode,
+        // its own baseline is empty, and the root `check` runs its lint too, so
+        // leaving it out would keep the mandatory gate non-deterministic.
+        informational +=
+            listOf(
+                "GradleDependency",
+                "AndroidGradlePluginVersion",
+                "NewerVersionAvailable",
+                "ExpiringTargetSdkVersion",
+            )
     }
 }
 

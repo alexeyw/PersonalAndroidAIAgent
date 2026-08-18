@@ -25,7 +25,7 @@ This invokes (transitively):
 | `:app:detekt`                                 | Kotlin static analysis. Fails on any unsuppressed finding.              |
 | `:app:detektFullDebug` + `:app:detektFossDebug` | Coroutine-cancellation gate (type-resolution, single rule, one per flavour). See below. |
 | `:app:ktlintCheck`                            | Kotlin formatting & idiomatic style rules. Run `ktlintFormat` to fix.  |
-| `:app:lintFullDebug`                              | Android Lint over the debug variant + library dependencies.             |
+| `:app:lintFullDebug` + `:app:lintFossDebug`   | Android Lint over both distribution flavours + library dependencies. `:catalog:lint` runs too. |
 | `:app:testFullDebugUnitTest`                      | JVM unit tests for the debug variant.                                   |
 | `:app:koverVerifyFullDebug`                       | Test-coverage threshold enforcement.                                    |
 | `:app:checkNoInternalFqn`                     | Custom rule: forbid `app.knotwork.android.*` FQN references in code body.   |
@@ -148,7 +148,9 @@ issues are reported by `:app:ktlintCheck`.
 
 ## Android Lint
 
-Provided by AGP 9.2.1. Strict mode in `app/build.gradle.kts`:
+Provided by the Android Gradle Plugin (version pinned in
+[`gradle/libs.versions.toml`](../gradle/libs.versions.toml)). Strict mode is
+configured identically in `app/build.gradle.kts` and `catalog/build.gradle.kts`:
 
 ```kotlin
 android {
@@ -169,9 +171,51 @@ deliberate batch of fixes:
 ./gradlew :app:updateLintBaseline    # rewrites the baseline; commit it.
 ```
 
+### Version-freshness checks report, they do not gate
+
+Four checks are demoted to **informational** severity in both modules:
+
+| Check | Answers from |
+|-------|--------------|
+| `GradleDependency`          | an external version index |
+| `AndroidGradlePluginVersion`| an external version index |
+| `NewerVersionAvailable`     | an external version index (a network round-trip per dependency) |
+| `ExpiringTargetSdkVersion`  | the calendar |
+
+The reason is determinism, not leniency. A build gate has to be a function of
+the contents of the repository: these four are not, so the same commit can be
+green today and red tomorrow with no edit in between, and green on a laptop
+while red in CI, because the two version indexes were refreshed at different
+times. A check whose verdict moves without the checked object moving is a
+report. The same rule applies to any future check that depends on external
+state — network reachability, a third-party service, the date.
+
+`ExpiredTargetSdkVersion` is deliberately excluded and stays fatal: it is
+calendar-driven too, but it encodes a store publishing deadline the project
+must meet, so the interrupt is wanted.
+
+Demoted is not disabled. The checks still run, still respect the baseline, and
+still appear in the reports — `disable` would drop the findings before any
+reporter sees them. `warningsAsErrors = true` does not undo the demotion: lint
+promotes `WARNING` to `ERROR`, and informational findings are exempt. Do **not**
+add `ignoreWarnings = true` next to it — that flag suppresses informational
+findings as well, which would delete the report.
+
+Dependencies are therefore updated deliberately — when a task needs the newer
+version, or in one pass before a release — rather than because a check went red
+in the middle of unrelated work.
+
+### Where the drift report lands
+
+- Locally: the lint reports below, produced by every `./gradlew check`.
+- In CI: the **Dependency version drift** table in the job summary, plus the
+  `lint-report` artifact, which is uploaded on every run — including green ones,
+  since a green run is precisely the run whose report carries the drift.
+
 **Reports**:
-- `app/build/reports/lint-results-debug.html`
-- `app/build/reports/lint-results-debug.xml`
+- `app/build/reports/lint-results-fullDebug.{html,xml}`
+- `app/build/reports/lint-results-fossDebug.{html,xml}`
+- `catalog/build/reports/lint-results-debug.{html,xml}`
 
 ---
 
@@ -344,10 +388,13 @@ tasks.named("check") { dependsOn("koverVerifyFullDebug") }
 The required job is defined in `.github/workflows/check.yml`. The workflow runs
 `./gradlew check` on every `pull_request → main` and every `push` to `main`
 (plus a manual `workflow_dispatch` trigger), uploads each report set —
-detekt / ktlint / lint / unit-test / Kover / Roborazzi diffs — as a
-downloadable artifact on failure, and is configured with
-`concurrency.cancel-in-progress` so a new push supersedes any older run on the
-same branch.
+detekt / ktlint / unit-test / Kover / Roborazzi diffs — as a downloadable
+artifact on failure, and is configured with `concurrency.cancel-in-progress` so
+a new push supersedes any older run on the same branch. The **lint** report is
+the exception: it is uploaded on every run, green ones included, because it
+carries the informational dependency-drift findings described above. The same
+findings are also rendered into the job summary as a *Dependency version drift*
+table, so the answer to "what is out of date?" needs no artifact download.
 
 The same workflow is also exposed as a reusable one (`workflow_call`) and is
 called as the first job of `.github/workflows/release.yml`, so a release cannot

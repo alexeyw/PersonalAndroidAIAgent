@@ -17,6 +17,12 @@ name: Check
 # `release.yml` reuse this exact gate as its first job instead of restating it:
 # the release build must never run against a definition of "green" that has
 # drifted from the one every pull request is measured by.
+#
+# What this gate deliberately does NOT decide: whether the project's
+# dependencies are up to date. Those lint checks answer from an external version
+# index, so their verdict changes without the repository changing; they run at
+# informational severity and surface as the "Dependency version drift" job
+# summary plus the always-uploaded lint report, never as a failure.
 
 on:
   pull_request:
@@ -75,6 +81,50 @@ jobs:
       - name: Run ./gradlew check
         run: ./gradlew check :buildSrc:test --stacktrace --no-daemon
 
+      # Renders the drift found by this run into the job summary, so the answer
+      # to "what is out of date?" is readable without downloading the lint-report
+      # artifact below. Reads the lint XML of every module; never fails the job.
+      - name: Summarise dependency version drift
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import glob
+          import xml.etree.ElementTree as ET
+
+          IDS = (
+              "GradleDependency",
+              "AndroidGradlePluginVersion",
+              "NewerVersionAvailable",
+              "ExpiringTargetSdkVersion",
+          )
+          reports = sorted(glob.glob("*/build/reports/lint-results-*.xml"))
+          rows = set()
+          for path in reports:
+              try:
+                  root = ET.parse(path).getroot()
+              except Exception:
+                  continue
+              for issue in root.iter("issue"):
+                  if issue.get("id") in IDS:
+                      message = (issue.get("message") or "").replace("|", "\\|")
+                      rows.add((issue.get("id"), message))
+
+          print("### Dependency version drift")
+          print()
+          print("Informational only - these findings never fail the build.")
+          print("Dependencies are updated deliberately, not because a check went red.")
+          print()
+          if not reports:
+              print("No lint reports were produced by this run.")
+          elif rows:
+              print("| Check | Finding |")
+              print("| --- | --- |")
+              for issue_id, message in sorted(rows):
+                  print("| `%s` | %s |" % (issue_id, message))
+          else:
+              print("No version-freshness findings in %d lint report(s)." % len(reports))
+          PY
+
       - name: Upload detekt report
         if: failure()
         uses: actions/upload-artifact@v4
@@ -91,8 +141,14 @@ jobs:
           path: app/build/reports/ktlint/
           if-no-files-found: ignore
 
+      # Uploaded on EVERY run, not only on failure. The version-freshness checks
+      # (`GradleDependency`, `AndroidGradlePluginVersion`, `NewerVersionAvailable`,
+      # `ExpiringTargetSdkVersion`) report at informational severity, so a green
+      # run is exactly the run whose report carries the dependency drift. Gating
+      # this upload on failure would delete the signal the demotion was meant to
+      # preserve. `:catalog` is included because the root `check` lints it too.
       - name: Upload lint report
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: lint-report
@@ -101,6 +157,8 @@ jobs:
             app/build/reports/lint-results-fullDebug.xml
             app/build/reports/lint-results-fossDebug.html
             app/build/reports/lint-results-fossDebug.xml
+            catalog/build/reports/lint-results-debug.html
+            catalog/build/reports/lint-results-debug.xml
           if-no-files-found: ignore
 
       - name: Upload Kover coverage report
