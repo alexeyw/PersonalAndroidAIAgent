@@ -52,6 +52,9 @@ class ExternalAutomationReceiverTest {
 
     @Before
     fun setUp() {
+        // Process-wide flag shared across every test class in this JVM: a leaked
+        // `true` would make the retention assertions below silently vacuous.
+        ExternalAutomationReceiver.retentionScheduled.set(false)
         context = RuntimeEnvironment.getApplication()
         handleRequest = mockk()
         callbackNotifier = mockk(relaxed = true)
@@ -204,6 +207,16 @@ class ExternalAutomationReceiverTest {
         // install driven purely by an automation app, this call is the sole thing
         // bounding a table that a third-party app writes to.
         runReceiver(requestIntent(), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+
+        verify(exactly = 1) { retentionScheduler.schedulePeriodic() }
+    }
+
+    @Test
+    fun `given repeated requests when handled then retention is enqueued once per process`() = runTest {
+        // The call rate here belongs to a third-party app. Scheduling on every
+        // broadcast would put a WorkManager transaction on the path of every packet
+        // a loop can send, which is the very abuse this table is being defended from.
+        repeat(5) { runReceiver(requestIntent(), CoroutineScope(UnconfinedTestDispatcher(testScheduler))) }
 
         verify(exactly = 1) { retentionScheduler.schedulePeriodic() }
     }

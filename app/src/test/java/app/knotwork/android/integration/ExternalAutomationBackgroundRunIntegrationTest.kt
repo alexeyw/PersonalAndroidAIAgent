@@ -341,7 +341,7 @@ class ExternalAutomationBackgroundRunIntegrationTest {
     }
 
     @Test
-    fun `a denied approval on an external run reports Failed to the caller, not silence`() = testScope.runTest {
+    fun `a denied approval on an external run still reports exactly one terminal status`() = testScope.runTest {
         val process = buildProcess(scriptedLlmEngine())
         val handler = buildHandler(process)
 

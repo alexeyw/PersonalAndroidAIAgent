@@ -8,6 +8,7 @@ import app.knotwork.android.domain.models.ExternalAutomationRejectionReason
 import app.knotwork.android.domain.models.ExternalAutomationStatus
 import app.knotwork.android.domain.models.ExternalAutomationTarget
 import app.knotwork.android.domain.repositories.ExternalAutomationJournalRepository
+import app.knotwork.android.domain.usecases.automation.CleanupExternalAutomationJournalUseCase
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -51,7 +52,9 @@ class ExternalAutomationJournalRepositoryImpl @Inject constructor(private val da
             "recordRefusal requires a refusal status, got ${entry.status}"
         }
         absorbingStoreFailure({ "External-automation journal recordRefusal failed; ignored" }) {
-            withContext(dispatcher) { dao.recordRefusal(entry.toEntity()) }
+            withContext(dispatcher) {
+                dao.recordRefusal(entry.toEntity(), CleanupExternalAutomationJournalUseCase.MAX_RECORDS)
+            }
         }
     }
 
@@ -79,10 +82,19 @@ class ExternalAutomationJournalRepositoryImpl @Inject constructor(private val da
         return admitted == true
     }
 
-    override suspend fun recordOutcome(runId: String, status: ExternalAutomationStatus) {
-        absorbingStoreFailure({ "External-automation journal recordOutcome failed; ignored" }) {
-            withContext(dispatcher) { dao.updateStatus(runId, status.discriminator()) }
+    override suspend fun recordOutcome(runId: String, status: ExternalAutomationStatus): Boolean {
+        val settled = absorbingStoreFailure({ "External-automation journal recordOutcome failed; ignored" }) {
+            withContext(dispatcher) {
+                dao.settleStatus(
+                    runId = runId,
+                    statusKind = status.discriminator(),
+                    fromStatusKind = ExternalAutomationStatus.Accepted.discriminator(),
+                )
+            }
         }
+        // An absorbed storage failure reads as "not settled here", so the caller is
+        // not told an outcome the journal does not record.
+        return settled == 1
     }
 
     override suspend fun findByRunId(runId: String): ExternalAutomationJournalEntry? = absorbingStoreFailure(

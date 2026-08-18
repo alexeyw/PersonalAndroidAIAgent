@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 
 /**
@@ -99,8 +100,21 @@ class ExternalAutomationReceiver : BroadcastReceiver() {
         launchAsync {
             val status = handleRequest(invocation = invocation, attestedSenderPackage = attestedSender)
             replyIfRequested(invocation, status)
-            // Deliberately after the decision: the request the user is waiting on
-            // must never queue behind housekeeping, and enqueueing is idempotent.
+            ensureRetentionScheduled()
+        }
+    }
+
+    /**
+     * Enqueues the journal retention pass once per process.
+     *
+     * Deliberately after the decision — the request a user is waiting on must never
+     * queue behind housekeeping — and deliberately once: `schedulePeriodic` is
+     * idempotent in effect but not free, and the call rate here belongs to a
+     * third-party app, so an unguarded call would put a WorkManager transaction on
+     * the path of every broadcast a loop can send.
+     */
+    private fun ensureRetentionScheduled() {
+        if (retentionScheduled.compareAndSet(false, true)) {
             runRetentionScheduler.schedulePeriodic()
         }
     }
@@ -170,15 +184,27 @@ class ExternalAutomationReceiver : BroadcastReceiver() {
         }
     }
 
-    private companion object {
+    /** Process-wide state of the entry point, and its constants. */
+    companion object {
         /** Timber tag for entry-point diagnostics. */
-        const val TAG = "ExternalAutomation"
+        private const val TAG = "ExternalAutomation"
+
+        /**
+         * Whether this process has already enqueued the retention pass. Process-wide
+         * rather than per-instance: the framework builds a fresh receiver per
+         * broadcast, so an instance field would guard nothing.
+         *
+         * Visible for tests, which share a JVM across test classes and must reset it
+         * — a leaked `true` would make a later test silently assert nothing.
+         */
+        @VisibleForTesting
+        internal val retentionScheduled = AtomicBoolean(false)
 
         /**
          * The request-side keys of the contract, and the only extras this receiver
          * reads. Callback-side keys are absent by design: they travel outward.
          */
-        val REQUEST_KEYS: List<String> = listOf(
+        private val REQUEST_KEYS: List<String> = listOf(
             ExternalAutomationContract.EXTRA_PIPELINE_ID,
             ExternalAutomationContract.EXTRA_PIPELINE_NAME,
             ExternalAutomationContract.EXTRA_PROMPT,

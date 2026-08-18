@@ -95,20 +95,28 @@ class HandleExternalAutomationRequestUseCase @Inject constructor(
             parsed.returnPackage != null &&
             parsed.returnPackage != attestedSenderPackage
         ) {
-            val status = rejected(ExternalAutomationRejectionReason.TARGET_NOT_ALLOWED)
+            val status = rejected(ExternalAutomationRejectionReason.RETURN_PACKAGE_MISMATCH)
             return refuse(invocation, parsed, attestedSenderPackage, nowMillis, status)
         }
 
+        // The binding is read once and then carried, never re-read. Re-reading it to
+        // find the pipeline to run would open a window in which the user unbinds the
+        // surface between the decision and the enqueue, and the request — already
+        // authorised — would fall through to the app's default routing and run a
+        // pipeline nobody allowed.
+        val binding = resolveBinding()
         val decision = authorizeRequest(
             request = parsed,
             contractEnabled = settingsRepository.externalAutomationEnabled.first(),
-            binding = resolveBinding(),
+            binding = binding,
         )
         if (decision is ExternalAutomationStatus.Rejected) {
             return refuse(invocation, parsed, attestedSenderPackage, nowMillis, decision)
         }
 
-        return admit(invocation, parsed, attestedSenderPackage, nowMillis)
+        // Authorisation returning anything but Rejected means the binding matched,
+        // which it cannot have done while null.
+        return admit(invocation, parsed, checkNotNull(binding), attestedSenderPackage, nowMillis)
     }
 
     /**
@@ -162,6 +170,8 @@ class HandleExternalAutomationRequestUseCase @Inject constructor(
      *
      * @param invocation The raw call.
      * @param request The parsed, authorised request.
+     * @param binding The binding the request was authorised against — the single
+     *   source of the pipeline to run, whether the caller named it by id or by name.
      * @param attestedSenderPackage System-supplied sender package, if any.
      * @param nowMillis Timestamp of the admission.
      * @return `Accepted` once the run is enqueued, `Blocked(RATE_LIMITED)` when the
@@ -170,6 +180,7 @@ class HandleExternalAutomationRequestUseCase @Inject constructor(
     private suspend fun admit(
         invocation: ExternalAutomationInvocation,
         request: ExternalAutomationRequest,
+        binding: ExternalAutomationBinding,
         attestedSenderPackage: String?,
         nowMillis: Long,
     ): ExternalAutomationStatus {
@@ -198,7 +209,7 @@ class HandleExternalAutomationRequestUseCase @Inject constructor(
                 delayMinutes = 0,
                 sessionId = EXTERNAL_AUTOMATION_SESSION_ID,
                 constraints = ScheduledTaskConstraints(requiresBatteryNotLow = true),
-                pipelineId = targetPipelineId(request),
+                pipelineId = binding.pipelineId,
                 origin = RunOrigin.EXTERNAL,
                 runId = runId,
             )
@@ -215,24 +226,6 @@ class HandleExternalAutomationRequestUseCase @Inject constructor(
             ExternalAutomationStatus.Failed
         }
     }
-
-    /**
-     * The pipeline an authorised request runs.
-     *
-     * Authorisation has already established that the request names the bound
-     * pipeline, so a by-id request carries the id directly; a by-name request is
-     * resolved through the binding, which is the only name the authorizer accepts.
-     *
-     * @param request The authorised request.
-     * @return The pipeline id to run, or `null` if the binding vanished between
-     *   authorisation and here — in which case the run falls back to the app's
-     *   default routing, exactly as any other pipeline-less run does.
-     */
-    private suspend fun targetPipelineId(request: ExternalAutomationRequest): String? =
-        when (val target = request.target) {
-            is ExternalAutomationTarget.ById -> target.pipelineId
-            is ExternalAutomationTarget.ByName -> settingsRepository.externalAutomationPipelineId.first()
-        }
 
     /**
      * Builds the journal record for one decision.

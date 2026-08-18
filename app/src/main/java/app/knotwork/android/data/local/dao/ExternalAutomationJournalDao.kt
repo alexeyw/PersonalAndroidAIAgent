@@ -105,12 +105,14 @@ interface ExternalAutomationJournalDao {
      * Records a refusal, folding it onto the newest row when it repeats it.
      *
      * One transaction so a concurrent burst cannot interleave a collapse and an
-     * insert and leave two rows describing the same uninterrupted repeat.
+     * insert and leave two rows describing the same uninterrupted repeat, and so
+     * the row cap holds at every observable moment.
      *
      * @param entity The refusal to record.
+     * @param maxRecords Hard cap the table is trimmed to after an insert.
      */
     @Transaction
-    suspend fun recordRefusal(entity: ExternalAutomationRequestEntity) {
+    suspend fun recordRefusal(entity: ExternalAutomationRequestEntity, maxRecords: Int) {
         val folded = collapseNewestRefusal(
             receivedAt = entity.receivedAt,
             requestId = entity.requestId,
@@ -120,19 +122,43 @@ interface ExternalAutomationJournalDao {
             statusKind = entity.statusKind,
             statusReason = entity.statusReason,
         )
-        if (folded == 0) insert(entity)
+        if (folded != 0) return
+        insert(entity)
+        // Trim in the same transaction, so the cap is an invariant of the table
+        // rather than something the daily retention pass restores later. The fold
+        // above only bounds a caller that repeats itself verbatim; one that varies
+        // any keyed field — the pipeline id it names, say — inserts a fresh row
+        // every time. The write rate here belongs to a third-party app, and the
+        // retention worker runs at most daily and only while charging and idle, so
+        // relying on it would leave a phone off the charger accumulating rows for a
+        // day. Enforcing on insert costs one indexed DELETE on a bounded table.
+        enforceCap(maxRecords)
     }
 
     /**
-     * Attributes a terminal status onto the journal row of [runId]. A no-op when no
-     * row references it — which is what keeps the hook root-only for free, since a
-     * nested sub-pipeline child inherits its parent's origin but owns no row.
+     * Settles a terminal status onto the journal row of [runId], **once**.
+     *
+     * Guarded on the row still being un-settled, because a run can reach a terminal
+     * status more than once: `INTERRUPTED` is terminal *and* resumable, so a run
+     * killed by the platform settles once, resumes, and settles again. Without the
+     * guard the caller would be told `Failed` and then `Completed` for one request —
+     * a contradiction it cannot act on, having already reacted to the first message.
+     * The first terminal outcome is the one that stands.
+     *
+     * A no-op when no row references [runId], which is what keeps the hook root-only
+     * for free: a nested sub-pipeline child inherits its parent's origin but owns no
+     * row.
      *
      * @param runId Id of the settled run.
-     * @param statusKind Terminal status discriminator.
+     * @param statusKind Terminal status discriminator to write.
+     * @param fromStatusKind The un-settled discriminator this may transition from.
+     * @return `1` when the row was settled by this call, `0` when it already was.
      */
-    @Query("UPDATE external_automation_requests SET statusKind = :statusKind WHERE runId = :runId")
-    suspend fun updateStatus(runId: String, statusKind: String)
+    @Query(
+        "UPDATE external_automation_requests SET statusKind = :statusKind " +
+            "WHERE runId = :runId AND statusKind = :fromStatusKind",
+    )
+    suspend fun settleStatus(runId: String, statusKind: String, fromStatusKind: String): Int
 
     /**
      * Reads the journal row belonging to an admitted run.

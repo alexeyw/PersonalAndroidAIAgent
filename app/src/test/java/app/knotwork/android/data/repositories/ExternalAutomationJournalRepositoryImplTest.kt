@@ -8,6 +8,7 @@ import app.knotwork.android.domain.models.ExternalAutomationJournalEntry
 import app.knotwork.android.domain.models.ExternalAutomationRejectionReason
 import app.knotwork.android.domain.models.ExternalAutomationStatus
 import app.knotwork.android.domain.models.ExternalAutomationTarget
+import app.knotwork.android.domain.usecases.automation.CleanupExternalAutomationJournalUseCase
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -323,10 +324,74 @@ class ExternalAutomationJournalRepositoryImplTest {
 
         // A nested sub-pipeline child inherits its parent's origin but owns no row.
         // This no-op is what keeps the terminal callback root-only for free.
-        repo.recordOutcome("child-run", ExternalAutomationStatus.Failed)
+        assertFalse(repo.recordOutcome("child-run", ExternalAutomationStatus.Failed))
 
         assertEquals(ExternalAutomationStatus.Accepted, repo.findByRunId("run-a")?.status)
         assertNull(repo.findByRunId("child-run"))
+    }
+
+    @Test
+    fun `given a refusal whose target varies every time when recorded then the table still cannot exceed the cap`() =
+        runTest {
+            val repo = repository()
+
+            // The fold keys on the target, which is caller data. A loop that varies
+            // it never folds — so the cap has to hold on insert, not only in the
+            // daily charging-and-idle retention pass.
+            repeat(CleanupExternalAutomationJournalUseCase.MAX_RECORDS + 25) { i ->
+                repo.recordRefusal(
+                    refusal(
+                        "r$i",
+                        receivedAt = i.toLong(),
+                        requestId = "req-$i",
+                        target = ExternalAutomationTarget.ById("pipe-$i"),
+                    ),
+                )
+            }
+
+            assertEquals(CleanupExternalAutomationJournalUseCase.MAX_RECORDS, repo.observeAll().first().size)
+        }
+
+    @Test
+    fun `given the table is at the cap when a refusal arrives then the newest rows are the ones kept`() = runTest {
+        val repo = repository()
+        repeat(CleanupExternalAutomationJournalUseCase.MAX_RECORDS + 5) { i ->
+            repo.recordRefusal(
+                refusal(
+                    "r$i",
+                    receivedAt = i.toLong(),
+                    requestId = "req-$i",
+                    target = ExternalAutomationTarget.ById("p$i"),
+                ),
+            )
+        }
+
+        val rows = repo.observeAll().first()
+        assertEquals("r${CleanupExternalAutomationJournalUseCase.MAX_RECORDS + 4}", rows.first().id)
+        assertNull("the oldest refusals must have aged out", rows.firstOrNull { it.id == "r0" })
+    }
+
+    // --- Once-only settlement --------------------------------------------------
+
+    @Test
+    fun `given a run that already settled when it settles again then the first outcome stands`() = runTest {
+        val repo = repository()
+        repo.admitAcceptedWithinCeiling(entry("a", receivedAt = 1), 0, limitPerWindow = 5)
+
+        assertTrue(repo.recordOutcome("run-a", ExternalAutomationStatus.Failed))
+        // INTERRUPTED is both terminal and resumable, so a run really can settle
+        // twice. Telling a caller Failed and then Completed for one request is a
+        // contradiction it cannot act on, having already reacted to the first.
+        assertFalse(repo.recordOutcome("run-a", ExternalAutomationStatus.Completed))
+
+        assertEquals(ExternalAutomationStatus.Failed, repo.findByRunId("run-a")?.status)
+    }
+
+    @Test
+    fun `given a run that owns no row when its outcome is recorded then it reports nothing to settle`() = runTest {
+        val repo = repository()
+
+        assertFalse(repo.recordOutcome("child-run", ExternalAutomationStatus.Completed))
     }
 
     // --- Retention -----------------------------------------------------------
@@ -400,7 +465,7 @@ class ExternalAutomationJournalRepositoryImplTest {
     @Test
     fun `given the store fails when a refusal is recorded then the failure is absorbed`() = runTest {
         val failing = mockk<ExternalAutomationJournalDao>()
-        coEvery { failing.recordRefusal(any()) } throws IllegalStateException("db down")
+        coEvery { failing.recordRefusal(any(), any()) } throws IllegalStateException("db down")
 
         repository(failing).recordRefusal(refusal("a"))
     }

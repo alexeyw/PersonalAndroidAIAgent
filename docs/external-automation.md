@@ -128,6 +128,7 @@ the reason where there is one.
 | `PROMPT_UNDECODABLE` | The base64 prompt could not be decoded. |
 | `REQUEST_ID_MISSING` | The request carried no request id to correlate its outcome with. |
 | `RATE_LIMITED` | Too many external requests were accepted within the rate window. |
+| `RETURN_PACKAGE_MISMATCH` | The request asked for its callback to be delivered to a package other than the one the system reported as the sender. |
 
 <!-- /AUTO-GEN:REJECTION_REASONS -->
 

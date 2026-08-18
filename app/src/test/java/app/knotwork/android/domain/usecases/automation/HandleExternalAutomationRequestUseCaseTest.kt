@@ -19,6 +19,7 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -164,11 +165,49 @@ class HandleExternalAutomationRequestUseCaseTest {
     }
 
     @Test
-    fun `given a request naming the bound pipeline by name when it arrives then it is admitted`() = runTest {
-        val status = useCase(invocation(pipelineId = null, pipelineName = BOUND_NAME))
+    fun `given a request naming the bound pipeline by name when it arrives then the bound pipeline is what runs`() =
+        runTest {
+            val pipelineSlot = slot<String>()
+            coEvery {
+                scheduler.scheduleOneTime(any(), any(), any(), any(), capture(pipelineSlot), any(), any())
+            } returns Unit
 
-        assertEquals(ExternalAutomationStatus.Accepted, status)
-    }
+            val status = useCase(invocation(pipelineId = null, pipelineName = BOUND_NAME))
+
+            assertEquals(ExternalAutomationStatus.Accepted, status)
+            // Asserting the status alone would pass even if the by-name path resolved
+            // to nothing and the run fell through to the app's default routing.
+            assertEquals(BOUND_ID, pipelineSlot.captured)
+        }
+
+    @Test
+    fun `given the surface is unbound between authorisation and enqueue then the authorised pipeline still runs`() =
+        runTest {
+            // The binding is read once and carried. Were it re-read to find the
+            // pipeline, this sequence would enqueue an already-authorised request
+            // with a null pipeline id — i.e. run whatever the app's default routing
+            // picks, which is precisely the pipeline nobody allowed.
+            //
+            // `flowOf(BOUND_ID, null)` would NOT reproduce this: `first()` returns
+            // the head every time, so both reads would see the binding and the test
+            // would pass against the bug it exists to catch. The setting has to
+            // actually change between the two reads, so the pipeline lookup — which
+            // happens between them — is the seam that unbinds it.
+            val bound = MutableStateFlow<String?>(BOUND_ID)
+            every { settings.externalAutomationPipelineId } returns bound
+            coEvery { pipelines.getPipelineById(BOUND_ID) } answers {
+                bound.value = null
+                PipelineGraph(id = BOUND_ID, name = BOUND_NAME)
+            }
+            val pipelineSlot = slot<String>()
+            coEvery {
+                scheduler.scheduleOneTime(any(), any(), any(), any(), capture(pipelineSlot), any(), any())
+            } returns Unit
+
+            useCase(invocation(pipelineId = null, pipelineName = BOUND_NAME))
+
+            assertEquals(BOUND_ID, pipelineSlot.captured)
+        }
 
     @Test
     fun `given a request naming a different pipeline by name when it arrives then it is refused`() = runTest {
@@ -363,9 +402,11 @@ class HandleExternalAutomationRequestUseCaseTest {
             )
 
         // On the rare call that shares its identity, a mismatch is an app trying
-        // to make this one broadcast at a third party.
+        // to make this one broadcast at a third party. Its own reason, not
+        // TARGET_NOT_ALLOWED: the caller named a permitted pipeline, so a row
+        // saying "wrong pipeline" would send the reader to the wrong setting.
         assertEquals(
-            ExternalAutomationStatus.Rejected(ExternalAutomationRejectionReason.TARGET_NOT_ALLOWED),
+            ExternalAutomationStatus.Rejected(ExternalAutomationRejectionReason.RETURN_PACKAGE_MISMATCH),
             status,
         )
         assertNothingStarted()

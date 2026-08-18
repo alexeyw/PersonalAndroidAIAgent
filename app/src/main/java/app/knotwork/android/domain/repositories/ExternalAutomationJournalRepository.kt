@@ -28,6 +28,11 @@ interface ExternalAutomationJournalRepository {
      * against a switched-off contract must not be able to grow the encrypted
      * database one row per attempt.
      *
+     * The hard row cap is applied in the same transaction as the insert, so it
+     * holds at every observable moment rather than being restored by the daily
+     * retention pass — the fold bounds only a caller that repeats itself verbatim,
+     * and this is the one table whose write rate a third-party app controls.
+     *
      * @param entry The refusal to record. Its status must be a refusal
      *   ([ExternalAutomationStatus.Rejected] or [ExternalAutomationStatus.Blocked]).
      */
@@ -58,7 +63,13 @@ interface ExternalAutomationJournalRepository {
     ): Boolean
 
     /**
-     * Settles the terminal outcome of an admitted request onto its journal row.
+     * Settles the terminal outcome of an admitted request onto its journal row,
+     * **once**.
+     *
+     * A run can reach a terminal status more than once — `INTERRUPTED` is terminal
+     * and also resumable — so the first settlement wins and later ones are refused.
+     * Telling a caller `Failed` and then `Completed` for one request would be a
+     * contradiction it cannot act on, having already reacted to the first message.
      *
      * A no-op when no row references [runId] — which is what makes the hook
      * root-only for free: a nested sub-pipeline child inherits its parent's origin
@@ -66,8 +77,10 @@ interface ExternalAutomationJournalRepository {
      *
      * @param runId Id of the settled run.
      * @param status The terminal status to attribute.
+     * @return `true` when this call settled the row, `false` when it was already
+     *   settled or no row matched — i.e. whether the caller should be notified.
      */
-    suspend fun recordOutcome(runId: String, status: ExternalAutomationStatus)
+    suspend fun recordOutcome(runId: String, status: ExternalAutomationStatus): Boolean
 
     /**
      * Reads the journal row an admitted run belongs to.
