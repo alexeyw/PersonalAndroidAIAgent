@@ -8,9 +8,9 @@ own permissions and its own condition model, and Knotwork does the language-mode
 part of *what* happens.
 
 > **Status: contract definition.** This page documents the vocabulary of the
-> contract. The receiver that acts on it, the setting that switches it on, and
-> the worked Tasker / MacroDroid / `adb` examples land in later changes; until
-> then nothing here is callable.
+> contract. The receiver that acts on it, the setting that switches it on, the
+> guarantees described below, and the worked Tasker / MacroDroid / `adb`
+> examples land in later changes; until then nothing here is callable.
 
 ## The safety model in one paragraph
 
@@ -29,6 +29,19 @@ named **either** by id **or** by name, never both; the prompt is supplied
 **either** as plain text **or** base64-encoded, never both. Anything ambiguous,
 missing, or undecodable is refused with a reason rather than repaired to the
 nearest plausible reading.
+
+**An empty value counts as an absent one.** Every key is trimmed, and a key
+whose value is blank is treated as if it had not been sent — because the callers
+are templates and shell scripts, where an unfilled variable arrives as an empty
+string far more often than anyone means to pass one. So an empty `prompt` is
+refused as `PROMPT_MISSING` rather than run as an empty message.
+
+**The base64 form uses the standard alphabet** (RFC 4648 §4: `A`–`Z`, `a`–`z`,
+`0`–`9`, `+`, `/`). Padding is optional — `aGk=` and `aGk` both decode to `hi`. The
+URL-safe alphabet (`-` and `_`) is **not** accepted: the same characters mean
+different bytes in the two alphabets, so decoding one as the other would hand the
+pipeline text you never wrote. A payload in the wrong alphabet is refused as
+`PROMPT_UNDECODABLE`.
 
 Targeting by id is the stable form. A pipeline's **name is targeted exactly**,
 so renaming the pipeline breaks every profile that named it — if you expect to

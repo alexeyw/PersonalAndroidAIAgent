@@ -97,6 +97,23 @@ class ParseExternalAutomationRequestUseCaseTest {
     }
 
     @Test
+    fun `given the padded and unpadded forms documented in the contract then both decode alike`() {
+        // The exact pair `docs/external-automation.md` shows a caller.
+        fun promptOf(encoded: String) = parsed(
+            useCase(
+                invocation(
+                    ExternalAutomationContract.EXTRA_REQUEST_ID to "req-1",
+                    ExternalAutomationContract.EXTRA_PIPELINE_ID to "pipe-1",
+                    ExternalAutomationContract.EXTRA_PROMPT_B64 to encoded,
+                ),
+            ),
+        ).request.prompt
+
+        assertEquals("hi", promptOf("aGk="))
+        assertEquals("hi", promptOf("aGk"))
+    }
+
+    @Test
     fun `given a non ascii base64 prompt when parsing then it round trips as UTF-8`() {
         val result = useCase(
             invocation(
