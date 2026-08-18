@@ -1,4 +1,4 @@
-package app.knotwork.android.domain.usecases.automation
+package app.knotwork.android.domain.usecases
 
 import app.knotwork.android.domain.models.RunOrigin
 

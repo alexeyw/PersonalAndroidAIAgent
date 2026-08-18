@@ -3,7 +3,6 @@ package app.knotwork.android.domain.usecases
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.services.ScheduledTaskConstraints
 import app.knotwork.android.domain.services.TaskScheduler
-import app.knotwork.android.domain.usecases.automation.RunRateCeiling
 import kotlinx.coroutines.CancellationException
 import timber.log.Timber
 import javax.inject.Inject

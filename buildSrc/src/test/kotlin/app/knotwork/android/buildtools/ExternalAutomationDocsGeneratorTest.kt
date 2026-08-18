@@ -131,6 +131,37 @@ class ExternalAutomationDocsGeneratorTest {
     }
 
     @Test
+    fun `given a member whose supertype wrapped onto the next line when rendering then it still becomes a row`() {
+        // A formatter wrapping a long declaration must not silently drop the row:
+        // the drift check reads through the same parser and would call the
+        // now-incomplete table current.
+        val wrapped = statusSource.replace(
+            "    data class Rejected(val reason: ExternalAutomationRejectionReason) : ExternalAutomationStatus",
+            "    data class Rejected(\n" +
+                "        val reason: ExternalAutomationRejectionReason,\n" +
+                "    ) : ExternalAutomationStatus",
+        )
+
+        val result = ExternalAutomationDocsGenerator.render(markdown, contractSource, wrapped, reasonSource)
+
+        assertTrue(result, result.contains("| `Rejected` | The request was refused before anything started. |"))
+    }
+
+    @Test
+    fun `given a sealed source without the named interface when rendering then generation fails`() {
+        val other = "package app.knotwork.android.domain.models\n\nsealed interface SomethingElse\n"
+
+        val error = runCatching {
+            ExternalAutomationDocsGenerator.render(markdown, contractSource, other, reasonSource)
+        }.exceptionOrNull()
+
+        assertTrue(
+            "expected a GenerationException, got $error",
+            error is ExternalAutomationDocsGenerator.GenerationException,
+        )
+    }
+
+    @Test
     fun `given already rendered markdown when rendering again then the result is unchanged`() {
         val once = render()
 

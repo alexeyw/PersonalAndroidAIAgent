@@ -30,6 +30,11 @@ named **either** by id **or** by name, never both; the prompt is supplied
 missing, or undecodable is refused with a reason rather than repaired to the
 nearest plausible reading.
 
+Targeting by id is the stable form. A pipeline's **name is targeted exactly**,
+so renaming the pipeline breaks every profile that named it — if you expect to
+rename it, use the id, which you can copy from the pipeline's entry in the
+library.
+
 <!-- AUTO-GEN:CONTRACT_KEYS -->
 
 | Constant | Wire key | Meaning |
@@ -40,10 +45,9 @@ nearest plausible reading.
 | `EXTRA_PIPELINE_NAME` | `pipeline_name` | Request key: user-visible name of the pipeline to run. Mutually exclusive with `EXTRA_PIPELINE_ID`. |
 | `EXTRA_PROMPT` | `prompt` | Request key: the prompt to run the pipeline on, as plain text. Mutually exclusive with `EXTRA_PROMPT_B64`. |
 | `EXTRA_PROMPT_B64` | `prompt_b64` | Request key: the prompt as a base64-encoded UTF-8 string, for callers whose shell quoting cannot carry the text intact. Mutually exclusive with `EXTRA_PROMPT`. |
-| `EXTRA_REQUEST_ID` | `request_id` | Request key: caller-minted correlation id, echoed back on the callback. Required. |
+| `EXTRA_REQUEST_ID` | `request_id` | Request key: caller-minted correlation id. Required. The callback carries it back under this same key, so a caller reads back the id it wrote. |
 | `EXTRA_RETURN_ACTION` | `return_action` | Request key: broadcast action to send the callback with. Optional; defaults to `ACTION_RUN_RESULT`. |
 | `EXTRA_RETURN_PACKAGE` | `return_package` | Request key: package to deliver the callback to as an explicit intent. Optional — omitting it is a valid fire-and-forget call. |
-| `EXTRA_STATUS_REQUEST_ID` | `request_id` | Callback key: the request id this callback answers, copied from `EXTRA_REQUEST_ID`. |
 | `EXTRA_STATUS` | `status` | Callback key: the status discriminator (`Accepted` / `Completed` / `Failed` / `Rejected` / `Blocked`). |
 | `EXTRA_STATUS_REASON` | `reason` | Callback key: the refusal reason, present only for the `Rejected` and `Blocked` statuses. |
 
@@ -54,7 +58,8 @@ nearest plausible reading.
 A request is answered with one of the statuses below. `Rejected` and `Blocked`
 carry a reason; the other three do not. The callback is delivered only when the
 request asked for one, and it never carries the content of the run — only the
-request id, the status, and the reason where there is one.
+request id (under the same `request_id` key the request used), the status, and
+the reason where there is one.
 
 <!-- AUTO-GEN:STATUSES -->
 

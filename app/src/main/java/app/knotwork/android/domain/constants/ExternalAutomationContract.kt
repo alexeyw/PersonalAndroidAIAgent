@@ -46,7 +46,14 @@ object ExternalAutomationContract {
      */
     const val EXTRA_PROMPT_B64: String = "prompt_b64"
 
-    /** Request key: caller-minted correlation id, echoed back on the callback. Required. */
+    /**
+     * Request key: caller-minted correlation id. Required. The callback carries
+     * it back under this same key, so a caller reads back the id it wrote.
+     *
+     * There is deliberately no separate callback-side constant holding the same
+     * value: two constants for one wire key are two things to rename out of
+     * step, on a key that is frozen once callers depend on it.
+     */
     const val EXTRA_REQUEST_ID: String = "request_id"
 
     /** Request key: broadcast action to send the callback with. Optional; defaults to [ACTION_RUN_RESULT]. */
@@ -57,9 +64,6 @@ object ExternalAutomationContract {
      * Optional — omitting it is a valid fire-and-forget call.
      */
     const val EXTRA_RETURN_PACKAGE: String = "return_package"
-
-    /** Callback key: the request id this callback answers, copied from [EXTRA_REQUEST_ID]. */
-    const val EXTRA_STATUS_REQUEST_ID: String = "request_id"
 
     /** Callback key: the status discriminator (`Accepted` / `Completed` / `Failed` / `Rejected` / `Blocked`). */
     const val EXTRA_STATUS: String = "status"

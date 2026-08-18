@@ -174,8 +174,18 @@ object ExternalAutomationDocsGenerator {
      *   carries no KDoc.
      */
     fun parseSealedMembers(source: String, parent: String): List<ContractEntry> {
-        val declaration = Regex("""^\s*data (?:object|class) ([A-Za-z][A-Za-z0-9]*)\s*(?:\(.*\))?\s*:\s*$parent\b""")
-        val entries = collectEntries(source) { line ->
+        val body = source.substringAfter("sealed interface $parent {", missingDelimiterValue = "")
+        if (body.isEmpty()) {
+            throw GenerationException("`sealed interface $parent` not found in the sealed-interface source.")
+        }
+        // Scoped to the interface body and anchored on the member's own
+        // indentation, deliberately without requiring `: $parent` on the same
+        // line. A member whose declaration grew long enough for the formatter to
+        // wrap the supertype onto the next line would otherwise vanish from the
+        // published table — silently, since the drift check reads through this
+        // same parser and would agree the table was current.
+        val declaration = Regex("""^\s{4}data (?:object|class) ([A-Za-z][A-Za-z0-9]*)\b""")
+        val entries = collectEntries(body) { line ->
             declaration.find(line)?.let { match -> match.groupValues[1] to null }
         }
         if (entries.isEmpty()) {
