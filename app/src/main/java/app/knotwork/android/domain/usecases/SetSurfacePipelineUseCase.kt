@@ -25,6 +25,7 @@ class SetSurfacePipelineUseCase @Inject constructor(private val settingsReposito
         when (surface) {
             EntrySurface.SHARE -> settingsRepository.setShareTargetPipelineId(pipelineId)
             EntrySurface.QUICK_TILE -> settingsRepository.setQuickSettingsTilePipelineId(pipelineId)
+            EntrySurface.EXTERNAL_AUTOMATION -> settingsRepository.setExternalAutomationPipelineId(pipelineId)
         }
     }
 }

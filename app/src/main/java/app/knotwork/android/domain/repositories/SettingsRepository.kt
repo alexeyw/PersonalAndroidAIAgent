@@ -829,6 +829,30 @@ interface SettingsRepository {
     suspend fun setQuickSettingsTilePipelineId(pipelineId: String?)
 
     /**
+     * A [Flow] of the pipeline id bound to the **external-automation** entry
+     * surface — the one a third-party automation app may ask the app to run.
+     * `null` means the surface is unbound and every external request is refused.
+     *
+     * The binding is an **allowlist**, not a default: an external request must
+     * name this exact pipeline, and one naming any other pipeline is refused
+     * rather than redirected here. That is what makes the user's choice in
+     * settings the complete statement of what another app is permitted to run.
+     *
+     * Like [defaultPipelineId] this is a user binding, not a tunable preference,
+     * so it is **never** touched by `resetToRecommendedDefaults`. It is cleared
+     * automatically when the bound pipeline is deleted.
+     */
+    val externalAutomationPipelineId: Flow<String?>
+
+    /**
+     * Updates the pipeline bound to the external-automation surface. Pass `null`
+     * to unbind (external requests are then refused outright).
+     *
+     * @param pipelineId Pipeline id to bind, or `null` to clear the binding.
+     */
+    suspend fun setExternalAutomationPipelineId(pipelineId: String?)
+
+    /**
      * A [Flow] indicating whether the user has opted in to anonymous crash
      * reporting via Firebase Crashlytics. Defaults to `false` — the project's
      * on-device privacy positioning forbids any automatic data egress.

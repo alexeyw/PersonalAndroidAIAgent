@@ -1509,14 +1509,23 @@ surfaces enqueue work into the same background path:
   tile** — start a run from outside the app. Each is **inert until the
   user binds a pipeline** (the privacy default) and enqueues with an
   explicit `pipelineId` so it runs the user's choice regardless of the
-  app default.
+  app default. A third surface, **external automation**, is defined but
+  not yet wired: it lets another app on the device ask for a run. Its
+  binding is deliberately stricter than the other two — an **allowlist**
+  rather than a default, so a request naming any other pipeline is
+  refused rather than redirected. The request vocabulary, the status and
+  refusal dictionaries, and the pure parser and authorizer that decide on
+  them live in `domain` (`domain/constants/ExternalAutomationContract.kt`,
+  `domain/models/ExternalAutomation*.kt`, `domain/usecases/automation/`),
+  which keeps the whole admission decision testable off-device. See
+  [external-automation.md](external-automation.md).
 
 Neither is a new execution path. Both land on
 `TaskScheduler.scheduleOneTime(...)` (the `WorkManagerTaskScheduler`
 impl), which drives `AgentWorker` → the **same** `TaskQueueManager` →
 `GraphExecutionEngine` chain as a `schedule_task` run — only the
-`RunOrigin` differs (`TRIGGER` / `SHARE` / `QUICK_TILE`), recorded on the
-persistent `pipeline_runs` record for accounting. Everything in §6.1–§6.3
+`RunOrigin` differs (`TRIGGER` / `SHARE` / `QUICK_TILE` / `EXTERNAL`),
+recorded on the persistent `pipeline_runs` record for accounting. Everything in §6.1–§6.3
 therefore applies unchanged: the persisted run lifecycle, foreground-service
 promotion, headless engine unload, the two-phase HITL gate (a `SENSITIVE`
 / `DESTRUCTIVE` tool inside an **unattended** trigger run **parks** on a

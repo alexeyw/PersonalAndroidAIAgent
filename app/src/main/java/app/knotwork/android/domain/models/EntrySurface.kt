@@ -24,4 +24,17 @@ enum class EntrySurface {
      * in the background.
      */
     QUICK_TILE,
+
+    /**
+     * The external-automation contract — a third-party automation app (Tasker,
+     * MacroDroid, `adb`) asking the app to run a pipeline.
+     *
+     * The binding carries more weight here than on the other two surfaces: it is
+     * an **allowlist**, not a default. An external request must name the pipeline
+     * it wants, and a request naming anything other than the bound pipeline is
+     * refused rather than redirected — the user's binding is the complete set of
+     * what another app may run. Unbound, the surface refuses everything, exactly
+     * like the other two.
+     */
+    EXTERNAL_AUTOMATION,
 }

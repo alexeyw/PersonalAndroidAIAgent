@@ -230,14 +230,25 @@ class OrchestratorViewModel @Inject constructor(
     fun bindPipelineToSurface(surface: EntrySurface, pipelineId: String) {
         viewModelScope.launch {
             setSurfacePipelineUseCase(surface, pipelineId)
-            _uiState.update { it.copy(feedbackMessage = UiText(surfaceBoundFeedback(surface))) }
+            val feedback = surfaceBoundFeedback(surface) ?: return@launch
+            _uiState.update { it.copy(feedbackMessage = UiText(feedback)) }
         }
     }
 
-    /** Snackbar feedback shown after binding a pipeline to [surface]. */
-    private fun surfaceBoundFeedback(surface: EntrySurface): Int = when (surface) {
+    /**
+     * Snackbar feedback shown after binding a pipeline to [surface], or `null`
+     * for a surface the library screen cannot bind yet.
+     *
+     * The `when` stays exhaustive on purpose — a new [EntrySurface] must not
+     * compile until someone decides what this screen says about it — while a
+     * `null` branch lets a surface exist before its wording does, instead of
+     * borrowing a sentence written about a different surface.
+     */
+    private fun surfaceBoundFeedback(surface: EntrySurface): Int? = when (surface) {
         EntrySurface.SHARE -> R.string.orchestrator_feedback_share_pipeline_bound
         EntrySurface.QUICK_TILE -> R.string.orchestrator_feedback_tile_pipeline_bound
+        // Bound from its own settings surface, which owns its wording.
+        EntrySurface.EXTERNAL_AUTOMATION -> null
     }
 
     private fun observePromptTemplates() {
