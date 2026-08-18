@@ -13,6 +13,41 @@ details.
 
 ## [Unreleased]
 
+### Changed
+
+- **The build no longer fails because a dependency released a new version.**
+  Four Android Lint checks — the three "a newer version of X is available"
+  checks and the target-SDK expiry warning — answer from an external version
+  index or from the calendar, not from the contents of this repository. That
+  made the same commit green one day and red the next with nothing changed in
+  between, and green on a contributor's machine while red in CI, because the two
+  version indexes had been refreshed at different times. Twice this year the
+  fix for a red build was a batch of version bumps unrelated to the work being
+  reviewed.
+
+  Those four checks now report instead of gating: they still run, still analyse
+  every dependency, and their findings still appear in the lint report — they
+  just no longer fail the build. The report is where the signal lives now. CI
+  uploads it on every run rather than only on failures (a green run is precisely
+  the run whose report carries the drift) and renders the findings into the job
+  summary as a table, so the answer to "what is out of date?" needs no download.
+  Dependencies are updated deliberately, when a task needs the newer version or
+  in a single pass before a release.
+
+  This is about determinism, not leniency: whether the build passes ought to be a
+  function of what is in the repository. Checks that encode a store publishing
+  blocker rather than a matter of hygiene deliberately keep failing the build —
+  the expired-target-SDK check and the Google Play SDK Index checks — because
+  being interrupted by those is the point. The design-system module, which
+  mirrors the app's strict lint configuration and is covered by the same
+  aggregate check, gets the same treatment; leaving it out would have kept the
+  gate non-deterministic.
+
+  A new build guard keeps the arrangement honest. Regenerating the lint baseline
+  would re-absorb the now-informational findings and quietly empty the report
+  they live in, with nothing failing to say so, so the aggregated check now fails
+  if a baseline suppresses one of them.
+
 ## [0.7.3] - 2026-08-16
 
 ### Fixed

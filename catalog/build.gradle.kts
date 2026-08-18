@@ -1,3 +1,4 @@
+import app.knotwork.android.buildtools.LintBaselineGuard
 import dev.detekt.gradle.Detekt
 
 plugins {
@@ -55,12 +56,26 @@ android {
         // code is held to the same gate as the application surface. The baseline is
         // generated lazily — `./gradlew :catalog:updateLintBaseline` writes the file
         // on first run; until then the module has no known issues to grandfather.
+        // That command is not free of consequence any more: a regenerated baseline
+        // re-absorbs the informational checks below and would delete the
+        // dependency-drift report. `verifyLintBaselineOverrides` (registered in
+        // `app/build.gradle.kts`, wired into the root `check`) scans this baseline
+        // too and fails the build if that happens.
         baseline = file("lint-baseline.xml")
         abortOnError = true
         warningsAsErrors = true
         checkDependencies = true
         htmlReport = true
         xmlReport = true
+        // Mirrors `:app` for the version-freshness and deadline checks: they stay
+        // enabled but report at INFORMATIONAL severity instead of failing the
+        // build, because their verdict depends on an external version index (or
+        // on the calendar) rather than on the contents of this repository — see
+        // the long rationale in `app/build.gradle.kts` and `decisions.md` §35.
+        // This module is not optional to cover: it mirrors `:app`'s strict mode,
+        // its own baseline is empty, and the root `check` runs its lint too, so
+        // leaving it out would keep the mandatory gate non-deterministic.
+        informational += LintBaselineGuard.DEMOTED_ISSUE_IDS
     }
 }
 

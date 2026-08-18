@@ -25,12 +25,13 @@ This invokes (transitively):
 | `:app:detekt`                                 | Kotlin static analysis. Fails on any unsuppressed finding.              |
 | `:app:detektFullDebug` + `:app:detektFossDebug` | Coroutine-cancellation gate (type-resolution, single rule, one per flavour). See below. |
 | `:app:ktlintCheck`                            | Kotlin formatting & idiomatic style rules. Run `ktlintFormat` to fix.  |
-| `:app:lintFullDebug`                              | Android Lint over the debug variant + library dependencies.             |
+| `:app:lintFullDebug` + `:app:lintFossDebug`   | Android Lint over both distribution flavours + library dependencies. `:catalog:lint` runs too. |
 | `:app:testFullDebugUnitTest`                      | JVM unit tests for the debug variant.                                   |
 | `:app:koverVerifyFullDebug`                       | Test-coverage threshold enforcement.                                    |
 | `:app:checkNoInternalFqn`                     | Custom rule: forbid `app.knotwork.android.*` FQN references in code body.   |
 | `:app:verifyBrowserEditorConstants`           | Fails if `pipeline-editor.html` `AUTO-GEN` blocks drift from the domain sources. |
 | `:app:verifyDocsHygiene`                      | Custom rule: guard the public docs against LLM tool-call artifacts and internal-document references (see below). |
+| `:app:verifyLintBaselineOverrides`            | Custom rule: fail if a lint baseline suppresses a check demoted to informational severity (see below). |
 | `:app:testFullDebugUnitTest` (Konsist suite)      | Architecture guard: Clean-Architecture layer boundaries (see below).        |
 
 Pre-flight tip: run `./gradlew :app:ktlintFormat` first to auto-fix the
@@ -148,7 +149,9 @@ issues are reported by `:app:ktlintCheck`.
 
 ## Android Lint
 
-Provided by AGP 9.2.1. Strict mode in `app/build.gradle.kts`:
+Provided by the Android Gradle Plugin (version pinned in
+[`gradle/libs.versions.toml`](../gradle/libs.versions.toml)). Strict mode is
+configured identically in `app/build.gradle.kts` and `catalog/build.gradle.kts`:
 
 ```kotlin
 android {
@@ -169,9 +172,95 @@ deliberate batch of fixes:
 ./gradlew :app:updateLintBaseline    # rewrites the baseline; commit it.
 ```
 
+> **Regenerating also re-absorbs the informational checks below.** Lint records
+> informational findings into a baseline exactly as it records errors, and a
+> baselined finding disappears from the report — which would silently empty the
+> dependency-drift signal while the build stays green. `verifyLintBaselineOverrides`
+> fails the build if that happens, naming the lines to delete. Prefer editing the
+> baseline by hand over regenerating it wholesale.
+
+### Version-freshness checks report, they do not gate
+
+Four checks are demoted to **informational** severity in both modules:
+
+| Check | Answers from |
+|-------|--------------|
+| `GradleDependency`          | an external version index |
+| `AndroidGradlePluginVersion`| an external version index |
+| `NewerVersionAvailable`     | an external version index (a network round-trip per dependency) |
+| `ExpiringTargetSdkVersion`  | the calendar |
+
+The reason is determinism, not leniency. Whether the build passes ought to be a
+function of the contents of the repository: these four are not, so the same
+commit can be green today and red tomorrow with no edit in between, and green on
+a laptop while red in CI, because the two version indexes were refreshed at
+different times. A check whose verdict moves without the checked object moving is
+a report.
+
+**Deliberate exceptions.** Seven checks stay build-failing even though their
+verdict is not purely a function of this repository, because each encodes a
+store publishing blocker rather than a matter of hygiene — being interrupted by
+them is the point:
+
+- `ExpiredTargetSdkVersion` (fatal), which is calendar-driven;
+- `PlaySdkIndexNonCompliant`, `PlaySdkIndexVulnerability`,
+  `PlaySdkIndexGenericIssues`, `PlaySdkIndexDeprecated`, `RiskyLibrary` and
+  `OutdatedLibrary`, which are decided by the Google Play SDK Index — a
+  network-refreshed dataset with a bundled offline snapshot as fallback.
+
+Anything outside that list is expected to hold the rule: a check that reads
+network reachability, a third-party service or the clock belongs in a report,
+not in the gate.
+
+Demoted is not disabled. The checks still run, still respect the baseline, and
+still appear in the reports — `disable` would drop the findings before any
+reporter sees them. `warningsAsErrors = true` does not undo the demotion: lint
+promotes `WARNING` to `ERROR`, and informational findings are exempt. Do **not**
+add `ignoreWarnings = true` next to it — that flag suppresses informational
+findings as well, which would delete the report.
+
+Dependencies are therefore updated deliberately — when a task needs the newer
+version, or in one pass before a release — rather than because a check went red
+in the middle of unrelated work.
+
+### Where the drift report lands
+
+- Locally: the lint reports below, produced by every `./gradlew check`.
+- In CI: the **Informational lint findings** table in the job summary, plus the
+  `lint-report` artifact, which is uploaded on every run — including green ones,
+  since a green run is precisely the run whose report carries the drift.
+
 **Reports**:
-- `app/build/reports/lint-results-debug.html`
-- `app/build/reports/lint-results-debug.xml`
+- `app/build/reports/lint-results-fullDebug.{html,xml}`
+- `app/build/reports/lint-results-fossDebug.{html,xml}`
+- `catalog/build/reports/lint-results-debug.{html,xml}`
+
+---
+
+## Lint baseline guard (`verifyLintBaselineOverrides`)
+
+The checks demoted above report at informational severity, which makes the lint
+report their only signal — and makes the baseline a way to delete that signal
+without failing anything. Lint records informational findings into a regenerated
+baseline exactly as it records errors (the write path filters by issue id, never
+by severity) and then filters baselined findings out of the reports, so a single
+routine `updateLintBaseline` run would empty the drift report while `check`
+stayed green.
+
+`verifyLintBaselineOverrides` closes that path: a demoted id may not appear in a
+committed baseline. Unlike the checks it protects, the guard is a legitimate gate
+— its verdict is a function of the committed baselines and nothing else.
+
+The pure scanner lives in `buildSrc`
+([`LintBaselineGuard`](../buildSrc/src/main/kotlin/app/knotwork/android/buildtools/LintBaselineGuard.kt))
+and holds the demoted-id list as its single declaration site: both lint blocks
+read it as `informational += LintBaselineGuard.DEMOTED_ISSUE_IDS`, so the set
+cannot drift between the modules and the guard. Its unit tests are not reachable
+from the root `check` graph (`buildSrc` is a separate build):
+
+```bash
+./gradlew -p buildSrc test
+```
 
 ---
 
@@ -344,10 +433,14 @@ tasks.named("check") { dependsOn("koverVerifyFullDebug") }
 The required job is defined in `.github/workflows/check.yml`. The workflow runs
 `./gradlew check` on every `pull_request → main` and every `push` to `main`
 (plus a manual `workflow_dispatch` trigger), uploads each report set —
-detekt / ktlint / lint / unit-test / Kover / Roborazzi diffs — as a
-downloadable artifact on failure, and is configured with
-`concurrency.cancel-in-progress` so a new push supersedes any older run on the
-same branch.
+detekt / ktlint / unit-test / Kover / Roborazzi diffs — as a downloadable
+artifact on failure, and is configured with `concurrency.cancel-in-progress` so
+a new push supersedes any older run on the same branch. The **lint** report is
+the exception: it is uploaded on every run, green ones included, because it
+carries the informational dependency-drift findings described above. The same
+findings are also rendered into the job summary as an *Informational lint
+findings* table, so the answer to "what is out of date?" needs no artifact
+download.
 
 The same workflow is also exposed as a reusable one (`workflow_call`) and is
 called as the first job of `.github/workflows/release.yml`, so a release cannot
