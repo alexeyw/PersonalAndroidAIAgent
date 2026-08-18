@@ -30,8 +30,9 @@ Closes #
 
 ## Checklist
 
-- [ ] `./gradlew check` passes locally (detekt, ktlint, lintDebug,
-      testDebugUnitTest, koverVerifyDebug).
+- [ ] `./gradlew check` passes locally (detekt, ktlint, lintFullDebug +
+      lintFossDebug, testFullDebugUnitTest + testFossDebugUnitTest,
+      koverVerifyFullDebug).
 - [ ] Tests added or updated for the changed code (target 100% logic
       coverage in new `domain` / `data` code; see `docs/testing.md`).
 - [ ] Public documentation updated where relevant (see the *Pull

@@ -1,6 +1,7 @@
 import app.knotwork.android.buildtools.BrowserEditorConstantsGenerator
 import app.knotwork.android.buildtools.DexInstantiabilityChecker
 import app.knotwork.android.buildtools.DocsHygieneChecker
+import app.knotwork.android.buildtools.LintBaselineGuard
 import app.knotwork.android.buildtools.R8MappingChecker
 import app.knotwork.android.buildtools.ReleaseVersionChecker
 import com.android.build.api.artifact.SingleArtifact
@@ -392,6 +393,12 @@ android {
         // - Do NOT add `ignoreWarnings = true` alongside this. Unlike
         //   `warningsAsErrors` it tests `<= WARNING`, so it would swallow
         //   INFORMATIONAL as well and silently delete the drift report.
+        //
+        // The baseline is the third way to delete the report, and the easiest to
+        // trip over: lint records informational findings into a regenerated
+        // baseline just like errors, and then filters them out of the reports.
+        // `verifyLintBaselineOverrides` (below, wired into `check`) fails the
+        // build if a baseline ever suppresses one of these ids.
         informational +=
             listOf(
                 "GradleDependency",
@@ -900,6 +907,51 @@ val verifyDocsHygiene by tasks.registering {
     }
 }
 tasks.named("check") { dependsOn(verifyDocsHygiene) }
+
+// Lint-baseline guard for the demoted version-freshness checks.
+//
+// Those checks report at informational severity (see the `lint {}` block above),
+// which makes the lint report their only signal — and makes the baseline a way to
+// delete that signal without failing anything. Lint records informational
+// incidents into a regenerated baseline exactly as it records errors (the write
+// path filters by issue id, never by severity) and then filters baselined
+// incidents out of the reports, so one routine `updateLintBaseline` run for an
+// unrelated batch of fixes would quietly empty the drift report and leave `check`
+// green. This project has already paid for that once: four such entries had
+// accumulated and had to be deleted before the report showed the packages it
+// exists to show.
+//
+// Unlike the checks it protects, this guard is a legitimate gate: its verdict is
+// a function of the committed baselines and nothing else.
+//
+// The pure scanner lives in `buildSrc` (`LintBaselineGuard`) and is unit-tested
+// there (`./gradlew -p buildSrc test`). The file set is a SINGLE-level glob on
+// purpose: it matches `app/lint-baseline.xml` and `catalog/lint-baseline.xml`
+// while never reaching a nested copy of the tree — notably a stale git worktree
+// under `.claude/worktrees/` — which would otherwise fail the build with a
+// violation that does not exist in this checkout.
+val verifyLintBaselineOverrides by tasks.registering {
+    group = "verification"
+    description =
+        "Fails the build if a lint baseline suppresses a check that was demoted to informational severity."
+    val rootDirForAction: File = rootDir
+    val baselineFiles: Set<File> = fileTree(rootDir) { include("*/lint-baseline.xml") }.files
+    inputs.files(baselineFiles)
+    doLast {
+        val contents = baselineFiles.associate { it.relativeTo(rootDirForAction).path to it.readText() }
+        val violations = LintBaselineGuard.scan(contents)
+        if (violations.isNotEmpty()) {
+            throw GradleException(
+                "Lint baseline suppresses a demoted check (${violations.size} violation(s)):\n" +
+                    violations.joinToString(separator = "\n") { it.format() } +
+                    "\n\nThese checks are informational so that the lint report keeps showing dependency " +
+                    "drift; a baseline entry hides them again. Delete the entries above instead of " +
+                    "regenerating the baseline wholesale.",
+            )
+        }
+    }
+}
+tasks.named("check") { dependsOn(verifyLintBaselineOverrides) }
 
 // `StoreMetadataTest` reads the store listing under `fastlane/metadata/` — the
 // text limits, the changelog for the shipping versionCode, and the screenshot

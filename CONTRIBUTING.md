@@ -98,11 +98,11 @@ request:
 - **detekt** — Kotlin static analysis (configured in
   [`config/detekt/detekt.yml`](config/detekt/detekt.yml)).
 - **ktlint** — formatting.
-- **Android lint** (`lintDebug`).
-- **Unit tests** (`testDebugUnitTest`) — including the **Konsist**
-  architecture guard (Clean-Architecture layer boundaries; see
+- **Android lint** (`lintFullDebug` + `lintFossDebug`, plus `:catalog:lint`).
+- **Unit tests** (`testFullDebugUnitTest` + `testFossDebugUnitTest`) — including
+  the **Konsist** architecture guard (Clean-Architecture layer boundaries; see
   [`docs/static-analysis.md`](docs/static-analysis.md)).
-- **Kover** coverage verification (`koverVerifyDebug`).
+- **Kover** coverage verification (`koverVerifyFullDebug`).
 
 Run `./gradlew check` **locally before pushing**. Pushing without running
 it just trades local feedback for slower CI feedback.

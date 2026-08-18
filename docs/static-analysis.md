@@ -31,6 +31,7 @@ This invokes (transitively):
 | `:app:checkNoInternalFqn`                     | Custom rule: forbid `app.knotwork.android.*` FQN references in code body.   |
 | `:app:verifyBrowserEditorConstants`           | Fails if `pipeline-editor.html` `AUTO-GEN` blocks drift from the domain sources. |
 | `:app:verifyDocsHygiene`                      | Custom rule: guard the public docs against LLM tool-call artifacts and internal-document references (see below). |
+| `:app:verifyLintBaselineOverrides`            | Custom rule: fail if a lint baseline suppresses a check demoted to informational severity (see below). |
 | `:app:testFullDebugUnitTest` (Konsist suite)      | Architecture guard: Clean-Architecture layer boundaries (see below).        |
 
 Pre-flight tip: run `./gradlew :app:ktlintFormat` first to auto-fix the
@@ -171,6 +172,13 @@ deliberate batch of fixes:
 ./gradlew :app:updateLintBaseline    # rewrites the baseline; commit it.
 ```
 
+> **Regenerating also re-absorbs the informational checks below.** Lint records
+> informational findings into a baseline exactly as it records errors, and a
+> baselined finding disappears from the report — which would silently empty the
+> dependency-drift signal while the build stays green. `verifyLintBaselineOverrides`
+> fails the build if that happens, naming the lines to delete. Prefer editing the
+> baseline by hand over regenerating it wholesale.
+
 ### Version-freshness checks report, they do not gate
 
 Four checks are demoted to **informational** severity in both modules:
@@ -182,17 +190,27 @@ Four checks are demoted to **informational** severity in both modules:
 | `NewerVersionAvailable`     | an external version index (a network round-trip per dependency) |
 | `ExpiringTargetSdkVersion`  | the calendar |
 
-The reason is determinism, not leniency. A build gate has to be a function of
-the contents of the repository: these four are not, so the same commit can be
-green today and red tomorrow with no edit in between, and green on a laptop
-while red in CI, because the two version indexes were refreshed at different
-times. A check whose verdict moves without the checked object moving is a
-report. The same rule applies to any future check that depends on external
-state — network reachability, a third-party service, the date.
+The reason is determinism, not leniency. Whether the build passes ought to be a
+function of the contents of the repository: these four are not, so the same
+commit can be green today and red tomorrow with no edit in between, and green on
+a laptop while red in CI, because the two version indexes were refreshed at
+different times. A check whose verdict moves without the checked object moving is
+a report.
 
-`ExpiredTargetSdkVersion` is deliberately excluded and stays fatal: it is
-calendar-driven too, but it encodes a store publishing deadline the project
-must meet, so the interrupt is wanted.
+**Deliberate exceptions.** Seven checks stay build-failing even though their
+verdict is not purely a function of this repository, because each encodes a
+store publishing blocker rather than a matter of hygiene — being interrupted by
+them is the point:
+
+- `ExpiredTargetSdkVersion` (fatal), which is calendar-driven;
+- `PlaySdkIndexNonCompliant`, `PlaySdkIndexVulnerability`,
+  `PlaySdkIndexGenericIssues`, `PlaySdkIndexDeprecated`, `RiskyLibrary` and
+  `OutdatedLibrary`, which are decided by the Google Play SDK Index — a
+  network-refreshed dataset with a bundled offline snapshot as fallback.
+
+Anything outside that list is expected to hold the rule: a check that reads
+network reachability, a third-party service or the clock belongs in a report,
+not in the gate.
 
 Demoted is not disabled. The checks still run, still respect the baseline, and
 still appear in the reports — `disable` would drop the findings before any

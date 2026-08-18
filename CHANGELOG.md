@@ -34,13 +34,19 @@ details.
   Dependencies are updated deliberately, when a task needs the newer version or
   in a single pass before a release.
 
-  This is about determinism, not leniency: whether the build passes has to be a
-  function of what is in the repository. The expired-target-SDK check keeps its
-  fatal severity — it encodes a store publishing deadline the project genuinely
-  has to meet, so that interrupt is wanted. The design-system module, which
+  This is about determinism, not leniency: whether the build passes ought to be a
+  function of what is in the repository. Checks that encode a store publishing
+  blocker rather than a matter of hygiene deliberately keep failing the build —
+  the expired-target-SDK check and the Google Play SDK Index checks — because
+  being interrupted by those is the point. The design-system module, which
   mirrors the app's strict lint configuration and is covered by the same
   aggregate check, gets the same treatment; leaving it out would have kept the
   gate non-deterministic.
+
+  A new build guard keeps the arrangement honest. Regenerating the lint baseline
+  would re-absorb the now-informational findings and quietly empty the report
+  they live in, with nothing failing to say so, so the aggregated check now fails
+  if a baseline suppresses one of them.
 
 ## [0.7.3] - 2026-08-16
 
