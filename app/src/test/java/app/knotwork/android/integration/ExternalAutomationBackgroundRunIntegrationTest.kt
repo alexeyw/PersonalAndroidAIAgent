@@ -6,11 +6,12 @@ import app.knotwork.android.data.engine.KoogCloudLlmModelResolver
 import app.knotwork.android.data.engine.TaskQueueManagerImpl
 import app.knotwork.android.data.local.AppDatabase
 import app.knotwork.android.data.local.models.ChatSessionEntity
+import app.knotwork.android.data.repositories.ExternalAutomationJournalRepositoryImpl
 import app.knotwork.android.data.repositories.PendingInteractionRepositoryImpl
 import app.knotwork.android.data.repositories.PipelineRunRepositoryImpl
 import app.knotwork.android.data.repositories.RunTraceRepositoryImpl
 import app.knotwork.android.data.repositories.TriggerJournalRepositoryImpl
-import app.knotwork.android.data.repositories.TriggerRepositoryImpl
+import app.knotwork.android.domain.constants.ExternalAutomationContract
 import app.knotwork.android.domain.engine.ChatHistoryWindowPlanner
 import app.knotwork.android.domain.engine.GraphExecutionEngine
 import app.knotwork.android.domain.engine.LlmInferenceEngine
@@ -32,55 +33,41 @@ import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
 import app.knotwork.android.domain.engine.structured.CloudStructuredInferenceClientFactory
 import app.knotwork.android.domain.engine.structured.StructuredOutputGate
 import app.knotwork.android.domain.models.AgentTool
-import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ConnectionModel
-import app.knotwork.android.domain.models.NetworkState
+import app.knotwork.android.domain.models.ExternalAutomationInvocation
+import app.knotwork.android.domain.models.ExternalAutomationStatus
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRunStatus
-import app.knotwork.android.domain.models.PowerState
 import app.knotwork.android.domain.models.Result
-import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.ToolApprovalPolicy
 import app.knotwork.android.domain.models.ToolRisk
-import app.knotwork.android.domain.models.Trigger
-import app.knotwork.android.domain.models.TriggerCondition
-import app.knotwork.android.domain.models.TriggerEvaluationSource
-import app.knotwork.android.domain.models.TriggerEvaluationVerdict
-import app.knotwork.android.domain.models.TriggerHitlActivity
-import app.knotwork.android.domain.models.TriggerHitlResolution
-import app.knotwork.android.domain.models.TriggerRunOutcome
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
 import app.knotwork.android.domain.repositories.ChatRepository
-import app.knotwork.android.domain.repositories.NetworkStateRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
-import app.knotwork.android.domain.repositories.PowerStateRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
-import app.knotwork.android.domain.repositories.TriggerRepository
 import app.knotwork.android.domain.repositories.UsageTelemetryRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
+import app.knotwork.android.domain.services.ExternalAutomationCallbackNotifier
 import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.services.ScheduledTaskConstraints
-import app.knotwork.android.domain.services.ScheduledTaskNotifier
 import app.knotwork.android.domain.services.TaskScheduler
-import app.knotwork.android.domain.services.TriggerScheduler
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
-import app.knotwork.android.domain.usecases.EvaluateTriggerFiringUseCase
-import app.knotwork.android.domain.usecases.FireTriggerUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.ParkedRunResumer
 import app.knotwork.android.domain.usecases.PendingSubmissionOutcome
-import app.knotwork.android.domain.usecases.RecordTriggerEvaluationUseCase
 import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
 import app.knotwork.android.domain.usecases.ResumePipelineRunUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
-import app.knotwork.android.domain.usecases.TriggerFireOutcome
+import app.knotwork.android.domain.usecases.automation.AuthorizeExternalAutomationRequestUseCase
+import app.knotwork.android.domain.usecases.automation.HandleExternalAutomationRequestUseCase
+import app.knotwork.android.domain.usecases.automation.ParseExternalAutomationRequestUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -91,7 +78,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -103,10 +89,8 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -115,94 +99,41 @@ import org.robolectric.RuntimeEnvironment
 import javax.inject.Provider
 
 /**
- * End-to-end JVM integration test of the **automation-trigger → background run →
- * notification → result-in-chat** arc — the privacy-sensitive surface phase 36
- * adds on top of the persisted background-run infrastructure.
+ * End-to-end JVM integration test of the **external request → background run →
+ * callback** arc: the entry point another app on the device broadcasts to.
  *
- * Both tests start from a charging trigger and drive a **real**
- * [FireTriggerUseCase] (loading the trigger from a real Room-backed
- * [TriggerRepositoryImpl], deciding via the real [EvaluateTriggerFiringUseCase],
- * resolving the bound session, and enqueuing) over a **real** engine + task
- * queue. The only seam between the trigger and the queue is a bridging
- * [TaskScheduler] that forwards `scheduleOneTime(...)` into the same
- * `enqueueScheduled` path `AgentWorker` drives — so WorkManager (untestable on
- * the JVM) is the single stubbed boundary, not the run itself.
+ * It exists to prove the guarantee the published contract makes in one sentence —
+ * *"an external call is not a form of approval"* — against the real engine rather
+ * than against a mock of it. A unit test can show that the use case calls
+ * `scheduleOneTime`; only this can show that what comes out the other end is a run
+ * that still stops and asks, still refuses a blocked tool, and still tells the
+ * caller how it ended **after** a human answered hours later.
  *
- * - [trigger fires, runs the bound pipeline in the background, and lands the result in the bound chat]
- *   proves the happy arc: the charging edge fires, the run is enqueued as
- *   [RunOrigin.TRIGGER] into the trigger's bound session, the "Trigger fired"
- *   notification is posted, the firing is tallied into the on-device usage
- *   statistics by kind, the pipeline runs to completion, and the final answer
- *   lands in that session as a regular assistant message.
- * - [a sensitive tool inside a trigger run still parks on the background HITL gate and resumes after approval]
- *   proves the safety invariant the security model leans on: a `SENSITIVE` tool
- *   inside an **unattended** trigger run does not execute silently. With no UI to
- *   answer, the live wait times out and the run **parks** (persistent
- *   WAITING_APPROVAL + approval notification); approving from the notification
- *   (the [SubmitApprovalDecisionUseCase] entry point `AgentApprovalReceiver`
- *   dispatches to) resumes the run from its checkpoint and it completes.
- *
- * Real `Dispatchers.IO` hops inside the repositories do not run on the
- * virtual-time scheduler, so the test synchronises on **observed database
- * state** via [awaitUntil] rather than bare `advanceUntilIdle()` — the same
- * convention [BackgroundAutonomyCycleIntegrationTest] uses.
+ * The process wiring is the same as [TriggerBackgroundRunIntegrationTest]'s, with
+ * the trigger-side collaborators swapped for the external ones: a real Room-backed
+ * request journal (so the admission row and its terminal settlement are the real
+ * two-phase write) and a spy callback notifier standing in for the outbound
+ * broadcast.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
-class TriggerBackgroundRunIntegrationTest {
+class ExternalAutomationBackgroundRunIntegrationTest {
 
     private val testDispatcher = StandardTestDispatcher()
     private val testScope = TestScope(testDispatcher)
 
     private lateinit var database: AppDatabase
 
-    // Device-edge doubles shared across the process wiring.
     private lateinit var chatRepository: ChatRepository
     private lateinit var pipelineRepository: PipelineRepository
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var toolRepository: ToolRepository
 
-    // Real, Room-backed trigger store + the pure firing evaluator.
-    private lateinit var triggerRepository: TriggerRepository
-    private val evaluateTriggerFiring = EvaluateTriggerFiringUseCase()
-
-    // Trigger-side doubles whose interactions the tests assert.
-    private lateinit var powerStateRepository: PowerStateRepository
-    private lateinit var networkStateRepository: NetworkStateRepository
-    private lateinit var scheduledTaskNotifier: ScheduledTaskNotifier
-    private lateinit var triggerScheduler: TriggerScheduler
-    private lateinit var usageTelemetry: UsageTelemetryRepository
-
-    /** A charging trigger already bound to the seeded session, armed and ready to fire. */
-    private val chargingTrigger = Trigger(
-        id = TRIGGER_ID,
-        name = TRIGGER_NAME,
-        condition = TriggerCondition.Charging,
-        pipelineId = GRAPH_ID,
-        prompt = USER_PROMPT,
-        enabled = true,
-        armed = true,
-        createdAt = 0L,
-        sessionId = SESSION_ID,
-    )
-
-    private val happyGraph = PipelineGraph(
-        id = GRAPH_ID,
-        name = "Trigger run",
-        nodes = listOf(
-            NodeModel("input_1", NodeType.INPUT, 0f, 0f),
-            NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f, systemPrompt = STEP_MARKER),
-            NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = FINAL_MARKER),
-        ),
-        connections = listOf(
-            ConnectionModel("c1", "input_1", "llm_1"),
-            ConnectionModel("c2", "llm_1", "output_1"),
-        ),
-    )
+    private val blockDestructiveTools = MutableStateFlow(false)
 
     private val toolGraph = PipelineGraph(
         id = GRAPH_ID,
-        name = "Trigger run with tool",
+        name = BOUND_NAME,
         nodes = listOf(
             NodeModel("input_1", NodeType.INPUT, 0f, 0f),
             NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f, systemPrompt = STEP_MARKER),
@@ -223,17 +154,16 @@ class TriggerBackgroundRunIntegrationTest {
             .allowMainThreadQueries()
             .build()
         // The persisted trace carries a foreign key into `chat_sessions`; chat
-        // persistence is mocked, so seed the bound session row the way the real
-        // chat repository would have when the trigger first minted it.
+        // persistence is mocked, so seed the surface's accumulating session row the
+        // way the worker would have on the first external run.
         runBlocking {
-            database.chatDao().insertSession(ChatSessionEntity(id = SESSION_ID, name = TRIGGER_NAME, updatedAt = 0L))
+            database.chatDao().insertSession(
+                ChatSessionEntity(id = SESSION_ID, name = "External automation", updatedAt = 0L),
+            )
         }
-        triggerRepository = TriggerRepositoryImpl(database.triggerDao())
 
         chatRepository = mockk(relaxed = true)
         every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
-        // The trigger's bound session still exists, so the fire reuses it
-        // verbatim (no fresh mint, deterministic foreign key).
         coEvery { chatRepository.sessionExists(SESSION_ID) } returns true
 
         settingsRepository = mockk()
@@ -244,13 +174,16 @@ class TriggerBackgroundRunIntegrationTest {
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
         every { settingsRepository.toolUsageInstruction } returns flowOf("")
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
-        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
+        every { settingsRepository.blockDestructiveTools } returns blockDestructiveTools
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
         every { settingsRepository.toolCallTimeoutMs } returns flowOf(LIVE_WAIT_TIMEOUT_MS)
         every { settingsRepository.resumeMaxAgeHours } returns flowOf(48)
         every { settingsRepository.backgroundApprovalWindowHours } returns flowOf(24)
         every { settingsRepository.defaultPipelineId } returns flowOf(GRAPH_ID)
         every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(2)
+        // The contract is on and bound to the pipeline under test.
+        every { settingsRepository.externalAutomationEnabled } returns flowOf(true)
+        every { settingsRepository.externalAutomationPipelineId } returns flowOf(GRAPH_ID)
 
         toolRepository = mockk(relaxed = true)
         coEvery { toolRepository.getAvailableTools() } returns
@@ -258,13 +191,9 @@ class TriggerBackgroundRunIntegrationTest {
         coEvery { toolRepository.getRisk(TOOL_NAME, any()) } returns ToolRisk.SENSITIVE
         coEvery { toolRepository.executeTool(TOOL_NAME, any(), any()) } returns TOOL_RESULT
 
-        // The device is charging, so the charging trigger's condition is met.
-        powerStateRepository = mockk { every { powerState } returns MutableStateFlow(PowerState(isCharging = true)) }
-        networkStateRepository = mockk { every { networkState } returns MutableStateFlow(NetworkState()) }
-        scheduledTaskNotifier = mockk(relaxed = true)
-        triggerScheduler = mockk(relaxed = true)
-        usageTelemetry = mockk(relaxed = true)
-        coEvery { usageTelemetry.isEnabled() } returns false
+        pipelineRepository = mockk()
+        every { pipelineRepository.getAllPipelines() } returns flowOf(listOf(toolGraph))
+        coEvery { pipelineRepository.getPipelineById(GRAPH_ID) } returns toolGraph
     }
 
     @After
@@ -273,188 +202,182 @@ class TriggerBackgroundRunIntegrationTest {
         database.close()
     }
 
-    @Test
-    fun `trigger fires, runs the bound pipeline in the background, and lands the result in the bound chat`() =
-        testScope.runTest {
-            stubPipeline(happyGraph)
-            runBlocking { triggerRepository.saveTrigger(chargingTrigger) }
-            val process = buildProcess(scriptedLlmEngine())
-            val fireTrigger = buildFireTrigger(process)
+    /** The real use case wired over this process's bridging scheduler. */
+    private fun buildHandler(process: ProcessHarness) = HandleExternalAutomationRequestUseCase(
+        parseRequest = ParseExternalAutomationRequestUseCase(),
+        authorizeRequest = AuthorizeExternalAutomationRequestUseCase(),
+        settingsRepository = settingsRepository,
+        pipelineRepository = pipelineRepository,
+        journal = process.externalJournal,
+        taskScheduler = process.scheduler,
+    )
 
-            // ── Fire the trigger (the charging edge is satisfied + armed) ──
-            val outcome = fireTrigger(TRIGGER_ID, TriggerEvaluationSource.POLL, NOW)
-
-            assertEquals(TriggerFireOutcome.Fired(GRAPH_ID), outcome)
-            // The run was enqueued through the scheduler path attributed to the trigger.
-            assertEquals(RunOrigin.TRIGGER, process.scheduler.lastOrigin)
-            assertEquals(GRAPH_ID, process.scheduler.lastPipelineId)
-            // Into the trigger's own bound session (not a fresh one).
-            assertEquals(SESSION_ID, process.scheduler.lastSessionId)
-            assertNotNull("the bridge captured the enqueued run id", process.scheduler.lastRunId)
-            val runId = process.scheduler.lastRunId!!
-
-            // ── The background run executes to completion ──
-            awaitUntil("run COMPLETED") {
-                process.runRepository.getRun(runId)?.status == PipelineRunStatus.COMPLETED
-            }
-            val run = process.runRepository.getRun(runId)
-            assertEquals(RunOrigin.TRIGGER, run?.origin)
-            assertEquals(SESSION_ID, run?.sessionId)
-
-            // ── The result landed in the bound session as a final assistant message ──
-            val saved = mutableListOf<ChatMessage>()
-            coVerify(atLeast = 1) { chatRepository.saveMessage(capture(saved)) }
-            assertTrue(
-                "Expected a final assistant message carrying the OUTPUT answer in the bound session",
-                saved.any {
-                    it.role == Role.AGENT &&
-                        it.isFinal &&
-                        it.sessionId == SESSION_ID &&
-                        it.content.contains(FINAL_ANSWER)
-                },
-            )
-
-            // ── A "Trigger fired" notification announced the background run ──
-            coVerify(exactly = 1) { scheduledTaskNotifier.notifyTriggerFired(SESSION_ID, TRIGGER_NAME) }
-            // ── The firing was tallied into the privacy-preserving local statistics by kind ──
-            coVerify(exactly = 1) { usageTelemetry.recordTriggerFired("CHARGING", NOW) }
-
-            // ── The trigger latched: fired-time recorded and the event trigger disarmed ──
-            val firedTrigger = triggerRepository.getTriggerById(TRIGGER_ID)
-            assertEquals(NOW, firedTrigger?.lastFiredAt)
-            assertFalse("a fired event trigger is disarmed until its condition drops", firedTrigger?.armed ?: true)
-
-            // ── The journal completed the two-phase row: one Fired evaluation for
-            //    this run id, its outcome now attributed as Success end-to-end ──
-            val journal = process.triggerJournal.observeByTrigger(TRIGGER_ID).first()
-            assertEquals(1, journal.size)
-            val entry = journal.single()
-            assertEquals(TriggerEvaluationVerdict.Fired, entry.verdict)
-            assertEquals(TriggerEvaluationSource.POLL, entry.source)
-            assertEquals(runId, entry.runId)
-            assertEquals(TriggerRunOutcome.Success, entry.outcome)
-            // This pipeline never stops to ask, so the row carries no HITL
-            // activity at all — "no gate" is an absence, not a neutral value.
-            assertNull(entry.hitl)
-
-            process.taskQueueManager.scope.cancel()
-        }
+    /** A well-formed request naming the bound pipeline. */
+    private fun request() = ExternalAutomationInvocation(
+        action = ExternalAutomationContract.ACTION_RUN_PIPELINE,
+        extras = mapOf(
+            ExternalAutomationContract.EXTRA_PIPELINE_ID to GRAPH_ID,
+            ExternalAutomationContract.EXTRA_PROMPT to USER_PROMPT,
+            ExternalAutomationContract.EXTRA_REQUEST_ID to REQUEST_ID,
+            ExternalAutomationContract.EXTRA_RETURN_PACKAGE to CALLER_PACKAGE,
+        ),
+    )
 
     @Test
-    fun `a sensitive tool inside a trigger run still parks on the background HITL gate and resumes after approval`() =
+    fun `a sensitive tool in an external run still parks on the HITL gate, and the caller hears only after approval`() =
         testScope.runTest {
-            stubPipeline(toolGraph)
-            runBlocking { triggerRepository.saveTrigger(chargingTrigger) }
             val process = buildProcess(scriptedLlmEngine())
-            val fireTrigger = buildFireTrigger(process)
+            val handler = buildHandler(process)
 
-            // ── Fire the trigger; the run reaches the SENSITIVE tool node ──
-            val outcome = fireTrigger(TRIGGER_ID, TriggerEvaluationSource.POLL, NOW)
-            assertEquals(TriggerFireOutcome.Fired(GRAPH_ID), outcome)
-            assertNotNull("the bridge captured the enqueued run id", process.scheduler.lastRunId)
-            val runId = process.scheduler.lastRunId!!
+            val status = handler(request(), attestedSenderPackage = null, nowMillis = NOW)
 
-            // ── No UI answers: the live wait times out and the run parks ──
-            // The live gate is part of the condition, not an afterthought: the
-            // approval below must take the durable path, and it only does so
-            // once `pendingApproval` is gone. `ToolInvocationGate` retires the
-            // holder before writing the durable record, so waiting for all
-            // three is waiting for one consistent state — asserting only the
-            // record would race that ordering.
+            assertEquals(ExternalAutomationStatus.Accepted, status)
+            assertEquals(RunOrigin.EXTERNAL, process.scheduler.lastOrigin)
+            val runId = requireNotNull(process.scheduler.lastRunId)
+
+            // ── Nobody is watching: the live wait expires and the run parks ──
+            // Waiting on all three is waiting for one consistent state: the gate
+            // retires the live holder before writing the durable record, so
+            // asserting only the status would race that ordering.
             awaitUntil("run parked WAITING_APPROVAL with the live gate retired") {
                 process.runRepository.getRun(runId)?.status == PipelineRunStatus.WAITING_APPROVAL &&
                     process.pendingRepository.getForRun(runId) != null &&
                     process.taskQueueManager.pendingApproval(SESSION_ID) == null
             }
-            verify(atLeast = 1) {
-                process.approvalNotifier.sendApprovalRequest(any(), any(), any(), any())
-            }
+            val parked = process.pendingRepository.getForRun(runId)
+            assertNotNull("the external run parked a durable approval record", parked)
+            assertEquals(PendingInteractionKind.APPROVAL, parked!!.kind)
+            assertEquals(TOOL_NAME, parked.toolName)
+            // The external call admitted the run; it did not approve the tool.
+            coVerify(exactly = 0) { toolRepository.executeTool(TOOL_NAME, any(), any()) }
+            // And nothing terminal has been reported to the caller yet.
+            verify(exactly = 0) { process.externalCallback.notifyOutcome(any(), any(), any(), any()) }
 
-            // ── Approve from the notification — the run resumes and completes ──
-            val submission = SubmitApprovalDecisionUseCase(
+            // ── A human approves from the notification, hours later ──
+            val outcome = SubmitApprovalDecisionUseCase(
                 process.taskQueueManager,
                 process.pendingRepository,
                 process.parkedRunResumer,
             )(SESSION_ID, isApproved = true, runId = runId)
-            assertEquals(PendingSubmissionOutcome.Resumed, submission)
-
-            awaitUntil("run COMPLETED after approval") {
+            assertEquals(PendingSubmissionOutcome.Resumed, outcome)
+            awaitUntil("run COMPLETED after the approval") {
                 process.runRepository.getRun(runId)?.status == PipelineRunStatus.COMPLETED
             }
-            // The staged tool really executed only after the approval.
-            coVerify(exactly = 1) { toolRepository.executeTool(TOOL_NAME, any(), any()) }
-            // The pending record was consumed.
-            assertNull(process.pendingRepository.getForRun(runId))
-            // The final answer landed in the bound session.
-            val saved = mutableListOf<ChatMessage>()
-            coVerify(atLeast = 1) { chatRepository.saveMessage(capture(saved)) }
-            assertTrue(
-                "Expected a final assistant message in the bound session after approval",
-                saved.any {
-                    it.role == Role.AGENT &&
-                        it.isFinal &&
-                        it.sessionId == SESSION_ID &&
-                        it.content.contains(FINAL_ANSWER)
-                },
-            )
+            // Settle-then-notify: `finishRun` writes the terminal status first and
+            // runs its observers after, so waiting on the status alone would race
+            // the very hook under test.
+            awaitUntil("the request journal settled the terminal status") {
+                process.externalJournal.findByRunId(runId)?.status == ExternalAutomationStatus.Completed
+            }
 
-            // ── The two-phase journal row survived the park and resume: still a
-            //    single Fired entry, its outcome now Success after the resumed run
-            //    completed (attributed on the resume path, not by the dead worker) ──
-            val entry = process.triggerJournal.observeByTrigger(TRIGGER_ID).first().single()
-            assertEquals(TriggerEvaluationVerdict.Fired, entry.verdict)
-            assertEquals(runId, entry.runId)
-            assertEquals(TriggerRunOutcome.Success, entry.outcome)
-
-            // ── …and the row says the run asked for approval, had to wait in the
-            //    shade for it, and got it. Without this the run is a plain
-            //    Success, indistinguishable from one that never asked — which is
-            //    exactly what made the background-approval criterion of the soak
-            //    protocol unprovable from a journal dump ──
+            // ── The caller is told, from the run-termination seam ──
+            // This is the case `AgentWorker.announceOutcome` structurally cannot
+            // cover: parking stopped the worker, and the resume came back through
+            // the in-process queue with no worker left to announce anything.
+            verify(exactly = 1) {
+                process.externalCallback.notifyOutcome(
+                    CALLER_PACKAGE,
+                    ExternalAutomationContract.ACTION_RUN_RESULT,
+                    REQUEST_ID,
+                    ExternalAutomationStatus.Completed,
+                )
+            }
             assertEquals(
-                TriggerHitlActivity(
-                    gateCount = 1,
-                    lastKind = PendingInteractionKind.APPROVAL,
-                    lastResolution = TriggerHitlResolution.APPROVED,
-                    parked = true,
-                ),
-                entry.hitl,
+                ExternalAutomationStatus.Completed,
+                process.externalJournal.findByRunId(runId)?.status,
             )
 
             process.taskQueueManager.scope.cancel()
         }
 
-    /** Publishes [graph] as the single saved pipeline the fire path resolves. */
-    private fun stubPipeline(graph: PipelineGraph) {
-        pipelineRepository = mockk()
-        every { pipelineRepository.getAllPipelines() } returns flowOf(listOf(graph))
-        coEvery { pipelineRepository.getPipelineById(GRAPH_ID) } returns graph
+    @Test
+    fun `a destructive tool in an external run is blocked when the user blocked destructive tools`() =
+        testScope.runTest {
+            // The block is a user stance about the device, not about a surface. An
+            // external caller must not be able to walk past it.
+            blockDestructiveTools.value = true
+            coEvery { toolRepository.getRisk(TOOL_NAME, any()) } returns ToolRisk.DESTRUCTIVE
+            val process = buildProcess(scriptedLlmEngine())
+            val handler = buildHandler(process)
+
+            handler(request(), attestedSenderPackage = null, nowMillis = NOW)
+            val runId = requireNotNull(process.scheduler.lastRunId)
+
+            awaitUntil("run reached a terminal status") {
+                process.runRepository.getRun(runId)?.status?.isTerminal == true
+            }
+
+            // The tool never ran, and the run never parked to ask — a blocked
+            // destructive tool is refused outright rather than offered for approval.
+            coVerify(exactly = 0) { toolRepository.executeTool(TOOL_NAME, any(), any()) }
+            assertNull(process.pendingRepository.getForRun(runId))
+
+            process.taskQueueManager.scope.cancel()
+        }
+
+    @Test
+    fun `a per-tool risk override raises the gate for a tool that would otherwise be read-only`() = testScope.runTest {
+        // `getRisk` is the single source of truth for the gate, overrides
+        // included. An external run consults exactly the same source.
+        coEvery { toolRepository.getRisk(TOOL_NAME, any()) } returns ToolRisk.DESTRUCTIVE
+        val process = buildProcess(scriptedLlmEngine())
+        val handler = buildHandler(process)
+
+        handler(request(), attestedSenderPackage = null, nowMillis = NOW)
+        val runId = requireNotNull(process.scheduler.lastRunId)
+
+        // Waiting on all three is waiting for one consistent state: the gate
+        // retires the live holder before writing the durable record, so
+        // asserting only the status would race that ordering.
+        awaitUntil("run parked WAITING_APPROVAL with the live gate retired") {
+            process.runRepository.getRun(runId)?.status == PipelineRunStatus.WAITING_APPROVAL &&
+                process.pendingRepository.getForRun(runId) != null &&
+                process.taskQueueManager.pendingApproval(SESSION_ID) == null
+        }
+        assertEquals(ToolRisk.DESTRUCTIVE, process.pendingRepository.getForRun(runId)?.risk)
+        coVerify(exactly = 0) { toolRepository.executeTool(TOOL_NAME, any(), any()) }
+
+        process.taskQueueManager.scope.cancel()
     }
 
-    /**
-     * Builds the real [FireTriggerUseCase] over this process's bridging
-     * scheduler, so a fire flows straight into the live task queue.
-     */
-    private fun buildFireTrigger(process: ProcessHarness): FireTriggerUseCase = FireTriggerUseCase(
-        triggerRepository = triggerRepository,
-        pipelineRepository = pipelineRepository,
-        powerStateRepository = powerStateRepository,
-        networkStateRepository = networkStateRepository,
-        evaluateTriggerFiring = evaluateTriggerFiring,
-        taskScheduler = process.scheduler,
-        chatRepository = chatRepository,
-        scheduledTaskNotifier = scheduledTaskNotifier,
-        triggerScheduler = triggerScheduler,
-        usageTelemetry = usageTelemetry,
-        recordTriggerEvaluation = RecordTriggerEvaluationUseCase(process.triggerJournal),
-    )
+    @Test
+    fun `a denied approval on an external run reports Failed to the caller, not silence`() = testScope.runTest {
+        val process = buildProcess(scriptedLlmEngine())
+        val handler = buildHandler(process)
 
-    /**
-     * One "process" worth of singletons: fresh Room-backed run/trace/pending
-     * repositories, a real engine wired exactly like production DI, a real task
-     * queue on the shared test dispatcher, and the bridging scheduler that turns
-     * a `scheduleOneTime` into an `enqueueScheduled` on that queue.
-     */
+        handler(request(), attestedSenderPackage = null, nowMillis = NOW)
+        val runId = requireNotNull(process.scheduler.lastRunId)
+        // Waiting on all three is waiting for one consistent state: the gate
+        // retires the live holder before writing the durable record, so
+        // asserting only the status would race that ordering.
+        awaitUntil("run parked WAITING_APPROVAL with the live gate retired") {
+            process.runRepository.getRun(runId)?.status == PipelineRunStatus.WAITING_APPROVAL &&
+                process.pendingRepository.getForRun(runId) != null &&
+                process.taskQueueManager.pendingApproval(SESSION_ID) == null
+        }
+
+        SubmitApprovalDecisionUseCase(
+            process.taskQueueManager,
+            process.pendingRepository,
+            process.parkedRunResumer,
+        )(SESSION_ID, isApproved = false, runId = runId)
+        awaitUntil("the request journal settled the terminal status") {
+            process.externalJournal.findByRunId(runId)?.status.let {
+                it == ExternalAutomationStatus.Completed || it == ExternalAutomationStatus.Failed
+            }
+        }
+
+        // A denial continues the run with a refusal recorded, so the run itself
+        // completes; either way the caller is told exactly once and never left
+        // waiting on a callback that does not come.
+        verify(exactly = 1) {
+            process.externalCallback.notifyOutcome(CALLER_PACKAGE, any(), REQUEST_ID, any())
+        }
+        coVerify(exactly = 0) { toolRepository.executeTool(TOOL_NAME, any(), any()) }
+
+        process.taskQueueManager.scope.cancel()
+    }
+
     private fun buildProcess(llmEngine: LlmInferenceEngine): ProcessHarness {
         val telemetry = mockk<UsageTelemetryRepository>(relaxed = true)
         coEvery { telemetry.isEnabled() } returns false
@@ -464,12 +387,21 @@ class TriggerBackgroundRunIntegrationTest {
         val triggerJournal = TriggerJournalRepositoryImpl(database.triggerJournalDao()).apply {
             dispatcher = testDispatcher
         }
+        // Real, Room-backed external journal shared by the admission path (which
+        // opens the Accepted row) and the run store (which settles the terminal
+        // status onto it) — the two-phase correlation end to end. The callback
+        // notifier is a spy: what a third-party caller is actually told is the
+        // observable this test exists to pin.
+        val externalJournal = ExternalAutomationJournalRepositoryImpl(
+            database.externalAutomationJournalDao(),
+        ).apply { dispatcher = testDispatcher }
+        val externalCallback = mockk<ExternalAutomationCallbackNotifier>(relaxed = true)
         val runRepository = PipelineRunRepositoryImpl(
             database.pipelineRunDao(),
             telemetry,
             triggerJournal,
-            mockk(relaxed = true),
-            mockk(relaxed = true),
+            externalJournal,
+            externalCallback,
         )
         val traceRepository = RunTraceRepositoryImpl(database.traceStepDao())
             .apply { dispatcher = testDispatcher }
@@ -615,27 +547,9 @@ class TriggerBackgroundRunIntegrationTest {
             pendingRepository = pendingRepository,
             approvalNotifier = approvalNotifier,
             parkedRunResumer = parkedRunResumer,
-            triggerJournal = triggerJournal,
+            externalJournal = externalJournal,
+            externalCallback = externalCallback,
         )
-    }
-
-    /**
-     * LLM double dispatching on the node's system-prompt marker embedded in the
-     * rendered prompt, so the script stays correct no matter how many times a
-     * node re-runs (checkpoint replay vs. live re-execution).
-     */
-    private fun scriptedLlmEngine(): LlmInferenceEngine = mockk {
-        every { currentModelPath } returns null
-        every { generateResponseStream(any()) } answers {
-            val prompt = firstArg<String>()
-            flowOf(
-                when {
-                    prompt.contains(STEP_MARKER) -> STEP_ANSWER
-                    prompt.contains(FINAL_MARKER) -> FINAL_ANSWER
-                    else -> TOOL_CALL_JSON
-                },
-            )
-        }
     }
 
     /**
@@ -654,17 +568,34 @@ class TriggerBackgroundRunIntegrationTest {
     }
 
     /**
+     * LLM double dispatching on the node's system-prompt marker embedded in the
+     * rendered prompt, so the script stays correct no matter how many times a node
+     * re-runs (checkpoint replay vs. live re-execution).
+     */
+    private fun scriptedLlmEngine(): LlmInferenceEngine = mockk {
+        every { currentModelPath } returns null
+        every { generateResponseStream(any()) } answers {
+            val prompt = firstArg<String>()
+            flowOf(
+                when {
+                    prompt.contains(STEP_MARKER) -> STEP_ANSWER
+                    prompt.contains(FINAL_MARKER) -> FINAL_ANSWER
+                    else -> TOOL_CALL_JSON
+                },
+            )
+        }
+    }
+
+    /**
      * A [TaskScheduler] that forwards a one-time schedule straight into the live
-     * task queue (the JVM stand-in for `WorkManagerTaskScheduler` → `AgentWorker`),
-     * capturing the routed arguments so the test can assert how the trigger
-     * enqueued its run.
+     * task queue (the JVM stand-in for `WorkManagerTaskScheduler` -> `AgentWorker`),
+     * capturing the routed arguments so the test can assert how the external entry
+     * point enqueued its run.
      *
      * @property orchestrator The queue entry point a real `AgentWorker` would call.
      */
     private class QueueBridgeScheduler(private val orchestrator: AgentOrchestratorUseCase) : TaskScheduler {
         var lastRunId: String? = null
-        var lastSessionId: String? = null
-        var lastPipelineId: String? = null
         var lastOrigin: RunOrigin? = null
 
         override fun scheduleOneTime(
@@ -676,13 +607,11 @@ class TriggerBackgroundRunIntegrationTest {
             origin: RunOrigin,
             runId: String?,
         ) {
-            lastSessionId = sessionId
-            lastPipelineId = pipelineId
             lastOrigin = origin
-            // Honour the pre-minted id exactly as `AgentWorker` does, so the run
-            // the queue creates shares identity with the trigger's journal row.
+            // Honour the pre-minted id exactly as `AgentWorker` does, so the run the
+            // queue creates shares identity with the request's journal row.
             lastRunId = orchestrator.enqueueScheduled(
-                sessionId = requireNotNull(sessionId) { "a trigger run always threads a bound session" },
+                sessionId = requireNotNull(sessionId) { "the external surface threads its accumulating session" },
                 userPrompt = prompt,
                 pipelineId = pipelineId,
                 origin = origin,
@@ -690,7 +619,6 @@ class TriggerBackgroundRunIntegrationTest {
             )
         }
 
-        /** Unused by the trigger path under test. */
         override fun cancelAllScheduled() = Unit
 
         override fun schedulePeriodic(
@@ -698,20 +626,21 @@ class TriggerBackgroundRunIntegrationTest {
             intervalHours: Long,
             sessionId: String?,
             constraints: ScheduledTaskConstraints,
-        ): Unit = error("a trigger only ever schedules one-time work")
+        ): Unit = error("the external surface only ever schedules one-time work")
     }
 
     /**
      * The per-process singleton set the production DI graph would provide.
      *
-     * @property scheduler Bridging scheduler routing a fire into the live queue.
+     * @property scheduler Bridging scheduler routing an admission into the queue.
      * @property taskQueueManager The process's queue worker.
      * @property runRepository Run store with the process-local ownership registry.
      * @property pendingRepository Persistent HITL park store.
      * @property approvalNotifier Captures the park notification.
      * @property parkedRunResumer Background-decision submission tail.
-     * @property triggerJournal Real trigger-evaluation journal, shared by the
-     *   fire path and the run store, so a test can read back the two-phase row.
+     * @property externalJournal Real request journal, shared by the admission path
+     *   and the run store, so a test can read back the two-phase row.
+     * @property externalCallback Spy standing in for the outbound broadcast.
      */
     private data class ProcessHarness(
         val scheduler: QueueBridgeScheduler,
@@ -720,20 +649,22 @@ class TriggerBackgroundRunIntegrationTest {
         val pendingRepository: PendingInteractionRepositoryImpl,
         val approvalNotifier: ApprovalNotifier,
         val parkedRunResumer: ParkedRunResumer,
-        val triggerJournal: TriggerJournalRepositoryImpl,
+        val externalJournal: ExternalAutomationJournalRepositoryImpl,
+        val externalCallback: ExternalAutomationCallbackNotifier,
     )
 
     private companion object {
-        const val GRAPH_ID = "trigger-graph"
-        const val SESSION_ID = "trigger-session"
-        const val TRIGGER_ID = "trigger-1"
-        const val TRIGGER_NAME = "Nightly digest"
+        const val GRAPH_ID = "external-graph"
+        const val BOUND_NAME = "Nightly digest"
+        const val SESSION_ID = HandleExternalAutomationRequestUseCase.EXTERNAL_AUTOMATION_SESSION_ID
+        const val REQUEST_ID = "req-1"
+        const val CALLER_PACKAGE = "com.example.caller"
         const val USER_PROMPT = "Summarise today"
         const val TOOL_NAME = "web.search"
         const val TOOL_RESULT = "Aurora visible after 23:00"
         const val TOOL_CALL_JSON = """{"tool":"web.search","arguments":"q=aurora forecast"}"""
         const val STEP_MARKER = "STEP-MARKER"
-        const val STEP_ANSWER = "Need the live forecast — calling the search tool."
+        const val STEP_ANSWER = "Need the live forecast - calling the search tool."
         const val FINAL_MARKER = "FINAL-MARKER"
         const val FINAL_ANSWER = "Here is your nightly digest."
         const val NOW = 2_000_000L

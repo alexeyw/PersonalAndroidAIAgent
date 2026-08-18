@@ -650,4 +650,40 @@ class AppDatabaseMigrationHelperTest {
             }
         }
     }
+
+    @Test
+    fun migrate57to58_addsExternalAutomationJournalPreservingExistingRows() {
+        helper.createDatabase(TEST_DB, 57).use { db ->
+            db.execSQL("INSERT INTO usage_active_day(day) VALUES('2026-08-18')")
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 58, true, AppDatabase.MIGRATION_57_58).use { db ->
+            db.query("SELECT COUNT(*) FROM usage_active_day").use { c ->
+                assertTrue("seeded row must survive the migration", c.moveToFirst())
+                assertEquals(1, c.getInt(0))
+            }
+            // Purely additive: an upgraded install starts with an empty journal
+            // rather than a back-filled one.
+            db.query("SELECT COUNT(*) FROM external_automation_requests").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals("upgraded install must start with no request history", 0, c.getInt(0))
+            }
+
+            // A refusal: no target, no callback address, no run — every one of
+            // those columns has to be genuinely nullable, because the commonest
+            // row in this table is a call that said almost nothing.
+            db.execSQL(
+                "INSERT INTO external_automation_requests(" +
+                    "id, requestId, receivedAt, action, targetKind, targetValue, declaredReturnPackage, " +
+                    "returnAction, attestedSenderPackage, statusKind, statusReason, runId, repeatCount) " +
+                    "VALUES('j-1', 'req-1', 100, 'app.knotwork.android.action.RUN_PIPELINE', NULL, NULL, NULL, " +
+                    "'app.knotwork.android.action.RUN_RESULT', NULL, 'Rejected', 'CONTRACT_DISABLED', NULL, 3)",
+            )
+            db.query("SELECT statusReason, repeatCount FROM external_automation_requests WHERE id = 'j-1'").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals("CONTRACT_DISABLED", c.getString(0))
+                assertEquals(3, c.getInt(1))
+            }
+        }
+    }
 }

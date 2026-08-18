@@ -5,9 +5,12 @@ import app.knotwork.android.data.local.models.PipelineRunEntity
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.RunOrigin
+import app.knotwork.android.domain.models.externalAutomationStatusForTerminal
+import app.knotwork.android.domain.repositories.ExternalAutomationJournalRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.TriggerJournalRepository
 import app.knotwork.android.domain.repositories.UsageTelemetryRepository
+import app.knotwork.android.domain.services.ExternalAutomationCallbackNotifier
 import app.knotwork.android.domain.usecases.triggerRunOutcomeForTerminal
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -47,6 +50,8 @@ class PipelineRunRepositoryImpl @Inject constructor(
     private val pipelineRunDao: PipelineRunDao,
     private val usageTelemetry: UsageTelemetryRepository,
     private val triggerJournal: TriggerJournalRepository,
+    private val externalAutomationJournal: ExternalAutomationJournalRepository,
+    private val externalAutomationCallback: ExternalAutomationCallbackNotifier,
 ) : PipelineRunRepository {
 
     /**
@@ -126,34 +131,76 @@ class PipelineRunRepositoryImpl @Inject constructor(
         // an outcome already attributed to its trigger-journal row.
         if (rowsTransitioned > 0) {
             recordRunTelemetry(runId, status)
-            recordTriggerRunOutcome(runId, status, errorMessage)
+            recordOriginBoundOutcome(runId, status, errorMessage)
         }
     }
 
     /**
-     * Attributes this run's terminal fate back onto its trigger-evaluation
-     * journal row — the second phase of the two-phase journal entry a firing
-     * trigger opened (see [app.knotwork.android.domain.models.TriggerEvaluation]).
+     * Attributes this run's terminal fate back onto whichever per-origin record
+     * opened for it — the second phase of the two-phase entry a firing trigger or
+     * an admitted external request opened.
      *
-     * Gated on the run being [RunOrigin.TRIGGER]: only a trigger fire ever opens a
-     * journal row, so for every other surface (interactive chat, the scheduler,
-     * the tile, a share, or a nested sub-pipeline child) the mapping and the keyed
-     * write would be pure waste on the hot completion path. The origin is read
-     * through a single-column projection rather than a full run load. The mapping
-     * from run status to the journal's outcome vocabulary — in particular keeping
-     * a platform kill distinct from a deliberate stop and from a genuine failure —
-     * lives in the pure [triggerRunOutcomeForTerminal] mapper.
+     * Dispatched on origin, read through a single-column projection rather than a
+     * full run load. The mapping from run status to each surface's outcome
+     * vocabulary lives in a pure mapper ([triggerRunOutcomeForTerminal],
+     * [externalAutomationStatusForTerminal]) — in the trigger's case keeping a
+     * platform kill distinct from a deliberate stop and from a genuine failure.
      *
-     * Best-effort throughout: the origin read is absorbed and the journal store
-     * absorbs its own storage failures, so this can never disturb the run it
-     * observes.
+     * Best-effort throughout: the origin read is absorbed and each store absorbs
+     * its own storage failures, so this can never disturb the run it observes.
      */
-    private suspend fun recordTriggerRunOutcome(runId: String, status: PipelineRunStatus, errorMessage: String?) {
+    private suspend fun recordOriginBoundOutcome(runId: String, status: PipelineRunStatus, errorMessage: String?) {
         val origin = absorbing("getRunOrigin") {
             withContext(Dispatchers.IO) { pipelineRunDao.getRunOrigin(runId) }
         }
-        if (origin != RunOrigin.TRIGGER.name) return
-        triggerJournal.recordRunOutcome(runId, triggerRunOutcomeForTerminal(status, errorMessage))
+        // One projection, then one branch. Two surfaces now keep a per-run record
+        // that a terminal transition has to settle, and reading the origin once
+        // keeps the hot completion path at a single extra query however many
+        // surfaces are added later. Every other origin — interactive chat, the
+        // scheduler, the tile, a share, a nested sub-pipeline child — owns no
+        // record and does no work here.
+        when (origin) {
+            RunOrigin.TRIGGER.name ->
+                triggerJournal.recordRunOutcome(runId, triggerRunOutcomeForTerminal(status, errorMessage))
+            RunOrigin.EXTERNAL.name -> recordExternalAutomationOutcome(runId, status)
+            else -> Unit
+        }
+    }
+
+    /**
+     * Settles an external request's journal row and tells the caller how its run
+     * ended.
+     *
+     * **This is the only seam that sees every terminal transition of an external
+     * run.** The obvious alternative — announcing from `AgentWorker`, where the app
+     * already reports scheduled-task outcomes — cannot work here: a
+     * human-in-the-loop gate that outlives its live waiting phase parks the run in a
+     * *non-terminal* status, the worker is stopped, and the answer arrives hours
+     * later through `ParkedRunResumer` and the in-process task queue, with no worker
+     * left to announce anything. A background approval window is measured in hours,
+     * so for an external request carrying a gated tool that is the normal path, not
+     * an edge case.
+     *
+     * **Root-only for free.** A nested sub-pipeline child inherits its parent's
+     * origin but owns no journal row, so the lookup finds nothing and the callback
+     * is not sent twice.
+     *
+     * Best-effort throughout: the journal absorbs its own storage failures and the
+     * notifier absorbs delivery failures, so neither can disturb the run they
+     * observe. A request that asked for no callback still gets its row settled —
+     * the journal is for the user, the callback is for the caller.
+     */
+    private suspend fun recordExternalAutomationOutcome(runId: String, status: PipelineRunStatus) {
+        val entry = externalAutomationJournal.findByRunId(runId) ?: return
+        val outcome = externalAutomationStatusForTerminal(status)
+        externalAutomationJournal.recordOutcome(runId, outcome)
+        val returnPackage = entry.declaredReturnPackage ?: return
+        externalAutomationCallback.notifyOutcome(
+            returnPackage = returnPackage,
+            returnAction = entry.returnAction,
+            requestId = entry.requestId,
+            status = outcome,
+        )
     }
 
     /**
