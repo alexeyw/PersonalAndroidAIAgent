@@ -81,22 +81,25 @@ jobs:
       - name: Run ./gradlew check
         run: ./gradlew check :buildSrc:test --stacktrace --no-daemon
 
-      # Renders the drift found by this run into the job summary, so the answer
-      # to "what is out of date?" is readable without downloading the lint-report
-      # artifact below. Reads the lint XML of every module; never fails the job.
-      - name: Summarise dependency version drift
+      # Renders this run's informational lint findings into the job summary, so
+      # the answer to "what is out of date?" is readable without downloading the
+      # lint-report artifact below. Selects by SEVERITY rather than by a list of
+      # issue ids on purpose: the demoted set is declared once, in buildSrc's
+      # LintBaselineGuard, and a step that re-listed those ids here would be a
+      # fourth copy to keep in sync. Reads the lint XML of every module; never
+      # fails the job.
+      - name: Summarise informational lint findings
         if: always()
         run: |
           python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
           import glob
           import xml.etree.ElementTree as ET
 
-          IDS = (
-              "GradleDependency",
-              "AndroidGradlePluginVersion",
-              "NewerVersionAvailable",
-              "ExpiringTargetSdkVersion",
-          )
+          # Lint's own baseline bookkeeping notices are informational too, and are
+          # noise here rather than findings.
+          META_IDS = ("LintBaseline", "LintBaselineFixed")
+          INFORMATIONAL = ("Hint", "Information", "Informational")
+
           reports = sorted(glob.glob("*/build/reports/lint-results-*.xml"))
           rows = set()
           for path in reports:
@@ -105,13 +108,16 @@ jobs:
               except Exception:
                   continue
               for issue in root.iter("issue"):
-                  if issue.get("id") in IDS:
-                      message = (issue.get("message") or "").replace("|", "\\|")
-                      rows.add((issue.get("id"), message))
+                  issue_id = issue.get("id") or ""
+                  if issue.get("severity") not in INFORMATIONAL or issue_id in META_IDS:
+                      continue
+                  message = (issue.get("message") or "").replace("|", "\\|")
+                  rows.add((issue_id, message))
 
-          print("### Dependency version drift")
+          print("### Informational lint findings")
           print()
-          print("Informational only - these findings never fail the build.")
+          print("These never fail the build: their verdict depends on an external version")
+          print("index or on the calendar, not on the contents of the repository.")
           print("Dependencies are updated deliberately, not because a check went red.")
           print()
           if not reports:
@@ -122,7 +128,7 @@ jobs:
               for issue_id, message in sorted(rows):
                   print("| `%s` | %s |" % (issue_id, message))
           else:
-              print("No version-freshness findings in %d lint report(s)." % len(reports))
+              print("No informational findings in %d lint report(s)." % len(reports))
           PY
 
       - name: Upload detekt report
@@ -142,9 +148,9 @@ jobs:
           if-no-files-found: ignore
 
       # Uploaded on EVERY run, not only on failure. The version-freshness checks
-      # (`GradleDependency`, `AndroidGradlePluginVersion`, `NewerVersionAvailable`,
-      # `ExpiringTargetSdkVersion`) report at informational severity, so a green
-      # run is exactly the run whose report carries the dependency drift. Gating
+      # report at informational severity (the demoted set is declared in buildSrc's
+      # `LintBaselineGuard`), so a green run is exactly the run whose report
+      # carries the dependency drift. Gating
       # this upload on failure would delete the signal the demotion was meant to
       # preserve. `:catalog` is included because the root `check` lints it too.
       - name: Upload lint report

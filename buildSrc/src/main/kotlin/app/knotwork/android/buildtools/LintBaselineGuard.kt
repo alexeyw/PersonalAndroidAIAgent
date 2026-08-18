@@ -36,13 +36,23 @@ package app.knotwork.android.buildtools
 object LintBaselineGuard {
 
     /**
-     * Lint issue ids demoted to informational severity in `app/build.gradle.kts`
-     * and `catalog/build.gradle.kts`.
+     * The lint issue ids demoted to informational severity — the single
+     * declaration site.
      *
-     * Kept in sync by this guard's failure message rather than by a shared
-     * constant: `buildSrc` compiles before — and independently of — the Android
-     * modules, so it cannot read their DSL. Adding an id to a module's
-     * `informational` set means adding it here too.
+     * Both strict modules consume this list directly
+     * (`informational += LintBaselineGuard.DEMOTED_ISSUE_IDS` in
+     * `app/build.gradle.kts` and `catalog/build.gradle.kts`), which is possible
+     * because `buildSrc` output is on every build script's classpath. Declaring
+     * it here rather than in the DSL is what makes the guard airtight: a list
+     * duplicated per module could grow an entry the guard does not know about,
+     * and an unknown id is exactly what this guard cannot report — `scan` only
+     * ever names ids it already holds, so drift in that direction would be
+     * silent.
+     *
+     * One copy remains outside this file, in the CI job-summary step of
+     * `.github/workflows/check.yml`. It is deliberately not a copy of these ids:
+     * the step selects findings by *severity*, so it picks up whatever is
+     * demoted without being told.
      */
     val DEMOTED_ISSUE_IDS: List<String> = listOf(
         "GradleDependency",
@@ -65,15 +75,17 @@ object LintBaselineGuard {
     ) {
         /** Renders the violation in the canonical `path:line: message` failure format. */
         fun format(): String =
-            "$file:$line: baselined `$issueId` — a demoted check must stay visible in the lint report"
+            "$file:$line: baselined `$issueId` — delete the enclosing `<issue>` element; " +
+                "a demoted check must stay visible in the lint report"
     }
 
     /**
      * Matches the `id="..."` attribute of a baseline `<issue>` element.
      *
-     * Anchored on the attribute rather than on the element so a hit is reported
-     * against the exact line a human has to delete, and so the scanner is immune
-     * to how the baseline writer wraps its elements.
+     * Anchored on the attribute rather than on the element so a hit points at the
+     * line that identifies the offending entry — the whole enclosing `<issue>`
+     * element is what has to go — and so the scanner is immune to how the
+     * baseline writer wraps its elements.
      */
     private val ISSUE_ID_ATTRIBUTE = Regex("""\bid="([^"]+)"""")
 

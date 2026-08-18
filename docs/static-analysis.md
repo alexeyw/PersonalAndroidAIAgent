@@ -226,7 +226,7 @@ in the middle of unrelated work.
 ### Where the drift report lands
 
 - Locally: the lint reports below, produced by every `./gradlew check`.
-- In CI: the **Dependency version drift** table in the job summary, plus the
+- In CI: the **Informational lint findings** table in the job summary, plus the
   `lint-report` artifact, which is uploaded on every run — including green ones,
   since a green run is precisely the run whose report carries the drift.
 
@@ -234,6 +234,33 @@ in the middle of unrelated work.
 - `app/build/reports/lint-results-fullDebug.{html,xml}`
 - `app/build/reports/lint-results-fossDebug.{html,xml}`
 - `catalog/build/reports/lint-results-debug.{html,xml}`
+
+---
+
+## Lint baseline guard (`verifyLintBaselineOverrides`)
+
+The checks demoted above report at informational severity, which makes the lint
+report their only signal — and makes the baseline a way to delete that signal
+without failing anything. Lint records informational findings into a regenerated
+baseline exactly as it records errors (the write path filters by issue id, never
+by severity) and then filters baselined findings out of the reports, so a single
+routine `updateLintBaseline` run would empty the drift report while `check`
+stayed green.
+
+`verifyLintBaselineOverrides` closes that path: a demoted id may not appear in a
+committed baseline. Unlike the checks it protects, the guard is a legitimate gate
+— its verdict is a function of the committed baselines and nothing else.
+
+The pure scanner lives in `buildSrc`
+([`LintBaselineGuard`](../buildSrc/src/main/kotlin/app/knotwork/android/buildtools/LintBaselineGuard.kt))
+and holds the demoted-id list as its single declaration site: both lint blocks
+read it as `informational += LintBaselineGuard.DEMOTED_ISSUE_IDS`, so the set
+cannot drift between the modules and the guard. Its unit tests are not reachable
+from the root `check` graph (`buildSrc` is a separate build):
+
+```bash
+./gradlew -p buildSrc test
+```
 
 ---
 
@@ -411,8 +438,9 @@ artifact on failure, and is configured with `concurrency.cancel-in-progress` so
 a new push supersedes any older run on the same branch. The **lint** report is
 the exception: it is uploaded on every run, green ones included, because it
 carries the informational dependency-drift findings described above. The same
-findings are also rendered into the job summary as a *Dependency version drift*
-table, so the answer to "what is out of date?" needs no artifact download.
+findings are also rendered into the job summary as an *Informational lint
+findings* table, so the answer to "what is out of date?" needs no artifact
+download.
 
 The same workflow is also exposed as a reusable one (`workflow_call`) and is
 called as the first job of `.github/workflows/release.yml`, so a release cannot

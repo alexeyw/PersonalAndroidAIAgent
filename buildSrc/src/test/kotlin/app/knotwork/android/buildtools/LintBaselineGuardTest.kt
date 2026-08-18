@@ -64,7 +64,24 @@ class LintBaselineGuardTest {
     }
 
     @Test
-    fun `given every demoted id when scanned then each is flagged exactly once`() {
+    fun `given the demoted id list when read then it holds exactly the ids both modules demote`() {
+        // Pinned as a literal on purpose. The list is the single declaration site
+        // consumed by `informational +=` in both lint blocks, and dropping an id
+        // from it silently reopens the baselining path this guard exists to close
+        // — a test that derived its expectation from the constant could not fail.
+        assertEquals(
+            listOf(
+                "GradleDependency",
+                "AndroidGradlePluginVersion",
+                "NewerVersionAvailable",
+                "ExpiringTargetSdkVersion",
+            ),
+            LintBaselineGuard.DEMOTED_ISSUE_IDS,
+        )
+    }
+
+    @Test
+    fun `given a baseline for every demoted id when scanned then each is flagged exactly once`() {
         val files = LintBaselineGuard.DEMOTED_ISSUE_IDS.associate { id ->
             "module-$id/lint-baseline.xml" to issue(id, "irrelevant") + "\n"
         }
@@ -121,9 +138,11 @@ class LintBaselineGuardTest {
     }
 
     @Test
-    fun `given the real committed baselines are clean then the guard passes`() {
-        // Mirrors what the Gradle task feeds in: the two committed baselines as
-        // they stand after the demoted entries were removed.
+    fun `given a baseline of only grandfathered non-demoted ids when scanned then no violations`() {
+        // Shaped like `app/lint-baseline.xml` after the demoted entries were
+        // removed. It is a fixture, not a reading of the committed file: what
+        // pins the real baselines is the `verifyLintBaselineOverrides` Gradle
+        // task, which feeds them to this same scanner under `check`.
         val files = mapOf(
             "app/lint-baseline.xml" to
                 issue("RedundantLabel", "Redundant label can be removed") + "\n" +

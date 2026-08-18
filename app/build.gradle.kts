@@ -386,10 +386,17 @@ android {
         // demotion: lint promotes `Severity.WARNING` only, and INFORMATIONAL is
         // documented as exempt.
         //
-        // Two deliberate exclusions:
-        // - `ExpiredTargetSdkVersion` keeps its FATAL severity. It is calendar-
-        //   driven too, but it encodes a store publishing deadline the project
-        //   genuinely must meet, so that interrupt is wanted.
+        // Deliberate exclusions — checks that stay gates although their verdict is
+        // not purely a function of this repository, because each encodes a store
+        // publishing blocker rather than a matter of hygiene:
+        // - `ExpiredTargetSdkVersion` (FATAL), which is calendar-driven;
+        // - `PlaySdkIndexNonCompliant`, `PlaySdkIndexVulnerability`,
+        //   `PlaySdkIndexGenericIssues`, `PlaySdkIndexDeprecated`, `RiskyLibrary`
+        //   and `OutdatedLibrary`, decided by the Google Play SDK Index — a
+        //   network-refreshed dataset with a bundled offline snapshot fallback.
+        // Being interrupted by those is the point. Anything outside that list is
+        // expected to hold the rule.
+        //
         // - Do NOT add `ignoreWarnings = true` alongside this. Unlike
         //   `warningsAsErrors` it tests `<= WARNING`, so it would swallow
         //   INFORMATIONAL as well and silently delete the drift report.
@@ -399,13 +406,7 @@ android {
         // baseline just like errors, and then filters them out of the reports.
         // `verifyLintBaselineOverrides` (below, wired into `check`) fails the
         // build if a baseline ever suppresses one of these ids.
-        informational +=
-            listOf(
-                "GradleDependency",
-                "AndroidGradlePluginVersion",
-                "NewerVersionAvailable",
-                "ExpiringTargetSdkVersion",
-            )
+        informational += LintBaselineGuard.DEMOTED_ISSUE_IDS
     }
 }
 
@@ -939,6 +940,18 @@ val verifyLintBaselineOverrides by tasks.registering {
     inputs.files(baselineFiles)
     doLast {
         val contents = baselineFiles.associate { it.relativeTo(rootDirForAction).path to it.readText() }
+        // A guard that scans nothing passes everything, which is the failure mode
+        // this task exists to prevent. `:app` always declares a baseline, so an
+        // empty match set means the glob stopped finding the modules (a module
+        // moved under a nested path, a renamed baseline file) rather than that
+        // there is nothing to check.
+        if (contents.isEmpty()) {
+            throw GradleException(
+                "verifyLintBaselineOverrides found no lint baseline to scan. At least " +
+                    "`app/lint-baseline.xml` is expected; the single-level `*/lint-baseline.xml` " +
+                    "glob has stopped matching the modules it is meant to cover.",
+            )
+        }
         val violations = LintBaselineGuard.scan(contents)
         if (violations.isNotEmpty()) {
             throw GradleException(
