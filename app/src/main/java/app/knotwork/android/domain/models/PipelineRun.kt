@@ -98,6 +98,17 @@ enum class RunOrigin {
      * but is attributed to the trigger surface for observability.
      */
     TRIGGER,
+
+    /**
+     * The run was started by a third-party automation app (Tasker, MacroDroid,
+     * `adb`) through the external-automation contract. Executes in the
+     * background on the same WorkManager path as [SCHEDULER] / [QUICK_TILE] /
+     * [TRIGGER], but is attributed to the external surface: it is the only
+     * origin whose rate is set by software outside the user's control, so
+     * telling it apart from the app's own background work is what makes the
+     * external entry point auditable at all.
+     */
+    EXTERNAL,
 }
 
 /**

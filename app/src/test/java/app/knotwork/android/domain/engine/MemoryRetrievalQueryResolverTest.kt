@@ -131,4 +131,16 @@ class MemoryRetrievalQueryResolverTest {
 
         assertEquals(setOf(RunOrigin.CHAT, RunOrigin.SHARE), interactive)
     }
+
+    @Test
+    fun `given an external automation run when resolving then it keys off the declared query`() {
+        // The external entry point runs in the background with nobody at the
+        // screen, so its prompt is written by another app rather than by the
+        // user — the one case where treating a prompt as the user's intent
+        // would be actively wrong.
+        val result = resolve(RunOrigin.EXTERNAL, declaredQuery = DECLARED)
+
+        assertEquals(DECLARED, result.text)
+        assertEquals(RetrievalQuerySource.DECLARED, result.source)
+    }
 }

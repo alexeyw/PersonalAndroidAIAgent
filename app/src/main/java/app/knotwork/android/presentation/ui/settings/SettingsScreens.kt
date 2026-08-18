@@ -265,17 +265,22 @@ fun BackgroundSettingsScreen(viewModel: SettingsViewModel, nav: SettingsNavActio
         }
     }
     pickerSurface?.let { surface ->
+        // Exhaustive on purpose: a new EntrySurface must not compile until this
+        // screen decides what it shows for it. A `null` title marks a surface
+        // bound elsewhere, and the picker is then simply not rendered rather
+        // than titled with a sentence written about a different surface.
+        val titleRes = when (surface) {
+            EntrySurface.SHARE -> R.string.settings_pipeline_picker_share_title
+            EntrySurface.QUICK_TILE -> R.string.settings_pipeline_picker_tile_title
+            EntrySurface.EXTERNAL_AUTOMATION -> null
+        } ?: return@let
         val selectedId = when (surface) {
             EntrySurface.SHARE -> uiState.shareTargetPipelineId
             EntrySurface.QUICK_TILE -> uiState.quickSettingsTilePipelineId
+            EntrySurface.EXTERNAL_AUTOMATION -> null
         }
         SurfacePipelinePickerDialog(
-            title = stringResource(
-                when (surface) {
-                    EntrySurface.SHARE -> R.string.settings_pipeline_picker_share_title
-                    EntrySurface.QUICK_TILE -> R.string.settings_pipeline_picker_tile_title
-                },
-            ),
+            title = stringResource(titleRes),
             options = uiState.bindablePipelines,
             selectedId = selectedId,
             onSelect = { pipelineId ->

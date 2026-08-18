@@ -13,6 +13,22 @@ details.
 
 ## [Unreleased]
 
+### Added
+
+- **Definition of the external-automation contract** — the vocabulary another
+  app on the device (Tasker, MacroDroid, a shell script over `adb`) will use to
+  ask Knotwork to run one of your pipelines. This change defines and documents
+  the contract; the receiver that acts on it and the setting that switches it on
+  land separately, so nothing is callable yet.
+  [`docs/external-automation.md`](docs/external-automation.md) describes the
+  request keys, the statuses and every refusal reason, and its reference tables
+  are generated from the source declarations with a build check that fails on
+  drift — a contract whose callers live in other apps cannot afford stale
+  documentation. The entry point will be **off by default** and **inert until
+  bound**, and the binding is an allowlist rather than a default: a request must
+  name the pipeline it wants, and one naming any other pipeline is refused
+  rather than quietly redirected.
+
 ### Changed
 
 - **The build no longer fails because a dependency released a new version.**

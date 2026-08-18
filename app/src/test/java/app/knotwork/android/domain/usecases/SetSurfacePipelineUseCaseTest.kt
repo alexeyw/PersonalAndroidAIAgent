@@ -31,6 +31,20 @@ class SetSurfacePipelineUseCaseTest {
     }
 
     @Test
+    fun `given EXTERNAL_AUTOMATION when invoked then writes the external binding`() = runTest {
+        useCase(EntrySurface.EXTERNAL_AUTOMATION, "external-pipe")
+
+        coVerify { settingsRepository.setExternalAutomationPipelineId("external-pipe") }
+    }
+
+    @Test
+    fun `given EXTERNAL_AUTOMATION and null pipeline when invoked then clears the external binding`() = runTest {
+        useCase(EntrySurface.EXTERNAL_AUTOMATION, null)
+
+        coVerify { settingsRepository.setExternalAutomationPipelineId(null) }
+    }
+
+    @Test
     fun `given null pipeline when invoked then clears the binding`() = runTest {
         useCase(EntrySurface.SHARE, null)
 

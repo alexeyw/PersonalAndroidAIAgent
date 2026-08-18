@@ -110,5 +110,5 @@ object MemoryRetrievalQueryResolver {
 val RunOrigin.isInteractive: Boolean
     get() = when (this) {
         RunOrigin.CHAT, RunOrigin.SHARE -> true
-        RunOrigin.SCHEDULER, RunOrigin.QUICK_TILE, RunOrigin.TRIGGER -> false
+        RunOrigin.SCHEDULER, RunOrigin.QUICK_TILE, RunOrigin.TRIGGER, RunOrigin.EXTERNAL -> false
     }

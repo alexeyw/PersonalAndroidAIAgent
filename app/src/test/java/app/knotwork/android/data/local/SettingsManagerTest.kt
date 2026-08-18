@@ -1489,7 +1489,13 @@ class SettingsManagerTest {
                 // break a working local setup with no explanation, and one that
                 // silently kept re-granting it would be worse.
                 "allowed_http_domains", "approved_cleartext_origins",
+                // Entry-surface bindings are user choices, not tunables. The
+                // external-automation one carries the most weight of the three:
+                // it is the allowlist of what another app may run, so a reset
+                // silently re-granting (or revoking) it would change the app's
+                // exposure without the user asking for it.
                 "share_target_pipeline_id", "quick_settings_tile_pipeline_id",
+                "external_automation_pipeline_id",
             )
 
             val uncovered = allKeys - written - excluded

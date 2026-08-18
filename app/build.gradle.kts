@@ -1,6 +1,7 @@
 import app.knotwork.android.buildtools.BrowserEditorConstantsGenerator
 import app.knotwork.android.buildtools.DexInstantiabilityChecker
 import app.knotwork.android.buildtools.DocsHygieneChecker
+import app.knotwork.android.buildtools.ExternalAutomationDocsGenerator
 import app.knotwork.android.buildtools.LintBaselineGuard
 import app.knotwork.android.buildtools.R8MappingChecker
 import app.knotwork.android.buildtools.ReleaseVersionChecker
@@ -745,6 +746,13 @@ val checkNoInternalFqn by tasks.registering {
     inputs.files(ktFiles)
     doLast {
         val fqnPattern = Regex("""\bapp\.knotwork\.android\.[a-z_]+\.[A-Za-z]""")
+        // Intent action strings are namespaced by the application id by Android
+        // convention (`<applicationId>.action.NAME`), so they read like an internal
+        // FQN while being wire data rather than a Kotlin reference — nothing an
+        // import could replace, and frozen once third-party callers use them.
+        // They are scrubbed from the line rather than exempting the whole line, so a
+        // real FQN sitting beside an action string is still caught.
+        val intentActionPattern = Regex("""\bapp\.knotwork\.android\.action\.""")
         val violations = mutableListOf<String>()
         ktFiles.forEach { file ->
             file.useLines { lines ->
@@ -758,7 +766,7 @@ val checkNoInternalFqn by tasks.registering {
                     ) {
                         return@forEachIndexed
                     }
-                    if (fqnPattern.containsMatchIn(line)) {
+                    if (fqnPattern.containsMatchIn(intentActionPattern.replace(line, ""))) {
                         violations += "${file.relativeTo(rootDir)}:${index + 1}: ${line.trim()}"
                     }
                 }
@@ -856,6 +864,83 @@ val verifyBrowserEditorConstants by tasks.registering {
     }
 }
 tasks.named("check") { dependsOn(verifyBrowserEditorConstants) }
+
+// External-automation contract documentation sync automation.
+//
+// `docs/external-automation.md` publishes the action strings, extra keys,
+// statuses and refusal reasons of a contract whose callers live in other apps.
+// Once a Tasker profile or an `adb` one-liner is written against a key, that key
+// is frozen — and documentation that has drifted from the code fails silently on
+// the caller's side, since a request built from a stale key merely looks
+// malformed to the app. `generateExternalAutomationDocs` regenerates the
+// `AUTO-GEN` tables straight from the Kotlin declarations;
+// `verifyExternalAutomationDocs` (wired into `check`) fails the build if the
+// committed Markdown has drifted. The pure generation logic lives in `buildSrc`
+// (`ExternalAutomationDocsGenerator`) and is unit-tested there.
+//
+// Inputs are resolved into local `val`s and captured by the task actions as
+// plain `File` values, so the actions never reach back into the `Project` —
+// keeping both tasks configuration-cache compatible.
+val externalAutomationDocsFile = file("$rootDir/docs/external-automation.md")
+val externalAutomationContractFile =
+    file("$projectDir/src/main/java/app/knotwork/android/domain/constants/ExternalAutomationContract.kt")
+val externalAutomationStatusFile =
+    file("$projectDir/src/main/java/app/knotwork/android/domain/models/ExternalAutomationStatus.kt")
+val externalAutomationReasonFile =
+    file("$projectDir/src/main/java/app/knotwork/android/domain/models/ExternalAutomationRejectionReason.kt")
+val externalAutomationInputFiles: Set<File> = setOf(
+    externalAutomationContractFile,
+    externalAutomationStatusFile,
+    externalAutomationReasonFile,
+)
+
+val generateExternalAutomationDocs by tasks.registering {
+    group = "build"
+    description =
+        "Regenerates the AUTO-GEN reference tables in docs/external-automation.md from the contract sources."
+    inputs.files(externalAutomationInputFiles)
+    inputs.file(externalAutomationDocsFile)
+    outputs.file(externalAutomationDocsFile)
+    doLast {
+        val current = externalAutomationDocsFile.readText()
+        val rendered = ExternalAutomationDocsGenerator.render(
+            markdown = current,
+            contractSource = externalAutomationContractFile.readText(),
+            statusSource = externalAutomationStatusFile.readText(),
+            reasonSource = externalAutomationReasonFile.readText(),
+        )
+        if (rendered != current) {
+            externalAutomationDocsFile.writeText(rendered)
+            logger.lifecycle("docs/external-automation.md: regenerated AUTO-GEN tables.")
+        } else {
+            logger.lifecycle("docs/external-automation.md: AUTO-GEN tables already up to date.")
+        }
+    }
+}
+
+val verifyExternalAutomationDocs by tasks.registering {
+    group = "verification"
+    description =
+        "Fails the build if docs/external-automation.md AUTO-GEN tables have drifted from the contract sources."
+    inputs.files(externalAutomationInputFiles)
+    inputs.file(externalAutomationDocsFile)
+    doLast {
+        val drifted = ExternalAutomationDocsGenerator.drift(
+            markdown = externalAutomationDocsFile.readText(),
+            contractSource = externalAutomationContractFile.readText(),
+            statusSource = externalAutomationStatusFile.readText(),
+            reasonSource = externalAutomationReasonFile.readText(),
+        )
+        if (drifted.isNotEmpty()) {
+            throw GradleException(
+                "docs/external-automation.md is out of sync with the external-automation contract sources.\n" +
+                    "Drifted AUTO-GEN block(s): ${drifted.joinToString(", ")}.\n" +
+                    "Run `./gradlew :app:generateExternalAutomationDocs` and commit the updated Markdown.",
+            )
+        }
+    }
+}
+tasks.named("check") { dependsOn(verifyExternalAutomationDocs) }
 
 // Public documentation hygiene guard.
 //

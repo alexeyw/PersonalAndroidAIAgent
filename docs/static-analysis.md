@@ -31,6 +31,7 @@ This invokes (transitively):
 | `:app:checkNoInternalFqn`                     | Custom rule: forbid `app.knotwork.android.*` FQN references in code body.   |
 | `:app:verifyBrowserEditorConstants`           | Fails if `pipeline-editor.html` `AUTO-GEN` blocks drift from the domain sources. |
 | `:app:verifyDocsHygiene`                      | Custom rule: guard the public docs against LLM tool-call artifacts and internal-document references (see below). |
+| `:app:verifyExternalAutomationDocs`           | Fails if the `docs/external-automation.md` `AUTO-GEN` tables drift from the contract sources (see below). |
 | `:app:verifyLintBaselineOverrides`            | Custom rule: fail if a lint baseline suppresses a check demoted to informational severity (see below). |
 | `:app:testFullDebugUnitTest` (Konsist suite)      | Architecture guard: Clean-Architecture layer boundaries (see below).        |
 
@@ -302,6 +303,47 @@ The guard is regression-tested against the exact leak class it exists to
 catch: reintroducing a `domain -> data` import (or an `android.*` import in
 `domain`) turns both `LayerDependencyKonsistTest` and
 `DomainPurityKonsistTest` red — verified during the suite's introduction.
+
+---
+
+## External-automation contract documentation guard (`verifyExternalAutomationDocs`)
+
+`:app:verifyExternalAutomationDocs` is a custom Gradle verification task, wired
+into `check`, that fails the build when the reference tables in
+[`docs/external-automation.md`](external-automation.md) no longer match the
+Kotlin declarations they document — the action strings and extra keys of
+`ExternalAutomationContract`, the members of `ExternalAutomationStatus`, and the
+constants of `ExternalAutomationRejectionReason`.
+
+The guard exists because this contract's callers live in **other apps**. A
+Tasker profile or `adb` one-liner written against a documented key keeps using
+it forever, and a key that has quietly changed does not fail loudly on the
+caller's side: the request simply looks malformed to the app, and the person who
+wrote the profile has no way to see why. Documentation drift here is therefore a
+compatibility defect, not a tidiness issue.
+
+Regenerate the tables with:
+
+```bash
+./gradlew :app:generateExternalAutomationDocs
+```
+
+Only the content between the `<!-- AUTO-GEN:… -->` markers is generated. The
+prose, the trust model and the worked examples around them are hand-written and
+never touched.
+
+Each row's description is the declaration's **own KDoc first paragraph**, so —
+unlike the browser-editor generator — there is no second, hand-maintained table
+that can be forgotten. What replaces that cross-check is a stricter demand on
+the source: a contract member with no KDoc fails generation outright, because an
+undocumented member would otherwise publish an empty cell.
+
+The generation logic is a pure string transform in `buildSrc`
+([`ExternalAutomationDocsGenerator`](../buildSrc/src/main/kotlin/app/knotwork/android/buildtools/ExternalAutomationDocsGenerator.kt))
+and is unit-tested there (`./gradlew -p buildSrc test`), including idempotence,
+per-block drift detection, and the two failure modes above. The gate itself was
+verified by renaming a wire key and watching `check` fail with the drifted block
+named.
 
 ---
 

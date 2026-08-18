@@ -1,6 +1,5 @@
 package app.knotwork.android.domain.usecases
 
-import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.services.ScheduledTaskConstraints
 import app.knotwork.android.domain.services.TaskScheduler
@@ -56,10 +55,10 @@ class ScheduleTaskUseCase @Inject constructor(
         nowMillis: Long = System.currentTimeMillis(),
     ): String = try {
         val recentRuns = pipelineRunRepository.countRunsByOriginSince(
-            origin = RunOrigin.SCHEDULER,
-            sinceEpochMs = nowMillis - MILLIS_PER_HOUR,
+            origin = CEILING.origin,
+            sinceEpochMs = CEILING.windowStart(nowMillis),
         )
-        if (recentRuns >= MAX_SCHEDULED_RUNS_PER_HOUR) {
+        if (CEILING.isExceededBy(recentRuns)) {
             Timber.w("Refusing to schedule: $recentRuns scheduled runs in the last hour")
             REFUSAL_MESSAGE
         } else {
@@ -96,13 +95,19 @@ class ScheduleTaskUseCase @Inject constructor(
     /** Runaway-guard constants. */
     companion object {
         /**
-         * How many scheduled runs may start within one hour before further
-         * scheduling is refused. Twelve is comfortably above any cadence the
-         * background runtime can actually honour for repeating work (its floor
-         * is well over a minute, and periodic work is hourly at best here) and
-         * far below the rate a self-re-scheduling chain reaches.
+         * The rate ceiling this guard enforces — the scheduler's instance of the
+         * shared [RunRateCeiling] mechanism.
          */
-        const val MAX_SCHEDULED_RUNS_PER_HOUR: Int = 12
+        val CEILING: RunRateCeiling = RunRateCeiling.SCHEDULED
+
+        /**
+         * How many scheduled runs may start within one hour before further
+         * scheduling is refused. Kept as a named constant because it is the
+         * number the public extension documentation quotes; the value itself
+         * lives on [CEILING], so the guard and the documented number cannot
+         * drift apart.
+         */
+        val MAX_SCHEDULED_RUNS_PER_HOUR: Int = CEILING.limitPerWindow
 
         /**
          * Returned instead of scheduling when the guard trips. Phrased as a
@@ -114,7 +119,5 @@ class ScheduleTaskUseCase @Inject constructor(
             "Not scheduled: too many scheduled runs have already started in the last hour, which is what a task " +
                 "that keeps re-scheduling itself looks like. Do not try again — tell the user to review or cancel " +
                 "the existing scheduled tasks under More > Active tasks first."
-
-        private const val MILLIS_PER_HOUR: Long = 3_600_000L
     }
 }
