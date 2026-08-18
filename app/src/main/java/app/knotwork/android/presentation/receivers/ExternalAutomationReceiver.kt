@@ -7,6 +7,7 @@ import androidx.annotation.VisibleForTesting
 import app.knotwork.android.data.services.RunRetentionScheduler
 import app.knotwork.android.domain.constants.ExternalAutomationContract
 import app.knotwork.android.domain.models.ExternalAutomationInvocation
+import app.knotwork.android.domain.models.ExternalAutomationRejectionReason
 import app.knotwork.android.domain.models.ExternalAutomationStatus
 import app.knotwork.android.domain.services.ExternalAutomationCallbackNotifier
 import app.knotwork.android.domain.usecases.automation.HandleExternalAutomationRequestUseCase
@@ -150,6 +151,16 @@ class ExternalAutomationReceiver : BroadcastReceiver() {
      * @param status The decision to report.
      */
     private fun replyIfRequested(invocation: ExternalAutomationInvocation, status: ExternalAutomationStatus) {
+        // The one refusal that must not be answered. Its whole purpose is that the
+        // caller named someone else's package for the callback, so sending the
+        // refusal to that address would perform the exact broadcast the refusal
+        // exists to prevent — and the journal row would then assert the opposite of
+        // what happened.
+        if (status is ExternalAutomationStatus.Rejected &&
+            status.reason == ExternalAutomationRejectionReason.RETURN_PACKAGE_MISMATCH
+        ) {
+            return
+        }
         val returnPackage = invocation.value(ExternalAutomationContract.EXTRA_RETURN_PACKAGE) ?: return
         val requestId = invocation.value(ExternalAutomationContract.EXTRA_REQUEST_ID) ?: return
         callbackNotifier.notifyOutcome(

@@ -193,31 +193,44 @@ interface ExternalAutomationJournalDao {
     suspend fun deleteOlderThan(cutoff: Long): Int
 
     /**
-     * Trims the table to its newest [maxRecords] rows, deleting the rest — except
-     * a request still awaiting its run's outcome, which is kept regardless of age.
+     * Trims **admitted requests** to the newest [maxRecords], leaving every request
+     * still awaiting its outcome untouched however old it is.
      *
-     * That exception is what keeps the daily retention pass from silently stranding
-     * a caller: dropping an un-settled row would leave its run unable to find the
-     * address to report back to, and no record that the request ever existed.
+     * Partitioned from [enforceRefusalCap] rather than sharing one newest-N pool,
+     * and that is the whole safety argument. A shared pool lets the high-volume
+     * partition crowd out the low-volume one: refusals arrive at a rate a
+     * third-party app chooses, admissions at most [
+     * app.knotwork.android.domain.usecases.RunRateCeiling.EXTERNAL]'s allowance, so
+     * a flood would push every settled admission out of the keep-set and the next
+     * pass would delete rows the rate ceiling still counts — resetting it.
+     * Partitioned, an admission can only be evicted by [maxRecords] newer
+     * admissions, which the ceiling itself makes impossible inside its window.
      *
-     * @param maxRecords Hard cap on retained rows.
+     * Sparing the un-settled ones additionally keeps a daily pass from stranding a
+     * caller: dropping that row would leave its run unable to find the address to
+     * report back to, and no record that the request ever existed.
+     *
+     * @param maxRecords Hard cap on retained admitted rows.
      * @return The number of rows deleted.
      */
     @Query(
-        "DELETE FROM external_automation_requests WHERE statusKind != 'Accepted' AND id NOT IN (" +
-            "SELECT id FROM external_automation_requests ORDER BY receivedAt DESC LIMIT :maxRecords)",
+        "DELETE FROM external_automation_requests " +
+            "WHERE runId IS NOT NULL AND statusKind != 'Accepted' AND id NOT IN (" +
+            "SELECT id FROM external_automation_requests " +
+            "WHERE runId IS NOT NULL AND statusKind != 'Accepted' " +
+            "ORDER BY receivedAt DESC LIMIT :maxRecords)",
     )
-    suspend fun enforceCap(maxRecords: Int): Int
+    suspend fun enforceAdmissionCap(maxRecords: Int): Int
 
     /**
-     * Trims **refusals** to the newest [maxRecords], leaving every admitted request
-     * untouched however old it is.
+     * Trims **refusals** to the newest [maxRecords], leaving admitted requests
+     * untouched however old they are.
      *
-     * Separate from [enforceCap] because it runs on the write path, whose rate a
-     * third-party app controls. An unrestricted trim there would be attacker-timed:
-     * flooding refusals would evict the admitted rows that [countAdmittedSince]
-     * counts, reset the rate ceiling and admit unlimited runs — and would drop the
-     * row an in-flight run needs to deliver its terminal callback.
+     * Used on the write path as well as in retention, because that path's rate a
+     * third-party app controls: an unrestricted trim there would be attacker-timed,
+     * and evicting an admitted row would reset the rate ceiling
+     * ([countAdmittedSince]) and drop the row an in-flight run needs to deliver its
+     * terminal callback.
      *
      * @param maxRecords Hard cap on retained refusal rows.
      * @return The number of rows deleted.
@@ -230,13 +243,19 @@ interface ExternalAutomationJournalDao {
     suspend fun enforceRefusalCap(maxRecords: Int): Int
 
     /**
-     * Applies both retention limits — the age window then the hard cap — in one
-     * transaction so the journal can never be observed half-trimmed.
+     * Applies the retention limits — the age window, then a hard cap **per
+     * partition** — in one transaction so the journal can never be observed
+     * half-trimmed.
+     *
+     * The cap is applied to refusals and to admissions separately rather than to
+     * the table as a whole: see [enforceAdmissionCap] for why one shared pool would
+     * let a refusal flood evict the rows the rate ceiling counts.
      *
      * @param cutoff Age cutoff, epoch-millis; older rows are deleted first.
-     * @param maxRecords Hard cap applied after the age pass.
-     * @return The total number of rows deleted across both passes.
+     * @param maxRecords Hard cap applied to each partition after the age pass.
+     * @return The total number of rows deleted across the passes.
      */
     @Transaction
-    suspend fun applyRetention(cutoff: Long, maxRecords: Int): Int = deleteOlderThan(cutoff) + enforceCap(maxRecords)
+    suspend fun applyRetention(cutoff: Long, maxRecords: Int): Int =
+        deleteOlderThan(cutoff) + enforceRefusalCap(maxRecords) + enforceAdmissionCap(maxRecords)
 }

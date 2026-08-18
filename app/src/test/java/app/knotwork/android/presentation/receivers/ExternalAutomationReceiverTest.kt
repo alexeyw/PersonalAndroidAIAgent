@@ -186,6 +186,26 @@ class ExternalAutomationReceiverTest {
     }
 
     @Test
+    fun `given a callback-address mismatch when refused then nothing is broadcast at the named package`() = runTest {
+        coEvery { handleRequest(any(), any(), any()) } returns
+            ExternalAutomationStatus.Rejected(ExternalAutomationRejectionReason.RETURN_PACKAGE_MISMATCH)
+
+        runReceiver(
+            requestIntent(
+                extras = mapOf(
+                    ExternalAutomationContract.EXTRA_REQUEST_ID to "req-1",
+                    ExternalAutomationContract.EXTRA_RETURN_PACKAGE to "com.example.victim",
+                ),
+            ),
+            CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
+        )
+
+        // Answering this refusal would send the victim exactly the broadcast the
+        // refusal exists to prevent, and leave a journal row claiming otherwise.
+        verify(exactly = 0) { callbackNotifier.notifyOutcome(any(), any(), any(), any()) }
+    }
+
+    @Test
     fun `given a fire-and-forget request when handled then no callback is attempted`() = runTest {
         runReceiver(
             requestIntent(

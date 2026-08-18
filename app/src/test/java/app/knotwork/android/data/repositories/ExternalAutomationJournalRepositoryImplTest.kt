@@ -426,6 +426,35 @@ class ExternalAutomationJournalRepositoryImplTest {
     }
 
     @Test
+    fun `given a refusal flood when retention runs then settled admissions are not evicted by it`() = runTest {
+        val repo = repository()
+        val limit = 3
+        repeat(limit) {
+            repo.admitAcceptedWithinCeiling(entry("adm-$it", receivedAt = 10L + it), 0, limit)
+            repo.recordOutcome("run-adm-$it", ExternalAutomationStatus.Completed)
+        }
+        repeat(20) {
+            repo.recordRefusal(
+                refusal(
+                    "ref-$it",
+                    receivedAt = 500L + it,
+                    requestId = "q$it",
+                    target = ExternalAutomationTarget.ById("p$it"),
+                ),
+            )
+        }
+
+        // One shared newest-N pool would let the high-volume partition crowd out the
+        // low-volume one: every refusal is newer, so the settled admissions would
+        // fall outside the keep-set and the pass would delete the rows the rate
+        // ceiling still counts.
+        repo.applyRetention(olderThanEpochMs = 0, maxRecords = 5)
+
+        val admitted = repo.admitAcceptedWithinCeiling(entry("after", receivedAt = 900), 0, limit)
+        assertFalse("retention must not reset the rate ceiling", admitted)
+    }
+
+    @Test
     fun `given retention runs when a request is still awaiting its outcome then its row is kept`() = runTest {
         val repo = repository()
         repo.admitAcceptedWithinCeiling(entry("in-flight", receivedAt = 1), 0, limitPerWindow = 9)
