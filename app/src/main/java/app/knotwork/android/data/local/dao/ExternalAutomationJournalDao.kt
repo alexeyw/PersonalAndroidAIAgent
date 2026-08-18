@@ -132,7 +132,13 @@ interface ExternalAutomationJournalDao {
         // retention worker runs at most daily and only while charging and idle, so
         // relying on it would leave a phone off the charger accumulating rows for a
         // day. Enforcing on insert costs one indexed DELETE on a bounded table.
-        enforceCap(maxRecords)
+        //
+        // Refusals only. This trim is attacker-timed — it runs on a write whose rate
+        // a third-party app sets — so it must never reach an admission: those rows
+        // ARE the rate ledger, and evicting them would let a refusal flood reset the
+        // ceiling and admit unlimited runs. They must also survive to carry their
+        // run's terminal callback.
+        enforceRefusalCap(maxRecords)
     }
 
     /**
@@ -187,16 +193,41 @@ interface ExternalAutomationJournalDao {
     suspend fun deleteOlderThan(cutoff: Long): Int
 
     /**
-     * Trims the table to its newest [maxRecords] rows, deleting the rest.
+     * Trims the table to its newest [maxRecords] rows, deleting the rest — except
+     * a request still awaiting its run's outcome, which is kept regardless of age.
+     *
+     * That exception is what keeps the daily retention pass from silently stranding
+     * a caller: dropping an un-settled row would leave its run unable to find the
+     * address to report back to, and no record that the request ever existed.
      *
      * @param maxRecords Hard cap on retained rows.
      * @return The number of rows deleted.
      */
     @Query(
-        "DELETE FROM external_automation_requests WHERE id NOT IN (" +
+        "DELETE FROM external_automation_requests WHERE statusKind != 'Accepted' AND id NOT IN (" +
             "SELECT id FROM external_automation_requests ORDER BY receivedAt DESC LIMIT :maxRecords)",
     )
     suspend fun enforceCap(maxRecords: Int): Int
+
+    /**
+     * Trims **refusals** to the newest [maxRecords], leaving every admitted request
+     * untouched however old it is.
+     *
+     * Separate from [enforceCap] because it runs on the write path, whose rate a
+     * third-party app controls. An unrestricted trim there would be attacker-timed:
+     * flooding refusals would evict the admitted rows that [countAdmittedSince]
+     * counts, reset the rate ceiling and admit unlimited runs — and would drop the
+     * row an in-flight run needs to deliver its terminal callback.
+     *
+     * @param maxRecords Hard cap on retained refusal rows.
+     * @return The number of rows deleted.
+     */
+    @Query(
+        "DELETE FROM external_automation_requests WHERE runId IS NULL AND id NOT IN (" +
+            "SELECT id FROM external_automation_requests WHERE runId IS NULL " +
+            "ORDER BY receivedAt DESC LIMIT :maxRecords)",
+    )
+    suspend fun enforceRefusalCap(maxRecords: Int): Int
 
     /**
      * Applies both retention limits — the age window then the hard cap — in one

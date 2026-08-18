@@ -19,6 +19,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -371,6 +372,79 @@ class ExternalAutomationJournalRepositoryImplTest {
         assertNull("the oldest refusals must have aged out", rows.firstOrNull { it.id == "r0" })
     }
 
+    @Test
+    fun `given the ceiling is full when a refusal flood arrives then the ceiling still holds`() = runTest {
+        val repo = repository()
+        val limit = 3
+        repeat(limit) {
+            repo.admitAcceptedWithinCeiling(entry("adm-$it", receivedAt = 10L + it), 0, limit)
+            // Settled, which is the realistic state: a run started an hour ago has
+            // finished. A settled admission still counts toward the ceiling, and is
+            // no longer protected by the "spare in-flight requests" guard — so this
+            // is the state in which an unrestricted trim would empty the ledger.
+            repo.recordOutcome("run-adm-$it", ExternalAutomationStatus.Completed)
+        }
+
+        // The refusal trim runs on a write path whose rate a third-party app sets.
+        // If it evicted admitted rows, this flood would empty the rate ledger and
+        // the next request would be admitted — a refusal flood buying unlimited runs.
+        repeat(CleanupExternalAutomationJournalUseCase.MAX_RECORDS + 50) { i ->
+            repo.recordRefusal(
+                refusal(
+                    "ref-$i",
+                    receivedAt = 100L + i,
+                    requestId = "req-$i",
+                    target = ExternalAutomationTarget.ById("pipe-$i"),
+                ),
+            )
+        }
+
+        val admitted = repo.admitAcceptedWithinCeiling(entry("after-flood", receivedAt = 9_000), 0, limit)
+
+        assertFalse("a refusal flood must not reset the rate ceiling", admitted)
+    }
+
+    @Test
+    fun `given a run in flight when a refusal flood arrives then its row survives to carry the callback`() = runTest {
+        val repo = repository()
+        repo.admitAcceptedWithinCeiling(entry("in-flight", receivedAt = 1), 0, limitPerWindow = 9)
+
+        repeat(CleanupExternalAutomationJournalUseCase.MAX_RECORDS + 50) { i ->
+            repo.recordRefusal(
+                refusal(
+                    "ref-$i",
+                    receivedAt = 100L + i,
+                    requestId = "req-$i",
+                    target = ExternalAutomationTarget.ById("pipe-$i"),
+                ),
+            )
+        }
+
+        // Losing this row strands the caller: the run would find no address to
+        // report back to, and nothing would record that the request ever existed.
+        assertNotNull(repo.findByRunId("run-in-flight"))
+    }
+
+    @Test
+    fun `given retention runs when a request is still awaiting its outcome then its row is kept`() = runTest {
+        val repo = repository()
+        repo.admitAcceptedWithinCeiling(entry("in-flight", receivedAt = 1), 0, limitPerWindow = 9)
+        repeat(5) {
+            repo.recordRefusal(
+                refusal(
+                    "r$it",
+                    receivedAt = 100L + it,
+                    requestId = "q$it",
+                    target = ExternalAutomationTarget.ById("p$it"),
+                ),
+            )
+        }
+
+        repo.applyRetention(olderThanEpochMs = 0, maxRecords = 2)
+
+        assertNotNull("an un-settled request must survive the cap", repo.findByRunId("run-in-flight"))
+    }
+
     // --- Once-only settlement --------------------------------------------------
 
     @Test
@@ -409,9 +483,14 @@ class ExternalAutomationJournalRepositoryImplTest {
     }
 
     @Test
-    fun `given more rows than the cap when retention runs then the newest are kept`() = runTest {
+    fun `given more settled rows than the cap when retention runs then the newest are kept`() = runTest {
         val repo = repository()
-        repeat(5) { repo.admitAcceptedWithinCeiling(entry("r$it", receivedAt = it.toLong()), 0, limitPerWindow = 9) }
+        // Settled rows, because retention deliberately spares a request still
+        // awaiting its outcome — see the un-settled case below.
+        repeat(5) {
+            repo.admitAcceptedWithinCeiling(entry("r$it", receivedAt = it.toLong()), 0, limitPerWindow = 9)
+            repo.recordOutcome("run-r$it", ExternalAutomationStatus.Completed)
+        }
 
         repo.applyRetention(olderThanEpochMs = 0, maxRecords = 2)
 

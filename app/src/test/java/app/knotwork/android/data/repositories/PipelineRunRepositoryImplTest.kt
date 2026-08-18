@@ -88,6 +88,9 @@ class PipelineRunRepositoryImplTest {
         // Same posture for the external-request journal: these tests finish runs of
         // other origins, for which the hook must do nothing at all.
         externalAutomationJournal = mockk(relaxed = true)
+        // The settle result is what gates the terminal callback; a relaxed Boolean
+        // would default to false and silently disable every callback assertion.
+        coEvery { externalAutomationJournal.recordOutcome(any(), any()) } returns true
         externalAutomationCallback = mockk(relaxed = true)
         repository = PipelineRunRepositoryImpl(
             pipelineRunDao,
@@ -793,6 +796,34 @@ class PipelineRunRepositoryImplTest {
         coVerify(exactly = 0) { externalAutomationJournal.findByRunId(any()) }
         coVerify(exactly = 0) { triggerJournal.recordRunOutcome(any(), any()) }
     }
+
+    @Test
+    fun `given an interrupted external run that is resumed and completes then only the first outcome is reported`() =
+        runTest {
+            coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+            coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.EXTERNAL.name
+            coEvery { externalAutomationJournal.findByRunId("run-1") } returns externalEntry()
+            // First settlement wins; the second is refused by the journal.
+            coEvery {
+                externalAutomationJournal.recordOutcome("run-1", ExternalAutomationStatus.Failed)
+            } returns true
+            coEvery {
+                externalAutomationJournal.recordOutcome("run-1", ExternalAutomationStatus.Completed)
+            } returns false
+
+            // INTERRUPTED is terminal AND resumable: the orphan sweep settles the run,
+            // the user resumes it from the chat, and it finishes for real.
+            repository.finishRun("run-1", PipelineRunStatus.INTERRUPTED)
+            repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
+
+            // Exactly one callback, and it is the one the caller already acted on.
+            verify(exactly = 1) {
+                externalAutomationCallback.notifyOutcome(any(), any(), any(), any())
+            }
+            verify(exactly = 1) {
+                externalAutomationCallback.notifyOutcome(any(), any(), any(), ExternalAutomationStatus.Failed)
+            }
+        }
 
     @Test
     fun `given a racing duplicate finish of an external run then no callback is sent twice`() = runTest {

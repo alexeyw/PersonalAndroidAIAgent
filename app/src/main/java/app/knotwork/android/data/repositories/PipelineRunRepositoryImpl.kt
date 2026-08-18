@@ -185,6 +185,13 @@ class PipelineRunRepositoryImpl @Inject constructor(
      * origin but owns no journal row, so the lookup finds nothing and the callback
      * is not sent twice.
      *
+     * **The first terminal outcome is the one that stands**, in the row and in the
+     * callback alike. A run that settles, is resumed and settles again keeps its
+     * first reported fate: the caller has already acted on it, so a correction it
+     * cannot undo is worth less than a record that matches what it was told. The
+     * residual is deliberate and narrow — a manually resumed external run shows its
+     * first outcome in the journal rather than its last.
+     *
      * Best-effort throughout: the journal absorbs its own storage failures and the
      * notifier absorbs delivery failures, so neither can disturb the run they
      * observe. A request that asked for no callback still gets its row settled —
@@ -193,7 +200,13 @@ class PipelineRunRepositoryImpl @Inject constructor(
     private suspend fun recordExternalAutomationOutcome(runId: String, status: PipelineRunStatus) {
         val entry = externalAutomationJournal.findByRunId(runId) ?: return
         val outcome = externalAutomationStatusForTerminal(status)
-        externalAutomationJournal.recordOutcome(runId, outcome)
+        // The settlement decides whether to notify. A run can reach a terminal
+        // status twice — `INTERRUPTED` is terminal *and* resumable, so a run killed
+        // by the platform settles, is resumed from the chat, and settles again — and
+        // the second settlement is refused. Notifying anyway would send the caller
+        // `Failed` and then `Completed` for one request, which is the contradiction
+        // this guard exists to prevent.
+        if (!externalAutomationJournal.recordOutcome(runId, outcome)) return
         val returnPackage = entry.declaredReturnPackage ?: return
         externalAutomationCallback.notifyOutcome(
             returnPackage = returnPackage,
