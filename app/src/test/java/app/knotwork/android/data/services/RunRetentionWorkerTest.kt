@@ -7,6 +7,7 @@ import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import app.knotwork.android.domain.usecases.CleanupPipelineRunsUseCase
 import app.knotwork.android.domain.usecases.CleanupTriggerJournalUseCase
+import app.knotwork.android.domain.usecases.automation.CleanupExternalAutomationJournalUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -32,12 +33,14 @@ class RunRetentionWorkerTest {
     private lateinit var context: Context
     private lateinit var runUseCase: CleanupPipelineRunsUseCase
     private lateinit var journalUseCase: CleanupTriggerJournalUseCase
+    private lateinit var externalJournalUseCase: CleanupExternalAutomationJournalUseCase
 
     @Before
     fun setup() {
         context = RuntimeEnvironment.getApplication()
         runUseCase = mockk()
         journalUseCase = mockk()
+        externalJournalUseCase = mockk()
     }
 
     private fun workerFactory(): WorkerFactory = object : WorkerFactory() {
@@ -45,7 +48,8 @@ class RunRetentionWorkerTest {
             appContext: Context,
             workerClassName: String,
             workerParameters: WorkerParameters,
-        ): ListenableWorker = RunRetentionWorker(appContext, workerParameters, runUseCase, journalUseCase)
+        ): ListenableWorker =
+            RunRetentionWorker(appContext, workerParameters, runUseCase, journalUseCase, externalJournalUseCase)
     }
 
     private fun buildWorker(): RunRetentionWorker = TestListenableWorkerBuilder<RunRetentionWorker>(context)
@@ -59,12 +63,14 @@ class RunRetentionWorkerTest {
             deletedLegacyTraceRows = 1,
         )
         coEvery { journalUseCase(any()) } returns 7
+        coEvery { externalJournalUseCase(any()) } returns 3
 
         val result = buildWorker().doWork()
 
         assertEquals(ListenableWorker.Result.success(), result)
         coVerify(exactly = 1) { runUseCase() }
         coVerify(exactly = 1) { journalUseCase(any()) }
+        coVerify(exactly = 1) { externalJournalUseCase(any()) }
     }
 
     @Test

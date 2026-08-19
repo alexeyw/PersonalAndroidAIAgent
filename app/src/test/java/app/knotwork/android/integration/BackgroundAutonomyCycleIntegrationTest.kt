@@ -315,7 +315,15 @@ class BackgroundAutonomyCycleIntegrationTest {
         coEvery { usageTelemetry.isEnabled() } returns false
         // No trigger runs in this cycle, so the journal observer is a relaxed no-op.
         val triggerJournal = mockk<TriggerJournalRepository>(relaxed = true)
-        val runRepository = PipelineRunRepositoryImpl(database.pipelineRunDao(), usageTelemetry, triggerJournal)
+        // No external requests in this cycle either, so both external-automation
+        // collaborators are relaxed no-ops.
+        val runRepository = PipelineRunRepositoryImpl(
+            database.pipelineRunDao(),
+            usageTelemetry,
+            triggerJournal,
+            mockk(relaxed = true),
+            mockk(relaxed = true),
+        )
         val traceRepository = RunTraceRepositoryImpl(database.traceStepDao())
             .apply { dispatcher = testDispatcher }
         val pendingRepository = PendingInteractionRepositoryImpl(database.pendingInteractionDao())

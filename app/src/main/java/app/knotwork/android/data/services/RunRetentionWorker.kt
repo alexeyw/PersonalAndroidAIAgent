@@ -6,6 +6,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import app.knotwork.android.domain.usecases.CleanupPipelineRunsUseCase
 import app.knotwork.android.domain.usecases.CleanupTriggerJournalUseCase
+import app.knotwork.android.domain.usecases.automation.CleanupExternalAutomationJournalUseCase
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
@@ -22,7 +23,12 @@ import timber.log.Timber
  *  - [CleanupPipelineRunsUseCase] — persisted pipeline runs and their traces
  *    (per-session count, max age, the terminal-only invariant), and
  *  - [CleanupTriggerJournalUseCase] — the trigger-evaluation journal (age window
- *    + hard record cap).
+ *    + hard record cap), and
+ *  - [CleanupExternalAutomationJournalUseCase] — the external-automation request
+ *    journal (same two limits). This pass is the one that is not merely tidiness:
+ *    its table's write rate is set by whatever third-party app is installed, and is
+ *    highest while the contract is switched **off**, because a refusal is an event
+ *    too.
  *
  * No agent-busy gate is needed: the run pass deletes **terminal** runs only, so
  * it can never race a run that is still executing or waiting, and the journal
@@ -31,6 +37,8 @@ import timber.log.Timber
  *
  * @property cleanupPipelineRunsUseCase The pipeline-run retention pass.
  * @property cleanupTriggerJournalUseCase The trigger-journal retention pass.
+ * @property cleanupExternalAutomationJournalUseCase The external-request journal
+ *   retention pass.
  */
 @HiltWorker
 class RunRetentionWorker @AssistedInject constructor(
@@ -38,23 +46,28 @@ class RunRetentionWorker @AssistedInject constructor(
     @Assisted workerParams: WorkerParameters,
     private val cleanupPipelineRunsUseCase: CleanupPipelineRunsUseCase,
     private val cleanupTriggerJournalUseCase: CleanupTriggerJournalUseCase,
+    private val cleanupExternalAutomationJournalUseCase: CleanupExternalAutomationJournalUseCase,
 ) : CoroutineWorker(context, workerParams) {
 
     /**
-     * Runs both retention passes.
+     * Runs every retention pass.
      *
-     * @return [Result.success] when the passes complete; [Result.retry] when
-     *   one throws unexpectedly, so WorkManager re-attempts under the same
-     *   constraints.
+     * @return [Result.success] when the passes complete; [Result.retry] when one
+     *   throws unexpectedly, so WorkManager re-attempts under the same constraints.
+     *   Every pass absorbs ordinary storage trouble internally and reports zero, so
+     *   a retry means a programming error rather than a busy database.
      */
     override suspend fun doWork(): Result = try {
         val outcome = cleanupPipelineRunsUseCase()
         val deletedJournalRows = cleanupTriggerJournalUseCase()
+        val deletedExternalRows = cleanupExternalAutomationJournalUseCase()
         Timber.tag(TAG).d(
-            "Retention finished: %d runs deleted, %d legacy trace rows deleted, %d journal rows deleted",
+            "Retention finished: %d runs deleted, %d legacy trace rows deleted, " +
+                "%d trigger-journal rows deleted, %d external-request rows deleted",
             outcome.deletedRuns,
             outcome.deletedLegacyTraceRows,
             deletedJournalRows,
+            deletedExternalRows,
         )
         Result.success()
     } catch (e: CancellationException) {

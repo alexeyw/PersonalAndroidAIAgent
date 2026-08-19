@@ -16,6 +16,7 @@ import app.knotwork.android.data.local.crypto.KeystoreBackedPrefsStore
 import app.knotwork.android.data.local.crypto.SecretStore
 import app.knotwork.android.data.local.dao.ChatDao
 import app.knotwork.android.data.local.dao.ChatHistorySummaryDao
+import app.knotwork.android.data.local.dao.ExternalAutomationJournalDao
 import app.knotwork.android.data.local.dao.LocalModelDao
 import app.knotwork.android.data.local.dao.MemoryDao
 import app.knotwork.android.data.local.dao.ModelPerformanceDao
@@ -31,11 +32,13 @@ import app.knotwork.android.data.local.dao.TriggerDao
 import app.knotwork.android.data.local.dao.TriggerJournalDao
 import app.knotwork.android.data.local.dao.UsageTelemetryDao
 import app.knotwork.android.data.network.CleartextGuardInterceptor
+import app.knotwork.android.data.services.ExternalAutomationCallbackSender
 import app.knotwork.android.data.services.WorkManagerTaskScheduler
 import app.knotwork.android.data.tools.local.AppFunctionDataCodec
 import app.knotwork.android.data.tools.local.LocalAppFunctionManager
 import app.knotwork.android.domain.services.ApprovalNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
+import app.knotwork.android.domain.services.ExternalAutomationCallbackNotifier
 import app.knotwork.android.domain.services.ScheduledTaskNotifier
 import app.knotwork.android.domain.services.TaskScheduler
 import app.knotwork.android.presentation.notifications.ApprovalNotificationManager
@@ -207,6 +210,7 @@ object AppModule {
                 AppDatabase.MIGRATION_54_55,
                 AppDatabase.MIGRATION_55_56,
                 AppDatabase.MIGRATION_56_57,
+                AppDatabase.MIGRATION_57_58,
             )
             // No destructive fallback on upgrade: every version bump must supply an explicit
             // migration above so user data survives. Destructive recreation is kept only for the
@@ -311,6 +315,17 @@ object AppModule {
      */
     @Provides
     fun provideTriggerJournalDao(database: AppDatabase): TriggerJournalDao = database.triggerJournalDao()
+
+    /**
+     * Provides the [ExternalAutomationJournalDao] backing the external-automation
+     * request journal.
+     *
+     * @param database The application database.
+     * @return The [ExternalAutomationJournalDao] instance.
+     */
+    @Provides
+    fun provideExternalAutomationJournalDao(database: AppDatabase): ExternalAutomationJournalDao =
+        database.externalAutomationJournalDao()
 
     /**
      * Provides the [UsageTelemetryDao] backing the privacy-preserving local
@@ -424,4 +439,18 @@ object AppModule {
     @Provides
     @Singleton
     fun provideClarificationNotifier(impl: ClarificationNotificationManager): ClarificationNotifier = impl
+
+    /**
+     * Binds the data-layer [ExternalAutomationCallbackSender] (a package-directed
+     * broadcast) to the domain-level [ExternalAutomationCallbackNotifier] the run
+     * termination hook reports an external request's outcome through.
+     *
+     * @param impl The broadcast-backed implementation.
+     * @return The bound notifier interface.
+     */
+    @Provides
+    @Singleton
+    fun provideExternalAutomationCallbackNotifier(
+        impl: ExternalAutomationCallbackSender,
+    ): ExternalAutomationCallbackNotifier = impl
 }

@@ -853,6 +853,34 @@ interface SettingsRepository {
     suspend fun setExternalAutomationPipelineId(pipelineId: String?)
 
     /**
+     * A [Flow] of the master switch for the external-automation contract —
+     * whether another app on the device may ask this one to run a pipeline at
+     * all. Defaults to `false`.
+     *
+     * Off by default is not caution for its own sake: switching it on widens the
+     * app's attack surface to every installed app, because a broadcast carries no
+     * attested sender identity. The switch is therefore the user's consent, and
+     * the only thing standing between an inbound broadcast and the parser.
+     *
+     * Being off does not merely ignore requests — it refuses them with
+     * [app.knotwork.android.domain.models.ExternalAutomationRejectionReason.CONTRACT_DISABLED]
+     * and journals the refusal, so a caller can tell "switched off" from "never
+     * arrived".
+     *
+     * This is a security-relevant preference rather than a tunable, so
+     * `resetToRecommendedDefaults` returns it to `false` — the safe direction.
+     */
+    val externalAutomationEnabled: Flow<Boolean>
+
+    /**
+     * Switches the external-automation contract on or off.
+     *
+     * @param enabled `true` to let permitted external requests through, `false`
+     *   to refuse every one of them.
+     */
+    suspend fun setExternalAutomationEnabled(enabled: Boolean)
+
+    /**
      * A [Flow] indicating whether the user has opted in to anonymous crash
      * reporting via Firebase Crashlytics. Defaults to `false` — the project's
      * on-device privacy positioning forbids any automatic data egress.

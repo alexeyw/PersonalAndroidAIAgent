@@ -53,6 +53,21 @@
         <intent>
             <action android:name="android.app.appfunctions.AppFunctionService" />
         </intent>
+        <!--
+            Visibility of automation apps that publish a manifest receiver for the
+            external-automation callback. Declared by capability rather than by
+            listing package names, matching the AppFunctions entry above and for the
+            same reason: the callers are not known at build time.
+
+            This is NOT what makes the callback deliverable. Broadcast delivery
+            resolves its receivers under the system identity, so a package-directed
+            callback reaches a package this app cannot see. Visibility is needed to
+            *describe* a caller — resolving its label and icon for the request
+            journal — which is a `PackageManager` lookup and therefore filtered.
+        -->
+        <intent>
+            <action android:name="app.knotwork.android.action.RUN_RESULT" />
+        </intent>
     </queries>
 
     <application
@@ -211,6 +226,40 @@
         <receiver
             android:name=".presentation.receivers.AgentApprovalReceiver"
             android:exported="false" />
+
+        <!--
+            External-automation entry point. Exported on purpose: the whole feature
+            is "let another app on this device ask us to run a pipeline", and the
+            callers it exists for (Tasker, MacroDroid, a shell script over `adb`)
+            cannot be enumerated at build time.
+
+            No android:permission is declared, and that is a decision rather than an
+            omission. A signature-level permission would admit only apps signed with
+            this project's key, i.e. nobody; a normal-level one would have to be
+            declared by the caller, which an automation app driven by user-authored
+            profiles cannot do. Either choice would close the entry point to exactly
+            the callers it is for, so the gate is placed where the user can see it
+            instead: the contract is off by default, inert until the user binds one
+            pipeline to it, rate-ceilinged, and every request — admitted or refused
+            — is journalled. Human-in-the-loop confirmation and the destructive-tool
+            block apply unchanged, because an admitted request goes through the very
+            same scheduler path as the app's own background work.
+
+            intentMatchingFlags="enforceIntentFilter" opts in to the Android 16
+            Safer Intents rules while they are still opt-in: an explicit intent
+            aimed at this component must match the filter below. The initiative is
+            scheduled to become opt-out and then mandatory, and a receiver that
+            already satisfies the strict rules cannot be broken by that transition.
+        -->
+        <receiver
+            android:name=".presentation.receivers.ExternalAutomationReceiver"
+            android:exported="true"
+            android:intentMatchingFlags="enforceIntentFilter"
+            tools:ignore="ExportedReceiver">
+            <intent-filter>
+                <action android:name="app.knotwork.android.action.RUN_PIPELINE" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

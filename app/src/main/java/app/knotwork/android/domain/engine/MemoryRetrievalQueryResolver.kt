@@ -49,11 +49,13 @@ data class ResolvedRetrievalQuery(val text: String, val source: RetrievalQuerySo
  * | Origin                               | Key                                        |
  * |--------------------------------------|--------------------------------------------|
  * | `CHAT`, `SHARE`                      | the run's prompt ([RetrievalQuerySource.USER_PROMPT]) |
- * | `SCHEDULER`, `QUICK_TILE`, `TRIGGER` | declared query → node input → run prompt   |
+ * | `SCHEDULER`, `QUICK_TILE`, `TRIGGER`, `EXTERNAL` | declared query → node input → run prompt |
  *
  * `SHARE` counts as interactive on purpose: the shared text *is* the user's
  * query. `QUICK_TILE` counts as background: the tile launches a duty pipeline
  * under a fixed prompt and suffers exactly the trigger's genericity.
+ * `EXTERNAL` counts as background for the plainest reason of all: nobody is at
+ * the device when a third-party app fires a request.
  *
  * The object is deterministic, framework-free and clock-free — the caller
  * supplies every input, including the already-template-rendered declared query.

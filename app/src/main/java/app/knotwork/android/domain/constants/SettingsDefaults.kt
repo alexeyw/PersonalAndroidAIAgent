@@ -464,6 +464,14 @@ object SettingsDefaults {
     const val SHARE_REUSE_SESSION_DEFAULT: Boolean = true
 
     /**
+     * Default for the external-automation master switch. `false` — the contract
+     * that lets another app on the device start a pipeline stays off until the
+     * user turns it on, because a broadcast carries no attested sender identity
+     * and the switch is therefore the whole of the consent.
+     */
+    const val EXTERNAL_AUTOMATION_ENABLED_DEFAULT: Boolean = false
+
+    /**
      * Default for the hard-block-every-destructive-tool flag. `false` so
      * destructive tools are gated by the standard Human-in-the-loop prompt
      * rather than refused outright — a blanket block is an opt-in safety stance.

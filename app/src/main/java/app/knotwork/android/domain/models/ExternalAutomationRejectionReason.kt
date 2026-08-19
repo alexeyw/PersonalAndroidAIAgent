@@ -60,4 +60,13 @@ enum class ExternalAutomationRejectionReason {
 
     /** Too many external requests were accepted within the rate window. */
     RATE_LIMITED,
+
+    /**
+     * The request asked for its callback to be delivered to a package other than
+     * the one the system reported as the sender.
+     *
+     * Only ever reported when the sender shared its identity, which is the rare
+     * case; it means a caller tried to make this app broadcast at a third party.
+     */
+    RETURN_PACKAGE_MISMATCH,
 }

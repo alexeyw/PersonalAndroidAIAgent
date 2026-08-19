@@ -23,6 +23,7 @@ import app.knotwork.android.data.repositories.AssetBundledSkillSource
 import app.knotwork.android.data.repositories.BundledSkillSource
 import app.knotwork.android.data.repositories.ChatRepositoryImpl
 import app.knotwork.android.data.repositories.ClarificationRepositoryImpl
+import app.knotwork.android.data.repositories.ExternalAutomationJournalRepositoryImpl
 import app.knotwork.android.data.repositories.IdentityRepositoryImpl
 import app.knotwork.android.data.repositories.LocalModelRepositoryImpl
 import app.knotwork.android.data.repositories.LocalPipelinePresetRepositoryImpl
@@ -55,6 +56,7 @@ import app.knotwork.android.domain.engine.TextEmbeddingEngine
 import app.knotwork.android.domain.repositories.ApiKeyRepository
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.ClarificationRepository
+import app.knotwork.android.domain.repositories.ExternalAutomationJournalRepository
 import app.knotwork.android.domain.repositories.IdentityRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.McpServerRepository
@@ -371,6 +373,21 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindTriggerJournalRepository(repository: TriggerJournalRepositoryImpl): TriggerJournalRepository
+
+    /**
+     * Binds [ExternalAutomationJournalRepositoryImpl] to
+     * [ExternalAutomationJournalRepository] — the request journal of the
+     * external-automation entry point, which doubles as the ledger its rate
+     * ceiling counts.
+     *
+     * @param repository The Room-backed implementation.
+     * @return The bound repository interface.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindExternalAutomationJournalRepository(
+        repository: ExternalAutomationJournalRepositoryImpl,
+    ): ExternalAutomationJournalRepository
 
     /**
      * Binds the `WorkManager`-backed [WorkManagerTriggerScheduler] to the

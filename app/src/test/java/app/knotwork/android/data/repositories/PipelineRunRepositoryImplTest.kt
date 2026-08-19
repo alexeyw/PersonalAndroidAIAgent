@@ -2,17 +2,23 @@ package app.knotwork.android.data.repositories
 
 import app.knotwork.android.data.local.dao.PipelineRunDao
 import app.knotwork.android.data.local.models.PipelineRunEntity
+import app.knotwork.android.domain.constants.ExternalAutomationContract
+import app.knotwork.android.domain.models.ExternalAutomationJournalEntry
+import app.knotwork.android.domain.models.ExternalAutomationStatus
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.TriggerRunOutcome
+import app.knotwork.android.domain.repositories.ExternalAutomationJournalRepository
 import app.knotwork.android.domain.repositories.TriggerJournalRepository
 import app.knotwork.android.domain.repositories.UsageTelemetryRepository
+import app.knotwork.android.domain.services.ExternalAutomationCallbackNotifier
 import app.knotwork.android.domain.usecases.ParkedRunResumer
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
@@ -36,6 +42,8 @@ class PipelineRunRepositoryImplTest {
     private lateinit var pipelineRunDao: PipelineRunDao
     private lateinit var usageTelemetry: UsageTelemetryRepository
     private lateinit var triggerJournal: TriggerJournalRepository
+    private lateinit var externalAutomationJournal: ExternalAutomationJournalRepository
+    private lateinit var externalAutomationCallback: ExternalAutomationCallbackNotifier
     private lateinit var repository: PipelineRunRepositoryImpl
 
     private val terminalNames = listOf("COMPLETED", "FAILED", "CANCELLED", "INTERRUPTED")
@@ -77,7 +85,20 @@ class PipelineRunRepositoryImplTest {
         // The trigger journal is a best-effort observer: relaxed so the outcome
         // write is a no-op for the runs the pre-existing tests finish.
         triggerJournal = mockk(relaxed = true)
-        repository = PipelineRunRepositoryImpl(pipelineRunDao, usageTelemetry, triggerJournal)
+        // Same posture for the external-request journal: these tests finish runs of
+        // other origins, for which the hook must do nothing at all.
+        externalAutomationJournal = mockk(relaxed = true)
+        // The settle result is what gates the terminal callback; a relaxed Boolean
+        // would default to false and silently disable every callback assertion.
+        coEvery { externalAutomationJournal.recordOutcome(any(), any()) } returns true
+        externalAutomationCallback = mockk(relaxed = true)
+        repository = PipelineRunRepositoryImpl(
+            pipelineRunDao,
+            usageTelemetry,
+            triggerJournal,
+            externalAutomationJournal,
+            externalAutomationCallback,
+        )
     }
 
     @Test
@@ -675,6 +696,146 @@ class PipelineRunRepositoryImplTest {
         repository.finishRun("run-1", PipelineRunStatus.INTERRUPTED, "Owning process died")
 
         coVerify(exactly = 1) { triggerJournal.recordRunOutcome("run-1", TriggerRunOutcome.CancelledBySystem) }
+    }
+
+    // --- External-automation runs -------------------------------------------
+
+    /** A journal row for an admitted external request, as the hook will find it. */
+    private fun externalEntry(
+        runId: String = "run-1",
+        requestId: String = "req-1",
+        declaredReturnPackage: String? = "com.example.caller",
+        returnAction: String = ExternalAutomationContract.ACTION_RUN_RESULT,
+    ) = ExternalAutomationJournalEntry(
+        id = "j-1",
+        requestId = requestId,
+        receivedAt = 1L,
+        action = ExternalAutomationContract.ACTION_RUN_PIPELINE,
+        target = null,
+        declaredReturnPackage = declaredReturnPackage,
+        returnAction = returnAction,
+        attestedSenderPackage = null,
+        status = ExternalAutomationStatus.Accepted,
+        runId = runId,
+        repeatCount = 1,
+    )
+
+    @Test
+    fun `given a completed external run finishes then Completed is settled and the caller is told`() = runTest {
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.EXTERNAL.name
+        coEvery { externalAutomationJournal.findByRunId("run-1") } returns externalEntry()
+
+        repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
+
+        coVerify(exactly = 1) {
+            externalAutomationJournal.recordOutcome("run-1", ExternalAutomationStatus.Completed)
+        }
+        verify(exactly = 1) {
+            externalAutomationCallback.notifyOutcome(
+                returnPackage = "com.example.caller",
+                returnAction = ExternalAutomationContract.ACTION_RUN_RESULT,
+                requestId = "req-1",
+                status = ExternalAutomationStatus.Completed,
+            )
+        }
+    }
+
+    @Test
+    fun `given a cancelled external run finishes then the caller is told Failed, not silence`() = runTest {
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.EXTERNAL.name
+        coEvery { externalAutomationJournal.findByRunId("run-1") } returns externalEntry()
+
+        // The contract publishes one settled failure status. A caller in another
+        // process can act on exactly one bit: did the thing I asked for happen.
+        repository.finishRun("run-1", PipelineRunStatus.CANCELLED)
+
+        verify(exactly = 1) {
+            externalAutomationCallback.notifyOutcome(any(), any(), any(), ExternalAutomationStatus.Failed)
+        }
+    }
+
+    @Test
+    fun `given a fire-and-forget external request when its run finishes then the row settles without a callback`() =
+        runTest {
+            coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+            coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.EXTERNAL.name
+            coEvery { externalAutomationJournal.findByRunId("run-1") } returns
+                externalEntry(declaredReturnPackage = null)
+
+            repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
+
+            // The journal is for the user, the callback is for the caller.
+            coVerify(exactly = 1) {
+                externalAutomationJournal.recordOutcome("run-1", ExternalAutomationStatus.Completed)
+            }
+            verify(exactly = 0) { externalAutomationCallback.notifyOutcome(any(), any(), any(), any()) }
+        }
+
+    @Test
+    fun `given a nested child of an external run finishes then no second callback is sent`() = runTest {
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        // A sub-pipeline child inherits its parent's origin but owns no journal row.
+        coEvery { pipelineRunDao.getRunOrigin("child-run") } returns RunOrigin.EXTERNAL.name
+        coEvery { externalAutomationJournal.findByRunId("child-run") } returns null
+
+        repository.finishRun("child-run", PipelineRunStatus.COMPLETED)
+
+        coVerify(exactly = 0) { externalAutomationJournal.recordOutcome(any(), any()) }
+        verify(exactly = 0) { externalAutomationCallback.notifyOutcome(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `given a run of another origin finishes then the external journal is never consulted`() = runTest {
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.CHAT.name
+
+        repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
+
+        coVerify(exactly = 0) { externalAutomationJournal.findByRunId(any()) }
+        coVerify(exactly = 0) { triggerJournal.recordRunOutcome(any(), any()) }
+    }
+
+    @Test
+    fun `given an interrupted external run that is resumed and completes then only the first outcome is reported`() =
+        runTest {
+            coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+            coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.EXTERNAL.name
+            coEvery { externalAutomationJournal.findByRunId("run-1") } returns externalEntry()
+            // First settlement wins; the second is refused by the journal.
+            coEvery {
+                externalAutomationJournal.recordOutcome("run-1", ExternalAutomationStatus.Failed)
+            } returns true
+            coEvery {
+                externalAutomationJournal.recordOutcome("run-1", ExternalAutomationStatus.Completed)
+            } returns false
+
+            // INTERRUPTED is terminal AND resumable: the orphan sweep settles the run,
+            // the user resumes it from the chat, and it finishes for real.
+            repository.finishRun("run-1", PipelineRunStatus.INTERRUPTED)
+            repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
+
+            // Exactly one callback, and it is the one the caller already acted on.
+            verify(exactly = 1) {
+                externalAutomationCallback.notifyOutcome(any(), any(), any(), any())
+            }
+            verify(exactly = 1) {
+                externalAutomationCallback.notifyOutcome(any(), any(), any(), ExternalAutomationStatus.Failed)
+            }
+        }
+
+    @Test
+    fun `given a racing duplicate finish of an external run then no callback is sent twice`() = runTest {
+        // The DAO update carries a `status NOT IN (terminal)` clause, so a racing
+        // second finish transitions zero rows — and must not re-notify the caller.
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 0
+        coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.EXTERNAL.name
+        coEvery { externalAutomationJournal.findByRunId("run-1") } returns externalEntry()
+
+        repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
+
+        verify(exactly = 0) { externalAutomationCallback.notifyOutcome(any(), any(), any(), any()) }
     }
 
     @Test

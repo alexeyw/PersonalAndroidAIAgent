@@ -15,6 +15,30 @@ details.
 
 ### Added
 
+- **Another app on your device can now ask Knotwork to run a pipeline.** The
+  external-automation entry point defined in the previous change is live: a
+  Tasker or MacroDroid profile, or a shell script over `adb`, can broadcast a
+  request and Knotwork will run the pipeline you bound to it. The switch that
+  turns this on is off by default and gets its settings screen in the next
+  change, so nothing is reachable yet without it.
+
+  The guarantees are the point, and each one is under test:
+  human-in-the-loop confirmation, per-tool risk overrides and the
+  destructive-tool block all apply exactly as they do to the app's own
+  background runs — an external call asks for a run, it does not approve what
+  the run then does. The binding is an allowlist, so a request naming any other
+  pipeline is refused rather than redirected. Requests are rate-limited, and
+  **every** request is recorded — admitted or refused — because an entry point
+  that leaves no trace cannot be diagnosed. A caller that asks for one gets a
+  callback when its run finishes, including hours later when the run had paused
+  to ask you something.
+
+  Android does not tell a broadcast receiver who sent the broadcast unless the
+  sender opts in, which automation apps do not, so the callback address is taken
+  at face value. That is why the callback carries only your request id and a
+  status, and never what the run produced. See
+  [`docs/external-automation.md`](docs/external-automation.md).
+
 - **Definition of the external-automation contract** — the vocabulary another
   app on the device (Tasker, MacroDroid, a shell script over `adb`) will use to
   ask Knotwork to run one of your pipelines. This change defines and documents

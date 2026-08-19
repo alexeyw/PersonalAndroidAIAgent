@@ -148,6 +148,7 @@ class SettingsManager @Inject constructor(
 
         // Tunable behaviour preference (reset by resetToRecommendedDefaults).
         val SHARE_REUSE_SESSION = booleanPreferencesKey("share_reuse_session")
+        val EXTERNAL_AUTOMATION_ENABLED = booleanPreferencesKey("external_automation_enabled")
         val CRASH_REPORTING_ENABLED = booleanPreferencesKey("crash_reporting_enabled")
         val USAGE_TELEMETRY_ENABLED = booleanPreferencesKey("usage_telemetry_enabled")
         val CONSOLE_PREFERRED_TAB = stringPreferencesKey("console_preferred_tab")
@@ -1188,6 +1189,26 @@ class SettingsManager @Inject constructor(
         }
     }
 
+    override val externalAutomationEnabled: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.EXTERNAL_AUTOMATION_ENABLED]
+                ?: SettingsDefaults.EXTERNAL_AUTOMATION_ENABLED_DEFAULT
+        }
+
+    override suspend fun setExternalAutomationEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.EXTERNAL_AUTOMATION_ENABLED] = enabled
+        }
+    }
+
     override val localModelBackend: Flow<String> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -2071,6 +2092,11 @@ class SettingsManager @Inject constructor(
                 SettingsDefaults.CRASH_REPORTING_ENABLED_DEFAULT
             preferences[PreferencesKeys.USAGE_TELEMETRY_ENABLED] =
                 SettingsDefaults.USAGE_TELEMETRY_ENABLED_DEFAULT
+            // Security-relevant switch: reset returns it to off, the safe
+            // direction. The pipeline *binding* beside it is a user binding and
+            // stays untouched, exactly like the other two surface bindings.
+            preferences[PreferencesKeys.EXTERNAL_AUTOMATION_ENABLED] =
+                SettingsDefaults.EXTERNAL_AUTOMATION_ENABLED_DEFAULT
         }
     }
 
