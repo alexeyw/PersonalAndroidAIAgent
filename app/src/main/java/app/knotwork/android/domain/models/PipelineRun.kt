@@ -48,6 +48,22 @@ package app.knotwork.android.domain.models
  *   image — can still tell presence-only consumers (an IF_CONDITION that branches
  *   on image presence, the INTENT_ROUTER image note) that the run had a picture,
  *   even for nodes that execute live past the resume point. Defaults to `false`.
+ * @property stepsSpent Node executions charged to this run **tree** so far,
+ *   accumulated across every attempt of the logical run. Meaningful only on a
+ *   tree root ([parentRunId] `null`): a child run charges its parent's root, so
+ *   a child's own counter stays `0`. Persisted because the ceiling has to
+ *   survive a resume — every answered background approval comes back through
+ *   `ResumePipelineRunUseCase`, and a per-attempt counter would hand a parking
+ *   run a fresh ceiling after every answer.
+ * @property tokensSpent Tokens charged to this run tree so far, on the same
+ *   root-keyed, resume-surviving basis as [stepsSpent]. A floor rather than an
+ *   exact total — see `RunBudgetLedger` for what is and is not charged.
+ * @property terminationReason Why the run stopped, when it stopped for a
+ *   reason the app itself decided. `null` for runs that completed, for ordinary
+ *   node failures, and for rows written before the column existed. The
+ *   human-readable rendering lives in [errorMessage]; this is the machine-
+ *   readable cause, so consumers no longer have to recover it by comparing
+ *   prose. See [RunTerminationKind].
  */
 data class PipelineRun(
     val id: String,
@@ -63,6 +79,9 @@ data class PipelineRun(
     val userPrompt: String? = null,
     val parentRunId: String? = null,
     val hadImage: Boolean = false,
+    val stepsSpent: Int = 0,
+    val tokensSpent: Int = 0,
+    val terminationReason: RunTerminationKind? = null,
 )
 
 /**

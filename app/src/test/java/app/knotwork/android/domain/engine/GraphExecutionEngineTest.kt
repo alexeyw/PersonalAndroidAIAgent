@@ -47,6 +47,8 @@ import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.ResumeContext
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.models.RunOrigin
+import app.knotwork.android.domain.models.RunSpend
+import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.ToolApprovalPolicy
 import app.knotwork.android.domain.models.ToolRisk
@@ -73,6 +75,7 @@ import app.knotwork.android.domain.usecases.EvaluateIfConditionUseCase
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
+import app.knotwork.android.domain.usecases.ResolveRunCeilingsUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -287,6 +290,7 @@ class GraphExecutionEngineTest {
             memoryRepository,
             pipelineRunRepository,
             runTraceRepository,
+            ResolveRunCeilingsUseCase(settingsRepository),
         )
 
         coEvery { getContextWindowUseCase(sessionId) } returns ""
@@ -304,6 +308,10 @@ class GraphExecutionEngineTest {
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { settingsRepository.pipelineMaxStepsBackground } returns flowOf(15)
+        every { settingsRepository.runMaxTokens } returns flowOf(1_000_000)
+        every { settingsRepository.runMaxTokensBackground } returns flowOf(100_000)
+        coEvery { pipelineRunRepository.getSpend(any()) } returns RunSpend()
         every { settingsRepository.pipelineMaxNestingDepth } returns flowOf(3)
         coEvery { toolRepository.getAvailableTools() } returns emptyList()
 
@@ -812,6 +820,7 @@ class GraphExecutionEngineTest {
             mockk(relaxed = true),
             mockk(relaxed = true),
             mockk(relaxed = true),
+            ResolveRunCeilingsUseCase(settingsRepository),
         )
 
         engineWithMock.resumeWithApproval("session_id_123", true)
@@ -1364,6 +1373,7 @@ class GraphExecutionEngineTest {
             memoryRepository,
             pipelineRunRepository,
             runTraceRepository,
+            ResolveRunCeilingsUseCase(settingsRepository),
         )
 
         val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
@@ -1581,6 +1591,7 @@ class GraphExecutionEngineTest {
                 memoryRepository,
                 pipelineRunRepository,
                 runTraceRepository,
+                ResolveRunCeilingsUseCase(settingsRepository),
             )
 
             // Generate a question with two options; the first one is the default the
@@ -3445,6 +3456,7 @@ class GraphExecutionEngineTest {
             memoryRepository,
             pipelineRunRepository,
             runTraceRepository,
+            ResolveRunCeilingsUseCase(settingsRepository),
         )
         val graph = memoryAwareGraph("g-placeholder", declaredQuery = "journal entries around \$DATE")
 
@@ -3628,5 +3640,210 @@ class GraphExecutionEngineTest {
         // vision sink — not any main-pipeline node — consumes the image.
         assertEquals(listOf("/abs/nested.jpg"), imagePaths)
     }
+    // endregion
+
+    // region Autonomous-run ceilings
+
+    /**
+     * Two-node graph used by the ceiling tests: INPUT -> LITE_RT -> OUTPUT.
+     */
+    private fun ceilingGraph() = PipelineGraph(
+        id = "g-ceiling",
+        name = "Ceiling",
+        nodes = listOf(
+            NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+            NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f),
+            NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+        ),
+        connections = listOf(
+            ConnectionModel("c1", "input_1", "llm_1"),
+            ConnectionModel("c2", "llm_1", "output_1"),
+        ),
+    )
+
+    @Test
+    fun `given the step ceiling binds then the Error carries a typed StepCeiling reason`() = runTest {
+        // Before the typed reason existed the only way to tell a protective stop
+        // from a defect was to read the message text, which is what two
+        // consumers had resorted to.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(2)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("response")
+
+        val states = engine(sessionId, "prompt", ceilingGraph()).toList()
+
+        val error = states.last() as AgentOrchestratorState.Error
+        assertEquals(RunTerminationReason.StepCeiling(limit = 2, spent = 2), error.reason)
+    }
+
+    @Test
+    fun `given the token ceiling binds then the Error carries a typed TokenCeiling reason`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(50)
+        every { settingsRepository.runMaxTokens } returns flowOf(10)
+        // The LITE_RT node meters one "token" per stream chunk, so this run
+        // charges 4 against a ceiling of 10 on its first node — under the hard
+        // limit, and over it after the second.
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("a", "b", "c", "d")
+
+        val graph = PipelineGraph(
+            id = "g-tokens",
+            name = "Tokens",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("llm_2", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("llm_3", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_1"),
+                ConnectionModel("c2", "llm_1", "llm_2"),
+                ConnectionModel("c3", "llm_2", "llm_3"),
+                ConnectionModel("c4", "llm_3", "output_1"),
+            ),
+        )
+
+        val states = engine(sessionId, "prompt", graph).toList()
+
+        val error = states.last() as AgentOrchestratorState.Error
+        assertTrue("expected a token ceiling, got ${error.reason}", error.reason is RunTerminationReason.TokenCeiling)
+    }
+
+    @Test
+    fun `given the soft threshold is crossed then the run is warned once and keeps going`() = runTest {
+        // A soft limit must not stop the run — it warns, marks the run, and
+        // nudges the model to wrap up.
+        // softFor(3) == 2, and the graph walks INPUT -> LITE_RT -> OUTPUT, so
+        // the crossing lands on the LITE_RT node: announced there, and the note
+        // reaches OUTPUT's input.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(3)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("response")
+
+        val states = engine(sessionId, "prompt", ceilingGraph()).toList()
+
+        assertTrue("the run must still complete", states.last() is AgentOrchestratorState.Completed)
+        val ceilingLines = states.filterIsInstance<AgentOrchestratorState.ConsoleLog>()
+            .last().events
+            .filter { it.type == ConsoleEventType.RunCeiling }
+        // Once — not once per remaining node, which would teach the reader to
+        // ignore it.
+        assertEquals(1, ceilingLines.size)
+        assertTrue(ceilingLines.single().message.contains("steps"))
+    }
+
+    @Test
+    fun `given the crossing lands on OUTPUT then no console line is pushed after Completed`() = runTest {
+        // OUTPUT's executor has already emitted `Completed` by the time the
+        // charge happens, so a console push there would move the terminal state
+        // off the tail of the flow — the same rule the "check" event and the
+        // NodeIO emission follow. This test watches the terminal state, not the
+        // absence of the line, because that is the property that matters.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(4)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("response")
+
+        val states = engine(sessionId, "prompt", ceilingGraph()).toList()
+
+        // softFor(4) == 3 and the walk is exactly three nodes, so the crossing
+        // is on OUTPUT.
+        assertTrue(states.last() is AgentOrchestratorState.Completed)
+    }
+
+    @Test
+    fun `given a persisted run then the spend is written to the root record as the tree executes`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(50)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("response")
+
+        engine(sessionId, "prompt", ceilingGraph(), "run-spend").toList()
+
+        // Three nodes execute, so the last write records three steps against the
+        // root — the number a resume will read back.
+        coVerify { pipelineRunRepository.recordSpend("run-spend", 3, any()) }
+    }
+
+    @Test
+    fun `given a previous attempt already spent the ceiling then the resumed run stops immediately`() = runTest {
+        // The regression this whole change exists for. Every answered background
+        // approval comes back through the resume path, and a run can park an
+        // unbounded number of times; with a per-attempt budget a nightly loop
+        // received a full fresh ceiling after every answer and the ceiling never
+        // bound. Mutate `getSpend` back to RunSpend() and this test passes while
+        // the defect is present.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        coEvery { pipelineRunRepository.getSpend("run-resumed") } returns RunSpend(steps = 15, tokens = 0)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("response")
+
+        val states = engine(sessionId, "prompt", ceilingGraph(), "run-resumed").toList()
+
+        val error = states.last() as AgentOrchestratorState.Error
+        assertEquals(RunTerminationReason.StepCeiling(limit = 15, spent = 15), error.reason)
+        // It stops before doing any work at all — the ceiling is already spent.
+        verify(exactly = 0) { llmEngine.generateResponseStream(any()) }
+    }
+
+    @Test
+    fun `given a resumed run then replayed nodes are not charged a second time`() = runTest {
+        // Replayed nodes were charged when they really ran. Charging them again
+        // would make a run that parks often die earlier than one that never
+        // parks — the inverse of what persisting the counter is for.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(50)
+        coEvery { pipelineRunRepository.getSpend("run-replay") } returns RunSpend(steps = 2, tokens = 0)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("Live")
+
+        val graph = PipelineGraph(
+            id = "g-replay",
+            name = "Replay",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("llm_2", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_1"),
+                ConnectionModel("c2", "llm_1", "llm_2"),
+                ConnectionModel("c3", "llm_2", "output_1"),
+            ),
+        )
+        val resume = ResumeContext(
+            records = listOf(nodeIoRecord("run-replay", 3L, "llm_1", NodeType.LITE_RT, "Recorded")),
+            memorySnapshot = null,
+            nextSeq = 4L,
+        )
+
+        engine(sessionId, "prompt", graph, "run-replay", resume).toList()
+
+        // Four nodes are walked; one of them replays. The seed was 2, and the
+        // three live nodes take it to 5 — not 6, which is what charging the
+        // replayed node too would produce.
+        coVerify { pipelineRunRepository.recordSpend("run-replay", 5, any()) }
+        coVerify(exactly = 0) { pipelineRunRepository.recordSpend("run-replay", 6, any()) }
+    }
+
+    @Test
+    fun `given a background origin then its own conservative ceiling applies`() = runTest {
+        // Nobody is watching a trigger run, so it is bounded by the background
+        // number rather than the interactive one.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(50)
+        every { settingsRepository.pipelineMaxStepsBackground } returns flowOf(2)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("response")
+
+        val states = engine(sessionId, "prompt", ceilingGraph(), origin = RunOrigin.TRIGGER).toList()
+
+        val error = states.last() as AgentOrchestratorState.Error
+        assertEquals(RunTerminationReason.StepCeiling(limit = 2, spent = 2), error.reason)
+    }
+
+    @Test
+    fun `given an interactive origin then the background ceiling does not apply to it`() = runTest {
+        // The mirror of the test above: a tight background number must not leak
+        // onto a run the user is sitting in front of.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(50)
+        every { settingsRepository.pipelineMaxStepsBackground } returns flowOf(2)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("response")
+
+        val states = engine(sessionId, "prompt", ceilingGraph(), origin = RunOrigin.CHAT).toList()
+
+        assertTrue(states.last() is AgentOrchestratorState.Completed)
+    }
+
     // endregion
 }

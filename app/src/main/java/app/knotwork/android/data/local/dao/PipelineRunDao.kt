@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import app.knotwork.android.data.local.models.PipelineRunEntity
+import app.knotwork.android.data.local.models.RunSpendProjection
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -86,6 +87,10 @@ interface PipelineRunDao {
      * @param status The terminal status name to write.
      * @param finishedAt Epoch millis of the terminal transition.
      * @param errorMessage Failure / interruption reason, or `null`.
+     * @param terminationReason `RunTerminationKind` name when the app itself
+     *   decided to stop the run, or `null` for a completion or an ordinary
+     *   node failure. Written in the same statement as the status so a
+     *   terminal row can never exist without the cause that produced it.
      * @param terminalStatuses Status names that must not be overwritten.
      * @return The number of rows actually transitioned — `1` on a real
      *   terminal transition, `0` when the run was already terminal (the
@@ -93,7 +98,7 @@ interface PipelineRunDao {
      */
     @Query(
         "UPDATE pipeline_runs SET status = :status, finishedAt = :finishedAt, " +
-            "errorMessage = :errorMessage " +
+            "errorMessage = :errorMessage, terminationReason = :terminationReason " +
             "WHERE id = :runId AND status NOT IN (:terminalStatuses)",
     )
     suspend fun finishRun(
@@ -101,8 +106,44 @@ interface PipelineRunDao {
         status: String,
         finishedAt: Long,
         errorMessage: String?,
+        terminationReason: String?,
         terminalStatuses: List<String>,
     ): Int
+
+    /**
+     * Writes the run tree's accumulated spend onto its root row.
+     *
+     * Absolute values rather than increments: the ledger in memory is the
+     * authority while a run executes, and writing what it holds keeps the row
+     * idempotent under a retry. The same `status NOT IN (:terminalStatuses)`
+     * guard every other mutation carries applies here too — a settled run's
+     * counters are part of the record of what happened and must not be moved
+     * by a late write from a coroutine that has not noticed yet.
+     *
+     * @param rootRunId Id of the run at the root of the tree.
+     * @param stepsSpent Node executions charged to the tree so far.
+     * @param tokensSpent Tokens charged to the tree so far.
+     * @param terminalStatuses Status names that must not be written to.
+     */
+    @Query(
+        "UPDATE pipeline_runs SET stepsSpent = :stepsSpent, tokensSpent = :tokensSpent " +
+            "WHERE id = :rootRunId AND status NOT IN (:terminalStatuses)",
+    )
+    suspend fun recordSpend(rootRunId: String, stepsSpent: Int, tokensSpent: Int, terminalStatuses: List<String>)
+
+    /**
+     * Reads back the spend already charged to a run tree.
+     *
+     * Projected rather than read through the whole row because the only caller
+     * is the engine seeding its ledger at the top of a run, and a resume path
+     * that loads and maps a full record just to take two integers would be
+     * paying for columns it never looks at.
+     *
+     * @param rootRunId Id of the run at the root of the tree.
+     * @return The persisted counters, or `null` when no such row exists.
+     */
+    @Query("SELECT stepsSpent, tokensSpent FROM pipeline_runs WHERE id = :rootRunId")
+    suspend fun getSpend(rootRunId: String): RunSpendProjection?
 
     /**
      * Returns the run with [runId], or `null` when no such row exists. Backs
@@ -126,14 +167,6 @@ interface PipelineRunDao {
     suspend fun getRunOrigin(runId: String): String?
 
     /**
-     * Returns the direct child runs of [parentRunId] (the sub-pipeline runs a
-     * `PIPELINE` node spawned), oldest first. Building the full run tree walks
-     * this recursively in the repository — nesting is bounded by the runtime
-     * depth ceiling, so a Kotlin-side recursion is simpler than a SQL CTE.
-     *
-     * @param parentRunId Id of the parent run.
-     */
-    /**
      * Counts the runs of one [origin] that started at or after [sinceEpochMs].
      *
      * Backs the scheduling tool's runaway guard: a task that keeps re-scheduling
@@ -148,6 +181,14 @@ interface PipelineRunDao {
     @Query("SELECT COUNT(*) FROM pipeline_runs WHERE origin = :origin AND startedAt >= :sinceEpochMs")
     suspend fun countRunsByOriginSince(origin: String, sinceEpochMs: Long): Int
 
+    /**
+     * Returns the direct child runs of [parentRunId] (the sub-pipeline runs a
+     * `PIPELINE` node spawned), oldest first. Building the full run tree walks
+     * this recursively in the repository — nesting is bounded by the runtime
+     * depth ceiling, so a Kotlin-side recursion is simpler than a SQL CTE.
+     *
+     * @param parentRunId Id of the parent run.
+     */
     @Query("SELECT * FROM pipeline_runs WHERE parentRunId = :parentRunId ORDER BY startedAt ASC")
     suspend fun getChildRuns(parentRunId: String): List<PipelineRunEntity>
 
@@ -253,12 +294,21 @@ interface PipelineRunDao {
      * @param fromStatus The INTERRUPTED status name the row must currently hold.
      * @param toStatus The FAILED status name to write.
      * @param errorMessage The "discarded by user" marker to record.
+     * @param terminationReason The matching `RunTerminationKind` name, written
+     *   in the same statement so the typed cause and its rendering cannot drift.
      */
     @Query(
-        "UPDATE pipeline_runs SET status = :toStatus, errorMessage = :errorMessage " +
+        "UPDATE pipeline_runs SET status = :toStatus, errorMessage = :errorMessage, " +
+            "terminationReason = :terminationReason " +
             "WHERE id = :runId AND status = :fromStatus",
     )
-    suspend fun discardInterruptedRun(runId: String, fromStatus: String, toStatus: String, errorMessage: String)
+    suspend fun discardInterruptedRun(
+        runId: String,
+        fromStatus: String,
+        toStatus: String,
+        errorMessage: String,
+        terminationReason: String,
+    )
 
     /**
      * Retention: deletes every **terminal top-level** run that is not among the

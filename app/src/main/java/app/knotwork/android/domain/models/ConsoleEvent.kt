@@ -85,4 +85,13 @@ sealed interface ConsoleEventType {
      * why earlier turns are no longer verbatim.
      */
     data object HistoryCompression : ConsoleEventType
+
+    /**
+     * An autonomous-run ceiling spoke: either the soft threshold on one axis was
+     * crossed (the run is warned and keeps going) or a hard ceiling ended the
+     * run. Rendered as a warning rather than an error, because a limit doing its
+     * job is not a fault — reading it as one is exactly the misinterpretation the
+     * typed termination reason exists to prevent.
+     */
+    data object RunCeiling : ConsoleEventType
 }

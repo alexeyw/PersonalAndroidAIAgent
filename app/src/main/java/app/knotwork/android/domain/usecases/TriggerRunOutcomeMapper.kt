@@ -1,6 +1,8 @@
 package app.knotwork.android.domain.usecases
 
 import app.knotwork.android.domain.models.PipelineRunStatus
+import app.knotwork.android.domain.models.RunTerminationKind
+import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.TriggerRunOutcome
 
 /**
@@ -9,17 +11,28 @@ import app.knotwork.android.domain.models.TriggerRunOutcome
  * journal row.
  *
  * This is the single translation from the run runtime's vocabulary
- * ([PipelineRunStatus] plus an optional error message) into the journal's
+ * ([PipelineRunStatus] plus a typed [RunTerminationReason]) into the journal's
  * diagnostic vocabulary, so every consumer settling a run attributes the same
  * outcome for the same terminal state. It is a pure function — no I/O, no clock —
  * and so exhaustively unit-testable.
  *
- * The mapping deliberately keeps **platform** outcomes distinct from **product**
- * and **deliberate** ones, which is the whole point of the background-reliability
- * journal:
+ * **The classification reads the typed reason, not the error text.** Until the
+ * reason existed this function recovered one distinction — an expired approval
+ * window — by comparing the recorded message against a constant by string
+ * equality. That worked only for as long as nobody edited the copy, and editing
+ * that copy is planned work. A vocabulary is now a vocabulary; the message is
+ * demoted to what it always was, a rendering for a person to read.
+ *
+ * The mapping deliberately keeps **platform** outcomes distinct from **product**,
+ * **deliberate** and **protective** ones, which is the whole point of the
+ * background-reliability journal:
  * - [PipelineRunStatus.COMPLETED] → [TriggerRunOutcome.Success].
- * - [PipelineRunStatus.FAILED] carrying the background-HITL expiry marker
- *   ([ParkedRunResumer.APPROVAL_WINDOW_EXPIRED_MESSAGE]) →
+ * - [PipelineRunStatus.FAILED] stopped by an autonomous-run ceiling
+ *   ([RunTerminationKind.STEP_CEILING] / [RunTerminationKind.TOKEN_CEILING]) →
+ *   [TriggerRunOutcome.StoppedByCeiling]. A safety limit doing its job is not a
+ *   defect of the trigger, and reporting it as one would teach the user to
+ *   distrust a health indicator that is telling the truth.
+ * - [PipelineRunStatus.FAILED] carrying [RunTerminationKind.HITL_WINDOW_EXPIRED] →
  *   [TriggerRunOutcome.HitlTimeout]: the run did not fail on its own, it parked on
  *   an approval/clarification the user never answered in the window. Distinguished
  *   here from a genuine failure so the journal does not blame the pipeline for an
@@ -41,19 +54,30 @@ import app.knotwork.android.domain.models.TriggerRunOutcome
  *
  * @param status The terminal run status. Must satisfy [PipelineRunStatus.isTerminal];
  *   a non-terminal status is a caller bug and throws [IllegalArgumentException].
- * @param errorMessage The failure/interruption reason recorded on the run, or
- *   `null`. Only consulted for the [PipelineRunStatus.FAILED] branch.
+ * @param errorMessage The human-readable failure/interruption text recorded on the
+ *   run, or `null`. Only used to fill [TriggerRunOutcome.Failure].
+ * @param reason The typed cause when the app itself decided to end the run, or
+ *   `null` for a completion or an ordinary node failure. Drives the classification.
  * @return The [TriggerRunOutcome] to attribute to the run's journal row.
  * @throws IllegalArgumentException if [status] is not terminal.
  */
-fun triggerRunOutcomeForTerminal(status: PipelineRunStatus, errorMessage: String?): TriggerRunOutcome = when (status) {
+fun triggerRunOutcomeForTerminal(
+    status: PipelineRunStatus,
+    errorMessage: String?,
+    reason: RunTerminationReason?,
+): TriggerRunOutcome = when (status) {
     PipelineRunStatus.COMPLETED -> TriggerRunOutcome.Success
-    PipelineRunStatus.FAILED ->
-        if (errorMessage == ParkedRunResumer.APPROVAL_WINDOW_EXPIRED_MESSAGE) {
-            TriggerRunOutcome.HitlTimeout
-        } else {
-            TriggerRunOutcome.Failure(errorMessage ?: DEFAULT_FAILURE_MESSAGE)
-        }
+    PipelineRunStatus.FAILED -> when (reason?.kind) {
+        RunTerminationKind.STEP_CEILING, RunTerminationKind.TOKEN_CEILING ->
+            TriggerRunOutcome.StoppedByCeiling
+        RunTerminationKind.HITL_WINDOW_EXPIRED -> TriggerRunOutcome.HitlTimeout
+        RunTerminationKind.NO_PROGRESS,
+        RunTerminationKind.GRAPH_CHANGED,
+        RunTerminationKind.PROCESS_DIED,
+        RunTerminationKind.DISCARDED_BY_USER,
+        null,
+        -> TriggerRunOutcome.Failure(errorMessage ?: DEFAULT_FAILURE_MESSAGE)
+    }
     PipelineRunStatus.INTERRUPTED -> TriggerRunOutcome.CancelledBySystem
     PipelineRunStatus.CANCELLED -> TriggerRunOutcome.Cancelled
     PipelineRunStatus.QUEUED,

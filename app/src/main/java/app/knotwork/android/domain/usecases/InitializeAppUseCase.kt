@@ -3,6 +3,7 @@ package app.knotwork.android.domain.usecases
 import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.engine.DefaultPipelineFactory
 import app.knotwork.android.domain.models.PipelineRunStatus
+import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
@@ -101,7 +102,12 @@ class InitializeAppUseCase @Inject constructor(
         pipelineRunRepository.getOrphanedRuns()
             .filterNot { it.id in parkedRunIds }
             .forEach { run ->
-                pipelineRunRepository.finishRun(run.id, PipelineRunStatus.INTERRUPTED, ORPHANED_RUN_MESSAGE)
+                pipelineRunRepository.finishRun(
+                    run.id,
+                    PipelineRunStatus.INTERRUPTED,
+                    ORPHANED_RUN_MESSAGE,
+                    RunTerminationReason.ProcessDied,
+                )
             }
     }
 

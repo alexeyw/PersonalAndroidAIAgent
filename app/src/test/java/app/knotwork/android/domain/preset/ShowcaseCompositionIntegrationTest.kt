@@ -33,6 +33,7 @@ import app.knotwork.android.domain.models.PipelinePresetImportOutcome
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Result
+import app.knotwork.android.domain.models.RunSpend
 import app.knotwork.android.domain.models.ToolApprovalPolicy
 import app.knotwork.android.domain.pipelineio.PipelinePresetJsonSerializer
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
@@ -59,6 +60,7 @@ import app.knotwork.android.domain.usecases.EvaluateIfConditionUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.LoadPipelineFromPresetUseCase
 import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
+import app.knotwork.android.domain.usecases.ResolveRunCeilingsUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import io.mockk.coEvery
 import io.mockk.every
@@ -172,6 +174,10 @@ class ShowcaseCompositionIntegrationTest {
         every { llmEngine.generateResponseStream(any()) } answers { flowOf(scriptFor(firstArg())) }
         every { settingsRepository.pipelineMaxNestingDepth } returns flowOf(3)
         every { settingsRepository.pipelineMaxSteps } returns flowOf(50)
+        every { settingsRepository.pipelineMaxStepsBackground } returns flowOf(15)
+        every { settingsRepository.runMaxTokens } returns flowOf(1_000_000)
+        every { settingsRepository.runMaxTokensBackground } returns flowOf(100_000)
+        coEvery { pipelineRunRepository.getSpend(any()) } returns RunSpend()
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
         every { settingsRepository.toolUsageInstruction } returns flowOf("")
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
@@ -371,6 +377,7 @@ class ShowcaseCompositionIntegrationTest {
             mockk(relaxed = true),
             pipelineRunRepository,
             runTraceRepository,
+            ResolveRunCeilingsUseCase(settingsRepository),
         )
     }
 

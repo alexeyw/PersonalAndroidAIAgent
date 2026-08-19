@@ -59,7 +59,7 @@ import javax.inject.Provider
  * states are intentionally not forwarded — only the sub-pipeline's final
  * response is the parent node's output.
  *
- * **Shared step budget.** [ExecutionScope.stepBudget] is threaded into the
+ * **Shared spend ledger.** [ExecutionScope.budget] is threaded into the
  * child engine invocation, so the sub-pipeline decrements the same tree-wide
  * `MAX_STEPS` ceiling instead of getting a private allowance; exhaustion in
  * depth fails the child, which becomes this node's error and terminates the
@@ -178,7 +178,7 @@ class PipelineNodeExecutor @Inject constructor(
                 runId = null,
                 resume = null,
                 depth = scope.depth + 1,
-                stepBudget = scope.stepBudget,
+                budget = scope.budget,
                 imageDelivery = scope.imageDelivery,
                 runHadImage = scope.imagePresent,
                 generatingModel = scope.generatingModel,
@@ -225,7 +225,7 @@ class PipelineNodeExecutor @Inject constructor(
                 runId = childRunId,
                 resume = childResume,
                 depth = scope.depth + 1,
-                stepBudget = scope.stepBudget,
+                budget = scope.budget,
                 imageDelivery = scope.imageDelivery,
                 runHadImage = scope.imagePresent,
                 generatingModel = scope.generatingModel,

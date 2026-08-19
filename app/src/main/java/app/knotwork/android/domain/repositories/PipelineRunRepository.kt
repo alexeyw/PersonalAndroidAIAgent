@@ -3,6 +3,8 @@ package app.knotwork.android.domain.repositories
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.RunOrigin
+import app.knotwork.android.domain.models.RunSpend
+import app.knotwork.android.domain.models.RunTerminationReason
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -87,8 +89,47 @@ interface PipelineRunRepository {
      *   bug and throws [IllegalArgumentException] (not absorbed).
      * @param errorMessage Failure or interruption reason; `null` for
      *   successful or cancelled runs.
+     * @param reason The typed cause when the app itself decided to end the run
+     *   — a ceiling, the no-progress watchdog, an expired approval window, a
+     *   changed graph, a dead process, a user discard. `null` for a completion
+     *   and for an ordinary node failure, which have no entry in that
+     *   vocabulary. Consumers that need to tell a protective stop from a
+     *   product failure read this instead of matching [errorMessage] by
+     *   string, which is what they had to do before it existed.
      */
-    suspend fun finishRun(runId: String, status: PipelineRunStatus, errorMessage: String? = null)
+    suspend fun finishRun(
+        runId: String,
+        status: PipelineRunStatus,
+        errorMessage: String? = null,
+        reason: RunTerminationReason? = null,
+    )
+
+    /**
+     * Writes a run tree's accumulated spend onto its root record, so a ceiling
+     * survives the run being parked and resumed.
+     *
+     * Called as the tree executes, from whatever depth is running: the ledger
+     * knows its root, and a sub-pipeline charges the same record its parent
+     * does. Best-effort — a storage failure loses accuracy, never the run.
+     *
+     * @param rootRunId Id of the run at the root of the tree.
+     * @param stepsSpent Node executions charged to the tree so far.
+     * @param tokensSpent Tokens charged to the tree so far.
+     */
+    suspend fun recordSpend(rootRunId: String, stepsSpent: Int, tokensSpent: Int)
+
+    /**
+     * Reads back the spend already charged to a run tree.
+     *
+     * The engine calls this once, at the top of a run, to seed its ledger:
+     * zero for a fresh run, and whatever the previous attempt spent for a
+     * resumed one. Degrades to zero on a store failure (best-effort contract),
+     * which makes the ceiling bind late rather than refusing to run.
+     *
+     * @param rootRunId Id of the run at the root of the tree.
+     * @return The persisted counters, zero when the row is missing.
+     */
+    suspend fun getSpend(rootRunId: String): RunSpend
 
     /**
      * Returns the run with [runId], or `null` when no such run exists (or the

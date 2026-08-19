@@ -19,10 +19,12 @@ import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.ResumeContext
+import app.knotwork.android.domain.models.RunBudgetLedger
 import app.knotwork.android.domain.models.RunGeneratingModel
 import app.knotwork.android.domain.models.RunImageDelivery
 import app.knotwork.android.domain.models.RunOrigin
-import app.knotwork.android.domain.models.RunStepBudget
+import app.knotwork.android.domain.models.RunSpend
+import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.ToolInvocationResult
 import app.knotwork.android.domain.models.usesContextConfig
@@ -36,6 +38,7 @@ import app.knotwork.android.domain.repositories.MetricsRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.usecases.ResolveRunCeilingsUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
@@ -78,6 +81,7 @@ class GraphExecutionEngine @Inject constructor(
     private val memoryRepository: MemoryRepository,
     private val pipelineRunRepository: PipelineRunRepository,
     private val runTraceRepository: RunTraceRepository,
+    private val resolveRunCeilingsUseCase: ResolveRunCeilingsUseCase,
 ) {
 
     /**
@@ -134,13 +138,16 @@ class GraphExecutionEngine @Inject constructor(
      *   runtime nesting ceiling and to thread the next depth into its own
      *   recursive call). It also stamps every console/trace record so the console
      *   can render nested sub-pipeline output as a hierarchy.
-     * @param stepBudget The step budget shared across the whole run tree. `null`
-     *   (the default, used by top-level callers) makes the engine seed a fresh
-     *   [RunStepBudget] from [SettingsRepository.pipelineMaxSteps]; a sub-pipeline
-     *   invocation passes the parent's budget so the nested run decrements the
-     *   same ceiling instead of getting a private allowance. Exhaustion at any
-     *   depth fails the run with the max-steps error, which propagates up the
-     *   stack as the parent PIPELINE node's error.
+     * @param budget The spend ledger shared across the whole run tree. `null`
+     *   (the default, used by top-level callers) makes the engine build one:
+     *   ceilings resolved from [origin], counters seeded from whatever the run
+     *   record already holds — which is zero for a fresh run and the previous
+     *   attempt's spend for a resumed one, so the ceiling binds across a park
+     *   and resume instead of restarting. A sub-pipeline invocation passes the
+     *   parent's ledger so the nested run charges the same ceiling instead of
+     *   getting a private allowance. A breach at any depth fails the run with a
+     *   typed [RunTerminationReason], which propagates up the stack as the
+     *   parent PIPELINE node's error.
      * @param imageInput The **top-level** run's single image attachment, already
      *   resolved to an absolute path + dimensions + byte size, or `null` for a
      *   text-only run (and always `null` for a sub-pipeline invocation, which
@@ -189,7 +196,7 @@ class GraphExecutionEngine @Inject constructor(
         runId: String? = null,
         resume: ResumeContext? = null,
         depth: Int = 0,
-        stepBudget: RunStepBudget? = null,
+        budget: RunBudgetLedger? = null,
         imageInput: EngineImageInput? = null,
         imageDelivery: RunImageDelivery? = null,
         runHadImage: Boolean = false,
@@ -320,13 +327,28 @@ class GraphExecutionEngine @Inject constructor(
             )
         }
 
-        val maxSteps = settingsRepository.pipelineMaxSteps.first()
-        // Step budget shared across the whole run tree. A top-level run seeds a
-        // fresh budget from the setting; a sub-pipeline run reuses the parent's
-        // instance (threaded in via [stepBudget]) so nested execution cannot
-        // side-step the parent's MAX_STEPS ceiling. Every node visited at any
-        // depth decrements it.
-        val budget = stepBudget ?: RunStepBudget(maxSteps)
+        // Spend ledger shared across the whole run tree. A sub-pipeline run
+        // reuses the parent's instance (threaded in via [budget]) so nested
+        // execution cannot side-step the parent's ceilings; a top-level run
+        // builds one, resolving the ceilings from its own origin and seeding
+        // the counters from what the run record already holds.
+        //
+        // The seed is what makes the ceiling bind across a resume. Every
+        // answered background approval comes back through the resume path, and
+        // a run may park an unbounded number of times — a ledger that started
+        // at zero on each attempt would hand a nightly loop a fresh ceiling
+        // after every answer, which is the one scenario these ceilings exist
+        // for.
+        val runBudget = budget ?: run {
+            val ceilings = resolveRunCeilingsUseCase(origin)
+            val spent = runId?.let { pipelineRunRepository.getSpend(it) } ?: RunSpend()
+            RunBudgetLedger(
+                ceilings = ceilings,
+                rootRunId = runId,
+                stepsAlreadySpent = spent.steps,
+                tokensAlreadySpent = spent.tokens,
+            )
+        }
         // Per-`PIPELINE`-node visit counter. A PIPELINE node inside a loop
         // (QUEUE_PROCESSOR) executes once per item; the index disambiguates the
         // child run id of each visit and is re-derived deterministically on
@@ -514,11 +536,31 @@ class GraphExecutionEngine @Inject constructor(
         // the suspension resolves flips the record back to RUNNING.
         var runSuspended = false
 
-        while (currentNode != null && budget.remaining > 0) {
-            // Charge this node against the shared run-tree budget before doing
-            // any work. Replayed nodes are charged too (the budget is not
-            // persisted across resume — see [RunStepBudget]).
-            budget.remaining--
+        // Set the moment a ceiling refuses to let the walk continue, so the
+        // post-loop branch can say which one bound instead of re-deriving it.
+        var terminationReason: RunTerminationReason? = null
+
+        // A soft crossing announces itself on the console immediately (below,
+        // where it happens) but reaches the model only on the next node — the
+        // walk rewrites `currentInputText` after the charge site, so a note
+        // prepended there would be overwritten before anything read it.
+        var pendingSoftCeilingNote = false
+
+        while (currentNode != null) {
+            // Ask the ledger before charging, so a node that is refused is never
+            // counted: a run stopped at the ceiling has spent exactly the
+            // ceiling, not one more than it.
+            terminationReason = runBudget.hardBreach()
+            if (terminationReason != null) break
+
+            // Deliver a soft warning raised by the previous node into the input
+            // this one executes on, so the model can wind the task up rather
+            // than discovering the hard stop by walking into it.
+            if (pendingSoftCeilingNote) {
+                currentInputText = "$SOFT_CEILING_CONTEXT_NOTE\n\n$currentInputText"
+                pendingSoftCeilingNote = false
+            }
+
             stepCount++
 
             // Visit index of this node when it is a PIPELINE node — incremented
@@ -720,7 +762,7 @@ class GraphExecutionEngine @Inject constructor(
                         runId,
                         ExecutionScope(
                             depth = depth,
-                            stepBudget = budget,
+                            budget = runBudget,
                             pipelineVisitIndex = pipelineVisitIndex,
                             routingChoices = routingChoices,
                             imagePath = imagePathForNode,
@@ -810,6 +852,38 @@ class GraphExecutionEngine @Inject constructor(
                 }
                 nodeDurationMs = System.currentTimeMillis() - nodeStartMs
                 metricsRepository.recordNodeExecution(currentNode.type, nodeDurationMs, nodeResult?.tokenCount)
+                // Charge the tree only for work actually done. A replayed node
+                // was charged when it really ran; charging it again would make a
+                // run that parks often die earlier than one that never parks —
+                // the inverse of what the persisted ledger is for. That is why
+                // this sits in the live branch, beside the metrics write and the
+                // trace append, which are guarded the same way.
+                runBudget.chargeStep()
+                runBudget.chargeTokens(nodeResult?.tokenCount, approximate = nodeResult?.tokensEstimated != false)
+                if (runId != null) {
+                    persistSpend(runBudget)
+                }
+                // Announce a soft crossing where it happens, not at the top of
+                // the next iteration: a run whose last node crosses the
+                // threshold would otherwise never say so, because there is no
+                // next iteration to say it in.
+                //
+                // OUTPUT is excluded for the reason the `✓` event and the
+                // `NodeIO` emission below are: its executor has already emitted
+                // `Completed`, and a console line pushed after that would shift
+                // the terminal state away from the tail of the flow. Nothing is
+                // lost — a warning that the run is approaching its limit has no
+                // reader once the answer has been delivered.
+                if (currentNode.type != NodeType.OUTPUT) {
+                    runBudget.claimSoftBreach()?.let { soft ->
+                        pushConsole(
+                            ConsoleEventType.RunCeiling,
+                            "Approaching the ${soft.axis.name.lowercase()} limit " +
+                                "(${soft.spent} of ${soft.hardLimit})",
+                        )
+                        pendingSoftCeilingNote = true
+                    }
+                }
             }
             val nodeTokenCount = nodeResult?.tokenCount
 
@@ -1026,17 +1100,16 @@ class GraphExecutionEngine @Inject constructor(
         // whose walk ends with no terminal node); the OUTPUT path notes it inline.
         noteUndeliveredImage()
 
-        if (budget.remaining <= 0 && currentNode != null) {
-            // Shared run-tree budget exhausted. When this run is a sub-pipeline
-            // the Error becomes the parent PIPELINE node's error and terminates
-            // the whole stack — the message names the tree-wide ceiling so the
-            // failure is unambiguous regardless of which depth ran out.
-            pushConsole(ConsoleEventType.Error, "Pipeline exceeded max steps ($maxSteps)")
-            emit(
-                AgentOrchestratorState.Error(
-                    "Pipeline execution exceeded the maximum of $maxSteps steps shared across the pipeline tree.",
-                ),
-            )
+        val breach = terminationReason
+        if (breach != null) {
+            // A ceiling refused to let the walk continue. When this run is a
+            // sub-pipeline the Error becomes the parent PIPELINE node's error and
+            // terminates the whole stack — the message names the tree-wide
+            // ceiling so the failure is unambiguous regardless of which depth ran
+            // out, and the typed reason travels with it so consumers no longer
+            // have to recover the cause from the prose.
+            pushConsole(ConsoleEventType.RunCeiling, ceilingConsoleLine(breach))
+            emit(AgentOrchestratorState.Error(ceilingErrorMessage(breach), reason = breach))
         } else {
             // Loop exited because currentNode became null before reaching OUTPUT
             pushConsole(ConsoleEventType.Error, "Pipeline terminated without OUTPUT")
@@ -1278,7 +1351,94 @@ class GraphExecutionEngine @Inject constructor(
         return listOf(text)
     }
 
+    /**
+     * Writes the tree's accumulated spend onto the root run record.
+     *
+     * Called once per executed node, from whatever depth is running. Two things
+     * make that cadence the right one rather than an extravagance: the walk
+     * already writes to `pipeline_runs` on every node entry (`updateCurrentNode`),
+     * so this adds no new class of traffic; and the counter has to be exact at
+     * every park, because a parked run resumes by reading it back. Nodes are
+     * seconds apart — they are LLM calls — so the write is never hot.
+     *
+     * Best-effort by the repository's contract: losing the write loses accuracy,
+     * never the run, and an under-count makes the ceiling bind late rather than
+     * early.
+     *
+     * @param ledger The run tree's spend ledger.
+     */
+    private suspend fun persistSpend(ledger: RunBudgetLedger) {
+        val rootId = ledger.rootRunId ?: return
+        pipelineRunRepository.recordSpend(
+            rootRunId = rootId,
+            stepsSpent = ledger.stepsSpent,
+            tokensSpent = ledger.tokensSpent,
+        )
+    }
+
+    /**
+     * The console line announcing a forced termination.
+     *
+     * Pushed **before** the terminal `Error` emission, like every other console
+     * write in this walk: a line appended afterwards would shift the last
+     * orchestrator state away from the terminal one the queue reads.
+     *
+     * @param reason The typed cause.
+     * @return The line to append to the run's console.
+     */
+    private fun ceilingConsoleLine(reason: RunTerminationReason): String = when (reason) {
+        is RunTerminationReason.StepCeiling -> "Pipeline exceeded max steps (${reason.limit})"
+        is RunTerminationReason.TokenCeiling -> "Pipeline exceeded its token limit (${reason.limit})"
+        RunTerminationReason.HitlWindowExpired,
+        RunTerminationReason.NoProgress,
+        RunTerminationReason.GraphChanged,
+        RunTerminationReason.ProcessDied,
+        RunTerminationReason.DiscardedByUser,
+        -> "Pipeline stopped: ${reason.kind.name}"
+    }
+
+    /**
+     * The human-readable message carried by the terminal `Error` state.
+     *
+     * Still assembled here, in English, exactly as the step-ceiling message
+     * always was. Moving this text into presentation resources is the job of the
+     * task that also writes the ceilings settings screen, so that the wording a
+     * user reads in the chat, in the settings and in the documentation is
+     * decided once instead of three times.
+     *
+     * @param reason The typed cause.
+     * @return The message for the terminal state.
+     */
+    private fun ceilingErrorMessage(reason: RunTerminationReason): String = when (reason) {
+        is RunTerminationReason.StepCeiling ->
+            "Pipeline execution exceeded the maximum of ${reason.limit} steps shared across the pipeline tree."
+        is RunTerminationReason.TokenCeiling ->
+            "Pipeline execution exceeded the maximum of ${reason.limit} tokens shared across the pipeline tree."
+        RunTerminationReason.HitlWindowExpired,
+        RunTerminationReason.NoProgress,
+        RunTerminationReason.GraphChanged,
+        RunTerminationReason.ProcessDied,
+        RunTerminationReason.DiscardedByUser,
+        -> "Pipeline execution was stopped (${reason.kind.name})."
+    }
+
     private companion object {
+        /**
+         * Injected into the run's own context the first time an axis crosses its
+         * soft threshold, so the model driving the next node can bring the task
+         * to a close on its own terms instead of discovering the hard stop by
+         * walking into it.
+         *
+         * Deliberately says what to do rather than quoting a number: the numbers
+         * are in the console line a person reads, and a budget figure inside the
+         * prompt invites the model to reason about arithmetic instead of about
+         * the task.
+         */
+        const val SOFT_CEILING_CONTEXT_NOTE: String =
+            "SYSTEM NOTICE: this run is close to its resource limit and may be stopped before it " +
+                "finishes. Wrap up now: produce the best answer you can from what you already have, " +
+                "and do not start new sub-tasks or additional tool calls."
+
         /** Lenient JSON used to parse a `QUEUE_PROCESSOR` seed list (see [parseListFromText]). */
         val listJson = Json {
             ignoreUnknownKeys = true

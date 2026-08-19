@@ -3,6 +3,7 @@ package app.knotwork.android.domain.usecases
 import app.knotwork.android.domain.models.PendingInteraction
 import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineRunStatus
+import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.TriggerHitlEvent
 import app.knotwork.android.domain.models.TriggerHitlResolution
 import app.knotwork.android.domain.repositories.PendingInteractionRepository
@@ -61,7 +62,7 @@ class ParkedRunResumer @Inject constructor(
 
         val windowHours = settingsRepository.backgroundApprovalWindowHours.first()
         if (System.currentTimeMillis() - pending.requestedAt > windowHours * MILLIS_PER_HOUR) {
-            failPark(pending, APPROVAL_WINDOW_EXPIRED_MESSAGE)
+            failPark(pending, APPROVAL_WINDOW_EXPIRED_MESSAGE, RunTerminationReason.HitlWindowExpired)
             return PendingSubmissionOutcome.Expired
         }
 
@@ -72,11 +73,11 @@ class ParkedRunResumer @Inject constructor(
         return when (resumePipelineRunUseCase(pending.runId)) {
             ResumeOutcome.Resumed -> PendingSubmissionOutcome.Resumed
             ResumeOutcome.GraphChanged -> {
-                failPark(pending, GRAPH_CHANGED_MESSAGE)
+                failPark(pending, GRAPH_CHANGED_MESSAGE, RunTerminationReason.GraphChanged)
                 PendingSubmissionOutcome.GraphChanged
             }
             ResumeOutcome.Expired -> {
-                failPark(pending, APPROVAL_WINDOW_EXPIRED_MESSAGE)
+                failPark(pending, APPROVAL_WINDOW_EXPIRED_MESSAGE, RunTerminationReason.HitlWindowExpired)
                 PendingSubmissionOutcome.Expired
             }
             ResumeOutcome.NotResumable -> {
@@ -92,7 +93,7 @@ class ParkedRunResumer @Inject constructor(
                 val stillOpen = pipelineRunRepository.getRun(pending.runId)
                     ?.status in NON_TERMINAL_STATUSES
                 if (stillOpen) {
-                    failPark(pending, NOT_RESUMABLE_MESSAGE)
+                    failPark(pending, NOT_RESUMABLE_MESSAGE, RunTerminationReason.HitlWindowExpired)
                 } else {
                     // The gate ends here too: without this it would stay
                     // journalled as still waiting on a run that is long over,
@@ -127,25 +128,28 @@ class ParkedRunResumer @Inject constructor(
      *
      * @param pending The parked interaction to settle.
      * @param reason Human-readable failure reason for the run record.
+     * @param terminationReason The typed cause behind [reason]. Passed rather
+     *   than inferred: this function used to recover the distinction by
+     *   comparing [reason] against its own constant by string equality, which
+     *   held only for as long as nobody edited the copy.
      */
-    suspend fun failPark(pending: PendingInteraction, reason: String) {
+    suspend fun failPark(pending: PendingInteraction, reason: String, terminationReason: RunTerminationReason) {
         val rootId = pipelineRunRepository.getRootRunId(pending.runId) ?: pending.runId
         // Settle the gate in the journal before the run record itself: the
         // window elapsing unanswered and the park being discarded under a
         // changed graph are two different stories, and the run's own outcome
-        // (FAILED, mapped to HitlTimeout only for the expiry message) cannot
-        // tell them apart on its own.
+        // (FAILED either way) cannot tell them apart on its own.
         recordTriggerHitlEvent(
             rootId,
             TriggerHitlEvent.Resolved(
-                if (reason == APPROVAL_WINDOW_EXPIRED_MESSAGE) {
+                if (terminationReason == RunTerminationReason.HitlWindowExpired) {
                     TriggerHitlResolution.TIMED_OUT
                 } else {
                     TriggerHitlResolution.ABANDONED
                 },
             ),
         )
-        pipelineRunRepository.finishRun(rootId, PipelineRunStatus.FAILED, reason)
+        pipelineRunRepository.finishRun(rootId, PipelineRunStatus.FAILED, reason, terminationReason)
         pendingInteractionRepository.delete(pending.runId)
         cancelNotification(pending)
     }

@@ -37,8 +37,9 @@ import androidx.room.PrimaryKey
  * @property runId Id of the enqueued run for a `FIRED` verdict; `null` otherwise.
  *   Indexed because the run-outcome write matches on it.
  * @property outcomeKind Terminal run-outcome discriminator (`SUCCESS` /
- *   `FAILURE` / `CANCELLED_BY_SYSTEM` / `HITL_TIMEOUT`), or `null` until the run
- *   settles (or when no run was started).
+ *   `FAILURE` / `CANCELLED_BY_SYSTEM` / `CANCELLED` / `HITL_TIMEOUT` /
+ *   `STOPPED_BY_CEILING`), or `null` until the run settles (or when no run was
+ *   started).
  * @property outcomeError Human-readable error for a `FAILURE` outcome; `null`
  *   otherwise.
  * @property hitlGateCount How many human-in-the-loop gates the run raised; `0`

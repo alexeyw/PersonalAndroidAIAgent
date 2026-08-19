@@ -15,6 +15,7 @@ import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.ResumeContext
 import app.knotwork.android.domain.models.RunOrigin
+import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.TaskPriority
 import app.knotwork.android.domain.models.ToolRisk
@@ -548,7 +549,7 @@ class TaskQueueManagerImplTest {
         taskQueueManager.enqueueTask(task)
         advanceUntilIdle()
 
-        coVerify { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, "node exploded") }
+        coVerify { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, "node exploded", null) }
     }
 
     /**
@@ -566,7 +567,7 @@ class TaskQueueManagerImplTest {
         taskQueueManager.enqueueTask(task)
         advanceUntilIdle()
 
-        coVerify { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, "engine blew up") }
+        coVerify { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, "engine blew up", null) }
     }
 
     /**
@@ -753,6 +754,7 @@ class TaskQueueManagerImplTest {
                 runId,
                 PipelineRunStatus.INTERRUPTED,
                 "Pipeline graph changed before resume could start. Restart the task instead.",
+                RunTerminationReason.GraphChanged,
             )
         }
         verify(exactly = 0) { graphExecutionEngine.invoke(any(), any(), any(), any(), any()) }
@@ -823,6 +825,7 @@ class TaskQueueManagerImplTest {
                 stalling.id,
                 PipelineRunStatus.FAILED,
                 TaskQueueManagerImpl.STALLED_MESSAGE,
+                RunTerminationReason.NoProgress,
             )
         }
         coVerify { pipelineRunRepository.finishRun(following.id, PipelineRunStatus.COMPLETED) }
@@ -907,6 +910,7 @@ class TaskQueueManagerImplTest {
                 task.id,
                 PipelineRunStatus.FAILED,
                 TaskQueueManagerImpl.STALLED_MESSAGE,
+                RunTerminationReason.NoProgress,
             )
         }
     }

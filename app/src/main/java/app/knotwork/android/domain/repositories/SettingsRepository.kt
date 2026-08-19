@@ -624,6 +624,46 @@ interface SettingsRepository {
     suspend fun setPipelineMaxSteps(steps: Int)
 
     /**
+     * A [Flow] representing the maximum number of pipeline execution steps for
+     * a run nobody is watching — the background origins (scheduler, quick tile,
+     * trigger, external automation). Valid range: 5–100.
+     */
+    val pipelineMaxStepsBackground: Flow<Int>
+
+    /**
+     * Updates the background step ceiling.
+     *
+     * @param steps The new limit. Will be coerced to the range 5–100.
+     */
+    suspend fun setPipelineMaxStepsBackground(steps: Int)
+
+    /**
+     * A [Flow] representing the token ceiling for an interactive run, counted
+     * across the whole run tree. Valid range: 10 000–10 000 000.
+     */
+    val runMaxTokens: Flow<Int>
+
+    /**
+     * Updates the interactive token ceiling.
+     *
+     * @param tokens The new limit. Will be coerced to the range 10 000–10 000 000.
+     */
+    suspend fun setRunMaxTokens(tokens: Int)
+
+    /**
+     * A [Flow] representing the token ceiling for a background run, counted
+     * across the whole run tree. Valid range: 10 000–10 000 000.
+     */
+    val runMaxTokensBackground: Flow<Int>
+
+    /**
+     * Updates the background token ceiling.
+     *
+     * @param tokens The new limit. Will be coerced to the range 10 000–10 000 000.
+     */
+    suspend fun setRunMaxTokensBackground(tokens: Int)
+
+    /**
      * A [Flow] representing the maximum nesting depth allowed for PIPELINE-node
      * composition (how many levels of sub-pipeline a run may descend into).
      * Enforced statically by `PipelineCompositionValidator` and at runtime by

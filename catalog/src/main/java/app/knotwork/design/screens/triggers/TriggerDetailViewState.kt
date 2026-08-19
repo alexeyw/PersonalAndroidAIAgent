@@ -89,6 +89,9 @@ enum class TriggerJournalOutcomeUi {
 
     /** The run parked on a background approval that timed out. */
     HitlTimeout,
+
+    /** An autonomous-run ceiling stopped the run — the guard working, not a defect. */
+    StoppedByCeiling,
 }
 
 /**
@@ -268,6 +271,7 @@ data class TriggerDetailStrings(
     val outcomeCancelledBySystem: String = "Stopped by the system",
     val outcomeCancelled: String = "You stopped it",
     val outcomeHitlTimeout: String = "Timed out waiting for approval",
+    val outcomeStoppedByCeiling: String = "Stopped by a safety limit",
     // Human-in-the-loop line. The two "parked" qualifiers are appended after the
     // state label when the run had to wait on a notification.
     val hitlWaiting: String = "Waiting for your response",

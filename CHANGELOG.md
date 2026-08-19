@@ -15,6 +15,37 @@ details.
 
 ### Added
 
+- **Autonomous runs now have ceilings, and a run stopped by one says so.**
+  A background run — a trigger firing overnight against your own cloud API key —
+  is now bounded on two axes across the whole run tree: how many pipeline steps
+  it may take, and how many tokens it may spend. Each axis has a soft threshold
+  that warns and nudges the run to wrap up, and a hard one that stops it
+  deterministically. Runs nobody is watching (scheduler, Quick Settings tile,
+  triggers, external automation) get their own, tighter token limit.
+
+  The step ceiling is not new, but it did not previously bind. It was counted
+  per execution attempt, and answering a background approval resumes a run — so
+  a nightly loop that asked a question each iteration received a full fresh
+  allowance every time it was answered. The counters now live on the run record,
+  survive being parked and resumed, and continue where the previous attempt
+  stopped. Work already done is never charged twice.
+
+  A **money limit is not offered, and the app says so rather than implying one.**
+  Knotwork runs on your provider keys and never sees an invoice; turning tokens
+  into currency would need a price table that goes stale between releases and
+  would show a wrong number as money. The token limit is the honest proxy.
+
+  Cloud token counts are now the provider's own figures — prompt *and*
+  completion — where the provider reports them, instead of an estimate that only
+  ever saw the answer. In a loop the prompt is what costs.
+
+- **A run stopped by a safety limit no longer reads as a broken automation.**
+  A trigger whose run hit a ceiling shows *Stopped by a safety limit* in its
+  journal and does not count against the trigger's health indicator. Why a run
+  ended is now recorded as a typed cause rather than recovered by matching the
+  error text, which also fixes the same confusion for approvals that timed out,
+  for runs the system killed, and for the no-progress watchdog.
+
 - **External automation is now switchable, and every request is readable.**
   Settings → Background & triggers grows three rows: the master switch, the one
   pipeline outside apps may run, and the request journal. All three are in the

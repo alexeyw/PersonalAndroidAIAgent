@@ -163,6 +163,9 @@
     <string name="triggers_journal_outcome_cancelled_by_system">Stopped by the system</string>
     <string name="triggers_journal_outcome_cancelled">You stopped it</string>
     <string name="triggers_journal_outcome_hitl_timeout">Timed out waiting for approval</string>
+    <!-- Journal outcome: an autonomous-run ceiling ended the run. Deliberately not
+         phrased as a failure — the guard the user configured did its job. -->
+    <string name="triggers_journal_outcome_stopped_by_ceiling">Stopped by a safety limit</string>
 
     <!-- Journal: the run stopped to ask the user something. The two "parked"
          qualifiers are appended after the state when the request had to wait on

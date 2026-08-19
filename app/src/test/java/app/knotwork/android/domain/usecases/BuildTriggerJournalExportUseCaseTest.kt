@@ -51,7 +51,7 @@ class BuildTriggerJournalExportUseCaseTest {
 
         // Bumped to 2 by the hitl* fields: an analyst reading a dump must be
         // able to tell "this build never recorded gates" from "no gate here".
-        assertEquals(2, document.getValue("schemaVersion").jsonPrimitive.int)
+        assertEquals(3, document.getValue("schemaVersion").jsonPrimitive.int)
         assertEquals(label, document.getValue("generatedAt").jsonPrimitive.content)
         assertTrue(document.getValue("localOnly").jsonPrimitive.content.toBoolean())
         assertEquals(0, document.getValue("totalEvaluations").jsonPrimitive.int)

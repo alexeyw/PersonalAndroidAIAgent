@@ -128,6 +128,9 @@ class SettingsManager @Inject constructor(
         val HTTP_TOOL_MAX_RESPONSE_BYTES =
             androidx.datastore.preferences.core.longPreferencesKey("http_tool_max_response_bytes")
         val PIPELINE_MAX_STEPS = intPreferencesKey("pipeline_max_steps")
+        val PIPELINE_MAX_STEPS_BACKGROUND = intPreferencesKey("pipeline_max_steps_background")
+        val RUN_MAX_TOKENS = intPreferencesKey("run_max_tokens")
+        val RUN_MAX_TOKENS_BACKGROUND = intPreferencesKey("run_max_tokens_background")
         val PIPELINE_MAX_NESTING_DEPTH = intPreferencesKey("pipeline_max_nesting_depth")
         val STRUCTURED_OUTPUT_MAX_REPAIRS = intPreferencesKey("structured_output_max_repairs")
         val CLOUD_RETRY_MAX_ATTEMPTS = intPreferencesKey("cloud_retry_max_attempts")
@@ -1573,6 +1576,74 @@ class SettingsManager @Inject constructor(
         }
     }
 
+    override val pipelineMaxStepsBackground: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.PIPELINE_MAX_STEPS_BACKGROUND]
+                ?: SettingsDefaults.PIPELINE_MAX_STEPS_BACKGROUND_DEFAULT
+        }
+
+    override suspend fun setPipelineMaxStepsBackground(steps: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.PIPELINE_MAX_STEPS_BACKGROUND] = steps.coerceIn(
+                SettingsDefaults.PIPELINE_MAX_STEPS_MIN,
+                SettingsDefaults.PIPELINE_MAX_STEPS_MAX,
+            )
+        }
+    }
+
+    override val runMaxTokens: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.RUN_MAX_TOKENS] ?: SettingsDefaults.RUN_MAX_TOKENS_DEFAULT
+        }
+
+    override suspend fun setRunMaxTokens(tokens: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.RUN_MAX_TOKENS] = tokens.coerceIn(
+                SettingsDefaults.RUN_MAX_TOKENS_MIN,
+                SettingsDefaults.RUN_MAX_TOKENS_MAX,
+            )
+        }
+    }
+
+    override val runMaxTokensBackground: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.RUN_MAX_TOKENS_BACKGROUND]
+                ?: SettingsDefaults.RUN_MAX_TOKENS_BACKGROUND_DEFAULT
+        }
+
+    override suspend fun setRunMaxTokensBackground(tokens: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.RUN_MAX_TOKENS_BACKGROUND] = tokens.coerceIn(
+                SettingsDefaults.RUN_MAX_TOKENS_MIN,
+                SettingsDefaults.RUN_MAX_TOKENS_MAX,
+            )
+        }
+    }
+
     override val pipelineMaxNestingDepth: Flow<Int> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -2000,10 +2071,10 @@ class SettingsManager @Inject constructor(
     }
 
     /**
-     * Writes the local-generation sampling + pipeline/structured-output/cloud-retry
-     * defaults into [preferences]. Shared by [resetSamplingDefaults] (the
+     * Writes the local-generation sampling + pipeline/run-ceiling/structured-output/
+     * cloud-retry defaults into [preferences]. Shared by [resetSamplingDefaults] (the
      * per-card "Reset to defaults") and [resetToRecommendedDefaults] (the global
-     * reset) so the two paths cannot drift on these ten keys.
+     * reset) so the two paths cannot drift on these thirteen keys.
      */
     private fun MutablePreferences.applySamplingDefaults() {
         this[PreferencesKeys.TEMPERATURE] = SettingsDefaults.TEMPERATURE_DEFAULT
@@ -2012,6 +2083,10 @@ class SettingsManager @Inject constructor(
         this[PreferencesKeys.REPETITION_PENALTY] = SettingsDefaults.REPETITION_PENALTY_DEFAULT
         this[PreferencesKeys.MAX_CONTEXT_LENGTH] = SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT
         this[PreferencesKeys.PIPELINE_MAX_STEPS] = SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT
+        this[PreferencesKeys.PIPELINE_MAX_STEPS_BACKGROUND] =
+            SettingsDefaults.PIPELINE_MAX_STEPS_BACKGROUND_DEFAULT
+        this[PreferencesKeys.RUN_MAX_TOKENS] = SettingsDefaults.RUN_MAX_TOKENS_DEFAULT
+        this[PreferencesKeys.RUN_MAX_TOKENS_BACKGROUND] = SettingsDefaults.RUN_MAX_TOKENS_BACKGROUND_DEFAULT
         this[PreferencesKeys.PIPELINE_MAX_NESTING_DEPTH] = SettingsDefaults.PIPELINE_MAX_NESTING_DEPTH_DEFAULT
         this[PreferencesKeys.STRUCTURED_OUTPUT_MAX_REPAIRS] = SettingsDefaults.STRUCTURED_OUTPUT_MAX_REPAIRS_DEFAULT
         this[PreferencesKeys.CLOUD_RETRY_MAX_ATTEMPTS] = SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_DEFAULT

@@ -128,6 +128,19 @@ class TriggerHealthEvaluatorTest {
         assertEquals(TriggerHealthStatus.ERRORED, evaluator.evaluate(trigger(), inputs, now))
     }
 
+    @Test
+    fun `given a recent evaluation and a ceiling-stopped last run when evaluated then healthy`() {
+        // The one non-Success outcome that is NOT an error. A run stopped by the
+        // ceiling the user configured is the guard working; reddening the badge
+        // for it would teach the user to distrust an indicator that is telling
+        // the truth. The stop is still visible in the journal row.
+        val inputs = TriggerHealthInputs(
+            latestEvaluatedAt = now - minute,
+            latestFiredOutcome = TriggerRunOutcome.StoppedByCeiling,
+        )
+        assertEquals(TriggerHealthStatus.HEALTHY, evaluator.evaluate(trigger(), inputs, now))
+    }
+
     // ── Staleness threshold and precedence ───────────────────────────────────
 
     @Test

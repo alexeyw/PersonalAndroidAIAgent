@@ -3,6 +3,7 @@ package app.knotwork.android.domain.usecases
 import app.knotwork.android.domain.models.PendingInteraction
 import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineRunStatus
+import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.models.TriggerHitlEvent
 import app.knotwork.android.domain.models.TriggerHitlResolution
@@ -113,6 +114,7 @@ class ParkedRunResumerTest {
                 "run-1",
                 PipelineRunStatus.FAILED,
                 ParkedRunResumer.APPROVAL_WINDOW_EXPIRED_MESSAGE,
+                RunTerminationReason.HitlWindowExpired,
             )
         }
         coVerify { pendingInteractionRepository.delete("run-1") }
@@ -135,7 +137,12 @@ class ParkedRunResumerTest {
 
         assertEquals(PendingSubmissionOutcome.GraphChanged, outcome)
         coVerify {
-            pipelineRunRepository.finishRun("run-1", PipelineRunStatus.FAILED, ParkedRunResumer.GRAPH_CHANGED_MESSAGE)
+            pipelineRunRepository.finishRun(
+                "run-1",
+                PipelineRunStatus.FAILED,
+                ParkedRunResumer.GRAPH_CHANGED_MESSAGE,
+                RunTerminationReason.GraphChanged,
+            )
         }
         coVerify { pendingInteractionRepository.delete("run-1") }
     }
@@ -152,6 +159,7 @@ class ParkedRunResumerTest {
                 "run-1",
                 PipelineRunStatus.FAILED,
                 ParkedRunResumer.APPROVAL_WINDOW_EXPIRED_MESSAGE,
+                RunTerminationReason.HitlWindowExpired,
             )
         }
     }
@@ -165,7 +173,7 @@ class ParkedRunResumerTest {
         assertEquals(PendingSubmissionOutcome.NothingPending, outcome)
         coVerify { pendingInteractionRepository.delete("run-1") }
         // The run record was settled elsewhere — no second terminal write.
-        coVerify(exactly = 0) { pipelineRunRepository.finishRun(any(), any(), any()) }
+        coVerify(exactly = 0) { pipelineRunRepository.finishRun(any(), any(), any(), any()) }
         // …but the gate must not be left journalled as still waiting on a run
         // that is already over: the response arrived and could not be applied.
         coVerify(exactly = 1) {
@@ -175,16 +183,27 @@ class ParkedRunResumerTest {
 
     @Test
     fun `failPark fails the run deletes the record and removes the notification`() = runTest {
-        resumer.failPark(parkedApproval(), "reason")
+        resumer.failPark(parkedApproval(), "reason", RunTerminationReason.HitlWindowExpired)
 
-        coVerify { pipelineRunRepository.finishRun("run-1", PipelineRunStatus.FAILED, "reason") }
+        coVerify {
+            pipelineRunRepository.finishRun(
+                "run-1",
+                PipelineRunStatus.FAILED,
+                "reason",
+                RunTerminationReason.HitlWindowExpired,
+            )
+        }
         coVerify { pendingInteractionRepository.delete("run-1") }
         verify { approvalNotifier.cancelApprovalNotification("session-1") }
     }
 
     @Test
     fun `failPark on an elapsed window journals the gate as timed out`() = runTest {
-        resumer.failPark(parkedApproval(), ParkedRunResumer.APPROVAL_WINDOW_EXPIRED_MESSAGE)
+        resumer.failPark(
+            parkedApproval(),
+            ParkedRunResumer.APPROVAL_WINDOW_EXPIRED_MESSAGE,
+            RunTerminationReason.HitlWindowExpired,
+        )
 
         // The run's own outcome (FAILED) cannot say whether the user was asked
         // and never answered, or whether the park was discarded for another
@@ -196,7 +215,7 @@ class ParkedRunResumerTest {
 
     @Test
     fun `failPark on a changed graph journals the gate as abandoned`() = runTest {
-        resumer.failPark(parkedApproval(), ParkedRunResumer.GRAPH_CHANGED_MESSAGE)
+        resumer.failPark(parkedApproval(), ParkedRunResumer.GRAPH_CHANGED_MESSAGE, RunTerminationReason.GraphChanged)
 
         coVerify(exactly = 1) {
             recordTriggerHitlEvent("run-1", TriggerHitlEvent.Resolved(TriggerHitlResolution.ABANDONED))
@@ -209,7 +228,11 @@ class ParkedRunResumerTest {
         // the root — the run the trigger actually enqueued.
         coEvery { pipelineRunRepository.getRootRunId("run-1") } returns "root-run"
 
-        resumer.failPark(parkedApproval(), ParkedRunResumer.APPROVAL_WINDOW_EXPIRED_MESSAGE)
+        resumer.failPark(
+            parkedApproval(),
+            ParkedRunResumer.APPROVAL_WINDOW_EXPIRED_MESSAGE,
+            RunTerminationReason.HitlWindowExpired,
+        )
 
         coVerify(exactly = 1) {
             recordTriggerHitlEvent("root-run", TriggerHitlEvent.Resolved(TriggerHitlResolution.TIMED_OUT))
