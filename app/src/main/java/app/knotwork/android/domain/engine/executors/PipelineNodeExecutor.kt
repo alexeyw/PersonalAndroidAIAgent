@@ -396,7 +396,11 @@ class PipelineNodeExecutor @Inject constructor(
      * Forwards a child orchestrator state to the parent engine when it is an
      * observability or HITL state — the console snapshot and per-node I/O
      * snapshot (both depth-stamped, so the console nests them) and the
-     * approval/clarification gates (so a sub-pipeline's HITL card surfaces).
+     * approval/clarification gates (so a sub-pipeline's HITL card surfaces) —
+     * plus [AgentOrchestratorState.RunNotice], because the ceilings are shared
+     * across the whole run tree: a soft crossing raised inside a sub-pipeline is
+     * about the very allowance the user is watching at depth zero, and dropping
+     * it here would make the warning arrive only for shallow runs.
      * Streaming/answer/stage states are dropped: only the sub-pipeline's final
      * response is the parent node's output. [AgentOrchestratorState.PipelineTrace]
      * is deliberately *not* forwarded live — it carries no run id, so the UI
@@ -410,6 +414,7 @@ class PipelineNodeExecutor @Inject constructor(
             is AgentOrchestratorState.NodeIO,
             is AgentOrchestratorState.WaitingForApproval,
             is AgentOrchestratorState.AwaitingClarification,
+            is AgentOrchestratorState.RunNotice,
             -> emit(NodeOutput.State(state))
             else -> Unit
         }

@@ -135,3 +135,35 @@ sealed interface RunTerminationReason {
         override val kind: RunTerminationKind = RunTerminationKind.NOT_RESUMABLE
     }
 }
+
+/**
+ * Terse, stable, **log-oriented** rendering of a termination reason.
+ *
+ * Deliberately not user copy. Two audiences read a stopped run and they need
+ * different things:
+ *
+ *  - a **person** needs a sentence that explains what happened and what to do
+ *    about it. That lives in the presentation layer, in one place, resolved
+ *    from string resources — `RunTerminationCopy`;
+ *  - the **run console and the persisted `pipeline_runs.errorMessage`** need a
+ *    short, stable, greppable line that means the same thing in a bug report
+ *    six months from now. That is this.
+ *
+ * Keeping the two apart is the point of the split. Before it, one hand-written
+ * English sentence tried to be both, ended up persisted, quoted verbatim in the
+ * user guide, and drifted from the code it described. A diagnostic string
+ * cannot drift in the same way because it describes *values*, not behaviour:
+ * there is no claim in `step-ceiling: 15/15` that can become false.
+ *
+ * @return A single line, lower-case, no trailing punctuation.
+ */
+fun RunTerminationReason.diagnostic(): String = when (this) {
+    is RunTerminationReason.StepCeiling -> "step-ceiling: $spent/$limit steps"
+    is RunTerminationReason.TokenCeiling -> "token-ceiling: $spent/$limit tokens"
+    RunTerminationReason.HitlWindowExpired -> "hitl-window-expired"
+    RunTerminationReason.NoProgress -> "no-progress"
+    RunTerminationReason.GraphChanged -> "graph-changed"
+    RunTerminationReason.ProcessDied -> "process-died"
+    RunTerminationReason.DiscardedByUser -> "discarded-by-user"
+    RunTerminationReason.NotResumable -> "not-resumable"
+}

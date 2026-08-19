@@ -46,6 +46,8 @@ import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.ResumeContext
 import app.knotwork.android.domain.models.Role
+import app.knotwork.android.domain.models.RunCeilingAxis
+import app.knotwork.android.domain.models.RunNoticeCause
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.RunSpend
 import app.knotwork.android.domain.models.RunTerminationReason
@@ -395,7 +397,13 @@ class GraphExecutionEngineTest {
 
         val last = states.last()
         assertTrue("Expected a run-level error, got: $last", last is AgentOrchestratorState.Error)
-        assertTrue((last as AgentOrchestratorState.Error).message.contains("shared across the pipeline tree"))
+        // Asserted on the typed cause, not on the sentence. The wording moved to
+        // presentation resources precisely so it could be changed without a test
+        // like this one going quietly green against prose nobody ships any more.
+        assertTrue(
+            "a depth-exhausted budget must surface as a step ceiling",
+            (last as AgentOrchestratorState.Error).reason is RunTerminationReason.StepCeiling,
+        )
     }
 
     @Test
@@ -855,7 +863,10 @@ class GraphExecutionEngineTest {
 
         val last = states.last()
         assertTrue(last is AgentOrchestratorState.Error)
-        assertTrue((last as AgentOrchestratorState.Error).message.contains("2"))
+        assertEquals(
+            RunTerminationReason.StepCeiling(limit = 2, spent = 2),
+            (last as AgentOrchestratorState.Error).reason,
+        )
     }
 
     @Test
@@ -1144,7 +1155,10 @@ class GraphExecutionEngineTest {
 
         val last = states.last()
         assertTrue("Expected Error but got: $last", last is AgentOrchestratorState.Error)
-        assertTrue((last as AgentOrchestratorState.Error).message.contains("3"))
+        assertEquals(
+            RunTerminationReason.StepCeiling(limit = 3, spent = 3),
+            (last as AgentOrchestratorState.Error).reason,
+        )
     }
 
     // ─── Per-node metrics tests ───────────────────────────────────────────────
@@ -3729,6 +3743,17 @@ class GraphExecutionEngineTest {
         // ignore it.
         assertEquals(1, ceilingLines.size)
         assertTrue(ceilingLines.single().message.contains("steps"))
+
+        // The console line is a diagnostic; the sentence the user reads is
+        // resolved from this typed notice instead. Asserted positively — a test
+        // suite that only ever checks the notice is *absent* is satisfied by
+        // never emitting one at all.
+        val notices = states.filterIsInstance<AgentOrchestratorState.RunNotice>()
+        assertEquals(1, notices.size)
+        assertEquals(
+            RunNoticeCause.ApproachingCeiling(axis = RunCeilingAxis.STEPS, spent = 2, hardLimit = 3),
+            notices.single().cause,
+        )
     }
 
     @Test

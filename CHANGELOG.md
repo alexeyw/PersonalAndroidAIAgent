@@ -39,6 +39,38 @@ details.
   completion — where the provider reports them, instead of an estimate that only
   ever saw the answer. In a loop the prompt is what costs.
 
+- **The run limits are now visible, adjustable, and honestly described.**
+  Settings → Pipelines & structured output grows a **Run limits** row, showing
+  the current step and token limits without opening anything, and leading to a
+  screen with all four: steps and tokens, each with its own value for runs
+  nobody is watching. The background step limit follows the interactive one
+  until you set it separately, and says so on the row rather than showing two
+  identical numbers with no hint that they are linked. The spending limit is
+  there too, as a statement rather than a control: the app runs on your own key,
+  never sees your bill, and says *Not measured* instead of showing a figure it
+  would have to guess.
+
+  Until now three of those four numbers had no screen at all — a run stopped at
+  a limit you could not read, let alone change.
+
+- **A run that stops explains itself in its own words.**
+  Every way a run can end early — a limit, an unanswered approval, a pipeline
+  edited mid-pause, the app being killed — now has a sentence written for a
+  person, in one place, used identically by the chat, the notification and the
+  foreground status. Six of them previously showed the internal constant name
+  in the middle of a sentence, and the message a ceiling produced was assembled
+  inside the engine, persisted, and quoted verbatim in the documentation, which
+  is how it came to describe behaviour the engine does not have.
+
+  **Retry is gone from these messages.** Re-running the identical turn reaches
+  the identical limit; a run stopped by a ceiling now offers *Adjust limits*
+  instead, and the ones a fresh attempt genuinely fixes offer to run again.
+  Retry remains where it belongs, on an ordinary failure.
+
+  A ceiling stop is also no longer *styled* as a failure: the chat, the
+  background notification and the run console all give it the same warning tone
+  and shield the trigger journal already used.
+
 - **A run stopped by a safety limit no longer reads as a broken automation.**
   A trigger whose run hit a ceiling shows *Stopped by a safety limit* in its
   journal and does not count against the trigger's health indicator. Why a run
@@ -118,6 +150,12 @@ details.
 
 ### Changed
 
+- **A settings reset no longer detaches the background step limit.**
+  Resetting to recommended defaults used to write that limit explicitly, which
+  is exactly what marks it as independently chosen — leaving you with a
+  deliberate-looking decision you never made, silently stopping it from
+  following the interactive limit. The reset now clears it, restoring the link.
+
 - **The build no longer fails because a dependency released a new version.**
   Four Android Lint checks — the three "a newer version of X is available"
   checks and the target-SDK expiry warning — answer from an external version
@@ -150,6 +188,14 @@ details.
   would re-absorb the now-informational findings and quietly empty the report
   they live in, with nothing failing to say so, so the aggregated check now fails
   if a baseline suppresses one of them.
+
+### Fixed
+
+- **The *More* tab keeps its highlight inside settings sub-screens.**
+  Opening Privacy → Usage statistics or Background & triggers → Request journal
+  dropped the bottom-bar highlight, because the list of routes that count as
+  "inside settings" was maintained by hand and had never included them.
+
 
 ## [0.7.3] - 2026-08-16
 

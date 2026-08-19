@@ -22,11 +22,13 @@ import app.knotwork.android.domain.models.ResumeContext
 import app.knotwork.android.domain.models.RunBudgetLedger
 import app.knotwork.android.domain.models.RunGeneratingModel
 import app.knotwork.android.domain.models.RunImageDelivery
+import app.knotwork.android.domain.models.RunNoticeCause
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.RunSpend
 import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.ToolInvocationResult
+import app.knotwork.android.domain.models.diagnostic
 import app.knotwork.android.domain.models.usesContextConfig
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
 import app.knotwork.android.domain.prompt.PromptVariableProvider
@@ -917,11 +919,18 @@ class GraphExecutionEngine @Inject constructor(
                 // reader once the answer has been delivered.
                 if (currentNode.type != NodeType.OUTPUT) {
                     runBudget.claimSoftBreach()?.let { soft ->
-                        pushConsole(
-                            ConsoleEventType.RunCeiling,
-                            "Approaching the ${soft.axis.name.lowercase()} limit " +
-                                "(${soft.spent} of ${soft.hardLimit})",
+                        // The cause is typed at the source. The console gets the
+                        // terse diagnostic; the sentence the user reads is
+                        // resolved from this same value in the presentation
+                        // layer, so the crossing is worded once rather than once
+                        // per surface.
+                        val cause = RunNoticeCause.ApproachingCeiling(
+                            axis = soft.axis,
+                            spent = soft.spent,
+                            hardLimit = soft.hardLimit,
                         )
+                        pushConsole(ConsoleEventType.RunCeiling, cause.diagnostic())
+                        emit(AgentOrchestratorState.RunNotice(cause))
                         pendingSoftCeilingNote = true
                     }
                 }
@@ -1148,12 +1157,18 @@ class GraphExecutionEngine @Inject constructor(
         if (breach != null) {
             // A ceiling refused to let the walk continue. When this run is a
             // sub-pipeline the Error becomes the parent PIPELINE node's error and
-            // terminates the whole stack — the message names the tree-wide
-            // ceiling so the failure is unambiguous regardless of which depth ran
-            // out, and the typed reason travels with it so consumers no longer
-            // have to recover the cause from the prose.
-            pushConsole(ConsoleEventType.RunCeiling, ceilingConsoleLine(breach))
-            emit(AgentOrchestratorState.Error(ceilingErrorMessage(breach), reason = breach))
+            // terminates the whole stack; the typed reason travels with it, so a
+            // breach at any depth stays classified all the way up.
+            //
+            // Both carriers get the *diagnostic* form, not prose. This string is
+            // persisted to `pipeline_runs.errorMessage` and written to the run
+            // trace, where it is read by engineers; the sentence a person reads
+            // is resolved from `breach` in the presentation layer. Keeping a
+            // hand-written English sentence here is what previously let one
+            // event acquire four different wordings, two of which described
+            // behaviour the engine never had.
+            pushConsole(ConsoleEventType.RunCeiling, breach.diagnostic())
+            emit(AgentOrchestratorState.Error(breach.diagnostic(), reason = breach))
         } else {
             // Loop exited because currentNode became null before reaching OUTPUT
             pushConsole(ConsoleEventType.Error, "Pipeline terminated without OUTPUT")
@@ -1314,16 +1329,23 @@ class GraphExecutionEngine @Inject constructor(
             runTraceRepository.flush()
             true
         }
-        // Console lines and node-I/O snapshots are observations *about* the run,
-        // not progress of it: they keep arriving while a HITL gate is waiting
-        // (a sub-pipeline forwards its child's console traffic upwards). Letting
-        // them fall through to the branch below made the first such line read as
-        // "the wait ended" and flip the record back to RUNNING while the gate was
-        // still open. For a nested pipeline that left the root RUNNING and the
-        // child WAITING_APPROVAL, so `ResumePipelineRunUseCase` — which requires
-        // a resumable *root* — rejected every attempt to answer the parked
-        // notification (phase-40 finding F7).
-        state is AgentOrchestratorState.ConsoleLog || state is AgentOrchestratorState.NodeIO -> wasSuspended
+        // Console lines, node-I/O snapshots and run notices are observations
+        // *about* the run, not progress of it: they keep arriving while a HITL
+        // gate is waiting (a sub-pipeline forwards its child's console traffic
+        // upwards). Letting them fall through to the branch below made the first
+        // such line read as "the wait ended" and flip the record back to RUNNING
+        // while the gate was still open. For a nested pipeline that left the root
+        // RUNNING and the child WAITING_APPROVAL, so `ResumePipelineRunUseCase`
+        // — which requires a resumable *root* — rejected every attempt to answer
+        // the parked notification (phase-40 finding F7).
+        //
+        // A notice is only ever raised just after a node is charged, so today it
+        // cannot coincide with an open gate. It is classified here anyway: the
+        // guarantee should rest on what the state *means*, not on an ordering
+        // argument that a later change could quietly invalidate.
+        state is AgentOrchestratorState.ConsoleLog ||
+            state is AgentOrchestratorState.NodeIO ||
+            state is AgentOrchestratorState.RunNotice -> wasSuspended
         wasSuspended -> {
             pipelineRunRepository.updateStatus(runId, PipelineRunStatus.RUNNING)
             false
@@ -1418,54 +1440,6 @@ class GraphExecutionEngine @Inject constructor(
             stepsSpent = ledger.stepsSpent,
             tokensSpent = ledger.tokensSpent,
         )
-    }
-
-    /**
-     * The console line announcing a forced termination.
-     *
-     * Pushed **before** the terminal `Error` emission, like every other console
-     * write in this walk: a line appended afterwards would shift the last
-     * orchestrator state away from the terminal one the queue reads.
-     *
-     * @param reason The typed cause.
-     * @return The line to append to the run's console.
-     */
-    private fun ceilingConsoleLine(reason: RunTerminationReason): String = when (reason) {
-        is RunTerminationReason.StepCeiling -> "Pipeline exceeded max steps (${reason.limit})"
-        is RunTerminationReason.TokenCeiling -> "Pipeline exceeded its token limit (${reason.limit})"
-        RunTerminationReason.HitlWindowExpired,
-        RunTerminationReason.NoProgress,
-        RunTerminationReason.GraphChanged,
-        RunTerminationReason.ProcessDied,
-        RunTerminationReason.DiscardedByUser,
-        RunTerminationReason.NotResumable,
-        -> "Pipeline stopped: ${reason.kind.name}"
-    }
-
-    /**
-     * The human-readable message carried by the terminal `Error` state.
-     *
-     * Still assembled here, in English, exactly as the step-ceiling message
-     * always was. Moving this text into presentation resources is the job of the
-     * task that also writes the ceilings settings screen, so that the wording a
-     * user reads in the chat, in the settings and in the documentation is
-     * decided once instead of three times.
-     *
-     * @param reason The typed cause.
-     * @return The message for the terminal state.
-     */
-    private fun ceilingErrorMessage(reason: RunTerminationReason): String = when (reason) {
-        is RunTerminationReason.StepCeiling ->
-            "Pipeline execution exceeded the maximum of ${reason.limit} steps shared across the pipeline tree."
-        is RunTerminationReason.TokenCeiling ->
-            "Pipeline execution exceeded the maximum of ${reason.limit} tokens shared across the pipeline tree."
-        RunTerminationReason.HitlWindowExpired,
-        RunTerminationReason.NoProgress,
-        RunTerminationReason.GraphChanged,
-        RunTerminationReason.ProcessDied,
-        RunTerminationReason.DiscardedByUser,
-        RunTerminationReason.NotResumable,
-        -> "Pipeline execution was stopped (${reason.kind.name})."
     }
 
     private companion object {

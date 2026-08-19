@@ -173,7 +173,6 @@ class SettingsViewModel @Inject constructor(
 
     // ─── Pipelines & structured output ───────────────────────────────────────
 
-    fun setCapAutonomousSteps(steps: Int) = pipelines.setCapAutonomousSteps(steps)
     fun setPipelineMaxNestingDepth(depth: Int) = pipelines.setPipelineMaxNestingDepth(depth)
     fun setStructuredOutputMaxRepairs(count: Int) = pipelines.setStructuredOutputMaxRepairs(count)
 

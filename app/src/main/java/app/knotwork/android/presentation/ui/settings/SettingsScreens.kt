@@ -68,7 +68,6 @@ import app.knotwork.design.screens.settings.SLIDER_MEMORY_RECENCY_HALF_LIFE
 import app.knotwork.design.screens.settings.SLIDER_MEMORY_SEARCH_THRESHOLD
 import app.knotwork.design.screens.settings.SLIDER_MEMORY_SEARCH_TOP_K
 import app.knotwork.design.screens.settings.SLIDER_MEMORY_SUMMARY_LIMIT
-import app.knotwork.design.screens.settings.SLIDER_PIPELINE_CAP_STEPS
 import app.knotwork.design.screens.settings.SLIDER_PIPELINE_NESTING_DEPTH
 import app.knotwork.design.screens.settings.SLIDER_PIPELINE_STRUCTURED_REPAIRS
 import app.knotwork.design.screens.settings.SLIDER_PRIVACY_RETENTION_AGE
@@ -101,6 +100,7 @@ import app.knotwork.android.domain.settings.SettingsCategoryId as DomainCategory
  * @property onOpenUsageStatistics Open the on-device Usage statistics screen.
  * @property onOpenExternalAutomationJournal Open the external-automation request
  *   journal.
+ * @property onOpenRunLimits Open the run-limits screen.
  */
 data class SettingsNavActions(
     val onBack: () -> Unit,
@@ -113,6 +113,7 @@ data class SettingsNavActions(
     val onOpenLicenses: () -> Unit,
     val onOpenUsageStatistics: () -> Unit,
     val onOpenExternalAutomationJournal: () -> Unit,
+    val onOpenRunLimits: () -> Unit,
 )
 
 /** Settings hub: search field, the six inline Basic controls and the category list. */
@@ -515,6 +516,7 @@ private fun rememberSettingsCallbacks(
         onExternalAutomationToggle = viewModel::setExternalAutomationEnabled,
         onExternalAutomationPipelineClick = onExternalAutomationPipelineClick,
         onOpenExternalAutomationJournal = nav.onOpenExternalAutomationJournal,
+        onOpenRunLimits = nav.onOpenRunLimits,
         onCrashReportingToggle = viewModel::setCrashReportingEnabled,
         onPrivacySliderChange = { id, value -> routePrivacySlider(viewModel, id, value) },
         onOpenUsageStatistics = nav.onOpenUsageStatistics,
@@ -538,7 +540,6 @@ private fun routeGenerationSlider(viewModel: SettingsViewModel, id: String, valu
 
 private fun routePipelinesSlider(viewModel: SettingsViewModel, id: String, value: Float) {
     when (id) {
-        SLIDER_PIPELINE_CAP_STEPS -> viewModel.setCapAutonomousSteps(value.roundToInt())
         SLIDER_PIPELINE_NESTING_DEPTH -> viewModel.setPipelineMaxNestingDepth(value.roundToInt())
         SLIDER_PIPELINE_STRUCTURED_REPAIRS -> viewModel.setStructuredOutputMaxRepairs(value.roundToInt())
     }

@@ -134,6 +134,41 @@ class ChatHomeContentSnapshotTest {
     }
 
     @Test
+    fun chat_home_stopped_by_ceiling_light() = snapshot(name = "stopped_ceiling", dark = false) {
+        ChatHomeContent(state = ChatHomePreview.stoppedByCeiling())
+    }
+
+    @Test
+    fun chat_home_stopped_by_ceiling_dark() = snapshot(name = "stopped_ceiling", dark = true) {
+        ChatHomeContent(state = ChatHomePreview.stoppedByCeiling())
+    }
+
+    @Test
+    fun chat_home_stopped_housekeeping_light() = snapshot(name = "stopped_housekeeping", dark = false) {
+        ChatHomeContent(state = ChatHomePreview.stoppedHousekeeping())
+    }
+
+    @Test
+    fun chat_home_run_notice_light() = snapshot(name = "run_notice", dark = false) {
+        ChatHomeContent(state = ChatHomePreview.approachingCeiling())
+    }
+
+    @Test
+    fun chat_home_run_notice_dark() = snapshot(name = "run_notice", dark = true) {
+        ChatHomeContent(state = ChatHomePreview.approachingCeiling())
+    }
+
+    @Test
+    fun chat_home_run_notice_stuck_light() = snapshot(name = "run_notice_stuck", dark = false) {
+        ChatHomeContent(state = ChatHomePreview.looksStuck())
+    }
+
+    @Test
+    fun chat_home_run_notice_stuck_dark() = snapshot(name = "run_notice_stuck", dark = true) {
+        ChatHomeContent(state = ChatHomePreview.looksStuck())
+    }
+
+    @Test
     fun chat_home_drawer_open_light() = snapshot(name = "drawer_open", dark = false) {
         ChatHomeContent(state = ChatHomePreview.drawerOpen())
     }

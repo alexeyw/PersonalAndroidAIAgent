@@ -174,6 +174,9 @@ object NavRoutes {
     /** External-automation request journal, reached from Background. */
     const val SETTINGS_BACKGROUND_EXTERNAL_AUTOMATION: String = "settings/background/external-automation"
 
+    /** Run-limits screen, reached from the Pipelines category entry row. */
+    const val SETTINGS_PIPELINES_RUN_LIMITS: String = "settings/pipelines/run-limits"
+
     /** Privacy category sub-screen. */
     const val SETTINGS_PRIVACY: String = "settings/privacy"
 

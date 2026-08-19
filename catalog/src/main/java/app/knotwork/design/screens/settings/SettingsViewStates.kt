@@ -49,9 +49,6 @@ const val SLIDER_MEMORY_LIVE_WINDOW: String = "memory_live_window"
 /** Memory · `$MEMORY_SUMMARY` default limit slider id. */
 const val SLIDER_MEMORY_SUMMARY_LIMIT: String = "memory_summary_limit"
 
-/** Pipelines · cap-autonomous-steps slider id. */
-const val SLIDER_PIPELINE_CAP_STEPS: String = "pipeline_cap_steps"
-
 /** Pipelines · max-nesting-depth slider id. */
 const val SLIDER_PIPELINE_NESTING_DEPTH: String = "pipeline_nesting_depth"
 
@@ -212,13 +209,14 @@ data class MemorySettingsViewState(
 /**
  * Pipelines-&-structured-output category sub-screen state.
  *
- * @property capAutonomousSteps Cap-autonomous-steps slider (Basic).
+ * @property runLimitsSummary Value summary on the run-limits entry row — the
+ *   step and token limits, so the numbers a user came to read are legible
+ *   without opening anything. The limits themselves moved to their own screen:
+ *   four numbers plus a spend statement do not fit here, and the one that used
+ *   to sit on this screen was the only one of the four that was visible at all.
  * @property advancedSliders Max-nesting-depth + structured-output-repairs sliders.
  */
-data class PipelinesSettingsViewState(
-    val capAutonomousSteps: SettingSliderRow,
-    val advancedSliders: List<SettingSliderRow>,
-)
+data class PipelinesSettingsViewState(val runLimitsSummary: String, val advancedSliders: List<SettingSliderRow>)
 
 // ─── Tools ───────────────────────────────────────────────────────────────────
 

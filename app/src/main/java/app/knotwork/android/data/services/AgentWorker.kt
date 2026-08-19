@@ -275,11 +275,27 @@ class AgentWorker @AssistedInject constructor(
         when (run.status) {
             PipelineRunStatus.COMPLETED ->
                 scheduledTaskNotifier.notifyCompleted(run.sessionId, finalAnswerPreview(run))
-            PipelineRunStatus.FAILED ->
-                scheduledTaskNotifier.notifyFailed(
-                    run.sessionId,
-                    run.errorMessage ?: applicationContext.getString(R.string.notifications_task_failed_title),
-                )
+            PipelineRunStatus.FAILED -> {
+                // A run the app ended on purpose is announced as what it was.
+                // `errorMessage` here is the diagnostic, not user copy, so
+                // posting it under the failure title would have shown a person
+                // "step-ceiling: 15/15 steps" and called it a failure.
+                val reason = run.terminationReason
+                if (reason != null) {
+                    scheduledTaskNotifier.notifyTerminated(
+                        sessionId = run.sessionId,
+                        kind = reason,
+                        runLabel = chatRepository.getSessionById(run.sessionId)?.name.orEmpty(),
+                        stepsSpent = run.stepsSpent,
+                        tokensSpent = run.tokensSpent,
+                    )
+                } else {
+                    scheduledTaskNotifier.notifyFailed(
+                        run.sessionId,
+                        run.errorMessage ?: applicationContext.getString(R.string.notifications_task_failed_title),
+                    )
+                }
+            }
             else -> Unit // CANCELLED / INTERRUPTED: the user or the system already intervened.
         }
     }

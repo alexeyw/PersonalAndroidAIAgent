@@ -83,6 +83,9 @@ object SettingsRowAnchors {
     /** Background · external-automation request journal link. */
     const val LINK_EXTERNAL_AUTOMATION_JOURNAL = "LINK_EXTERNAL_AUTOMATION_JOURNAL"
 
+    /** Pipelines · run-limits screen link. */
+    const val LINK_RUN_LIMITS = "LINK_RUN_LIMITS"
+
     /** Privacy · crash-reporting toggle. */
     const val CRASH_REPORTING_ENABLED = "CRASH_REPORTING_ENABLED"
 
@@ -120,6 +123,7 @@ object SettingsRowAnchors {
         EXTERNAL_AUTOMATION_ENABLED,
         EXTERNAL_AUTOMATION_PIPELINE_ID,
         LINK_EXTERNAL_AUTOMATION_JOURNAL,
+        LINK_RUN_LIMITS,
         CRASH_REPORTING_ENABLED,
         IDENTITY,
         LINK_LICENSES,

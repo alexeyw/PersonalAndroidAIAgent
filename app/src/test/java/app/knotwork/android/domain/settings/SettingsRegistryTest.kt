@@ -80,7 +80,11 @@ class SettingsRegistryTest {
             "CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS", "CHAT_HISTORY_LIVE_WINDOW_SIZE",
             "MEMORY_SUMMARY_DEFAULT_LIMIT", "ACTIVE_EMBEDDING_PROVIDER_ID", "VERBOSE_MEMORY_LOGGING_ENABLED",
             // Pipelines & structured output
-            "PIPELINE_MAX_STEPS", "PIPELINE_MAX_NESTING_DEPTH", "STRUCTURED_OUTPUT_MAX_REPAIRS",
+            // PIPELINE_MAX_STEPS is deliberately absent: the step ceiling is no
+            // longer a keyed row here but part of the run-limits screen, reached
+            // through a keyless LINK row (anchor LINK_RUN_LIMITS). It moved with
+            // its three siblings, which had never had rows at all.
+            "PIPELINE_MAX_NESTING_DEPTH", "STRUCTURED_OUTPUT_MAX_REPAIRS",
             // Tools & workspace
             "TOOL_APPROVAL_POLICY", "BLOCK_DESTRUCTIVE_TOOLS", "BLOCK_NETWORK_FROM_LOCAL_MODEL",
             "TOOL_CALL_TIMEOUT_MS", "WORKSPACE_MAX_FILE_SIZE_BYTES", "WORKSPACE_MAX_TOTAL_BYTES",

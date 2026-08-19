@@ -269,7 +269,15 @@ private fun String.belongsToSettingsGraph(): Boolean = this == NavRoutes.SETTING
     this == NavRoutes.SETTINGS_TOOLS ||
     this == NavRoutes.SETTINGS_BACKGROUND ||
     this == NavRoutes.SETTINGS_PRIVACY ||
-    this == NavRoutes.SETTINGS_ABOUT
+    this == NavRoutes.SETTINGS_ABOUT ||
+    // The category sub-screens. These were missing: Privacy → Usage and
+    // Background → External automation are real destinations inside the
+    // settings subtree, and omitting them dropped the More tab's highlight the
+    // moment a user opened one. Listed here so the run-limits screen does not
+    // become a third instance of the same bug.
+    this == NavRoutes.SETTINGS_PRIVACY_USAGE ||
+    this == NavRoutes.SETTINGS_BACKGROUND_EXTERNAL_AUTOMATION ||
+    this == NavRoutes.SETTINGS_PIPELINES_RUN_LIMITS
 
 /**
  * Anchor route used as the [popUpTo] target during tab switches.

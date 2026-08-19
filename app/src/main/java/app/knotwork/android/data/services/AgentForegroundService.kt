@@ -20,6 +20,8 @@ import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.repositories.PowerStateRepository
 import app.knotwork.android.domain.services.MemoryReembedScheduler
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
+import app.knotwork.android.presentation.ui.common.RunTerminationCopyMapper
+import app.knotwork.android.presentation.ui.common.resolve
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -234,11 +236,19 @@ class AgentForegroundService : Service() {
         is AgentOrchestratorState.ObservationResult -> "Processing tool result..."
         is AgentOrchestratorState.Answering -> "Answering..."
         is AgentOrchestratorState.Completed -> "Task completed"
-        is AgentOrchestratorState.Error -> "Error: ${state.message}"
+        // A run the app stopped on purpose is not an error, and this line is
+        // the last place that still called one. The typed reason resolves to
+        // the same sentence the chat, the notification and the trigger journal
+        // use; only a genuine, untyped failure keeps the word "Error".
+        is AgentOrchestratorState.Error ->
+            state.reason
+                ?.let { resolve(RunTerminationCopyMapper.terminationCopy(it).title) }
+                ?: "Error: ${state.message}"
         is AgentOrchestratorState.PipelineStage -> "Pipeline stage: ${state.stepInfo.nodeName}"
         is AgentOrchestratorState.PipelineTrace -> "Pipeline trace updated"
         is AgentOrchestratorState.ConsoleLog -> "Pipeline running..."
         is AgentOrchestratorState.NodeIO -> "Pipeline running..."
+        is AgentOrchestratorState.RunNotice -> resolve(RunTerminationCopyMapper.noticeCopy(state.cause).text)
     }
 
     private fun createNotificationChannel() {
@@ -287,6 +297,10 @@ class AgentForegroundService : Service() {
         is AgentOrchestratorState.PipelineTrace,
         is AgentOrchestratorState.ConsoleLog,
         is AgentOrchestratorState.NodeIO,
+        // A notice is only ever raised mid-run, so the work is by definition
+        // still in flight and the status notification stays up — now carrying
+        // the advisory itself.
+        is AgentOrchestratorState.RunNotice,
         -> true
         is AgentOrchestratorState.Idle,
         is AgentOrchestratorState.Completed,

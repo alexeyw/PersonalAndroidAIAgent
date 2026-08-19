@@ -542,6 +542,9 @@ class ChatHomeViewModel @Inject constructor(
             current.withPendingCleared().withConsoleProjectionsCleared().copy(
                 visual = ChatHomeUiState.Generating(),
                 tokens = current.tokens.copy(streaming = 0),
+                // A notice belongs to the run that raised it. The new run has
+                // its own budget and will raise its own if it needs to.
+                runNotice = null,
             )
         }
 
@@ -1007,6 +1010,10 @@ class ChatHomeViewModel @Inject constructor(
                     current.withPendingCleared().copy(
                         tokens = current.tokens.copy(streaming = 0),
                         visual = current.restingVisual(),
+                        // The run finished inside its limits after all. A
+                        // warning about a limit it did not reach is noise, so
+                        // it leaves no residue.
+                        runNotice = null,
                     )
                 }
                 // Fire-and-forget: distil durable facts from the just-finished
@@ -1022,9 +1029,22 @@ class ChatHomeViewModel @Inject constructor(
                 _state.update {
                     it.withPendingCleared().copy(
                         tokens = it.tokens.copy(streaming = 0),
-                        visual = ChatHomeUiState.Error(state.message),
+                        // The typed cause travels into the visual state so the
+                        // surface can render a sentence for it. `state.message`
+                        // is the diagnostic when a reason is present, and is
+                        // shown verbatim only when it is not.
+                        visual = ChatHomeUiState.Error(state.message, reason = state.reason),
+                        // The run is over; an advisory about how it was going
+                        // has no reader once the outcome is on screen.
+                        runNotice = null,
                     )
                 }
+            }
+            // The run is still going and has something to say about itself. Not
+            // a visual state: it must coexist with whatever the run is doing —
+            // generating, or holding a HITL gate open — rather than replace it.
+            is AgentOrchestratorState.RunNotice -> {
+                _state.update { it.copy(runNotice = state.cause) }
             }
             // Intermediate states keep `Generating` while the request is in flight.
             else -> Unit

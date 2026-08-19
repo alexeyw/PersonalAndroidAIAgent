@@ -39,11 +39,11 @@ internal object SettingsPreview {
         searchResults = listOf(
             searchRow("MAX_CONTEXT_LENGTH", SettingsCategoryId.Generation, "Max context length", 0, 3),
             searchRow(
-                "PIPELINE_MAX_STEPS",
+                "LINK_RUN_LIMITS",
                 SettingsCategoryId.Pipelines,
-                "Cap autonomous steps",
+                "Run limits",
                 basic = true,
-                synonym = "max",
+                synonym = "limit",
             ),
             searchRow("MAX_MEMORY_CHUNKS", SettingsCategoryId.Memory, "Max memory chunks", 0, 3),
             searchRow("WORKSPACE_MAX_FILE_SIZE_BYTES", SettingsCategoryId.Tools, "Workspace max file size", 10, 3),
@@ -137,8 +137,91 @@ internal object SettingsPreview {
 
     // ─── Pipelines ───────────────────────────────────────────────────────────
 
+    // ─── Run limits ──────────────────────────────────────────────────────────
+
+    /**
+     * Default run limits: the background step ceiling has never been set, so it
+     * inherits — the state a fresh install is actually in, and the one the
+     * qualifier exists to explain.
+     */
+    fun runLimits(): RunLimitsViewState = RunLimitsViewState(
+        intro = "An autonomous run stops itself when it reaches one of these limits. Everything a run starts " +
+            "counts towards them — pipelines it calls, and every time it resumes.",
+        stepsGroupLabel = "Steps",
+        steps = LimitSliderRowState(
+            label = "Steps per run",
+            valueLabel = "15",
+            description = "How many steps a run may take before it stops. One step is one node execution.",
+            value = 15f,
+            valueRange = 5f..100f,
+            minLabel = "5",
+            maxLabel = "100",
+        ),
+        stepsBackground = LimitSliderRowState(
+            label = "Steps per background run",
+            valueLabel = "15",
+            description = "Not set separately, so background runs use the same limit as above.",
+            qualifier = "Same as above",
+            value = 15f,
+            valueRange = 5f..100f,
+            minLabel = "5",
+            maxLabel = "100",
+        ),
+        tokensGroupLabel = "Tokens",
+        tokens = LimitSliderRowState(
+            label = "Tokens per run",
+            valueLabel = "1,000,000",
+            description = "How many tokens a run may send and receive in total.",
+            value = 6f,
+            valueRange = 4f..7f,
+            minLabel = "10,000",
+            maxLabel = "10,000,000",
+        ),
+        tokensBackground = LimitSliderRowState(
+            label = "Tokens per background run",
+            valueLabel = "100,000",
+            description = "Background runs get a lower token limit by default, because no one is watching " +
+                "them finish.",
+            value = 5f,
+            valueRange = 4f..7f,
+            minLabel = "10,000",
+            maxLabel = "10,000,000",
+        ),
+        spendGroupLabel = "Spend",
+        spend = StatementRowState(
+            label = "Spending limit",
+            stateWord = "Not measured",
+            body = "The app runs on your own API key, so it never sees your bill and cannot measure or cap " +
+                "what a run costs. The token limit above is the closest control.",
+        ),
+        softNote = "Each run warns you once when it passes 75% of a limit, while there is still room to " +
+            "finish. The warning point is not adjustable.",
+    )
+
+    /** The user raised the interactive cap; the inherited row follows it. */
+    fun runLimitsRaised(): RunLimitsViewState = runLimits().let { base ->
+        base.copy(
+            steps = base.steps.copy(valueLabel = "40", value = 40f),
+            stepsBackground = base.stepsBackground.copy(valueLabel = "40", value = 40f),
+            tokens = base.tokens.copy(valueLabel = "4,000,000", value = 6.6f),
+        )
+    }
+
+    /** The background ceiling has been set on its own: no qualifier, its own copy. */
+    fun runLimitsBackgroundSet(): RunLimitsViewState = runLimits().let { base ->
+        base.copy(
+            stepsBackground = base.stepsBackground.copy(
+                valueLabel = "8",
+                value = 8f,
+                qualifier = null,
+                description = "Runs started by a trigger or from Quick Settings. They start at the same " +
+                    "limit as interactive runs.",
+            ),
+        )
+    }
+
     fun pipelines(): PipelinesSettingsViewState = PipelinesSettingsViewState(
-        capAutonomousSteps = SettingSliderRow(SLIDER_PIPELINE_CAP_STEPS, "Cap autonomous steps", "20", 20f, 5f..100f),
+        runLimitsSummary = "15 steps · 1,000,000 tokens per run",
         advancedSliders = listOf(
             SettingSliderRow(SLIDER_PIPELINE_NESTING_DEPTH, "Max nesting depth", "3", 3f, 1f..5f, steps = 3),
             SettingSliderRow(

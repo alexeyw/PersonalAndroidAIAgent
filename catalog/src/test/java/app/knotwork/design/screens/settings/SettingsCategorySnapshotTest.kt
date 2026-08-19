@@ -90,6 +90,26 @@ class SettingsCategorySnapshotTest {
     }
 
     @Test
+    fun pipelines_advanced_dark() = snapshot("pipelines_advanced", dark = true) {
+        PipelinesSettingsContent(state = SettingsPreview.pipelines(), advancedExpanded = true)
+    }
+
+    /**
+     * The Basic tier on its own, which is where the run-limits entry row lives.
+     * Previously the only Pipelines baseline had the Advanced disclosure open,
+     * so the row a user actually lands on had no capture of its own.
+     */
+    @Test
+    fun pipelines_basic_light() = snapshot("pipelines_basic", dark = false) {
+        PipelinesSettingsContent(state = SettingsPreview.pipelines())
+    }
+
+    @Test
+    fun pipelines_basic_dark() = snapshot("pipelines_basic", dark = true) {
+        PipelinesSettingsContent(state = SettingsPreview.pipelines())
+    }
+
+    @Test
     fun tools_basic_light() = snapshot("tools_basic", dark = false) {
         ToolsSettingsContent(state = SettingsPreview.tools())
     }

@@ -636,6 +636,21 @@ interface SettingsRepository {
     val pipelineMaxStepsBackground: Flow<Int>
 
     /**
+     * Whether the background step ceiling has ever been set independently.
+     *
+     * `false` means the value [pipelineMaxStepsBackground] reports is inherited
+     * from [pipelineMaxSteps] rather than chosen — a real, reachable state that
+     * a surface showing both numbers has to be able to explain, because
+     * otherwise it renders two identical figures and gives no hint that moving
+     * the first one also moves the second.
+     *
+     * Exposed rather than derived by comparing the two flows: they are equal by
+     * default, so equality cannot distinguish "inherited" from "deliberately
+     * set to the same number", and only the presence of the stored key can.
+     */
+    val pipelineMaxStepsBackgroundIsSet: Flow<Boolean>
+
+    /**
      * Updates the background step ceiling.
      *
      * @param steps The new limit. Will be coerced to the range 5–100.
