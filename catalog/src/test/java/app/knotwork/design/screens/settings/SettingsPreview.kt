@@ -33,20 +33,23 @@ internal object SettingsPreview {
     fun hubRestart(): SettingsHubViewState =
         hubDefault().copy(restartRequiredMessage = "Backend change requires restart.")
 
-    /** Hub with an active "limit" query — results across categories incl. a synonym hit. */
+    /** Hub with an active "max" query — results across categories incl. a synonym hit. */
     fun hubSearchResults(): SettingsHubViewState = hubDefault().copy(
-        // Was "max", which stopped being able to produce this list: the run
-        // limits row is keyed on its own synonyms now, and "max" is not one of
-        // them. A fixture may only depict a result the engine could return.
-        searchQuery = "limit",
+        // Every row here must be one the engine could actually return for this
+        // query. The run-limits row used to sit in this list on the strength of
+        // a "max steps" synonym that never existed; it is keyed on its own terms
+        // now — steps, tokens, limit, cap, budget, cost, spend — none of which
+        // is "max", so it does not belong in a "max" result set. Its place is
+        // taken by TOOL_CALL_TIMEOUT_MS, which matches "max" by synonym alone
+        // and so keeps the synonym-chip state this fixture exists to show.
+        searchQuery = "max",
         searchResults = listOf(
             searchRow("MAX_CONTEXT_LENGTH", SettingsCategoryId.Generation, "Max context length", 0, 3),
             searchRow(
-                "LINK_RUN_LIMITS",
-                SettingsCategoryId.Pipelines,
-                "Run limits",
-                basic = true,
-                synonym = "limit",
+                "TOOL_CALL_TIMEOUT_MS",
+                SettingsCategoryId.Tools,
+                "Tool call timeout",
+                synonym = "max",
             ),
             searchRow("MAX_MEMORY_CHUNKS", SettingsCategoryId.Memory, "Max memory chunks", 0, 3),
             searchRow("WORKSPACE_MAX_FILE_SIZE_BYTES", SettingsCategoryId.Tools, "Workspace max file size", 10, 3),

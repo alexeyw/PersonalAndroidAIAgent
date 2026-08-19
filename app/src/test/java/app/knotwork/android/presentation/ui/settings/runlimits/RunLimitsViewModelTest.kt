@@ -202,7 +202,9 @@ class RunLimitsViewModelTest {
     private companion object {
         /** All four differ from `RunLimitsUiState`'s defaults, on purpose. */
         const val REPO_STEPS: Int = 22
-        const val REPO_STEPS_BACKGROUND: Int = 22
+
+        /** Different from [REPO_STEPS] so a cross-wired collector cannot pass. */
+        const val REPO_STEPS_BACKGROUND: Int = 31
         const val REPO_TOKENS: Int = 640_000
         const val REPO_TOKENS_BACKGROUND: Int = 55_000
     }
