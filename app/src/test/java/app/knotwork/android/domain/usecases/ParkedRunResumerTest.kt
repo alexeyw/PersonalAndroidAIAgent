@@ -2,7 +2,9 @@ package app.knotwork.android.domain.usecases
 
 import app.knotwork.android.domain.models.PendingInteraction
 import app.knotwork.android.domain.models.PendingInteractionKind
+import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
+import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.models.TriggerHitlEvent
@@ -75,6 +77,21 @@ class ParkedRunResumerTest {
         toolArgs = "{}",
         risk = ToolRisk.SENSITIVE,
         requestedAt = requestedAt,
+    )
+
+    /** A run record that is still open, so the not-resumable branch has to settle it. */
+    private fun openRun(): PipelineRun = PipelineRun(
+        id = "run-1",
+        sessionId = "session-1",
+        pipelineId = "pipe-1",
+        origin = RunOrigin.TRIGGER,
+        status = PipelineRunStatus.WAITING_APPROVAL,
+        currentNodeId = "node-1",
+        startedAt = 0L,
+        finishedAt = null,
+        errorMessage = null,
+        graphContentHash = "hash",
+        userPrompt = "prompt",
     )
 
     @Test
@@ -176,6 +193,31 @@ class ParkedRunResumerTest {
         coVerify(exactly = 0) { pipelineRunRepository.finishRun(any(), any(), any(), any()) }
         // …but the gate must not be left journalled as still waiting on a run
         // that is already over: the response arrived and could not be applied.
+        coVerify(exactly = 1) {
+            recordTriggerHitlEvent("run-1", TriggerHitlEvent.Resolved(TriggerHitlResolution.ABANDONED))
+        }
+    }
+
+    @Test
+    fun `given NotResumable on a still-open run then it settles as not-resumable, not as a timeout`() = runTest {
+        // The branch every other NotResumable test skips, because it needs the
+        // run to still be open. The user *did* answer here — the run behind the
+        // gate simply could not be continued — so the gate must be journalled as
+        // abandoned, not as "no response before the window closed". Typing it as
+        // an expired window would rewrite the record of who failed to respond.
+        coEvery { resumePipelineRunUseCase("run-1") } returns ResumeOutcome.NotResumable
+        coEvery { pipelineRunRepository.getRun("run-1") } returns openRun()
+
+        resumer.submit(parkedApproval()) { true }
+
+        coVerify(exactly = 1) {
+            pipelineRunRepository.finishRun(
+                "run-1",
+                PipelineRunStatus.FAILED,
+                ParkedRunResumer.NOT_RESUMABLE_MESSAGE,
+                RunTerminationReason.NotResumable,
+            )
+        }
         coVerify(exactly = 1) {
             recordTriggerHitlEvent("run-1", TriggerHitlEvent.Resolved(TriggerHitlResolution.ABANDONED))
         }

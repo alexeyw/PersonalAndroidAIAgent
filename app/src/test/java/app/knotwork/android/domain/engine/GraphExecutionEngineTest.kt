@@ -3751,6 +3751,47 @@ class GraphExecutionEngineTest {
     }
 
     @Test
+    fun `given an INTENT_ROUTER after the crossing then the notice still never reaches the answer`() = runTest {
+        // The router is the case that defeated a guard on "which node receives
+        // the note": it composes a prompt, so it was handed the note, but its
+        // walk arm deliberately forwards `currentInputText` unchanged — so the
+        // pollution outlived it and reached a pass-through OUTPUT anyway.
+        //
+        // Arithmetic that puts the crossing one node ahead of the router:
+        // hard = 5 gives softFor(5) = 3, and the five nodes charge 1..5, so the
+        // third (llm_2) raises the warning, the router receives it, and OUTPUT
+        // still runs because 4 < 5.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(5)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("Blue")
+
+        val graph = PipelineGraph(
+            id = "g-router-soft",
+            name = "RouterSoft",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("llm_2", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("router_1", NodeType.INTENT_ROUTER, 0f, 0f, systemPrompt = "route"),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_1"),
+                ConnectionModel("c2", "llm_1", "llm_2"),
+                ConnectionModel("c3", "llm_2", "router_1"),
+                ConnectionModel("c4", "router_1", "output_1", label = "Blue"),
+            ),
+        )
+
+        val states = engine(sessionId, "prompt", graph).toList()
+
+        val completed = states.last() as AgentOrchestratorState.Completed
+        assertFalse(
+            "the internal notice must not survive the router into the answer",
+            completed.finalResponse.contains("SYSTEM NOTICE"),
+        )
+    }
+
+    @Test
     fun `given the crossing lands on OUTPUT then no console line is pushed after Completed`() = runTest {
         // OUTPUT's executor has already emitted `Completed` by the time the
         // charge happens, so a console push there would move the terminal state

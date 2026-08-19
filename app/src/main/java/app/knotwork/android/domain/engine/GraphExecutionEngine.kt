@@ -553,25 +553,6 @@ class GraphExecutionEngine @Inject constructor(
             terminationReason = runBudget.hardBreach()
             if (terminationReason != null) break
 
-            // Deliver a soft warning raised by the previous node into the input
-            // this one executes on, so the model can wind the task up rather
-            // than discovering the hard stop by walking into it.
-            //
-            // Only into a node that actually composes a prompt for a model. For
-            // every other node `currentInputText` is *data*, not a prompt: an
-            // OUTPUT node in its shipped pass-through mode persists its input
-            // verbatim as the agent's chat message, so an unguarded injection
-            // printed the engine's internal notice to the user as the answer.
-            // `QUEUE_PROCESSOR` parses its input as a list and `IF_CONDITION`
-            // branches on it — both would be corrupted the same way. The note
-            // stays pending until a model-facing node comes along, or is simply
-            // never delivered if none does; a hint nobody can act on is worth
-            // less than an answer nobody garbled.
-            if (pendingSoftCeilingNote && shouldComposeContext(currentNode)) {
-                currentInputText = "$SOFT_CEILING_CONTEXT_NOTE\n\n$currentInputText"
-                pendingSoftCeilingNote = false
-            }
-
             stepCount++
 
             // Visit index of this node when it is a PIPELINE node — incremented
@@ -721,7 +702,30 @@ class GraphExecutionEngine @Inject constructor(
                     // before any tool has run). Step 3/6 forbids the all-flags-false
                     // case at the validation layer, so we will not silently leak
                     // previous-node output back into a node that opted out.
-                    nodeContextBuilder.build(currentNode.contextConfig, executionContext)
+                    val composed = nodeContextBuilder.build(currentNode.contextConfig, executionContext)
+                    // Deliver a soft warning raised by an earlier node into this
+                    // node's *composed prompt*, so the model can wind the task up
+                    // rather than discovering the hard stop by walking into it.
+                    //
+                    // Into `executorInput`, never into `currentInputText`. The
+                    // latter is the text that travels between nodes, and for a
+                    // node that does not compose a prompt it is *data*: a
+                    // pass-through OUTPUT persists it verbatim as the agent's
+                    // chat message, `QUEUE_PROCESSOR` parses it as a list,
+                    // `IF_CONDITION` branches on it. Writing the notice there
+                    // printed the engine's internals to the user as their
+                    // answer — and guarding only the node it was handed to was
+                    // not enough, because `INTENT_ROUTER` composes a prompt but
+                    // deliberately forwards `currentInputText` unchanged, so the
+                    // pollution outlived the router and reached OUTPUT anyway.
+                    // Scoping it to one node's input makes that structurally
+                    // impossible rather than conditionally avoided.
+                    if (pendingSoftCeilingNote) {
+                        pendingSoftCeilingNote = false
+                        "$SOFT_CEILING_CONTEXT_NOTE\n\n$composed"
+                    } else {
+                        composed
+                    }
                 } else {
                     currentInputText
                 }
