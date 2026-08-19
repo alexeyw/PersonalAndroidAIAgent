@@ -70,6 +70,12 @@ class RunLimitsViewModelTest {
     fun `given the repository values then every one of them reaches the screen`() = runTest(dispatcher) {
         // One assertion per collector. Deleting any of the five init blocks
         // leaves the corresponding default in place and fails here.
+        //
+        // The fifth needs care the other four do not: `stepsBackgroundInherited`
+        // defaults to `true`, so asserting `true` here would pass against the
+        // default and prove nothing. The fixture therefore reports the key as
+        // SET, which is the value the ViewModel cannot produce on its own.
+        stepsBackgroundIsSet.value = true
         val viewModel = RunLimitsViewModel(repository)
         advanceUntilIdle()
 
@@ -78,7 +84,7 @@ class RunLimitsViewModelTest {
         assertEquals(REPO_STEPS_BACKGROUND, state.stepsBackground)
         assertEquals(REPO_TOKENS, state.tokens)
         assertEquals(REPO_TOKENS_BACKGROUND, state.tokensBackground)
-        assertTrue(state.stepsBackgroundInherited)
+        assertFalse(state.stepsBackgroundInherited)
     }
 
     @Test

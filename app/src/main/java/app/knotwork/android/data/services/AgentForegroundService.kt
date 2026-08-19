@@ -300,8 +300,9 @@ class AgentForegroundService : Service() {
         is AgentOrchestratorState.ConsoleLog,
         is AgentOrchestratorState.NodeIO,
         // A notice is only ever raised mid-run, so the work is by definition
-        // still in flight and the status notification stays up — now carrying
-        // the advisory itself.
+        // still in flight and the status notification stays up. It does not
+        // carry the advisory's words: this line describes what the agent is
+        // doing, and the advisory is worded once, in the chat.
         is AgentOrchestratorState.RunNotice,
         -> true
         is AgentOrchestratorState.Idle,

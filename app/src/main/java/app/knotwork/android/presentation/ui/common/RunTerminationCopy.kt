@@ -93,8 +93,9 @@ data class RunNoticeCopy(val tone: RunTerminationTone, val text: UiText)
  *
  * @property title What happened, in the same words the chat and the trigger
  *   journal use.
- * @property body One sentence naming the run and, for a ceiling, the allowance
- *   it used up.
+ * @property body One sentence naming the run and, for a ceiling, what it spent.
+ *   Never the allowance: the persisted record does not carry the limit, and a
+ *   token stop routinely lands past it — see [RunTerminationCopyMapper.notificationCopy].
  */
 data class RunTerminationNotificationCopy(val title: UiText, val body: UiText)
 

@@ -102,16 +102,20 @@ class ScheduledTaskNotifierImpl @Inject constructor(
             sessionId = sessionId,
             title = context.resolve(copy.title),
             body = context.resolve(copy.body),
-            // The glyph follows the cause rather than the fact that a cause
-            // exists. A limit the user set earns the shield — announcing that
-            // as a failure is what taught users to distrust their own
-            // automations. A run the watchdog killed for making no progress
-            // did not do what it was asked, and dressing that as a working
-            // guard is the same mistake pointing the other way.
+            // The shield is earned, not given to every typed cause. A limit the
+            // user configured did its job, and announcing that as a failure is
+            // what taught users to distrust their own automations. A run the
+            // watchdog killed, or one the platform killed, did not do what it
+            // was asked — dressing those as a working guard is the same mistake
+            // pointing the other way.
             icon = when (RunTerminationCopyMapper.toneFor(kind)) {
                 RunTerminationTone.LIMIT -> R.drawable.ic_notif_limit
-                RunTerminationTone.STUCK -> R.drawable.ic_notif_failed
-                RunTerminationTone.INFO -> R.drawable.ic_notif_done
+                // Everything else keeps the did-not-complete cross, whose own
+                // definition already covers this set: "a background run also
+                // fails because the platform killed the process". The success
+                // tick was briefly used here and was simply wrong — it is the
+                // glyph for a task that finished, and it doubles as Approve.
+                RunTerminationTone.STUCK, RunTerminationTone.INFO -> R.drawable.ic_notif_failed
             },
         )
     }

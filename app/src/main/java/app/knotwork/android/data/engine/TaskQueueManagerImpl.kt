@@ -393,7 +393,11 @@ class TaskQueueManagerImpl @Inject constructor(
                 message,
                 RunTerminationReason.GraphChanged,
             )
-            val errState = AgentOrchestratorState.Error(message)
+            // Same rule as the stall path below: the cause travels to the
+            // surface, not only to the record. Dropping it here left a resume
+            // the app refused wearing the destructive tile and a Retry, when
+            // what the user needs is "run it again" against the current graph.
+            val errState = AgentOrchestratorState.Error(message, RunTerminationReason.GraphChanged)
             stateFlow.emit(errState)
             _globalState.value = errState
             return
