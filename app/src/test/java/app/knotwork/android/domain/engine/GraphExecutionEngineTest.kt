@@ -3711,11 +3711,11 @@ class GraphExecutionEngineTest {
 
     @Test
     fun `given the soft threshold is crossed then the run is warned once and keeps going`() = runTest {
-        // A soft limit must not stop the run — it warns, marks the run, and
-        // nudges the model to wrap up.
+        // A soft limit must not stop the run — it warns and keeps going.
         // softFor(3) == 2, and the graph walks INPUT -> LITE_RT -> OUTPUT, so
-        // the crossing lands on the LITE_RT node: announced there, and the note
-        // reaches OUTPUT's input.
+        // the crossing is announced on the LITE_RT node. Delivery of the note
+        // itself is covered separately: this OUTPUT is a pass-through, which
+        // composes no prompt, so nothing is handed to it.
         every { settingsRepository.pipelineMaxSteps } returns flowOf(3)
         every { llmEngine.generateResponseStream(any()) } returns flowOf("response")
 
@@ -3729,6 +3729,52 @@ class GraphExecutionEngineTest {
         // ignore it.
         assertEquals(1, ceilingLines.size)
         assertTrue(ceilingLines.single().message.contains("steps"))
+    }
+
+    @Test
+    fun `given the soft threshold is crossed then the next prompt-composing node is warned`() = runTest {
+        // The positive half of the contract. Both leak tests assert the notice is
+        // *absent* from the answer, and "never produced" satisfies that perfectly
+        // — so without this, deleting the injection outright would leave the
+        // suite green.
+        //
+        // hard = 6 gives softFor(6) = 4, and the six nodes charge 1..6, so the
+        // crossing is claimed on node C and the note is handed to D, the next
+        // node that composes a prompt.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(6)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("answer")
+
+        val graph = PipelineGraph(
+            id = "g-soft-delivery",
+            name = "SoftDelivery",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("a", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("b", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("c", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("d", NodeType.LITE_RT, 0f, 0f),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "a"),
+                ConnectionModel("c2", "a", "b"),
+                ConnectionModel("c3", "b", "c"),
+                ConnectionModel("c4", "c", "d"),
+                ConnectionModel("c5", "d", "output_1"),
+            ),
+        )
+
+        val states = engine(sessionId, "prompt", graph).toList()
+
+        val nodeInputs = states.filterIsInstance<AgentOrchestratorState.NodeIO>().associate { it.nodeId to it.input }
+        assertTrue(
+            "the node after the crossing must be told to wind up; got: ${nodeInputs["d"]}",
+            nodeInputs.getValue("d").contains("SYSTEM NOTICE"),
+        )
+        // And only that one: the warning fires once per axis, not on every node.
+        assertFalse("a node before the crossing must not be warned", nodeInputs.getValue("b").contains("SYSTEM NOTICE"))
+        // The answer is still the model's, not the engine's.
+        assertEquals("answer", (states.last() as AgentOrchestratorState.Completed).finalResponse)
     }
 
     @Test
@@ -3788,6 +3834,18 @@ class GraphExecutionEngineTest {
         assertFalse(
             "the internal notice must not survive the router into the answer",
             completed.finalResponse.contains("SYSTEM NOTICE"),
+        )
+        // Not vacuous: the run really did walk through the router to OUTPUT, and
+        // the soft warning really did fire. Without both, "no notice in the
+        // answer" would be true for the wrong reason.
+        val consoleEvents = states.filterIsInstance<AgentOrchestratorState.ConsoleLog>().last().events
+        assertTrue(
+            "the soft threshold must actually have been crossed",
+            consoleEvents.any { it.type == ConsoleEventType.RunCeiling },
+        )
+        assertTrue(
+            "the router must actually have executed",
+            consoleEvents.any { it.message.contains(NodeType.INTENT_ROUTER.name) },
         )
     }
 
