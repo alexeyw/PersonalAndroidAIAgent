@@ -324,11 +324,6 @@ private fun journalStrings(): ExternalAutomationJournalStrings = ExternalAutomat
     bannerBoundTitle = stringResource(R.string.external_automation_banner_bound_title),
     bannerBoundBodyFormat = stringResource(R.string.external_automation_banner_bound_body),
     sectionLabel = stringResource(R.string.external_automation_section_label),
-    windowLabel = pluralStringResource(
-        R.plurals.external_automation_window_label,
-        RETENTION_DAYS,
-        RETENTION_DAYS,
-    ),
     retentionFooter = pluralStringResource(
         R.plurals.external_automation_retention_footer,
         RETENTION_DAYS,
@@ -368,7 +363,7 @@ private fun journalStrings(): ExternalAutomationJournalStrings = ExternalAutomat
     senderClaimedFormat = stringResource(R.string.external_automation_sender_claimed),
     requestIdFormat = stringResource(R.string.external_automation_request_id),
     repeatFormat = stringResource(R.string.external_automation_repeat),
-    repeatCd = stringResource(R.string.external_automation_repeat_cd),
+    repeatCdFormat = stringResource(R.string.external_automation_repeat_cd),
     callBlockTitle = stringResource(R.string.external_automation_call_title),
     callBlockBody = stringResource(R.string.external_automation_call_body),
     callBlockActionLabel = stringResource(R.string.external_automation_call_action_label),

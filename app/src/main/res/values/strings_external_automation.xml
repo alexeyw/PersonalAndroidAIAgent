@@ -9,7 +9,7 @@
   distinguishable in words: `Refused` is a statement about the request, `Held
   back` about the moment.
 -->
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Shared journal timestamp vocabulary (also used by the trigger journal's own copy). -->
     <string name="journal_time_just_now">just now</string>
@@ -32,10 +32,6 @@
 
     <!-- Journal section. -->
     <string name="external_automation_section_label">Inbound requests</string>
-    <plurals name="external_automation_window_label">
-        <item quantity="one">last %d day</item>
-        <item quantity="other">last %d days</item>
-    </plurals>
     <plurals name="external_automation_retention_footer">
         <item quantity="one">Requests are kept for %1$d day · at most %2$s are stored</item>
         <item quantity="other">Requests are kept for %1$d days · at most %2$s are stored</item>
@@ -82,7 +78,11 @@
     <string name="external_automation_sender_claimed">answer requested to %s · unverified</string>
     <string name="external_automation_request_id">req %s</string>
     <string name="external_automation_repeat">×%d</string>
-    <string name="external_automation_repeat_cd">repeated</string>
+    <!--
+      Not a plural: the badge is only rendered when the count is greater than one,
+      so the singular form is unreachable. The catalog formats the count in.
+    -->
+    <string name="external_automation_repeat_cd" tools:ignore="PluralsCandidate">repeated %d times</string>
 
     <!-- "How another app calls this". -->
     <string name="external_automation_call_title">How another app calls this</string>

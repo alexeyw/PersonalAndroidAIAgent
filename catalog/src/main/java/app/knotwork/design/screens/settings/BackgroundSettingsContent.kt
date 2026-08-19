@@ -105,7 +105,10 @@ fun BackgroundSettingsContent(
         }
         SettingsAnchor(anchorKey = SettingsRowAnchors.LINK_EXTERNAL_AUTOMATION_JOURNAL) {
             NavLinkRow(
-                icon = AppIcons.History,
+                // Not `History`: the scheduled-task notification row above already
+                // uses it, and two rows on one screen sharing a glyph makes the
+                // shorter scan of the list read them as the same kind of thing.
+                icon = AppIcons.Monitor,
                 title = stringResource(R.string.knotwork_settings_external_journal_title),
                 subtitle = state.externalAutomationJournalLabel,
                 onClick = callbacks.onOpenExternalAutomationJournal,

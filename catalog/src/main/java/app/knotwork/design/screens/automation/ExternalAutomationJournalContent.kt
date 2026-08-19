@@ -15,6 +15,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -142,7 +144,7 @@ fun ExternalAutomationJournalContent(
             if (state.callKeys.isNotEmpty()) {
                 item(key = "call-block") { CallBlock(state = state, strings = strings, callbacks = callbacks) }
             }
-            item(key = "section-header") { SectionHeader(state = state, strings = strings) }
+            item(key = "section-header") { SectionHeader(strings = strings) }
             journalSection(state = state, strings = strings)
         }
     }
@@ -365,9 +367,19 @@ private fun CallKeyRow(key: ExternalCallKeyUi, strings: ExternalAutomationJourna
 
 // ── Journal section ─────────────────────────────────────────────────────────
 
+/**
+ * Names the timeline below it.
+ *
+ * Carries no retention window of its own: the footer at the end of the list
+ * already states it, and a second copy opposite the section label had nowhere to
+ * go at the "Largest" text preset except on top of the label.
+ */
 @Composable
-private fun SectionHeader(state: ExternalAutomationJournalViewState, strings: ExternalAutomationJournalStrings) {
-    Row(
+private fun SectionHeader(strings: ExternalAutomationJournalStrings) {
+    Text(
+        text = strings.sectionLabel,
+        style = KnotworkTextStyles.MonoSm.copy(fontWeight = FontWeight.Bold),
+        color = KnotworkTheme.extended.onSurfaceMuted,
         modifier = Modifier
             .fillMaxWidth()
             .padding(
@@ -376,22 +388,7 @@ private fun SectionHeader(state: ExternalAutomationJournalViewState, strings: Ex
                 top = KnotworkTheme.spacing.sp5,
                 bottom = KnotworkTheme.spacing.sp1,
             ),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = strings.sectionLabel,
-            style = KnotworkTextStyles.MonoSm.copy(fontWeight = FontWeight.Bold),
-            color = KnotworkTheme.extended.onSurfaceMuted,
-        )
-        if (state.journalState == ExternalJournalVisualState.Populated) {
-            Text(
-                text = strings.windowLabel,
-                style = KnotworkTextStyles.MonoSm,
-                color = KnotworkTheme.extended.onSurfaceDim,
-            )
-        }
-    }
+    )
 }
 
 private fun LazyListScope.journalSection(
@@ -490,30 +487,38 @@ private fun StatusTile(status: ExternalRequestStatusUi) {
     }
 }
 
-/** Status word · what was asked for · repeat badge · moment. */
+/**
+ * Status word · what was asked for · repeat badge · moment.
+ *
+ * A [FlowRow] rather than a [Row], because at the "Largest" text preset these
+ * four items cannot share a line: laid out in a fixed row, the target — the one
+ * field that says *what was asked for*, and the only variable-length one — gets
+ * squeezed to two characters while the fixed-width status word and timestamp keep
+ * their space. Wrapping puts it on its own line instead of deleting it.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RowFirstLine(entry: ExternalRequestEntryUi, strings: ExternalAutomationJournalStrings) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+    FlowRow(
+        verticalArrangement = Arrangement.Center,
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        itemVerticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = entry.status.label(strings),
             style = KnotworkTextStyles.BodyBase.copy(fontWeight = FontWeight.Bold),
             color = MaterialTheme.colorScheme.onSurface,
         )
-        Text(
-            text = entry.targetLabel?.let { "${strings.targetPrefix} $it" }.orEmpty(),
-            style = KnotworkTextStyles.MonoSm,
-            color = KnotworkTheme.extended.onSurfaceMuted,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
+        entry.targetLabel?.let { target ->
+            Text(
+                text = "${strings.targetPrefix} $target",
+                style = KnotworkTextStyles.MonoSm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
         if (entry.repeatCount > 1) RepeatBadge(count = entry.repeatCount, strings = strings)
-        // Deliberately unweighted: the moment is short and fixed, so giving it a
-        // share of the row only takes width away from the target label, which is
-        // the part that is actually variable-length.
         Text(
             text = entry.timestampLabel,
             style = KnotworkTextStyles.MonoSm,
@@ -534,13 +539,16 @@ private fun RowFirstLine(entry: ExternalRequestEntryUi, strings: ExternalAutomat
  */
 @Composable
 private fun RepeatBadge(count: Int, strings: ExternalAutomationJournalStrings) {
-    val cd = strings.repeatCd
+    // Merged, and spelling the number out: read as a bare node, "×43" is
+    // announced as punctuation plus a number and the fact that it is a repeat
+    // count is exactly the part that goes missing.
+    val cd = strings.repeatCdFormat.format(count)
     Box(
         modifier = Modifier
             .clip(KnotworkTheme.shapes.full)
             .background(KnotworkTheme.extended.surface3)
             .padding(horizontal = KnotworkTheme.spacing.sp2, vertical = KnotworkTheme.spacing.sp1)
-            .semantics { contentDescription = cd },
+            .semantics(mergeDescendants = true) { contentDescription = cd },
     ) {
         Text(
             text = strings.repeatFormat.format(count),

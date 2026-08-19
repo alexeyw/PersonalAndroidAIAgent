@@ -103,9 +103,10 @@ class SettingsCallbacks(
     /** Open the picker binding a pipeline to the Quick Settings tile. */
     val onQuickTilePipelineClick: () -> Unit = {},
     /**
-     * "External automation" master switch. Carries the requested position rather
-     * than a plain toggle, because switching it **on** raises a consent dialog and
-     * only lands once confirmed, while switching it off is immediate.
+     * "External automation" master switch, carrying the position the user asked
+     * for. Unlike every other toggle here it is a **request**, not a write: the
+     * host raises a consent dialog for `true` and only persists once confirmed,
+     * while `false` is applied immediately.
      */
     val onExternalAutomationToggle: (Boolean) -> Unit = {},
     /** Open the picker binding the one pipeline outside apps may run. */

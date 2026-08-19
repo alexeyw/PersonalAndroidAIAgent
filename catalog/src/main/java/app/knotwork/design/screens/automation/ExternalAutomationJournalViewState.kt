@@ -236,8 +236,7 @@ data class ExternalAutomationJournalStrings(
     val bannerBoundBodyFormat: String = "Outside apps may run one pipeline: %s. Nothing else.",
     // Section chrome.
     val sectionLabel: String = "Inbound requests",
-    val windowLabel: String = "last 30 days",
-    val retentionFooter: String = "Requests are kept for 30 days · older entries age out",
+    val retentionFooter: String = "Requests are kept for 30 days · at most 2,000 are stored",
     val emptyTitle: String = "No requests yet",
     val emptyBody: String =
         "Nothing has asked to run a pipeline yet. Every request another app sends — accepted or " +
@@ -277,7 +276,7 @@ data class ExternalAutomationJournalStrings(
     val senderClaimedFormat: String = "answer requested to %s · unverified",
     val requestIdFormat: String = "req %s",
     val repeatFormat: String = "×%d",
-    val repeatCd: String = "repeated",
+    val repeatCdFormat: String = "repeated %d times",
     // "How another app calls this" block.
     val callBlockTitle: String = "How another app calls this",
     val callBlockBody: String =
