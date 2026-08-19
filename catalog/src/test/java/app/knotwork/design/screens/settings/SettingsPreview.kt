@@ -173,10 +173,33 @@ internal object SettingsPreview {
         shareTargetPipelineLabel = "Default System Pipeline",
         shareReuseSessionEnabled = true,
         quickTilePipelineLabel = "Not set",
+        externalAutomationEnabled = false,
+        externalAutomationPipelineLabel = "Not set",
+        externalAutomationUnbound = false,
+        externalAutomationJournalLabel = "No requests yet",
         advancedSliders = listOf(
             SettingSliderRow(SLIDER_BACKGROUND_RESUME_MAX_AGE, "Resume window", "48 h", 48f, 1f..168f),
             SettingSliderRow(SLIDER_BACKGROUND_APPROVAL_WINDOW, "Approval window", "24 h", 24f, 1f..168f),
         ),
+    )
+
+    /**
+     * External automation switched on with nothing bound: reachable, inert, and
+     * the state whose whole job is to look visibly incomplete rather than
+     * quietly do nothing.
+     */
+    fun backgroundExternalUnbound(): BackgroundSettingsViewState = background().copy(
+        externalAutomationEnabled = true,
+        externalAutomationPipelineLabel = "Not set — every request is refused",
+        externalAutomationUnbound = true,
+    )
+
+    /** External automation switched on and bound — the working state, with a refusal to diagnose. */
+    fun backgroundExternalBound(): BackgroundSettingsViewState = background().copy(
+        externalAutomationEnabled = true,
+        externalAutomationPipelineLabel = "Morning digest",
+        externalAutomationUnbound = false,
+        externalAutomationJournalLabel = "Refused · 14:32",
     )
 
     // ─── Privacy ─────────────────────────────────────────────────────────────

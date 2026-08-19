@@ -94,6 +94,12 @@ https://github.com/user-attachments/assets/2ea06de5-6832-4e0c-ad48-430f375d8b72
   the background. **Triggers** (time, charging, Wi-Fi, network) fire a pipeline
   on their own and report back with a notification. Every entry surface stays
   inert until you bind a pipeline to it — a privacy-first default.
+- **Complements your automation app.** Tasker, MacroDroid or a shell script over
+  `adb` can ask the agent to run one pipeline you nominate: they decide *when*,
+  the agent does the language-model part of *what*. Off by default and behind an
+  explicit consent dialog; the binding is an allowlist, not a fallback, so a
+  request naming anything else is refused rather than redirected. Every inbound
+  request — accepted or refused — lands in a readable journal.
 - **Local-first by construction.** The Room database is SQLCipher-encrypted and
   API keys are sealed with AES-GCM under a dedicated Android Keystore key.
   On-device usage statistics (a build-time guard forbids any network on that

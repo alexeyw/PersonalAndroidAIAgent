@@ -36,12 +36,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import app.knotwork.android.R
 import app.knotwork.android.domain.models.EntrySurface
 import app.knotwork.android.domain.models.MemoryImportStrategy
 import app.knotwork.android.domain.models.ProviderId
 import app.knotwork.android.domain.models.ToolApprovalPolicy
 import app.knotwork.android.presentation.tile.requestAddDutyTile
+import app.knotwork.design.screens.automation.ExternalAutomationConsentContent
+import app.knotwork.design.screens.automation.ExternalAutomationConsentStrings
 import app.knotwork.design.screens.settings.AboutSettingsContent
 import app.knotwork.design.screens.settings.ApproveToolCallsOption
 import app.knotwork.design.screens.settings.BackgroundSettingsContent
@@ -96,6 +99,8 @@ import app.knotwork.android.domain.settings.SettingsCategoryId as DomainCategory
  * @property onOpenAllowedDomains Open the allowed-HTTP-domains screen.
  * @property onOpenLicenses Open the About / licenses screen.
  * @property onOpenUsageStatistics Open the on-device Usage statistics screen.
+ * @property onOpenExternalAutomationJournal Open the external-automation request
+ *   journal.
  */
 data class SettingsNavActions(
     val onBack: () -> Unit,
@@ -107,6 +112,7 @@ data class SettingsNavActions(
     val onOpenAllowedDomains: () -> Unit,
     val onOpenLicenses: () -> Unit,
     val onOpenUsageStatistics: () -> Unit,
+    val onOpenExternalAutomationJournal: () -> Unit,
 )
 
 /** Settings hub: search field, the six inline Basic controls and the category list. */
@@ -253,6 +259,7 @@ fun BackgroundSettingsScreen(viewModel: SettingsViewModel, nav: SettingsNavActio
         nav = nav,
         onShareTargetPipelineClick = { pickerSurface = EntrySurface.SHARE },
         onQuickTilePipelineClick = { pickerSurface = EntrySurface.QUICK_TILE },
+        onExternalAutomationPipelineClick = { pickerSurface = EntrySurface.EXTERNAL_AUTOMATION },
     )
     val highlight = rememberCategoryHighlight(viewModel, uiState.pendingHighlightAnchor, DomainCategoryId.BACKGROUND)
     SettingsSurface(viewModel) {
@@ -266,18 +273,17 @@ fun BackgroundSettingsScreen(viewModel: SettingsViewModel, nav: SettingsNavActio
     }
     pickerSurface?.let { surface ->
         // Exhaustive on purpose: a new EntrySurface must not compile until this
-        // screen decides what it shows for it. A `null` title marks a surface
-        // bound elsewhere, and the picker is then simply not rendered rather
-        // than titled with a sentence written about a different surface.
+        // screen decides what it shows for it, rather than borrowing a sentence
+        // written about a different surface.
         val titleRes = when (surface) {
             EntrySurface.SHARE -> R.string.settings_pipeline_picker_share_title
             EntrySurface.QUICK_TILE -> R.string.settings_pipeline_picker_tile_title
-            EntrySurface.EXTERNAL_AUTOMATION -> null
-        } ?: return@let
+            EntrySurface.EXTERNAL_AUTOMATION -> R.string.settings_pipeline_picker_external_title
+        }
         val selectedId = when (surface) {
             EntrySurface.SHARE -> uiState.shareTargetPipelineId
             EntrySurface.QUICK_TILE -> uiState.quickSettingsTilePipelineId
-            EntrySurface.EXTERNAL_AUTOMATION -> null
+            EntrySurface.EXTERNAL_AUTOMATION -> uiState.externalAutomationPipelineId
         }
         SurfacePipelinePickerDialog(
             title = stringResource(titleRes),
@@ -292,7 +298,30 @@ fun BackgroundSettingsScreen(viewModel: SettingsViewModel, nav: SettingsNavActio
             onDismiss = { pickerSurface = null },
         )
     }
+    if (uiState.pendingExternalAutomationConsent) {
+        Dialog(onDismissRequest = viewModel::dismissExternalAutomationConsent) {
+            ExternalAutomationConsentContent(
+                onConfirm = viewModel::confirmExternalAutomationConsent,
+                onCancel = viewModel::dismissExternalAutomationConsent,
+                strings = externalAutomationConsentStrings(),
+            )
+        }
+    }
 }
+
+/** Localised copy of the external-automation consent dialog. */
+@Composable
+private fun externalAutomationConsentStrings(): ExternalAutomationConsentStrings = ExternalAutomationConsentStrings(
+    title = stringResource(R.string.external_automation_consent_title),
+    intro = stringResource(R.string.external_automation_consent_intro),
+    bulletAnyApp = stringResource(R.string.external_automation_consent_any_app),
+    bulletOnePipeline = stringResource(R.string.external_automation_consent_one_pipeline),
+    bulletApprovals = stringResource(R.string.external_automation_consent_approvals),
+    bulletCost = stringResource(R.string.external_automation_consent_cost),
+    bulletReversible = stringResource(R.string.external_automation_consent_reversible),
+    confirm = stringResource(R.string.external_automation_consent_confirm),
+    cancel = stringResource(R.string.external_automation_consent_cancel),
+)
 
 /**
  * Single-choice picker binding a pipeline to an entry surface. Reuses a plain
@@ -419,6 +448,7 @@ private fun rememberSettingsCallbacks(
     onClearSearch: () -> Unit = {},
     onShareTargetPipelineClick: () -> Unit = {},
     onQuickTilePipelineClick: () -> Unit = {},
+    onExternalAutomationPipelineClick: () -> Unit = {},
 ): SettingsCallbacks {
     val context = LocalContext.current
     val exportFilename = stringResource(R.string.settings_memory_export_filename)
@@ -482,6 +512,9 @@ private fun rememberSettingsCallbacks(
         onShareTargetPipelineClick = onShareTargetPipelineClick,
         onShareReuseSessionToggle = viewModel::setShareReuseSession,
         onQuickTilePipelineClick = onQuickTilePipelineClick,
+        onExternalAutomationToggle = viewModel::setExternalAutomationEnabled,
+        onExternalAutomationPipelineClick = onExternalAutomationPipelineClick,
+        onOpenExternalAutomationJournal = nav.onOpenExternalAutomationJournal,
         onCrashReportingToggle = viewModel::setCrashReportingEnabled,
         onPrivacySliderChange = { id, value -> routePrivacySlider(viewModel, id, value) },
         onOpenUsageStatistics = nav.onOpenUsageStatistics,

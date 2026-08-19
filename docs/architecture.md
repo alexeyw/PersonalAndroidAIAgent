@@ -59,7 +59,7 @@ Each layer maps onto concrete packages:
 
 | Layer          | Packages                                                                                          |
 |----------------|---------------------------------------------------------------------------------------------------|
-| `presentation` | `presentation/ui/{about,chat,files,memory,models,monitoring,more,onboarding,orchestrator,pipeline/editor,prompts,settings,splash,taskmonitor,tools}`, `presentation/ui/navigation`, `presentation/{components,state,theme,notifications,receivers}` |
+| `presentation` | `presentation/ui/{about,automation,chat,files,memory,models,monitoring,more,onboarding,orchestrator,pipeline/editor,prompts,settings,splash,taskmonitor,tools}`, `presentation/ui/navigation`, `presentation/{components,state,theme,notifications,receivers}` |
 | `domain`       | `domain/{usecases,engine,models,repositories,prompt,constants,services,pipelineio,promptio,memoryio,report}` |
 | `data`         | `data/{engine,local,repositories,prompt,mcp,services,tools,network,mappers,logging}`              |
 
@@ -1509,16 +1509,20 @@ surfaces enqueue work into the same background path:
   tile** — start a run from outside the app. Each is **inert until the
   user binds a pipeline** (the privacy default) and enqueues with an
   explicit `pipelineId` so it runs the user's choice regardless of the
-  app default. A third surface, **external automation**, is defined but
-  not yet wired: it lets another app on the device ask for a run. Its
-  binding is deliberately stricter than the other two — an **allowlist**
-  rather than a default, so a request naming any other pipeline is
-  refused rather than redirected. The request vocabulary, the status and
-  refusal dictionaries, and the pure parser and authorizer that decide on
-  them live in `domain` (`domain/constants/ExternalAutomationContract.kt`,
+  app default. A third surface, **external automation**, lets another app
+  on the device ask for a run. Its binding is deliberately stricter than
+  the other two — an **allowlist** rather than a default, so a request
+  naming any other pipeline is refused rather than redirected. The request
+  vocabulary, the status and refusal dictionaries, and the pure parser and
+  authorizer that decide on them live in `domain`
+  (`domain/constants/ExternalAutomationContract.kt`,
   `domain/models/ExternalAutomation*.kt`, `domain/usecases/automation/`),
-  which keeps the whole admission decision testable off-device. See
-  [external-automation.md](external-automation.md).
+  which keeps the whole admission decision testable off-device. Its consent
+  switch and pipeline binding are rows of the Background settings category;
+  its request journal is a screen of its own
+  (`presentation/ui/automation/`), reading the same `domain` dictionaries so
+  the user-facing sentences and the persisted discriminators cannot drift.
+  See [external-automation.md](external-automation.md).
 
 Neither is a new execution path. Both land on
 `TaskScheduler.scheduleOneTime(...)` (the `WorkManagerTaskScheduler`

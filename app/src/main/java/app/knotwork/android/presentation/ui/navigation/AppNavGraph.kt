@@ -18,6 +18,7 @@ import app.knotwork.android.domain.models.ProviderId
 import app.knotwork.android.presentation.state.ChatEntryRequest
 import app.knotwork.android.presentation.state.ChatEntryRequestRelay
 import app.knotwork.android.presentation.ui.about.AboutScreen
+import app.knotwork.android.presentation.ui.automation.ExternalAutomationJournalScreen
 import app.knotwork.android.presentation.ui.chat.archive.ChatArchiveScreen
 import app.knotwork.android.presentation.ui.chat.home.ChatHomeScreen
 import app.knotwork.android.presentation.ui.chat.home.ChatHomeViewModel
@@ -389,6 +390,9 @@ fun AppNavGraph(
             composable(NavRoutes.SETTINGS_BACKGROUND) { entry ->
                 BackgroundSettingsScreen(viewModel = settingsGraphViewModel(navController, entry), nav = nav)
             }
+            composable(NavRoutes.SETTINGS_BACKGROUND_EXTERNAL_AUTOMATION) {
+                ExternalAutomationJournalScreen(onBack = { navController.popBackStack() })
+            }
             composable(NavRoutes.SETTINGS_PRIVACY) { entry ->
                 PrivacySettingsScreen(viewModel = settingsGraphViewModel(navController, entry), nav = nav)
             }
@@ -512,6 +516,9 @@ private fun settingsNavActions(navController: NavHostController): SettingsNavAct
     onOpenAllowedDomains = { navController.navigate(NavRoutes.ALLOWED_DOMAINS) },
     onOpenLicenses = { navController.navigate(NavRoutes.ABOUT) },
     onOpenUsageStatistics = { navController.navigate(NavRoutes.SETTINGS_PRIVACY_USAGE) },
+    onOpenExternalAutomationJournal = {
+        navController.navigate(NavRoutes.SETTINGS_BACKGROUND_EXTERNAL_AUTOMATION)
+    },
 )
 
 /** Maps a settings category id to its sub-screen route. */

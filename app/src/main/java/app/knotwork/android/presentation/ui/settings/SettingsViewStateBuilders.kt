@@ -265,7 +265,10 @@ internal fun buildToolsViewState(uiState: SettingsUiState): ToolsSettingsViewSta
     blockNetworkSubtitle = stringResource(R.string.settings_restrictions_block_network_subtitle),
 )
 
-/** Builds the Background category state (notification toggles + advanced windows). */
+/**
+ * Builds the Background category state (notification toggles, entry-surface
+ * bindings, the external-automation consent switch, and the advanced windows).
+ */
 @Composable
 internal fun buildBackgroundViewState(uiState: SettingsUiState): BackgroundSettingsViewState =
     BackgroundSettingsViewState(
@@ -274,6 +277,10 @@ internal fun buildBackgroundViewState(uiState: SettingsUiState): BackgroundSetti
         shareTargetPipelineLabel = pipelineBindingLabel(uiState, uiState.shareTargetPipelineId),
         shareReuseSessionEnabled = uiState.shareReuseSession,
         quickTilePipelineLabel = pipelineBindingLabel(uiState, uiState.quickSettingsTilePipelineId),
+        externalAutomationEnabled = uiState.externalAutomationEnabled,
+        externalAutomationPipelineLabel = externalAutomationBindingLabel(uiState),
+        externalAutomationUnbound = uiState.isExternalAutomationUnbound(),
+        externalAutomationJournalLabel = externalJournalSummary(uiState.externalAutomationLatestRequest),
         advancedSliders = listOf(
             SettingSliderRow(
                 id = SLIDER_BACKGROUND_RESUME_MAX_AGE,

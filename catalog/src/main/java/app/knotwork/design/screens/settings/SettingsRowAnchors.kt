@@ -74,6 +74,15 @@ object SettingsRowAnchors {
     /** Background · Quick Settings tile pipeline binding row. */
     const val QUICK_SETTINGS_TILE_PIPELINE_ID = "QUICK_SETTINGS_TILE_PIPELINE_ID"
 
+    /** Background · external-automation master switch (the consent toggle). */
+    const val EXTERNAL_AUTOMATION_ENABLED = "EXTERNAL_AUTOMATION_ENABLED"
+
+    /** Background · pipeline outside apps may run (the allowlist binding). */
+    const val EXTERNAL_AUTOMATION_PIPELINE_ID = "EXTERNAL_AUTOMATION_PIPELINE_ID"
+
+    /** Background · external-automation request journal link. */
+    const val LINK_EXTERNAL_AUTOMATION_JOURNAL = "LINK_EXTERNAL_AUTOMATION_JOURNAL"
+
     /** Privacy · crash-reporting toggle. */
     const val CRASH_REPORTING_ENABLED = "CRASH_REPORTING_ENABLED"
 
@@ -108,6 +117,9 @@ object SettingsRowAnchors {
         SHARE_TARGET_PIPELINE_ID,
         SHARE_REUSE_SESSION,
         QUICK_SETTINGS_TILE_PIPELINE_ID,
+        EXTERNAL_AUTOMATION_ENABLED,
+        EXTERNAL_AUTOMATION_PIPELINE_ID,
+        LINK_EXTERNAL_AUTOMATION_JOURNAL,
         CRASH_REPORTING_ENABLED,
         IDENTITY,
         LINK_LICENSES,

@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  External-automation surfaces: the consent dialog raised by the master switch,
+  and the inbound-request journal.
+
+  The status and reason wording is the user-facing face of the domain
+  `ExternalAutomationStatus` / `ExternalAutomationRejectionReason` dictionaries.
+  A row must never show a constant name, and the two refusal kinds must stay
+  distinguishable in words: `Refused` is a statement about the request, `Held
+  back` about the moment.
+-->
+<resources>
+
+    <!-- Shared journal timestamp vocabulary (also used by the trigger journal's own copy). -->
+    <string name="journal_time_just_now">just now</string>
+    <string name="journal_time_minutes_ago">%dm ago</string>
+    <string name="journal_day_today">Today</string>
+    <string name="journal_day_yesterday">Yesterday</string>
+
+    <!-- Screen chrome. -->
+    <string name="external_automation_title">External automation</string>
+    <string name="external_automation_journal_subtitle">Request journal</string>
+    <string name="external_automation_back_cd">Back</string>
+
+    <!-- Posture banners. -->
+    <string name="external_automation_banner_off_title">Switched off</string>
+    <string name="external_automation_banner_off_body">No outside app can start a run. Requests that arrive anyway are refused on the spot — and still recorded below, so a profile calling a switched-off contract stays visible.</string>
+    <string name="external_automation_banner_unbound_title">No pipeline picked</string>
+    <string name="external_automation_banner_unbound_body">External automation is on, but nothing is picked for outside apps to run, so every request is refused. Pick a pipeline on the previous screen to make it work.</string>
+    <string name="external_automation_banner_bound_title">Accepting requests</string>
+    <string name="external_automation_banner_bound_body">Outside apps may run one pipeline: %s. Nothing else.</string>
+
+    <!-- Journal section. -->
+    <string name="external_automation_section_label">Inbound requests</string>
+    <plurals name="external_automation_window_label">
+        <item quantity="one">last %d day</item>
+        <item quantity="other">last %d days</item>
+    </plurals>
+    <plurals name="external_automation_retention_footer">
+        <item quantity="one">Requests are kept for %1$d day · at most %2$s are stored</item>
+        <item quantity="other">Requests are kept for %1$d days · at most %2$s are stored</item>
+    </plurals>
+    <string name="external_automation_empty_title">No requests yet</string>
+    <string name="external_automation_empty_body">Nothing has asked to run a pipeline yet. Every request another app sends — accepted or refused — shows up here.</string>
+
+    <!-- Statuses. -->
+    <string name="external_automation_status_accepted">Accepted</string>
+    <string name="external_automation_status_completed">Completed</string>
+    <string name="external_automation_status_failed">Failed</string>
+    <string name="external_automation_status_rejected">Refused</string>
+    <string name="external_automation_status_blocked">Held back</string>
+
+    <!-- Outcome sentences for the three run-bearing statuses. -->
+    <string name="external_automation_outcome_running">Running…</string>
+    <string name="external_automation_outcome_completed">The run finished.</string>
+    <string name="external_automation_outcome_failed">The run didn’t finish.</string>
+
+    <!-- The distinction between the two refusal kinds, in one sentence each. -->
+    <string name="external_automation_rejected_hint">Sending the same request again gives the same answer.</string>
+    <string name="external_automation_blocked_hint">The same request can be accepted later.</string>
+
+    <!-- Refusal reasons: one human sentence each, never the constant name. -->
+    <string name="external_automation_reason_contract_disabled">External automation is switched off.</string>
+    <string name="external_automation_reason_surface_not_bound">No pipeline is picked for outside apps to run.</string>
+    <string name="external_automation_reason_target_not_allowed">It asked for a pipeline other than the one you picked.</string>
+    <string name="external_automation_reason_target_missing">It didn’t say which pipeline to run.</string>
+    <string name="external_automation_reason_target_ambiguous">It named the pipeline twice, by id and by name, and the two disagree.</string>
+    <string name="external_automation_reason_unknown_action">It used an action this app doesn’t answer.</string>
+    <string name="external_automation_reason_prompt_missing">It didn’t include a message to run on.</string>
+    <string name="external_automation_reason_prompt_ambiguous">It sent the message twice, as plain text and as base64.</string>
+    <string name="external_automation_reason_prompt_undecodable">The base64 message couldn’t be decoded.</string>
+    <string name="external_automation_reason_request_id_missing">It didn’t include a request id to answer with.</string>
+    <string name="external_automation_reason_rate_limited">Too many requests in the last hour.</string>
+    <string name="external_automation_reason_return_package_mismatch">It asked for the answer to be sent to a different app than the one that called.</string>
+    <string name="external_automation_reason_return_package_mismatch_note">Nothing was run, and nothing was sent to that app.</string>
+
+    <!-- Row detail lines. -->
+    <string name="external_automation_target_prefix">for</string>
+    <string name="external_automation_target_by_id">id %s</string>
+    <string name="external_automation_action_prefix">action %s</string>
+    <string name="external_automation_sender_attested">sent by %s · confirmed by Android</string>
+    <string name="external_automation_sender_claimed">answer requested to %s · unverified</string>
+    <string name="external_automation_request_id">req %s</string>
+    <string name="external_automation_repeat">×%d</string>
+    <string name="external_automation_repeat_cd">repeated</string>
+
+    <!-- "How another app calls this". -->
+    <string name="external_automation_call_title">How another app calls this</string>
+    <string name="external_automation_call_body">Send a broadcast with this action and these extras. Worked Tasker, MacroDroid and adb examples live in the project documentation.</string>
+    <string name="external_automation_call_action_label">Action</string>
+    <string name="external_automation_call_keys_label">Extras</string>
+    <string name="external_automation_call_required">required</string>
+    <string name="external_automation_call_optional">optional</string>
+    <string name="external_automation_call_copy">Copy</string>
+    <string name="external_automation_call_expand_cd">Show how another app calls this</string>
+    <string name="external_automation_call_clip_label">Knotwork external automation</string>
+
+    <!-- Meaning of each wire key, in the order the contract declares them. -->
+    <string name="external_automation_key_pipeline_id">Id of the pipeline to run. Use this or the name, never both.</string>
+    <string name="external_automation_key_pipeline_name">Name of the pipeline to run, matched exactly.</string>
+    <string name="external_automation_key_prompt">The message the pipeline runs on.</string>
+    <string name="external_automation_key_prompt_b64">The same message, base64-encoded, for shells that mangle quoting.</string>
+    <string name="external_automation_key_request_id">Your own id. It comes back with the answer, so you can match them up.</string>
+    <string name="external_automation_key_return_action">Action to send the answer with. Defaults to the contract’s own.</string>
+    <string name="external_automation_key_return_package">Package to deliver the answer to. Leave it out for fire-and-forget.</string>
+
+    <!-- Consent dialog. -->
+    <string name="external_automation_consent_title">Let other apps run a pipeline?</string>
+    <string name="external_automation_consent_intro">Automation apps like Tasker or MacroDroid — and shell scripts over adb — will be able to ask Knotwork to run one pipeline for them.</string>
+    <string name="external_automation_consent_any_app">Any app on this device that can send a broadcast may ask. There is no per-app list: the pipeline you pick is the whole permission.</string>
+    <string name="external_automation_consent_one_pipeline">Only that one pipeline can be run. A request naming anything else is refused, never redirected to the one you picked.</string>
+    <string name="external_automation_consent_approvals">Your approvals still apply. Destructive and sensitive tools stop and ask you first, exactly as they do for the app’s own background runs.</string>
+    <string name="external_automation_consent_cost">A run started this way can use your cloud API key, and costs whatever that run costs.</string>
+    <string name="external_automation_consent_reversible">One tap on the same switch turns this off again.</string>
+    <string name="external_automation_consent_confirm">Turn on</string>
+    <string name="external_automation_consent_cancel">Cancel</string>
+
+</resources>

@@ -12,8 +12,9 @@ import app.knotwork.design.theme.KnotworkTheme
 
 /**
  * Background-&-triggers category sub-screen. Basic tier surfaces the two
- * notification toggles; the Advanced disclosure holds the resume-window and
- * background-approval-window sliders.
+ * notification toggles, the three entry-surface bindings and the
+ * external-automation consent switch with its request journal; the Advanced
+ * disclosure holds the resume-window and background-approval-window sliders.
  *
  * @param state Immutable Background state.
  * @param modifier Layout modifier.
@@ -75,6 +76,41 @@ fun BackgroundSettingsContent(
                 onClick = callbacks.onQuickTilePipelineClick,
             )
         }
+        SettingsAnchor(anchorKey = SettingsRowAnchors.EXTERNAL_AUTOMATION_ENABLED) {
+            IconToggleRow(
+                icon = AppIcons.External,
+                title = stringResource(R.string.knotwork_settings_external_automation_title),
+                subtitle = stringResource(
+                    if (state.externalAutomationEnabled) {
+                        R.string.knotwork_settings_external_automation_subtitle_on
+                    } else {
+                        R.string.knotwork_settings_external_automation_subtitle_off
+                    },
+                ),
+                checked = state.externalAutomationEnabled,
+                onCheckedChange = callbacks.onExternalAutomationToggle,
+            )
+        }
+        SettingsAnchor(anchorKey = SettingsRowAnchors.EXTERNAL_AUTOMATION_PIPELINE_ID) {
+            NavLinkRow(
+                icon = AppIcons.Flow,
+                title = stringResource(R.string.knotwork_settings_external_pipeline_title),
+                subtitle = state.externalAutomationPipelineLabel,
+                onClick = callbacks.onExternalAutomationPipelineClick,
+                // A switched-on surface with nothing bound accepts nothing. Left
+                // as an ordinary "Not set" it reads as an untouched default; the
+                // warning treatment is what tells it apart from one.
+                subtitleWarning = state.externalAutomationUnbound,
+            )
+        }
+        SettingsAnchor(anchorKey = SettingsRowAnchors.LINK_EXTERNAL_AUTOMATION_JOURNAL) {
+            NavLinkRow(
+                icon = AppIcons.History,
+                title = stringResource(R.string.knotwork_settings_external_journal_title),
+                subtitle = state.externalAutomationJournalLabel,
+                onClick = callbacks.onOpenExternalAutomationJournal,
+            )
+        }
         AdvancedDisclosure(initiallyExpanded = advancedExpanded) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -90,5 +126,8 @@ fun BackgroundSettingsContent(
     }
 }
 
-/** Number of Basic-tier rows on the Background sub-screen (three toggles + two pipeline bindings). */
-private const val BASIC_ROW_COUNT = 5
+/**
+ * Number of Basic-tier rows on the Background sub-screen: four toggles, three
+ * pipeline bindings, and the request-journal link.
+ */
+private const val BASIC_ROW_COUNT = 8

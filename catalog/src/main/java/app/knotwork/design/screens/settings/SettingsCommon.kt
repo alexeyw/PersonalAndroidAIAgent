@@ -318,7 +318,15 @@ internal fun IconToggleRow(
     }
 }
 
-/** Icon + title + subtitle + trailing chevron; routes to another screen. */
+/**
+ * Icon + title + subtitle + trailing chevron; routes to another screen.
+ *
+ * @param subtitleWarning Renders the subtitle as a warning — a leading warn glyph
+ *   plus the warn tint — for a row whose current value leaves the feature
+ *   incomplete. The glyph is not decoration: it is what carries the state for a
+ *   reader who cannot see the tint, so the row never says "something is wrong"
+ *   in colour alone.
+ */
 @Composable
 internal fun NavLinkRow(
     icon: ImageVector,
@@ -326,6 +334,7 @@ internal fun NavLinkRow(
     subtitle: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    subtitleWarning: Boolean = false,
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -347,11 +356,28 @@ internal fun NavLinkRow(
                 color = MaterialTheme.colorScheme.onSurface,
             )
             if (subtitle.isNotBlank()) {
-                Text(
-                    text = subtitle,
-                    style = KnotworkTextStyles.MonoSm,
-                    color = KnotworkTheme.extended.onSurfaceMuted,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+                ) {
+                    if (subtitleWarning) {
+                        Icon(
+                            imageVector = AppIcons.Warn,
+                            contentDescription = null,
+                            tint = KnotworkTheme.extended.signalWarn,
+                            modifier = Modifier.size(NavLinkWarnGlyphSize),
+                        )
+                    }
+                    Text(
+                        text = subtitle,
+                        style = KnotworkTextStyles.MonoSm,
+                        color = if (subtitleWarning) {
+                            KnotworkTheme.extended.signalWarn
+                        } else {
+                            KnotworkTheme.extended.onSurfaceMuted
+                        },
+                    )
+                }
             }
         }
         Icon(
@@ -361,6 +387,9 @@ internal fun NavLinkRow(
         )
     }
 }
+
+/** Leading glyph size of a [NavLinkRow] warning subtitle. */
+private val NavLinkWarnGlyphSize = 13.dp
 
 /** Collapsed external-provider row (masked key fingerprint + model + LAN pill). */
 @Composable

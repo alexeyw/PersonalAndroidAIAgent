@@ -184,7 +184,14 @@
     <string name="settings_pipeline_not_set">Not set</string>
     <string name="settings_pipeline_picker_share_title">Pipeline for sharing</string>
     <string name="settings_pipeline_picker_tile_title">Quick Settings pipeline</string>
+    <string name="settings_pipeline_picker_external_title">Pipeline other apps may run</string>
     <string name="settings_pipeline_picker_none">None</string>
+
+    <!-- External-automation row summary (Background category) -->
+    <string name="settings_external_pipeline_unbound">Not set — every request is refused</string>
+    <string name="settings_external_journal_none">No requests yet</string>
+    <string name="settings_external_journal_summary">%1$s · %2$s</string>
+    <string name="settings_external_journal_moment_dated">%1$s, %2$s</string>
 
     <!-- On-device usage statistics (Privacy → Usage statistics) -->
     <string name="settings_usage_runs_total">Total: %1$d</string>

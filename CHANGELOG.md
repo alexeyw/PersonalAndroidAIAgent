@@ -15,12 +15,43 @@ details.
 
 ### Added
 
+- **External automation is now switchable, and every request is readable.**
+  Settings → Background & triggers grows three rows: the master switch, the one
+  pipeline outside apps may run, and the request journal. All three are in the
+  settings search index — the app's most security-sensitive switch should not be
+  the only one you cannot find by typing its name.
+
+  Switching it **on** raises a consent dialog that names what you are agreeing
+  to in plain language: any app on the device that can send a broadcast may ask,
+  only the pipeline you pick can be run, your tool approvals still apply exactly
+  as they do for the app's own background runs, a run can spend your cloud API
+  key, and one tap turns it all off again. The switch does not move until you
+  confirm. Switching it **off** is immediate and asks nothing — a confirmation
+  on the way out would make that last promise false.
+
+  Switched on with nothing picked is a real state, not an oversight: the surface
+  accepts a request and refuses it. The binding row says so with a warning glyph
+  and words, not only a colour.
+
+  The **request journal** shows every inbound request, accepted or refused, with
+  the reason as a sentence rather than a constant name, and keeps the two
+  refusal kinds apart — *Refused* means sending the same request again gives the
+  same answer, *Held back* means it can be accepted later. Because Android only
+  reveals who sent a broadcast when the sender opts in (automation apps do not),
+  a row shows the app the caller asked to be answered on and marks it
+  *unverified*: a claim never reads as a confirmed identity. A caller looping
+  against a switched-off contract collapses onto one row with a repeat count, so
+  a misconfigured profile reads as one recurring problem rather than dozens of
+  separate ones. The screen also carries a *How another app calls this* block —
+  the action and the extra keys, read from the contract itself so it cannot
+  describe a call the app would not answer.
+
 - **Another app on your device can now ask Knotwork to run a pipeline.** The
   external-automation entry point defined in the previous change is live: a
   Tasker or MacroDroid profile, or a shell script over `adb`, can broadcast a
   request and Knotwork will run the pipeline you bound to it. The switch that
-  turns this on is off by default and gets its settings screen in the next
-  change, so nothing is reachable yet without it.
+  turns this on is off by default; its settings screen ships in the entry
+  above.
 
   The guarantees are the point, and each one is under test:
   human-in-the-loop confirmation, per-tool risk overrides and the

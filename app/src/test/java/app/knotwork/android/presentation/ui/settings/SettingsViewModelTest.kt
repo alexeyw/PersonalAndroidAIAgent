@@ -8,6 +8,7 @@ import app.knotwork.android.domain.models.TestProbeResult
 import app.knotwork.android.domain.models.ToolApprovalPolicy
 import app.knotwork.android.domain.repositories.ApiKeyRepository
 import app.knotwork.android.domain.repositories.CrashReportingRepository
+import app.knotwork.android.domain.repositories.ExternalAutomationJournalRepository
 import app.knotwork.android.domain.repositories.IdentityRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.MemoryRepository
@@ -61,6 +62,9 @@ class SettingsViewModelTest {
 
     private val context = mockk<Context>(relaxed = true)
     private val settings = mockk<SettingsRepository>(relaxed = true)
+    private val externalAutomationJournal = mockk<ExternalAutomationJournalRepository>(relaxed = true) {
+        every { observeAll() } returns flowOf(emptyList())
+    }
     private val apiKeys = mockk<ApiKeyRepository>(relaxed = true)
     private val localModels = mockk<LocalModelRepository>(relaxed = true)
     private val memory = mockk<MemoryRepository>(relaxed = true)
@@ -721,6 +725,73 @@ class SettingsViewModelTest {
         assertTrue(viewModel.uiState.value.searchResults.isEmpty())
     }
 
+    // ─── External automation: the consent gate ───────────────────────────────
+
+    @Test
+    fun `given the external switch moved on when staged then nothing is persisted yet`() = runTest {
+        advanceUntilIdle()
+
+        viewModel.setExternalAutomationEnabled(true)
+        advanceUntilIdle()
+
+        // The invariant the whole dialog exists for: the contract does not open
+        // because the switch was touched, only because the user agreed to it.
+        assertTrue(viewModel.uiState.value.pendingExternalAutomationConsent)
+        coVerify(exactly = 0) { settings.setExternalAutomationEnabled(any()) }
+    }
+
+    @Test
+    fun `given staged consent when confirmed then the contract is switched on and the dialog closes`() = runTest {
+        advanceUntilIdle()
+        viewModel.setExternalAutomationEnabled(true)
+        advanceUntilIdle()
+
+        viewModel.confirmExternalAutomationConsent()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.pendingExternalAutomationConsent)
+        coVerify(exactly = 1) { settings.setExternalAutomationEnabled(true) }
+    }
+
+    @Test
+    fun `given staged consent when dismissed then the contract stays as it was`() = runTest {
+        advanceUntilIdle()
+        viewModel.setExternalAutomationEnabled(true)
+        advanceUntilIdle()
+
+        viewModel.dismissExternalAutomationConsent()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.pendingExternalAutomationConsent)
+        coVerify(exactly = 0) { settings.setExternalAutomationEnabled(any()) }
+    }
+
+    @Test
+    fun `given the external switch moved off when applied then it is persisted without a dialog`() = runTest {
+        advanceUntilIdle()
+
+        viewModel.setExternalAutomationEnabled(false)
+        advanceUntilIdle()
+
+        // Closing an entry point never asks: a confirmation on the way out would
+        // make the consent copy's "one tap turns it off" promise false.
+        assertFalse(viewModel.uiState.value.pendingExternalAutomationConsent)
+        coVerify(exactly = 1) { settings.setExternalAutomationEnabled(false) }
+    }
+
+    @Test
+    fun `given a staged consent when the switch is moved off then the dialog is dropped`() = runTest {
+        advanceUntilIdle()
+        viewModel.setExternalAutomationEnabled(true)
+        advanceUntilIdle()
+
+        viewModel.setExternalAutomationEnabled(false)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.pendingExternalAutomationConsent)
+        coVerify(exactly = 1) { settings.setExternalAutomationEnabled(false) }
+    }
+
     private fun newViewModel(): SettingsViewModel = SettingsViewModel(
         appContext = context,
         settingsRepository = settings,
@@ -743,5 +814,6 @@ class SettingsViewModelTest {
             io.mockk.every { getAllPipelines() } returns kotlinx.coroutines.flow.flowOf(emptyList())
         },
         setSurfacePipelineUseCase = io.mockk.mockk(relaxed = true),
+        externalAutomationJournal = externalAutomationJournal,
     )
 }

@@ -130,6 +130,23 @@ private val BACKGROUND_ENTRIES = listOf(
         DROPDOWN,
         syn = listOf("tile", "quick settings", "shade", "pipeline", "surface"),
     ),
+    setting(
+        "EXTERNAL_AUTOMATION_ENABLED",
+        BASIC,
+        TOGGLE,
+        syn = listOf("external", "automation", "tasker", "macrodroid", "adb", "broadcast", "intent"),
+    ),
+    setting(
+        "EXTERNAL_AUTOMATION_PIPELINE_ID",
+        BASIC,
+        DROPDOWN,
+        syn = listOf("external", "automation", "tasker", "pipeline", "surface", "allowlist"),
+    ),
+    link(
+        BASIC,
+        "External automation journal",
+        syn = listOf("external", "automation", "tasker", "requests", "journal", "log", "history"),
+    ),
     setting("RESUME_MAX_AGE_HOURS", ADVANCED, SLIDER, syn = listOf("resume", "max")),
     setting("BACKGROUND_APPROVAL_WINDOW_HOURS", ADVANCED, SLIDER, syn = listOf("approval", "window")),
 )

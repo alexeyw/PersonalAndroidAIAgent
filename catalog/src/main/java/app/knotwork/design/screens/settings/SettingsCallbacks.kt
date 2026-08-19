@@ -102,6 +102,16 @@ class SettingsCallbacks(
     val onShareReuseSessionToggle: (Boolean) -> Unit = {},
     /** Open the picker binding a pipeline to the Quick Settings tile. */
     val onQuickTilePipelineClick: () -> Unit = {},
+    /**
+     * "External automation" master switch. Carries the requested position rather
+     * than a plain toggle, because switching it **on** raises a consent dialog and
+     * only lands once confirmed, while switching it off is immediate.
+     */
+    val onExternalAutomationToggle: (Boolean) -> Unit = {},
+    /** Open the picker binding the one pipeline outside apps may run. */
+    val onExternalAutomationPipelineClick: () -> Unit = {},
+    /** Open the external-automation request journal. */
+    val onOpenExternalAutomationJournal: () -> Unit = {},
 
     // ─── Privacy ─────────────────────────────────────────────────────────────
     /** "Crash reporting" toggle. */

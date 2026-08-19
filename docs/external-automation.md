@@ -7,12 +7,27 @@ than replace it: the other app decides *when* something should happen, using its
 own permissions and its own condition model, and Knotwork does the language-model
 part of *what* happens.
 
-> **Status: the entry point is live; its setting has no screen yet.** Requests
-> are received, judged and journalled exactly as described below. What is still
-> missing is the settings screen that switches the contract on and binds a
-> pipeline to it, and the worked Tasker / MacroDroid / `adb` examples — both land
-> in the next change. Until the switch has a screen the contract stays off, which
-> is its default state anyway.
+> **Status: the contract is live and switchable.** Requests are received, judged
+> and journalled exactly as described below, and **Settings → Background &
+> triggers → External automation** switches it on, picks the one pipeline outside
+> apps may run, and shows every inbound request. What is still missing is the
+> worked Tasker / MacroDroid / `adb` examples, which land in a later change.
+
+## Switching it on
+
+The contract is off out of the box. To open it:
+
+1. **Settings → Background & triggers → External automation** — the switch raises
+   a consent dialog naming what you are agreeing to; it only moves once you
+   confirm. Switching it back off is immediate and asks nothing.
+2. **Pipeline other apps may run** — pick the one pipeline. Until you do, the
+   surface is on but inert: every request is refused, and the row says so.
+3. **Request journal** — every inbound request, accepted or refused, with the
+   reason in plain language. The row on the settings screen summarises the most
+   recent one, which is usually what you came to check.
+
+The journal also carries a **How another app calls this** block with the action
+and the extra keys, so a profile can be written without leaving the app.
 
 ## The safety model in one paragraph
 
