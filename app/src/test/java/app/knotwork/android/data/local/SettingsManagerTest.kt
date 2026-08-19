@@ -88,6 +88,11 @@ class SettingsManagerTest {
     private val requiresUserConfirmationKey = booleanPreferencesKey("requires_user_confirmation")
     private val lastReembedProviderIdKey = stringPreferencesKey("last_reembed_provider_id")
     private val pipelineMaxStepsKey = androidx.datastore.preferences.core.intPreferencesKey("pipeline_max_steps")
+    private val pipelineMaxStepsBackgroundKey =
+        androidx.datastore.preferences.core.intPreferencesKey("pipeline_max_steps_background")
+    private val runMaxTokensKey = androidx.datastore.preferences.core.intPreferencesKey("run_max_tokens")
+    private val runMaxTokensBackgroundKey =
+        androidx.datastore.preferences.core.intPreferencesKey("run_max_tokens_background")
     private val pipelineMaxNestingDepthKey =
         androidx.datastore.preferences.core.intPreferencesKey("pipeline_max_nesting_depth")
     private val audioMaxDurationSecKey =
@@ -532,6 +537,81 @@ class SettingsManagerTest {
         val settingsManager = SettingsManager(dataStore, secretStore)
         val result = settingsManager.pipelineMaxSteps.first()
         assertEquals(30, result)
+    }
+
+    @Test
+    fun `pipelineMaxStepsBackground falls back to the configured interactive cap`() = runTest {
+        // The upgrade case, and the reason this is not a plain constant default:
+        // one setting used to govern every origin, so a user who had widened the
+        // cap to 40 must not find their triggers quietly reset to 15.
+        val prefs = mockk<Preferences>()
+        every { prefs[pipelineMaxStepsBackgroundKey] } returns null
+        every { prefs[pipelineMaxStepsKey] } returns 40
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, secretStore)
+        assertEquals(40, settingsManager.pipelineMaxStepsBackground.first())
+    }
+
+    @Test
+    fun `pipelineMaxStepsBackground prefers its own stored value over the interactive one`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[pipelineMaxStepsBackgroundKey] } returns 8
+        every { prefs[pipelineMaxStepsKey] } returns 40
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, secretStore)
+        assertEquals(8, settingsManager.pipelineMaxStepsBackground.first())
+    }
+
+    @Test
+    fun `pipelineMaxStepsBackground falls back to the constant only when neither is set`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[pipelineMaxStepsBackgroundKey] } returns null
+        every { prefs[pipelineMaxStepsKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, secretStore)
+        assertEquals(
+            SettingsDefaults.PIPELINE_MAX_STEPS_BACKGROUND_DEFAULT,
+            settingsManager.pipelineMaxStepsBackground.first(),
+        )
+    }
+
+    @Test
+    fun `runMaxTokens returns its default and then its stored value`() = runTest {
+        val unset = mockk<Preferences>()
+        every { unset[runMaxTokensKey] } returns null
+        every { dataStore.data } returns flowOf(unset)
+        assertEquals(
+            SettingsDefaults.RUN_MAX_TOKENS_DEFAULT,
+            SettingsManager(dataStore, secretStore).runMaxTokens.first(),
+        )
+
+        val stored = mockk<Preferences>()
+        every { stored[runMaxTokensKey] } returns 250_000
+        every { dataStore.data } returns flowOf(stored)
+        assertEquals(250_000, SettingsManager(dataStore, secretStore).runMaxTokens.first())
+    }
+
+    @Test
+    fun `runMaxTokensBackground returns its own, tighter default`() = runTest {
+        // The background number is a real default rather than an inheritance,
+        // because the token axis is new — there is no older setting a user could
+        // have configured for it.
+        val prefs = mockk<Preferences>()
+        every { prefs[runMaxTokensBackgroundKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, secretStore)
+        assertEquals(
+            SettingsDefaults.RUN_MAX_TOKENS_BACKGROUND_DEFAULT,
+            settingsManager.runMaxTokensBackground.first(),
+        )
+        assertTrue(
+            "the unattended ceiling must be the tighter one",
+            SettingsDefaults.RUN_MAX_TOKENS_BACKGROUND_DEFAULT < SettingsDefaults.RUN_MAX_TOKENS_DEFAULT,
+        )
     }
 
     @Test

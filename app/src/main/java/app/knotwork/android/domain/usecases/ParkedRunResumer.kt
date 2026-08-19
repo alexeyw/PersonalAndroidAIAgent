@@ -93,7 +93,7 @@ class ParkedRunResumer @Inject constructor(
                 val stillOpen = pipelineRunRepository.getRun(pending.runId)
                     ?.status in NON_TERMINAL_STATUSES
                 if (stillOpen) {
-                    failPark(pending, NOT_RESUMABLE_MESSAGE, RunTerminationReason.HitlWindowExpired)
+                    failPark(pending, NOT_RESUMABLE_MESSAGE, RunTerminationReason.NotResumable)
                 } else {
                     // The gate ends here too: without this it would stay
                     // journalled as still waiting on a run that is long over,

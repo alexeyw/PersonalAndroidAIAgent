@@ -552,6 +552,25 @@ class TaskQueueManagerImplTest {
         coVerify { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, "node exploded", null) }
     }
 
+    @Test
+    fun `given an engine error carrying a typed reason then it is settled with that reason`() = runTest {
+        // The seam that carries the cause out of the engine. Verified with a
+        // real reason, not only with null: settling a ceiling stop as an
+        // untyped failure is exactly the misreading the vocabulary prevents,
+        // and a test that only ever sees null would not notice.
+        val reason = RunTerminationReason.StepCeiling(limit = 15, spent = 15)
+        every { graphExecutionEngine.invoke(any(), any(), any(), any(), any()) } returns
+            flowOf(AgentOrchestratorState.Error("over the cap", reason))
+
+        val task = AgentTask(sessionId = "session_ceiling", prompt = "p")
+        taskQueueManager.enqueueTask(task)
+        advanceUntilIdle()
+
+        coVerify {
+            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, "over the cap", reason)
+        }
+    }
+
     /**
      * A plain exception escaping the engine flow also settles the record as
      * FAILED — the same mapping the in-memory `Error` state gets.

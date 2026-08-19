@@ -57,10 +57,11 @@ class ResolveRunCeilingsUseCaseTest {
 
     @Test
     fun `given every origin then the split matches isInteractive exactly`() = runTest {
-        // The guard that matters: the classification is not restated here, so a
-        // new origin is classified once, in the exhaustive `when` that will not
-        // compile until somebody does it. This test fails the moment the two
-        // partitions disagree.
+        // This asserts the *coupling*, not the partition: it fails if the use
+        // case stops deriving the split from `isInteractive` and hardcodes a
+        // list of its own. The partition itself is pinned by the explicit test
+        // below, which names the four background origins rather than deriving
+        // them.
         RunOrigin.entries.forEach { origin ->
             val ceilings = useCase(origin)
             val expectedSteps = if (origin.isInteractive) INTERACTIVE_STEPS else BACKGROUND_STEPS

@@ -94,6 +94,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -3731,6 +3732,25 @@ class GraphExecutionEngineTest {
     }
 
     @Test
+    fun `given a pass-through OUTPUT then the soft-ceiling notice never reaches the answer`() = runTest {
+        // `currentInputText` is a prompt only for a node that composes one. An
+        // OUTPUT node with no systemPrompt is in pass-through mode and persists
+        // its input verbatim as the agent's chat message, so injecting the
+        // engine's internal notice there printed it to the user as the answer.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(3)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("the real answer")
+
+        val states = engine(sessionId, "prompt", ceilingGraph()).toList()
+
+        val completed = states.last() as AgentOrchestratorState.Completed
+        assertEquals("the real answer", completed.finalResponse)
+        assertFalse(
+            "the internal notice must not be part of the answer",
+            completed.finalResponse.contains("SYSTEM NOTICE"),
+        )
+    }
+
+    @Test
     fun `given the crossing lands on OUTPUT then no console line is pushed after Completed`() = runTest {
         // OUTPUT's executor has already emitted `Completed` by the time the
         // charge happens, so a console push there would move the terminal state
@@ -3754,8 +3774,8 @@ class GraphExecutionEngineTest {
 
         engine(sessionId, "prompt", ceilingGraph(), "run-spend").toList()
 
-        // Three nodes execute, so the last write records three steps against the
-        // root — the number a resume will read back.
+        // Three nodes execute on a fresh attempt, so the last write records
+        // three steps against the root — the number a resume will read back.
         coVerify { pipelineRunRepository.recordSpend("run-spend", 3, any()) }
     }
 
@@ -3811,11 +3831,83 @@ class GraphExecutionEngineTest {
 
         engine(sessionId, "prompt", graph, "run-replay", resume).toList()
 
-        // Four nodes are walked; one of them replays. The seed was 2, and the
-        // three live nodes take it to 5 — not 6, which is what charging the
-        // replayed node too would produce.
-        coVerify { pipelineRunRepository.recordSpend("run-replay", 5, any()) }
+        // Four nodes are walked. llm_1 replays from the checkpoint and is not
+        // charged; INPUT and OUTPUT re-run but were already charged on the first
+        // attempt, so a resume does not charge them again. Only llm_2 is new.
+        // The seed was 2, so the tree lands on 3 — not 6, which is what charging
+        // the replayed prefix and the pass-through nodes again would produce.
+        coVerify { pipelineRunRepository.recordSpend("run-replay", 3, any()) }
         coVerify(exactly = 0) { pipelineRunRepository.recordSpend("run-replay", 6, any()) }
+    }
+
+    @Test
+    fun `given a ceiling breach inside a sub-pipeline then the typed reason reaches the root run`() = runTest {
+        // The reason has to survive the sub-pipeline boundary. Dropping it there
+        // settles the ROOT run as an ordinary failure, so a trigger whose loop
+        // lives one nesting level down would still redden its health badge for a
+        // guard that worked — the exact misreading this vocabulary prevents.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(3)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("partial")
+        val subGraph = PipelineGraph(
+            id = "sub-pipe",
+            name = "Sub",
+            nodes = listOf(
+                NodeModel("sub_in", NodeType.INPUT, 0f, 0f),
+                NodeModel("sub_llm", NodeType.LITE_RT, 5f, 0f),
+                NodeModel("sub_out", NodeType.OUTPUT, 10f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("sc1", "sub_in", "sub_llm"),
+                ConnectionModel("sc2", "sub_llm", "sub_out"),
+            ),
+        )
+        coEvery { pipelineRepository.getPipelineById("sub-pipe") } returns subGraph
+        val mainGraph = PipelineGraph(
+            id = "main-pipe",
+            name = "Main",
+            nodes = listOf(
+                NodeModel("main_in", NodeType.INPUT, 0f, 0f),
+                NodeModel("pipe_node", NodeType.PIPELINE, 10f, 0f, targetPipelineId = "sub-pipe"),
+                NodeModel("main_out", NodeType.OUTPUT, 20f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("mc1", "main_in", "pipe_node"),
+                ConnectionModel("mc2", "pipe_node", "main_out"),
+            ),
+        )
+
+        val states = engine(sessionId, "go", mainGraph).toList()
+
+        val error = states.last() as AgentOrchestratorState.Error
+        assertTrue(
+            "the root run must carry the child's typed cause, got ${error.reason}",
+            error.reason is RunTerminationReason.StepCeiling,
+        )
+    }
+
+    @Test
+    fun `given repeated resumes then the pass-through nodes are not re-charged each time`() = runTest {
+        // INPUT and OUTPUT are never written to the trace, so they re-run on
+        // every attempt. Charging them again on each resume would let a run that
+        // parks often exhaust its ceiling on pass-through nodes alone — the same
+        // class of drift the persisted counter exists to remove.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(50)
+        coEvery { pipelineRunRepository.getSpend("run-drift") } returns RunSpend(steps = 4, tokens = 0)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("Live")
+
+        val resume = ResumeContext(
+            records = listOf(nodeIoRecord("run-drift", 3L, "llm_1", NodeType.LITE_RT, "Recorded")),
+            memorySnapshot = null,
+            nextSeq = 4L,
+        )
+
+        engine(sessionId, "prompt", ceilingGraph(), "run-drift", resume).toList()
+
+        // Nothing new ran: llm_1 replayed, INPUT and OUTPUT were already paid
+        // for. The counter must be exactly where the previous attempt left it.
+        coVerify { pipelineRunRepository.recordSpend("run-drift", 4, any()) }
+        coVerify(exactly = 0) { pipelineRunRepository.recordSpend("run-drift", 5, any()) }
+        coVerify(exactly = 0) { pipelineRunRepository.recordSpend("run-drift", 6, any()) }
     }
 
     @Test

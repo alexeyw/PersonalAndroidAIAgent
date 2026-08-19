@@ -35,6 +35,12 @@ enum class RunTerminationKind {
 
     /** The user discarded the run from the chat surface. */
     DISCARDED_BY_USER,
+
+    /**
+     * A background answer arrived for a run that could no longer be resumed,
+     * so the run was settled instead of being left un-actionable.
+     */
+    NOT_RESUMABLE,
 }
 
 /**
@@ -116,37 +122,16 @@ sealed interface RunTerminationReason {
         override val kind: RunTerminationKind = RunTerminationKind.DISCARDED_BY_USER
     }
 
-    /** Reconstruction of a reason from what the run record actually stored. */
-    companion object {
-        /**
-         * Rebuilds the payload-free reason a persisted [RunTerminationKind]
-         * stands for, using the run record's own counters for the axes that
-         * carry numbers.
-         *
-         * The ceiling *limit* is not persisted on purpose: the setting it came
-         * from is mutable, so a value read back later would describe today's
-         * configuration rather than the decision that was actually taken. Where
-         * a limit is genuinely needed it is available live, on the reason the
-         * engine emitted. Reading a historical row back therefore reports the
-         * limit as the spend itself — the smallest ceiling consistent with the
-         * decision that was made.
-         *
-         * @param kind The persisted discriminator, or `null` for an
-         *   unclassified termination.
-         * @param stepsSpent The run record's persisted step count.
-         * @param tokensSpent The run record's persisted token count.
-         * @return The reconstructed reason, or `null` when [kind] is `null`.
-         */
-        fun fromPersisted(kind: RunTerminationKind?, stepsSpent: Int, tokensSpent: Int): RunTerminationReason? =
-            when (kind) {
-                null -> null
-                RunTerminationKind.STEP_CEILING -> StepCeiling(limit = stepsSpent, spent = stepsSpent)
-                RunTerminationKind.TOKEN_CEILING -> TokenCeiling(limit = tokensSpent, spent = tokensSpent)
-                RunTerminationKind.HITL_WINDOW_EXPIRED -> HitlWindowExpired
-                RunTerminationKind.NO_PROGRESS -> NoProgress
-                RunTerminationKind.GRAPH_CHANGED -> GraphChanged
-                RunTerminationKind.PROCESS_DIED -> ProcessDied
-                RunTerminationKind.DISCARDED_BY_USER -> DiscardedByUser
-            }
+    /**
+     * The user answered a background gate, but the run behind it could no
+     * longer be resumed, so it was settled rather than stranded.
+     *
+     * Distinct from [HitlWindowExpired] on purpose: the user *did* answer. The
+     * journal records the gate as abandoned rather than timed out, which is
+     * what it was before the cause became typed — collapsing the two would
+     * rewrite the record of who failed to respond.
+     */
+    data object NotResumable : RunTerminationReason {
+        override val kind: RunTerminationKind = RunTerminationKind.NOT_RESUMABLE
     }
 }

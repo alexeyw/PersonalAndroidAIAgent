@@ -1586,7 +1586,14 @@ class SettingsManager @Inject constructor(
             }
         }
         .map { preferences ->
+            // Falls back to the *configured* interactive cap, not to a constant.
+            // Until this key existed one setting governed every origin, so a user
+            // who had raised the cap to 40 would otherwise find their triggers
+            // silently dropped to the shipped default on upgrade — the exact
+            // capability regression the background default was chosen to avoid.
+            // A constant is only reached when the user never set either.
             preferences[PreferencesKeys.PIPELINE_MAX_STEPS_BACKGROUND]
+                ?: preferences[PreferencesKeys.PIPELINE_MAX_STEPS]
                 ?: SettingsDefaults.PIPELINE_MAX_STEPS_BACKGROUND_DEFAULT
         }
 

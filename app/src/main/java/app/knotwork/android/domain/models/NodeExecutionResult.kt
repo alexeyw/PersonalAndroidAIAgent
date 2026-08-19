@@ -22,6 +22,13 @@ package app.knotwork.android.domain.models
  *   counting deltas. Set to `false` only where a real prompt+completion count
  *   was received. The ceiling applies either way; the flag exists so the product
  *   can qualify the number instead of implying a precision it does not have.
+ * @property terminationReason For a `PIPELINE` node whose sub-pipeline was ended
+ *   by the app itself — a ceiling, most importantly — the typed cause the child
+ *   run reported. Carried so the parent engine can re-emit it instead of
+ *   flattening the child's decision into prose: without it a ceiling breach one
+ *   nesting level down settles the root run as an ordinary failure, which is
+ *   exactly the misreading the typed vocabulary exists to prevent. `null` for
+ *   every other node and for an ordinary sub-pipeline failure.
  * @property resolvedToolName For TOOL nodes only — the actual tool that was selected
  *   and executed. When the node is configured with `toolName = "auto"` the executor
  *   resolves the concrete tool dynamically; the engine reads this field to record
@@ -34,5 +41,6 @@ data class NodeExecutionResult(
     val routingKey: String? = null,
     val tokenCount: Int? = null,
     val tokensEstimated: Boolean = true,
+    val terminationReason: RunTerminationReason? = null,
     val resolvedToolName: String? = null,
 )

@@ -75,6 +75,7 @@ fun triggerRunOutcomeForTerminal(
         RunTerminationKind.GRAPH_CHANGED,
         RunTerminationKind.PROCESS_DIED,
         RunTerminationKind.DISCARDED_BY_USER,
+        RunTerminationKind.NOT_RESUMABLE,
         null,
         -> TriggerRunOutcome.Failure(errorMessage ?: DEFAULT_FAILURE_MESSAGE)
     }

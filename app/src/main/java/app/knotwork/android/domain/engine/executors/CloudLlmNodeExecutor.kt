@@ -167,6 +167,10 @@ class CloudLlmNodeExecutor @Inject constructor(
         // Google populate it, DeepSeek only if its API volunteers it, and the Ollama
         // client emits no end frame at all.
         var reportedTokenCount: Int? = null
+        // The completion half on its own, kept apart because the run ceiling and
+        // the generation-rate display want different numbers: the ceiling is
+        // about what the call cost, the rate is about what it produced.
+        var reportedOutputTokenCount: Int? = null
 
         try {
             responseStream.collect { frame ->
@@ -177,6 +181,7 @@ class CloudLlmNodeExecutor @Inject constructor(
                         ?: listOfNotNull(meta.inputTokensCount, meta.outputTokensCount)
                             .takeIf { it.isNotEmpty() }
                             ?.sum()
+                    reportedOutputTokenCount = meta.outputTokensCount
                     return@collect
                 }
                 val token = (frame as? StreamFrame.TextDelta)?.text ?: return@collect
@@ -236,7 +241,12 @@ class CloudLlmNodeExecutor @Inject constructor(
         val tokensEstimated = reportedTokenCount == null
 
         val endTime = System.currentTimeMillis()
-        metricsRepository.updateMetrics(endTime - startTime, chargedTokenCount)
+        // The metrics display divides this by elapsed time to show a generation
+        // rate, so it gets the *completion* count only. Prompt tokens were not
+        // produced during this call — folding them in would inflate the figure
+        // and make it incomparable with the local-inference path that feeds the
+        // same counter.
+        metricsRepository.updateMetrics(endTime - startTime, reportedOutputTokenCount ?: approximateTokenCount)
 
         val fullResponseText = accumulatedResponse.toString().trim()
 

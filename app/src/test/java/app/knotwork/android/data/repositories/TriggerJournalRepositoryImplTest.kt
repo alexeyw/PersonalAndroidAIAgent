@@ -122,6 +122,7 @@ class TriggerJournalRepositoryImplTest {
             "run-c" to TriggerRunOutcome.CancelledBySystem,
             "run-u" to TriggerRunOutcome.Cancelled,
             "run-h" to TriggerRunOutcome.HitlTimeout,
+            "run-b" to TriggerRunOutcome.StoppedByCeiling,
         )
         cases.entries.forEachIndexed { index, (runId, _) ->
             repo.recordEvaluation(

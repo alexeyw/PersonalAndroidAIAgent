@@ -556,7 +556,18 @@ class GraphExecutionEngine @Inject constructor(
             // Deliver a soft warning raised by the previous node into the input
             // this one executes on, so the model can wind the task up rather
             // than discovering the hard stop by walking into it.
-            if (pendingSoftCeilingNote) {
+            //
+            // Only into a node that actually composes a prompt for a model. For
+            // every other node `currentInputText` is *data*, not a prompt: an
+            // OUTPUT node in its shipped pass-through mode persists its input
+            // verbatim as the agent's chat message, so an unguarded injection
+            // printed the engine's internal notice to the user as the answer.
+            // `QUEUE_PROCESSOR` parses its input as a list and `IF_CONDITION`
+            // branches on it — both would be corrupted the same way. The note
+            // stays pending until a model-facing node comes along, or is simply
+            // never delivered if none does; a hint nobody can act on is worth
+            // less than an answer nobody garbled.
+            if (pendingSoftCeilingNote && shouldComposeContext(currentNode)) {
                 currentInputText = "$SOFT_CEILING_CONTEXT_NOTE\n\n$currentInputText"
                 pendingSoftCeilingNote = false
             }
@@ -618,6 +629,7 @@ class GraphExecutionEngine @Inject constructor(
                 emit(
                     AgentOrchestratorState.Error(
                         "Recorded checkpoint no longer matches the pipeline graph. Restart the task instead.",
+                        reason = RunTerminationReason.GraphChanged,
                     ),
                 )
                 return@flow
@@ -858,7 +870,32 @@ class GraphExecutionEngine @Inject constructor(
                 // the inverse of what the persisted ledger is for. That is why
                 // this sits in the live branch, beside the metrics write and the
                 // trace append, which are guarded the same way.
-                runBudget.chargeStep()
+                //
+                // Two further exclusions keep the *step* counter stable across
+                // attempts, which is the property a persisted counter has to have
+                // and the one a per-attempt budget never needed:
+                //
+                //  - INPUT and OUTPUT are never written to the trace, so they are
+                //    never replayed and run their executors again on every
+                //    resumed attempt. On a fresh attempt they are ordinary steps
+                //    and are charged; on a resume they were already charged the
+                //    first time, and charging them again would let a run that
+                //    parks fifteen times exhaust a fifteen-step ceiling on
+                //    pass-through nodes alone — which is the very scenario the
+                //    persisted counter exists to bound.
+                //  - A node whose result carries a termination reason is a
+                //    `PIPELINE` node whose child already charged this same tree
+                //    and stopped it; charging the parent node on top would
+                //    persist one more than the ceiling it just reported.
+                //
+                // Tokens are charged unconditionally: INPUT produces none, and
+                // OUTPUT is terminal, so neither can be double-counted later.
+                val replayedPassThrough = resume != null &&
+                    (currentNode.type == NodeType.INPUT || currentNode.type == NodeType.OUTPUT)
+                val chargeableStep = !replayedPassThrough && nodeResult?.terminationReason == null
+                if (chargeableStep) {
+                    runBudget.chargeStep()
+                }
                 runBudget.chargeTokens(nodeResult?.tokenCount, approximate = nodeResult?.tokensEstimated != false)
                 if (runId != null) {
                     persistSpend(runBudget)
@@ -895,7 +932,10 @@ class GraphExecutionEngine @Inject constructor(
                     ConsoleEventType.Error,
                     "${currentNode.type.name}: ${nodeResult?.error}",
                 )
-                emit(AgentOrchestratorState.Error(nodeResult?.error!!))
+                // A `PIPELINE` node forwards its sub-pipeline's typed cause here.
+                // Re-emitting it is what keeps a ceiling breach one nesting
+                // level down from settling the root run as an ordinary failure.
+                emit(AgentOrchestratorState.Error(nodeResult?.error!!, reason = nodeResult?.terminationReason))
                 return@flow
             }
 
@@ -1394,6 +1434,7 @@ class GraphExecutionEngine @Inject constructor(
         RunTerminationReason.GraphChanged,
         RunTerminationReason.ProcessDied,
         RunTerminationReason.DiscardedByUser,
+        RunTerminationReason.NotResumable,
         -> "Pipeline stopped: ${reason.kind.name}"
     }
 
@@ -1419,6 +1460,7 @@ class GraphExecutionEngine @Inject constructor(
         RunTerminationReason.GraphChanged,
         RunTerminationReason.ProcessDied,
         RunTerminationReason.DiscardedByUser,
+        RunTerminationReason.NotResumable,
         -> "Pipeline execution was stopped (${reason.kind.name})."
     }
 

@@ -1448,8 +1448,9 @@ Key invariants:
   `ExecutionScope`) through the whole tree, so a sub-pipeline charges the
   parent's allowance and a breach at any depth fails the entire stack
   with a typed `RunTerminationReason`. The ledger is seeded from — and
-  written back to — the root run record, so it survives a park and
-  resume; see the contract in the project description.
+  written back to — the root run record, so a ceiling keeps binding across
+  a park and resume instead of restarting; work already replayed from the
+  checkpoint is never charged twice.
 
 ### 6.2. Two-phase HITL (background approvals)
 

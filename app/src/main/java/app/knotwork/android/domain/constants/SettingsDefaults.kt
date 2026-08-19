@@ -150,6 +150,12 @@ object SettingsDefaults {
      * token axis already provides. The value is separately configurable so a
      * user who wants a tighter background bound has one.
      *
+     * This constant is reached only when the user has configured **neither**
+     * cap: until this key existed one setting governed every origin, so an
+     * unset background value falls back to the configured interactive one
+     * rather than here. Otherwise a user who had raised the cap would have seen
+     * their background runs quietly reset to 15 by the upgrade.
+     *
      * Shares the [PIPELINE_MAX_STEPS_MIN] / [PIPELINE_MAX_STEPS_MAX] clamps.
      */
     const val PIPELINE_MAX_STEPS_BACKGROUND_DEFAULT: Int = 15

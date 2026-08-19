@@ -103,11 +103,17 @@ object MemoryRetrievalQueryResolver {
  * `true` when the run was started by a person acting on the app right now, so
  * its prompt carries the user's actual intent.
  *
- * The distinction drives the retrieval-key contract above and is deliberately
- * exhaustive (`when` over the enum): a new [RunOrigin] will not compile until it
- * is classified, which is the point — silently defaulting a new background
- * surface to "interactive" would reintroduce the very blindness this resolver
- * exists to fix.
+ * The distinction drives the retrieval-key contract above and, since the
+ * autonomous-run ceilings landed, also decides **which ceiling binds a run**
+ * (`ResolveRunCeilingsUseCase`): a run nobody is watching gets the tighter
+ * numbers. Both consumers read this one property rather than re-partitioning
+ * the enum, so a new origin is classified once.
+ *
+ * The `when` is deliberately exhaustive: a new [RunOrigin] will not compile
+ * until it is classified, which is the point — silently defaulting a new
+ * background surface to "interactive" would reintroduce the very blindness this
+ * resolver exists to fix, and would now also hand it interactive spending
+ * limits.
  */
 val RunOrigin.isInteractive: Boolean
     get() = when (this) {

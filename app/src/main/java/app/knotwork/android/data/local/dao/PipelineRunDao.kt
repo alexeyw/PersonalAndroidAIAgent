@@ -195,7 +195,9 @@ interface PipelineRunDao {
     /**
      * Flips a resumable run back to the QUEUED status for checkpoint resume,
      * clearing the markers ([PipelineRunEntity.finishedAt],
-     * [PipelineRunEntity.errorMessage]) a sweep may have stamped. The
+     * [PipelineRunEntity.errorMessage], [PipelineRunEntity.terminationReason])
+     * a sweep may have stamped — a run that is running again must not still
+     * carry the reason it was stopped for. The
      * `WHERE status = :fromStatus` guard pins the transition to the expected
      * starting status — INTERRUPTED for the terminal-exit path next to
      * [discardInterruptedRun], or a WAITING_* status for a parked run whose
@@ -209,7 +211,8 @@ interface PipelineRunDao {
      *   applied, `0` when the row was missing or in a different status.
      */
     @Query(
-        "UPDATE pipeline_runs SET status = :toStatus, finishedAt = NULL, errorMessage = NULL " +
+        "UPDATE pipeline_runs SET status = :toStatus, finishedAt = NULL, errorMessage = NULL, " +
+            "terminationReason = NULL " +
             "WHERE id = :runId AND status = :fromStatus",
     )
     suspend fun markResumed(runId: String, fromStatus: String, toStatus: String): Int

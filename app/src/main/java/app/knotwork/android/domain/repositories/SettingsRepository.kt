@@ -627,6 +627,11 @@ interface SettingsRepository {
      * A [Flow] representing the maximum number of pipeline execution steps for
      * a run nobody is watching — the background origins (scheduler, quick tile,
      * trigger, external automation). Valid range: 5–100.
+     *
+     * Until this setting existed, [pipelineMaxSteps] governed every origin.
+     * While it has never been set, it therefore reports whatever
+     * [pipelineMaxSteps] is configured to, so an upgrade cannot quietly shrink
+     * the budget of an automation the user had already widened.
      */
     val pipelineMaxStepsBackground: Flow<Int>
 
@@ -1247,8 +1252,10 @@ interface SettingsRepository {
      * [SettingsDefaults.TOP_K_DEFAULT], [SettingsDefaults.TOP_P_DEFAULT],
      * [SettingsDefaults.REPETITION_PENALTY_DEFAULT],
      * [SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT],
-     * [SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT]). Used by the
-     * "Reset to defaults" action in Settings → LLM parameters.
+     * [SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT]) — and, alongside them, the
+     * autonomous-run ceilings, which share this reset because they are the same
+     * family of runtime bound: the background step cap and both token caps. Used
+     * by the "Reset to defaults" action in Settings → LLM parameters.
      */
     suspend fun resetSamplingDefaults()
 

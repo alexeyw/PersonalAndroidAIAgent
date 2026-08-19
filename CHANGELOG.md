@@ -43,8 +43,9 @@ details.
   A trigger whose run hit a ceiling shows *Stopped by a safety limit* in its
   journal and does not count against the trigger's health indicator. Why a run
   ended is now recorded as a typed cause rather than recovered by matching the
-  error text, which also fixes the same confusion for approvals that timed out,
-  for runs the system killed, and for the no-progress watchdog.
+  error text — which was how a timed-out background approval used to be told
+  apart from a genuine failure, and would have broken the first time that
+  message was reworded.
 
 - **External automation is now switchable, and every request is readable.**
   Settings → Background & triggers grows three rows: the master switch, the one
