@@ -710,7 +710,7 @@ immediately.
 
 ## Entry surfaces
 
-Beyond opening the app, three OS surfaces let you reach the agent from
+Beyond opening the app, four OS surfaces let you reach the agent from
 elsewhere on the device. Every surface is **off by default**: it does
 nothing until you point it at a pipeline, so the agent never acts on
 shared content or a tap until you have opted in.
@@ -750,13 +750,58 @@ a tap-through into the resulting chat. While no pipeline is bound the tile
 is inactive and a tap opens the app so you can set one up. Right after you
 bind a tile pipeline in Settings, Android offers to add the tile for you.
 
+### External automation (Tasker, MacroDroid, adb)
+
+Another app on the device can ask Knotwork to run a pipeline for it — a
+Tasker or MacroDroid profile, or a shell script over `adb`. The other app
+decides *when*; Knotwork does the language-model part of *what*.
+
+This one is different from the three above, because it opens the app to
+code you did not write. So it is switched on deliberately, in two steps:
+
+1. **Settings → Background & triggers → External automation** — the switch
+   raises a dialog spelling out what you are agreeing to: any app on the
+   device that can send a broadcast may ask, only the pipeline you pick can
+   be run, your tool approvals still apply exactly as they do for the app's
+   own background runs, a run can spend your cloud API key, and one tap
+   turns it all off again. The switch only moves once you confirm; turning
+   it back off is immediate and asks nothing.
+2. **Pipeline other apps may run** — pick the one pipeline. This is an
+   allowlist, not a default: a request naming anything else is refused
+   rather than redirected to your pick. Until you pick one, the surface is
+   on but inert — every request is refused, and the row says so in amber.
+
+**Request journal.** Every inbound request is recorded, accepted or
+refused, with the reason in plain language — "It asked for a pipeline other
+than the one you picked", "Too many requests in the last hour". A refusal is
+usually a profile that needs fixing rather than a fault in the app, and the
+journal is how you tell which. It also distinguishes the two refusal kinds:
+**Refused** means sending the same request again gives the same answer,
+**Held back** means it can be accepted later.
+
+Two details worth knowing:
+
+- **The sender is not verified.** Android only tells a receiving app who
+  sent a broadcast when the *sender* opts in, which automation apps do not.
+  So a row shows the app the caller asked to be answered on, marked
+  *unverified* — it is a claim, not a confirmed identity.
+- **A repeated refusal collapses onto one row** with a count (`×43`), so a
+  misconfigured profile looping every minute reads as one recurring problem
+  instead of forty-three separate ones.
+
+The journal screen also carries a **How another app calls this** block with
+the action string and the extra keys, so you can write the profile without
+leaving the app. Full details, including the callback your profile can
+receive back, are in
+[external-automation.md](external-automation.md).
+
 ### Choosing a pipeline per surface
 
 Bind a pipeline to a surface in either place:
 
-- **Settings → Background & triggers** — the *Pipeline for sharing* and
-  *Quick Settings pipeline* rows open a picker (choose a pipeline, or
-  **None** to switch the surface back off).
+- **Settings → Background & triggers** — the *Pipeline for sharing*,
+  *Quick Settings pipeline* and *Pipeline other apps may run* rows open a
+  picker (choose a pipeline, or **None** to switch the surface back off).
 - **Pipeline library** — a pipeline's row menu (⋮) has **Use for sharing**
   and **Use for Quick Settings tile**. The bound pipelines are easy to spot
   at a glance: the library row carries an outlined **SHARE** pill when it is

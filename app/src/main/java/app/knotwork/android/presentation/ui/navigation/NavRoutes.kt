@@ -171,6 +171,9 @@ object NavRoutes {
     /** Background-&-triggers category sub-screen. */
     const val SETTINGS_BACKGROUND: String = "settings/background"
 
+    /** External-automation request journal, reached from Background. */
+    const val SETTINGS_BACKGROUND_EXTERNAL_AUTOMATION: String = "settings/background/external-automation"
+
     /** Privacy category sub-screen. */
     const val SETTINGS_PRIVACY: String = "settings/privacy"
 

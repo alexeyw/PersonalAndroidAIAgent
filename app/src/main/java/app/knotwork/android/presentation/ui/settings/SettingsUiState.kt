@@ -2,6 +2,7 @@ package app.knotwork.android.presentation.ui.settings
 
 import app.knotwork.android.domain.constants.SettingsDefaults
 import app.knotwork.android.domain.models.ActiveModelMeta
+import app.knotwork.android.domain.models.ExternalAutomationJournalEntry
 import app.knotwork.android.domain.models.Identity
 import app.knotwork.android.domain.models.LocalBackend
 import app.knotwork.android.domain.models.MemoryExportDocument
@@ -119,6 +120,22 @@ import app.knotwork.design.screens.settings.HubSearchResultRow
  *   Settings tile, or `null` when the surface is unbound (inert).
  * @property bindablePipelines Pipelines offered in the Background binding
  *   pickers (id + display name), in library order.
+ * @property externalAutomationEnabled Mirror of the external-automation master
+ *   switch — whether another app on the device may ask for a pipeline run. Off
+ *   by default.
+ * @property externalAutomationPipelineId Id of the one pipeline outside apps may
+ *   run, or `null` when nothing is bound. This binding is an **allowlist**, not a
+ *   default: a request naming anything else is refused rather than redirected, so
+ *   an unbound surface refuses everything even while switched on.
+ * @property externalAutomationLatestRequest Newest row of the external-request
+ *   journal, or `null` when nothing has ever arrived. Only the newest is held:
+ *   the Background row answers "did anything reach us, and what happened to it",
+ *   and the full timeline lives on its own screen.
+ * @property pendingExternalAutomationConsent `true` while the consent dialog
+ *   raised by switching the contract **on** is open. Held in the ViewModel rather
+ *   than in the composable so the half-made decision survives a configuration
+ *   change — and so the invariant that matters (the switch does not move until
+ *   the user confirms) is testable without the UI.
  */
 data class SettingsUiState(
     val identity: Identity? = null,
@@ -170,6 +187,10 @@ data class SettingsUiState(
     val shareReuseSession: Boolean = SettingsDefaults.SHARE_REUSE_SESSION_DEFAULT,
     val quickSettingsTilePipelineId: String? = null,
     val bindablePipelines: List<PipelineBindingOption> = emptyList(),
+    val externalAutomationEnabled: Boolean = SettingsDefaults.EXTERNAL_AUTOMATION_ENABLED_DEFAULT,
+    val externalAutomationPipelineId: String? = null,
+    val externalAutomationLatestRequest: ExternalAutomationJournalEntry? = null,
+    val pendingExternalAutomationConsent: Boolean = false,
     val crashReportingEnabled: Boolean = false,
     val verboseMemoryLoggingEnabled: Boolean = SettingsDefaults.VERBOSE_MEMORY_LOGGING_ENABLED_DEFAULT,
     val traceRetentionRunsPerSession: Int = SettingsDefaults.TRACE_RETENTION_RUNS_PER_SESSION_DEFAULT,

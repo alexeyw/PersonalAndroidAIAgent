@@ -234,6 +234,18 @@ object SettingsSearchCatalog {
             R.string.settings_search_name_background_approval_window_hours,
             R.string.settings_search_desc_background_approval_window_hours,
         ),
+        "EXTERNAL_AUTOMATION_ENABLED" to strings(
+            R.string.settings_search_name_external_automation_enabled,
+            R.string.settings_search_desc_external_automation_enabled,
+        ),
+        "EXTERNAL_AUTOMATION_PIPELINE_ID" to strings(
+            R.string.settings_search_name_external_automation_pipeline_id,
+            R.string.settings_search_desc_external_automation_pipeline_id,
+        ),
+        "LINK_EXTERNAL_AUTOMATION_JOURNAL" to strings(
+            R.string.settings_search_name_link_external_automation_journal,
+            R.string.settings_search_desc_link_external_automation_journal,
+        ),
         // ─── Privacy ─────────────────────────────────────────────────────────
         CRASH_REPORTING_ANCHOR to strings(
             R.string.settings_search_name_crash_reporting_enabled,

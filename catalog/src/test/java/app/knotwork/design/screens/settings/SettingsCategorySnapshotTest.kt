@@ -104,6 +104,41 @@ class SettingsCategorySnapshotTest {
         BackgroundSettingsContent(state = SettingsPreview.background(), advancedExpanded = true)
     }
 
+    // The three external-automation postures. Each is a different decision for
+    // the reader — nothing can call in, something can call in but nothing will
+    // run, something can call in and one pipeline will — so each gets a baseline
+    // in both themes rather than only the working one.
+
+    @Test
+    fun background_external_off_light() = snapshot("background_external_off", dark = false) {
+        BackgroundSettingsContent(state = SettingsPreview.background())
+    }
+
+    @Test
+    fun background_external_off_dark() = snapshot("background_external_off", dark = true) {
+        BackgroundSettingsContent(state = SettingsPreview.background())
+    }
+
+    @Test
+    fun background_external_unbound_light() = snapshot("background_external_unbound", dark = false) {
+        BackgroundSettingsContent(state = SettingsPreview.backgroundExternalUnbound())
+    }
+
+    @Test
+    fun background_external_unbound_dark() = snapshot("background_external_unbound", dark = true) {
+        BackgroundSettingsContent(state = SettingsPreview.backgroundExternalUnbound())
+    }
+
+    @Test
+    fun background_external_bound_light() = snapshot("background_external_bound", dark = false) {
+        BackgroundSettingsContent(state = SettingsPreview.backgroundExternalBound())
+    }
+
+    @Test
+    fun background_external_bound_dark() = snapshot("background_external_bound", dark = true) {
+        BackgroundSettingsContent(state = SettingsPreview.backgroundExternalBound())
+    }
+
     @Test
     fun privacy_advanced_light() = snapshot("privacy_advanced", dark = false) {
         PrivacySettingsContent(state = SettingsPreview.privacy(), advancedExpanded = true)

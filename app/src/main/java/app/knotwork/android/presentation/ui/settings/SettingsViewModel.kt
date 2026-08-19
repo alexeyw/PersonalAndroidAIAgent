@@ -11,6 +11,7 @@ import app.knotwork.android.domain.models.ProviderId
 import app.knotwork.android.domain.models.ToolApprovalPolicy
 import app.knotwork.android.domain.repositories.ApiKeyRepository
 import app.knotwork.android.domain.repositories.CrashReportingRepository
+import app.knotwork.android.domain.repositories.ExternalAutomationJournalRepository
 import app.knotwork.android.domain.repositories.IdentityRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.MemoryRepository
@@ -82,6 +83,7 @@ class SettingsViewModel @Inject constructor(
     memorySearchStatsTracker: MemorySearchStatsTracker,
     pipelineRepository: PipelineRepository,
     setSurfacePipelineUseCase: SetSurfacePipelineUseCase,
+    externalAutomationJournal: ExternalAutomationJournalRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -131,6 +133,7 @@ class SettingsViewModel @Inject constructor(
             settingsRepository,
             pipelineRepository,
             setSurfacePipelineUseCase,
+            externalAutomationJournal,
         )
 
     private val privacy = PrivacySettingsDelegate(
@@ -186,9 +189,21 @@ class SettingsViewModel @Inject constructor(
     /** Toggles whether shares accumulate in one Shared chat (`true`) or open a new chat each time. */
     fun setShareReuseSession(reuse: Boolean) = background.setShareReuseSession(reuse)
 
-    /** Binds (or clears, with `null`) the pipeline run by an entry [surface] (share / tile). */
+    /** Binds (or clears, with `null`) the pipeline run by an entry [surface] (share / tile / external). */
     fun setSurfacePipeline(surface: EntrySurface, pipelineId: String?) =
         background.setSurfacePipeline(surface, pipelineId)
+
+    /**
+     * Moves the external-automation master switch. Switching it on stages the
+     * consent dialog rather than persisting; switching it off persists at once.
+     */
+    fun setExternalAutomationEnabled(enabled: Boolean) = background.setExternalAutomationEnabled(enabled)
+
+    /** Persists the switched-on external-automation contract the user just consented to. */
+    fun confirmExternalAutomationConsent() = background.confirmExternalAutomationConsent()
+
+    /** Drops the staged external-automation consent; the contract stays as it was. */
+    fun dismissExternalAutomationConsent() = background.dismissExternalAutomationConsent()
 
     // ─── Privacy ─────────────────────────────────────────────────────────────
 
