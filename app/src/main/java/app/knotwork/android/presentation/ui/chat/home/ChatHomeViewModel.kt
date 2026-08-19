@@ -747,7 +747,10 @@ class ChatHomeViewModel @Inject constructor(
         modelLoadJob?.cancel()
         reattach.cancel()
         _state.update { current ->
-            val cleared = current.withPendingCleared()
+            // The advisory belongs to the run. Stopping the run ends it — a
+            // strip still saying "nearing the step limit" above a composer
+            // with nothing running is worse than no strip at all.
+            val cleared = current.withPendingCleared().copy(runNotice = null)
             if (current.visual is ChatHomeUiState.Generating) {
                 cleared.copy(visual = cleared.restingVisual())
             } else {
@@ -795,6 +798,10 @@ class ChatHomeViewModel @Inject constructor(
                     visual = ChatHomeUiState.Empty,
                     thread = cleared.thread.copy(currentSessionId = threadId),
                     composer = cleared.composer.copy(value = restoredDraft),
+                    // Belongs to the run in the chat being left. Carried across,
+                    // it would advertise a limit on a thread with nothing
+                    // running in it.
+                    runNotice = null,
                 ),
             )
         }

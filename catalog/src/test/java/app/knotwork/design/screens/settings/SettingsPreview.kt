@@ -33,9 +33,12 @@ internal object SettingsPreview {
     fun hubRestart(): SettingsHubViewState =
         hubDefault().copy(restartRequiredMessage = "Backend change requires restart.")
 
-    /** Hub with an active "max" query — results across categories incl. a synonym hit. */
+    /** Hub with an active "limit" query — results across categories incl. a synonym hit. */
     fun hubSearchResults(): SettingsHubViewState = hubDefault().copy(
-        searchQuery = "max",
+        // Was "max", which stopped being able to produce this list: the run
+        // limits row is keyed on its own synonyms now, and "max" is not one of
+        // them. A fixture may only depict a result the engine could return.
+        searchQuery = "limit",
         searchResults = listOf(
             searchRow("MAX_CONTEXT_LENGTH", SettingsCategoryId.Generation, "Max context length", 0, 3),
             searchRow(
@@ -160,7 +163,8 @@ internal object SettingsPreview {
         stepsBackground = LimitSliderRowState(
             label = "Steps per background run",
             valueLabel = "15",
-            description = "Not set separately, so background runs use the same limit as above.",
+            description = "Not set separately, so runs you did not start yourself — a trigger, a schedule, the " +
+                "Quick Settings tile, or another app — use the same limit as above.",
             qualifier = "Same as above",
             value = 15f,
             valueRange = 5f..100f,
@@ -180,8 +184,8 @@ internal object SettingsPreview {
         tokensBackground = LimitSliderRowState(
             label = "Tokens per background run",
             valueLabel = "100,000",
-            description = "Background runs get a lower token limit by default, because no one is watching " +
-                "them finish.",
+            description = "Runs you did not start yourself get a lower token limit by default, because no " +
+                "one is watching them finish.",
             value = 5f,
             valueRange = 4f..7f,
             minLabel = "10,000",
@@ -194,8 +198,9 @@ internal object SettingsPreview {
             body = "The app runs on your own API key, so it never sees your bill and cannot measure or cap " +
                 "what a run costs. The token limit above is the closest control.",
         ),
-        softNote = "Each run warns you once when it passes 75% of a limit, while there is still room to " +
-            "finish. The warning point is not adjustable.",
+        softNote = "A run in an open chat warns you when it passes 75% of a limit, while there is still " +
+            "room to finish. The warning point is not adjustable, and a run that resumes after a pause " +
+            "may warn again.",
     )
 
     /** The user raised the interactive cap; the inherited row follows it. */
@@ -214,8 +219,8 @@ internal object SettingsPreview {
                 valueLabel = "8",
                 value = 8f,
                 qualifier = null,
-                description = "Runs started by a trigger or from Quick Settings. They start at the same " +
-                    "limit as interactive runs.",
+                description = "Applies to runs you did not start yourself — a trigger, a schedule, the " +
+                    "Quick Settings tile, or another app.",
             ),
         )
     }

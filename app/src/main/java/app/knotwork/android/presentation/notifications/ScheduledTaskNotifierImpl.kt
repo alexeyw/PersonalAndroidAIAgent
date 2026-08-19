@@ -16,6 +16,7 @@ import app.knotwork.android.domain.models.RunTerminationKind
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.ScheduledTaskNotifier
 import app.knotwork.android.presentation.ui.common.RunTerminationCopyMapper
+import app.knotwork.android.presentation.ui.common.RunTerminationTone
 import app.knotwork.android.presentation.ui.common.resolve
 import app.knotwork.android.presentation.ui.navigation.ChatDeepLink
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -101,10 +102,17 @@ class ScheduledTaskNotifierImpl @Inject constructor(
             sessionId = sessionId,
             title = context.resolve(copy.title),
             body = context.resolve(copy.body),
-            // The shield, not the failure cross. A run held by a limit the user
-            // set is not a defect, and announcing it as one is what taught the
-            // user to distrust their own automations.
-            icon = R.drawable.ic_notif_limit,
+            // The glyph follows the cause rather than the fact that a cause
+            // exists. A limit the user set earns the shield — announcing that
+            // as a failure is what taught users to distrust their own
+            // automations. A run the watchdog killed for making no progress
+            // did not do what it was asked, and dressing that as a working
+            // guard is the same mistake pointing the other way.
+            icon = when (RunTerminationCopyMapper.toneFor(kind)) {
+                RunTerminationTone.LIMIT -> R.drawable.ic_notif_limit
+                RunTerminationTone.STUCK -> R.drawable.ic_notif_failed
+                RunTerminationTone.INFO -> R.drawable.ic_notif_done
+            },
         )
     }
 

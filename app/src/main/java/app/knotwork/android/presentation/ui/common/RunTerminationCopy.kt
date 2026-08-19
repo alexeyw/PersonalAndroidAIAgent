@@ -158,9 +158,13 @@ object RunTerminationCopyMapper {
      * Notification copy for a background run that stopped.
      *
      * Reads from the persisted record, so the ceiling that bound the run is not
-     * available — but it does not need to be: a run stopped by a ceiling has
-     * spent *exactly* the ceiling (the engine checks before charging), so the
-     * spend is the allowance.
+     * available. The body therefore reports the **spend**, never the allowance
+     * — and the distinction is not pedantry. Steps are charged one at a time
+     * and checked before charging, so a step stop really does land on its
+     * ceiling; tokens are charged a whole node's usage at once and only then
+     * compared, so a token stop routinely lands *past* it. Wording either as
+     * "used all N it was allowed" would state the overshoot as the configured
+     * limit, and contradict the chat, which shows both numbers.
      *
      * @param kind The persisted cause.
      * @param runLabel Human name of the run's session, quoted in the body.
@@ -188,11 +192,25 @@ object RunTerminationCopyMapper {
             // The six housekeeping reasons say the same thing here as in the
             // chat. Inventing a second, notification-only sentence for them is
             // exactly how the wording fragmented the first time.
+            // Neither body promises a destination: the notification's only tap
+            // action deep-links to the chat, which shows nothing about a run
+            // that already finished, so "tap to review the limits" would have
+            // been a promise the tap does not keep.
             else -> bodyFor(kind)
         },
     )
 
-    private fun toneFor(kind: RunTerminationKind): RunTerminationTone = when (kind) {
+    /**
+     * How loudly this cause should be announced.
+     *
+     * Public because surfaces that render no sentence still have to pick a
+     * glyph — the background notification does exactly that — and deriving the
+     * tone a second time is how one event ends up looking like two.
+     *
+     * @param kind The persisted cause.
+     * @return Its tone.
+     */
+    fun toneFor(kind: RunTerminationKind): RunTerminationTone = when (kind) {
         RunTerminationKind.STEP_CEILING, RunTerminationKind.TOKEN_CEILING -> RunTerminationTone.LIMIT
         RunTerminationKind.NO_PROGRESS -> RunTerminationTone.STUCK
         RunTerminationKind.HITL_WINDOW_EXPIRED,

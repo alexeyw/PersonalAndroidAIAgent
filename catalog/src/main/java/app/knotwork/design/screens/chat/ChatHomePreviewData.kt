@@ -326,7 +326,6 @@ internal object ChatHomePreview {
     )
 
     /** DrawerOpen state — alt-nav drawer overlayed. */
-    /** DrawerOpen state — alt-nav drawer overlayed. */
     fun drawerOpen(): ChatHomeViewState = ChatHomeViewState(
         visualState = ChatHomeVisualState.DrawerOpen,
         threadTitle = THREAD_TITLE,

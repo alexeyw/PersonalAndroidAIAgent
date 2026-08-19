@@ -137,6 +137,21 @@ class ChatHomeStateMappingTest {
     }
 
     @Test
+    fun `a stalled run is explained, not shown as a failure to retry`() {
+        // The queue's watchdog types this cause and persists it. It used to drop
+        // it on the way to the surface, so the run that the app itself killed
+        // arrived wearing the destructive tile and a Retry that would stall all
+        // over again.
+        val view = screenState(
+            ChatHomeUiState.Error(message = "no-progress", reason = RunTerminationReason.NoProgress),
+        ).toViewState()
+
+        assertNull(view.errorMessage)
+        val termination = requireNotNull(view.termination)
+        assertEquals(RunTerminationToneUi.Stuck, termination.tone)
+    }
+
+    @Test
     fun `Empty maps to ChatHomeVisualState_Empty with sample prompt cards and no messages`() {
         val view = screenState(ChatHomeUiState.Empty).toViewState()
         assertEquals(ChatHomeVisualState.Empty, view.visualState)

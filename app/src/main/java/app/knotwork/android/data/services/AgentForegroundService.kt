@@ -20,8 +20,6 @@ import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.repositories.PowerStateRepository
 import app.knotwork.android.domain.services.MemoryReembedScheduler
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
-import app.knotwork.android.presentation.ui.common.RunTerminationCopyMapper
-import app.knotwork.android.presentation.ui.common.resolve
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -236,19 +234,23 @@ class AgentForegroundService : Service() {
         is AgentOrchestratorState.ObservationResult -> "Processing tool result..."
         is AgentOrchestratorState.Answering -> "Answering..."
         is AgentOrchestratorState.Completed -> "Task completed"
-        // A run the app stopped on purpose is not an error, and this line is
-        // the last place that still called one. The typed reason resolves to
-        // the same sentence the chat, the notification and the trigger journal
-        // use; only a genuine, untyped failure keeps the word "Error".
-        is AgentOrchestratorState.Error ->
-            state.reason
-                ?.let { resolve(RunTerminationCopyMapper.terminationCopy(it).title) }
-                ?: "Error: ${state.message}"
+        // Unreachable in practice, and deliberately says nothing about the
+        // cause. `Error` is not active work, so `updateForegroundPresence`
+        // demotes the notification rather than promoting it with this text.
+        // Even if that changed, the cause does not belong here: `state.message`
+        // is the diagnostic for a typed stop, and the sentence a person reads
+        // is resolved once, in the presentation layer, for the chat and the
+        // background-run notification. A foreground status line must not be a
+        // third place to word it — and reaching into presentation from `data`
+        // to do so would invert the dependency direction.
+        is AgentOrchestratorState.Error -> "Run stopped"
         is AgentOrchestratorState.PipelineStage -> "Pipeline stage: ${state.stepInfo.nodeName}"
         is AgentOrchestratorState.PipelineTrace -> "Pipeline trace updated"
         is AgentOrchestratorState.ConsoleLog -> "Pipeline running..."
         is AgentOrchestratorState.NodeIO -> "Pipeline running..."
-        is AgentOrchestratorState.RunNotice -> resolve(RunTerminationCopyMapper.noticeCopy(state.cause).text)
+        // An advisory is not a change of activity: the run carries on, and the
+        // strip above the composer is where the notice is worded.
+        is AgentOrchestratorState.RunNotice -> "Pipeline running..."
     }
 
     private fun createNotificationChannel() {

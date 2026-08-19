@@ -58,14 +58,14 @@
     <string name="run_limits_steps_desc">How many steps a run may take before it stops. One step is one node execution.</string>
 
     <string name="run_limits_steps_background_label">Steps per background run</string>
-    <string name="run_limits_steps_background_desc_set">Runs started by a trigger or from Quick Settings. They start at the same limit as interactive runs.</string>
-    <string name="run_limits_steps_background_desc_inherited">Not set separately, so background runs use the same limit as above.</string>
+    <string name="run_limits_steps_background_desc_set">Applies to runs you did not start yourself — a trigger, a schedule, the Quick Settings tile, or another app.</string>
+    <string name="run_limits_steps_background_desc_inherited">Not set separately, so runs you did not start yourself — a trigger, a schedule, the Quick Settings tile, or another app — use the same limit as above.</string>
 
     <string name="run_limits_tokens_label">Tokens per run</string>
     <string name="run_limits_tokens_desc">How many tokens a run may send and receive in total.</string>
 
     <string name="run_limits_tokens_background_label">Tokens per background run</string>
-    <string name="run_limits_tokens_background_desc">Background runs get a lower token limit by default, because no one is watching them finish.</string>
+    <string name="run_limits_tokens_background_desc">Runs you did not start yourself get a lower token limit by default, because no one is watching them finish.</string>
 
     <!-- Shown on a background row whose key has never been written: the value is
          the configured interactive one, not an independent choice. -->
@@ -78,7 +78,7 @@
     <string name="run_limits_spend_state">Not measured</string>
     <string name="run_limits_spend_body">The app runs on your own API key, so it never sees your bill and cannot measure or cap what a run costs. The token limit above is the closest control.</string>
 
-    <string name="run_limits_soft_note">Each run warns you once when it passes 75%% of a limit, while there is still room to finish. The warning point is not adjustable.</string>
+    <string name="run_limits_soft_note">A run in an open chat warns you when it passes 75% of a limit, while there is still room to finish. The warning point is not adjustable, and a run that resumes after a pause may warn again.</string>
 
 
     <!-- ─── Surface B · why a run stopped, all eight typed reasons ────── -->
@@ -155,7 +155,7 @@
 
     <!-- A working guard is not a failure. A ceiling stop drops the failure title
          and icon it used to inherit and says what actually happened. -->
-    <string name="run_termination_notification_body_step_ceiling" tools:ignore="PluralsCandidate">“%1$s” used all %2$,d steps it was allowed. Tap to review the limits.</string>
-    <string name="run_termination_notification_body_token_ceiling" tools:ignore="PluralsCandidate">“%1$s” used all %2$,d tokens it was allowed. Tap to review the limits.</string>
+    <string name="run_termination_notification_body_step_ceiling" tools:ignore="PluralsCandidate">“%1$s” stopped at its step limit, after %2$,d steps.</string>
+    <string name="run_termination_notification_body_token_ceiling" tools:ignore="PluralsCandidate">“%1$s” stopped at its token limit, after %2$,d tokens.</string>
 
 </resources>

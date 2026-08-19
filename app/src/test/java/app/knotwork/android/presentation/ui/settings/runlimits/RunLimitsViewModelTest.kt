@@ -33,11 +33,15 @@ import org.junit.Test
 class RunLimitsViewModelTest {
 
     private val dispatcher = StandardTestDispatcher()
-    private val steps = MutableStateFlow(DEFAULT_STEPS)
-    private val stepsBackground = MutableStateFlow(DEFAULT_STEPS)
+
+    // Deliberately NOT the shipped defaults. A fixture that matches what the
+    // ViewModel already holds proves nothing: delete the collector and the
+    // assertion still passes against the default it never replaced.
+    private val steps = MutableStateFlow(REPO_STEPS)
+    private val stepsBackground = MutableStateFlow(REPO_STEPS_BACKGROUND)
     private val stepsBackgroundIsSet = MutableStateFlow(false)
-    private val tokens = MutableStateFlow(DEFAULT_TOKENS)
-    private val tokensBackground = MutableStateFlow(DEFAULT_TOKENS_BACKGROUND)
+    private val tokens = MutableStateFlow(REPO_TOKENS)
+    private val tokensBackground = MutableStateFlow(REPO_TOKENS_BACKGROUND)
 
     private lateinit var repository: SettingsRepository
 
@@ -61,6 +65,35 @@ class RunLimitsViewModelTest {
 
     @After
     fun tearDown() = Dispatchers.resetMain()
+
+    @Test
+    fun `given the repository values then every one of them reaches the screen`() = runTest(dispatcher) {
+        // One assertion per collector. Deleting any of the five init blocks
+        // leaves the corresponding default in place and fails here.
+        val viewModel = RunLimitsViewModel(repository)
+        advanceUntilIdle()
+
+        val state = viewModel.state.value
+        assertEquals(REPO_STEPS, state.steps)
+        assertEquals(REPO_STEPS_BACKGROUND, state.stepsBackground)
+        assertEquals(REPO_TOKENS, state.tokens)
+        assertEquals(REPO_TOKENS_BACKGROUND, state.tokensBackground)
+        assertTrue(state.stepsBackgroundInherited)
+    }
+
+    @Test
+    fun `given an interactive token drag then nothing persists until the gesture ends`() = runTest(dispatcher) {
+        val viewModel = RunLimitsViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.onTokensChange(2_000_000)
+        advanceUntilIdle()
+        coVerify(exactly = 0) { repository.setRunMaxTokens(any()) }
+
+        viewModel.onTokensCommit()
+        advanceUntilIdle()
+        coVerify(exactly = 1) { repository.setRunMaxTokens(2_000_000) }
+    }
 
     @Test
     fun `given the background key is unset then the row reports itself inherited`() = runTest(dispatcher) {
@@ -102,7 +135,7 @@ class RunLimitsViewModelTest {
         // inheritance must survive — writing the key here would detach the
         // background ceiling for good on a gesture that expressed no decision.
         viewModel.onStepsBackgroundChange(30)
-        viewModel.onStepsBackgroundChange(DEFAULT_STEPS)
+        viewModel.onStepsBackgroundChange(REPO_STEPS_BACKGROUND)
         viewModel.onStepsBackgroundCommit()
         advanceUntilIdle()
 
@@ -161,8 +194,10 @@ class RunLimitsViewModelTest {
     }
 
     private companion object {
-        const val DEFAULT_STEPS: Int = 15
-        const val DEFAULT_TOKENS: Int = 1_000_000
-        const val DEFAULT_TOKENS_BACKGROUND: Int = 100_000
+        /** All four differ from `RunLimitsUiState`'s defaults, on purpose. */
+        const val REPO_STEPS: Int = 22
+        const val REPO_STEPS_BACKGROUND: Int = 22
+        const val REPO_TOKENS: Int = 640_000
+        const val REPO_TOKENS_BACKGROUND: Int = 55_000
     }
 }

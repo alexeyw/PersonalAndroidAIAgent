@@ -2132,10 +2132,11 @@ after a pause. There are four numbers and one statement:
 
 - **Steps per run** (5 – 100) — how many steps a run may take before it stops.
   One step is one node execution.
-- **Steps per background run** — the same limit for runs started by a trigger or
-  from Quick Settings. Until you set it, it is marked *Same as above* and follows
-  the number above it, so raising your interactive limit raises theirs too.
-  Setting it separately ends that, and it keeps its own value from then on.
+- **Steps per background run** — the same limit for runs you did not start
+  yourself: a trigger, a schedule, the Quick Settings tile, or another app.
+  Until you set it, it is marked *Same as above* and follows the number above
+  it, so raising your interactive limit raises theirs too. Setting it separately
+  ends that, and it keeps its own value from then on.
 - **Tokens per run** (10 000 – 10 000 000) — how many tokens a run may send and
   receive in total. The track is logarithmic, so a proportional change costs the
   same drag anywhere along it.
@@ -2146,9 +2147,11 @@ after a pause. There are four numbers and one statement:
   show you a figure it would have to guess, it says so. The token limit above is
   the closest control.
 
-Each run warns you **once** when it passes 75 % of a limit, with an unobtrusive
-note above the composer while there is still room to finish. That warning point
-is fixed and not adjustable.
+A run you are watching warns you when it passes 75 % of a limit, with an
+unobtrusive note above the composer while there is still room to finish. That
+warning point is fixed and not adjustable. Two honest caveats: the note lives in
+the chat, so a run started by a trigger at 3 am has nowhere to show it; and a
+run that pauses and resumes may warn again.
 
 When a limit is actually reached, the run **ends** — it does not pause and does
 not ask what to do. The chat shows **Stopped by a safety limit**, which allowance
@@ -2565,7 +2568,7 @@ on that message opens the screen where you can raise it.
 
 Two things worth knowing before you raise anything. The limit that stopped the
 run may be the **token** one rather than the step one, so read the message rather
-than assuming; and a run started by a trigger or Quick Settings is governed by
+than assuming; and a run you did not start yourself is governed by
 the **background** limits, which are set separately on the same screen. If the
 run was looping unproductively, lower the limit instead.
 

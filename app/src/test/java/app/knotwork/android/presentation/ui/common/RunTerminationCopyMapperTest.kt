@@ -138,26 +138,39 @@ class RunTerminationCopyMapperTest {
     }
 
     @Test
-    fun `given every reason then retry is never offered`() {
-        // Retry re-runs the identical turn into the identical outcome. It
-        // survives only on the untyped error tile, which this mapper never
-        // produces copy for.
-        val actions = everyReason.mapNotNull { RunTerminationCopyMapper.terminationCopy(it).action }
-        assertTrue(actions.none { it.name.contains("RETRY", ignoreCase = true) })
-    }
-
-    @Test
-    fun `given a ceiling then the action leads to the limits`() {
-        assertEquals(
-            RunTerminationAction.ADJUST_LIMITS,
-            RunTerminationCopyMapper.terminationCopy(RunTerminationReason.StepCeiling(1, 1)).action,
+    fun `given every reason then the offered action is the one that can change the outcome`() {
+        // Pinned for all eight rather than the two interesting ones. Retry is
+        // absent by construction — it re-runs the identical turn into the
+        // identical outcome — but asserting that by scanning enum *names* was
+        // vacuous, because no such constant exists to find. This asserts the
+        // mapping instead, which is what could actually regress.
+        val expected = mapOf(
+            RunTerminationKind.STEP_CEILING to RunTerminationAction.ADJUST_LIMITS,
+            RunTerminationKind.TOKEN_CEILING to RunTerminationAction.ADJUST_LIMITS,
+            RunTerminationKind.NO_PROGRESS to RunTerminationAction.OPEN_CONSOLE,
+            RunTerminationKind.HITL_WINDOW_EXPIRED to RunTerminationAction.RUN_AGAIN,
+            RunTerminationKind.GRAPH_CHANGED to RunTerminationAction.RUN_AGAIN,
+            RunTerminationKind.PROCESS_DIED to RunTerminationAction.RUN_AGAIN,
+            RunTerminationKind.NOT_RESUMABLE to RunTerminationAction.RUN_AGAIN,
+            // The app arguing with a decision it was just given.
+            RunTerminationKind.DISCARDED_BY_USER to null,
         )
+        assertEquals(RunTerminationKind.entries.toSet(), expected.keys)
+        everyReason.forEach { reason ->
+            assertEquals(
+                "wrong action for ${reason.kind}",
+                expected.getValue(reason.kind),
+                RunTerminationCopyMapper.terminationCopy(reason).action,
+            )
+        }
     }
 
     @Test
-    fun `given a run the user discarded then nothing is offered`() {
-        // The app arguing with a decision it was just given.
-        assertNull(RunTerminationCopyMapper.terminationCopy(RunTerminationReason.DiscardedByUser).action)
+    fun `given every reason then the banner clause is specific to its kind`() {
+        // The tile bodies already have this guard; the banners did not, so two
+        // kinds could have collapsed onto one clause unnoticed.
+        val banners = everyReason.map { context.resolve(RunTerminationCopyMapper.terminationCopy(it).banner) }
+        assertEquals("each kind needs its own clause", banners.size, banners.toSet().size)
     }
 
     @Test
@@ -175,7 +188,7 @@ class RunTerminationCopyMapperTest {
     }
 
     @Test
-    fun `given a ceiling stop when notified then the body names the run and the allowance`() {
+    fun `given a step-ceiling stop when notified then the body names the run and the spend`() {
         val body = context.resolve(
             RunTerminationCopyMapper.notificationCopy(
                 kind = RunTerminationKind.STEP_CEILING,
@@ -185,9 +198,50 @@ class RunTerminationCopyMapperTest {
             ).body,
         )
         assertTrue(body, body.contains("Morning digest"))
-        // A run stopped by a ceiling has spent exactly the ceiling, so the spend
-        // is the allowance and the notification can state it without the limit.
         assertTrue(body, body.contains("15"))
+    }
+
+    @Test
+    fun `given a token-ceiling stop that overshot then the notification does not call the spend an allowance`() {
+        // Tokens are charged a whole node's usage at once and only compared
+        // afterwards, so a token stop routinely lands PAST its ceiling — this
+        // is the normal case, not an edge one. The record keeps the spend and
+        // not the limit, so the sentence must report a spend; the earlier
+        // wording ("used all N tokens it was allowed") stated the overshoot as
+        // the configured limit and contradicted the chat, which shows both.
+        val body = context.resolve(
+            RunTerminationCopyMapper.notificationCopy(
+                kind = RunTerminationKind.TOKEN_CEILING,
+                runLabel = "Morning digest",
+                stepsSpent = 0,
+                tokensSpent = 118_432,
+            ).body,
+        )
+        assertTrue(body, body.contains("Morning digest"))
+        assertTrue(body, body.contains("118,432"))
+        assertFalse("the spend must not be presented as the allowance: $body", body.contains("allowed"))
+    }
+
+    @Test
+    fun `given a notification body then it promises no destination the tap cannot reach`() {
+        // The notification's only tap action deep-links to the chat, which shows
+        // nothing about a run that already finished. "Tap to review the limits"
+        // was a promise the tap does not keep.
+        RunTerminationKind.entries.forEach { kind ->
+            val body = context.resolve(
+                RunTerminationCopyMapper.notificationCopy(kind, "Morning digest", 15, 100).body,
+            )
+            assertFalse("$kind promises a destination: $body", body.contains("Tap to"))
+        }
+    }
+
+    @Test
+    fun `given every kind then the tone ranks a configured limit apart from a run that misbehaved`() {
+        // Read by the notification to pick its glyph, so a regression here
+        // dresses a watchdog kill as a working guard or the reverse.
+        assertEquals(RunTerminationTone.LIMIT, RunTerminationCopyMapper.toneFor(RunTerminationKind.STEP_CEILING))
+        assertEquals(RunTerminationTone.LIMIT, RunTerminationCopyMapper.toneFor(RunTerminationKind.TOKEN_CEILING))
+        assertEquals(RunTerminationTone.STUCK, RunTerminationCopyMapper.toneFor(RunTerminationKind.NO_PROGRESS))
     }
 
     @Test

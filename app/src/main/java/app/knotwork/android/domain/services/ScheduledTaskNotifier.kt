@@ -81,10 +81,12 @@ interface ScheduledTaskNotifier {
      * @param kind Why the run was ended.
      * @param runLabel Human name of the session, quoted in the body so a user
      *   with several automations knows which one this is about.
-     * @param stepsSpent Node executions charged across the run tree. For a step
-     *   ceiling this *is* the allowance — the engine checks before charging, so
-     *   a stopped run has spent exactly its limit.
-     * @param tokensSpent Tokens accounted across the run tree, likewise.
+     * @param stepsSpent Node executions charged across the run tree.
+     * @param tokensSpent Tokens accounted across the run tree. Note that this
+     *   can exceed the ceiling that stopped the run: tokens are charged a whole
+     *   node's usage at a time and compared afterwards, unlike steps. The
+     *   implementation therefore reports both as spend and never as the
+     *   allowance.
      */
     suspend fun notifyTerminated(
         sessionId: String,
