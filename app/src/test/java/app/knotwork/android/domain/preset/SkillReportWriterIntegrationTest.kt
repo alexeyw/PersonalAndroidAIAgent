@@ -59,6 +59,7 @@ import app.knotwork.android.domain.skillio.SkillJsonSerializer
 import app.knotwork.android.domain.usecases.EvaluateIfConditionUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
+import app.knotwork.android.domain.usecases.ResolveRunCeilingsUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -145,6 +146,9 @@ class SkillReportWriterIntegrationTest {
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.NeverPrompt)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { settingsRepository.pipelineMaxStepsBackground } returns flowOf(15)
+        every { settingsRepository.runMaxTokens } returns flowOf(1_000_000)
+        every { settingsRepository.runMaxTokensBackground } returns flowOf(100_000)
         every { settingsRepository.pipelineMaxNestingDepth } returns flowOf(3)
         every { settingsRepository.verboseMemoryLoggingEnabled } returns flowOf(false)
         every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(2)
@@ -351,6 +355,7 @@ class SkillReportWriterIntegrationTest {
             mockk(relaxed = true),
             pipelineRunRepository,
             runTraceRepository,
+            ResolveRunCeilingsUseCase(settingsRepository),
         )
     }
 }

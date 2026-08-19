@@ -77,6 +77,7 @@ import app.knotwork.android.domain.usecases.ParkedRunResumer
 import app.knotwork.android.domain.usecases.PendingSubmissionOutcome
 import app.knotwork.android.domain.usecases.RecordTriggerEvaluationUseCase
 import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
+import app.knotwork.android.domain.usecases.ResolveRunCeilingsUseCase
 import app.knotwork.android.domain.usecases.ResumePipelineRunUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
@@ -246,6 +247,9 @@ class TriggerBackgroundRunIntegrationTest {
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { settingsRepository.pipelineMaxStepsBackground } returns flowOf(15)
+        every { settingsRepository.runMaxTokens } returns flowOf(1_000_000)
+        every { settingsRepository.runMaxTokensBackground } returns flowOf(100_000)
         every { settingsRepository.toolCallTimeoutMs } returns flowOf(LIVE_WAIT_TIMEOUT_MS)
         every { settingsRepository.resumeMaxAgeHours } returns flowOf(48)
         every { settingsRepository.backgroundApprovalWindowHours } returns flowOf(24)
@@ -573,6 +577,7 @@ class TriggerBackgroundRunIntegrationTest {
             mockk(relaxed = true),
             runRepository,
             traceRepository,
+            ResolveRunCeilingsUseCase(settingsRepository),
         )
         val taskQueueManager = TaskQueueManagerImpl(
             chatRepository = chatRepository,

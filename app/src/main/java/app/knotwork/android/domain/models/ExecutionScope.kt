@@ -12,7 +12,7 @@ package app.knotwork.android.domain.models
  * `PipelineNodeExecutor`, which re-enters the engine for a sub-pipeline).
  *
  * The engine builds a fresh [ExecutionScope] for each node it dispatches: the
- * run-tree-wide fields ([depth], [stepBudget]) are constant across a run while
+ * run-tree-wide fields ([depth], [budget]) are constant across a run while
  * [pipelineVisitIndex] is recomputed per node so a `PIPELINE` node visited more
  * than once (e.g. inside a `QUEUE_PROCESSOR` loop) can mint a distinct,
  * resume-stable child run id per visit.
@@ -21,9 +21,11 @@ package app.knotwork.android.domain.models
  *   top-level run, `parentDepth + 1` for a sub-pipeline. Used to enforce the
  *   runtime nesting ceiling and to stamp console/trace records with their
  *   nesting level for the indented console rendering.
- * @property stepBudget The step budget shared across the whole run tree, or
- *   `null` when the engine was invoked without one (non-persisted editor test
- *   runs). See [RunStepBudget].
+ * @property budget The spend ledger shared across the whole run tree — the
+ *   step and token counters every ceiling is charged against, seeded from the
+ *   root run record so a resumed run continues its own count rather than
+ *   restarting it. `null` when the engine was invoked without one
+ *   (non-persisted editor test runs). See [RunBudgetLedger].
  * @property pipelineVisitIndex Zero-based index of *this* `PIPELINE`-node visit
  *   within the current run. Incremented by the engine each time it enters a
  *   `PIPELINE` node (including replayed visits during resume), so the value is
@@ -72,7 +74,7 @@ package app.knotwork.android.domain.models
  */
 data class ExecutionScope(
     val depth: Int = 0,
-    val stepBudget: RunStepBudget? = null,
+    val budget: RunBudgetLedger? = null,
     val pipelineVisitIndex: Int = 0,
     val routingChoices: List<String> = emptyList(),
     val imagePath: String? = null,

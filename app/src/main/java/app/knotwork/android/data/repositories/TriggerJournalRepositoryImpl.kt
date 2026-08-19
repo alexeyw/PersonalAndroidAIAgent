@@ -223,6 +223,7 @@ class TriggerJournalRepositoryImpl @Inject constructor(private val dao: TriggerJ
         TriggerRunOutcome.CancelledBySystem -> OUTCOME_CANCELLED_BY_SYSTEM to null
         TriggerRunOutcome.Cancelled -> OUTCOME_CANCELLED to null
         TriggerRunOutcome.HitlTimeout -> OUTCOME_HITL_TIMEOUT to null
+        TriggerRunOutcome.StoppedByCeiling -> OUTCOME_STOPPED_BY_CEILING to null
     }
 
     /**
@@ -240,6 +241,7 @@ class TriggerJournalRepositoryImpl @Inject constructor(private val dao: TriggerJ
         OUTCOME_CANCELLED_BY_SYSTEM -> TriggerRunOutcome.CancelledBySystem
         OUTCOME_CANCELLED -> TriggerRunOutcome.Cancelled
         OUTCOME_HITL_TIMEOUT -> TriggerRunOutcome.HitlTimeout
+        OUTCOME_STOPPED_BY_CEILING -> TriggerRunOutcome.StoppedByCeiling
         else -> null
     }
 
@@ -255,6 +257,7 @@ class TriggerJournalRepositoryImpl @Inject constructor(private val dao: TriggerJ
         const val OUTCOME_CANCELLED_BY_SYSTEM = "CANCELLED_BY_SYSTEM"
         const val OUTCOME_CANCELLED = "CANCELLED"
         const val OUTCOME_HITL_TIMEOUT = "HITL_TIMEOUT"
+        const val OUTCOME_STOPPED_BY_CEILING = "STOPPED_BY_CEILING"
     }
 }
 

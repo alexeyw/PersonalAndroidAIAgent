@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.usecases.ParkedRunResumer
@@ -59,7 +60,11 @@ class PendingInteractionMaintenanceWorker @AssistedInject constructor(
         val cutoff = System.currentTimeMillis() - windowHours * MILLIS_PER_HOUR
         val expired = pendingInteractionRepository.getRequestedAtOrBefore(cutoff)
         expired.forEach { pending ->
-            parkedRunResumer.failPark(pending, ParkedRunResumer.APPROVAL_WINDOW_EXPIRED_MESSAGE)
+            parkedRunResumer.failPark(
+                pending,
+                ParkedRunResumer.APPROVAL_WINDOW_EXPIRED_MESSAGE,
+                RunTerminationReason.HitlWindowExpired,
+            )
         }
         if (expired.isNotEmpty()) {
             Timber.tag(TAG).i("Expired %d parked interaction(s) past the %d h window", expired.size, windowHours)

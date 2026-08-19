@@ -939,8 +939,10 @@ and the verdict:
 
 - **Fired** — a run started. The entry is completed later with how that run
   ended: **Completed**, **Failed**, **Stopped by the system** (the app's
-  process was killed mid-run), **You stopped it**, or **Timed out waiting for
-  approval**. Until the run settles it reads **Running…**. If the run stopped
+  process was killed mid-run), **You stopped it**, **Timed out waiting for
+  approval**, or **Stopped by a safety limit** (the run reached the step or
+  token ceiling in force for background runs — a working guard, so it does not
+  count against the trigger's health indicator). Until the run settles it reads **Running…**. If the run stopped
   to ask you something, a second line says what became of the request —
   **You approved it**, **You denied it**, **You answered it**, **Waiting for
   your response**, **No response before the window closed**, or **The request

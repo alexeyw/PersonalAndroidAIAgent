@@ -92,9 +92,17 @@ sealed interface AgentOrchestratorState {
     /**
      * An error occurred during the orchestration.
      *
-     * @property message The error message.
+     * @property message The error message, already rendered for a person to
+     *   read.
+     * @property reason The typed cause when the app itself decided to end the
+     *   run — a ceiling, the no-progress watchdog, an expired approval window.
+     *   `null` for an ordinary node or engine failure, which has no entry in
+     *   that vocabulary. Defaulted so the two dozen sites that emit a plain
+     *   failure stay unchanged, and carried so the ones that settle a run can
+     *   tell a protective stop from a defect without matching [message] by
+     *   string.
      */
-    data class Error(val message: String) : AgentOrchestratorState
+    data class Error(val message: String, val reason: RunTerminationReason? = null) : AgentOrchestratorState
 
     /**
      * Holds the progress metadata of a single pipeline execution step.

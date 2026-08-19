@@ -12,6 +12,7 @@ import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.RunOrigin
+import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
@@ -235,7 +236,18 @@ class PipelineNodeExecutorTest {
 
         assertTrue(result.error!!.contains("edited since it was interrupted"))
         verify(exactly = 0) { engine.invoke(any(), any(), any(), any(), any(), any(), any()) }
-        coVerify { pipelineRunRepository.finishRun("root::p::0", PipelineRunStatus.FAILED, any()) }
+        // The child settles with the same typed cause its top-level counterpart
+        // uses, so a sub-pipeline invalidated by an edit is not reported as an
+        // ordinary failure just because it happened one level down.
+        coVerify {
+            pipelineRunRepository.finishRun(
+                "root::p::0",
+                PipelineRunStatus.FAILED,
+                any(),
+                RunTerminationReason.GraphChanged,
+            )
+        }
+        assertEquals(RunTerminationReason.GraphChanged, result.terminationReason)
     }
 
     @Test

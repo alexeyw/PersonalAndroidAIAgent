@@ -158,11 +158,30 @@ class CloudLlmNodeExecutor @Inject constructor(
         // stream with no finish reason, which is otherwise indistinguishable from a
         // complete answer — see [providerReportsFinishReason].
         var finishReason: String? = null
+        // Prompt + completion tokens as the provider itself counted them, when it
+        // counted them. This is the number a run ceiling should be charged, and the
+        // one this executor used to throw away: the delta count below sees only the
+        // answer, while a loop's real cost is dominated by the prompt being re-sent
+        // on every call. Stays null for a provider that reports no usage — measured
+        // in Koog 1.1.1: OpenAI (which asks for `include_usage`), Anthropic and
+        // Google populate it, DeepSeek only if its API volunteers it, and the Ollama
+        // client emits no end frame at all.
+        var reportedTokenCount: Int? = null
+        // The completion half on its own, kept apart because the run ceiling and
+        // the generation-rate display want different numbers: the ceiling is
+        // about what the call cost, the rate is about what it produced.
+        var reportedOutputTokenCount: Int? = null
 
         try {
             responseStream.collect { frame ->
                 if (frame is StreamFrame.End) {
                     finishReason = frame.finishReason
+                    val meta = frame.metaInfo
+                    reportedTokenCount = meta.totalTokensCount
+                        ?: listOfNotNull(meta.inputTokensCount, meta.outputTokensCount)
+                            .takeIf { it.isNotEmpty() }
+                            ?.sum()
+                    reportedOutputTokenCount = meta.outputTokensCount
                     return@collect
                 }
                 val token = (frame as? StreamFrame.TextDelta)?.text ?: return@collect
@@ -215,8 +234,19 @@ class CloudLlmNodeExecutor @Inject constructor(
             return@channelFlow
         }
 
+        // Prefer what the provider counted; fall back to the delta count so a
+        // provider that reports nothing still charges the ceiling something rather
+        // than running for free.
+        val chargedTokenCount = reportedTokenCount ?: approximateTokenCount
+        val tokensEstimated = reportedTokenCount == null
+
         val endTime = System.currentTimeMillis()
-        metricsRepository.updateMetrics(endTime - startTime, approximateTokenCount)
+        // The metrics display divides this by elapsed time to show a generation
+        // rate, so it gets the *completion* count only. Prompt tokens were not
+        // produced during this call — folding them in would inflate the figure
+        // and make it incomparable with the local-inference path that feeds the
+        // same counter.
+        metricsRepository.updateMetrics(endTime - startTime, reportedOutputTokenCount ?: approximateTokenCount)
 
         val fullResponseText = accumulatedResponse.toString().trim()
 
@@ -233,7 +263,15 @@ class CloudLlmNodeExecutor @Inject constructor(
 
         kotlinx.coroutines.delay(PipelineExecutionDefaults.NODE_RESULT_EMIT_DELAY_MS)
 
-        send(NodeOutput.Result(NodeExecutionResult(outputText = fullResponseText, tokenCount = approximateTokenCount)))
+        send(
+            NodeOutput.Result(
+                NodeExecutionResult(
+                    outputText = fullResponseText,
+                    tokenCount = chargedTokenCount,
+                    tokensEstimated = tokensEstimated,
+                ),
+            ),
+        )
     }
 
     /**

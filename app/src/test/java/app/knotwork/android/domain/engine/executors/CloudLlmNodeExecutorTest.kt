@@ -22,6 +22,7 @@ import app.knotwork.android.domain.repositories.NetworkActivityTracker
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
@@ -34,6 +35,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import kotlin.time.Instant
 
 class CloudLlmNodeExecutorTest {
 
@@ -207,6 +209,113 @@ class CloudLlmNodeExecutorTest {
 
         assertEquals("A whole answer", result.outputText)
         assertNull(result.error)
+    }
+
+    @Test
+    fun `given a provider that reports usage then prompt and completion tokens are charged`() = runTest {
+        // The point of reading the provider's usage record: in a loop the cost is
+        // dominated by the prompt being re-sent, and the old delta count only ever
+        // saw the answer. Two deltas would have counted 2; the provider says 1400.
+        val node = NodeModel("1", NodeType.CLOUD, 0f, 0f, cloudProvider = "deepseek")
+        val client: LLMClient = mockk(relaxed = true)
+        coEvery { client.executeStreaming(any(), any<LLModel>()) } returns flowOf(
+            StreamFrame.TextDelta("Two "),
+            StreamFrame.TextDelta("deltas"),
+            StreamFrame.End(
+                finishReason = "stop",
+                metaInfo = ResponseMetaInfo(
+                    timestamp = Instant.DISTANT_PAST,
+                    totalTokensCount = 1_400,
+                    inputTokensCount = 1_200,
+                    outputTokensCount = 200,
+                ),
+            ),
+        )
+        coEvery { clientFactory.createClient(CloudProvider.DEEPSEEK, any()) } returns client
+        coEvery { modelResolver.resolveModel(CloudProvider.DEEPSEEK) } returns AnthropicModels.Sonnet_4_5
+
+        val result = executor.execute(node, "input", "s1", "Q").toList()
+            .filterIsInstance<NodeOutput.Result>().single().result
+
+        assertEquals(1_400, result.tokenCount)
+        assertFalse("a provider-reported figure is not an estimate", result.tokensEstimated)
+    }
+
+    @Test
+    fun `given usage without a total then input and output are summed`() = runTest {
+        val node = NodeModel("1", NodeType.CLOUD, 0f, 0f, cloudProvider = "deepseek")
+        val client: LLMClient = mockk(relaxed = true)
+        coEvery { client.executeStreaming(any(), any<LLModel>()) } returns flowOf(
+            StreamFrame.TextDelta("hi"),
+            StreamFrame.End(
+                finishReason = "stop",
+                metaInfo = ResponseMetaInfo(
+                    timestamp = Instant.DISTANT_PAST,
+                    inputTokensCount = 900,
+                    outputTokensCount = 100,
+                ),
+            ),
+        )
+        coEvery { clientFactory.createClient(CloudProvider.DEEPSEEK, any()) } returns client
+        coEvery { modelResolver.resolveModel(CloudProvider.DEEPSEEK) } returns AnthropicModels.Sonnet_4_5
+
+        val result = executor.execute(node, "input", "s1", "Q").toList()
+            .filterIsInstance<NodeOutput.Result>().single().result
+
+        assertEquals(1_000, result.tokenCount)
+        assertFalse(result.tokensEstimated)
+    }
+
+    @Test
+    fun `given a provider that reports no usage then the delta estimate is charged and flagged`() = runTest {
+        // Measured against the pinned client library: the Ollama client emits no
+        // usage at all, and DeepSeek only if its API volunteers one. The run must
+        // still be charged something rather than running for free, and the number
+        // must be marked as the app's own estimate.
+        val node = NodeModel("1", NodeType.CLOUD, 0f, 0f, cloudProvider = "ollama")
+        val client: LLMClient = mockk(relaxed = true)
+        coEvery { client.executeStreaming(any(), any<LLModel>()) } returns flowOf(
+            StreamFrame.TextDelta("one"),
+            StreamFrame.TextDelta("two"),
+            StreamFrame.TextDelta("three"),
+            StreamFrame.End(finishReason = null, metaInfo = ResponseMetaInfo.Empty),
+        )
+        coEvery { clientFactory.createClient(CloudProvider.OLLAMA, any()) } returns client
+        coEvery { modelResolver.resolveModel(CloudProvider.OLLAMA) } returns AnthropicModels.Sonnet_4_5
+
+        val result = executor.execute(node, "input", "s1", "Q").toList()
+            .filterIsInstance<NodeOutput.Result>().single().result
+
+        assertEquals(3, result.tokenCount)
+        assertTrue("an estimate must say so", result.tokensEstimated)
+    }
+
+    @Test
+    fun `given reported usage then the generation-rate metric sees only completion tokens`() = runTest {
+        // The metrics display divides by elapsed time to show a rate. Prompt
+        // tokens were not produced during the call, so folding them in would
+        // inflate the figure and break comparability with local inference.
+        val node = NodeModel("1", NodeType.CLOUD, 0f, 0f, cloudProvider = "deepseek")
+        val client: LLMClient = mockk(relaxed = true)
+        coEvery { client.executeStreaming(any(), any<LLModel>()) } returns flowOf(
+            StreamFrame.TextDelta("x"),
+            StreamFrame.End(
+                finishReason = "stop",
+                metaInfo = ResponseMetaInfo(
+                    timestamp = Instant.DISTANT_PAST,
+                    totalTokensCount = 1_400,
+                    inputTokensCount = 1_200,
+                    outputTokensCount = 200,
+                ),
+            ),
+        )
+        coEvery { clientFactory.createClient(CloudProvider.DEEPSEEK, any()) } returns client
+        coEvery { modelResolver.resolveModel(CloudProvider.DEEPSEEK) } returns AnthropicModels.Sonnet_4_5
+
+        executor.execute(node, "input", "s1", "Q").toList()
+
+        coVerify { metricsRepository.updateMetrics(any(), 200) }
+        coVerify(exactly = 0) { metricsRepository.updateMetrics(any(), 1_400) }
     }
 
     @Test

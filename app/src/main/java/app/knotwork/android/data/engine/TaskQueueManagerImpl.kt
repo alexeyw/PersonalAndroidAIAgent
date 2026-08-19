@@ -12,6 +12,7 @@ import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.ResumeContext
 import app.knotwork.android.domain.models.Role
+import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
@@ -386,7 +387,12 @@ class TaskQueueManagerImpl @Inject constructor(
         val graph = run?.pipelineId?.let { pipelineRepository.getPipelineById(it) }
         if (run == null || graph == null || recordedHash == null || graph.contentHash() != recordedHash) {
             val message = "Pipeline graph changed before resume could start. Restart the task instead."
-            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.INTERRUPTED, message)
+            pipelineRunRepository.finishRun(
+                task.id,
+                PipelineRunStatus.INTERRUPTED,
+                message,
+                RunTerminationReason.GraphChanged,
+            )
             val errState = AgentOrchestratorState.Error(message)
             stateFlow.emit(errState)
             _globalState.value = errState
@@ -479,7 +485,15 @@ class TaskQueueManagerImpl @Inject constructor(
                         is AgentOrchestratorState.Completed ->
                             pipelineRunRepository.finishRun(task.id, PipelineRunStatus.COMPLETED)
                         is AgentOrchestratorState.Error ->
-                            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, state.message)
+                            // The engine's typed reason travels with the state, so a
+                            // protective stop settles as one instead of arriving here
+                            // as prose the journal would have to parse back.
+                            pipelineRunRepository.finishRun(
+                                task.id,
+                                PipelineRunStatus.FAILED,
+                                state.message,
+                                state.reason,
+                            )
                         is AgentOrchestratorState.SuspendedInBackground -> runParked = true
                         else -> Unit
                     }
@@ -497,7 +511,11 @@ class TaskQueueManagerImpl @Inject constructor(
             throw e
         } catch (e: Exception) {
             val message = e.message ?: "Execution failed"
-            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, message)
+            // The stall watchdog is the one exception the queue itself raises, and
+            // it is a forced termination rather than a pipeline defect — typed so
+            // it stops being recoverable only by matching its own message text.
+            val reason = if (e is RunStalledException) RunTerminationReason.NoProgress else null
+            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, message, reason)
             val errState = AgentOrchestratorState.Error(message)
             stateFlow.emit(errState)
             _globalState.value = errState

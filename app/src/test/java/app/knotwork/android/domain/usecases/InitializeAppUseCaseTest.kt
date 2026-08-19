@@ -5,6 +5,7 @@ import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.RunOrigin
+import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
@@ -127,6 +128,7 @@ class InitializeAppUseCaseTest {
                 "run-1",
                 PipelineRunStatus.INTERRUPTED,
                 "Process terminated during execution",
+                RunTerminationReason.ProcessDied,
             )
         }
         coVerify {
@@ -134,6 +136,7 @@ class InitializeAppUseCaseTest {
                 "run-2",
                 PipelineRunStatus.INTERRUPTED,
                 "Process terminated during execution",
+                RunTerminationReason.ProcessDied,
             )
         }
         coVerify {
@@ -141,6 +144,7 @@ class InitializeAppUseCaseTest {
                 "run-3",
                 PipelineRunStatus.INTERRUPTED,
                 "Process terminated during execution",
+                RunTerminationReason.ProcessDied,
             )
         }
     }
@@ -159,7 +163,12 @@ class InitializeAppUseCaseTest {
 
         // Then — the sweep is not gated behind the first-launch branch.
         coVerify {
-            pipelineRunRepository.finishRun("run-1", PipelineRunStatus.INTERRUPTED, any())
+            pipelineRunRepository.finishRun(
+                "run-1",
+                PipelineRunStatus.INTERRUPTED,
+                any(),
+                RunTerminationReason.ProcessDied,
+            )
         }
     }
 
@@ -170,7 +179,7 @@ class InitializeAppUseCaseTest {
 
         useCase()
 
-        coVerify(exactly = 0) { pipelineRunRepository.finishRun(any(), any(), any()) }
+        coVerify(exactly = 0) { pipelineRunRepository.finishRun(any(), any(), any(), any()) }
     }
 
     /**
@@ -205,9 +214,14 @@ class InitializeAppUseCaseTest {
 
         useCase()
 
-        coVerify(exactly = 0) { pipelineRunRepository.finishRun("run-parked", any(), any()) }
+        coVerify(exactly = 0) { pipelineRunRepository.finishRun("run-parked", any(), any(), any()) }
         coVerify(exactly = 1) {
-            pipelineRunRepository.finishRun("run-dead", PipelineRunStatus.INTERRUPTED, any())
+            pipelineRunRepository.finishRun(
+                "run-dead",
+                PipelineRunStatus.INTERRUPTED,
+                any(),
+                RunTerminationReason.ProcessDied,
+            )
         }
     }
 }

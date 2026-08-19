@@ -505,6 +505,7 @@ private fun TriggerRunOutcome?.toOutcomeUi(): TriggerJournalOutcomeUi = when (th
     TriggerRunOutcome.CancelledBySystem -> TriggerJournalOutcomeUi.CancelledBySystem
     TriggerRunOutcome.Cancelled -> TriggerJournalOutcomeUi.Cancelled
     TriggerRunOutcome.HitlTimeout -> TriggerJournalOutcomeUi.HitlTimeout
+    TriggerRunOutcome.StoppedByCeiling -> TriggerJournalOutcomeUi.StoppedByCeiling
 }
 
 /** Maps the latest HITL gate's resolution to the catalog enum. */
@@ -586,6 +587,7 @@ private fun triggerDetailStrings(): TriggerDetailStrings = TriggerDetailStrings(
     outcomeCancelledBySystem = stringResource(R.string.triggers_journal_outcome_cancelled_by_system),
     outcomeCancelled = stringResource(R.string.triggers_journal_outcome_cancelled),
     outcomeHitlTimeout = stringResource(R.string.triggers_journal_outcome_hitl_timeout),
+    outcomeStoppedByCeiling = stringResource(R.string.triggers_journal_outcome_stopped_by_ceiling),
     hitlWaiting = stringResource(R.string.triggers_journal_hitl_waiting),
     hitlApproved = stringResource(R.string.triggers_journal_hitl_approved),
     hitlDenied = stringResource(R.string.triggers_journal_hitl_denied),

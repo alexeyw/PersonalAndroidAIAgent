@@ -612,7 +612,7 @@ into a run is deliberately narrow so the rest of the engine stays text-only:
 2. **Announce.** At run start the engine emits one `Image input: W×H, N KB`
    console line (`SystemMessage`).
 3. **Deliver to exactly one node, anywhere in the tree.** Delivery state is a
-   tree-shared `RunImageDelivery` holder (mirroring the shared `RunStepBudget`):
+   tree-shared `RunImageDelivery` holder (mirroring the shared `RunBudgetLedger`):
    a `PIPELINE` node threads it into its sub-pipeline's engine invocation via
    `ExecutionScope.imageDelivery`. The engine hands the image to the **first
    `LITE_RT` node whose context includes the original task** in execution order
@@ -1443,10 +1443,14 @@ Key invariants:
   to `parentRunId IS NULL`, and resume / park-settlement always act on
   the **root** of the tree (resolved by walking `parentRunId` up). A
   child's trace records carry a nesting `depth` so the console renders
-  them indented under the spawning node. The `MAX_STEPS` budget is a
-  single `RunStepBudget` threaded (via `ExecutionScope`) through the
-  whole tree, so a sub-pipeline decrements the parent's allowance and
-  exhaustion at any depth fails the entire stack.
+  them indented under the spawning node. The autonomous-run ceilings are
+  charged against a single `RunBudgetLedger` threaded (via
+  `ExecutionScope`) through the whole tree, so a sub-pipeline charges the
+  parent's allowance and a breach at any depth fails the entire stack
+  with a typed `RunTerminationReason`. The ledger is seeded from — and
+  written back to — the root run record, so a ceiling keeps binding across
+  a park and resume instead of restarting; work already replayed from the
+  checkpoint is never charged twice.
 
 ### 6.2. Two-phase HITL (background approvals)
 

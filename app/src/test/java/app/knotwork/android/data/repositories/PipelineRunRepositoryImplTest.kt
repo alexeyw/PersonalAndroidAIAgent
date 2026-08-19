@@ -2,12 +2,15 @@ package app.knotwork.android.data.repositories
 
 import app.knotwork.android.data.local.dao.PipelineRunDao
 import app.knotwork.android.data.local.models.PipelineRunEntity
+import app.knotwork.android.data.local.models.RunSpendProjection
 import app.knotwork.android.domain.constants.ExternalAutomationContract
 import app.knotwork.android.domain.models.ExternalAutomationJournalEntry
 import app.knotwork.android.domain.models.ExternalAutomationStatus
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.RunOrigin
+import app.knotwork.android.domain.models.RunSpend
+import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.TriggerRunOutcome
 import app.knotwork.android.domain.repositories.ExternalAutomationJournalRepository
 import app.knotwork.android.domain.repositories.TriggerJournalRepository
@@ -168,6 +171,7 @@ class PipelineRunRepositoryImplTest {
                 status = "INTERRUPTED",
                 finishedAt = capture(finishedAt),
                 errorMessage = "process died",
+                terminationReason = null,
                 terminalStatuses = terminalNames,
             )
         }
@@ -181,7 +185,7 @@ class PipelineRunRepositoryImplTest {
                 repository.finishRun("run-1", PipelineRunStatus.RUNNING)
             }
         }
-        coVerify(exactly = 0) { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) }
     }
 
     @Test
@@ -320,13 +324,14 @@ class PipelineRunRepositoryImplTest {
                 fromStatus = "INTERRUPTED",
                 toStatus = "FAILED",
                 errorMessage = "Discarded by user",
+                terminationReason = "DISCARDED_BY_USER",
             )
         }
     }
 
     @Test
     fun `given DAO failure when discardInterruptedRun then absorbed`() = runTest {
-        coEvery { pipelineRunDao.discardInterruptedRun(any(), any(), any(), any()) } throws
+        coEvery { pipelineRunDao.discardInterruptedRun(any(), any(), any(), any(), any()) } throws
             IllegalStateException("disk full")
 
         repository.discardInterruptedRun("run-1") // must not throw
@@ -354,7 +359,7 @@ class PipelineRunRepositoryImplTest {
             IllegalStateException("disk full")
         coEvery { pipelineRunDao.updateStatus(any(), any(), any()) } throws IllegalStateException("disk full")
         coEvery { pipelineRunDao.updateCurrentNode(any(), any(), any()) } throws IllegalStateException("disk full")
-        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } throws
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } throws
             IllegalStateException("disk full")
 
         // None of these may throw — run records are observability only.
@@ -560,7 +565,7 @@ class PipelineRunRepositoryImplTest {
     @Test
     fun `given telemetry enabled when a root run finishes then its outcome is recorded`() = runTest {
         coEvery { usageTelemetry.isEnabled() } returns true
-        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
         coEvery { pipelineRunDao.getRun("run-1") } returns
             sampleEntity.copy(id = "run-1", pipelineId = "pipe-1", parentRunId = null)
 
@@ -574,7 +579,7 @@ class PipelineRunRepositoryImplTest {
     @Test
     fun `given a root run completes then the onboarding first-value marker is offered`() = runTest {
         coEvery { usageTelemetry.isEnabled() } returns true
-        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
         coEvery { pipelineRunDao.getRun("run-1") } returns
             sampleEntity.copy(id = "run-1", pipelineId = "pipe-1", parentRunId = null)
 
@@ -588,7 +593,7 @@ class PipelineRunRepositoryImplTest {
     @Test
     fun `given a root run fails then no onboarding first-value marker is offered`() = runTest {
         coEvery { usageTelemetry.isEnabled() } returns true
-        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
         coEvery { pipelineRunDao.getRun("run-1") } returns
             sampleEntity.copy(id = "run-1", pipelineId = "pipe-1", parentRunId = null)
 
@@ -601,7 +606,7 @@ class PipelineRunRepositoryImplTest {
     @Test
     fun `given a nested sub-pipeline run completes then no onboarding first-value marker is offered`() = runTest {
         coEvery { usageTelemetry.isEnabled() } returns true
-        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
         coEvery { pipelineRunDao.getRun("child-1") } returns
             sampleEntity.copy(id = "child-1", pipelineId = "pipe-1", parentRunId = "root-1")
 
@@ -613,7 +618,7 @@ class PipelineRunRepositoryImplTest {
     @Test
     fun `given a nested sub-pipeline run finishes then it is not recorded`() = runTest {
         coEvery { usageTelemetry.isEnabled() } returns true
-        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
         coEvery { pipelineRunDao.getRun("child-1") } returns
             sampleEntity.copy(id = "child-1", pipelineId = "pipe-1", parentRunId = "root-1")
 
@@ -626,7 +631,7 @@ class PipelineRunRepositoryImplTest {
     fun `given a duplicate finishRun that transitions no row then telemetry is not recorded`() = runTest {
         coEvery { usageTelemetry.isEnabled() } returns true
         // The run is already terminal: the guarded UPDATE matches no row.
-        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 0
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 0
 
         repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
 
@@ -637,7 +642,7 @@ class PipelineRunRepositoryImplTest {
     @Test
     fun `given a run that never resolved a pipeline finishes then it is not recorded`() = runTest {
         coEvery { usageTelemetry.isEnabled() } returns true
-        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
         // A queued run reaped as INTERRUPTED by the orphan sweep: pipelineId never resolved.
         coEvery { pipelineRunDao.getRun("orphan-1") } returns
             sampleEntity.copy(id = "orphan-1", pipelineId = null, parentRunId = null)
@@ -650,7 +655,7 @@ class PipelineRunRepositoryImplTest {
     @Test
     fun `given telemetry disabled when a run finishes then the run is not read back for telemetry`() = runTest {
         // isEnabled() is stubbed false in setup; the run should never be re-read.
-        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
         repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
 
         coVerify(exactly = 0) { pipelineRunDao.getRun(any()) }
@@ -659,7 +664,7 @@ class PipelineRunRepositoryImplTest {
 
     @Test
     fun `given a completed trigger run finishes then Success is attributed to its trigger-journal row`() = runTest {
-        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
         coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.TRIGGER.name
 
         repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
@@ -669,7 +674,7 @@ class PipelineRunRepositoryImplTest {
 
     @Test
     fun `given a failed trigger run finishes then a typed Failure carrying the message is attributed`() = runTest {
-        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
         coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.TRIGGER.name
 
         repository.finishRun("run-1", PipelineRunStatus.FAILED, "boom")
@@ -680,7 +685,7 @@ class PipelineRunRepositoryImplTest {
     @Test
     fun `given a user-cancelled trigger run finishes then a deliberate Cancelled is attributed, not a platform kill`() =
         runTest {
-            coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+            coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
             coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.TRIGGER.name
 
             repository.finishRun("run-1", PipelineRunStatus.CANCELLED)
@@ -690,7 +695,7 @@ class PipelineRunRepositoryImplTest {
 
     @Test
     fun `given an orphaned trigger run reaped as INTERRUPTED then CancelledBySystem is attributed`() = runTest {
-        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
         coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.TRIGGER.name
 
         repository.finishRun("run-1", PipelineRunStatus.INTERRUPTED, "Owning process died")
@@ -722,7 +727,7 @@ class PipelineRunRepositoryImplTest {
 
     @Test
     fun `given a completed external run finishes then Completed is settled and the caller is told`() = runTest {
-        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
         coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.EXTERNAL.name
         coEvery { externalAutomationJournal.findByRunId("run-1") } returns externalEntry()
 
@@ -743,7 +748,7 @@ class PipelineRunRepositoryImplTest {
 
     @Test
     fun `given a cancelled external run finishes then the caller is told Failed, not silence`() = runTest {
-        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
         coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.EXTERNAL.name
         coEvery { externalAutomationJournal.findByRunId("run-1") } returns externalEntry()
 
@@ -759,7 +764,7 @@ class PipelineRunRepositoryImplTest {
     @Test
     fun `given a fire-and-forget external request when its run finishes then the row settles without a callback`() =
         runTest {
-            coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+            coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
             coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.EXTERNAL.name
             coEvery { externalAutomationJournal.findByRunId("run-1") } returns
                 externalEntry(declaredReturnPackage = null)
@@ -775,7 +780,7 @@ class PipelineRunRepositoryImplTest {
 
     @Test
     fun `given a nested child of an external run finishes then no second callback is sent`() = runTest {
-        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
         // A sub-pipeline child inherits its parent's origin but owns no journal row.
         coEvery { pipelineRunDao.getRunOrigin("child-run") } returns RunOrigin.EXTERNAL.name
         coEvery { externalAutomationJournal.findByRunId("child-run") } returns null
@@ -788,7 +793,7 @@ class PipelineRunRepositoryImplTest {
 
     @Test
     fun `given a run of another origin finishes then the external journal is never consulted`() = runTest {
-        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
         coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.CHAT.name
 
         repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
@@ -800,7 +805,7 @@ class PipelineRunRepositoryImplTest {
     @Test
     fun `given an interrupted external run that is resumed and completes then only the first outcome is reported`() =
         runTest {
-            coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+            coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
             coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.EXTERNAL.name
             coEvery { externalAutomationJournal.findByRunId("run-1") } returns externalEntry()
             // First settlement wins; the second is refused by the journal.
@@ -829,7 +834,7 @@ class PipelineRunRepositoryImplTest {
     fun `given a racing duplicate finish of an external run then no callback is sent twice`() = runTest {
         // The DAO update carries a `status NOT IN (terminal)` clause, so a racing
         // second finish transitions zero rows — and must not re-notify the caller.
-        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 0
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 0
         coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.EXTERNAL.name
         coEvery { externalAutomationJournal.findByRunId("run-1") } returns externalEntry()
 
@@ -840,18 +845,102 @@ class PipelineRunRepositoryImplTest {
 
     @Test
     fun `given a trigger run failed by an expired background approval then HitlTimeout is attributed`() = runTest {
-        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
         coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.TRIGGER.name
 
-        // The exact reason the park-expiry settlement stamps on the run.
-        repository.finishRun("run-1", PipelineRunStatus.FAILED, ParkedRunResumer.APPROVAL_WINDOW_EXPIRED_MESSAGE)
+        // The typed reason the park-expiry settlement stamps on the run. The
+        // message travels alongside it but no longer decides anything.
+        repository.finishRun(
+            "run-1",
+            PipelineRunStatus.FAILED,
+            ParkedRunResumer.APPROVAL_WINDOW_EXPIRED_MESSAGE,
+            RunTerminationReason.HitlWindowExpired,
+        )
 
         coVerify(exactly = 1) { triggerJournal.recordRunOutcome("run-1", TriggerRunOutcome.HitlTimeout) }
     }
 
     @Test
+    fun `given a trigger run stopped by a ceiling then StoppedByCeiling is attributed, not Failure`() = runTest {
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.TRIGGER.name
+
+        repository.finishRun(
+            "run-1",
+            PipelineRunStatus.FAILED,
+            "Pipeline execution exceeded the maximum of 15 steps shared across the pipeline tree.",
+            RunTerminationReason.StepCeiling(limit = 15, spent = 15),
+        )
+
+        // A working safety limit is not a trigger defect; reporting it as a
+        // Failure would redden the trigger's health badge for correct behaviour.
+        coVerify(exactly = 1) { triggerJournal.recordRunOutcome("run-1", TriggerRunOutcome.StoppedByCeiling) }
+    }
+
+    @Test
+    fun `given a ceiling stop then the typed reason is written to the run row`() = runTest {
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRunOrigin(any()) } returns RunOrigin.CHAT.name
+
+        repository.finishRun(
+            "run-1",
+            PipelineRunStatus.FAILED,
+            "over budget",
+            RunTerminationReason.TokenCeiling(limit = 100, spent = 140),
+        )
+
+        coVerify {
+            pipelineRunDao.finishRun(
+                runId = "run-1",
+                status = "FAILED",
+                finishedAt = any(),
+                errorMessage = "over budget",
+                terminationReason = "TOKEN_CEILING",
+                terminalStatuses = any(),
+            )
+        }
+    }
+
+    @Test
+    fun `given spend is recorded then the root row is written under the terminal guard`() = runTest {
+        repository.recordSpend("root-1", stepsSpent = 7, tokensSpent = 4_200)
+
+        coVerify {
+            pipelineRunDao.recordSpend(
+                rootRunId = "root-1",
+                stepsSpent = 7,
+                tokensSpent = 4_200,
+                terminalStatuses = any(),
+            )
+        }
+    }
+
+    @Test
+    fun `given no row when spend is read then it degrades to zero rather than failing the run`() = runTest {
+        coEvery { pipelineRunDao.getSpend("missing") } returns null
+
+        assertEquals(RunSpend(steps = 0, tokens = 0), repository.getSpend("missing"))
+    }
+
+    @Test
+    fun `given a stored spend then it round-trips for the resume seed`() = runTest {
+        coEvery { pipelineRunDao.getSpend("root-1") } returns RunSpendProjection(stepsSpent = 9, tokensSpent = 900)
+
+        assertEquals(RunSpend(steps = 9, tokens = 900), repository.getSpend("root-1"))
+    }
+
+    @Test
+    fun `given the store fails when spend is read then it degrades to zero`() = runTest {
+        // Best-effort contract: losing the read makes the ceiling bind late,
+        // which is safe. Refusing to run would not be.
+        coEvery { pipelineRunDao.getSpend(any()) } throws IllegalStateException("disk full")
+
+        assertEquals(RunSpend(), repository.getSpend("root-1"))
+    }
+
+    @Test
     fun `given a non-trigger run finishes then the journal is never touched`() = runTest {
-        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
         coEvery { pipelineRunDao.getRunOrigin("run-1") } returns RunOrigin.CHAT.name
 
         repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
@@ -865,7 +954,7 @@ class PipelineRunRepositoryImplTest {
         // Already terminal: the guarded UPDATE matches no row, so a racing write
         // must never overwrite the outcome already on the journal entry — and the
         // origin is not even read.
-        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any()) } returns 0
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 0
 
         repository.finishRun("run-1", PipelineRunStatus.COMPLETED)
 

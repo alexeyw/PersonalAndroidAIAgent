@@ -180,6 +180,19 @@ sealed interface TriggerRunOutcome {
      * clarification) that timed out without a user response.
      */
     data object HitlTimeout : TriggerRunOutcome
+
+    /**
+     * An autonomous-run ceiling ended the run: it reached the step or token
+     * limit in force for a background origin and was stopped deliberately.
+     *
+     * Kept distinct from [Failure] because it is the opposite of one. The run
+     * did not break — a safety limit the user configured did exactly what it
+     * was configured to do, and a health indicator that reddened for it would
+     * be teaching the user to distrust a signal that is telling the truth. It
+     * is also not [Cancelled]: nobody pressed Stop, and the copy for that
+     * outcome says so in the first person.
+     */
+    data object StoppedByCeiling : TriggerRunOutcome
 }
 
 /**

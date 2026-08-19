@@ -15,6 +15,7 @@ import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.ResumeContext
 import app.knotwork.android.domain.models.RunOrigin
+import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.TaskPriority
 import app.knotwork.android.domain.models.ToolRisk
@@ -548,7 +549,26 @@ class TaskQueueManagerImplTest {
         taskQueueManager.enqueueTask(task)
         advanceUntilIdle()
 
-        coVerify { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, "node exploded") }
+        coVerify { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, "node exploded", null) }
+    }
+
+    @Test
+    fun `given an engine error carrying a typed reason then it is settled with that reason`() = runTest {
+        // The seam that carries the cause out of the engine. Verified with a
+        // real reason, not only with null: settling a ceiling stop as an
+        // untyped failure is exactly the misreading the vocabulary prevents,
+        // and a test that only ever sees null would not notice.
+        val reason = RunTerminationReason.StepCeiling(limit = 15, spent = 15)
+        every { graphExecutionEngine.invoke(any(), any(), any(), any(), any()) } returns
+            flowOf(AgentOrchestratorState.Error("over the cap", reason))
+
+        val task = AgentTask(sessionId = "session_ceiling", prompt = "p")
+        taskQueueManager.enqueueTask(task)
+        advanceUntilIdle()
+
+        coVerify {
+            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, "over the cap", reason)
+        }
     }
 
     /**
@@ -566,7 +586,7 @@ class TaskQueueManagerImplTest {
         taskQueueManager.enqueueTask(task)
         advanceUntilIdle()
 
-        coVerify { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, "engine blew up") }
+        coVerify { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, "engine blew up", null) }
     }
 
     /**
@@ -753,6 +773,7 @@ class TaskQueueManagerImplTest {
                 runId,
                 PipelineRunStatus.INTERRUPTED,
                 "Pipeline graph changed before resume could start. Restart the task instead.",
+                RunTerminationReason.GraphChanged,
             )
         }
         verify(exactly = 0) { graphExecutionEngine.invoke(any(), any(), any(), any(), any()) }
@@ -823,6 +844,7 @@ class TaskQueueManagerImplTest {
                 stalling.id,
                 PipelineRunStatus.FAILED,
                 TaskQueueManagerImpl.STALLED_MESSAGE,
+                RunTerminationReason.NoProgress,
             )
         }
         coVerify { pipelineRunRepository.finishRun(following.id, PipelineRunStatus.COMPLETED) }
@@ -907,6 +929,7 @@ class TaskQueueManagerImplTest {
                 task.id,
                 PipelineRunStatus.FAILED,
                 TaskQueueManagerImpl.STALLED_MESSAGE,
+                RunTerminationReason.NoProgress,
             )
         }
     }

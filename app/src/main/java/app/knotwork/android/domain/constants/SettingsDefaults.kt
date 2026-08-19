@@ -139,6 +139,55 @@ object SettingsDefaults {
     const val PIPELINE_MAX_STEPS_MAX: Int = 100
 
     /**
+     * Default step ceiling for runs nobody is watching — the background
+     * origins (scheduler, quick tile, trigger, external automation).
+     *
+     * Deliberately equal to [PIPELINE_MAX_STEPS_DEFAULT] rather than lower.
+     * The origin distinction that matters for an unattended run is what it
+     * *spends*, and that is carried by the token ceiling below; shipping an
+     * upgrade that silently shrinks the step budget of automations already
+     * running in the field would break working pipelines to buy protection the
+     * token axis already provides. The value is separately configurable so a
+     * user who wants a tighter background bound has one.
+     *
+     * This constant is reached only when the user has configured **neither**
+     * cap: until this key existed one setting governed every origin, so an
+     * unset background value falls back to the configured interactive one
+     * rather than here. Otherwise a user who had raised the cap would have seen
+     * their background runs quietly reset to 15 by the upgrade.
+     *
+     * Shares the [PIPELINE_MAX_STEPS_MIN] / [PIPELINE_MAX_STEPS_MAX] clamps.
+     */
+    const val PIPELINE_MAX_STEPS_BACKGROUND_DEFAULT: Int = 15
+
+    /**
+     * Default token ceiling for an interactive run, across the whole run tree.
+     *
+     * Set high enough that it never fires by accident on a person's own
+     * request — someone is watching an interactive run and can stop it — while
+     * still bounding a pathological loop.
+     */
+    const val RUN_MAX_TOKENS_DEFAULT: Int = 1_000_000
+
+    /**
+     * Default token ceiling for a background run, across the whole run tree.
+     *
+     * An order of magnitude below the interactive default, because this is the
+     * concrete failure the ceilings exist for: a trigger fires overnight, a
+     * CLOUD node runs on the user's own provider key inside a loop, and the
+     * bill arrives in the morning. Sized against the step ceiling — with 15
+     * nodes it leaves well over six thousand tokens per node, comfortable for
+     * a real background pipeline and tight for a runaway one.
+     */
+    const val RUN_MAX_TOKENS_BACKGROUND_DEFAULT: Int = 100_000
+
+    /** Lower bound enforced when the user edits either run-token ceiling. */
+    const val RUN_MAX_TOKENS_MIN: Int = 10_000
+
+    /** Upper bound enforced when the user edits either run-token ceiling. */
+    const val RUN_MAX_TOKENS_MAX: Int = 10_000_000
+
+    /**
      * Default maximum nesting depth for PIPELINE-node composition: how many
      * levels of sub-pipeline a run may descend into before the recursion is
      * refused. Keeps composed pipelines comprehensible and bounds recursion.
