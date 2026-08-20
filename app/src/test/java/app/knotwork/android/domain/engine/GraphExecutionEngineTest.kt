@@ -4257,15 +4257,86 @@ class GraphExecutionEngineTest {
         val states = engine(
             sessionId,
             "prompt",
-            repeatingChainGraph(count = 5),
+            // Four, not five: the nudge lands on the LAST llm node, so the very
+            // next node is the echo OUTPUT. That adjacency is the whole test —
+            // with a spare node in between, the note is consumed before OUTPUT
+            // is ever reached and the assertion below cannot fail.
+            repeatingChainGraph(count = 4),
             stuckDetector = GraphStuckDetector(staleStreak = 2, graceSteps = 99),
         ).toList()
 
+        // Positively: a notice must actually have been raised, or "the answer
+        // is clean" is satisfied by never producing a note at all.
+        assertEquals(1, states.filterIsInstance<AgentOrchestratorState.RunNotice>().size)
         val completed = states.last() as AgentOrchestratorState.Completed
         assertEquals("the same answer", completed.finalResponse)
         assertFalse(
             "the internal notice must not be part of the answer",
             completed.finalResponse.contains("SYSTEM NOTICE"),
+        )
+    }
+
+    @Test
+    fun `given a generating OUTPUT that produces nothing then no note becomes the answer`() = runTest {
+        // The third shape of a defect this project has now shipped twice: the
+        // note is correctly kept out of `currentInputText`, and correctly
+        // survives no router — but an OUTPUT node *with* a system prompt
+        // composes context like any other node, so it could be handed the note
+        // directly. `OutputNodeExecutor` then falls back to persisting its own
+        // input verbatim whenever the model returns nothing, and the engine's
+        // internal notice becomes the agent's chat message.
+        //
+        // Both guards are exercised at once: the soft ceiling crosses and the
+        // detector nudges, so if either could reach OUTPUT this fails.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(8)
+        // Every node's model returns the same text, except the OUTPUT node's,
+        // which returns nothing at all — the fallback path.
+        every { llmEngine.generateResponseStream(any()) } answers {
+            val prompt = firstArg<String>()
+            if (prompt.contains("FINAL ANSWER")) flowOf("") else flowOf("the same answer")
+        }
+
+        val graph = PipelineGraph(
+            id = "g-output-note",
+            name = "OutputNote",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f, systemPrompt = "work"),
+                NodeModel("llm_2", NodeType.LITE_RT, 0f, 0f, systemPrompt = "work"),
+                NodeModel("llm_3", NodeType.LITE_RT, 0f, 0f, systemPrompt = "work"),
+                NodeModel("llm_4", NodeType.LITE_RT, 0f, 0f, systemPrompt = "work"),
+                NodeModel("llm_5", NodeType.LITE_RT, 0f, 0f, systemPrompt = "work"),
+                // A *generating* OUTPUT — the case a pass-through OUTPUT test
+                // cannot reach, because a pass-through composes nothing.
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = "FINAL ANSWER: format it"),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_1"),
+                ConnectionModel("c2", "llm_1", "llm_2"),
+                ConnectionModel("c3", "llm_2", "llm_3"),
+                ConnectionModel("c4", "llm_3", "llm_4"),
+                ConnectionModel("c5", "llm_4", "llm_5"),
+                ConnectionModel("c6", "llm_5", "output_1"),
+            ),
+        )
+
+        val states = engine(
+            sessionId,
+            "prompt",
+            graph,
+            stuckDetector = GraphStuckDetector(staleStreak = 3, graceSteps = 99),
+        ).toList()
+
+        val answer = states.filterIsInstance<AgentOrchestratorState.Completed>().last().finalResponse
+        assertFalse("the engine's own notice must never be the answer; got: $answer", answer.contains("SYSTEM NOTICE"))
+        // And the OUTPUT node's composed prompt must not carry one either —
+        // asserting only on the answer would pass on any build where the
+        // fallback happened not to fire.
+        val outputInput = states.filterIsInstance<AgentOrchestratorState.NodeIO>()
+            .firstOrNull { it.nodeId == "output_1" }?.input
+        assertTrue(
+            "a note must not reach OUTPUT's prompt at all; got: $outputInput",
+            outputInput == null || !outputInput.contains("SYSTEM NOTICE"),
         )
     }
 
@@ -4278,6 +4349,10 @@ class GraphExecutionEngineTest {
         every { settingsRepository.pipelineMaxSteps } returns flowOf(50)
         every { llmEngine.generateResponseStream(any()) } returns flowOf("Blue")
 
+        // Four LLM nodes before the router, so the nudge lands on the last of
+        // them and the router is the node that receives the note. With fewer,
+        // no nudge is raised at all and this test asserts nothing — which is
+        // exactly what it did until the assertion below was added.
         val graph = PipelineGraph(
             id = "g-router-stuck",
             name = "RouterStuck",
@@ -4285,14 +4360,18 @@ class GraphExecutionEngineTest {
                 NodeModel("input_1", NodeType.INPUT, 0f, 0f),
                 NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f, systemPrompt = "work"),
                 NodeModel("llm_2", NodeType.LITE_RT, 0f, 0f, systemPrompt = "work"),
+                NodeModel("llm_3", NodeType.LITE_RT, 0f, 0f, systemPrompt = "work"),
+                NodeModel("llm_4", NodeType.LITE_RT, 0f, 0f, systemPrompt = "work"),
                 NodeModel("router_1", NodeType.INTENT_ROUTER, 0f, 0f, systemPrompt = "route"),
                 NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
             ),
             connections = listOf(
                 ConnectionModel("c1", "input_1", "llm_1"),
                 ConnectionModel("c2", "llm_1", "llm_2"),
-                ConnectionModel("c3", "llm_2", "router_1"),
-                ConnectionModel("c4", "router_1", "output_1"),
+                ConnectionModel("c3", "llm_2", "llm_3"),
+                ConnectionModel("c4", "llm_3", "llm_4"),
+                ConnectionModel("c5", "llm_4", "router_1"),
+                ConnectionModel("c6", "router_1", "output_1"),
             ),
         )
 
@@ -4302,6 +4381,12 @@ class GraphExecutionEngineTest {
             graph,
             stuckDetector = GraphStuckDetector(staleStreak = 2, graceSteps = 99),
         ).toList()
+
+        // The router must actually have been handed the note, or the leak this
+        // test guards has nothing to leak.
+        val routerInput = states.filterIsInstance<AgentOrchestratorState.NodeIO>()
+            .first { it.nodeId == "router_1" }.input
+        assertTrue("the router must receive the note; got: $routerInput", routerInput.contains("SYSTEM NOTICE"))
 
         val completed = states.last() as AgentOrchestratorState.Completed
         assertFalse(
@@ -4316,9 +4401,6 @@ class GraphExecutionEngineTest {
         // its soft ceiling *and* trips the detector, and whichever spoke second
         // used to silently overwrite the other's advice.
         //
-        // hard = 8 gives softFor(8) = 6, and the nodes charge 1..8, so the
-        // crossing lands on llm_5 (the sixth step) — the same node the detector
-        // is arranged to nudge on.
         // Arranged so both guards speak in the SAME gap, which is the only way
         // one can erase the other: hard = 8 gives softFor(8) = 6, and the walk
         // charges INPUT plus llm_1..llm_5 to reach 6 on llm_5 — the same node
@@ -4390,23 +4472,73 @@ class GraphExecutionEngineTest {
             ),
         )
 
+        // Both child paths, because `PipelineNodeExecutor` has two nearly
+        // identical hand-off blocks: an unpersisted child (the editor's test
+        // run, `runId == null`) and `runPersistedChild` (every real run). A
+        // test that exercised only one would let someone tidying the pair drop
+        // `contextNotes` from the other and never hear about it.
+        // A relaxed mock answers `getRun` with a relaxed PipelineRun rather than
+        // null, which `prepareChildRun` reads as an unexpected existing run and
+        // aborts on. Say "no such run" explicitly so the persisted path takes
+        // its fresh-child branch.
+        coEvery { pipelineRunRepository.getRun(any()) } returns null
+
+        listOf(null, "run-parent").forEach { parentRunId ->
+            val states = engine(
+                sessionId,
+                "prompt",
+                mainGraph,
+                parentRunId,
+                stuckDetector = GraphStuckDetector(staleStreak = 2, graceSteps = 99),
+            ).toList()
+
+            val inputs = states.filterIsInstance<AgentOrchestratorState.NodeIO>()
+            assertTrue(
+                "the nudge must have been raised at all (runId=$parentRunId)",
+                states.filterIsInstance<AgentOrchestratorState.RunNotice>().isNotEmpty(),
+            )
+            val childInput = inputs.firstOrNull { it.nodeId == "sub_llm" }?.input
+            assertNotNull("the child's LITE_RT must have run (runId=$parentRunId)", childInput)
+            assertTrue(
+                "the advice must cross the sub-pipeline boundary (runId=$parentRunId); got: $childInput",
+                childInput!!.contains("repeating itself"),
+            )
+        }
+    }
+
+    @Test
+    fun `given a resumed run that inherits the escalation then it is warned before it is stopped`() = runTest {
+        // Notes are live-only, so the attempt that raised one and then parked
+        // destroyed it. Carrying only the CLOCK across the resume would stop
+        // the run for ignoring advice that no longer exists — a stepped
+        // recovery with the first step missing.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(50)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("the same answer")
+
+        // A prefix long enough to have earned the nudge on the parked attempt.
+        val resume = ResumeContext(
+            records = (1..5).map { i ->
+                nodeIoRecord("run-armed", i.toLong(), "llm_$i", NodeType.LITE_RT, "the same answer")
+            },
+            memorySnapshot = null,
+            nextSeq = 6L,
+        )
+
         val states = engine(
             sessionId,
             "prompt",
-            mainGraph,
-            stuckDetector = GraphStuckDetector(staleStreak = 2, graceSteps = 99),
+            repeatingChainGraph(count = 7),
+            "run-armed",
+            resume,
+            stuckDetector = GraphStuckDetector(staleStreak = 2, graceSteps = 1),
         ).toList()
 
-        val inputs = states.filterIsInstance<AgentOrchestratorState.NodeIO>()
+        val liveInputs = states.filterIsInstance<AgentOrchestratorState.NodeIO>()
+            .filter { it.nodeId == "llm_6" || it.nodeId == "llm_7" }
+            .map { it.input }
         assertTrue(
-            "the nudge must have been raised at all",
-            states.filterIsInstance<AgentOrchestratorState.RunNotice>().isNotEmpty(),
-        )
-        val childInput = inputs.firstOrNull { it.nodeId == "sub_llm" }?.input
-        assertNotNull("the child's LITE_RT must have run", childInput)
-        assertTrue(
-            "the advice must cross the sub-pipeline boundary; got: $childInput",
-            childInput!!.contains("repeating itself"),
+            "the first live node must be handed the advice the parked attempt lost; got: $liveInputs",
+            liveInputs.any { it.contains("repeating itself") },
         )
     }
 

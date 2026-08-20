@@ -748,7 +748,19 @@ class GraphExecutionEngine @Inject constructor(
                     // A crossing or a stuck verdict announces itself on the
                     // console where it happens, but reaches the model only
                     // here, on the next node that composes a prompt.
-                    val notes = runContextNotes.drain()
+                    //
+                    // Except OUTPUT, which composes one and must still never be
+                    // handed a note. Two reasons, and the second is the one
+                    // that bites: advice to wrap up has no reader at the node
+                    // that *is* the wrapping up; and `OutputNodeExecutor` falls
+                    // back to persisting its own input verbatim when the model
+                    // returns nothing, so a note delivered here becomes the
+                    // agent's chat message on any empty generation. That is the
+                    // third shape of the same defect — the first two were
+                    // writing the note to `currentInputText`, and letting it
+                    // survive an `INTENT_ROUTER` — and it is why the exclusion
+                    // is on the node type rather than on the executor.
+                    val notes = if (currentNode.type == NodeType.OUTPUT) null else runContextNotes.drain()
                     if (notes != null) "$notes\n\n$composed" else composed
                 } else {
                     currentInputText
@@ -1086,8 +1098,13 @@ class GraphExecutionEngine @Inject constructor(
             // would drop the one step the verdict was actually reached on, so
             // the console would be missing precisely the evidence the reader
             // was sent to find. Judging the same input/output pair the trace
-            // has just recorded is the point: what the detector saw and what a
-            // person can read back are then the same thing by construction.
+            // has just recorded is the point: for every node the trace carries,
+            // what the detector saw and what a person can read back are the
+            // same thing. (INPUT is the one exception, and it is the trace's
+            // rule, not this one: INPUT and OUTPUT are never recorded. INPUT is
+            // still observed, because the pass-through accounting needs it, but
+            // it can only ever contribute a pass-through — never the repetition
+            // a verdict is reached on.)
             //
             // OUTPUT is excluded on the same grounds as the ✓ event and the
             // soft-ceiling notice above: its executor has already emitted
@@ -1108,7 +1125,20 @@ class GraphExecutionEngine @Inject constructor(
                     // the attempt that actually ran this prefix did not stop on
                     // it, and reaching a different verdict now would be the app
                     // rewriting what already happened.
-                    runStuckDetector.replay(observation)
+                    //
+                    // The escalation it earned does carry forward, though, and
+                    // that obliges us to carry the advice with it: notes are
+                    // live-only, so the attempt that raised one and then parked
+                    // destroyed it. Re-queue it for the first live node that
+                    // composes a prompt — otherwise the resumed run inherits
+                    // only the clock and is stopped for ignoring something it
+                    // was never told. The console line and the on-screen notice
+                    // are not repeated: they were emitted when the verdict was
+                    // actually reached, and a warning re-shown on every resume
+                    // is one the reader learns to skip.
+                    if (runStuckDetector.replay(observation)) {
+                        runContextNotes.add(STUCK_CONTEXT_NOTE)
+                    }
                 } else {
                     when (val verdict = runStuckDetector.observe(observation)) {
                         StuckVerdict.Healthy -> Unit
@@ -1451,10 +1481,10 @@ class GraphExecutionEngine @Inject constructor(
      * says the pipeline misbehaved. Filing the second under the first is how a
      * console stops being searchable.
      *
-     * Only the reasons the engine itself can produce appear here; the rest
-     * (a dead process, a discarded run, an expired approval window) never reach
-     * this branch, and share the ceiling channel rather than earning a third
-     * one for a case that cannot occur.
+     * Exhaustive rather than defaulting: the reasons the walk cannot produce
+     * are listed too, on the neutral channel. An `else` would file the next
+     * engine-raised reason under the ceiling channel — a console line claiming
+     * a limit was reached when none was, found only by whoever greps for it.
      *
      * @param reason The typed cause the walk stopped on.
      * @return The console event type its diagnostic should be pushed under.

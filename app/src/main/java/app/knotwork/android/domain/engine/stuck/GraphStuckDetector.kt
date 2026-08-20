@@ -55,9 +55,12 @@ import java.security.MessageDigest
  *
  * ## Bounded by construction
  *
- * The window holds at most [windowSize] observations and the novelty ledger at
- * most one fingerprint per charged step, which the step ceiling already bounds
- * (100 at its maximum). Nothing here grows with the length of a run.
+ * The window holds at most [windowSize] observations, and the two novelty
+ * ledgers — outputs produced, inputs seen — hold at most one fingerprint per
+ * observation each. Observations are bounded by the step ceiling in the same
+ * tree (100 at its maximum), and a fingerprint is a fixed 64 characters however
+ * long the text behind it was. Nothing here grows with the length of a run, or
+ * with the size of the answers a run is generating.
  *
  * The detector is a small mutable object shared by one execution tree and
  * passed by reference, exactly like `RunBudgetLedger`: the engine's walk is the
@@ -190,11 +193,24 @@ class GraphStuckDetector(
      * goes. The original attempt did not end here, and pre-empting a verdict it
      * never reached would silence the detector for the rest of the run.
      *
+     * **Carrying the escalation forward obliges the caller to carry the advice
+     * with it.** A note is live-only, so an attempt that raised one and then
+     * parked destroyed it — and a resumed run that inherits only the *clock*
+     * would be stopped for ignoring advice that no longer exists. The return
+     * value exists so the caller can re-queue the note for the first live node
+     * that can read it; the run is then genuinely warned before it is ended,
+     * which is the whole shape of a stepped recovery.
+     *
      * @param step The replayed step, already fingerprinted.
+     * @return `true` when this step armed the escalation — the caller owes the
+     *   run its note. `false` otherwise, including when the escalation was
+     *   already armed.
      */
-    fun replay(step: RunStepObservation) {
+    fun replay(step: RunStepObservation): Boolean {
         record(step)
-        if (nudgedAt == null && signal() != null) nudgedAt = observed
+        if (nudgedAt != null || signal() == null) return false
+        nudgedAt = observed
+        return true
     }
 
     private fun record(step: RunStepObservation) {
@@ -217,11 +233,17 @@ class GraphStuckDetector(
      * The signal the window currently shows, or `null` when it shows none.
      *
      * Every signal is gated on the run having made no progress since the last
-     * checkpoint. That single condition is what keeps a healthy
-     * `QUEUE_PROCESSOR` out of the net: each iteration rewrites the item node's
-     * input with the results accumulated so far and produces a fresh answer, so
-     * a draining queue resets the counter on every pass — which is correct,
-     * because a draining queue *is* making progress.
+     * checkpoint, and evidence is counted only over the steps since that
+     * happened.
+     *
+     * That gate alone is **not** what keeps a healthy `QUEUE_PROCESSOR` out of
+     * the net, and it is worth saying so, because it reads as though it were.
+     * A queue whose items all answer alike produces no progress at all after
+     * the first, so the gate opens on it immediately. What actually protects it
+     * is the second condition on [StuckSignal.NO_NEW_OUTPUT] below — that the
+     * run has also stopped being *asked* anything new. Delete that conjunct as
+     * redundant and a run marking twelve recipients through one tool is stopped
+     * on its seventh.
      */
     private fun signal(): StuckSignal? {
         if (stepsSinceProgress == 0) return null

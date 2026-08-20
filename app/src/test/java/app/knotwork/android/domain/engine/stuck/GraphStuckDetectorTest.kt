@@ -1,6 +1,7 @@
 package app.knotwork.android.domain.engine.stuck
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -384,10 +385,13 @@ class GraphStuckDetectorTest {
         // more often than the grace period would never be stopped by the
         // detector at all.
         val detector = GraphStuckDetector()
-        detector.replay(step("seed", "start", "out"))
-        repeat(GraphStuckDetector.REPEAT_THRESHOLD + GraphStuckDetector.GRACE_STEPS) {
+        assertFalse("a healthy first step owes no note", detector.replay(step("seed", "start", "out")))
+        val armed = (1..GraphStuckDetector.REPEAT_THRESHOLD + GraphStuckDetector.GRACE_STEPS).count {
             detector.replay(step("loop", "in", "out"))
         }
+        // Exactly once, and only on the step that armed it: a note re-queued on
+        // every replayed step afterwards would stack up on one prompt.
+        assertEquals("the escalation is armed once", 1, armed)
 
         // The replayed prefix earned a nudge and spent its grace. The first
         // live repetition therefore stops the run rather than nudging it again.
@@ -420,6 +424,16 @@ class GraphStuckDetectorTest {
         assertTrue(
             "the weaker signal must need more evidence than the stronger one",
             GraphStuckDetector.STALE_STREAK > GraphStuckDetector.REPEAT_THRESHOLD,
+        )
+        // The weaker signal must still be *reachable*. `worstCase` above covers
+        // REPEATED_STEP only, so raising STALE_STREAK to quiet a false positive
+        // could push NO_NEW_OUTPUT past every ceiling a user can set (the
+        // maximum is 100) and silently retire it — a detector with one signal,
+        // on a green build.
+        val staleWorstCase = 1 + GraphStuckDetector.STALE_STREAK + GraphStuckDetector.GRACE_STEPS
+        assertTrue(
+            "NO_NEW_OUTPUT must stay reachable inside the largest configurable ceiling, needs $staleWorstCase",
+            staleWorstCase < 100,
         )
     }
 

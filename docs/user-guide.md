@@ -2165,9 +2165,11 @@ above the composer that the limit warning uses, and in the run's own context, so
 the agent gets a chance to change course by itself. That is usually the end of
 it. If the repetition carries on regardless, the run is ended and the chat says
 **Stopped: the run was not getting anywhere**, with **Open console**. The
-console is where the repetition is: its **Vars** tab lists what each step was
-given and what it produced, including the step the run was stopped on, so the
-identical rows are visible side by side.
+console's **Logs** tab is where the repetition shows: the same step starts and
+finishes over and over, and the last lines say what was noticed and that the run
+was ended for it. The **Vars** tab is the companion — it shows what that step was
+given and what it produced, though only the most recent pass, since it keeps one
+entry per step rather than one per visit.
 
 A run that keeps producing *different* results is not repeating itself, however
 long it takes, and this never touches it. That case is what the limits above are
@@ -2613,10 +2615,12 @@ always there, and which of two shapes it takes decides what to do next:
 - **There is an entry, and it fired but ended badly.** *Failed* points at the
   pipeline (open the run in the trigger's chat and read the console). Two
   failures name themselves: *the run was not getting anywhere* means it was
-  repeating itself, and the console's **Vars** tab shows the identical steps;
-  *the run went quiet* means a step stopped responding, and there the console
-  is deliberately short — the last step it shows is the one that never
-  finished, which is the thing to look at;
+  repeating itself, and the console's log shows the same step running again and
+  again before the line that ends it;
+  *the run went quiet* means a step stopped responding — the console's log ends
+  with the step it started and never finished, and that step is the thing to
+  look at, though the **Vars** tab will have nothing for it because it never
+  produced anything;
   *Stopped by the system* means the process was killed mid-run, which is a
   battery / memory-pressure problem, not a pipeline one; *Timed out waiting
   for approval* means the run parked on a sensitive tool and the approval

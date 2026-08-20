@@ -21,7 +21,8 @@ details.
   responds in two stages: first it tells the run, quietly in the chat and in the
   agent's own context, so it can change course by itself; then, if nothing
   changes, it ends the run and says *Stopped: the run was not getting anywhere*,
-  offering **Open console**, where the repeating step is visible.
+  offering **Open console**, whose log shows the same step running over and over
+  and the line that ended it.
 
   This is a different protection from the run limits, not a second copy of one.
   A limit asks how much a run has spent; this asks whether it is getting
@@ -36,8 +37,10 @@ details.
   A run that stops responding altogether — a tool or a server that never answers
   — is now reported as its own thing (*Stopped: the run went quiet*) instead of
   borrowing the wording for repetition. It had been showing a message about work
-  that "kept repeating", which was never what had happened to it, under an
-  action that offered to open a console with nothing in it.
+  that "kept repeating", which was never what had happened to it, and offering
+  to open a console to compare steps that had never repeated. It now offers to
+  run it again, which is the thing that can actually help: a step that hung once
+  often answers the next time.
 
 - **Autonomous runs now have ceilings, and a run stopped by one says so.**
   A background run — a trigger firing overnight against your own cloud API key —

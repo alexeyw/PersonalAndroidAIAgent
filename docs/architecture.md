@@ -1459,9 +1459,12 @@ Key invariants:
   same point the walk writes its `NodeIo` checkpoint, so the evidence
   behind a stop is exactly what the console can show. It recovers in two
   stages (a note injected into the next prompt-composing node's input,
-  then a forced stop reusing the shared `RunTerminationReason`), and a
-  replayed prefix rebuilds its window without being allowed to decide
-  the run. Which of the two speaks first depends on the signal: on a real
+  then a forced stop reusing the shared `RunTerminationReason`). A
+  replayed prefix rebuilds its window and carries forward whether the run
+  had already been warned — otherwise a run that parks on every iteration
+  would restart the escalation each time and never be stopped — but it
+  never returns a verdict of its own, and the note it re-queues is what
+  keeps the warning ahead of the stop. Which of the two speaks first depends on the signal: on a real
   cycle the detector's repetition signal reaches a verdict well inside the
   default step allowance, while a straight chain that merely repeats its
   answers has no repeated *node* to catch and is left to the ceilings —
