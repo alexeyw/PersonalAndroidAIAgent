@@ -4286,8 +4286,9 @@ class GraphExecutionEngineTest {
         // input verbatim whenever the model returns nothing, and the engine's
         // internal notice becomes the agent's chat message.
         //
-        // Both guards are exercised at once: the soft ceiling crosses and the
-        // detector nudges, so if either could reach OUTPUT this fails.
+        // The detector's nudge is what must not reach OUTPUT here; the soft
+        // ceiling has its own suppression at OUTPUT already, so this fixture
+        // deliberately does not depend on where the crossing lands.
         every { settingsRepository.pipelineMaxSteps } returns flowOf(8)
         // Every node's model returns the same text, except the OUTPUT node's,
         // which returns nothing at all — the fallback path.
@@ -4329,14 +4330,87 @@ class GraphExecutionEngineTest {
 
         val answer = states.filterIsInstance<AgentOrchestratorState.Completed>().last().finalResponse
         assertFalse("the engine's own notice must never be the answer; got: $answer", answer.contains("SYSTEM NOTICE"))
-        // And the OUTPUT node's composed prompt must not carry one either —
-        // asserting only on the answer would pass on any build where the
-        // fallback happened not to fire.
-        val outputInput = states.filterIsInstance<AgentOrchestratorState.NodeIO>()
-            .firstOrNull { it.nodeId == "output_1" }?.input
+        // Both guards must actually have spoken, or "the answer is clean" is
+        // satisfied by there being nothing to leak.
         assertTrue(
-            "a note must not reach OUTPUT's prompt at all; got: $outputInput",
-            outputInput == null || !outputInput.contains("SYSTEM NOTICE"),
+            "a notice must have been raised",
+            states.filterIsInstance<AgentOrchestratorState.RunNotice>().isNotEmpty(),
+        )
+        // The answer IS the fallback: an empty generation makes OUTPUT persist
+        // its own input, so `finalResponse` is the composed prompt. Asserting
+        // that proves the fallback fired rather than assuming it.
+        assertTrue(
+            "the empty-generation fallback must be the path under test; got: $answer",
+            answer.contains("FINAL ANSWER") || answer.contains("Original Task"),
+        )
+    }
+
+    @Test
+    fun `given a nested generating OUTPUT then it is excluded from the note too`() = runTest {
+        // The exclusion is on the node TYPE, not on the depth, and this pins
+        // that. A sub-pipeline's OUTPUT does not write to the chat itself — so
+        // narrowing the guard to `depth == 0` reads as a tidy-up — but its text
+        // becomes the PIPELINE node's result and travels on, and a pass-through
+        // OUTPUT at the root then persists it verbatim as the answer.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(50)
+        every { llmEngine.generateResponseStream(any()) } answers {
+            val prompt = firstArg<String>()
+            if (prompt.contains("CHILD FORMAT")) flowOf("") else flowOf("the same answer")
+        }
+        coEvery { pipelineRunRepository.getRun(any()) } returns null
+
+        val subGraph = PipelineGraph(
+            id = "sub-out",
+            name = "Sub",
+            nodes = listOf(
+                NodeModel("sub_in", NodeType.INPUT, 0f, 0f),
+                // Generating OUTPUT whose model returns nothing: the executor
+                // falls back to persisting its own input.
+                NodeModel("sub_out", NodeType.OUTPUT, 0f, 0f, systemPrompt = "CHILD FORMAT"),
+            ),
+            connections = listOf(ConnectionModel("s1", "sub_in", "sub_out")),
+        )
+        coEvery { pipelineRepository.getPipelineById("sub-out") } returns subGraph
+
+        val mainGraph = PipelineGraph(
+            id = "main-out",
+            name = "Main",
+            nodes = listOf(
+                NodeModel("main_in", NodeType.INPUT, 0f, 0f),
+                NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f, systemPrompt = "work"),
+                NodeModel("llm_2", NodeType.LITE_RT, 0f, 0f, systemPrompt = "work"),
+                NodeModel("llm_3", NodeType.LITE_RT, 0f, 0f, systemPrompt = "work"),
+                NodeModel("llm_4", NodeType.LITE_RT, 0f, 0f, systemPrompt = "work"),
+                NodeModel("pipe_node", NodeType.PIPELINE, 0f, 0f, targetPipelineId = "sub-out"),
+                // Pass-through root OUTPUT: whatever the child produced becomes
+                // the agent's chat message verbatim.
+                NodeModel("main_out", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("m1", "main_in", "llm_1"),
+                ConnectionModel("m2", "llm_1", "llm_2"),
+                ConnectionModel("m3", "llm_2", "llm_3"),
+                ConnectionModel("m4", "llm_3", "llm_4"),
+                ConnectionModel("m5", "llm_4", "pipe_node"),
+                ConnectionModel("m6", "pipe_node", "main_out"),
+            ),
+        )
+
+        val states = engine(
+            sessionId,
+            "prompt",
+            mainGraph,
+            stuckDetector = GraphStuckDetector(staleStreak = 2, graceSteps = 99),
+        ).toList()
+
+        assertTrue(
+            "a notice must have been raised, or there is nothing to leak",
+            states.filterIsInstance<AgentOrchestratorState.RunNotice>().isNotEmpty(),
+        )
+        val answer = states.filterIsInstance<AgentOrchestratorState.Completed>().last().finalResponse
+        assertFalse(
+            "a nested OUTPUT must not carry the note out to the user; got: $answer",
+            answer.contains("SYSTEM NOTICE"),
         )
     }
 
@@ -4527,18 +4601,26 @@ class GraphExecutionEngineTest {
         val states = engine(
             sessionId,
             "prompt",
-            repeatingChainGraph(count = 7),
+            // Long enough that the resumed run actually reaches its stop. With
+            // a shorter graph it merely completed, and the "before it is
+            // stopped" half of this test's name was asserting nothing.
+            repeatingChainGraph(count = 9),
             "run-armed",
             resume,
             stuckDetector = GraphStuckDetector(staleStreak = 2, graceSteps = 1),
         ).toList()
 
-        val liveInputs = states.filterIsInstance<AgentOrchestratorState.NodeIO>()
-            .filter { it.nodeId == "llm_6" || it.nodeId == "llm_7" }
-            .map { it.input }
+        // Both halves, in order: the run IS stopped, and a live node was handed
+        // the advice before that happened.
+        val error = states.last() as AgentOrchestratorState.Error
+        assertEquals(RunTerminationReason.NoProgress, error.reason)
+
+        val liveIo = states.filterIsInstance<AgentOrchestratorState.NodeIO>()
+            .filter { it.nodeId !in resume.records.map { r -> r.nodeId } }
         assertTrue(
-            "the first live node must be handed the advice the parked attempt lost; got: $liveInputs",
-            liveInputs.any { it.contains("repeating itself") },
+            "the first live node must be handed the advice the parked attempt lost; got: " +
+                liveIo.map { it.nodeId },
+            liveIo.any { it.input.contains("repeating itself") },
         )
     }
 

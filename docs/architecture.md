@@ -1458,7 +1458,9 @@ Key invariants:
   **repeats** — a sliding window over executed steps, observed at the
   same point the walk writes its `NodeIo` checkpoint, so the evidence
   behind a stop is exactly what the console can show. It recovers in two
-  stages (a note injected into the next prompt-composing node's input,
+  stages (a note injected into the next prompt-composing node's input —
+  never into an `OUTPUT` node, which composes one but whose executor
+  echoes its own input as the answer when a model returns nothing —
   then a forced stop reusing the shared `RunTerminationReason`). A
   replayed prefix rebuilds its window and carries forward whether the run
   had already been warned — otherwise a run that parks on every iteration

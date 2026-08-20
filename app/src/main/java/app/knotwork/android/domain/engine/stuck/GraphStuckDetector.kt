@@ -201,6 +201,12 @@ class GraphStuckDetector(
      * that can read it; the run is then genuinely warned before it is ended,
      * which is the whole shape of a stepped recovery.
      *
+     * The return value does not distinguish "the note was lost with the park"
+     * from "the note had already been delivered before the park", because the
+     * trace cannot tell the two apart. Re-queueing in the second case costs one
+     * repeated line of advice in one prompt; not re-queueing in the first costs
+     * a run stopped without ever being warned. The asymmetry decides it.
+     *
      * @param step The replayed step, already fingerprinted.
      * @return `true` when this step armed the escalation — the caller owes the
      *   run its note. `false` otherwise, including when the escalation was
@@ -337,6 +343,11 @@ class GraphStuckDetector(
          * and control-flow nodes do not compose one — so a graph can take
          * several steps to actually hand the advice to a model. Four leaves
          * room for that without letting a genuinely stuck run spin much longer.
+         *
+         * A graph made only of control-flow nodes never delivers it at all, and
+         * is stopped anyway. That is the right outcome rather than a gap: a
+         * loop with no model in it has nobody to take the advice, and the stop
+         * is the only thing left that can end it.
          */
         const val GRACE_STEPS: Int = 4
 

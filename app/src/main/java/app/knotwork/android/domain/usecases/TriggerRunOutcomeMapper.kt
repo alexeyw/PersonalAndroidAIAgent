@@ -75,7 +75,12 @@ fun triggerRunOutcomeForTerminal(
         // ceiling — which is a number the user chose, doing what they chose it
         // for — these are exactly the condition a health badge exists to show,
         // so they redden it.
-        RunTerminationKind.NO_PROGRESS,
+        // The detector persists a *diagnostic* as the run's message — `no-progress`
+        // — because that column is also what an engineer greps six months from
+        // now. The journal is read by a person, and it renders this string
+        // verbatim next to the outcome, so it gets the sentence instead. Every
+        // other kind below already records prose at its own producer.
+        RunTerminationKind.NO_PROGRESS -> TriggerRunOutcome.Failure(NO_PROGRESS_JOURNAL_MESSAGE)
         RunTerminationKind.RUN_STALLED,
         RunTerminationKind.GRAPH_CHANGED,
         RunTerminationKind.PROCESS_DIED,
@@ -95,3 +100,12 @@ fun triggerRunOutcomeForTerminal(
 
 /** Neutral failure text used when a run finished FAILED without a recorded reason. */
 private const val DEFAULT_FAILURE_MESSAGE = "Run failed"
+
+/**
+ * What the trigger journal says about a run the stuck-detector ended.
+ *
+ * Deliberately a sentence and not the run's persisted message: that message is
+ * the detector's diagnostic (`no-progress`), kept terse and greppable on
+ * purpose, and the journal shows it to a person rather than to a log reader.
+ */
+private const val NO_PROGRESS_JOURNAL_MESSAGE = "The run kept repeating itself without getting anywhere"

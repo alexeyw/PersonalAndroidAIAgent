@@ -101,8 +101,8 @@
     <!-- A stalled run and a looping one are opposite shapes and must not share a
          sentence: this one emitted nothing at all, which is what a step waiting
          on an external tool that never answers looks like. Telling that user
-         that work "kept repeating" would send them to a console with nothing
-         in it. -->
+         that work "kept repeating" would send them to compare steps that had
+         never repeated. -->
     <string name="run_termination_title_run_stalled">Stopped: the run went quiet</string>
     <string name="run_termination_body_run_stalled">A step stopped responding — most often a tool or a server that never answered — so the run was ended to free the queue.</string>
 

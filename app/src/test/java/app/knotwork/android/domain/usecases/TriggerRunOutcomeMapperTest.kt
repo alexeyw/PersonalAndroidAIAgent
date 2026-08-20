@@ -4,6 +4,7 @@ import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.TriggerRunOutcome
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -109,12 +110,36 @@ class TriggerRunOutcomeMapperTest {
     }
 
     @Test
-    fun `given the no-progress watchdog then it is a Failure, not a ceiling stop`() {
-        // The watchdog fires because something hung, which is a defect the
-        // trigger's health should reflect — unlike a configured ceiling.
+    fun `given the stuck-detector then it is a Failure, not a ceiling stop`() {
+        // A loop is the automation not working, which is a defect the trigger's
+        // health should reflect — unlike a configured ceiling, which is a
+        // number the user chose doing what they chose it for.
+        val outcome = triggerRunOutcomeForTerminal(
+            PipelineRunStatus.FAILED,
+            // What the engine actually persists for a detector stop: the terse
+            // diagnostic, not prose.
+            "no-progress",
+            RunTerminationReason.NoProgress,
+        )
+        assertTrue("a loop must redden the badge", outcome is TriggerRunOutcome.Failure)
+
+        // And the journal must not show the diagnostic to a person. This row is
+        // rendered verbatim beside the outcome in the trigger detail screen.
+        val shown = (outcome as TriggerRunOutcome.Failure).error
+        assertFalse("the journal must not print the log form; got: $shown", shown == "no-progress")
+        assertTrue("the journal needs a sentence; got: $shown", shown.contains(" "))
+    }
+
+    @Test
+    fun `given the silence watchdog then it is a Failure carrying its own recorded prose`() {
+        // The counterpart, and the reason the two kinds exist separately: the
+        // watchdog records a sentence at its own producer, so the journal keeps
+        // it. A later change that moved this next to the ceilings — on the
+        // plausible reading that "the app stopped it, so it is not the
+        // pipeline's fault" — would stop reddening a badge for a hung tool.
         assertEquals(
             TriggerRunOutcome.Failure("stalled"),
-            triggerRunOutcomeForTerminal(PipelineRunStatus.FAILED, "stalled", RunTerminationReason.NoProgress),
+            triggerRunOutcomeForTerminal(PipelineRunStatus.FAILED, "stalled", RunTerminationReason.RunStalled),
         )
     }
 

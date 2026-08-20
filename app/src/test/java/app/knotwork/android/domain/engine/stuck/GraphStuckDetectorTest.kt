@@ -1,5 +1,6 @@
 package app.knotwork.android.domain.engine.stuck
 
+import app.knotwork.android.domain.constants.SettingsDefaults
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -433,7 +434,15 @@ class GraphStuckDetectorTest {
         val staleWorstCase = 1 + GraphStuckDetector.STALE_STREAK + GraphStuckDetector.GRACE_STEPS
         assertTrue(
             "NO_NEW_OUTPUT must stay reachable inside the largest configurable ceiling, needs $staleWorstCase",
-            staleWorstCase < 100,
+            staleWorstCase < SettingsDefaults.PIPELINE_MAX_STEPS_MAX,
+        )
+        // And inside the *smallest* ceiling a run can be given, the strong
+        // signal must still fit — otherwise a user who tightens their limit to
+        // 5 has a detector that can never speak before the ceiling does, which
+        // is the configuration where an unexplained stop is least welcome.
+        assertTrue(
+            "REPEATED_STEP must fit the tightest configurable ceiling, needs $worstCase",
+            worstCase <= SettingsDefaults.PIPELINE_MAX_STEPS_MIN + GraphStuckDetector.GRACE_STEPS,
         )
     }
 

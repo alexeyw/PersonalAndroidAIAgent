@@ -128,8 +128,11 @@ sealed interface RunTerminationReason {
      * what a step waiting on an external tool that never answers looks like.
      * [NoProgress] is the opposite shape — a run emitting briskly and saying
      * the same thing every time. Collapsing them would tell a user whose MCP
-     * server hung that the same work kept repeating, and would send them to a
-     * console with nothing in it to see.
+     * server hung that the same work kept repeating, and would send them to
+     * compare steps that never repeated. (The console is not empty for a stall:
+     * its log ends on the step that started and never finished, which is the
+     * one thing worth seeing. What it has no row for is that step's output,
+     * because there never was one.)
      */
     data object RunStalled : RunTerminationReason {
         override val kind: RunTerminationKind = RunTerminationKind.RUN_STALLED
