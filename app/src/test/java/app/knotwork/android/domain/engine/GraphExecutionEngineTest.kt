@@ -4286,9 +4286,12 @@ class GraphExecutionEngineTest {
         // input verbatim whenever the model returns nothing, and the engine's
         // internal notice becomes the agent's chat message.
         //
-        // The detector's nudge is what must not reach OUTPUT here; the soft
-        // ceiling has its own suppression at OUTPUT already, so this fixture
-        // deliberately does not depend on where the crossing lands.
+        // The detector's nudge is what must not reach OUTPUT here. Both notes
+        // go through the same drain, so the OUTPUT exclusion covers them
+        // equally — the soft ceiling's separate suppression is only about where
+        // a crossing is *announced*, not about where a note is delivered, and
+        // this fixture deliberately does not depend on where the crossing
+        // lands.
         every { settingsRepository.pipelineMaxSteps } returns flowOf(8)
         // Every node's model returns the same text, except the OUTPUT node's,
         // which returns nothing at all — the fallback path.
@@ -4330,11 +4333,13 @@ class GraphExecutionEngineTest {
 
         val answer = states.filterIsInstance<AgentOrchestratorState.Completed>().last().finalResponse
         assertFalse("the engine's own notice must never be the answer; got: $answer", answer.contains("SYSTEM NOTICE"))
-        // Both guards must actually have spoken, or "the answer is clean" is
-        // satisfied by there being nothing to leak.
+        // The DETECTOR must have spoken, not merely "some guard": with
+        // `isNotEmpty()` the soft ceiling alone satisfied this, so raising
+        // STALE_STREAK would have quietly removed the test's actual subject.
         assertTrue(
-            "a notice must have been raised",
-            states.filterIsInstance<AgentOrchestratorState.RunNotice>().isNotEmpty(),
+            "the detector must have raised its notice, or there is nothing to leak",
+            states.filterIsInstance<AgentOrchestratorState.RunNotice>()
+                .any { it.cause is RunNoticeCause.LooksStuck },
         )
         // The answer IS the fallback: an empty generation makes OUTPUT persist
         // its own input, so `finalResponse` is the composed prompt. Asserting
@@ -4404,9 +4409,15 @@ class GraphExecutionEngineTest {
         ).toList()
 
         assertTrue(
-            "a notice must have been raised, or there is nothing to leak",
-            states.filterIsInstance<AgentOrchestratorState.RunNotice>().isNotEmpty(),
+            "the detector must have raised its notice, or there is nothing to leak",
+            states.filterIsInstance<AgentOrchestratorState.RunNotice>()
+                .any { it.cause is RunNoticeCause.LooksStuck },
         )
+        // And the nested OUTPUT must genuinely be a prompt-composing node —
+        // otherwise it was never a candidate to receive the note and this
+        // guards nothing. An OUTPUT node emits no NodeIO by design, so the
+        // evidence is the inference call it made with its own system prompt.
+        verify { llmEngine.generateResponseStream(match { it.contains("CHILD FORMAT") }) }
         val answer = states.filterIsInstance<AgentOrchestratorState.Completed>().last().finalResponse
         assertFalse(
             "a nested OUTPUT must not carry the note out to the user; got: $answer",

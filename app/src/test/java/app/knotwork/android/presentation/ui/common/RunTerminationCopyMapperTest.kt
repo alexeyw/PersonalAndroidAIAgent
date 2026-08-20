@@ -1,9 +1,12 @@
 package app.knotwork.android.presentation.ui.common
 
+import app.knotwork.android.R
+import app.knotwork.android.data.engine.TaskQueueManagerImpl
 import app.knotwork.android.domain.models.RunCeilingAxis
 import app.knotwork.android.domain.models.RunNoticeCause
 import app.knotwork.android.domain.models.RunTerminationKind
 import app.knotwork.android.domain.models.RunTerminationReason
+import app.knotwork.android.domain.usecases.NO_PROGRESS_JOURNAL_MESSAGE
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -121,6 +124,26 @@ class RunTerminationCopyMapperTest {
         everyReason.filter { it.kind !in CEILING_KINDS }.forEach { reason ->
             assertNull("${reason.kind} has no numbers to show", RunTerminationCopyMapper.terminationCopy(reason).meter)
         }
+    }
+
+    @Test
+    fun `given the surfaces of one stop then they all say the same sentence`() {
+        // The fork this guards is easy to reintroduce and invisible once shipped:
+        // the trigger journal renders a plain string it was handed, while the
+        // chat and the notification resolve a resource, so the two can drift
+        // into saying different things about one event with nothing failing.
+        // `domain` cannot read resources, so the words are duplicated — and the
+        // duplication is only safe while something compares them.
+        assertEquals(
+            "the trigger journal and the chat must say the same thing about a stuck run",
+            context.getString(R.string.run_termination_body_no_progress),
+            NO_PROGRESS_JOURNAL_MESSAGE,
+        )
+        assertEquals(
+            "the trigger journal and the chat must say the same thing about a stalled run",
+            context.getString(R.string.run_termination_body_run_stalled),
+            TaskQueueManagerImpl.STALLED_MESSAGE,
+        )
     }
 
     @Test

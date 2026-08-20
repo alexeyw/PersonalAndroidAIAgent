@@ -104,8 +104,25 @@ private const val DEFAULT_FAILURE_MESSAGE = "Run failed"
 /**
  * What the trigger journal says about a run the stuck-detector ended.
  *
- * Deliberately a sentence and not the run's persisted message: that message is
- * the detector's diagnostic (`no-progress`), kept terse and greppable on
- * purpose, and the journal shows it to a person rather than to a log reader.
+ * A sentence and not the run's persisted message, because that message is the
+ * detector's diagnostic (`no-progress`) — terse and greppable on purpose — and
+ * the journal renders it to a person rather than to a log reader.
+ *
+ * **Byte-identical to `R.string.run_termination_body_no_progress`**, which is
+ * what the chat tile and the background notification say about the same event.
+ * A second wording here would have been the fork this whole vocabulary exists
+ * to prevent: one stop, three sentences, depending on which surface the user
+ * happened to look at. It is duplicated rather than shared because `domain`
+ * cannot read string resources, and `RunTerminationCopyMapperTest` fails if the
+ * two ever drift apart.
+ *
+ * The tidier shape — a typed `TriggerRunOutcome` variant like
+ * `StoppedByCeiling`, letting the journal resolve its own copy from the kind —
+ * is deliberately not taken here: it is a persisted journal vocabulary plus an
+ * export schema bump, which is a wider change than this task opened. That shape
+ * would also settle the one cost being accepted: a domain constant cannot be
+ * translated, so when the planned `values-ru` pass lands the chat will speak
+ * Russian about a stuck run while this journal row stays English.
  */
-private const val NO_PROGRESS_JOURNAL_MESSAGE = "The run kept repeating itself without getting anywhere"
+internal const val NO_PROGRESS_JOURNAL_MESSAGE =
+    "The same work kept repeating without moving the task forward, so the run was ended."

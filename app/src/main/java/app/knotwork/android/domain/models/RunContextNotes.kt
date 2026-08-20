@@ -9,6 +9,17 @@ package app.knotwork.android.domain.models
  * a prompt, and the node that *raised* the note usually is not one. So the note
  * waits, and the next composing node picks it up.
  *
+ * **With one exception the reader has to know about: `OUTPUT` never drains.**
+ * It composes a prompt when it has a system prompt, so it looks like a valid
+ * recipient — but its executor persists its own input verbatim as the agent's
+ * chat message whenever the model returns nothing, which would print this
+ * holder's contents to the user as their answer. The exclusion is on the node
+ * type at every depth, because a nested `OUTPUT`'s text becomes the parent's
+ * and can still reach a pass-through root. The consequence to plan for: when
+ * the only composing node left after a warning is an `OUTPUT`, the note is
+ * never delivered — the run is finishing anyway, and advice to wrap up has no
+ * reader at the node that is the wrapping up.
+ *
  * **Shared across the whole run tree**, on the same terms as `RunBudgetLedger`
  * and `GraphStuckDetector`, and for a reason that is not symmetry. The
  * detector's grace period counts steps at *every* depth, so a nudge raised just

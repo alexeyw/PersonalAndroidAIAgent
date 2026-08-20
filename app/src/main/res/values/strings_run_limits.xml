@@ -104,7 +104,12 @@
          that work "kept repeating" would send them to compare steps that had
          never repeated. -->
     <string name="run_termination_title_run_stalled">Stopped: the run went quiet</string>
-    <string name="run_termination_body_run_stalled">A step stopped responding — most often a tool or a server that never answered — so the run was ended to free the queue.</string>
+    <!-- Byte-identical to TaskQueueManagerImpl.STALLED_MESSAGE, which the queue
+         writes onto the run record and the trigger journal renders verbatim. A
+         second wording here would say two different things about one event
+         depending on which surface the user opened; RunTerminationCopyMapperTest
+         fails if the two drift apart. -->
+    <string name="run_termination_body_run_stalled">The task stopped responding and was ended so other messages can run. A step it was waiting on — most often an external tool — never answered.</string>
 
     <string name="run_termination_title_hitl_expired">Stopped waiting for your approval</string>
     <string name="run_termination_body_hitl_expired">A step needed your approval and the waiting window closed before an answer arrived.</string>
