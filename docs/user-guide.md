@@ -2406,9 +2406,11 @@ somebody or keep it in a repository beside your other notes.
 - **Export** — from a row's **More** menu (or directly on a bundled
   row). Pick where to save; the file is named after the prompt.
   Exporting a bundled prompt is fine — it only reads it.
-- **Import** — the download icon in the top bar, and the first button
-  on the empty screen. Pick a `.md` file; the prompt lands in the
-  category the file names, and a message tells you which one.
+- **Import** — the tray icon in the top bar, and the first button on
+  the empty screen. Pick a `.md` file; the prompt lands in the category
+  the file names. When there is nothing to report, a message names the
+  prompt and the category and offers to take you there; when there is,
+  you get the details instead.
 
 The file looks like this — a settings block between two lines of three
 dashes, then the prompt itself:

@@ -78,7 +78,7 @@ object PromptPackMarkdownSerializer {
      * because reporting them would train the user to dismiss the warning
      * that matters.
      */
-    internal val TOLERATED_KEYS = setOf("license", "compatibility", "metadata")
+    private val TOLERATED_KEYS = setOf("license", "compatibility", "metadata")
 
     /**
      * Keys that ask for a capability, mapped to the family they belong to.
@@ -338,10 +338,18 @@ object PromptPackMarkdownSerializer {
     private fun FrontmatterParseResult.Parsed.scalar(key: String): String? =
         (entries[key] as? FrontmatterValue.Scalar)?.text
 
-    /** Reads [key] as a list, tolerating a single scalar written without brackets. */
+    /**
+     * Reads [key] as a list, tolerating a single scalar written without
+     * brackets.
+     *
+     * Blanks are dropped whichever spelling the author used. The block form
+     * (`- ""`) can otherwise carry an empty entry all the way into
+     * `PromptPreset.tags`, where it renders as an empty chip in the picker's
+     * tag filter — a control the user can neither name nor remove.
+     */
     private fun FrontmatterParseResult.Parsed.items(key: String): List<String> = when (val value = entries[key]) {
         is FrontmatterValue.Items -> value.values
-        is FrontmatterValue.Scalar -> value.text.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        is FrontmatterValue.Scalar -> value.text.split(',')
         else -> emptyList()
-    }
+    }.map { it.trim() }.filter { it.isNotEmpty() }
 }

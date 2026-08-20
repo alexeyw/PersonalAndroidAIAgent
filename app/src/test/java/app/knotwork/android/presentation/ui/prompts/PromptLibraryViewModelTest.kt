@@ -246,7 +246,7 @@ class PromptLibraryViewModelTest {
     }
 
     @Test
-    fun `given a file asking for tools when imported then the refusal is reported alongside the success`() = runTest {
+    fun `given a file asking for tools when imported then the refusal is reported instead of a snackbar`() = runTest {
         coEvery { promptPresetRepository.getPresetById(any()) } returns null
         val greedy = """
                 ---
@@ -263,9 +263,12 @@ class PromptLibraryViewModelTest {
 
         val dialog = viewModel.uiState.value.importDialog as PromptImportDialog.Reported
         assertTrue(dialog.notes.hasRefusal)
-        // The prompt landed too — the snackbar is not suppressed by the
-        // dialog, because a refusal is not a failed import.
-        assertNotNull(viewModel.uiState.value.snackbar)
+        // The dialog is the disclosure *and* the confirmation — its first
+        // sentence says the prompt is in the library — so no snackbar is
+        // raised behind it, where its action could not be reached anyway.
+        assertNull(viewModel.uiState.value.snackbar)
+        // And the prompt really did land: a refusal is not a failed import.
+        coVerify { promptPresetRepository.saveUserPreset(any()) }
     }
 
     @Test

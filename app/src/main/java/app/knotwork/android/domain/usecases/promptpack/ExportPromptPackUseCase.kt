@@ -2,6 +2,7 @@ package app.knotwork.android.domain.usecases.promptpack
 
 import app.knotwork.android.domain.promptpack.PromptPackMarkdownSerializer
 import app.knotwork.android.domain.repositories.PromptPresetRepository
+import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 
 /**
@@ -35,8 +36,16 @@ class ExportPromptPackUseCase @Inject constructor(private val promptPresetReposi
      *   if the row was deleted between the tap and the picker returning.
      */
     suspend operator fun invoke(presetId: String): Result<ExportedPromptPack> {
-        val preset = promptPresetRepository.getPresetById(presetId)
-            ?: return Result.failure(NoSuchElementException("No prompt preset with id $presetId"))
+        val preset = try {
+            promptPresetRepository.getPresetById(presetId)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Returned rather than thrown: the caller launches this in
+            // `viewModelScope` and reads the `Result`, so a raw throw here
+            // would take the process down instead of showing a message.
+            return Result.failure(e)
+        } ?: return Result.failure(NoSuchElementException("No prompt preset with id $presetId"))
         return Result.success(
             ExportedPromptPack(
                 fileName = PromptPackMarkdownSerializer.suggestFileName(preset),

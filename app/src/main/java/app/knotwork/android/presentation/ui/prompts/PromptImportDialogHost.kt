@@ -165,7 +165,13 @@ private fun askedFor(refused: List<RefusedCapability>): String {
  */
 @Composable
 private fun leftOutItems(notes: PromptPackImportNotes): List<String> = buildList {
-    notes.refused.forEach { capability ->
+    // A key can be present with nothing readable under it (`tools: []`, or
+    // values that sanitise away entirely). The body still says the file asked
+    // for tools; a list line reading "Tools:" with nothing after it would say
+    // less than nothing. Filtered here rather than inside the `when`, so that
+    // `when` stays exhaustive over the enum and a new capability family is a
+    // compile error instead of silently rendering as scripts.
+    notes.refused.filter { it.values.isNotEmpty() }.forEach { capability ->
         when (capability.kind) {
             RefusedCapability.Kind.TOOLS -> add(
                 stringResource(

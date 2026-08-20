@@ -88,7 +88,11 @@ fun PromptLibraryScreen(
         scope.launch {
             val resolver = context.contentResolver
             val document = withContext(Dispatchers.IO) { readText(resolver, uri) }
-            if (document.isNullOrBlank()) {
+            // Only an unreadable document short-circuits here. An *empty* one
+            // is readable, and the parser has a better sentence for it than
+            // "that file could not be read" — it can say the settings block
+            // is missing, which is what the user has to fix.
+            if (document == null) {
                 viewModel.onFileUnreadable()
             } else {
                 val fileName = withContext(Dispatchers.IO) { resolveDisplayName(resolver, uri) }.orEmpty()
@@ -207,7 +211,7 @@ private fun PromptExportLauncher(
         if (uri == null || pending == null) return@rememberLauncherForActivityResult
         scope.launch {
             val written = withContext(Dispatchers.IO) { writeText(resolver, uri, pending.content) }
-            if (written) viewModel.onExported(pending.displayName) else viewModel.onFileUnreadable()
+            if (written) viewModel.onExported(pending.displayName) else viewModel.onExportFailed()
         }
     }
     val pendingExport = uiState.pendingExport
@@ -239,7 +243,9 @@ private fun PromptImportSnackbar(
     val actionLabel = stringResource(R.string.prompts_import_success_action)
     LaunchedEffect(snackbar) {
         if (snackbar == null || message == null) return@LaunchedEffect
-        viewModel.consumeSnackbar()
+        // Shown *before* it is consumed. Consuming first clears the state this
+        // effect is keyed on, which cancels the effect — and with it the
+        // `showSnackbar` call — so the message never reliably appears.
         val result = hostState.showSnackbar(
             message = message,
             actionLabel = actionLabel.takeIf { snackbar.showCategory != null },
@@ -248,6 +254,7 @@ private fun PromptImportSnackbar(
         if (result == SnackbarResult.ActionPerformed) {
             snackbar.showCategory?.let(viewModel::selectCategory)
         }
+        viewModel.consumeSnackbar()
     }
 }
 
@@ -390,7 +397,6 @@ private fun promptLibraryStrings(): LocalisedPromptLibraryStrings = LocalisedPro
         editCd = stringResource(R.string.prompts_edit_cd),
         deleteCd = stringResource(R.string.prompts_delete_cd),
         previewCd = stringResource(R.string.prompts_preview_cd),
-        duplicate = stringResource(R.string.prompts_duplicate),
         duplicateCd = stringResource(R.string.prompts_duplicate_cd),
         usedByFormat = stringResource(R.string.prompts_used_by_format),
         emptyTitle = stringResource(R.string.prompts_empty_title),

@@ -191,6 +191,17 @@ class PromptPackMarkdownSerializerTest {
     }
 
     @Test
+    fun `given a capability key with nothing readable under it when parsed then it is still refused`() {
+        // `tools: []` asks for tool access and names nothing. The refusal has
+        // to stand on the key alone — the UI renders no "Tools:" line for an
+        // empty value list, but the file still asked.
+        val outcome = partial(document(frontmatter = "name: N\nnodeType: CLOUD\ntools: []"))
+
+        assertTrue(outcome.notes.hasRefusal)
+        assertTrue(outcome.notes.refused.single().values.isEmpty())
+    }
+
+    @Test
     fun `given a capability value carrying a tab when parsed then whitespace is collapsed`() {
         val outcome = partial(document(frontmatter = "name: N\nnodeType: CLOUD\ntools: [\"a\tb\"]"))
 
@@ -352,6 +363,19 @@ class PromptPackMarkdownSerializerTest {
     }
 
     // --- Identity ---------------------------------------------------------
+
+    @Test
+    fun `given a blank tag in either spelling when parsed then it is dropped`() {
+        // An empty tag reaches the picker's tag filter as a chip the user can
+        // neither name nor remove.
+        val inline = success(document(frontmatter = "name: N\nnodeType: LITE_RT\ntags: [a, , b]")).preset
+        val block = success(
+            document(frontmatter = "name: N\nnodeType: LITE_RT\ntags:\n  - a\n  - \"\"\n  - b"),
+        ).preset
+
+        assertEquals(listOf("a", "b"), inline.tags)
+        assertEquals(listOf("a", "b"), block.tags)
+    }
 
     @Test
     fun `given no id in the file when parsed then the caller's fallback is used`() {

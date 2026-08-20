@@ -89,7 +89,9 @@ data class OutcomeAction(
 /**
  * A named list of things that were left out, rendered under a dialog body.
  *
- * @property heading Section label (e.g. "Left out").
+ * @property heading Section label (e.g. "Left out") — or, on the pipeline
+ *   importer, a full sentence naming what is about to be lost. Rendered at
+ *   full contrast for that reason.
  * @property items The entries, in the order the reader produced them.
  * @property moreLabel Summary line shown when [items] exceeds the display
  *   cap. Pre-resolved by the caller — which knows how many entries there are
@@ -231,10 +233,16 @@ private fun NamedList(list: OutcomeNamedList) {
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
         modifier = Modifier.fillMaxWidth(),
     ) {
+        // `BodySm` at full contrast, not a muted caption. The heading is a
+        // label on this surface ("Left out"), but the pipeline importer —
+        // which shares this component — puts a full sentence here warning
+        // that settings are about to be lost. Shrinking and dimming that is
+        // exactly the wrong direction for the one line that says data goes
+        // away.
         Text(
             text = list.heading,
-            style = KnotworkTextStyles.Caption,
-            color = KnotworkTheme.extended.onSurfaceMuted,
+            style = KnotworkTextStyles.BodySm,
+            color = MaterialTheme.colorScheme.onSurface,
         )
         list.items.take(MAX_NAMED_LIST_ITEMS).forEach { item ->
             Text(text = "— $item", style = KnotworkTextStyles.MonoSm, color = MaterialTheme.colorScheme.onSurface)

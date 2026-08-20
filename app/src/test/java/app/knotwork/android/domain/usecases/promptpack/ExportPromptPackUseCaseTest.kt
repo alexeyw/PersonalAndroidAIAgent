@@ -52,4 +52,16 @@ class ExportPromptPackUseCaseTest {
 
         assertTrue(useCase("gone").isFailure)
     }
+
+    @Test
+    fun `given the repository throws when exported then the failure is returned rather than thrown`() = runTest {
+        // The caller launches this in `viewModelScope` and reads the `Result`.
+        // A raw throw would take the process down instead of showing a message.
+        coEvery { repository.getPresetById("boom") } throws IllegalStateException("db down")
+
+        val result = useCase("boom")
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is IllegalStateException)
+    }
 }

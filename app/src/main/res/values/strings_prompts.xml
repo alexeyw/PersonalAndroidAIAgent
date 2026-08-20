@@ -8,7 +8,6 @@
     <string name="prompts_edit_cd">Edit prompt</string>
     <string name="prompts_delete_cd">Delete prompt</string>
     <string name="prompts_preview_cd">Preview prompt</string>
-    <string name="prompts_duplicate">Duplicate</string>
     <string name="prompts_used_by_format" tools:ignore="PluralsCandidate">used by %1$d pipelines</string>
     <string name="prompts_duplicate_cd">Duplicate prompt</string>
     <string name="prompts_more_cd">More actions</string>
@@ -34,6 +33,7 @@
     <string name="prompts_export_success_format">Exported “%1$s”.</string>
     <string name="prompts_import_unchanged_format">“%1$s” is already in your library — nothing changed.</string>
     <string name="prompts_import_unreadable">That file could not be read.</string>
+    <string name="prompts_export_unwritable">That file could not be saved.</string>
 
     <!-- Import outcome dialogs. One shape, five bodies. -->
     <string name="prompts_import_left_out_heading">LEFT OUT</string>

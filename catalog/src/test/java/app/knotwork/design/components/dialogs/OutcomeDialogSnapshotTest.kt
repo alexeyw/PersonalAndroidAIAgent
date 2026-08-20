@@ -2,8 +2,10 @@ package app.knotwork.design.components.dialogs
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.knotwork.design.a11y.FixedKnotworkA11y
 import app.knotwork.design.a11y.LocalKnotworkA11y
@@ -69,6 +71,23 @@ class OutcomeDialogSnapshotTest {
     }
 
     @Test
+    fun outcome_parse_font_scale_200() = snapshot(name = "parse_fontscale200", dark = false) {
+        // The body is the only part that can grow without bound, so it is the
+        // part that scrolls. This baseline is what proves the action row is
+        // still on screen at 200 % rather than pushed off the bottom.
+        AtFontScale(scale = 2f) {
+            OutcomeDialog(
+                tone = OutcomeTone.ERROR,
+                headline = "Nothing was imported",
+                body = "The settings block at the top of the file is missing or incomplete. " +
+                    "It has to sit between two lines of three dashes.",
+                confirm = ok,
+                onDismissRequest = {},
+            )
+        }
+    }
+
+    @Test
     fun outcome_question_light() = snapshot(name = "question", dark = false) {
         OutcomeDialog(
             tone = OutcomeTone.QUESTION,
@@ -92,6 +111,16 @@ class OutcomeDialogSnapshotTest {
             namedList = OutcomeNamedList(heading = "LEFT OUT", items = listOf("Tools: web_search, fetch_url")),
             confirm = ok,
             onDismissRequest = {},
+        )
+    }
+
+    /** Renders [content] at a forced font scale, leaving density untouched. */
+    @Composable
+    private fun AtFontScale(scale: Float, content: @Composable () -> Unit) {
+        val base = LocalDensity.current
+        CompositionLocalProvider(
+            LocalDensity provides Density(density = base.density, fontScale = scale),
+            content = content,
         )
     }
 

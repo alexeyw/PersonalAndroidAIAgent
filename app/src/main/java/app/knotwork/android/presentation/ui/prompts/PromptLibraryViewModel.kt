@@ -232,6 +232,17 @@ class PromptLibraryViewModel @Inject constructor(
         _uiState.update { it.copy(snackbar = PromptLibrarySnackbar(UiText(R.string.prompts_import_unreadable))) }
     }
 
+    /**
+     * Reports a document that could not be written.
+     *
+     * Its own message rather than [onFileUnreadable]'s: the user just asked to
+     * save a file, and being told it "could not be read" describes an
+     * operation they did not perform.
+     */
+    fun onExportFailed() {
+        _uiState.update { it.copy(snackbar = PromptLibrarySnackbar(UiText(R.string.prompts_export_unwritable))) }
+    }
+
     /** Dismisses whichever import dialog is open, deciding nothing. */
     fun dismissImportDialog() {
         _uiState.update { it.copy(importDialog = null) }
@@ -254,21 +265,31 @@ class PromptLibraryViewModel @Inject constructor(
     private fun applyImportResult(result: PromptPackImportResult) {
         when (result) {
             is PromptPackImportResult.Imported -> {
-                val notes = result.notes
+                // Built once so the snackbar decision and the dialog cannot
+                // disagree, and so neither needs a non-null assertion.
+                val reportedDialog = result.notes
+                    ?.takeUnless { it.isEmpty }
+                    ?.let { PromptImportDialog.Reported(presetName = result.preset.name, notes = it) }
                 _uiState.update { state ->
                     state.copy(
-                        snackbar = PromptLibrarySnackbar(
-                            text = UiText.Resource(
-                                R.string.prompts_import_success_format,
-                                listOf(result.preset.name, result.preset.nodeType.name),
-                            ),
-                            showCategory = result.preset.nodeType.name,
-                        ),
-                        importDialog = if (notes == null || notes.isEmpty) {
+                        // A dialog and a snackbar are not raised together. When
+                        // there is something to disclose, the dialog is the
+                        // disclosure *and* the confirmation — its own first
+                        // sentence says the prompt is in the library — and a
+                        // snackbar behind a scrim is an action the user cannot
+                        // reach anyway.
+                        snackbar = if (reportedDialog != null) {
                             null
                         } else {
-                            PromptImportDialog.Reported(presetName = result.preset.name, notes = notes)
+                            PromptLibrarySnackbar(
+                                text = UiText.Resource(
+                                    R.string.prompts_import_success_format,
+                                    listOf(result.preset.name, result.preset.nodeType.name),
+                                ),
+                                showCategory = result.preset.nodeType.name,
+                            )
                         },
+                        importDialog = reportedDialog,
                     )
                 }
             }

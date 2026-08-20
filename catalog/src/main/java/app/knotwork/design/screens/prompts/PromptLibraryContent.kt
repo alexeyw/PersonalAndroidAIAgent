@@ -890,7 +890,6 @@ data class PromptLibraryStrings(
     val editCd: String = "Edit prompt",
     val deleteCd: String = "Delete prompt",
     val previewCd: String = "Preview",
-    val duplicate: String = "Duplicate",
     val duplicateCd: String = "Duplicate prompt",
     val usedByFormat: String = "used by %1\$d pipelines",
     val emptyTitle: String = "No prompts yet",
