@@ -62,8 +62,10 @@
     <string name="prompts_import_failed_no_prompt">The file has a name but no prompt text, so there is nothing to save.</string>
     <string name="prompts_import_failed_unknown_type_format">The file is for a step type this app does not have: %1$s.</string>
     <string name="prompts_import_failed_not_llm_format">Prompts belong to steps that call a model. This file is for %1$s, which does not.</string>
-    <string name="prompts_import_failed_name_too_long_format">The name in the file is longer than %1$d characters.</string>
-    <string name="prompts_import_failed_prompt_too_long_format">The prompt in the file is longer than %1$d characters.</string>
+    <!-- The two counts are fixed ceilings (60 and 8000), so a plural form
+         would be unreachable code in every language. -->
+    <string name="prompts_import_failed_name_too_long_format" tools:ignore="PluralsCandidate">The name in the file is longer than %1$d characters.</string>
+    <string name="prompts_import_failed_prompt_too_long_format" tools:ignore="PluralsCandidate">The prompt in the file is longer than %1$d characters.</string>
 
     <!-- Re-import of a prompt already in the library. -->
     <string name="prompts_import_collision_title_format">“%1$s” is already in your library</string>
