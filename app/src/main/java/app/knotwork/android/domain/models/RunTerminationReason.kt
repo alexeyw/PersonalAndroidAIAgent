@@ -24,8 +24,11 @@ enum class RunTerminationKind {
     /** A background human-in-the-loop gate went unanswered past its window. */
     HITL_WINDOW_EXPIRED,
 
-    /** The queue's watchdog ended a run that stopped emitting progress. */
+    /** The stuck-detector ended a run that kept repeating itself. */
     NO_PROGRESS,
+
+    /** The queue's watchdog ended a run that went silent for too long. */
+    RUN_STALLED,
 
     /** The pipeline graph was edited between interruption and resume. */
     GRAPH_CHANGED,
@@ -45,8 +48,8 @@ enum class RunTerminationKind {
 
 /**
  * Why a run stopped before producing an answer — the single typed vocabulary
- * shared by the autonomous-run ceilings, the queue watchdog, the resume guards
- * and the start-up orphan sweep.
+ * shared by the autonomous-run ceilings, the graph stuck-detector, the queue
+ * watchdog, the resume guards and the start-up orphan sweep.
  *
  * Before this type existed the cause travelled as a free-form `errorMessage`
  * string, and two independent consumers had already resorted to comparing that
@@ -102,9 +105,37 @@ sealed interface RunTerminationReason {
         override val kind: RunTerminationKind = RunTerminationKind.HITL_WINDOW_EXPIRED
     }
 
-    /** The run stopped emitting progress and the queue watchdog ended it. */
+    /**
+     * The run kept repeating itself without getting anywhere, and the graph
+     * stuck-detector ended it.
+     *
+     * Carries no numbers on purpose. The detector's own evidence — which node,
+     * which signal, how many repetitions — is a *diagnostic*, written to the
+     * run console where the repetition is visible step by step, and the chat
+     * copy for this kind sends the reader there rather than trying to
+     * summarise a loop in a sentence. Persisting a signal name would also make
+     * a second vocabulary out of what is deliberately one.
+     */
     data object NoProgress : RunTerminationReason {
         override val kind: RunTerminationKind = RunTerminationKind.NO_PROGRESS
+    }
+
+    /**
+     * The run went quiet and the queue's watchdog ended it.
+     *
+     * Distinct from [NoProgress], and the distinction is the whole point of
+     * having both: this run emitted *nothing at all* for five minutes, which is
+     * what a step waiting on an external tool that never answers looks like.
+     * [NoProgress] is the opposite shape — a run emitting briskly and saying
+     * the same thing every time. Collapsing them would tell a user whose MCP
+     * server hung that the same work kept repeating, and would send them to
+     * compare steps that never repeated. (The console is not empty for a stall:
+     * its log ends on the step that started and never finished, which is the
+     * one thing worth seeing. What it has no row for is that step's output,
+     * because there never was one.)
+     */
+    data object RunStalled : RunTerminationReason {
+        override val kind: RunTerminationKind = RunTerminationKind.RUN_STALLED
     }
 
     /** The pipeline graph changed between interruption and resume. */
@@ -162,6 +193,7 @@ fun RunTerminationReason.diagnostic(): String = when (this) {
     is RunTerminationReason.TokenCeiling -> "token-ceiling: $spent/$limit tokens"
     RunTerminationReason.HitlWindowExpired -> "hitl-window-expired"
     RunTerminationReason.NoProgress -> "no-progress"
+    RunTerminationReason.RunStalled -> "run-stalled"
     RunTerminationReason.GraphChanged -> "graph-changed"
     RunTerminationReason.ProcessDied -> "process-died"
     RunTerminationReason.DiscardedByUser -> "discarded-by-user"

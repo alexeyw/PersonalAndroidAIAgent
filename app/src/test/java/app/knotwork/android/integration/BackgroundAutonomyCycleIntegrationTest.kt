@@ -450,7 +450,7 @@ class BackgroundAutonomyCycleIntegrationTest {
             // threads the scheduler cannot see, so the window would elapse on a
             // healthy run. The valve itself is covered in
             // `TaskQueueManagerImplTest`, where nothing races the clock.
-            noProgressTimeoutMs = 0
+            silenceTimeoutMs = 0
         }
 
         val resumeRun = ResumePipelineRunUseCase(

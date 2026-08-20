@@ -181,6 +181,15 @@ class PipelineNodeExecutor @Inject constructor(
                 resume = null,
                 depth = scope.depth + 1,
                 budget = scope.budget,
+                // Shared for the same reason the budget is: a parent that calls
+                // this child repeatedly with the same input is one loop, and a
+                // child with a private window would see several fresh runs
+                // where the tree has one going in circles.
+                stuckDetector = scope.stuckDetector,
+                // And the notes with it: the detector's grace period is spent
+                // by the child's steps, so a nudge the parent raised has to be
+                // able to reach the child that is spending it.
+                contextNotes = scope.contextNotes,
                 imageDelivery = scope.imageDelivery,
                 runHadImage = scope.imagePresent,
                 generatingModel = scope.generatingModel,
@@ -236,6 +245,15 @@ class PipelineNodeExecutor @Inject constructor(
                 resume = childResume,
                 depth = scope.depth + 1,
                 budget = scope.budget,
+                // Shared for the same reason the budget is: a parent that calls
+                // this child repeatedly with the same input is one loop, and a
+                // child with a private window would see several fresh runs
+                // where the tree has one going in circles.
+                stuckDetector = scope.stuckDetector,
+                // And the notes with it: the detector's grace period is spent
+                // by the child's steps, so a nudge the parent raised has to be
+                // able to reach the child that is spending it.
+                contextNotes = scope.contextNotes,
                 imageDelivery = scope.imageDelivery,
                 runHadImage = scope.imagePresent,
                 generatingModel = scope.generatingModel,

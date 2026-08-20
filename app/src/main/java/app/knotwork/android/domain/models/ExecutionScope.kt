@@ -1,5 +1,7 @@
 package app.knotwork.android.domain.models
 
+import app.knotwork.android.domain.engine.stuck.GraphStuckDetector
+
 /**
  * Run-tree-scoped execution context threaded from
  * [app.knotwork.android.domain.engine.GraphExecutionEngine] into every
@@ -26,6 +28,15 @@ package app.knotwork.android.domain.models
  *   root run record so a resumed run continues its own count rather than
  *   restarting it. `null` when the engine was invoked without one
  *   (non-persisted editor test runs). See [RunBudgetLedger].
+ * @property stuckDetector The repetition detector shared across the whole run
+ *   tree, on the same terms as [budget]: a sub-pipeline observes into the same
+ *   window as its parent, so a parent calling one child repeatedly with the
+ *   same input reads as the single loop it is. `null` when the engine was
+ *   invoked without one. See [GraphStuckDetector].
+ * @property contextNotes Advice raised for the run but not yet delivered to a
+ *   model, shared across the whole tree so the scope a note can reach matches
+ *   the scope the detector's grace period counts over. `null` when the engine
+ *   was invoked without one. See [RunContextNotes].
  * @property pipelineVisitIndex Zero-based index of *this* `PIPELINE`-node visit
  *   within the current run. Incremented by the engine each time it enters a
  *   `PIPELINE` node (including replayed visits during resume), so the value is
@@ -75,6 +86,8 @@ package app.knotwork.android.domain.models
 data class ExecutionScope(
     val depth: Int = 0,
     val budget: RunBudgetLedger? = null,
+    val stuckDetector: GraphStuckDetector? = null,
+    val contextNotes: RunContextNotes? = null,
     val pipelineVisitIndex: Int = 0,
     val routingChoices: List<String> = emptyList(),
     val imagePath: String? = null,

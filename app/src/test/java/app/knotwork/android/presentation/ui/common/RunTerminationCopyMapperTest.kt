@@ -1,9 +1,12 @@
 package app.knotwork.android.presentation.ui.common
 
+import app.knotwork.android.R
+import app.knotwork.android.data.engine.TaskQueueManagerImpl
 import app.knotwork.android.domain.models.RunCeilingAxis
 import app.knotwork.android.domain.models.RunNoticeCause
 import app.knotwork.android.domain.models.RunTerminationKind
 import app.knotwork.android.domain.models.RunTerminationReason
+import app.knotwork.android.domain.usecases.NO_PROGRESS_JOURNAL_MESSAGE
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
@@ -33,6 +36,7 @@ class RunTerminationCopyMapperTest {
         RunTerminationReason.StepCeiling(limit = 15, spent = 15),
         RunTerminationReason.TokenCeiling(limit = 1_000_000, spent = 1_000_000),
         RunTerminationReason.NoProgress,
+        RunTerminationReason.RunStalled,
         RunTerminationReason.HitlWindowExpired,
         RunTerminationReason.GraphChanged,
         RunTerminationReason.ProcessDied,
@@ -86,7 +90,7 @@ class RunTerminationCopyMapperTest {
         // The journal has called it this since the ceilings shipped. Two
         // surfaces describing one event differently is the whole defect.
         assertEquals(
-            context.getString(app.knotwork.android.R.string.triggers_journal_outcome_stopped_by_ceiling),
+            context.getString(R.string.triggers_journal_outcome_stopped_by_ceiling),
             context.resolve(copy.title),
         )
     }
@@ -123,18 +127,77 @@ class RunTerminationCopyMapperTest {
     }
 
     @Test
+    fun `given the surfaces of one stop then they all say the same sentence`() {
+        // The fork this guards is easy to reintroduce and invisible once shipped:
+        // the trigger journal renders a plain string it was handed, while the
+        // chat and the notification resolve a resource, so the two can drift
+        // into saying different things about one event with nothing failing.
+        // `domain` cannot read resources, so the words are duplicated — and the
+        // duplication is only safe while something compares them.
+        assertEquals(
+            "the trigger journal and the chat must say the same thing about a stuck run",
+            context.getString(R.string.run_termination_body_no_progress),
+            NO_PROGRESS_JOURNAL_MESSAGE,
+        )
+        assertEquals(
+            "the trigger journal and the chat must say the same thing about a stalled run",
+            context.getString(R.string.run_termination_body_run_stalled),
+            TaskQueueManagerImpl.STALLED_MESSAGE,
+        )
+
+        // Enumerated rather than sampled, because this file's whole design is
+        // enumeration and a fork is invisible without it. The kinds below are
+        // the ones whose journal text is known to differ from their chat text;
+        // both predate this change (see decisions.md) and are parked, not
+        // fixed. Listing them here is what makes a *new* forked kind fail the
+        // build instead of joining them silently.
+        val knownForked = setOf(RunTerminationKind.GRAPH_CHANGED, RunTerminationKind.NOT_RESUMABLE)
+        val alignedHere = setOf(RunTerminationKind.NO_PROGRESS, RunTerminationKind.RUN_STALLED)
+        // Ceilings never reach the journal as prose at all — they map to
+        // StoppedByCeiling, which carries no message — and the remaining kinds
+        // are HITL_WINDOW_EXPIRED (its own outcome), PROCESS_DIED and
+        // DISCARDED_BY_USER (never settled through this path with a message).
+        val notApplicable = RunTerminationKind.entries.toSet() - knownForked - alignedHere
+        assertEquals(
+            "a new kind must be classified here: aligned, known-forked, or not applicable",
+            RunTerminationKind.entries.toSet(),
+            knownForked + alignedHere + notApplicable,
+        )
+        assertTrue(
+            "the ceiling kinds must stay out of the prose path",
+            RunTerminationKind.STEP_CEILING in notApplicable && RunTerminationKind.TOKEN_CEILING in notApplicable,
+        )
+    }
+
+    @Test
     fun `given every reason then the tone matches what the app decided`() {
         fun toneOf(reason: RunTerminationReason) = RunTerminationCopyMapper.terminationCopy(reason).tone
         assertEquals(RunTerminationTone.LIMIT, toneOf(RunTerminationReason.StepCeiling(1, 1)))
         assertEquals(RunTerminationTone.LIMIT, toneOf(RunTerminationReason.TokenCeiling(1, 1)))
         assertEquals(RunTerminationTone.STUCK, toneOf(RunTerminationReason.NoProgress))
-        listOf(
+        // A stall is not housekeeping: the trigger journal counts it a Failure,
+        // and the INFO tone is documented as implying nothing about the
+        // pipeline's quality.
+        assertEquals(RunTerminationTone.STUCK, toneOf(RunTerminationReason.RunStalled))
+        val housekeeping = listOf(
             RunTerminationReason.HitlWindowExpired,
             RunTerminationReason.GraphChanged,
             RunTerminationReason.ProcessDied,
             RunTerminationReason.DiscardedByUser,
             RunTerminationReason.NotResumable,
-        ).forEach { assertEquals("${it.kind} is housekeeping", RunTerminationTone.INFO, toneOf(it)) }
+        )
+        housekeeping.forEach { assertEquals("${it.kind} is housekeeping", RunTerminationTone.INFO, toneOf(it)) }
+        // Enumerated, not sampled. Without this a kind added later simply is
+        // not asserted anywhere, and its tone can drift to whatever a stray
+        // edit leaves it as — which is exactly how RUN_STALLED spent a while
+        // rendering as housekeeping.
+        val toned = setOf(
+            RunTerminationKind.STEP_CEILING,
+            RunTerminationKind.TOKEN_CEILING,
+            RunTerminationKind.NO_PROGRESS,
+            RunTerminationKind.RUN_STALLED,
+        ) + housekeeping.map { it.kind }
+        assertEquals("every kind needs an asserted tone", RunTerminationKind.entries.toSet(), toned)
     }
 
     @Test
@@ -148,6 +211,8 @@ class RunTerminationCopyMapperTest {
             RunTerminationKind.STEP_CEILING to RunTerminationAction.ADJUST_LIMITS,
             RunTerminationKind.TOKEN_CEILING to RunTerminationAction.ADJUST_LIMITS,
             RunTerminationKind.NO_PROGRESS to RunTerminationAction.OPEN_CONSOLE,
+            // A stalled run left nothing in the console to open.
+            RunTerminationKind.RUN_STALLED to RunTerminationAction.RUN_AGAIN,
             RunTerminationKind.HITL_WINDOW_EXPIRED to RunTerminationAction.RUN_AGAIN,
             RunTerminationKind.GRAPH_CHANGED to RunTerminationAction.RUN_AGAIN,
             RunTerminationKind.PROCESS_DIED to RunTerminationAction.RUN_AGAIN,

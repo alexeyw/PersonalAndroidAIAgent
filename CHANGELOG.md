@@ -15,6 +15,33 @@ details.
 
 ### Added
 
+- **A run that goes in circles is now caught and stopped, and told apart from a
+  run that has merely run out of allowance.** The agent watches each run for
+  repetition — the same step, on the same input, producing the same result — and
+  responds in two stages: first it tells the run, quietly in the chat and in the
+  agent's own context, so it can change course by itself; then, if nothing
+  changes, it ends the run and says *Stopped: the run was not getting anywhere*,
+  offering **Open console**, whose log shows the same step running over and over
+  and the line that ended it.
+
+  This is a different protection from the run limits, not a second copy of one.
+  A limit asks how much a run has spent; this asks whether it is getting
+  anywhere. A run that keeps producing genuinely different results is not
+  repeating itself however long it takes, and is left alone — and neither is a
+  run still being handed something new each time, even when its answers look
+  alike, which is what a long list of similar tasks looks like from the inside.
+  Those cases are what the limits are for. Nothing is configurable here: how
+  many identical steps count as a loop is not a preference, and a slider would
+  only invite widening it until the protection stopped protecting.
+
+  A run that stops responding altogether — a tool or a server that never answers
+  — is now reported as its own thing (*Stopped: the run went quiet*) instead of
+  borrowing the wording for repetition. It had been showing a message about work
+  that "kept repeating", which was never what had happened to it, and offering
+  to open a console to compare steps that had never repeated. It now offers to
+  run it again, which is the thing that can actually help: a step that hung once
+  often answers the next time.
+
 - **Autonomous runs now have ceilings, and a run stopped by one says so.**
   A background run — a trigger firing overnight against your own cloud API key —
   is now bounded on two axes across the whole run tree: how many pipeline steps

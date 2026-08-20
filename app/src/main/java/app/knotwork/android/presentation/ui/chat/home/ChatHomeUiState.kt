@@ -71,7 +71,7 @@ sealed interface ChatHomeUiState {
      *     keeps the destructive-toned tile with its Retry action, because a
      *     transient fault may genuinely not recur.
      *  - **a typed termination** — the app itself decided to end the run: a
-     *     ceiling, the no-progress watchdog, an expired approval window. Here
+     *     ceiling, the stuck-detector, the silence watchdog, an expired approval window. Here
      *     [message] is only the diagnostic that lands in the run record; every
      *     word the user reads is resolved from [reason] through
      *     `RunTerminationCopyMapper`, so the same event is worded identically

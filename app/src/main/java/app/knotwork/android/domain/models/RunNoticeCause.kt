@@ -1,5 +1,7 @@
 package app.knotwork.android.domain.models
 
+import app.knotwork.android.domain.engine.stuck.StuckSignal
+
 /**
  * Why a run in flight is showing the user an advisory.
  *
@@ -9,11 +11,11 @@ package app.knotwork.android.domain.models
  * one calm, non-modal label above the composer; the cause is what decides its
  * glyph and its sentence.
  *
- * Modelled as a sealed type with a single variant on purpose. The graph
- * stuck-detector adds the second one, and it should be able to do that by
- * *adding a variant* rather than by changing the shape of the state that
- * carries it — the notice surface was designed with both causes in view
- * precisely so the second arrival does not re-open it.
+ * Two variants, and the second arrived exactly as the first one's author
+ * planned: by *adding a case* rather than by reshaping the state that carries
+ * it. The notice surface was designed with both causes in view precisely so
+ * the second arrival would not re-open it, and it did not — the component, the
+ * slot and the tone vocabulary were already there.
  *
  * Deliberately **live-only**: a notice is never persisted and never survives
  * the process. It carries the numbers behind the decision, which is exactly
@@ -37,6 +39,29 @@ sealed interface RunNoticeCause {
      * @property hardLimit The ceiling that will stop the run if it keeps going.
      */
     data class ApproachingCeiling(val axis: RunCeilingAxis, val spent: Int, val hardLimit: Int) : RunNoticeCause
+
+    /**
+     * The graph stuck-detector thinks the run is going round in circles, and is
+     * saying so while there is still time for it to stop on its own.
+     *
+     * The first stage of the detector's stepped recovery, and the one that is
+     * meant to be the last: alongside this notice the run is handed a note in
+     * its own context telling it to wind up, and a model told that it is
+     * repeating itself usually does. Only if that fails is the run ended, with
+     * [RunTerminationReason.NoProgress].
+     *
+     * Raised at most once per execution attempt, like the ceiling warning
+     * beside it — for the same reason, that a warning repeated on every node is
+     * one the reader learns to skip. A resumed run inherits the escalation from
+     * its replayed prefix rather than restarting it, so a run that had already
+     * been warned before it parked is *stopped* on its next repetition, not
+     * warned a second time.
+     *
+     * @property signal Which observation produced the verdict. Diagnostic only:
+     *   it reaches the run console, never the sentence the user reads, which is
+     *   one sentence for the whole cause.
+     */
+    data class LooksStuck(val signal: StuckSignal) : RunNoticeCause
 }
 
 /**
@@ -52,4 +77,5 @@ sealed interface RunNoticeCause {
 fun RunNoticeCause.diagnostic(): String = when (this) {
     is RunNoticeCause.ApproachingCeiling ->
         "soft-ceiling: $spent/$hardLimit ${axis.name.lowercase()}"
+    is RunNoticeCause.LooksStuck -> "looks-stuck: ${signal.diagnostic}"
 }

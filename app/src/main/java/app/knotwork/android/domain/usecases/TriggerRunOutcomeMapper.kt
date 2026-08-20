@@ -1,5 +1,6 @@
 package app.knotwork.android.domain.usecases
 
+import androidx.annotation.VisibleForTesting
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.RunTerminationKind
 import app.knotwork.android.domain.models.RunTerminationReason
@@ -71,7 +72,17 @@ fun triggerRunOutcomeForTerminal(
         RunTerminationKind.STEP_CEILING, RunTerminationKind.TOKEN_CEILING ->
             TriggerRunOutcome.StoppedByCeiling
         RunTerminationKind.HITL_WINDOW_EXPIRED -> TriggerRunOutcome.HitlTimeout
-        RunTerminationKind.NO_PROGRESS,
+        // A loop and a stall are both the automation not working. Unlike a
+        // ceiling — which is a number the user chose, doing what they chose it
+        // for — these are exactly the condition a health badge exists to show,
+        // so they redden it.
+        // The detector persists a *diagnostic* as the run's message — `no-progress`
+        // — because that column is also what an engineer greps six months from
+        // now. The journal is read by a person, and it renders this string
+        // verbatim next to the outcome, so it gets the sentence instead. Every
+        // other kind below already records prose at its own producer.
+        RunTerminationKind.NO_PROGRESS -> TriggerRunOutcome.Failure(NO_PROGRESS_JOURNAL_MESSAGE)
+        RunTerminationKind.RUN_STALLED,
         RunTerminationKind.GRAPH_CHANGED,
         RunTerminationKind.PROCESS_DIED,
         RunTerminationKind.DISCARDED_BY_USER,
@@ -90,3 +101,30 @@ fun triggerRunOutcomeForTerminal(
 
 /** Neutral failure text used when a run finished FAILED without a recorded reason. */
 private const val DEFAULT_FAILURE_MESSAGE = "Run failed"
+
+/**
+ * What the trigger journal says about a run the stuck-detector ended.
+ *
+ * A sentence and not the run's persisted message, because that message is the
+ * detector's diagnostic (`no-progress`) — terse and greppable on purpose — and
+ * the journal renders it to a person rather than to a log reader.
+ *
+ * **Byte-identical to `R.string.run_termination_body_no_progress`**, which is
+ * what the chat tile and the background notification say about the same event.
+ * A second wording here would have been the fork this whole vocabulary exists
+ * to prevent: one stop, three sentences, depending on which surface the user
+ * happened to look at. It is duplicated rather than shared because `domain`
+ * cannot read string resources, and `RunTerminationCopyMapperTest` fails if the
+ * two ever drift apart.
+ *
+ * The tidier shape — a typed `TriggerRunOutcome` variant like
+ * `StoppedByCeiling`, letting the journal resolve its own copy from the kind —
+ * is deliberately not taken here: it is a persisted journal vocabulary plus an
+ * export schema bump, which is a wider change than this task opened. That shape
+ * would also settle the one cost being accepted: a domain constant cannot be
+ * translated, so when the planned `values-ru` pass lands the chat will speak
+ * Russian about a stuck run while this journal row stays English.
+ */
+@VisibleForTesting
+internal const val NO_PROGRESS_JOURNAL_MESSAGE =
+    "The same work kept repeating without moving the task forward, so the run was ended."

@@ -56,9 +56,10 @@ import app.knotwork.design.screens.chat.ChatHomeThreadRow
  *   pipeline-agnostic set.
  * @property sourceChooserVisible whether the image-source chooser sheet
  *   (Photo library / Camera) is currently shown.
- * @property runNotice the advisory about the run currently in flight — today,
- *   that it has crossed the soft threshold on one of its limits — or `null`
- *   when there is nothing to say. Deliberately **live-only** and deliberately
+ * @property runNotice the advisory about the run currently in flight — that it
+ *   has crossed the soft threshold on one of its limits, or that the
+ *   stuck-detector thinks it is going in circles — or `null` when there is
+ *   nothing to say. Deliberately **live-only** and deliberately
  *   *not* part of [visual]: the run is still going, so it is not a state of the
  *   screen but a remark about the work in it, and it must not displace the HITL
  *   or generating visuals it coexists with. Cleared the moment the run reaches

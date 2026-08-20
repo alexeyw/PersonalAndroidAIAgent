@@ -73,7 +73,7 @@ class TaskQueueManagerImpl @Inject constructor(
 
     /**
      * How long a run may go without emitting anything before the worker gives
-     * up on it. See [NO_PROGRESS_TIMEOUT_MS].
+     * up on it. See [SILENCE_TIMEOUT_MS].
      *
      * A non-positive value disables the valve. That exists for the integration
      * harnesses that drive real `Dispatchers.IO` work under a virtual clock:
@@ -82,7 +82,7 @@ class TaskQueueManagerImpl @Inject constructor(
      * measurement would be meaningless rather than merely inconvenient.
      */
     @VisibleForTesting
-    internal var noProgressTimeoutMs: Long = NO_PROGRESS_TIMEOUT_MS
+    internal var silenceTimeoutMs: Long = SILENCE_TIMEOUT_MS
 
     private val _globalState = MutableStateFlow<AgentOrchestratorState>(AgentOrchestratorState.Idle)
     override val globalState: StateFlow<AgentOrchestratorState> = _globalState.asStateFlow()
@@ -159,11 +159,11 @@ class TaskQueueManagerImpl @Inject constructor(
          * a database stall it could not explain.
          */
         @VisibleForTesting
-        internal const val NO_PROGRESS_TIMEOUT_MS = 5 * 60 * 1000L
+        internal const val SILENCE_TIMEOUT_MS = 5 * 60 * 1000L
 
         /**
          * User-facing explanation written to the run record when
-         * [NO_PROGRESS_TIMEOUT_MS] elapses. Names the consequence, not the
+         * [SILENCE_TIMEOUT_MS] elapses. Names the consequence, not the
          * internals: the alternative to this message is the silent
          * "Generating…" that F13 documented.
          */
@@ -205,7 +205,7 @@ class TaskQueueManagerImpl @Inject constructor(
      * configured.
      *
      * @param timeoutMs Maximum silence tolerated between emissions; a
-     *   non-positive value returns the receiver unguarded (see [noProgressTimeoutMs]).
+     *   non-positive value returns the receiver unguarded (see [silenceTimeoutMs]).
      * @return The same values as the receiver, or a failure once silence exceeds the window.
      */
     private fun Flow<AgentOrchestratorState>.failIfStalled(timeoutMs: Long): Flow<AgentOrchestratorState> {
@@ -480,7 +480,7 @@ class TaskQueueManagerImpl @Inject constructor(
             )
                 // Safety valve: the worker is serial, so a run that never
                 // emits again would hold every other chat hostage (F13).
-                .failIfStalled(noProgressTimeoutMs)
+                .failIfStalled(silenceTimeoutMs)
                 .collect { state ->
                     // Terminal engine states are mirrored into the persistent run
                     // record as they pass through, so the record is already
@@ -518,7 +518,7 @@ class TaskQueueManagerImpl @Inject constructor(
             // The stall watchdog is the one exception the queue itself raises, and
             // it is a forced termination rather than a pipeline defect — typed so
             // it stops being recoverable only by matching its own message text.
-            val reason = if (e is RunStalledException) RunTerminationReason.NoProgress else null
+            val reason = if (e is RunStalledException) RunTerminationReason.RunStalled else null
             pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, message, reason)
             // The same reason travels to the surface, not only to the record.
             // Dropping it here left a watchdog kill wearing the destructive

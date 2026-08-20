@@ -70,7 +70,7 @@ class KoogClientFactory @Inject constructor(
      *
      * The load-bearing value is [SOCKET_TIMEOUT_MS], because it is applied **per read**:
      * it bounds how long the provider may stay *silent*, not how long a healthy answer
-     * may take. That is deliberately the same rule the task queue's no-progress valve
+     * may take. That is deliberately the same rule the task queue's silence valve
      * uses — a long, steadily-streaming generation must never be cut for being long,
      * while a dead connection must not survive. [REQUEST_TIMEOUT_MS] is left at Koog's
      * generous value as a backstop for the pathological case of a provider that dribbles

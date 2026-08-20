@@ -122,7 +122,15 @@ class RunBudgetLedger(
      *
      * Claiming is destructive by design: a soft limit is a warning, and a
      * warning repeated on every node for the rest of the run is noise that
-     * teaches the user to ignore it. Each axis warns once per run tree.
+     * teaches the user to ignore it. Each axis warns once per *attempt*: the
+     * claim set lives on this object, and a resumed run builds a fresh ledger
+     * from the persisted counters alone. A run that parks repeatedly past its
+     * soft threshold therefore warns again on each resume — which is a real
+     * inconsistency with the stuck-detector beside it, whose escalation *is*
+     * carried across a resume. Left as it is rather than changed here: making
+     * it once-per-tree means persisting the claim, which is a schema change
+     * this task did not open, and the failure mode is a repeated advisory
+     * rather than a wrong one.
      *
      * @return The crossing, carrying everything a warning needs to name itself,
      *   or `null` when nothing new crossed. Returning the numbers rather than

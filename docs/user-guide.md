@@ -2153,6 +2153,28 @@ warning point is fixed and not adjustable. Two honest caveats: the note lives in
 the chat, so a run started by a trigger at 3 am has nowhere to show it; and a
 run that pauses and resumes may warn again.
 
+#### When a run goes in circles
+
+Separately from the limits above, and with nothing for you to configure, the app
+watches a run for **repetition**: the same step, on the same input, producing the
+same result over and over. The two are not the same protection. A limit asks how
+much a run has spent; this asks whether it is getting anywhere.
+
+It works in two stages. First the run is told — quietly, in the same short strip
+above the composer that the limit warning uses, and in the run's own context, so
+the agent gets a chance to change course by itself. That is usually the end of
+it. If the repetition carries on regardless, the run is ended and the chat says
+**Stopped: the run was not getting anywhere**, with **Open console**. The
+console's **Logs** tab is where the repetition shows: the same step starts and
+finishes over and over, and the last lines say what was noticed and that the run
+was ended for it. The **Vars** tab is the companion — it shows what that step was
+given and what it produced, though only the most recent pass, since it keeps one
+entry per step rather than one per visit.
+
+A run that keeps producing *different* results is not repeating itself, however
+long it takes, and this never touches it. That case is what the limits above are
+for.
+
 When a limit is actually reached, the run **ends** — it does not pause and does
 not ask what to do. The chat shows **Stopped by a safety limit**, which allowance
 ran out, how much of it was used, and an **Adjust limits** action. A background
@@ -2569,8 +2591,15 @@ on that message opens the screen where you can raise it.
 Two things worth knowing before you raise anything. The limit that stopped the
 run may be the **token** one rather than the step one, so read the message rather
 than assuming; and a run you did not start yourself is governed by
-the **background** limits, which are set separately on the same screen. If the
-run was looping unproductively, lower the limit instead.
+the **background** limits, which are set separately on the same screen.
+
+But read the message first, because not every mid-run stop is a limit. **Stopped:
+the run was not getting anywhere** means the run was repeating itself and was
+ended for that — raising a limit would only buy it more circles, so open the
+console and look at which step keeps coming back. **Stopped: the run went quiet**
+is a third thing again: a step stopped responding, most often a tool or a server
+that never answered, and the run was ended so other messages could run. That one
+may well work on a second try.
 
 ### A trigger didn't fire
 
@@ -2584,7 +2613,14 @@ always there, and which of two shapes it takes decides what to do next:
   broken — either the condition is not what you thought, or the trigger needs
   binding or enabling.
 - **There is an entry, and it fired but ended badly.** *Failed* points at the
-  pipeline (open the run in the trigger's chat and read the console);
+  pipeline (open the run in the trigger's chat and read the console). Two
+  failures name themselves: *the run was not getting anywhere* means it was
+  repeating itself, and the console's log shows the same step running again and
+  again before the line that ends it;
+  *the run went quiet* means a step stopped responding — the console's log ends
+  with the step it started and never finished, and that step is the thing to
+  look at, though the **Vars** tab will have nothing for it because it never
+  produced anything;
   *Stopped by the system* means the process was killed mid-run, which is a
   battery / memory-pressure problem, not a pipeline one; *Timed out waiting
   for approval* means the run parked on a sensitive tool and the approval
