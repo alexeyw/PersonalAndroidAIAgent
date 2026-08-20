@@ -1,5 +1,6 @@
 package app.knotwork.android.domain.usecases
 
+import androidx.annotation.VisibleForTesting
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.RunTerminationKind
 import app.knotwork.android.domain.models.RunTerminationReason
@@ -124,5 +125,6 @@ private const val DEFAULT_FAILURE_MESSAGE = "Run failed"
  * translated, so when the planned `values-ru` pass lands the chat will speak
  * Russian about a stuck run while this journal row stays English.
  */
+@VisibleForTesting
 internal const val NO_PROGRESS_JOURNAL_MESSAGE =
     "The same work kept repeating without moving the task forward, so the run was ended."

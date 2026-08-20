@@ -32,8 +32,12 @@ package app.knotwork.android.domain.models
  * A list rather than a single slot because there are two writers and a long
  * repeating run trips both: with one slot, whichever spoke second silently
  * erased the other's advice. Bounded by construction — each ceiling axis warns
- * once per tree and the detector nudges once, so at most three notes can ever
- * be waiting.
+ * once per *attempt* and the detector nudges once, so at most three notes can
+ * ever be waiting. (Per attempt, not per tree: the ceiling's claim set lives on
+ * a ledger that is rebuilt on every resume, so a run that parks past its soft
+ * threshold warns again — a known inconsistency with the detector, whose
+ * escalation is carried across a resume. Bounding is unaffected either way,
+ * since a note only waits until the next composing node.)
  *
  * Deliberately **live-only**: notes are never persisted. A note is advice about
  * what to do next, and a run being resumed from a checkpoint is re-deciding

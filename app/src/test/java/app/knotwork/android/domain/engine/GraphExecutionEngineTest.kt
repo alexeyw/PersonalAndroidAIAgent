@@ -4418,6 +4418,17 @@ class GraphExecutionEngineTest {
         // guards nothing. An OUTPUT node emits no NodeIO by design, so the
         // evidence is the inference call it made with its own system prompt.
         verify { llmEngine.generateResponseStream(match { it.contains("CHILD FORMAT") }) }
+        // The note also has to have been *pending* when the child ran, or the
+        // child being skipped proves nothing. Nothing in this graph consumes
+        // it: the nudge lands on the last node before the PIPELINE, the child's
+        // only composing node is the OUTPUT under test, and the root OUTPUT is
+        // a pass-through. So no node's prompt may contain it — if an
+        // intermediate node were added and drained it first, this fails.
+        val everyInput = states.filterIsInstance<AgentOrchestratorState.NodeIO>().map { it.input }
+        assertTrue(
+            "the note must still have been pending when the nested OUTPUT ran",
+            everyInput.none { it.contains("SYSTEM NOTICE") },
+        )
         val answer = states.filterIsInstance<AgentOrchestratorState.Completed>().last().finalResponse
         assertFalse(
             "a nested OUTPUT must not carry the note out to the user; got: $answer",

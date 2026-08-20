@@ -90,7 +90,7 @@ class RunTerminationCopyMapperTest {
         // The journal has called it this since the ceilings shipped. Two
         // surfaces describing one event differently is the whole defect.
         assertEquals(
-            context.getString(app.knotwork.android.R.string.triggers_journal_outcome_stopped_by_ceiling),
+            context.getString(R.string.triggers_journal_outcome_stopped_by_ceiling),
             context.resolve(copy.title),
         )
     }
@@ -143,6 +143,29 @@ class RunTerminationCopyMapperTest {
             "the trigger journal and the chat must say the same thing about a stalled run",
             context.getString(R.string.run_termination_body_run_stalled),
             TaskQueueManagerImpl.STALLED_MESSAGE,
+        )
+
+        // Enumerated rather than sampled, because this file's whole design is
+        // enumeration and a fork is invisible without it. The kinds below are
+        // the ones whose journal text is known to differ from their chat text;
+        // both predate this change (see decisions.md) and are parked, not
+        // fixed. Listing them here is what makes a *new* forked kind fail the
+        // build instead of joining them silently.
+        val knownForked = setOf(RunTerminationKind.GRAPH_CHANGED, RunTerminationKind.NOT_RESUMABLE)
+        val alignedHere = setOf(RunTerminationKind.NO_PROGRESS, RunTerminationKind.RUN_STALLED)
+        // Ceilings never reach the journal as prose at all — they map to
+        // StoppedByCeiling, which carries no message — and the remaining kinds
+        // are HITL_WINDOW_EXPIRED (its own outcome), PROCESS_DIED and
+        // DISCARDED_BY_USER (never settled through this path with a message).
+        val notApplicable = RunTerminationKind.entries.toSet() - knownForked - alignedHere
+        assertEquals(
+            "a new kind must be classified here: aligned, known-forked, or not applicable",
+            RunTerminationKind.entries.toSet(),
+            knownForked + alignedHere + notApplicable,
+        )
+        assertTrue(
+            "the ceiling kinds must stay out of the prose path",
+            RunTerminationKind.STEP_CEILING in notApplicable && RunTerminationKind.TOKEN_CEILING in notApplicable,
         )
     }
 
