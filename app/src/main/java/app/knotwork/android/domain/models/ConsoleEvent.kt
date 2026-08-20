@@ -94,4 +94,17 @@ sealed interface ConsoleEventType {
      * typed termination reason exists to prevent.
      */
     data object RunCeiling : ConsoleEventType
+
+    /**
+     * The graph stuck-detector spoke: either it warned that the run looks like
+     * it is going round in circles, or it ended the run for it. Rendered as a
+     * warning, beside [RunCeiling] rather than as part of it — a ceiling is a
+     * number the user chose and a loop is the pipeline misbehaving, and one
+     * type covering both would be a name that stops being true the first time
+     * somebody greps for it.
+     *
+     * The line carries the detector's signal, which is the evidence a reader
+     * following the **Open console** action has come to look for.
+     */
+    data object StuckDetector : ConsoleEventType
 }

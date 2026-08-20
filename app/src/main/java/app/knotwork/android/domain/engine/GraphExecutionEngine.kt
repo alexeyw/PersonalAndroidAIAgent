@@ -5,6 +5,9 @@ import app.knotwork.android.domain.constants.PipelineExecutionDefaults
 import app.knotwork.android.domain.engine.executors.NodeExecutorFactory
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
 import app.knotwork.android.domain.engine.structured.JsonPayloadExtractor
+import app.knotwork.android.domain.engine.stuck.GraphStuckDetector
+import app.knotwork.android.domain.engine.stuck.RunStepObservation
+import app.knotwork.android.domain.engine.stuck.StuckVerdict
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ChatHistorySummary
 import app.knotwork.android.domain.models.ConsoleEvent
@@ -150,6 +153,14 @@ class GraphExecutionEngine @Inject constructor(
      *   getting a private allowance. A breach at any depth fails the run with a
      *   typed [RunTerminationReason], which propagates up the stack as the
      *   parent PIPELINE node's error.
+     * @param stuckDetector The repetition detector shared across the whole run
+     *   tree, on the same terms as [budget] and for the same reason: a parent
+     *   that calls one sub-pipeline five times with the same input is one loop,
+     *   not five unrelated runs. `null` (the default) makes the engine build
+     *   one. Unlike the ledger it is **not** seeded from storage — it is
+     *   rebuilt from the replayed prefix instead, because what it needs is the
+     *   sequence of steps, which the run trace already holds and the run record
+     *   does not.
      * @param imageInput The **top-level** run's single image attachment, already
      *   resolved to an absolute path + dimensions + byte size, or `null` for a
      *   text-only run (and always `null` for a sub-pipeline invocation, which
@@ -199,6 +210,7 @@ class GraphExecutionEngine @Inject constructor(
         resume: ResumeContext? = null,
         depth: Int = 0,
         budget: RunBudgetLedger? = null,
+        stuckDetector: GraphStuckDetector? = null,
         imageInput: EngineImageInput? = null,
         imageDelivery: RunImageDelivery? = null,
         runHadImage: Boolean = false,
@@ -351,6 +363,14 @@ class GraphExecutionEngine @Inject constructor(
                 tokensAlreadySpent = spent.tokens,
             )
         }
+        // The repetition detector for this tree. Built fresh rather than seeded
+        // from storage: its state is a *sequence* of steps, and the sequence
+        // lives in the run trace, which the walk below re-reads anyway on a
+        // resume. Every replayed record is fed back through `replay(...)` as it
+        // passes, so a resumed run rebuilds the window it had rather than
+        // starting blind — which matters precisely because a run that parks
+        // often is a run in a loop.
+        val runStuckDetector = stuckDetector ?: GraphStuckDetector()
         // Per-`PIPELINE`-node visit counter. A PIPELINE node inside a loop
         // (QUEUE_PROCESSOR) executes once per item; the index disambiguates the
         // child run id of each visit and is re-derived deterministically on
@@ -542,11 +562,18 @@ class GraphExecutionEngine @Inject constructor(
         // post-loop branch can say which one bound instead of re-deriving it.
         var terminationReason: RunTerminationReason? = null
 
-        // A soft crossing announces itself on the console immediately (below,
-        // where it happens) but reaches the model only on the next node — the
-        // walk rewrites `currentInputText` after the charge site, so a note
-        // prepended there would be overwritten before anything read it.
-        var pendingSoftCeilingNote = false
+        // Notes the run has to be told about, waiting for a node that composes
+        // a prompt to tell them to. A crossing or a stuck verdict announces
+        // itself on the console immediately (below, where it happens) but
+        // reaches the model only on the next node — the walk rewrites
+        // `currentInputText` after the charge site, so a note prepended there
+        // would be overwritten before anything read it.
+        //
+        // A list rather than the boolean this used to be, because there are now
+        // two writers: a long loop crosses its soft ceiling *and* trips the
+        // detector, and with a single slot whichever spoke second would silently
+        // erase the other's advice.
+        val pendingContextNotes = mutableListOf<String>()
 
         while (currentNode != null) {
             // Ask the ledger before charging, so a node that is refused is never
@@ -722,9 +749,10 @@ class GraphExecutionEngine @Inject constructor(
                     // pollution outlived the router and reached OUTPUT anyway.
                     // Scoping it to one node's input makes that structurally
                     // impossible rather than conditionally avoided.
-                    if (pendingSoftCeilingNote) {
-                        pendingSoftCeilingNote = false
-                        "$SOFT_CEILING_CONTEXT_NOTE\n\n$composed"
+                    if (pendingContextNotes.isNotEmpty()) {
+                        val notes = pendingContextNotes.joinToString(separator = "\n\n")
+                        pendingContextNotes.clear()
+                        "$notes\n\n$composed"
                     } else {
                         composed
                     }
@@ -781,6 +809,7 @@ class GraphExecutionEngine @Inject constructor(
                         ExecutionScope(
                             depth = depth,
                             budget = runBudget,
+                            stuckDetector = runStuckDetector,
                             pipelineVisitIndex = pipelineVisitIndex,
                             routingChoices = routingChoices,
                             imagePath = imagePathForNode,
@@ -931,7 +960,7 @@ class GraphExecutionEngine @Inject constructor(
                         )
                         pushConsole(ConsoleEventType.RunCeiling, cause.diagnostic())
                         emit(AgentOrchestratorState.RunNotice(cause))
-                        pendingSoftCeilingNote = true
+                        pendingContextNotes += SOFT_CEILING_CONTEXT_NOTE
                     }
                 }
             }
@@ -962,6 +991,57 @@ class GraphExecutionEngine @Inject constructor(
                     ConsoleEventType.NodeExecution,
                     "✓ ${currentNode.type.name} in ${nodeDurationMs}ms",
                 )
+            }
+
+            // ── Stuck-detector observation point ──────────────────────────
+            //
+            // Placed where the node has finished and both the text it executed
+            // on and the text it produced are known — the same pair the trace
+            // records a few lines below. That is deliberate: what the detector
+            // judges is then exactly what a person following the **Open
+            // console** action can read back, step by step.
+            //
+            // OUTPUT is excluded on the same grounds as the ✓ event and the
+            // soft-ceiling notice above: its executor has already emitted
+            // `Completed`, and a console line pushed after that would shift the
+            // terminal state away from the tail of the flow. Nothing is lost —
+            // a run that has just delivered its answer is not going in circles.
+            if (currentNode.type != NodeType.OUTPUT) {
+                val observation = RunStepObservation(
+                    nodeId = currentNode.id,
+                    inputFingerprint = GraphStuckDetector.fingerprint(executorInput),
+                    // The engine's own fallback for a node that emitted no
+                    // result is to forward its input, so the fingerprints match
+                    // and the step reads as the pass-through it is.
+                    outputFingerprint = GraphStuckDetector.fingerprint(nodeResult?.outputText ?: executorInput),
+                )
+                if (replayRecord != null) {
+                    // Rebuild the window from history without re-deciding it:
+                    // the attempt that actually ran this prefix did not stop on
+                    // it, and reaching a different verdict now would be the app
+                    // rewriting what already happened.
+                    runStuckDetector.replay(observation)
+                } else {
+                    when (val verdict = runStuckDetector.observe(observation)) {
+                        StuckVerdict.Healthy -> Unit
+                        is StuckVerdict.Nudge -> {
+                            val cause = RunNoticeCause.LooksStuck(verdict.signal)
+                            pushConsole(ConsoleEventType.StuckDetector, cause.diagnostic())
+                            emit(AgentOrchestratorState.RunNotice(cause))
+                            pendingContextNotes += STUCK_CONTEXT_NOTE
+                        }
+                        is StuckVerdict.Stop -> {
+                            // Same seam the ceilings use: set the reason and
+                            // leave the walk. The post-loop branch owns the
+                            // console line and the typed terminal state, so a
+                            // protective stop is worded in exactly one place
+                            // however it was decided.
+                            pushConsole(ConsoleEventType.StuckDetector, verdict.signal.diagnostic)
+                            terminationReason = RunTerminationReason.NoProgress
+                            break
+                        }
+                    }
+                }
             }
 
             if (currentNode.type == NodeType.TOOL) {
@@ -1167,7 +1247,7 @@ class GraphExecutionEngine @Inject constructor(
             // hand-written English sentence here is what previously let one
             // event acquire four different wordings, two of which described
             // behaviour the engine never had.
-            pushConsole(ConsoleEventType.RunCeiling, breach.diagnostic())
+            pushConsole(consoleTypeFor(breach), breach.diagnostic())
             emit(AgentOrchestratorState.Error(breach.diagnostic(), reason = breach))
         } else {
             // Loop exited because currentNode became null before reaching OUTPUT
@@ -1364,6 +1444,31 @@ class GraphExecutionEngine @Inject constructor(
     private fun shouldComposeContext(node: NodeModel): Boolean = node.usesContextConfig()
 
     /**
+     * Which console channel a protective stop belongs on.
+     *
+     * The walk exits through one seam whatever decided to end it, so the choice
+     * of channel has to be made from the reason rather than from the site — and
+     * it is worth making, because the two channels answer different questions.
+     * A ceiling line says a number the user chose was reached; a detector line
+     * says the pipeline misbehaved. Filing the second under the first is how a
+     * console stops being searchable.
+     *
+     * Only the reasons the engine itself can produce appear here; the rest
+     * (a dead process, a discarded run, an expired approval window) never reach
+     * this branch, and share the ceiling channel rather than earning a third
+     * one for a case that cannot occur.
+     *
+     * @param reason The typed cause the walk stopped on.
+     * @return The console event type its diagnostic should be pushed under.
+     */
+    private fun consoleTypeFor(reason: RunTerminationReason): ConsoleEventType =
+        if (reason == RunTerminationReason.NoProgress) {
+            ConsoleEventType.StuckDetector
+        } else {
+            ConsoleEventType.RunCeiling
+        }
+
+    /**
      * Returns a copy of [node] with its `systemPrompt` rendered through
      * [PromptTemplateEngine], substituting all `$VARIABLE` placeholders using the
      * injected [PromptVariableProvider] set. For nodes whose `systemPrompt` is
@@ -1458,6 +1563,23 @@ class GraphExecutionEngine @Inject constructor(
             "SYSTEM NOTICE: this run is close to its resource limit and may be stopped before it " +
                 "finishes. Wrap up now: produce the best answer you can from what you already have, " +
                 "and do not start new sub-tasks or additional tool calls."
+
+        /**
+         * Injected into the run's own context the first time the stuck-detector
+         * decides the run is going in circles, so the model gets a chance to
+         * break the pattern itself before the run is ended for it. This first
+         * stage is meant to be the last one: a model told that it is repeating
+         * itself usually stops.
+         *
+         * Names the observation rather than the machinery. "You have produced
+         * this before" is something a model can act on; the signal name and the
+         * repetition count are for the console, where an engineer reads them.
+         */
+        const val STUCK_CONTEXT_NOTE: String =
+            "SYSTEM NOTICE: this run appears to be repeating itself — the same work has produced the " +
+                "same result more than once, and the run will be stopped if that continues. Change " +
+                "approach or finish: give the best answer you can from what you already have, and do " +
+                "not repeat a step you have already taken."
 
         /** Lenient JSON used to parse a `QUEUE_PROCESSOR` seed list (see [parseListFromText]). */
         val listJson = Json {

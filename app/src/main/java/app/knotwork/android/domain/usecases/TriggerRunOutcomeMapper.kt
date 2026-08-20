@@ -71,7 +71,12 @@ fun triggerRunOutcomeForTerminal(
         RunTerminationKind.STEP_CEILING, RunTerminationKind.TOKEN_CEILING ->
             TriggerRunOutcome.StoppedByCeiling
         RunTerminationKind.HITL_WINDOW_EXPIRED -> TriggerRunOutcome.HitlTimeout
+        // A loop and a stall are both the automation not working. Unlike a
+        // ceiling — which is a number the user chose, doing what they chose it
+        // for — these are exactly the condition a health badge exists to show,
+        // so they redden it.
         RunTerminationKind.NO_PROGRESS,
+        RunTerminationKind.RUN_STALLED,
         RunTerminationKind.GRAPH_CHANGED,
         RunTerminationKind.PROCESS_DIED,
         RunTerminationKind.DISCARDED_BY_USER,

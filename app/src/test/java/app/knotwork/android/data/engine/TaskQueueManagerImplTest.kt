@@ -173,7 +173,21 @@ class TaskQueueManagerImplTest {
 
         val imageSlot = slot<EngineImageInput>()
         every {
-            graphExecutionEngine.invoke(any(), any(), any(), any(), any(), any(), any(), capture(imageSlot))
+            // Named rather than positional: this stub used to count arguments,
+            // and adding one to the engine's signature silently re-aimed the
+            // capture at a different parameter. The compiler caught it that
+            // time only because the types happened to disagree.
+            graphExecutionEngine.invoke(
+                sessionId = any(),
+                userPrompt = any(),
+                graph = any(),
+                runId = any(),
+                resume = any(),
+                depth = any(),
+                budget = any(),
+                stuckDetector = any(),
+                imageInput = capture(imageSlot),
+            )
         } returns flowOf(AgentOrchestratorState.Completed("ok"))
 
         taskQueueManager.enqueueTask(AgentTask(sessionId = "s1", prompt = "hi", attachment = attachment))
@@ -732,9 +746,19 @@ class TaskQueueManagerImplTest {
 
         val hadImageSlot = slot<Boolean>()
         every {
-            // ...imageInput(8), imageDelivery(9), runHadImage(10) — capture the 10th.
+            // Named rather than positional, for the reason above.
             graphExecutionEngine.invoke(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), capture(hadImageSlot),
+                sessionId = any(),
+                userPrompt = any(),
+                graph = any(),
+                runId = any(),
+                resume = any(),
+                depth = any(),
+                budget = any(),
+                stuckDetector = any(),
+                imageInput = any(),
+                imageDelivery = any(),
+                runHadImage = capture(hadImageSlot),
             )
         } returns flowOf(AgentOrchestratorState.Completed("ok"))
 
@@ -851,7 +875,7 @@ class TaskQueueManagerImplTest {
                 stalling.id,
                 PipelineRunStatus.FAILED,
                 TaskQueueManagerImpl.STALLED_MESSAGE,
-                RunTerminationReason.NoProgress,
+                RunTerminationReason.RunStalled,
             )
         }
         coVerify { pipelineRunRepository.finishRun(following.id, PipelineRunStatus.COMPLETED) }
@@ -865,7 +889,7 @@ class TaskQueueManagerImplTest {
         // record was already right while the emission dropped it, so the chat
         // put the raw message in the destructive tile under a Retry that would
         // stall all over again — the state this assertion exists to forbid.
-        assertEquals(RunTerminationReason.NoProgress, error.reason)
+        assertEquals(RunTerminationReason.RunStalled, error.reason)
     }
 
     /**
@@ -876,7 +900,7 @@ class TaskQueueManagerImplTest {
      */
     @Test
     fun `given a slow run that keeps emitting then it is not failed`() = testScope.runTest {
-        val window = taskQueueManager.noProgressTimeoutMs
+        val window = taskQueueManager.silenceTimeoutMs
         every { graphExecutionEngine.invoke(any(), any(), any(), any()) } returns flow {
             repeat(4) {
                 delay(window - 1)
@@ -901,7 +925,7 @@ class TaskQueueManagerImplTest {
      */
     @Test
     fun `given a run waiting on an approval gate then the window does not apply`() = testScope.runTest {
-        val window = taskQueueManager.noProgressTimeoutMs
+        val window = taskQueueManager.silenceTimeoutMs
         every { graphExecutionEngine.invoke(any(), any(), any(), any()) } returns flow {
             emit(AgentOrchestratorState.WaitingForApproval("echo", "{}", ToolRisk.SENSITIVE))
             delay(window * 3)
@@ -939,7 +963,7 @@ class TaskQueueManagerImplTest {
                 task.id,
                 PipelineRunStatus.FAILED,
                 TaskQueueManagerImpl.STALLED_MESSAGE,
-                RunTerminationReason.NoProgress,
+                RunTerminationReason.RunStalled,
             )
         }
     }

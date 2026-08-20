@@ -1,5 +1,6 @@
 package app.knotwork.android.domain.models
 
+import app.knotwork.android.domain.engine.stuck.StuckSignal
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -31,6 +32,41 @@ class RunNoticeCauseTest {
         val steps = RunNoticeCause.ApproachingCeiling(RunCeilingAxis.STEPS, 12, 15).diagnostic()
         val tokens = RunNoticeCause.ApproachingCeiling(RunCeilingAxis.TOKENS, 12, 15).diagnostic()
         assertTrue("the axis has to be readable off the line", steps != tokens)
+    }
+
+    @Test
+    fun `given the stuck cause then the diagnostic names the signal`() {
+        val line = RunNoticeCause.LooksStuck(StuckSignal.REPEATED_STEP).diagnostic()
+
+        assertTrue(line, line.contains(StuckSignal.REPEATED_STEP.diagnostic))
+        assertEquals("a diagnostic is lower case", line, line.lowercase())
+        assertTrue("a diagnostic is one line: '$line'", !line.contains("\n"))
+    }
+
+    @Test
+    fun `given every cause then the vocabulary is covered and the diagnostics are distinct`() {
+        // The completeness fixture `RunTerminationKind` has had since it was
+        // introduced, and that this type went without: adding a variant is
+        // otherwise caught only by the compiler's exhaustive `when`, which says
+        // nothing about whether the new cause reached a surface.
+        //
+        // Listed by hand because a sealed interface with a data-class variant
+        // has no `entries` to enumerate; the assertion below is what makes the
+        // list a checklist rather than a sample.
+        val everyCause: List<RunNoticeCause> = listOf(
+            RunNoticeCause.ApproachingCeiling(RunCeilingAxis.STEPS, 12, 15),
+            RunNoticeCause.LooksStuck(StuckSignal.NO_NEW_OUTPUT),
+        )
+        assertEquals(
+            "add the new cause to everyCause, or nothing here covers it",
+            RunNoticeCause::class.sealedSubclasses.toSet(),
+            everyCause.map { it::class }.toSet(),
+        )
+        val lines = everyCause.map { it.diagnostic() }
+        assertEquals("two causes must not log the same line", lines.size, lines.toSet().size)
+        lines.forEach { line ->
+            assertTrue("no trailing punctuation: '$line'", !line.endsWith("."))
+        }
     }
 
     @Test

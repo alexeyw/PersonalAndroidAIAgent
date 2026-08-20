@@ -33,6 +33,7 @@ class RunTerminationCopyMapperTest {
         RunTerminationReason.StepCeiling(limit = 15, spent = 15),
         RunTerminationReason.TokenCeiling(limit = 1_000_000, spent = 1_000_000),
         RunTerminationReason.NoProgress,
+        RunTerminationReason.RunStalled,
         RunTerminationReason.HitlWindowExpired,
         RunTerminationReason.GraphChanged,
         RunTerminationReason.ProcessDied,
@@ -148,6 +149,8 @@ class RunTerminationCopyMapperTest {
             RunTerminationKind.STEP_CEILING to RunTerminationAction.ADJUST_LIMITS,
             RunTerminationKind.TOKEN_CEILING to RunTerminationAction.ADJUST_LIMITS,
             RunTerminationKind.NO_PROGRESS to RunTerminationAction.OPEN_CONSOLE,
+            // A stalled run left nothing in the console to open.
+            RunTerminationKind.RUN_STALLED to RunTerminationAction.RUN_AGAIN,
             RunTerminationKind.HITL_WINDOW_EXPIRED to RunTerminationAction.RUN_AGAIN,
             RunTerminationKind.GRAPH_CHANGED to RunTerminationAction.RUN_AGAIN,
             RunTerminationKind.PROCESS_DIED to RunTerminationAction.RUN_AGAIN,

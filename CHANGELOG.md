@@ -15,6 +15,28 @@ details.
 
 ### Added
 
+- **A run that goes in circles is now caught and stopped, and told apart from a
+  run that has merely run out of allowance.** The agent watches each run for
+  repetition — the same step, on the same input, producing the same result — and
+  responds in two stages: first it tells the run, quietly in the chat and in the
+  agent's own context, so it can change course by itself; then, if nothing
+  changes, it ends the run and says *Stopped: the run was not getting anywhere*,
+  offering **Open console**, where the repeating step is visible.
+
+  This is a different protection from the run limits, not a second copy of one.
+  A limit asks how much a run has spent; this asks whether it is getting
+  anywhere. A run that keeps producing genuinely different results is not
+  repeating itself however long it takes, and is left alone — that case is what
+  the limits are for. Nothing is configurable here: how many identical steps
+  count as a loop is not a preference, and a slider would only invite widening
+  it until the protection stopped protecting.
+
+  A run that stops responding altogether — a tool or a server that never answers
+  — is now reported as its own thing (*Stopped: the run went quiet*) instead of
+  borrowing the wording for repetition. It had been showing a message about work
+  that "kept repeating", which was never what had happened to it, under an
+  action that offered to open a console with nothing in it.
+
 - **Autonomous runs now have ceilings, and a run stopped by one says so.**
   A background run — a trigger firing overnight against your own cloud API key —
   is now bounded on two axes across the whole run tree: how many pipeline steps

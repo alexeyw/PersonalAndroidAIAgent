@@ -153,6 +153,14 @@ object RunTerminationCopyMapper {
                 args = listOf(cause.spent, cause.hardLimit),
             ),
         )
+        // One sentence for both signals. The signal is the console's business;
+        // to the person watching, "this keeps repeating" is the whole story,
+        // and splitting it in two would make the reader work out which of two
+        // near-identical wordings they were shown.
+        is RunNoticeCause.LooksStuck -> RunNoticeCopy(
+            tone = RunTerminationTone.STUCK,
+            text = UiText.Resource(R.string.run_notice_looks_stuck),
+        )
     }
 
     /**
@@ -213,7 +221,7 @@ object RunTerminationCopyMapper {
      */
     fun toneFor(kind: RunTerminationKind): RunTerminationTone = when (kind) {
         RunTerminationKind.STEP_CEILING, RunTerminationKind.TOKEN_CEILING -> RunTerminationTone.LIMIT
-        RunTerminationKind.NO_PROGRESS -> RunTerminationTone.STUCK
+        RunTerminationKind.NO_PROGRESS, RunTerminationKind.RUN_STALLED -> RunTerminationTone.STUCK
         RunTerminationKind.HITL_WINDOW_EXPIRED,
         RunTerminationKind.GRAPH_CHANGED,
         RunTerminationKind.PROCESS_DIED,
@@ -231,6 +239,7 @@ object RunTerminationCopyMapper {
             RunTerminationKind.TOKEN_CEILING,
             -> R.string.run_termination_title_ceiling
             RunTerminationKind.NO_PROGRESS -> R.string.run_termination_title_no_progress
+            RunTerminationKind.RUN_STALLED -> R.string.run_termination_title_run_stalled
             RunTerminationKind.HITL_WINDOW_EXPIRED -> R.string.run_termination_title_hitl_expired
             RunTerminationKind.GRAPH_CHANGED -> R.string.run_termination_title_graph_changed
             RunTerminationKind.PROCESS_DIED -> R.string.run_termination_title_process_died
@@ -244,6 +253,7 @@ object RunTerminationCopyMapper {
             RunTerminationKind.STEP_CEILING -> R.string.run_termination_body_step_ceiling
             RunTerminationKind.TOKEN_CEILING -> R.string.run_termination_body_token_ceiling
             RunTerminationKind.NO_PROGRESS -> R.string.run_termination_body_no_progress
+            RunTerminationKind.RUN_STALLED -> R.string.run_termination_body_run_stalled
             RunTerminationKind.HITL_WINDOW_EXPIRED -> R.string.run_termination_body_hitl_expired
             RunTerminationKind.GRAPH_CHANGED -> R.string.run_termination_body_graph_changed
             RunTerminationKind.PROCESS_DIED -> R.string.run_termination_body_process_died
@@ -257,6 +267,11 @@ object RunTerminationCopyMapper {
         RunTerminationKind.TOKEN_CEILING,
         -> RunTerminationAction.ADJUST_LIMITS
         RunTerminationKind.NO_PROGRESS -> RunTerminationAction.OPEN_CONSOLE
+        // Not OPEN_CONSOLE: a run that went silent left nothing in the console
+        // to look at, which is exactly what distinguishes it from a loop. The
+        // step it hung on may well answer next time, so running it again is the
+        // one action that can help.
+        RunTerminationKind.RUN_STALLED,
         RunTerminationKind.HITL_WINDOW_EXPIRED,
         RunTerminationKind.GRAPH_CHANGED,
         RunTerminationKind.PROCESS_DIED,
@@ -278,6 +293,7 @@ object RunTerminationCopyMapper {
         )
         RunTerminationReason.HitlWindowExpired,
         RunTerminationReason.NoProgress,
+        RunTerminationReason.RunStalled,
         RunTerminationReason.GraphChanged,
         RunTerminationReason.ProcessDied,
         RunTerminationReason.DiscardedByUser,
@@ -295,6 +311,7 @@ object RunTerminationCopyMapper {
             listOf(reason.spent, reason.limit),
         )
         RunTerminationReason.NoProgress -> UiText.Resource(R.string.run_termination_banner_no_progress)
+        RunTerminationReason.RunStalled -> UiText.Resource(R.string.run_termination_banner_run_stalled)
         RunTerminationReason.HitlWindowExpired -> UiText.Resource(R.string.run_termination_banner_hitl_expired)
         RunTerminationReason.GraphChanged -> UiText.Resource(R.string.run_termination_banner_graph_changed)
         RunTerminationReason.ProcessDied -> UiText.Resource(R.string.run_termination_banner_process_died)

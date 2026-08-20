@@ -930,9 +930,9 @@ replacement.
 
 The call deadline is backed by a second, independent limit one level up:
 `TaskQueueManagerImpl` is a single serial worker, so an unbounded call does not
-merely stall its own run — it freezes every chat behind it. Its **no-progress
-valve** (`NO_PROGRESS_TIMEOUT_MS`, 5 min) fails a task that has emitted nothing
-for that long. It measures **silence, not duration**, because a healthy
+merely stall its own run — it freezes every chat behind it. Its **silence
+valve** (`SILENCE_TIMEOUT_MS`, 5 min) fails a task that has emitted nothing
+for that long, with the typed reason `RUN_STALLED`. It measures **silence, not duration**, because a healthy
 generation streams per token and must never be cut for being long; and it
 exempts the wait after `WaitingForApproval` / `AwaitingClarification`, where
 silence is the expected state, re-arming at the next emission. Two limits
@@ -1451,6 +1451,19 @@ Key invariants:
   written back to — the root run record, so a ceiling keeps binding across
   a park and resume instead of restarting; work already replayed from the
   checkpoint is never charged twice.
+
+  A second tree-shared guard rides the same `ExecutionScope` seam and
+  answers a different question. The ledger bounds what a run **spends**;
+  `GraphStuckDetector` (`domain/engine/stuck/`) bounds what it
+  **repeats** — a sliding window over executed steps, observed at the
+  same point the walk writes its `NodeIo` checkpoint, so the evidence
+  behind a stop is exactly what the console can show. It recovers in two
+  stages (a note injected into the next prompt-composing node's input,
+  then a forced stop reusing the shared `RunTerminationReason`), and a
+  replayed prefix rebuilds its window without being allowed to decide
+  the run. Precedence between the two, and the reason a run can never be
+  stopped twice with two explanations, are specified in the engine
+  contract.
 
 ### 6.2. Two-phase HITL (background approvals)
 

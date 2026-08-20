@@ -25,6 +25,8 @@ import app.knotwork.android.domain.engine.executors.ToolInvocationGate
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
 import app.knotwork.android.domain.engine.structured.CloudStructuredInferenceClientFactory
 import app.knotwork.android.domain.engine.structured.StructuredOutputGate
+import app.knotwork.android.domain.engine.stuck.GraphStuckDetector
+import app.knotwork.android.domain.engine.stuck.StuckSignal
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.ChatMessage
@@ -4059,6 +4061,265 @@ class GraphExecutionEngineTest {
         val states = engine(sessionId, "prompt", ceilingGraph(), origin = RunOrigin.CHAT).toList()
 
         assertTrue(states.last() is AgentOrchestratorState.Completed)
+    }
+
+    // endregion
+
+    // region Graph stuck-detector
+
+    /**
+     * A straight chain of prompt-composing nodes. Nothing about the graph loops
+     * — the repetition under test is in what the model keeps *saying*, which is
+     * the shape the detector actually has to recognise: the one structural
+     * cycle the validator permits (a `QUEUE_PROCESSOR` back-edge) only becomes
+     * a defect when its iterations stop differing.
+     *
+     * @param count How many `LITE_RT` nodes sit between INPUT and OUTPUT.
+     * @return The graph.
+     */
+    private fun repeatingChainGraph(count: Int): PipelineGraph {
+        val llmIds = (1..count).map { "llm_$it" }
+        val ids = listOf("input_1") + llmIds + "output_1"
+        return PipelineGraph(
+            id = "g-stuck",
+            name = "Stuck",
+            nodes = listOf(NodeModel("input_1", NodeType.INPUT, 0f, 0f)) +
+                llmIds.map { NodeModel(it, NodeType.LITE_RT, 0f, 0f, systemPrompt = "work") } +
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            connections = ids.zipWithNext().mapIndexed { i, (from, to) ->
+                ConnectionModel("c$i", from, to)
+            },
+        )
+    }
+
+    @Test
+    fun `given a run that keeps saying the same thing then it is warned once and keeps going`() = runTest {
+        // Only a nudge: the grace period is set beyond the length of the run,
+        // so this proves the first stage does not end anything.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(50)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("the same answer")
+
+        val states = engine(
+            sessionId,
+            "prompt",
+            repeatingChainGraph(count = 3),
+            stuckDetector = GraphStuckDetector(staleStreak = 2, graceSteps = 99),
+        ).toList()
+
+        assertTrue("a nudged run must still finish", states.last() is AgentOrchestratorState.Completed)
+
+        // Asserted positively. A suite that only checks the notice is *absent*
+        // is satisfied by an implementation that never emits one at all.
+        val notices = states.filterIsInstance<AgentOrchestratorState.RunNotice>()
+        assertEquals(1, notices.size)
+        assertEquals(RunNoticeCause.LooksStuck(StuckSignal.NO_NEW_OUTPUT), notices.single().cause)
+
+        val stuckLines = states.filterIsInstance<AgentOrchestratorState.ConsoleLog>()
+            .last().events
+            .filter { it.type == ConsoleEventType.StuckDetector }
+        // Once, not once per remaining node.
+        assertEquals(1, stuckLines.size)
+        assertTrue(stuckLines.single().message, stuckLines.single().message.contains("looks-stuck"))
+    }
+
+    @Test
+    fun `given a nudge that changes nothing then the run is stopped with NoProgress`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(50)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("the same answer")
+
+        val states = engine(
+            sessionId,
+            "prompt",
+            repeatingChainGraph(count = 6),
+            stuckDetector = GraphStuckDetector(staleStreak = 2, graceSteps = 1),
+        ).toList()
+
+        val error = states.last() as AgentOrchestratorState.Error
+        // The shared vocabulary, not a second one invented for the detector.
+        assertEquals(RunTerminationReason.NoProgress, error.reason)
+        assertEquals("no-progress", error.message)
+        // And the console files it under the detector, not under the ceilings —
+        // a reader who greps for a limit must not find a loop.
+        //
+        // Asserted on the terminal line specifically. "A detector line exists"
+        // is satisfied by the *nudge* that preceded it, so that weaker check
+        // stayed green when the stop was filed under the ceiling channel.
+        val events = states.filterIsInstance<AgentOrchestratorState.ConsoleLog>().last().events
+        val terminalLines = events.filter { it.message == "no-progress" }
+        assertEquals("the stop writes exactly one terminal line", 1, terminalLines.size)
+        assertEquals(ConsoleEventType.StuckDetector, terminalLines.single().type)
+        assertTrue(
+            "no ceiling bound this run, so no ceiling line may claim it",
+            events.none { it.type == ConsoleEventType.RunCeiling },
+        )
+    }
+
+    @Test
+    fun `given a stuck run then the ceiling did not stop it`() = runTest {
+        // The claim that justifies the detector existing beside the ceilings:
+        // it reaches a verdict first. With the shipped thresholds and the
+        // default ceiling of 15 steps, a repeating run is ended by the detector
+        // — and the reason the user is shown says so.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("the same answer")
+
+        val states = engine(sessionId, "prompt", repeatingChainGraph(count = 14)).toList()
+
+        val error = states.last() as AgentOrchestratorState.Error
+        assertEquals(RunTerminationReason.NoProgress, error.reason)
+    }
+
+    @Test
+    fun `given the detector nudges then the next prompt-composing node is told to change course`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(50)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("the same answer")
+
+        val states = engine(
+            sessionId,
+            "prompt",
+            repeatingChainGraph(count = 4),
+            stuckDetector = GraphStuckDetector(staleStreak = 2, graceSteps = 99),
+        ).toList()
+
+        val nodeInputs = states.filterIsInstance<AgentOrchestratorState.NodeIO>().associate { it.nodeId to it.input }
+        // llm_1 produces the first (novel) answer, llm_2 repeats it (streak 1),
+        // llm_3 repeats it again (streak 2) and raises the nudge, so llm_4 is
+        // the node that gets told.
+        assertTrue(
+            "the node after the nudge must be told to change course; got: ${nodeInputs["llm_4"]}",
+            nodeInputs.getValue("llm_4").contains("repeating itself"),
+        )
+        assertFalse(
+            "a node before the nudge must not be warned",
+            nodeInputs.getValue("llm_2").contains("SYSTEM NOTICE"),
+        )
+    }
+
+    @Test
+    fun `given a pass-through OUTPUT then the stuck notice never reaches the answer`() = runTest {
+        // The invariant the soft-ceiling note had to learn twice: the note goes
+        // into one node's composed prompt, never into the text travelling
+        // between nodes, which a pass-through OUTPUT persists verbatim as the
+        // agent's chat message.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(50)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("the same answer")
+
+        val states = engine(
+            sessionId,
+            "prompt",
+            repeatingChainGraph(count = 3),
+            stuckDetector = GraphStuckDetector(staleStreak = 2, graceSteps = 99),
+        ).toList()
+
+        val completed = states.last() as AgentOrchestratorState.Completed
+        assertEquals("the same answer", completed.finalResponse)
+        assertFalse(
+            "the internal notice must not be part of the answer",
+            completed.finalResponse.contains("SYSTEM NOTICE"),
+        )
+    }
+
+    @Test
+    fun `given an INTENT_ROUTER after the nudge then the notice still never reaches the answer`() = runTest {
+        // The router is the case that defeated a guard on "which node receives
+        // the note": it composes a prompt, so it is handed one, but its walk arm
+        // forwards `currentInputText` unchanged — so a note written there
+        // outlives it and reaches a pass-through OUTPUT.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(50)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("Blue")
+
+        val graph = PipelineGraph(
+            id = "g-router-stuck",
+            name = "RouterStuck",
+            nodes = listOf(
+                NodeModel("input_1", NodeType.INPUT, 0f, 0f),
+                NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f, systemPrompt = "work"),
+                NodeModel("llm_2", NodeType.LITE_RT, 0f, 0f, systemPrompt = "work"),
+                NodeModel("router_1", NodeType.INTENT_ROUTER, 0f, 0f, systemPrompt = "route"),
+                NodeModel("output_1", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("c1", "input_1", "llm_1"),
+                ConnectionModel("c2", "llm_1", "llm_2"),
+                ConnectionModel("c3", "llm_2", "router_1"),
+                ConnectionModel("c4", "router_1", "output_1"),
+            ),
+        )
+
+        val states = engine(
+            sessionId,
+            "prompt",
+            graph,
+            stuckDetector = GraphStuckDetector(staleStreak = 2, graceSteps = 99),
+        ).toList()
+
+        val completed = states.last() as AgentOrchestratorState.Completed
+        assertFalse(
+            "the internal notice must not survive the router and become the answer",
+            completed.finalResponse.contains("SYSTEM NOTICE"),
+        )
+    }
+
+    @Test
+    fun `given both a soft ceiling and the detector speak then neither note erases the other`() = runTest {
+        // The single-slot bug this list replaced: a long repeating run crosses
+        // its soft ceiling *and* trips the detector, and whichever spoke second
+        // used to silently overwrite the other's advice.
+        //
+        // hard = 8 gives softFor(8) = 6, and the nodes charge 1..8, so the
+        // crossing lands on llm_5 (the sixth step) — the same node the detector
+        // is arranged to nudge on.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(8)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("the same answer")
+
+        val states = engine(
+            sessionId,
+            "prompt",
+            repeatingChainGraph(count = 6),
+            stuckDetector = GraphStuckDetector(staleStreak = 4, graceSteps = 99),
+        ).toList()
+
+        val nodeInputs = states.filterIsInstance<AgentOrchestratorState.NodeIO>().associate { it.nodeId to it.input }
+        val warned = nodeInputs.getValue("llm_6")
+        assertTrue("the ceiling's advice must survive; got: $warned", warned.contains("close to its resource limit"))
+        assertTrue("the detector's advice must survive; got: $warned", warned.contains("repeating itself"))
+    }
+
+    @Test
+    fun `given a replayed prefix that repeats then the resumed run is not stopped on it`() = runTest {
+        // A resume must rebuild the window rather than start blind — a run that
+        // parks often is exactly the one that may be looping. But the attempt
+        // that ran this prefix did not stop on it, and reaching a different
+        // verdict now would rewrite what already happened.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(50)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("fresh answer")
+
+        // The prefix is long enough that acting on it WOULD end the run: with
+        // these thresholds the third record nudges and the fourth stops. A
+        // shorter prefix could never have failed this test whatever the engine
+        // did with it.
+        val graph = repeatingChainGraph(count = 5)
+        val resume = ResumeContext(
+            records = (1..4).map { i ->
+                nodeIoRecord("run-stuck", i.toLong(), "llm_$i", NodeType.LITE_RT, "the same answer")
+            },
+            memorySnapshot = null,
+            nextSeq = 5L,
+        )
+
+        val states = engine(
+            sessionId,
+            "prompt",
+            graph,
+            "run-stuck",
+            resume,
+            stuckDetector = GraphStuckDetector(staleStreak = 2, graceSteps = 1),
+        ).toList()
+
+        assertTrue(
+            "a replayed prefix must not end the resumed run: ${states.last()}",
+            states.last() is AgentOrchestratorState.Completed,
+        )
     }
 
     // endregion

@@ -98,6 +98,14 @@
     <string name="run_termination_title_no_progress">Stopped: the run was not getting anywhere</string>
     <string name="run_termination_body_no_progress">The same work kept repeating without moving the task forward, so the run was ended.</string>
 
+    <!-- A stalled run and a looping one are opposite shapes and must not share a
+         sentence: this one emitted nothing at all, which is what a step waiting
+         on an external tool that never answers looks like. Telling that user
+         that work "kept repeating" would send them to a console with nothing
+         in it. -->
+    <string name="run_termination_title_run_stalled">Stopped: the run went quiet</string>
+    <string name="run_termination_body_run_stalled">A step stopped responding — most often a tool or a server that never answered — so the run was ended to free the queue.</string>
+
     <string name="run_termination_title_hitl_expired">Stopped waiting for your approval</string>
     <string name="run_termination_body_hitl_expired">A step needed your approval and the waiting window closed before an answer arrived.</string>
 
@@ -129,6 +137,7 @@
     <string name="run_termination_banner_step_ceiling" tools:ignore="PluralsCandidate">Stopped by a safety limit — used %1$,d of %2$,d steps.</string>
     <string name="run_termination_banner_token_ceiling" tools:ignore="PluralsCandidate">Stopped by a safety limit — used %1$,d of %2$,d tokens.</string>
     <string name="run_termination_banner_no_progress">Stopped: the run was not getting anywhere.</string>
+    <string name="run_termination_banner_run_stalled">Stopped: a step never answered.</string>
     <string name="run_termination_banner_hitl_expired">Stopped waiting for your approval.</string>
     <string name="run_termination_banner_graph_changed">The pipeline changed while this run was paused.</string>
     <string name="run_termination_banner_process_died">The app stopped while this run was working.</string>
@@ -145,11 +154,13 @@
 
     <string name="run_notice_soft_steps" tools:ignore="PluralsCandidate">Nearing the step limit: %1$,d of %2$,d steps used.</string>
     <string name="run_notice_soft_tokens" tools:ignore="PluralsCandidate">Nearing the token limit: %1$,d of %2$,d tokens used.</string>
-    <!-- The stuck-detector's sentence is NOT declared here. Its cause has no
-         producer yet, and an unreferenced resource fails lint. The notice
-         *component* carries both tones and both are captured in the catalog
-         snapshots, so the surface is settled; the detector adds its own
-         `RunNoticeCause` variant and its own string. -->
+    <!-- The stuck-detector's sentence, held back until its cause had a producer
+         because an unreferenced resource fails lint. The wording is the one
+         already frozen in the catalog snapshot beside the soft-ceiling notice,
+         so the surface renders what was reviewed. Carries no numbers: a
+         repetition count is evidence for the console, not for a one-line
+         advisory. -->
+    <string name="run_notice_looks_stuck">This run looks stuck — the same step keeps repeating. It will stop if nothing changes.</string>
 
     <!-- ─── Background-run notification ───────────────────────────────── -->
 
