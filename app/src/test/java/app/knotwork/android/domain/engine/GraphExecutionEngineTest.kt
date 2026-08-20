@@ -4102,7 +4102,7 @@ class GraphExecutionEngineTest {
         val states = engine(
             sessionId,
             "prompt",
-            repeatingChainGraph(count = 3),
+            repeatingChainGraph(count = 5),
             stuckDetector = GraphStuckDetector(staleStreak = 2, graceSteps = 99),
         ).toList()
 
@@ -4130,7 +4130,7 @@ class GraphExecutionEngineTest {
         val states = engine(
             sessionId,
             "prompt",
-            repeatingChainGraph(count = 6),
+            repeatingChainGraph(count = 9),
             stuckDetector = GraphStuckDetector(staleStreak = 2, graceSteps = 1),
         ).toList()
 
@@ -4155,18 +4155,66 @@ class GraphExecutionEngineTest {
     }
 
     @Test
-    fun `given a stuck run then the ceiling did not stop it`() = runTest {
-        // The claim that justifies the detector existing beside the ceilings:
-        // it reaches a verdict first. With the shipped thresholds and the
-        // default ceiling of 15 steps, a repeating run is ended by the detector
-        // — and the reason the user is shown says so.
+    fun `given the detector stops a run then the step it stopped on is in the trace`() = runTest {
+        // The stop's entire user-facing promise is **Open console**, "where the
+        // repetition is visible". Leaving the walk before the trace append
+        // dropped the one step the verdict was actually reached on, so the
+        // console was missing exactly the evidence the reader was sent to find.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(50)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("the same answer")
+        val appended = mutableListOf<RunTraceRecord>()
+        coEvery { runTraceRepository.append(capture(appended)) } returns Unit
+
+        // Which node the walk was standing on is recorded at the TOP of each
+        // iteration, so it survives the `break` whatever the trace does. That
+        // independence is the point: comparing the trace against the NodeIO
+        // emissions instead compared two things that disappear together, and
+        // passed with the bug in place.
+        val visited = mutableListOf<String>()
+        coEvery { pipelineRunRepository.updateCurrentNode(any(), capture(visited)) } returns Unit
+
+        val states = engine(
+            sessionId,
+            "prompt",
+            repeatingChainGraph(count = 9),
+            "run-stuck-trace",
+            stuckDetector = GraphStuckDetector(staleStreak = 2, graceSteps = 1),
+        ).toList()
+
+        val error = states.last() as AgentOrchestratorState.Error
+        assertEquals(RunTerminationReason.NoProgress, error.reason)
+
+        val tracedNodes = appended.filterIsInstance<RunTraceRecord.NodeIo>().map { it.nodeId }
+        assertEquals(
+            "the step the detector stopped on must be in the console it sends the user to",
+            visited.last(),
+            tracedNodes.last(),
+        )
+    }
+
+    @Test
+    fun `given a straight chain that merely repeats itself then the ceiling stops it, not the detector`() = runTest {
+        // A characterisation test, and a deliberate limit rather than a gap.
+        //
+        // A straight chain never visits a node twice, so REPEATED_STEP — the
+        // detector's fast signal, and the one that beats the ceiling on a real
+        // cycle — cannot fire on it at all. What is left is NO_NEW_OUTPUT,
+        // which needs the run to have stopped being asked anything new as well
+        // as having stopped saying anything new; on a chain where every node
+        // composes a slightly different prompt, and where the nudge's own note
+        // makes one more prompt look new, that takes longer than the default
+        // fifteen steps.
+        //
+        // This is the right way round to be wrong: the run is spending, and
+        // spending is precisely what the ceilings measure. Pinned here so the
+        // claim in the docs stays the one the code can keep.
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
         every { llmEngine.generateResponseStream(any()) } returns flowOf("the same answer")
 
         val states = engine(sessionId, "prompt", repeatingChainGraph(count = 14)).toList()
 
         val error = states.last() as AgentOrchestratorState.Error
-        assertEquals(RunTerminationReason.NoProgress, error.reason)
+        assertEquals(RunTerminationReason.StepCeiling(limit = 15, spent = 15), error.reason)
     }
 
     @Test
@@ -4177,17 +4225,19 @@ class GraphExecutionEngineTest {
         val states = engine(
             sessionId,
             "prompt",
-            repeatingChainGraph(count = 4),
+            repeatingChainGraph(count = 5),
             stuckDetector = GraphStuckDetector(staleStreak = 2, graceSteps = 99),
         ).toList()
 
         val nodeInputs = states.filterIsInstance<AgentOrchestratorState.NodeIO>().associate { it.nodeId to it.input }
-        // llm_1 produces the first (novel) answer, llm_2 repeats it (streak 1),
-        // llm_3 repeats it again (streak 2) and raises the nudge, so llm_4 is
-        // the node that gets told.
+        // llm_1 answers first (novel output, and the first prompt of its
+        // shape); llm_2 repeats the answer but is still being handed something
+        // new; llm_3 and llm_4 repeat both, which is where the progress streak
+        // and the input-staleness counter both reach 2. So llm_4 raises the
+        // nudge and llm_5 is the node that gets told.
         assertTrue(
-            "the node after the nudge must be told to change course; got: ${nodeInputs["llm_4"]}",
-            nodeInputs.getValue("llm_4").contains("repeating itself"),
+            "the node after the nudge must be told to change course; got: ${nodeInputs["llm_5"]}",
+            nodeInputs.getValue("llm_5").contains("repeating itself"),
         )
         assertFalse(
             "a node before the nudge must not be warned",
@@ -4207,7 +4257,7 @@ class GraphExecutionEngineTest {
         val states = engine(
             sessionId,
             "prompt",
-            repeatingChainGraph(count = 3),
+            repeatingChainGraph(count = 5),
             stuckDetector = GraphStuckDetector(staleStreak = 2, graceSteps = 99),
         ).toList()
 
@@ -4269,6 +4319,12 @@ class GraphExecutionEngineTest {
         // hard = 8 gives softFor(8) = 6, and the nodes charge 1..8, so the
         // crossing lands on llm_5 (the sixth step) — the same node the detector
         // is arranged to nudge on.
+        // Arranged so both guards speak in the SAME gap, which is the only way
+        // one can erase the other: hard = 8 gives softFor(8) = 6, and the walk
+        // charges INPUT plus llm_1..llm_5 to reach 6 on llm_5 — the same node
+        // where the progress streak (4) and the input-staleness counter (3)
+        // both clear a stale streak of 3. Both notes are queued there and both
+        // must reach llm_6.
         every { settingsRepository.pipelineMaxSteps } returns flowOf(8)
         every { llmEngine.generateResponseStream(any()) } returns flowOf("the same answer")
 
@@ -4276,13 +4332,82 @@ class GraphExecutionEngineTest {
             sessionId,
             "prompt",
             repeatingChainGraph(count = 6),
-            stuckDetector = GraphStuckDetector(staleStreak = 4, graceSteps = 99),
+            stuckDetector = GraphStuckDetector(staleStreak = 3, graceSteps = 99),
         ).toList()
 
         val nodeInputs = states.filterIsInstance<AgentOrchestratorState.NodeIO>().associate { it.nodeId to it.input }
         val warned = nodeInputs.getValue("llm_6")
         assertTrue("the ceiling's advice must survive; got: $warned", warned.contains("close to its resource limit"))
         assertTrue("the detector's advice must survive; got: $warned", warned.contains("repeating itself"))
+    }
+
+    @Test
+    fun `given the nudge is raised before a sub-pipeline then the child still receives it`() = runTest {
+        // The grace period is spent by steps at EVERY depth, so a nudge raised
+        // just before a PIPELINE node has its clock run down by the child's
+        // steps. With the note held in the parent's own invocation it could
+        // never reach that child, and the run would be stopped for ignoring
+        // advice no model in the tree was ever given.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(50)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("the same answer")
+
+        val subGraph = PipelineGraph(
+            id = "sub-stuck",
+            name = "Sub",
+            nodes = listOf(
+                NodeModel("sub_in", NodeType.INPUT, 0f, 0f),
+                NodeModel("sub_llm", NodeType.LITE_RT, 10f, 0f, systemPrompt = "work"),
+                NodeModel("sub_out", NodeType.OUTPUT, 20f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("sc1", "sub_in", "sub_llm"),
+                ConnectionModel("sc2", "sub_llm", "sub_out"),
+            ),
+        )
+        coEvery { pipelineRepository.getPipelineById("sub-stuck") } returns subGraph
+
+        // The parent repeats itself enough to earn the nudge, and the only
+        // prompt-composing node left after it lives inside the child.
+        val mainGraph = PipelineGraph(
+            id = "main-stuck",
+            name = "Main",
+            nodes = listOf(
+                NodeModel("main_in", NodeType.INPUT, 0f, 0f),
+                NodeModel("llm_1", NodeType.LITE_RT, 0f, 0f, systemPrompt = "work"),
+                NodeModel("llm_2", NodeType.LITE_RT, 0f, 0f, systemPrompt = "work"),
+                NodeModel("llm_3", NodeType.LITE_RT, 0f, 0f, systemPrompt = "work"),
+                NodeModel("llm_4", NodeType.LITE_RT, 0f, 0f, systemPrompt = "work"),
+                NodeModel("pipe_node", NodeType.PIPELINE, 0f, 0f, targetPipelineId = "sub-stuck"),
+                NodeModel("main_out", NodeType.OUTPUT, 0f, 0f, systemPrompt = null),
+            ),
+            connections = listOf(
+                ConnectionModel("mc1", "main_in", "llm_1"),
+                ConnectionModel("mc2", "llm_1", "llm_2"),
+                ConnectionModel("mc3", "llm_2", "llm_3"),
+                ConnectionModel("mc4", "llm_3", "llm_4"),
+                ConnectionModel("mc5", "llm_4", "pipe_node"),
+                ConnectionModel("mc6", "pipe_node", "main_out"),
+            ),
+        )
+
+        val states = engine(
+            sessionId,
+            "prompt",
+            mainGraph,
+            stuckDetector = GraphStuckDetector(staleStreak = 2, graceSteps = 99),
+        ).toList()
+
+        val inputs = states.filterIsInstance<AgentOrchestratorState.NodeIO>()
+        assertTrue(
+            "the nudge must have been raised at all",
+            states.filterIsInstance<AgentOrchestratorState.RunNotice>().isNotEmpty(),
+        )
+        val childInput = inputs.firstOrNull { it.nodeId == "sub_llm" }?.input
+        assertNotNull("the child's LITE_RT must have run", childInput)
+        assertTrue(
+            "the advice must cross the sub-pipeline boundary; got: $childInput",
+            childInput!!.contains("repeating itself"),
+        )
     }
 
     @Test

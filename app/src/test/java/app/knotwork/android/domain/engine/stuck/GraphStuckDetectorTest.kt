@@ -169,7 +169,7 @@ class GraphStuckDetectorTest {
     @Test
     fun `given identical steps by different nodes then they are not one node repeating`() {
         val detector = GraphStuckDetector(staleStreak = 99)
-        detector.observe(step("seed", "start", "list"))
+        detector.observe(step("seed", "start", "out"))
         detector.observe(step("a", "in", "out"))
         detector.observe(step("b", "in", "out"))
         assertEquals(StuckVerdict.Healthy, detector.observe(step("c", "in", "out")))
@@ -180,15 +180,17 @@ class GraphStuckDetectorTest {
     @Test
     fun `given a whole streak of steps that say nothing new then the run is nudged`() {
         val detector = GraphStuckDetector()
-        detector.observe(step("seed", "start", "known"))
-        // Distinct nodes and inputs each time, so REPEATED_STEP cannot fire —
-        // only the streak is left to notice.
+        detector.observe(step("seed", "asked", "known"))
+        // Distinct *nodes* each time, so REPEATED_STEP cannot fire — only the
+        // streak is left to notice. The input is held constant on purpose: a
+        // run still being handed something new is one this signal must leave
+        // alone, however repetitive its answers (see the draining-queue test).
         repeat(GraphStuckDetector.STALE_STREAK - 1) { i ->
-            assertEquals("iteration $i", StuckVerdict.Healthy, detector.observe(step("n$i", "in$i", "known")))
+            assertEquals("iteration $i", StuckVerdict.Healthy, detector.observe(step("n$i", "asked", "known")))
         }
         assertEquals(
             StuckVerdict.Nudge(StuckSignal.NO_NEW_OUTPUT),
-            detector.observe(step("last", "in-last", "known")),
+            detector.observe(step("last", "asked", "known")),
         )
     }
 
@@ -203,6 +205,20 @@ class GraphStuckDetectorTest {
             detector.observe(passThrough(it, "the answer"))
         }
         assertTrue("no ordinary run may be nudged: $verdicts", verdicts.all { it == StuckVerdict.Healthy })
+    }
+
+    @Test
+    fun `given a queue whose items all answer identically then it is still not accused`() {
+        // The false positive the input conjunct exists for. Twelve recipients
+        // marked through one tool that answers `{"status":"ok"}` for each: one
+        // novel output and eleven repeats, which is no progress by the rule and
+        // a stall by any streak worth setting. What separates it from a loop is
+        // that the run is being asked something new every time.
+        val detector = GraphStuckDetector()
+        repeat(12) { item ->
+            val verdict = detector.observe(step("mark", "recipient $item", """{"status":"ok"}"""))
+            assertEquals("item $item", StuckVerdict.Healthy, verdict)
+        }
     }
 
     @Test
@@ -286,6 +302,30 @@ class GraphStuckDetectorTest {
     }
 
     @Test
+    fun `given a run that recovers and relapses then it is stopped without a second warning`() {
+        // Deliberate, and the alternative is worse: rearming the escalation on
+        // every recovery is what a loop alternating three repetitions with one
+        // productive step — a queue re-seeding itself — would exploit forever.
+        // A run gets one chance to take the advice, not one per episode.
+        val detector = GraphStuckDetector()
+        detector.observe(step("seed", "start", "out"))
+        repeat(2) { detector.observe(step("loop", "in", "out")) }
+        assertEquals(StuckVerdict.Nudge(StuckSignal.REPEATED_STEP), detector.observe(step("loop", "in", "out")))
+
+        // It takes the advice and works productively for a long stretch.
+        repeat(GraphStuckDetector.WINDOW_SIZE * 2) { i ->
+            assertEquals("recovery step $i", StuckVerdict.Healthy, detector.observe(step("w", "in-$i", "new $i")))
+        }
+
+        // Then it relapses. The grace period was spent long ago, so this stops.
+        repeat(GraphStuckDetector.REPEAT_THRESHOLD - 1) { detector.observe(step("loop2", "x", "new 0")) }
+        assertEquals(
+            StuckVerdict.Stop(StuckSignal.REPEATED_STEP),
+            detector.observe(step("loop2", "x", "new 0")),
+        )
+    }
+
+    @Test
     fun `given a run already stopped then it is never stopped twice`() {
         // The engine breaks out of its walk on the first Stop, but a detector
         // that kept returning one would make a second caller's control flow
@@ -316,8 +356,10 @@ class GraphStuckDetectorTest {
         // attempt that ran this prefix did not stop on it, and reaching a
         // different verdict now would rewrite what already happened.
         val detector = GraphStuckDetector()
-        detector.replay(step("seed", "start", "list"))
-        repeat(GraphStuckDetector.REPEAT_THRESHOLD + GraphStuckDetector.GRACE_STEPS) {
+        detector.replay(step("seed", "start", "out"))
+        // One repetition short of the nudge, so the prefix itself earns nothing
+        // and only the warmth of the window is under test here.
+        repeat(GraphStuckDetector.REPEAT_THRESHOLD - 1) {
             detector.replay(step("loop", "in", "out"))
         }
 
@@ -331,6 +373,28 @@ class GraphStuckDetectorTest {
         val detector = GraphStuckDetector()
         repeat(GraphStuckDetector.WINDOW_SIZE) { i -> detector.replay(step("n$i", "in$i", "out$i")) }
         assertEquals(StuckVerdict.Healthy, detector.observe(step("next", "in-next", "out-next")))
+    }
+
+    @Test
+    fun `given a replayed prefix that had already earned a nudge then the resumed run does not start over`() {
+        // The escape that made the per-attempt step budget useless in the task
+        // before this one: answering a background approval is a RESUME, so a
+        // loop that raises one gate per iteration gets a fresh everything after
+        // every answer. If the escalation restarted here too, a loop that parks
+        // more often than the grace period would never be stopped by the
+        // detector at all.
+        val detector = GraphStuckDetector()
+        detector.replay(step("seed", "start", "out"))
+        repeat(GraphStuckDetector.REPEAT_THRESHOLD + GraphStuckDetector.GRACE_STEPS) {
+            detector.replay(step("loop", "in", "out"))
+        }
+
+        // The replayed prefix earned a nudge and spent its grace. The first
+        // live repetition therefore stops the run rather than nudging it again.
+        assertEquals(
+            StuckVerdict.Stop(StuckSignal.REPEATED_STEP),
+            detector.observe(step("loop", "in", "out")),
+        )
     }
 
     // ─── Thresholds ──────────────────────────────────────────────────────────

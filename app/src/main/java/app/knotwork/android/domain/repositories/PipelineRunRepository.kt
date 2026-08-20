@@ -90,7 +90,7 @@ interface PipelineRunRepository {
      * @param errorMessage Failure or interruption reason; `null` for
      *   successful or cancelled runs.
      * @param reason The typed cause when the app itself decided to end the run
-     *   — a ceiling, the no-progress watchdog, an expired approval window, a
+     *   — a ceiling, the stuck-detector, the silence watchdog, an expired approval window, a
      *   changed graph, a dead process, a user discard. `null` for a completion
      *   and for an ordinary node failure, which have no entry in that
      *   vocabulary. Consumers that need to tell a protective stop from a

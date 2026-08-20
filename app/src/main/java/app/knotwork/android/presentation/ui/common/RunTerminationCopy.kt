@@ -221,6 +221,12 @@ object RunTerminationCopyMapper {
      */
     fun toneFor(kind: RunTerminationKind): RunTerminationTone = when (kind) {
         RunTerminationKind.STEP_CEILING, RunTerminationKind.TOKEN_CEILING -> RunTerminationTone.LIMIT
+        // A stall shares the STUCK tone with a loop rather than sitting with the
+        // housekeeping reasons, because the trigger journal already calls it a
+        // Failure and reddens the health badge for it. INFO is documented as
+        // implying nothing about the pipeline's quality; the two cannot both be
+        // right about the same event, and a hung tool is a defect the app
+        // caught, not the app being restarted.
         RunTerminationKind.NO_PROGRESS, RunTerminationKind.RUN_STALLED -> RunTerminationTone.STUCK
         RunTerminationKind.HITL_WINDOW_EXPIRED,
         RunTerminationKind.GRAPH_CHANGED,

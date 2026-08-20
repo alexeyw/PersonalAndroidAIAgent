@@ -26,10 +26,12 @@ details.
   This is a different protection from the run limits, not a second copy of one.
   A limit asks how much a run has spent; this asks whether it is getting
   anywhere. A run that keeps producing genuinely different results is not
-  repeating itself however long it takes, and is left alone — that case is what
-  the limits are for. Nothing is configurable here: how many identical steps
-  count as a loop is not a preference, and a slider would only invite widening
-  it until the protection stopped protecting.
+  repeating itself however long it takes, and is left alone — and neither is a
+  run still being handed something new each time, even when its answers look
+  alike, which is what a long list of similar tasks looks like from the inside.
+  Those cases are what the limits are for. Nothing is configurable here: how
+  many identical steps count as a loop is not a preference, and a slider would
+  only invite widening it until the protection stopped protecting.
 
   A run that stops responding altogether — a tool or a server that never answers
   — is now reported as its own thing (*Stopped: the run went quiet*) instead of

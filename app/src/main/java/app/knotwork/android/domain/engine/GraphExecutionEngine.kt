@@ -23,6 +23,7 @@ import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.ResumeContext
 import app.knotwork.android.domain.models.RunBudgetLedger
+import app.knotwork.android.domain.models.RunContextNotes
 import app.knotwork.android.domain.models.RunGeneratingModel
 import app.knotwork.android.domain.models.RunImageDelivery
 import app.knotwork.android.domain.models.RunNoticeCause
@@ -161,6 +162,11 @@ class GraphExecutionEngine @Inject constructor(
      *   rebuilt from the replayed prefix instead, because what it needs is the
      *   sequence of steps, which the run trace already holds and the run record
      *   does not.
+     * @param contextNotes Advice raised for the run but not yet delivered to a
+     *   model, shared across the whole tree for the same reason [stuckDetector]
+     *   is: the detector's grace period counts steps at every depth, so a note
+     *   held in one invocation could have its clock run down by a sub-pipeline
+     *   it could never reach. `null` (the default) makes the engine build one.
      * @param imageInput The **top-level** run's single image attachment, already
      *   resolved to an absolute path + dimensions + byte size, or `null` for a
      *   text-only run (and always `null` for a sub-pipeline invocation, which
@@ -211,6 +217,7 @@ class GraphExecutionEngine @Inject constructor(
         depth: Int = 0,
         budget: RunBudgetLedger? = null,
         stuckDetector: GraphStuckDetector? = null,
+        contextNotes: RunContextNotes? = null,
         imageInput: EngineImageInput? = null,
         imageDelivery: RunImageDelivery? = null,
         runHadImage: Boolean = false,
@@ -371,6 +378,8 @@ class GraphExecutionEngine @Inject constructor(
         // starting blind — which matters precisely because a run that parks
         // often is a run in a loop.
         val runStuckDetector = stuckDetector ?: GraphStuckDetector()
+        // Shared for the same reason the detector is — see the parameter doc.
+        val runContextNotes = contextNotes ?: RunContextNotes()
         // Per-`PIPELINE`-node visit counter. A PIPELINE node inside a loop
         // (QUEUE_PROCESSOR) executes once per item; the index disambiguates the
         // child run id of each visit and is re-derived deterministically on
@@ -562,19 +571,6 @@ class GraphExecutionEngine @Inject constructor(
         // post-loop branch can say which one bound instead of re-deriving it.
         var terminationReason: RunTerminationReason? = null
 
-        // Notes the run has to be told about, waiting for a node that composes
-        // a prompt to tell them to. A crossing or a stuck verdict announces
-        // itself on the console immediately (below, where it happens) but
-        // reaches the model only on the next node — the walk rewrites
-        // `currentInputText` after the charge site, so a note prepended there
-        // would be overwritten before anything read it.
-        //
-        // A list rather than the boolean this used to be, because there are now
-        // two writers: a long loop crosses its soft ceiling *and* trips the
-        // detector, and with a single slot whichever spoke second would silently
-        // erase the other's advice.
-        val pendingContextNotes = mutableListOf<String>()
-
         while (currentNode != null) {
             // Ask the ledger before charging, so a node that is refused is never
             // counted: a run stopped at the ceiling has spent exactly the
@@ -749,13 +745,11 @@ class GraphExecutionEngine @Inject constructor(
                     // pollution outlived the router and reached OUTPUT anyway.
                     // Scoping it to one node's input makes that structurally
                     // impossible rather than conditionally avoided.
-                    if (pendingContextNotes.isNotEmpty()) {
-                        val notes = pendingContextNotes.joinToString(separator = "\n\n")
-                        pendingContextNotes.clear()
-                        "$notes\n\n$composed"
-                    } else {
-                        composed
-                    }
+                    // A crossing or a stuck verdict announces itself on the
+                    // console where it happens, but reaches the model only
+                    // here, on the next node that composes a prompt.
+                    val notes = runContextNotes.drain()
+                    if (notes != null) "$notes\n\n$composed" else composed
                 } else {
                     currentInputText
                 }
@@ -810,6 +804,7 @@ class GraphExecutionEngine @Inject constructor(
                             depth = depth,
                             budget = runBudget,
                             stuckDetector = runStuckDetector,
+                            contextNotes = runContextNotes,
                             pipelineVisitIndex = pipelineVisitIndex,
                             routingChoices = routingChoices,
                             imagePath = imagePathForNode,
@@ -960,7 +955,7 @@ class GraphExecutionEngine @Inject constructor(
                         )
                         pushConsole(ConsoleEventType.RunCeiling, cause.diagnostic())
                         emit(AgentOrchestratorState.RunNotice(cause))
-                        pendingContextNotes += SOFT_CEILING_CONTEXT_NOTE
+                        runContextNotes.add(SOFT_CEILING_CONTEXT_NOTE)
                     }
                 }
             }
@@ -991,57 +986,6 @@ class GraphExecutionEngine @Inject constructor(
                     ConsoleEventType.NodeExecution,
                     "✓ ${currentNode.type.name} in ${nodeDurationMs}ms",
                 )
-            }
-
-            // ── Stuck-detector observation point ──────────────────────────
-            //
-            // Placed where the node has finished and both the text it executed
-            // on and the text it produced are known — the same pair the trace
-            // records a few lines below. That is deliberate: what the detector
-            // judges is then exactly what a person following the **Open
-            // console** action can read back, step by step.
-            //
-            // OUTPUT is excluded on the same grounds as the ✓ event and the
-            // soft-ceiling notice above: its executor has already emitted
-            // `Completed`, and a console line pushed after that would shift the
-            // terminal state away from the tail of the flow. Nothing is lost —
-            // a run that has just delivered its answer is not going in circles.
-            if (currentNode.type != NodeType.OUTPUT) {
-                val observation = RunStepObservation(
-                    nodeId = currentNode.id,
-                    inputFingerprint = GraphStuckDetector.fingerprint(executorInput),
-                    // The engine's own fallback for a node that emitted no
-                    // result is to forward its input, so the fingerprints match
-                    // and the step reads as the pass-through it is.
-                    outputFingerprint = GraphStuckDetector.fingerprint(nodeResult?.outputText ?: executorInput),
-                )
-                if (replayRecord != null) {
-                    // Rebuild the window from history without re-deciding it:
-                    // the attempt that actually ran this prefix did not stop on
-                    // it, and reaching a different verdict now would be the app
-                    // rewriting what already happened.
-                    runStuckDetector.replay(observation)
-                } else {
-                    when (val verdict = runStuckDetector.observe(observation)) {
-                        StuckVerdict.Healthy -> Unit
-                        is StuckVerdict.Nudge -> {
-                            val cause = RunNoticeCause.LooksStuck(verdict.signal)
-                            pushConsole(ConsoleEventType.StuckDetector, cause.diagnostic())
-                            emit(AgentOrchestratorState.RunNotice(cause))
-                            pendingContextNotes += STUCK_CONTEXT_NOTE
-                        }
-                        is StuckVerdict.Stop -> {
-                            // Same seam the ceilings use: set the reason and
-                            // leave the walk. The post-loop branch owns the
-                            // console line and the typed terminal state, so a
-                            // protective stop is worded in exactly one place
-                            // however it was decided.
-                            pushConsole(ConsoleEventType.StuckDetector, verdict.signal.diagnostic)
-                            terminationReason = RunTerminationReason.NoProgress
-                            break
-                        }
-                    }
-                }
             }
 
             if (currentNode.type == NodeType.TOOL) {
@@ -1132,6 +1076,60 @@ class GraphExecutionEngine @Inject constructor(
                         depth = depth,
                     ),
                 )
+            }
+
+            // ── Stuck-detector observation point ──────────────────────────
+            //
+            // Placed **after** the trace append above, not before it. The
+            // stop's whole user-facing promise is *Open console*, where the
+            // repetition is visible — and a `break` taken before the append
+            // would drop the one step the verdict was actually reached on, so
+            // the console would be missing precisely the evidence the reader
+            // was sent to find. Judging the same input/output pair the trace
+            // has just recorded is the point: what the detector saw and what a
+            // person can read back are then the same thing by construction.
+            //
+            // OUTPUT is excluded on the same grounds as the ✓ event and the
+            // soft-ceiling notice above: its executor has already emitted
+            // `Completed`, and a console line pushed after that would shift the
+            // terminal state away from the tail of the flow. Nothing is lost —
+            // a run that has just delivered its answer is not going in circles.
+            if (currentNode.type != NodeType.OUTPUT) {
+                val observation = RunStepObservation(
+                    nodeId = currentNode.id,
+                    inputFingerprint = GraphStuckDetector.fingerprint(executorInput),
+                    // The engine's own fallback for a node that emitted no
+                    // result is to forward its input, so the fingerprints match
+                    // and the step reads as the pass-through it is.
+                    outputFingerprint = GraphStuckDetector.fingerprint(nodeResult?.outputText ?: executorInput),
+                )
+                if (replayRecord != null) {
+                    // Rebuild the window from history without re-deciding it:
+                    // the attempt that actually ran this prefix did not stop on
+                    // it, and reaching a different verdict now would be the app
+                    // rewriting what already happened.
+                    runStuckDetector.replay(observation)
+                } else {
+                    when (val verdict = runStuckDetector.observe(observation)) {
+                        StuckVerdict.Healthy -> Unit
+                        is StuckVerdict.Nudge -> {
+                            val cause = RunNoticeCause.LooksStuck(verdict.signal)
+                            pushConsole(ConsoleEventType.StuckDetector, cause.diagnostic())
+                            emit(AgentOrchestratorState.RunNotice(cause))
+                            runContextNotes.add(STUCK_CONTEXT_NOTE)
+                        }
+                        is StuckVerdict.Stop -> {
+                            // Same seam the ceilings use: set the reason and
+                            // leave the walk. The post-loop branch owns the
+                            // console line and the typed terminal state, so a
+                            // protective stop is worded in exactly one place
+                            // however it was decided.
+                            pushConsole(ConsoleEventType.StuckDetector, verdict.signal.diagnostic)
+                            terminationReason = RunTerminationReason.NoProgress
+                            break
+                        }
+                    }
+                }
             }
 
             if (currentNode.type == NodeType.OUTPUT) {
@@ -1461,12 +1459,24 @@ class GraphExecutionEngine @Inject constructor(
      * @param reason The typed cause the walk stopped on.
      * @return The console event type its diagnostic should be pushed under.
      */
-    private fun consoleTypeFor(reason: RunTerminationReason): ConsoleEventType =
-        if (reason == RunTerminationReason.NoProgress) {
-            ConsoleEventType.StuckDetector
-        } else {
-            ConsoleEventType.RunCeiling
-        }
+    private fun consoleTypeFor(reason: RunTerminationReason): ConsoleEventType = when (reason) {
+        RunTerminationReason.NoProgress -> ConsoleEventType.StuckDetector
+        is RunTerminationReason.StepCeiling,
+        is RunTerminationReason.TokenCeiling,
+        -> ConsoleEventType.RunCeiling
+        // Exhaustive rather than an `else`, and the reasons below are listed
+        // even though the walk cannot produce them. An `else` would quietly
+        // file the next engine-raised reason under the ceiling channel — a
+        // console line that says a limit was reached when none was, discovered
+        // only by whoever greps for it later.
+        RunTerminationReason.RunStalled,
+        RunTerminationReason.HitlWindowExpired,
+        RunTerminationReason.GraphChanged,
+        RunTerminationReason.ProcessDied,
+        RunTerminationReason.DiscardedByUser,
+        RunTerminationReason.NotResumable,
+        -> ConsoleEventType.SystemMessage
+    }
 
     /**
      * Returns a copy of [node] with its `systemPrompt` rendered through

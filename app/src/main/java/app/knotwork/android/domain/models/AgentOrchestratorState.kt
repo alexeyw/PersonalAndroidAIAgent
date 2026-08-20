@@ -102,7 +102,7 @@ sealed interface AgentOrchestratorState {
      *   layer instead, so one event is worded once rather than once per
      *   surface.
      * @property reason The typed cause when the app itself decided to end the
-     *   run — a ceiling, the no-progress watchdog, an expired approval window.
+     *   run — a ceiling, the stuck-detector, the silence watchdog, an expired approval window.
      *   `null` for an ordinary node or engine failure, which has no entry in
      *   that vocabulary. Defaulted so the two dozen sites that emit a plain
      *   failure stay unchanged, and carried so the ones that settle a run can

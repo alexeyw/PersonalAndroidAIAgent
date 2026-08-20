@@ -28,11 +28,15 @@ import java.security.MessageDigest
  * `EVALUATION` retry edge back to an earlier node, or an `IF_CONDITION` loop,
  * cannot be saved or run at all. Sub-pipeline recursion is bounded separately
  * by the nesting-depth limit. What is left is the queue back-edge: a queue
- * whose item branch re-seeds a queue, a graph with two queue nodes in a cycle,
- * or a queue whose items keep producing the same answer.
+ * whose item branch re-seeds a queue, or a graph with two queue nodes in a
+ * cycle — a graph doing the same work on the same input, over and over.
  *
- * That is what this detector is tuned for, and it is why the progress rule
- * below is written the way it is: **a draining queue must never trip it.**
+ * That is what this detector is tuned for, and it is why the rules below are
+ * written the way they are: **a draining queue must never trip it**, however
+ * repetitive its answers, because a queue is being handed a different item
+ * every time. A run that keeps answering identically while still being asked
+ * something new is not stuck — it is working through a list, and it is the
+ * ceilings' business if that list is too long.
  *
  * ## Progress, defined operationally
  *
@@ -78,14 +82,33 @@ class GraphStuckDetector(
     private val graceSteps: Int = GRACE_STEPS,
 ) {
 
+    init {
+        // A non-positive window silently disables REPEATED_STEP entirely (the
+        // deque is emptied on every record, so `signal` short-circuits on an
+        // absent last step) and a non-positive threshold fires it on the first
+        // step. Both are the detector *appearing* to work while doing the
+        // opposite, which is exactly the failure a test tightening a fixture
+        // would read as a passing repetition scenario.
+        require(windowSize > 0) { "windowSize must be positive, was $windowSize" }
+        require(repeatThreshold > 1) { "repeatThreshold must exceed 1, was $repeatThreshold" }
+        require(staleStreak > 0) { "staleStreak must be positive, was $staleStreak" }
+        require(graceSteps > 0) { "graceSteps must be positive, was $graceSteps" }
+    }
+
     private val window: ArrayDeque<RunStepObservation> = ArrayDeque()
 
     /** Every output fingerprint a producing step has emitted in this run. */
     private val producedOutputs: MutableSet<String> = mutableSetOf()
 
+    /** Every input fingerprint a step has been executed on in this run. */
+    private val seenInputs: MutableSet<String> = mutableSetOf()
+
     /** Checkpoints since the last one that produced something new. */
     var stepsSinceProgress: Int = 0
         private set
+
+    /** Checkpoints since the last one that was asked something new. */
+    private var stepsSinceNewInput: Int = 0
 
     /** Observations recorded so far, used only to measure the grace period. */
     private var observed: Int = 0
@@ -98,6 +121,14 @@ class GraphStuckDetector(
 
     /**
      * Records a step that actually executed and says what to do about it.
+     *
+     * **A run is warned once, and stays armed once warned.** If it breaks the
+     * pattern, recovers, and relapses fifty steps later, it is stopped without
+     * a second warning. That asymmetry is deliberate: the alternative — rearming
+     * the whole escalation on every recovery — is what a loop that alternates
+     * three repetitions with one productive step would exploit forever, which
+     * is precisely the shape of a queue re-seeding itself. A run gets one
+     * chance to take the advice, not one chance per episode.
      *
      * @param step The step, already fingerprinted.
      * @return [StuckVerdict.Healthy] while the run is getting somewhere,
@@ -116,6 +147,8 @@ class GraphStuckDetector(
                 nudgedAt = observed
                 StuckVerdict.Nudge(signal)
             }
+            // A replayed prefix can have armed this, in which case the run is
+            // past its grace before its first live step — see [replay].
             // The nudge reaches the model only through the *next* node that
             // composes a prompt, and a graph may take a few steps to get to
             // one. Stopping before then would punish the run for advice it had
@@ -139,14 +172,29 @@ class GraphStuckDetector(
      * that parks would be invisible for exactly the reason the persisted spend
      * counters exist.
      *
-     * Replayed steps are recorded but never acted on: the original attempt did
-     * not stop on this prefix, and deriving a stop from it now would rewrite
-     * what already happened.
+     * Replayed steps are recorded but never *decided*: the original attempt did
+     * not stop on this prefix, and returning a stop from it now would rewrite
+     * what already happened. But the escalation they earned **is** carried
+     * forward, and that distinction is load-bearing.
+     *
+     * Answering a background approval is a resume. A loop that raises one gate
+     * per iteration therefore comes back through here on every answer, and if
+     * the escalation restarted each time, a loop that parks more often than
+     * [GRACE_STEPS] would never be stopped by the detector at all — which is
+     * exactly the escape that made the per-execution step budget useless before
+     * its counters were moved onto the run record. So a prefix that already
+     * earned a nudge leaves the run armed: its first live repetition is
+     * stopped, not warned again.
+     *
+     * `stopped` is deliberately *not* set from a replay, however far the prefix
+     * goes. The original attempt did not end here, and pre-empting a verdict it
+     * never reached would silence the detector for the rest of the run.
      *
      * @param step The replayed step, already fingerprinted.
      */
     fun replay(step: RunStepObservation) {
         record(step)
+        if (nudgedAt == null && signal() != null) nudgedAt = observed
     }
 
     private fun record(step: RunStepObservation) {
@@ -156,6 +204,11 @@ class GraphStuckDetector(
         // producing it and the real producer would later look like a repeat.
         val madeProgress = !step.isPassThrough && producedOutputs.add(step.outputFingerprint)
         stepsSinceProgress = if (madeProgress) 0 else stepsSinceProgress + 1
+        // Tracked separately from progress, and deliberately not merged into
+        // it: a novel input is not an achievement, it is only evidence that the
+        // run is being asked something it has not been asked before. See
+        // [signal] for the one place that distinction is used.
+        stepsSinceNewInput = if (seenInputs.add(step.inputFingerprint)) 0 else stepsSinceNewInput + 1
         window.addLast(step)
         while (window.size > windowSize) window.removeFirst()
     }
@@ -188,7 +241,21 @@ class GraphStuckDetector(
         }
         return when {
             identical >= repeatThreshold -> StuckSignal.REPEATED_STEP
-            stepsSinceProgress >= staleStreak -> StuckSignal.NO_NEW_OUTPUT
+            // The weaker signal carries the extra condition, because on its own
+            // it accuses a perfectly healthy queue. Draining twelve recipients
+            // through a tool that answers `{"status":"ok"}` for each produces
+            // one novel output and eleven repeats — no progress by the rule
+            // above, and a stall by any streak worth setting. What separates
+            // that run from a loop is that it is being asked something new
+            // every time: the item changes even though the answer does not.
+            //
+            // So this fires only when the run has stopped being asked anything
+            // new *as well as* having stopped saying anything new. The cost is
+            // that a loop re-posing itself with an ever-growing context is left
+            // to the ceilings — which is the right way round to be wrong, since
+            // that run is spending and the ceilings measure spend, while the
+            // other mistake kills a run that is doing its job.
+            stepsSinceProgress >= staleStreak && stepsSinceNewInput >= staleStreak -> StuckSignal.NO_NEW_OUTPUT
             else -> null
         }
     }

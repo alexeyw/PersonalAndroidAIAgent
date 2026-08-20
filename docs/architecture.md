@@ -1007,7 +1007,7 @@ muted `RUNTIME` warning (`Cloud retry 1/2 for openai`).
 to every client it builds: **60 s socket**, **30 s connect**, **900 s request**.
 The socket value is the load-bearing one, because Ktor applies it *per read* —
 it bounds how long a provider may stay **silent**, not how long a healthy
-answer may take, the same rule the task queue's no-progress valve uses. Passing
+answer may take, the same rule the task queue's silence valve uses. Passing
 no config is not a neutral choice: Koog's own default is 900 s for both request
 and socket, measured at 900 033 ms against a stalled provider. Unlike the MCP
 SSE path above, `HttpTimeout` *does* apply here.
@@ -1461,9 +1461,13 @@ Key invariants:
   stages (a note injected into the next prompt-composing node's input,
   then a forced stop reusing the shared `RunTerminationReason`), and a
   replayed prefix rebuilds its window without being allowed to decide
-  the run. Precedence between the two, and the reason a run can never be
-  stopped twice with two explanations, are specified in the engine
-  contract.
+  the run. Which of the two speaks first depends on the signal: on a real
+  cycle the detector's repetition signal reaches a verdict well inside the
+  default step allowance, while a straight chain that merely repeats its
+  answers has no repeated *node* to catch and is left to the ceilings —
+  spending is what they measure. Neither can stop a run the other has
+  already stopped: the walk leaves through one seam, which owns the single
+  wording.
 
 ### 6.2. Two-phase HITL (background approvals)
 

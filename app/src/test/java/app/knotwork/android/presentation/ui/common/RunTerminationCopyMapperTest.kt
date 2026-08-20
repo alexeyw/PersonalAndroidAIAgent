@@ -129,13 +129,29 @@ class RunTerminationCopyMapperTest {
         assertEquals(RunTerminationTone.LIMIT, toneOf(RunTerminationReason.StepCeiling(1, 1)))
         assertEquals(RunTerminationTone.LIMIT, toneOf(RunTerminationReason.TokenCeiling(1, 1)))
         assertEquals(RunTerminationTone.STUCK, toneOf(RunTerminationReason.NoProgress))
-        listOf(
+        // A stall is not housekeeping: the trigger journal counts it a Failure,
+        // and the INFO tone is documented as implying nothing about the
+        // pipeline's quality.
+        assertEquals(RunTerminationTone.STUCK, toneOf(RunTerminationReason.RunStalled))
+        val housekeeping = listOf(
             RunTerminationReason.HitlWindowExpired,
             RunTerminationReason.GraphChanged,
             RunTerminationReason.ProcessDied,
             RunTerminationReason.DiscardedByUser,
             RunTerminationReason.NotResumable,
-        ).forEach { assertEquals("${it.kind} is housekeeping", RunTerminationTone.INFO, toneOf(it)) }
+        )
+        housekeeping.forEach { assertEquals("${it.kind} is housekeeping", RunTerminationTone.INFO, toneOf(it)) }
+        // Enumerated, not sampled. Without this a kind added later simply is
+        // not asserted anywhere, and its tone can drift to whatever a stray
+        // edit leaves it as — which is exactly how RUN_STALLED spent a while
+        // rendering as housekeeping.
+        val toned = setOf(
+            RunTerminationKind.STEP_CEILING,
+            RunTerminationKind.TOKEN_CEILING,
+            RunTerminationKind.NO_PROGRESS,
+            RunTerminationKind.RUN_STALLED,
+        ) + housekeeping.map { it.kind }
+        assertEquals("every kind needs an asserted tone", RunTerminationKind.entries.toSet(), toned)
     }
 
     @Test

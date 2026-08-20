@@ -50,9 +50,12 @@ sealed interface RunNoticeCause {
      * repeating itself usually does. Only if that fails is the run ended, with
      * [RunTerminationReason.NoProgress].
      *
-     * Raised once per run tree, like the ceiling warning beside it — for the
-     * same reason, that a warning repeated on every node is one the reader
-     * learns to skip.
+     * Raised at most once per execution attempt, like the ceiling warning
+     * beside it — for the same reason, that a warning repeated on every node is
+     * one the reader learns to skip. A resumed run inherits the escalation from
+     * its replayed prefix rather than restarting it, so a run that had already
+     * been warned before it parked is *stopped* on its next repetition, not
+     * warned a second time.
      *
      * @property signal Which observation produced the verdict. Diagnostic only:
      *   it reaches the run console, never the sentence the user reads, which is

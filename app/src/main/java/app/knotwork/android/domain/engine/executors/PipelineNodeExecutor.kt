@@ -186,6 +186,10 @@ class PipelineNodeExecutor @Inject constructor(
                 // child with a private window would see several fresh runs
                 // where the tree has one going in circles.
                 stuckDetector = scope.stuckDetector,
+                // And the notes with it: the detector's grace period is spent
+                // by the child's steps, so a nudge the parent raised has to be
+                // able to reach the child that is spending it.
+                contextNotes = scope.contextNotes,
                 imageDelivery = scope.imageDelivery,
                 runHadImage = scope.imagePresent,
                 generatingModel = scope.generatingModel,
@@ -246,6 +250,10 @@ class PipelineNodeExecutor @Inject constructor(
                 // child with a private window would see several fresh runs
                 // where the tree has one going in circles.
                 stuckDetector = scope.stuckDetector,
+                // And the notes with it: the detector's grace period is spent
+                // by the child's steps, so a nudge the parent raised has to be
+                // able to reach the child that is spending it.
+                contextNotes = scope.contextNotes,
                 imageDelivery = scope.imageDelivery,
                 runHadImage = scope.imagePresent,
                 generatingModel = scope.generatingModel,

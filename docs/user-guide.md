@@ -2160,12 +2160,14 @@ watches a run for **repetition**: the same step, on the same input, producing th
 same result over and over. The two are not the same protection. A limit asks how
 much a run has spent; this asks whether it is getting anywhere.
 
-It works in two stages. First the run is told — quietly, in the same one-line
-strip above the composer that the limit warning uses, and in the run's own
-context, so the agent gets a chance to change course by itself. That is usually
-the end of it. If the repetition carries on regardless, the run is ended and the
-chat says **Stopped: the run was not getting anywhere**, with **Open console** —
-where the repeating step is visible, which is the point of sending you there.
+It works in two stages. First the run is told — quietly, in the same short strip
+above the composer that the limit warning uses, and in the run's own context, so
+the agent gets a chance to change course by itself. That is usually the end of
+it. If the repetition carries on regardless, the run is ended and the chat says
+**Stopped: the run was not getting anywhere**, with **Open console**. The
+console is where the repetition is: its **Vars** tab lists what each step was
+given and what it produced, including the step the run was stopped on, so the
+identical rows are visible side by side.
 
 A run that keeps producing *different* results is not repeating itself, however
 long it takes, and this never touches it. That case is what the limits above are
@@ -2609,9 +2611,12 @@ always there, and which of two shapes it takes decides what to do next:
   broken — either the condition is not what you thought, or the trigger needs
   binding or enabling.
 - **There is an entry, and it fired but ended badly.** *Failed* points at the
-  pipeline (open the run in the trigger's chat and read the console — if it
-  says the run was not getting anywhere, or that it went quiet, the console
-  names the step);
+  pipeline (open the run in the trigger's chat and read the console). Two
+  failures name themselves: *the run was not getting anywhere* means it was
+  repeating itself, and the console's **Vars** tab shows the identical steps;
+  *the run went quiet* means a step stopped responding, and there the console
+  is deliberately short — the last step it shows is the one that never
+  finished, which is the thing to look at;
   *Stopped by the system* means the process was killed mid-run, which is a
   battery / memory-pressure problem, not a pipeline one; *Timed out waiting
   for approval* means the run parked on a sensitive tool and the approval
