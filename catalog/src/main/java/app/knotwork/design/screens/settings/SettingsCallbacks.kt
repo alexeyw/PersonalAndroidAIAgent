@@ -113,6 +113,8 @@ class SettingsCallbacks(
     val onExternalAutomationPipelineClick: () -> Unit = {},
     /** Open the external-automation request journal. */
     val onOpenExternalAutomationJournal: () -> Unit = {},
+    /** Opens the run-limits screen from the Pipelines category entry row. */
+    val onOpenRunLimits: () -> Unit = {},
 
     // ─── Privacy ─────────────────────────────────────────────────────────────
     /** "Crash reporting" toggle. */

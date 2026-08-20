@@ -260,6 +260,71 @@ internal object ChatHomePreview {
         composerState = ComposerState.Error(message = "Network unreachable"),
     )
 
+    /**
+     * A run a ceiling stopped. Warning-toned, shield-marked, no Retry — the
+     * limit will still be there on a second attempt, so the only useful action
+     * is to change it.
+     */
+    fun stoppedByCeiling(): ChatHomeViewState = ChatHomeViewState(
+        visualState = ChatHomeVisualState.Error,
+        threadTitle = THREAD_TITLE,
+        modelName = MODEL_NAME,
+        messages = baselineMessages(),
+        termination = ChatTerminationUi(
+            tone = RunTerminationToneUi.Limit,
+            toneLabel = "Safety limit",
+            title = "Stopped by a safety limit",
+            body = "This run used all the steps it was allowed. Raise the step limit, or split the work " +
+                "into smaller runs.",
+            banner = "Stopped by a safety limit — used 15 of 15 steps.",
+            meter = "Used 15 of 15 steps",
+            actionLabel = "Adjust limits",
+        ),
+    )
+
+    /**
+     * A run ended for a housekeeping reason: nothing about the pipeline is
+     * wrong, so the tone drops to neutral and running it again is genuinely
+     * worth offering.
+     */
+    fun stoppedHousekeeping(): ChatHomeViewState = stoppedByCeiling().copy(
+        termination = ChatTerminationUi(
+            tone = RunTerminationToneUi.Info,
+            toneLabel = "Run ended",
+            title = "The pipeline changed while this run was paused",
+            body = "This run was built on the earlier version of the pipeline, so it could not pick up " +
+                "where it left off. Running it again uses the current version.",
+            banner = "The pipeline changed while this run was paused.",
+            actionLabel = "Run it again",
+        ),
+    )
+
+    /** A run still going, warned once that it is approaching a limit. */
+    fun approachingCeiling(): ChatHomeViewState = ChatHomeViewState(
+        visualState = ChatHomeVisualState.Generating,
+        threadTitle = THREAD_TITLE,
+        modelName = MODEL_NAME,
+        messages = baselineMessages(),
+        runNotice = ChatRunNoticeUi(
+            tone = RunTerminationToneUi.Limit,
+            text = "Nearing the step limit: 12 of 15 steps used.",
+        ),
+    )
+
+    /**
+     * The same slot, the graph stuck-detector's cause.
+     *
+     * Drawn now, before its producer exists, on purpose: this surface is frozen
+     * by the baselines beside it, and a second consumer arriving afterwards
+     * with nowhere to render is exactly what that would have caused.
+     */
+    fun looksStuck(): ChatHomeViewState = approachingCeiling().copy(
+        runNotice = ChatRunNoticeUi(
+            tone = RunTerminationToneUi.Stuck,
+            text = "This run looks stuck — the same step keeps repeating. It will stop if nothing changes.",
+        ),
+    )
+
     /** DrawerOpen state — alt-nav drawer overlayed. */
     fun drawerOpen(): ChatHomeViewState = ChatHomeViewState(
         visualState = ChatHomeVisualState.DrawerOpen,

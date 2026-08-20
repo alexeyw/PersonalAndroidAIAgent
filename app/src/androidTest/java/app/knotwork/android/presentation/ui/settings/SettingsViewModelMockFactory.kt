@@ -52,4 +52,5 @@ internal fun settingsNavStub(): SettingsNavActions = SettingsNavActions(
     onOpenLicenses = {},
     onOpenUsageStatistics = {},
     onOpenExternalAutomationJournal = {},
+    onOpenRunLimits = {},
 )

@@ -356,6 +356,13 @@ private fun ChatHomeBottomBar(state: ChatHomeViewState, callbacks: ChatHomeCallb
         if (state.agentStatusLine != null) {
             AgentStatusPill(text = state.agentStatusLine, onClick = callbacks.onAgentStatusClick)
         }
+        // Directly above the composer, where a remark about the run sits in the
+        // reader's path without interrupting it. A run still going shows its
+        // notice; a run the app stopped shows the short form of why — in the
+        // same tone as its tile, which the composer's own error banner could
+        // not do.
+        state.runNotice?.let { ChatRunNotice(state = it) }
+        state.termination?.let { ChatRunNotice(state = ChatRunNoticeUi(tone = it.tone, text = it.banner)) }
         ChatComposer(
             value = state.composerValue,
             onValueChange = callbacks.onComposerValueChange,
@@ -709,8 +716,18 @@ private fun ChatHomeMessageList(
         if (state.visualState == ChatHomeVisualState.Generating) {
             item { GeneratingLoaderBubble() }
         }
-        if (state.visualState == ChatHomeVisualState.Error && state.errorMessage != null) {
-            item { ChatHomeErrorTile(message = state.errorMessage, onRetry = callbacks.onErrorRetry) }
+        // A stopped run gets exactly one tile. Which one depends on whether we
+        // chose to stop it: a fault we did not choose keeps the destructive
+        // tone and the Retry that may genuinely help, while a decision we made
+        // is explained in its own words and offers something that can actually
+        // change the outcome.
+        if (state.visualState == ChatHomeVisualState.Error) {
+            state.termination?.let { termination ->
+                item { ChatTerminationTile(state = termination, onAction = callbacks.onTerminationAction) }
+            }
+            state.errorMessage?.let { message ->
+                item { ChatHomeErrorTile(message = message, onRetry = callbacks.onErrorRetry) }
+            }
         }
     }
 }
@@ -750,7 +767,142 @@ private fun GeneratingLoaderBubble() {
     }
 }
 
-/** Inline error tile rendered in the trailing position of the conversation. */
+/**
+ * Tile explaining a run the app deliberately ended.
+ *
+ * Everything on it is supplied already resolved, including the tone's word, so
+ * the whole vocabulary of a stopped run has exactly one owner in `:app` and
+ * this module only decides how it looks. That is the point: the same event used
+ * to be worded separately in the engine, the settings search and the
+ * documentation, and two of those wordings described a pause the engine never
+ * performed.
+ *
+ * There is no Retry. The action is optional and labelled, because what helps
+ * depends on why the run stopped — raise the limit, look at the console, or
+ * simply run it again.
+ *
+ * @param state The resolved copy and tone.
+ * @param onAction Invoked by the single action, when there is one.
+ */
+@Composable
+private fun ChatTerminationTile(state: ChatTerminationUi, onAction: () -> Unit) {
+    val accent = state.tone.accent()
+    Column(
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(KnotworkTheme.shapes.md)
+            .background(color = KnotworkTheme.extended.surface1)
+            .border(border = BorderStroke(width = 1.dp, color = accent), shape = KnotworkTheme.shapes.md)
+            .padding(KnotworkTheme.spacing.sp4),
+    ) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = state.tone.glyph(),
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(KnotworkTheme.spacing.sp4),
+            )
+            Text(
+                text = state.toneLabel.uppercase(),
+                style = KnotworkTextStyles.MonoSm,
+                color = accent,
+            )
+        }
+        Text(
+            text = state.title,
+            style = KnotworkTextStyles.TitleMd,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Text(
+            text = state.body,
+            style = KnotworkTextStyles.BodyBase,
+            color = KnotworkTheme.extended.onSurface2,
+        )
+        state.meter?.let { meter ->
+            Text(
+                text = meter,
+                style = KnotworkTextStyles.MonoSm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+        state.actionLabel?.let { label ->
+            KnotworkSecondaryButton(text = label, onClick = onAction)
+        }
+    }
+}
+
+/**
+ * The quiet advisory about a run that is still going.
+ *
+ * Deliberately not a dialog and deliberately not a message: it is a property of
+ * the work in flight, so it sits in the composer's own column, is not
+ * dismissible, and disappears with the run that raised it.
+ *
+ * @param state The resolved sentence and tone.
+ */
+@Composable
+private fun ChatRunNotice(state: ChatRunNoticeUi) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp1)
+            .clip(KnotworkTheme.shapes.sm)
+            .background(color = KnotworkTheme.extended.surface2)
+            .border(
+                border = BorderStroke(width = 1.dp, color = KnotworkTheme.extended.divider),
+                shape = KnotworkTheme.shapes.sm,
+            )
+            .padding(horizontal = KnotworkTheme.spacing.sp3, vertical = KnotworkTheme.spacing.sp2),
+    ) {
+        Icon(
+            imageVector = state.tone.glyph(),
+            contentDescription = null,
+            tint = state.tone.accent(),
+            modifier = Modifier.size(KnotworkTheme.spacing.sp4),
+        )
+        Text(
+            text = state.text,
+            style = KnotworkTextStyles.BodySm,
+            color = KnotworkTheme.extended.onSurface2,
+            // Two lines is the strip's budget. The host supplies a clause
+            // written to fit it rather than the tile's full sentence.
+            maxLines = NOTICE_MAX_LINES,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** Lines the run-notice strip will grow to before it truncates. */
+private const val NOTICE_MAX_LINES: Int = 2
+
+/** The glyph half of a tone. Never colour alone. */
+@Composable
+private fun RunTerminationToneUi.glyph() = when (this) {
+    RunTerminationToneUi.Limit -> AppIcons.Shield
+    RunTerminationToneUi.Stuck -> AppIcons.Warn
+    RunTerminationToneUi.Info -> AppIcons.Info
+}
+
+/** The colour half of a tone. A limit doing its job is warned, never errored. */
+@Composable
+private fun RunTerminationToneUi.accent() = when (this) {
+    RunTerminationToneUi.Limit, RunTerminationToneUi.Stuck -> KnotworkTheme.extended.signalWarn
+    RunTerminationToneUi.Info -> KnotworkTheme.extended.onSurfaceMuted
+}
+
+/**
+ * Inline error tile rendered in the trailing position of the conversation.
+ *
+ * The **untyped** half of a stopped run: something broke that we did not
+ * choose. Keeps its destructive tone and its Retry, because a transient fault
+ * may genuinely not recur — which is exactly what is not true of a limit.
+ */
 @Composable
 private fun ChatHomeErrorTile(message: String, onRetry: () -> Unit) {
     Column(

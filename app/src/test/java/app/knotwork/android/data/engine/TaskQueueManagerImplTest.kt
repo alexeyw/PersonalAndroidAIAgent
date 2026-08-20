@@ -778,6 +778,13 @@ class TaskQueueManagerImplTest {
         }
         verify(exactly = 0) { graphExecutionEngine.invoke(any(), any(), any(), any(), any()) }
         coVerify(exactly = 0) { chatRepository.saveMessage(any()) }
+
+        // And the cause reaches the surface, not only the record. Without it the
+        // chat renders a refused resume as an ordinary failure with a Retry —
+        // when the useful action is to run it again against the current graph.
+        val state = taskQueueManager.observeTaskState("session_resume").first()
+        assertTrue("Expected an Error state, got $state", state is AgentOrchestratorState.Error)
+        assertEquals(RunTerminationReason.GraphChanged, (state as AgentOrchestratorState.Error).reason)
     }
 
     // endregion
@@ -852,10 +859,13 @@ class TaskQueueManagerImplTest {
         // permanent, wordless "Generating…".
         val state = taskQueueManager.observeTaskState("session_stalled").first()
         assertTrue("A stalled run must not end silently, got $state", state is AgentOrchestratorState.Error)
-        assertEquals(
-            TaskQueueManagerImpl.STALLED_MESSAGE,
-            (state as AgentOrchestratorState.Error).message,
-        )
+        val error = state as AgentOrchestratorState.Error
+        assertEquals(TaskQueueManagerImpl.STALLED_MESSAGE, error.message)
+        // The cause has to reach the SURFACE, not only the record above. The
+        // record was already right while the emission dropped it, so the chat
+        // put the raw message in the destructive tile under a Retry that would
+        // stall all over again — the state this assertion exists to forbid.
+        assertEquals(RunTerminationReason.NoProgress, error.reason)
     }
 
     /**

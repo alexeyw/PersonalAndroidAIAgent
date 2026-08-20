@@ -120,8 +120,9 @@ enum class SettingControlType {
  *   the hub (exactly six rows across all categories).
  * @property controlType The kind of control rendered for this row.
  * @property synonyms Extra search terms (English) the settings search matches in
- *   addition to the human-readable name, so a query like `"max"` can surface
- *   *Cap autonomous steps* via the synonym `"max steps"`.
+ *   addition to the human-readable name, so a query like `"cost"` can surface
+ *   *Run limits* — whose own name says nothing about spend. Each entry is one
+ *   term, matched on its own; there is no phrase matching.
  * @property linkDestination For [SettingControlType.LINK] rows, a stable label of
  *   the screen the row routes to (e.g. `"Provider detail"`); `null` otherwise.
  */

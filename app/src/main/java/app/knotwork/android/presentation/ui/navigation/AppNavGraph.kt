@@ -49,6 +49,7 @@ import app.knotwork.android.presentation.ui.settings.SettingsViewModel
 import app.knotwork.android.presentation.ui.settings.ToolsSettingsScreen
 import app.knotwork.android.presentation.ui.settings.provider.ProviderDetailScreen
 import app.knotwork.android.presentation.ui.settings.provider.ProviderPickerScreen
+import app.knotwork.android.presentation.ui.settings.runlimits.RunLimitsScreen
 import app.knotwork.android.presentation.ui.settings.usage.UsageTelemetryScreen
 import app.knotwork.android.presentation.ui.skills.SkillLibraryScreen
 import app.knotwork.android.presentation.ui.splash.SplashScreen
@@ -175,6 +176,7 @@ fun AppNavGraph(
                 onOpenSettings = { navController.navigate(NavRoutes.SETTINGS) },
                 onOpenModels = { navController.navigate(NavRoutes.MODELS) },
                 onOpenArchive = { navController.navigate(NavRoutes.CHAT_ARCHIVE) },
+                onOpenRunLimits = { navController.navigate(NavRoutes.SETTINGS_PIPELINES_RUN_LIMITS) },
             )
         }
 
@@ -393,6 +395,9 @@ fun AppNavGraph(
             composable(NavRoutes.SETTINGS_BACKGROUND_EXTERNAL_AUTOMATION) {
                 ExternalAutomationJournalScreen(onBack = { navController.popBackStack() })
             }
+            composable(NavRoutes.SETTINGS_PIPELINES_RUN_LIMITS) {
+                RunLimitsScreen(viewModel = hiltViewModel(), onBack = { navController.popBackStack() })
+            }
             composable(NavRoutes.SETTINGS_PRIVACY) { entry ->
                 PrivacySettingsScreen(viewModel = settingsGraphViewModel(navController, entry), nav = nav)
             }
@@ -519,6 +524,7 @@ private fun settingsNavActions(navController: NavHostController): SettingsNavAct
     onOpenExternalAutomationJournal = {
         navController.navigate(NavRoutes.SETTINGS_BACKGROUND_EXTERNAL_AUTOMATION)
     },
+    onOpenRunLimits = { navController.navigate(NavRoutes.SETTINGS_PIPELINES_RUN_LIMITS) },
 )
 
 /** Maps a settings category id to its sub-screen route. */

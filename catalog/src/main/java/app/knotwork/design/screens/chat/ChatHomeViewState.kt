@@ -183,8 +183,19 @@ data class ChatHomeConsoleState(
  * @property pendingTypedConfirm typed-confirm input for a Destructive
  *   confirmation; ignored unless [visualState] is
  *   [ChatHomeVisualState.HitlConfirm] with risk Destructive.
- * @property errorMessage user-visible error text rendered in
- *   [ChatHomeVisualState.Error]; `null` otherwise.
+ * @property errorMessage user-visible error text for an **untyped** failure —
+ *   a node or the engine broke — rendered in [ChatHomeVisualState.Error] with
+ *   the destructive-toned tile and its Retry action. `null` whenever the run
+ *   was stopped deliberately; see [termination].
+ * @property termination why the app itself ended the run, when it did. Mutually
+ *   exclusive with [errorMessage]: a stopped run is either a fault we did not
+ *   choose or a decision we made, never both, and the two read very differently
+ *   to the person holding the phone.
+ * @property runNotice advisory about the run **still in flight** — it crossed a
+ *   soft threshold, or (once the stuck detector lands) it stopped making
+ *   progress. Independent of [visualState] on purpose: the run is still going,
+ *   so the notice coexists with whatever the run is doing rather than replacing
+ *   it.
  * @property threads thread rows surfaced inside the drawer overlay.
  * @property console console-pane snapshot, used when [visualState] is
  *   [ChatHomeVisualState.ConsoleExpanded].
@@ -199,6 +210,8 @@ data class ChatHomeViewState(
     val composerState: ComposerState = ComposerState.Idle,
     val pendingTypedConfirm: String = "",
     val errorMessage: String? = null,
+    val termination: ChatTerminationUi? = null,
+    val runNotice: ChatRunNoticeUi? = null,
     val threads: List<ChatHomeThreadRow> = emptyList(),
     val console: ChatHomeConsoleState = ChatHomeConsoleState(),
     val samplePrompts: List<String> = emptyList(),
@@ -259,8 +272,11 @@ data class ChatHomeViewState(
     val archivedReadOnly: Boolean = false,
 ) {
     init {
-        require((visualState == ChatHomeVisualState.Error) == (errorMessage != null)) {
-            "errorMessage must be non-null iff visualState == Error"
+        require((visualState == ChatHomeVisualState.Error) == (errorMessage != null || termination != null)) {
+            "the Error visual must carry exactly one explanation: errorMessage or termination"
+        }
+        require(errorMessage == null || termination == null) {
+            "a stopped run is either an untyped failure or a typed termination, never both"
         }
     }
 }
@@ -328,6 +344,12 @@ class ChatHomeCallbacks(
      */
     val onDiscardRun: () -> Unit = {},
     val onErrorRetry: () -> Unit = {},
+    /**
+     * Invoked by the single action on a typed termination tile. What it does is
+     * decided by the host from the reason — adjust the limits, open the console,
+     * run it again — which is why the tile carries a label rather than a verb.
+     */
+    val onTerminationAction: () -> Unit = {},
     val onTitleTripleTap: () -> Unit = {},
     val onToggleFavorite: () -> Unit = {},
     /** Fired from the drawer row's overflow "Rename" item. */
@@ -380,3 +402,72 @@ internal val DefaultRowMetadata: ChatMetadata = ChatMetadata(
     timestamp = "—",
     status = ChatMessageStatus.Sent,
 )
+
+/**
+ * How a stopped or struggling run is toned in the chat.
+ *
+ * Mirrors the host's termination vocabulary locally, the way this module
+ * mirrors every other domain enum: `:catalog` keeps its zero-dependency on
+ * `:app`, so the host maps its own type onto this one and hands over resolved
+ * strings.
+ *
+ * Status is never carried by colour alone here — each tone is rendered with a
+ * glyph *and* the word the host supplies alongside it.
+ */
+enum class RunTerminationToneUi {
+    /** A limit the user configured did its job. Shield, warning tone. */
+    Limit,
+
+    /** The run stopped getting anywhere and was ended. Warning triangle. */
+    Stuck,
+
+    /** Housekeeping: the app restarted, the user discarded it, a window closed. */
+    Info,
+}
+
+/**
+ * The tile explaining a run the app deliberately ended.
+ *
+ * Distinct from the untyped error tile in tone, glyph and action. In
+ * particular it has **no Retry**: every typed termination is a decision about
+ * this run, and repeating the identical turn reaches the identical outcome.
+ *
+ * @property tone Glyph and colour ranking.
+ * @property toneLabel The word beside the glyph, e.g. "Safety limit".
+ * @property title One line naming what happened.
+ * @property body What happened and what to do about it.
+ * @property meter The numbers behind the decision, in tabular figures on their
+ *   own line, or `null` when the reason has none. Kept out of [body] so one
+ *   sentence serves surfaces that have the numbers and surfaces that do not.
+ * @property banner One clause for the strip above the composer. A separate
+ *   string from [body], and a separately *toned* surface: routing it through
+ *   the composer's error banner would have put a red alert glyph two inches
+ *   below a tile explaining that nothing had gone wrong.
+ * @property actionLabel Label of the single offered action, or `null` when
+ *   there is nothing useful to offer.
+ */
+data class ChatTerminationUi(
+    val tone: RunTerminationToneUi,
+    val toneLabel: String,
+    val title: String,
+    val body: String,
+    val banner: String,
+    val meter: String? = null,
+    val actionLabel: String? = null,
+)
+
+/**
+ * The quiet, non-modal advisory shown directly above the composer while a run
+ * is still going.
+ *
+ * One component for two causes on purpose: "you are nearing a limit you set"
+ * and "this run looks stuck" ask the same thing of the reader — wind this up —
+ * so they share a slot and a shape, and differ only in glyph and sentence.
+ *
+ * Not dismissible, and gone the moment the run ends: it is a property of the
+ * run in flight, not a message in the thread.
+ *
+ * @property tone Glyph and colour.
+ * @property text The whole sentence — a notice is one line, not a card.
+ */
+data class ChatRunNoticeUi(val tone: RunTerminationToneUi, val text: String)

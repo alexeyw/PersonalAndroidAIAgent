@@ -70,8 +70,6 @@
     <string name="settings_search_desc_memory_actions">Back up, restore, re-embed or wipe memory.</string>
 
     <!-- Pipelines &amp; structured output -->
-    <string name="settings_search_name_pipeline_max_steps">Cap autonomous steps</string>
-    <string name="settings_search_desc_pipeline_max_steps">Pause &amp; ask for guidance after N planner cycles.</string>
     <string name="settings_search_name_pipeline_max_nesting_depth">Max nesting depth</string>
     <string name="settings_search_desc_pipeline_max_nesting_depth">Deepest sub-pipeline expansion allowed.</string>
     <string name="settings_search_name_structured_output_max_repairs">Structured-output repairs</string>

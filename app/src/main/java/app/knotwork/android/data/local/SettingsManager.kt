@@ -1597,6 +1597,25 @@ class SettingsManager @Inject constructor(
                 ?: SettingsDefaults.PIPELINE_MAX_STEPS_BACKGROUND_DEFAULT
         }
 
+    /**
+     * True once the background key exists in storage, whatever its value.
+     *
+     * Deliberately keyed on presence, not on the number: the default background
+     * ceiling equals the interactive one, so a user who deliberately sets 15
+     * and a user who has never touched it produce the same figure and only the
+     * stored key tells them apart.
+     */
+    override val pipelineMaxStepsBackgroundIsSet: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences -> preferences.contains(PreferencesKeys.PIPELINE_MAX_STEPS_BACKGROUND) }
+
     override suspend fun setPipelineMaxStepsBackground(steps: Int) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.PIPELINE_MAX_STEPS_BACKGROUND] = steps.coerceIn(
@@ -2090,8 +2109,13 @@ class SettingsManager @Inject constructor(
         this[PreferencesKeys.REPETITION_PENALTY] = SettingsDefaults.REPETITION_PENALTY_DEFAULT
         this[PreferencesKeys.MAX_CONTEXT_LENGTH] = SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT
         this[PreferencesKeys.PIPELINE_MAX_STEPS] = SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT
-        this[PreferencesKeys.PIPELINE_MAX_STEPS_BACKGROUND] =
-            SettingsDefaults.PIPELINE_MAX_STEPS_BACKGROUND_DEFAULT
+        // REMOVED, not written back to its default. Writing the key is exactly
+        // what marks the background ceiling as independently chosen, so writing
+        // it here would make a reset do the one thing a reset must not: leave
+        // the user with a deliberate-looking decision they never made, silently
+        // detached from the interactive ceiling it is supposed to follow.
+        // Removing it restores the inheritance, which *is* the default state.
+        remove(PreferencesKeys.PIPELINE_MAX_STEPS_BACKGROUND)
         this[PreferencesKeys.RUN_MAX_TOKENS] = SettingsDefaults.RUN_MAX_TOKENS_DEFAULT
         this[PreferencesKeys.RUN_MAX_TOKENS_BACKGROUND] = SettingsDefaults.RUN_MAX_TOKENS_BACKGROUND_DEFAULT
         this[PreferencesKeys.PIPELINE_MAX_NESTING_DEPTH] = SettingsDefaults.PIPELINE_MAX_NESTING_DEPTH_DEFAULT

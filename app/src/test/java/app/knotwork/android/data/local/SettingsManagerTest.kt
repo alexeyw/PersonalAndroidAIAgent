@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -1041,6 +1042,37 @@ class SettingsManagerTest {
     private val huggingFaceTokenKey = stringPreferencesKey("hugging_face_token")
 
     /** Like [freshManagerWithRealDataStore] but also exposes the backing DataStore. */
+    @Test
+    fun `given a raised interactive cap when reset then the background ceiling inherits again`() = runTest {
+        val (manager, _, scope) = freshManagerWithExposedDataStore()
+        try {
+            // The user widens both, deliberately detaching the background one.
+            manager.setPipelineMaxSteps(40)
+            manager.setPipelineMaxStepsBackground(30)
+            assertTrue(manager.pipelineMaxStepsBackgroundIsSet.first())
+
+            manager.resetToRecommendedDefaults()
+
+            // The inheritance is the default state, so a reset has to restore
+            // it. Writing the constant instead would leave the user holding a
+            // deliberate-looking decision they never made — and from then on
+            // raising the interactive cap would silently stop moving their
+            // triggers.
+            assertFalse(
+                "a reset must not leave the background ceiling independently set",
+                manager.pipelineMaxStepsBackgroundIsSet.first(),
+            )
+            manager.setPipelineMaxSteps(40)
+            assertEquals(
+                "after a reset the background ceiling follows the interactive one again",
+                40,
+                manager.pipelineMaxStepsBackground.first(),
+            )
+        } finally {
+            scope.cancel()
+        }
+    }
+
     private fun freshManagerWithExposedDataStore(): Triple<SettingsManager, DataStore<Preferences>, CoroutineScope> {
         val file = tempFolder.newFile("settings-manager-hf-${System.nanoTime()}.preferences_pb")
         file.delete()
@@ -1576,6 +1608,14 @@ class SettingsManagerTest {
                 // exposure without the user asking for it.
                 "share_target_pipeline_id", "quick_settings_tile_pipeline_id",
                 "external_automation_pipeline_id",
+                // Excluded because the reset REMOVES it rather than writing it,
+                // which is the only way to restore its default. Its default is
+                // not a number: while the key is absent the background step
+                // ceiling *follows* the interactive one, and writing any value
+                // — including the constant — is precisely what marks it as an
+                // independent choice. A reset that wrote it would hand the user
+                // a deliberate-looking decision they never made.
+                "pipeline_max_steps_background",
             )
 
             val uncovered = allKeys - written - excluded

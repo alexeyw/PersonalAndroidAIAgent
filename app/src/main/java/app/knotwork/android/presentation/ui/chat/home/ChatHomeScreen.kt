@@ -71,6 +71,9 @@ import app.knotwork.android.domain.report.ContentReportComposer
 import app.knotwork.android.domain.report.ContentReportReason
 import app.knotwork.android.presentation.ui.chat.CHAT_EXPORT_MIME_JSON
 import app.knotwork.android.presentation.ui.chat.toShareChooser
+import app.knotwork.android.presentation.ui.common.RunTerminationAction
+import app.knotwork.android.presentation.ui.common.RunTerminationCopyMapper
+import app.knotwork.android.presentation.ui.common.resolve
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chat.AudioSourceChooserSheet
@@ -114,6 +117,9 @@ import java.io.File
  * @param onOpenModels deep-link callback into the Models management route.
  * @param onOpenArchive deep-link callback into the archived-chats route, fired
  *   from the drawer footer entry (which only appears once something is archived).
+ * @param onOpenRunLimits deep-link callback into the run-limits screen, offered
+ *   on a run that a ceiling stopped — the one action that can change the
+ *   outcome, where retrying the same turn cannot.
  * @param modifier optional layout modifier applied to the screen root.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -124,6 +130,7 @@ fun ChatHomeScreen(
     onOpenSettings: () -> Unit = {},
     onOpenModels: () -> Unit = {},
     onOpenArchive: () -> Unit = {},
+    onOpenRunLimits: () -> Unit = {},
 ) {
     // Single subscription to the consolidated screen state — the immutable
     // sub-structures (composer, console, pending, thread, model, tokens)
@@ -359,7 +366,7 @@ fun ChatHomeScreen(
     // `strings_chat.xml`.
     val fixtures = rememberChatHomeFixtures()
 
-    val viewState = screenState.toViewState(fixtures = fixtures)
+    val viewState = screenState.toViewState(fixtures = fixtures) { context.resolve(it) }
 
     val callbacks = ChatHomeCallbacks(
         onComposerValueChange = viewModel::onComposerValueChange,
@@ -415,6 +422,19 @@ fun ChatHomeScreen(
         onResumeRun = viewModel.reattach::resumeInterruptedRun,
         onDiscardRun = viewModel.reattach::discardInterruptedRun,
         onErrorRetry = viewModel::retryAfterError,
+        // One slot, three destinations. The tile carries a label, not a verb,
+        // so what the action *does* is decided here from the typed reason the
+        // label was derived from — keeping the design module free of any
+        // opinion about navigation.
+        onTerminationAction = {
+            val reason = (screenState.visual as? ChatHomeUiState.Error)?.reason
+            when (reason?.let { RunTerminationCopyMapper.terminationCopy(it).action }) {
+                RunTerminationAction.ADJUST_LIMITS -> onOpenRunLimits()
+                RunTerminationAction.OPEN_CONSOLE -> viewModel.console.openConsole()
+                RunTerminationAction.RUN_AGAIN -> viewModel.retryAfterError()
+                null -> Unit
+            }
+        },
         onTitleTripleTap = { debugPickerExpanded = true },
         onToggleFavorite = viewModel.threads::toggleFavoriteCurrent,
         onEditThread = { threadId ->

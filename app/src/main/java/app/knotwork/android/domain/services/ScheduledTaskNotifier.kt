@@ -1,5 +1,7 @@
 package app.knotwork.android.domain.services
 
+import app.knotwork.android.domain.models.RunTerminationKind
+
 /**
  * Posts user-facing notifications announcing background-run lifecycle events:
  * a trigger firing ("Trigger fired"), and the run outcome ("Task completed" /
@@ -59,4 +61,38 @@ interface ScheduledTaskNotifier {
      *   run record, shown as the notification body.
      */
     suspend fun notifyFailed(sessionId: String, reason: String)
+
+    /**
+     * Announces a background run that the app itself decided to end.
+     *
+     * Separate from [notifyFailed] because it is not a failure and must not
+     * read like one: a ceiling stop is the guard the user configured doing its
+     * job, and the trigger journal has called it "Stopped by a safety limit"
+     * since it was introduced. Posting it under the failure title and the
+     * failure glyph left the notification as the last surface still calling a
+     * working limit a defect.
+     *
+     * Takes the typed cause rather than a rendered sentence so the wording
+     * stays owned by one place; the implementation resolves it to the same
+     * words the chat and the journal use.
+     *
+     * @param sessionId Chat session the run was bound to; the notification's
+     *   tap action deep-links into this session.
+     * @param kind Why the run was ended.
+     * @param runLabel Human name of the session, quoted in the body so a user
+     *   with several automations knows which one this is about.
+     * @param stepsSpent Node executions charged across the run tree.
+     * @param tokensSpent Tokens accounted across the run tree. Note that this
+     *   can exceed the ceiling that stopped the run: tokens are charged a whole
+     *   node's usage at a time and compared afterwards, unlike steps. The
+     *   implementation therefore reports both as spend and never as the
+     *   allowance.
+     */
+    suspend fun notifyTerminated(
+        sessionId: String,
+        kind: RunTerminationKind,
+        runLabel: String,
+        stepsSpent: Int,
+        tokensSpent: Int,
+    )
 }

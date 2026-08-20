@@ -1,5 +1,6 @@
 package app.knotwork.android.presentation.ui.chat.home
 
+import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.design.components.chips.Risk
 
 /**
@@ -60,13 +61,28 @@ sealed interface ChatHomeUiState {
     data object Interrupted : ChatHomeUiState
 
     /**
-     * Inline error tile + retry CTA. The user-visible message is carried
-     * here so the surface can render the failure cause without consulting
-     * any other source of truth.
+     * The run stopped without producing an answer, and the tail of the
+     * conversation explains why.
      *
-     * @property message user-visible error description.
+     * Two shapes behind one state, told apart by [reason]:
+     *
+     *  - **an ordinary failure** (`reason == null`) — a node or the engine
+     *     broke. [message] is the user-visible description, and the surface
+     *     keeps the destructive-toned tile with its Retry action, because a
+     *     transient fault may genuinely not recur.
+     *  - **a typed termination** — the app itself decided to end the run: a
+     *     ceiling, the no-progress watchdog, an expired approval window. Here
+     *     [message] is only the diagnostic that lands in the run record; every
+     *     word the user reads is resolved from [reason] through
+     *     `RunTerminationCopyMapper`, so the same event is worded identically
+     *     in the chat, the notification and the trigger journal.
+     *
+     * @property message The failure description for an ordinary failure, or the
+     *   terse diagnostic form for a typed termination. Never the user-facing
+     *   sentence in the second case — see [reason].
+     * @property reason The typed cause, or `null` for an ordinary failure.
      */
-    data class Error(val message: String) : ChatHomeUiState
+    data class Error(val message: String, val reason: RunTerminationReason? = null) : ChatHomeUiState
 
     /** Alternate nav drawer over the chat surface. */
     data object DrawerOpen : ChatHomeUiState

@@ -1,6 +1,11 @@
 package app.knotwork.android.presentation.ui.chat.home
 
 import app.knotwork.android.domain.models.ClarificationRequest
+import app.knotwork.android.domain.models.RunNoticeCause
+import app.knotwork.android.presentation.ui.common.RunTerminationCopy
+import app.knotwork.android.presentation.ui.common.RunTerminationCopyMapper
+import app.knotwork.android.presentation.ui.common.RunTerminationTone
+import app.knotwork.android.presentation.ui.common.UiText
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ChatMessageStatus
 import app.knotwork.design.components.chat.ChatMetadata
@@ -16,6 +21,9 @@ import app.knotwork.design.screens.chat.ChatHomeMessageRow
 import app.knotwork.design.screens.chat.ChatHomeSamplePromptCard
 import app.knotwork.design.screens.chat.ChatHomeViewState
 import app.knotwork.design.screens.chat.ChatHomeVisualState
+import app.knotwork.design.screens.chat.ChatRunNoticeUi
+import app.knotwork.design.screens.chat.ChatTerminationUi
+import app.knotwork.design.screens.chat.RunTerminationToneUi
 import org.json.JSONArray
 import org.json.JSONException
 import org.json.JSONObject
@@ -45,7 +53,10 @@ import java.util.Locale
 // Reason: single switch over 8 visual variants, each branch a flat
 // constructor call; splitting would just shuffle the fixtures.
 @Suppress("LongMethod")
-fun ChatHomeScreenState.toViewState(fixtures: ChatHomeFixtures = ChatHomeFixtures.forTesting()): ChatHomeViewState {
+fun ChatHomeScreenState.toViewState(
+    fixtures: ChatHomeFixtures = ChatHomeFixtures.forTesting(),
+    resolveText: (UiText) -> String = ::stubResolveText,
+): ChatHomeViewState {
     val threadTitle = thread.title
     val modelName = model.name
     val composerValue = composer.value
@@ -165,21 +176,32 @@ fun ChatHomeScreenState.toViewState(fixtures: ChatHomeFixtures = ChatHomeFixture
             console = console,
         )
 
-        is ChatHomeUiState.Error -> ChatHomeViewState(
-            visualState = ChatHomeVisualState.Error,
-            threadTitle = threadTitle,
-            modelName = modelName,
-            messages = messages,
-            composerValue = composerValue,
-            composerState = ComposerState.Error(message = visual.message),
-            errorMessage = visual.message,
-            pipelineName = resolvedPipelineName,
-            tokensUsed = tokens.used,
-            tokensMax = tokens.max,
-            favorite = thread.favorite,
-            agentStatusLine = fixtures.statusError,
-            console = console,
-        )
+        is ChatHomeUiState.Error -> {
+            // A typed termination is explained in its own words; an untyped
+            // failure keeps the destructive tile and its Retry. Exactly one of
+            // the two is ever populated — the catalog view state requires it.
+            val termination = visual.reason?.let { RunTerminationCopyMapper.terminationCopy(it) }
+            ChatHomeViewState(
+                visualState = ChatHomeVisualState.Error,
+                threadTitle = threadTitle,
+                modelName = modelName,
+                messages = messages,
+                composerValue = composerValue,
+                // Only an untyped failure puts the composer into its error
+                // state. A typed stop explains itself in its own tone above the
+                // composer instead — the error banner is destructive-red, which
+                // would have contradicted the tile two inches above it.
+                composerState = untypedComposerState(visual.message, termination),
+                errorMessage = untypedErrorMessage(visual.message, termination),
+                termination = termination?.toCatalog(resolveText),
+                pipelineName = resolvedPipelineName,
+                tokensUsed = tokens.used,
+                tokensMax = tokens.max,
+                favorite = thread.favorite,
+                agentStatusLine = fixtures.statusError,
+                console = console,
+            )
+        }
 
         is ChatHomeUiState.DrawerOpen -> ChatHomeViewState(
             visualState = ChatHomeVisualState.DrawerOpen,
@@ -217,7 +239,97 @@ fun ChatHomeScreenState.toViewState(fixtures: ChatHomeFixtures = ChatHomeFixture
         openThreadMenuId = thread.openMenuId,
         archivedCount = thread.archivedCount,
         archivedReadOnly = thread.archived,
+        // Orthogonal for the same reason: the notice is about the run in
+        // flight, so it can coexist with any visual — generating, or a HITL
+        // gate held open — rather than belonging to one of them.
+        runNotice = runNotice?.toCatalog(resolveText),
     )
+}
+
+/**
+ * The composer's own error state, which only an **untyped** failure earns.
+ *
+ * @param message The failure description.
+ * @param termination The typed cause, when there was one.
+ * @return The error state, or [ComposerState.Idle] for a typed stop.
+ */
+private fun untypedComposerState(message: String, termination: RunTerminationCopy?): ComposerState =
+    if (termination == null) ComposerState.Error(message) else ComposerState.Idle
+
+/**
+ * The verbatim failure text, likewise reserved for an untyped failure.
+ *
+ * For a typed stop this string is the diagnostic that lands in the run record,
+ * and showing it would put `step-ceiling: 15/15 steps` in front of a person.
+ *
+ * @param message The failure description or diagnostic.
+ * @param termination The typed cause, when there was one.
+ * @return The text to render, or `null` when the cause is typed.
+ */
+private fun untypedErrorMessage(message: String, termination: RunTerminationCopy?): String? =
+    message.takeIf { termination == null }
+
+/**
+ * Projects the live run advisory onto the catalog's strip model.
+ *
+ * @param resolveText Resolver for the sentence.
+ * @return The strip state.
+ */
+private fun RunNoticeCause.toCatalog(resolveText: (UiText) -> String): ChatRunNoticeUi =
+    RunTerminationCopyMapper.noticeCopy(this).let {
+        ChatRunNoticeUi(tone = it.tone.toCatalog(), text = resolveText(it.text))
+    }
+
+/**
+ * Projects the resolved termination copy onto the catalog's local model.
+ *
+ * @param resolveText Resolver for the [UiText] values the copy carries.
+ * @return The catalog tile model, with every string already resolved.
+ */
+private fun RunTerminationCopy.toCatalog(resolveText: (UiText) -> String): ChatTerminationUi = ChatTerminationUi(
+    tone = tone.toCatalog(),
+    toneLabel = resolveText(UiText.Resource(tone.labelRes)),
+    title = resolveText(title),
+    body = resolveText(body),
+    // Its own short clause, not the tile's sentence: the strip is clamped to
+    // two lines, and one string trying to serve both is what got the copy cut
+    // in half at large font scales.
+    banner = resolveText(banner),
+    meter = meter?.let(resolveText),
+    actionLabel = action?.let { resolveText(UiText.Resource(it.labelRes)) },
+)
+
+/**
+ * Maps the app's tone vocabulary onto the catalog's local mirror, which exists
+ * so the design module keeps its zero dependency on `:app`.
+ *
+ * @return The catalog tone.
+ */
+private fun RunTerminationTone.toCatalog(): RunTerminationToneUi = when (this) {
+    RunTerminationTone.LIMIT -> RunTerminationToneUi.Limit
+    RunTerminationTone.STUCK -> RunTerminationToneUi.Stuck
+    RunTerminationTone.INFO -> RunTerminationToneUi.Info
+}
+
+/**
+ * Default [UiText] resolver for unit tests, which call [toViewState] without a
+ * `Context`.
+ *
+ * Renders a resource as `res:<id>` plus its arguments, so a test can assert
+ * *which* string a branch chose without loading resources — and so a
+ * production call site that forgot to pass a real resolver would be
+ * unmistakable on screen rather than quietly blank.
+ *
+ * @param text The value to render.
+ * @return A greppable stand-in for the translated string.
+ */
+internal fun stubResolveText(text: UiText): String = when (text) {
+    is UiText.Resource ->
+        "res:${text.id}" + text.args.takeIf { it.isNotEmpty() }?.joinToString(",", "(", ")").orEmpty()
+    is UiText.Dynamic -> text.text
+    is UiText.Joined -> text.parts.joinToString(text.separator) { stubResolveText(it) }
+    is UiText.Plural -> "plural:${text.id}(${text.quantity})"
+    UiText.Empty -> ""
 }
 
 /**

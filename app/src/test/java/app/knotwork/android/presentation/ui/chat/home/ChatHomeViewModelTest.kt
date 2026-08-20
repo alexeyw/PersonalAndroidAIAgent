@@ -18,7 +18,10 @@ import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.Role
+import app.knotwork.android.domain.models.RunCeilingAxis
+import app.knotwork.android.domain.models.RunNoticeCause
 import app.knotwork.android.domain.models.RunOrigin
+import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.ClarificationRepository
@@ -65,6 +68,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
@@ -462,6 +466,68 @@ class ChatHomeViewModelTest {
         advanceUntilIdle()
 
         assertEquals(LocalBackend.GPU.key, viewModel.state.value.tokens.backend)
+    }
+
+    @Test
+    fun `given a typed stop then the cause reaches the surface, not only the record`() = runTest(testDispatcher) {
+        // The seam between the engine's typed cause and the sentence the user
+        // reads. Dropping `state.reason` here compiles, keeps the run record
+        // correct, and silently restores the defect this change exists to fix:
+        // the user sees a raw diagnostic in a destructive tile.
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            // A live state first: the send collector drops a leading terminal
+            // state as a stale replay of the previous run.
+            emit(AgentOrchestratorState.PipelineStage(AgentOrchestratorState.PipelineStepInfo(1, 3, "CLOUD")))
+            emit(
+                AgentOrchestratorState.Error(
+                    message = "step-ceiling: 15/15 steps",
+                    reason = RunTerminationReason.StepCeiling(limit = 15, spent = 15),
+                ),
+            )
+        }
+
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        val visual = viewModel.state.value.visual
+        assertTrue("expected an Error visual, got $visual", visual is ChatHomeUiState.Error)
+        assertEquals(
+            RunTerminationReason.StepCeiling(limit = 15, spent = 15),
+            (visual as ChatHomeUiState.Error).reason,
+        )
+    }
+
+    @Test
+    fun `given a run advisory when the run is stopped then the strip goes with it`() = runTest(testDispatcher) {
+        // A notice belongs to the run that raised it. Left behind, it advertises
+        // a limit above a composer with nothing running.
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(AgentOrchestratorState.PipelineStage(AgentOrchestratorState.PipelineStepInfo(1, 3, "CLOUD")))
+            emit(
+                AgentOrchestratorState.RunNotice(
+                    RunNoticeCause.ApproachingCeiling(axis = RunCeilingAxis.STEPS, spent = 12, hardLimit = 15),
+                ),
+            )
+            // Never completes: the run is still going when the user taps Stop.
+            awaitCancellation()
+        }
+
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+        assertNotNull("the advisory should be showing while the run is live", viewModel.state.value.runNotice)
+
+        viewModel.stopGeneration()
+        advanceUntilIdle()
+
+        assertNull("the advisory outlived its run", viewModel.state.value.runNotice)
     }
 
     @Test

@@ -24,9 +24,14 @@ package app.knotwork.android.domain.models
  * @property startedAt Epoch millis when the run was enqueued.
  * @property finishedAt Epoch millis when the run reached a terminal status;
  *   `null` while the run is still active.
- * @property errorMessage Human-readable failure or interruption reason.
- *   `null` unless the run finished with [PipelineRunStatus.FAILED] or
- *   [PipelineRunStatus.INTERRUPTED].
+ * @property errorMessage Why the run did not finish, in text. `null` unless it
+ *   ended [PipelineRunStatus.FAILED] or [PipelineRunStatus.INTERRUPTED]. Its
+ *   audience depends on [terminationReason]: without one this is an ordinary
+ *   failure and the string is the description a person reads, but when the app
+ *   itself ended the run this holds the terse **diagnostic** form
+ *   (`RunTerminationReason.diagnostic()`), not user copy. Reading it as a
+ *   sentence in that case would show somebody `step-ceiling: 15/15 steps`; the
+ *   sentence is resolved from [terminationReason] in the presentation layer.
  * @property graphContentHash Content hash of the executing pipeline graph
  *   captured at the moment the run transitioned to
  *   [PipelineRunStatus.RUNNING] (see `PipelineGraph.contentHash`). Used to

@@ -31,7 +31,6 @@
     <string name="settings_row_approval_window_title">Approval window</string>
     <string name="settings_row_voice_length_title">Voice input length</string>
     <string name="settings_tool_usage_helper">Extra guidance, prepended to tool-enabled prompts, on when and how to call tools.</string>
-    <string name="settings_pipeline_cap_steps_title">Cap autonomous steps</string>
     <string name="settings_pipeline_nesting_depth_title">Max nesting depth</string>
     <string name="settings_pipeline_structured_repairs_title">Structured-output repairs</string>
     <string name="settings_memory_summary_limit_title">Memory summary size</string>

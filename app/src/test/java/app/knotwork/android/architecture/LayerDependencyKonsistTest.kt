@@ -39,4 +39,34 @@ class LayerDependencyKonsistTest {
                 presentation.dependsOn(domain)
             }
     }
+
+    /**
+     * `data` must not reach up into `presentation`.
+     *
+     * The assertion above is **permissive**: `dependsOn` says a layer *may*
+     * depend on another and says nothing about the ones it may not. Only
+     * `dependsOnNothing()` is exclusive, and it applies to `domain` alone — so
+     * this direction was unguarded, and a foreground service duly imported a
+     * presentation mapper to render a status line. Nothing failed. This test is
+     * what would have failed.
+     *
+     * The mirror assertion, `presentation.doesNotDependOn(data)`, is
+     * **deliberately absent**: eight production files already cross that way
+     * (`MainActivity`, `ModelsViewModel`, `ExternalAutomationReceiver` and
+     * others reaching for schedulers and download managers). That is a real
+     * debt, but it is long-standing rather than a regression, and asserting it
+     * here would fail the build on code this change never touched. Raised for
+     * the phase's bug-fix container instead — adding the assertion is a
+     * one-line change once the eight are moved behind domain ports.
+     */
+    @Test
+    fun `data does not depend on presentation`() {
+        ArchitectureScope.production
+            .assertArchitecture {
+                val data = Layer("Data", "app.knotwork.android.data..")
+                val presentation = Layer("Presentation", "app.knotwork.android.presentation..")
+
+                data.doesNotDependOn(presentation)
+            }
+    }
 }

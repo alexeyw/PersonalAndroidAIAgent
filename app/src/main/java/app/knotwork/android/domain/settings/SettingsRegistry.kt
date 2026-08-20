@@ -100,7 +100,16 @@ private val MEMORY_ENTRIES = listOf(
 )
 
 private val PIPELINES_ENTRIES = listOf(
-    setting("PIPELINE_MAX_STEPS", BASIC, SLIDER, syn = listOf("max", "safety", "cap", "steps")),
+    // Absorbed, not moved beside: the step cap used to be a lone slider here,
+    // the only one of four ceilings a user could see. It now lives on the
+    // run-limits screen with the other three and the spend statement, reached
+    // through this row — which keeps the category, so the search deep-link and
+    // its row highlight still land where they always did.
+    link(
+        BASIC,
+        "Run limits",
+        syn = listOf("steps", "tokens", "limit", "cap", "budget", "cost", "spend", "runaway"),
+    ),
     setting("PIPELINE_MAX_NESTING_DEPTH", ADVANCED, SLIDER, syn = listOf("nest", "max", "depth")),
     setting("STRUCTURED_OUTPUT_MAX_REPAIRS", ADVANCED, SLIDER, syn = listOf("json", "repair", "max")),
     link(ADVANCED, "Provider detail", syn = listOf("retry", "cloud", "delay")),

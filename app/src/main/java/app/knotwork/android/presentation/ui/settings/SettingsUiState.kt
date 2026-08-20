@@ -29,8 +29,12 @@ import app.knotwork.design.screens.settings.HubSearchResultRow
  * @property toolApprovalPolicy Currently selected HITL policy.
  * @property blockDestructiveTools Mirror of the persisted toggle.
  * @property blockNetworkFromLocalModel Mirror of the persisted toggle.
- * @property capAutonomousSteps Renamed `pipelineMaxSteps`; trailing value
- *   in the restrictions card.
+ * @property runMaxTokens Interactive token ceiling. Held here only to build the
+ *   run-limits entry-row summary — the limits themselves are owned by the
+ *   run-limits screen and its own ViewModel.
+ * @property capAutonomousSteps `pipelineMaxSteps`. Read-only here: the limit is
+ *   edited on the run-limits screen, and this copy exists only to build the
+ *   value summary on the entry row that leads there.
  * @property resumeMaxAgeHours Window (hours) during which an interrupted
  *   pipeline run can still be resumed from its checkpoint.
  * @property backgroundApprovalWindowHours Window (hours) during which a run
@@ -146,6 +150,7 @@ data class SettingsUiState(
     val blockDestructiveTools: Boolean = false,
     val blockNetworkFromLocalModel: Boolean = false,
     val capAutonomousSteps: Int = SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT,
+    val runMaxTokens: Int = SettingsDefaults.RUN_MAX_TOKENS_DEFAULT,
     val resumeMaxAgeHours: Int = SettingsDefaults.RESUME_MAX_AGE_HOURS_DEFAULT,
     val backgroundApprovalWindowHours: Int = SettingsDefaults.BACKGROUND_APPROVAL_WINDOW_HOURS_DEFAULT,
     val temperature: Float = SettingsDefaults.TEMPERATURE_DEFAULT,

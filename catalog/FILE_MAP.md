@@ -405,7 +405,21 @@ project — `:app` consumes it as an `implementation` dependency.
     - `MemorySettingsContent.kt` — long-term-memory controls
       (extraction, retrieval thresholds, re-embed).
     - `PipelinesSettingsContent.kt` — pipeline / structured-output
-      controls.
+      controls. Basic tier is the **Run limits** entry row, carrying the
+      current step and token limits as its subtitle.
+    - `RunLimitsContent.kt` — the run-limits screen: four ceilings plus the
+      spend statement. Carries two components of its own. `LimitSliderRow`
+      is a slider with a description and an optional state qualifier, laid
+      out in a `FlowRow` rather than a `Row` — at a 200 % font scale a
+      title and a trailing chip cannot share one line, and a `Row` resolves
+      that by clipping the chip off the screen. `StatementRow` is an axis
+      the product *states* rather than controls, deliberately not a
+      disabled slider: a disabled control implies something could enable
+      it, and nothing will.
+    - `RunLimitsViewState.kt` — `RunLimitsViewState`,
+      `LimitSliderRowState`, `StatementRowState` and `RunLimitsCallbacks`.
+      Every axis has a *move* and a *commit*, because writing a background
+      limit is what stops it following the interactive one.
     - `ToolsSettingsContent.kt` — tool-calling and approval controls.
     - `BackgroundSettingsContent.kt` — background work, triggers,
       notifications and entry-surface bindings.

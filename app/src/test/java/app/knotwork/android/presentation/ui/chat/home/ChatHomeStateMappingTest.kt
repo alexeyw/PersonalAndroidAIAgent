@@ -1,6 +1,9 @@
 package app.knotwork.android.presentation.ui.chat.home
 
 import app.knotwork.android.domain.models.PipelineSamplePrompt
+import app.knotwork.android.domain.models.RunCeilingAxis
+import app.knotwork.android.domain.models.RunNoticeCause
+import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ComposerState
 import app.knotwork.design.components.chips.Risk
@@ -15,7 +18,9 @@ import app.knotwork.design.components.console.SpanStatus
 import app.knotwork.design.screens.chat.ChatHomeConsoleState
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
 import app.knotwork.design.screens.chat.ChatHomeVisualState
+import app.knotwork.design.screens.chat.RunTerminationToneUi
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -45,6 +50,7 @@ class ChatHomeStateMappingTest {
         pendingTypedConfirm: String = "",
         console: ChatHomeConsoleState = ChatHomeConsoleState(),
         activeSamplePrompts: List<PipelineSamplePrompt> = emptyList(),
+        runNotice: RunNoticeCause? = null,
     ): ChatHomeScreenState = ChatHomeScreenState(
         visual = visual,
         composer = ChatHomeComposerState(value = composerValue, typedConfirm = pendingTypedConfirm),
@@ -53,7 +59,97 @@ class ChatHomeStateMappingTest {
         model = ChatHomeModelState(name = model),
         messages = messages,
         activeSamplePrompts = activeSamplePrompts,
+        runNotice = runNotice,
     )
+
+    // ─── Stopped runs: chosen vs unchosen ─────────────────────────────────────
+
+    @Test
+    fun `an untyped failure keeps the error tile and its retry`() {
+        val view = screenState(ChatHomeUiState.Error("Tool 'http.get' failed")).toViewState()
+
+        assertEquals(ChatHomeVisualState.Error, view.visualState)
+        assertEquals("Tool 'http.get' failed", view.errorMessage)
+        assertNull("nothing typed happened, so there is nothing to explain", view.termination)
+    }
+
+    @Test
+    fun `a typed termination is explained instead of shown as an error`() {
+        val view = screenState(
+            ChatHomeUiState.Error(
+                message = "step-ceiling: 15/15 steps",
+                reason = RunTerminationReason.StepCeiling(limit = 15, spent = 15),
+            ),
+        ).toViewState()
+
+        assertEquals(ChatHomeVisualState.Error, view.visualState)
+        // The diagnostic is for the run record and the console, never the tile.
+        assertNull("the diagnostic must not reach the user", view.errorMessage)
+        val termination = requireNotNull(view.termination)
+        assertEquals(RunTerminationToneUi.Limit, termination.tone)
+        assertNotNull("a ceiling states its numbers", termination.meter)
+        assertNotNull("a ceiling offers a way to change the outcome", termination.actionLabel)
+    }
+
+    @Test
+    fun `a typed stop does not put the composer into its error state`() {
+        val view = screenState(
+            ChatHomeUiState.Error(
+                message = "step-ceiling: 15/15 steps",
+                reason = RunTerminationReason.StepCeiling(limit = 15, spent = 15),
+            ),
+        ).toViewState()
+
+        // The composer's error banner is destructive-red. Using it here put an
+        // alert glyph two inches below a tile explaining that a limit had done
+        // its job — one event, two tones, on one screen.
+        assertEquals(ComposerState.Idle, view.composerState)
+        val termination = requireNotNull(view.termination)
+        // The strip is clamped to two lines; sharing one sentence with the tile
+        // is what cut the copy in half at large font scales.
+        assertNotEquals(termination.body, termination.banner)
+    }
+
+    @Test
+    fun `an untyped failure still drives the composer error banner`() {
+        val view = screenState(ChatHomeUiState.Error("Tool 'http.get' failed")).toViewState()
+
+        assertEquals(ComposerState.Error("Tool 'http.get' failed"), view.composerState)
+    }
+
+    @Test
+    fun `a run notice rides alongside whatever the run is doing`() {
+        val view = screenState(
+            ChatHomeUiState.Generating(),
+            runNotice = RunNoticeCause.ApproachingCeiling(axis = RunCeilingAxis.STEPS, spent = 12, hardLimit = 15),
+        ).toViewState()
+
+        // Not a visual state of its own: the run is still generating, and the
+        // notice must not displace that.
+        assertEquals(ChatHomeVisualState.Generating, view.visualState)
+        val notice = requireNotNull(view.runNotice)
+        assertEquals(RunTerminationToneUi.Limit, notice.tone)
+    }
+
+    @Test
+    fun `no notice means no strip above the composer`() {
+        assertNull(screenState(ChatHomeUiState.Generating()).toViewState().runNotice)
+    }
+
+    @Test
+    fun `a stalled run is explained, not shown as a failure to retry`() {
+        // The queue's watchdog types this cause and persists it. It used to drop
+        // it on the way to the surface, so the run that the app itself killed
+        // arrived wearing the destructive tile and a Retry that would stall all
+        // over again.
+        val view = screenState(
+            ChatHomeUiState.Error(message = "no-progress", reason = RunTerminationReason.NoProgress),
+        ).toViewState()
+
+        assertNull(view.errorMessage)
+        val termination = requireNotNull(view.termination)
+        assertEquals(RunTerminationToneUi.Stuck, termination.tone)
+    }
 
     @Test
     fun `Empty maps to ChatHomeVisualState_Empty with sample prompt cards and no messages`() {

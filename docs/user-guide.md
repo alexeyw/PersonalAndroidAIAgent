@@ -546,13 +546,14 @@ example `[Translator] ▶ LITE_RT`), so you can read a nested run as a
 hierarchy — both live and when replaying a finished run. Each level of
 nesting adds one step of indentation.
 
-Two run-wide limits also span the whole call tree:
+Three run-wide limits span the whole call tree:
 
-- **Step budget.** The maximum-steps limit is shared across the parent
-  and every sub-pipeline it calls, so a composition cannot loop forever
-  by nesting. If the budget runs out deep inside a sub-pipeline, the
-  whole run stops with a clear "exceeded the maximum … steps shared
-  across the pipeline tree" message.
+- **Step limit.** The step ceiling is shared across the parent and every
+  sub-pipeline it calls, so a composition cannot loop forever by nesting.
+  If it runs out deep inside a sub-pipeline, the whole run stops and says
+  it was **stopped by a safety limit**.
+- **Token limit.** Charged against the same shared allowance, on the same
+  whole-tree basis.
 - **Approvals and questions.** A tool approval or clarification raised
   *inside* a sub-pipeline surfaces its card in the chat exactly like a
   top-level one, and answering it continues the nested run in place.
@@ -1267,7 +1268,7 @@ be saved:
 While a composed run executes, each sub-pipeline appears as its own
 **indented span** in the console — see
 [Sub-pipelines in the console](#sub-pipelines-in-the-console) for how
-nested traces, the shared step budget, approvals raised inside a
+nested traces, the shared run limits, approvals raised inside a
 sub-pipeline, and resuming across a sub-pipeline boundary all behave.
 
 ### Variables in system prompts
@@ -1941,8 +1942,8 @@ and **Send anonymous crash reports**.
 ### Search the settings
 
 The magnifying-glass field at the top of the hub searches every setting by name,
-description, owning category and a set of synonyms — so typing `max` surfaces
-*Cap autonomous steps* (via the synonym *max steps*), *Max context length*,
+description, owning category and a set of synonyms — so typing `limit` surfaces
+*Run limits* (via its synonyms), and `max` surfaces *Max context length*,
 *Max memory chunks* and more. The matched text is highlighted in each result, and
 a result row shows its category **breadcrumb** and **Basic/Advanced** tier (plus
 a `≈ "synonym"` chip when a synonym is what matched). Tapping a result opens the
@@ -2114,14 +2115,51 @@ and is discarded rather than saved.
 
 ### Pipelines & structured output
 
-- **Cap autonomous steps** *(Basic)* (5 – 100) — upper bound on planner
-  iterations per user message; the agent pauses for guidance when the cap is hit.
+- **Run limits** *(Basic link)* — opens the [Run limits](#run-limits) screen,
+  and shows the current step and token limits on the row itself.
 - **Max nesting depth** *(Advanced)* — how deep `PIPELINE` nodes may recurse.
 - **Structured-output repairs** *(Advanced)* — how many times the
   structured-output gate re-asks the model to fix malformed JSON before falling
   back to the per-node failure policy.
 - **Retry policy** *(Advanced link)* — opens the provider detail screen (the same
   retry sliders described under Models).
+
+#### Run limits
+
+An autonomous run stops itself when it reaches one of these limits. Everything a
+run starts counts towards them — pipelines it calls, and every time it resumes
+after a pause. There are four numbers and one statement:
+
+- **Steps per run** (5 – 100) — how many steps a run may take before it stops.
+  One step is one node execution.
+- **Steps per background run** — the same limit for runs you did not start
+  yourself: a trigger, a schedule, the Quick Settings tile, or another app.
+  Until you set it, it is marked *Same as above* and follows the number above
+  it, so raising your interactive limit raises theirs too. Setting it separately
+  ends that, and it keeps its own value from then on.
+- **Tokens per run** (10 000 – 10 000 000) — how many tokens a run may send and
+  receive in total. The track is logarithmic, so a proportional change costs the
+  same drag anywhere along it.
+- **Tokens per background run** — lower by default, because nobody is watching a
+  background run finish.
+- **Spending limit — *Not measured*.** Knotwork runs on your own API key, so it
+  never sees your bill and cannot measure or cap what a run costs. Rather than
+  show you a figure it would have to guess, it says so. The token limit above is
+  the closest control.
+
+A run you are watching warns you when it passes 75 % of a limit, with an
+unobtrusive note above the composer while there is still room to finish. That
+warning point is fixed and not adjustable. Two honest caveats: the note lives in
+the chat, so a run started by a trigger at 3 am has nowhere to show it; and a
+run that pauses and resumes may warn again.
+
+When a limit is actually reached, the run **ends** — it does not pause and does
+not ask what to do. The chat shows **Stopped by a safety limit**, which allowance
+ran out, how much of it was used, and an **Adjust limits** action. A background
+run that stops this way is announced the same way in its notification and
+recorded in the trigger's journal, where it deliberately does **not** count
+against the trigger's health: a limit you configured doing its job is not a
+fault.
 
 ### Tools & workspace
 
@@ -2523,11 +2561,16 @@ default**, or rebind the chat by creating a new one.
 
 ### The agent stopped mid-run
 
-Long pipelines can hit the **Cap autonomous steps** ceiling. The console will
-show a stop event with the step count. If you legitimately need
-more iterations, raise the ceiling in **Settings → Pipelines & structured
-output → Cap autonomous steps**. If the run is looping unproductively, lower it
-instead.
+A long run can reach one of its **run limits**. The run does not pause and does
+not ask what to do — it stops, and the chat says **Stopped by a safety limit**
+along with which allowance ran out and how much of it was used. **Adjust limits**
+on that message opens the screen where you can raise it.
+
+Two things worth knowing before you raise anything. The limit that stopped the
+run may be the **token** one rather than the step one, so read the message rather
+than assuming; and a run you did not start yourself is governed by
+the **background** limits, which are set separately on the same screen. If the
+run was looping unproductively, lower the limit instead.
 
 ### A trigger didn't fire
 
