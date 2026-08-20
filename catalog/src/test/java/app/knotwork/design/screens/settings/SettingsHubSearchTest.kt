@@ -39,6 +39,20 @@ class SettingsHubSearchTest {
     }
 
     @Test
+    fun `a basic-tier hit is tagged Basic`() {
+        // The tier tag has two branches and, for a while, only one of them was
+        // depicted: every entry matching the "max" fixture's query is Advanced.
+        // Asserted here rather than in a snapshot because the snapshot suite is
+        // inert under `./gradlew check` — it verifies only when a Roborazzi task
+        // is in the graph.
+        composeTestRule.setContent {
+            KnotworkTheme { SettingsHubContent(state = SettingsPreview.hubSearchBasicTier()) }
+        }
+        composeTestRule.onNodeWithText("Run limits").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Basic").assertIsDisplayed()
+    }
+
+    @Test
     fun `no-match state shows the query and clears on action`() {
         var cleared = false
         composeTestRule.setContent {

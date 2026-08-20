@@ -57,6 +57,27 @@ internal object SettingsPreview {
         ),
     )
 
+    /**
+     * A hit set containing a **Basic** row, which the "max" fixture above
+     * cannot produce.
+     *
+     * Its existence is not decorative. Every entry matching "max" is Advanced,
+     * so once the run-limits row stopped answering to that query the Basic tier
+     * had no depiction anywhere — the tag string and its primary-colour
+     * treatment were rendered by nothing and asserted by nothing.
+     *
+     * Producible as written: "limit" appears in exactly two indexed names —
+     * *Memory summary limit* and *Run limits* — both as substrings, so both
+     * rank the same and the stable sort keeps registry order, Memory first.
+     */
+    fun hubSearchBasicTier(): SettingsHubViewState = hubDefault().copy(
+        searchQuery = "limit",
+        searchResults = listOf(
+            searchRow("MEMORY_SUMMARY_DEFAULT_LIMIT", SettingsCategoryId.Memory, "Memory summary limit", 15, 5),
+            searchRow("LINK_RUN_LIMITS", SettingsCategoryId.Pipelines, "Run limits", 4, 5, basic = true),
+        ),
+    )
+
     /** Hub with a query that matches nothing — the calm empty state. */
     fun hubSearchEmpty(): SettingsHubViewState = hubDefault().copy(searchQuery = "lidar", searchResults = emptyList())
 
