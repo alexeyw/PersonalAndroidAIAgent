@@ -15,6 +15,36 @@ details.
 
 ### Added
 
+- **A prompt can now travel as a file.** Any prompt in the Prompt library can be
+  exported as a Markdown file and imported back — yours or one of the bundled
+  ones, since exporting only reads it. Import is the new action in the library's
+  top bar and the first button on the empty screen; export lives on each row.
+  The file is a short settings block between two lines of three dashes followed
+  by the prompt itself, so one can be written by hand in any editor and sent
+  through a chat or kept in a repository.
+
+  **A prompt file can only supply wording.** It cannot add tools, add steps, or
+  carry scripts. If a file asks for any of those, the prompt is still imported
+  and the app names exactly what it left out, because a refusal nobody sees is
+  the same as no refusal at all. There is deliberately no "import from a URL":
+  a prompt becomes part of the instructions the agent follows, and the file
+  picker is what keeps a person's decision between a link and your agent.
+
+  When a file cannot be read, nothing is imported and the app says which of the
+  recognised causes it hit rather than calling the file invalid. When the prompt
+  is already in your library and the file differs, you choose whether to replace
+  it or keep both — the app never silently overwrites an edit you made in it.
+
+### Changed
+
+- **Prompt cards were rearranged to fit their new export action.** The name now
+  has the whole first line to itself, and Preview, Duplicate, Edit and a **More**
+  menu — holding Export and Delete — sit on the footer line beside `used by N
+  pipelines`. Delete stops being a one-tap neighbour of Edit, and the row keeps
+  the same four action slots it had, at the same reach, including at the largest
+  font sizes. An empty Prompt library now offers **Import prompt** and **New
+  prompt** directly instead of only a `+` button.
+
 - **A run that goes in circles is now caught and stopped, and told apart from a
   run that has merely run out of allowance.** The agent watches each run for
   repetition — the same step, on the same input, producing the same result — and

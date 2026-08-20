@@ -23,8 +23,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.Edit
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -38,9 +39,14 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -68,12 +74,25 @@ private val EditorHeaderGlyph = 18.dp
 private val FabIconSize = 24.dp
 
 /**
+ * Font scale above which the top bar drops its subtitle.
+ *
+ * At 1.5× and beyond the bar cannot hold two lines of text beside the
+ * navigation icon and the import action without clipping the title to a
+ * letter or two. The subtitle is a count available elsewhere; the title is
+ * what the screen is, so the subtitle is what goes.
+ */
+private const val MAX_SUBTITLE_FONT_SCALE = 1.5f
+
+/**
  * Stateless Knotwork Prompt Library surface.
  *
  * @param state immutable view state — drives loader / empty / default / error layouts.
  * @param modifier optional layout modifier applied to the root scaffold.
  * @param strings localised display strings.
  * @param callbacks one-shot callback bundle.
+ * @param snackbarHost host slot for one-shot confirmations (imported,
+ * exported, nothing changed). Empty by default so catalog previews and
+ * snapshots render the screen without one.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,10 +101,12 @@ fun PromptLibraryContent(
     modifier: Modifier = Modifier,
     strings: PromptLibraryStrings = PromptLibraryStrings(),
     callbacks: PromptLibraryCallbacks = noopPromptLibraryCallbacks(),
+    snackbarHost: @Composable () -> Unit = {},
 ) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.surface,
+        snackbarHost = snackbarHost,
         contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(left = 0, top = 0, right = 0, bottom = 0),
         topBar = {
             androidx.compose.foundation.layout.Column {
@@ -94,7 +115,12 @@ fun PromptLibraryContent(
             }
         },
         floatingActionButton = {
-            if (state.visualState != PromptLibraryVisualState.Loading) {
+            // Hidden while the library is empty: that state offers both verbs
+            // as buttons of its own, and a FAB repeating one of them makes the
+            // pair read as three choices.
+            if (state.visualState != PromptLibraryVisualState.Loading &&
+                state.visualState != PromptLibraryVisualState.Empty
+            ) {
                 FloatingActionButton(
                     onClick = callbacks.onNewPrompt,
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -111,17 +137,23 @@ fun PromptLibraryContent(
         },
     ) { padding ->
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            // The tab row is deliberately stable across loads — a category with
+            // zero prompts still gets its tab, so the row does not reshuffle
+            // under the user. The one exception is a library with nothing in it
+            // at all: there is no catalogue to browse, and eight tabs over an
+            // empty page describe a shape the user does not have yet.
             if (state.visualState != PromptLibraryVisualState.Loading &&
-                state.visualState != PromptLibraryVisualState.Error
+                state.visualState != PromptLibraryVisualState.Error &&
+                state.visualState != PromptLibraryVisualState.Empty
             ) {
                 PromptsCategoryTabs(state = state, callbacks = callbacks)
             }
             when (state.visualState) {
                 PromptLibraryVisualState.Loading -> PromptsLoading()
-                PromptLibraryVisualState.Empty -> PromptsEmpty(strings = strings)
+                PromptLibraryVisualState.Empty -> PromptsEmptyLibrary(strings = strings, callbacks = callbacks)
                 PromptLibraryVisualState.Error -> PromptsError(state = state, strings = strings, callbacks = callbacks)
                 PromptLibraryVisualState.Default -> if (state.prompts.isEmpty()) {
-                    PromptsEmpty(strings = strings)
+                    PromptsEmptyCategory(strings = strings)
                 } else {
                     PromptsList(state = state, strings = strings, callbacks = callbacks)
                 }
@@ -144,12 +176,22 @@ private fun PromptsTopBar(
                     text = strings.title,
                     style = KnotworkTextStyles.TitleMd,
                     color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
-                if (state.subtitle.isNotEmpty()) {
+                // At large font scales the bar cannot hold both lines beside
+                // the navigation icon and the import action, and a title
+                // clipped to one letter is worse than no subtitle: the
+                // subtitle is a count the user can get elsewhere, the title
+                // is what the screen is. So the subtitle is the part that
+                // goes first.
+                if (state.subtitle.isNotEmpty() && LocalDensity.current.fontScale <= MAX_SUBTITLE_FONT_SCALE) {
                     Text(
                         text = state.subtitle,
                         style = KnotworkTextStyles.MonoSm,
                         color = KnotworkTheme.extended.onSurfaceMuted,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
@@ -163,8 +205,18 @@ private fun PromptsTopBar(
                 )
             }
         },
-        // TopAppBar slot intentionally empty. Reserved for future actions (Import / Export).
-        actions = {},
+        // The reserved slot, filled. Import is the only action here: it acts on
+        // the library rather than on a row, and it is reachable from the empty
+        // state, which is where importing matters most. Export is per-row.
+        actions = {
+            IconButton(onClick = callbacks.onImportPrompt) {
+                Icon(
+                    imageVector = AppIcons.ImportFile,
+                    contentDescription = strings.importCd,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
@@ -242,12 +294,36 @@ private fun PromptsLoading() {
     }
 }
 
+/**
+ * Nothing in the library at all. Import leads, because a first prompt is more
+ * likely to arrive as a file someone sent than to be written from a blank
+ * sheet; writing one is offered right below it.
+ */
 @Composable
-private fun PromptsEmpty(strings: PromptLibraryStrings) {
+private fun PromptsEmptyLibrary(strings: PromptLibraryStrings, callbacks: PromptLibraryCallbacks) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         EmptyState(
             title = strings.emptyTitle,
             subtitle = strings.emptySubtitle,
+            ctaLabel = strings.emptyImportCta,
+            onCtaClick = callbacks.onImportPrompt,
+            secondaryCtaLabel = strings.emptyNewCta,
+            onSecondaryCtaClick = callbacks.onNewPrompt,
+        )
+    }
+}
+
+/**
+ * The selected category has no prompts but the library does. Its own words:
+ * the library-wide state owns "No prompts yet", and repeating that sentence
+ * here would tell a user with twenty prompts that they have none.
+ */
+@Composable
+private fun PromptsEmptyCategory(strings: PromptLibraryStrings) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        EmptyState(
+            title = strings.emptyCategoryTitle,
+            subtitle = strings.emptyCategorySubtitle,
         )
     }
 }
@@ -293,6 +369,7 @@ private fun PromptsList(
                 onDelete = { callbacks.onDeletePrompt(prompt.id) },
                 onDuplicate = { callbacks.onDuplicatePrompt(prompt.id) },
                 onPreview = { callbacks.onPreviewPrompt(prompt.id) },
+                onExport = { callbacks.onExportPrompt(prompt.id) },
             )
         }
     }
@@ -308,6 +385,7 @@ private fun PromptCard(
     onDelete: () -> Unit,
     onDuplicate: () -> Unit,
     onPreview: () -> Unit,
+    onExport: () -> Unit,
 ) {
     // Card accent + chip share the same node-type hue from the
     // catalog palette so a card visually echoes the matching node on
@@ -358,21 +436,6 @@ private fun PromptCard(
                     // Name wraps onto multiple lines so long titles aren't
                     // truncated. The card grows vertically.
                 )
-                // Preview is available on every row (read-only OR mutable);
-                // Edit + Delete only render when the row is mutable.
-                CompactIconButton(
-                    icon = AppIcons.Search,
-                    contentDescription = strings.previewCd,
-                    onClick = onPreview,
-                )
-                if (!prompt.isReadOnly) {
-                    CompactIconButton(icon = AppIcons.Edit, contentDescription = strings.editCd, onClick = onEdit)
-                    CompactIconButton(
-                        icon = AppIcons.Trash,
-                        contentDescription = strings.deleteCd,
-                        onClick = onDelete,
-                    )
-                }
             }
             Text(
                 text = highlightVariables(text = prompt.body, variables = variables),
@@ -381,14 +444,111 @@ private fun PromptCard(
                 maxLines = 4,
                 overflow = TextOverflow.Ellipsis,
             )
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = strings.usedByFormat.format(prompt.usedByCount),
-                    style = KnotworkTextStyles.Caption,
-                    color = KnotworkTheme.extended.onSurfaceMuted,
-                    modifier = Modifier.weight(1f),
+            PromptCardActions(
+                prompt = prompt,
+                strings = strings,
+                onEdit = onEdit,
+                onDelete = onDelete,
+                onDuplicate = onDuplicate,
+                onPreview = onPreview,
+                onExport = onExport,
+            )
+        }
+    }
+}
+
+/**
+ * The card's action row: the "used by" caption, then the icon cluster.
+ *
+ * Four slots on a user row — Preview, Duplicate, Edit, and an overflow
+ * holding Export and Delete — and three on a read-only row, where Export is
+ * direct because a bundled prompt has only three verbs and an overflow
+ * holding one item is not a menu.
+ *
+ * Two layout rules earn their keep here:
+ *
+ * 1. **The caption is what yields, never the icons.** It carries `weight(1f)`
+ *    and ellipsises; the cluster keeps its width at every font scale. The
+ *    opposite arrangement drops the overflow at large font scales, and with
+ *    it the only route to Delete and Export.
+ * 2. **The overflow is never conditional on size.** Whatever else the row
+ *    does under pressure, the menu stays reachable.
+ *
+ * @param prompt Row being rendered; [PromptRow.isReadOnly] picks the variant.
+ * @param strings Localised labels and content descriptions.
+ * @param onEdit Opens the editor sheet. User rows only.
+ * @param onDelete Deletes the prompt. User rows only, behind the overflow.
+ * @param onDuplicate Copies the prompt into an editable one.
+ * @param onPreview Opens the rendered-prompt preview sheet.
+ * @param onExport Writes the prompt out as a file.
+ */
+@Composable
+@Suppress("LongParameterList") // Mirrors PromptCard's action set one-for-one.
+private fun PromptCardActions(
+    prompt: PromptRow,
+    strings: PromptLibraryStrings,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onDuplicate: () -> Unit,
+    onPreview: () -> Unit,
+    onExport: () -> Unit,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = strings.usedByFormat.format(prompt.usedByCount),
+            style = KnotworkTextStyles.Caption,
+            color = KnotworkTheme.extended.onSurfaceMuted,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        CompactIconButton(icon = AppIcons.Eye, contentDescription = strings.previewCd, onClick = onPreview)
+        CompactIconButton(icon = AppIcons.Copy, contentDescription = strings.duplicateCd, onClick = onDuplicate)
+        if (prompt.isReadOnly) {
+            CompactIconButton(
+                icon = AppIcons.ExportFile,
+                contentDescription = strings.exportCdFormat.format(prompt.name),
+                onClick = onExport,
+            )
+        } else {
+            CompactIconButton(icon = AppIcons.Edit, contentDescription = strings.editCd, onClick = onEdit)
+            Box {
+                CompactIconButton(
+                    icon = AppIcons.More,
+                    contentDescription = strings.moreCd,
+                    onClick = { menuOpen = true },
                 )
-                KnotworkTextButton(text = strings.duplicate, onClick = onDuplicate)
+                DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                    DropdownMenuItem(
+                        text = { Text(text = strings.exportAction) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = AppIcons.ExportFile,
+                                contentDescription = null,
+                                tint = KnotworkTheme.extended.onSurface2,
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            onExport()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(text = strings.deleteAction, color = KnotworkTheme.extended.riskDestructive) },
+                        leadingIcon = {
+                            Icon(
+                                imageVector = AppIcons.Trash,
+                                contentDescription = null,
+                                tint = KnotworkTheme.extended.riskDestructive,
+                            )
+                        },
+                        onClick = {
+                            menuOpen = false
+                            onDelete()
+                        },
+                    )
+                }
             }
         }
     }
@@ -731,9 +891,19 @@ data class PromptLibraryStrings(
     val deleteCd: String = "Delete prompt",
     val previewCd: String = "Preview",
     val duplicate: String = "Duplicate",
+    val duplicateCd: String = "Duplicate prompt",
     val usedByFormat: String = "used by %1\$d pipelines",
     val emptyTitle: String = "No prompts yet",
-    val emptySubtitle: String = "Tap + to add the first one",
+    val emptySubtitle: String = "Import a prompt from a Markdown file, or write one from scratch.",
+    val emptyImportCta: String = "Import prompt",
+    val emptyNewCta: String = "New prompt",
+    val emptyCategoryTitle: String = "Nothing here yet",
+    val emptyCategorySubtitle: String = "Prompts for this step type show up here. Import one, or tap + to write it.",
+    val importCd: String = "Import a prompt from a file",
+    val exportCdFormat: String = "Export \u201c%1\$s\u201d to a file",
+    val moreCd: String = "More actions",
+    val exportAction: String = "Export",
+    val deleteAction: String = "Delete",
     val errorTitle: String = "Couldn't load prompts",
     val errorRetry: String = "Retry",
 )

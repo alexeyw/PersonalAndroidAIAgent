@@ -15,6 +15,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
+import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -42,6 +43,10 @@ private val DefaultIllustrationSize = 160.dp
  * render the button.
  * @param onCtaClick optional CTA click handler; ignored when [ctaLabel] is
  * `null`.
+ * @param secondaryCtaLabel optional lower-emphasis second action, rendered as
+ * a text button under the primary CTA; pair with [onSecondaryCtaClick].
+ * @param onSecondaryCtaClick optional secondary click handler; ignored when
+ * [secondaryCtaLabel] is `null`.
  * @param illustrationSize size of the default striped illustration slot.
  * @param illustration custom illustration slot; defaults to a
  * [StripedPlaceholder] sized to [illustrationSize].
@@ -54,6 +59,8 @@ fun EmptyState(
     modifier: Modifier = Modifier,
     ctaLabel: String? = null,
     onCtaClick: (() -> Unit)? = null,
+    secondaryCtaLabel: String? = null,
+    onSecondaryCtaClick: (() -> Unit)? = null,
     illustrationSize: Dp = DefaultIllustrationSize,
     illustration: @Composable () -> Unit = {
         StripedPlaceholder(modifier = Modifier.size(illustrationSize))
@@ -85,6 +92,13 @@ fun EmptyState(
                 onClick = onCtaClick,
                 modifier = Modifier.padding(top = KnotworkTheme.spacing.sp2),
             )
+        }
+        // Lower-emphasis second way out, for empty states where two verbs are
+        // both reasonable first moves (import a prompt someone sent you, or
+        // write one). Rendered as a text button so the pair reads as
+        // "this, or that" rather than as two equal buttons.
+        if (secondaryCtaLabel != null && onSecondaryCtaClick != null) {
+            KnotworkTextButton(text = secondaryCtaLabel, onClick = onSecondaryCtaClick)
         }
     }
 }

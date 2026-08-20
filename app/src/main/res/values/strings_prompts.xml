@@ -10,9 +10,66 @@
     <string name="prompts_preview_cd">Preview prompt</string>
     <string name="prompts_duplicate">Duplicate</string>
     <string name="prompts_used_by_format" tools:ignore="PluralsCandidate">used by %1$d pipelines</string>
+    <string name="prompts_duplicate_cd">Duplicate prompt</string>
+    <string name="prompts_more_cd">More actions</string>
     <string name="prompts_empty_title">No prompts yet</string>
-    <string name="prompts_empty_subtitle">Tap + to add the first one</string>
+    <string name="prompts_empty_subtitle">Import a prompt from a Markdown file, or write one from scratch.</string>
+    <string name="prompts_empty_import_cta">Import prompt</string>
+    <string name="prompts_empty_new_cta">New prompt</string>
+    <string name="prompts_empty_category_title">Nothing here yet</string>
+    <string name="prompts_empty_category_subtitle">Prompts for this step type show up here. Import one, or tap + to write it.</string>
     <string name="prompts_error_title">Couldn\'t load prompts</string>
+
+    <!-- Import / export of a prompt as a Markdown file. There is deliberately
+         no user-facing noun for the artefact: the verbs are "Import prompt"
+         and "Export prompt", and the file itself is "a Markdown file". A noun
+         like "pack" implies a bundle that installs things, which is the exact
+         implication this surface must not make. -->
+    <string name="prompts_import_cd">Import a prompt from a file</string>
+    <string name="prompts_export_cd_format">Export “%1$s” to a file</string>
+    <string name="prompts_action_export">Export</string>
+    <string name="prompts_action_delete">Delete</string>
+    <string name="prompts_import_success_format">Imported “%1$s” into %2$s.</string>
+    <string name="prompts_import_success_action">Show</string>
+    <string name="prompts_export_success_format">Exported “%1$s”.</string>
+    <string name="prompts_import_unchanged_format">“%1$s” is already in your library — nothing changed.</string>
+    <string name="prompts_import_unreadable">That file could not be read.</string>
+
+    <!-- Import outcome dialogs. One shape, five bodies. -->
+    <string name="prompts_import_left_out_heading">LEFT OUT</string>
+    <plurals name="prompts_import_left_out_more">
+        <item quantity="one">and %1$d more</item>
+        <item quantity="other">and %1$d more</item>
+    </plurals>
+    <string name="prompts_import_mismatch_title">Imported without some settings</string>
+    <string name="prompts_import_mismatch_body_format">“%1$s” was written by a different version of the app. The prompt came across; these settings did not.</string>
+    <string name="prompts_import_unknown_keys_body_format">“%1$s” is in your library. Some settings in the file are not ones this app knows, so they were left out.</string>
+    <string name="prompts_import_refused_title">Imported as text only</string>
+    <string name="prompts_import_refused_body_format">“%1$s” is now in your library. The file also asked to add %2$s — a prompt can only supply wording, so that part was left out.</string>
+    <string name="prompts_import_refused_asked_tools">tools</string>
+    <string name="prompts_import_refused_asked_steps">steps</string>
+    <string name="prompts_import_refused_asked_scripts">scripts</string>
+    <string name="prompts_import_refused_tools_format">Tools: %1$s</string>
+    <string name="prompts_import_refused_steps_format" tools:ignore="PluralsCandidate">Steps: %1$d</string>
+    <string name="prompts_import_refused_scripts_format" tools:ignore="PluralsCandidate">Scripts: %1$d</string>
+    <string name="prompts_import_version_left_out_format">Version: %1$d</string>
+
+    <!-- Parse failures: one title, one body per cause. Never "invalid file". -->
+    <string name="prompts_import_failed_title">Nothing was imported</string>
+    <string name="prompts_import_failed_frontmatter">The settings block at the top of the file is missing or incomplete. It has to sit between two lines of three dashes.</string>
+    <string name="prompts_import_failed_duplicate_key">The settings block at the top of the file names the same setting twice, so there is no way to tell which one you meant.</string>
+    <string name="prompts_import_failed_missing_key_format">The file is missing something it needs: %1$s.</string>
+    <string name="prompts_import_failed_no_prompt">The file has a name but no prompt text, so there is nothing to save.</string>
+    <string name="prompts_import_failed_unknown_type_format">The file is for a step type this app does not have: %1$s.</string>
+    <string name="prompts_import_failed_not_llm_format">Prompts belong to steps that call a model. This file is for %1$s, which does not.</string>
+    <string name="prompts_import_failed_name_too_long_format">The name in the file is longer than %1$d characters.</string>
+    <string name="prompts_import_failed_prompt_too_long_format">The prompt in the file is longer than %1$d characters.</string>
+
+    <!-- Re-import of a prompt already in the library. -->
+    <string name="prompts_import_collision_title_format">“%1$s” is already in your library</string>
+    <string name="prompts_import_collision_body">The file and the saved prompt are not the same. Keeping both saves the file as a separate prompt.</string>
+    <string name="prompts_import_collision_replace">Replace</string>
+    <string name="prompts_import_collision_keep_both">Keep both</string>
 
     <!-- Editor sheet -->
     <string name="prompts_editor_title_new">New prompt</string>

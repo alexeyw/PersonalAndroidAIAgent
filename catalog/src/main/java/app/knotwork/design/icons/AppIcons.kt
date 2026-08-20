@@ -34,6 +34,7 @@ import app.knotwork.design.icons.imagevector.knotworkDownload2Icon
 import app.knotwork.design.icons.imagevector.knotworkDownloadIcon
 import app.knotwork.design.icons.imagevector.knotworkEditIcon
 import app.knotwork.design.icons.imagevector.knotworkExpandIcon
+import app.knotwork.design.icons.imagevector.knotworkExportFileIcon
 import app.knotwork.design.icons.imagevector.knotworkExtensionIcon
 import app.knotwork.design.icons.imagevector.knotworkExternalIcon
 import app.knotwork.design.icons.imagevector.knotworkEyeIcon
@@ -470,4 +471,7 @@ object AppIcons {
 
     /** `I.importFile` — import a file into the workspace. */
     val ImportFile: ImageVector get() = knotworkImportFileIcon
+
+    /** `I.exportFile` — export a file out of the workspace (mirror of [ImportFile]). */
+    val ExportFile: ImageVector get() = knotworkExportFileIcon
 }
