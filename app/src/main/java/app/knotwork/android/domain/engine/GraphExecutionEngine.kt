@@ -69,7 +69,11 @@ import javax.inject.Singleton
 // chat-history resolution, HITL suspension, checkpoint/resume, sub-pipeline
 // fan-out) is most readable as one cohesive state machine. Decomposing it into
 // collaborators is tracked as future work rather than forced here.
-@Suppress("LargeClass")
+// LongParameterList is suppressed for the same reason: every parameter is a
+// collaborator Hilt injects, so the list is assembled by the container and
+// never written out by hand. Shrinking it would mean decomposing the class —
+// the future work named above — not renaming its dependencies.
+@Suppress("LargeClass", "LongParameterList")
 @Singleton
 class GraphExecutionEngine @Inject constructor(
     private val nodeExecutorFactory: NodeExecutorFactory,
@@ -207,7 +211,15 @@ class GraphExecutionEngine @Inject constructor(
     // states, and surfaces console events. Decomposition into helpers
     // historically obscured the linear flow; the method body is structured
     // and well-commented in place.
-    @Suppress("LongMethod", "CyclomaticComplexMethod")
+    // LongParameterList is a real signal here and is suppressed knowingly, not
+    // dismissed: unlike the constructor above, this is a hand-written call site,
+    // and 14 parameters is past what a reader can hold. Most of them travel
+    // together as one run's context (budget, stuck detector, notes, image
+    // delivery, generating model, origin) and belong in a parameter object.
+    // Doing that reshapes every call site including the recursive sub-pipeline
+    // one, so it is deliberately not smuggled into the change that first made
+    // this rule run.
+    @Suppress("LongMethod", "CyclomaticComplexMethod", "LongParameterList")
     operator fun invoke(
         sessionId: String,
         userPrompt: String,

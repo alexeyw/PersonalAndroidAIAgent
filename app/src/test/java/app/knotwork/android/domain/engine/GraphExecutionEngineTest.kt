@@ -213,8 +213,6 @@ class GraphExecutionEngineTest {
 
         val liteRtNodeExecutor = LiteRtNodeExecutor(
             llmEngine,
-            toolRepository,
-            chatRepository,
             settingsRepository,
             metricsRepository,
             mockk(relaxed = true),
@@ -223,8 +221,6 @@ class GraphExecutionEngineTest {
         )
 
         val cloudLlmNodeExecutor = CloudLlmNodeExecutor(
-            toolRepository,
-            chatRepository,
             settingsRepository,
             apiKeyRepository,
             metricsRepository,
@@ -1309,8 +1305,6 @@ class GraphExecutionEngineTest {
             ),
             LiteRtNodeExecutor(
                 llmEngine,
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 metricsRepository,
                 mockk(relaxed = true),
@@ -1318,8 +1312,6 @@ class GraphExecutionEngineTest {
                 loadModelUseCase,
             ),
             CloudLlmNodeExecutor(
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 apiKeyRepository,
                 metricsRepository,
@@ -1532,8 +1524,6 @@ class GraphExecutionEngineTest {
                 ),
                 LiteRtNodeExecutor(
                     llmEngine,
-                    toolRepository,
-                    chatRepository,
                     settingsRepository,
                     metricsRepository,
                     mockk(relaxed = true),
@@ -1541,8 +1531,6 @@ class GraphExecutionEngineTest {
                     loadModelUseCase,
                 ),
                 CloudLlmNodeExecutor(
-                    toolRepository,
-                    chatRepository,
                     settingsRepository,
                     apiKeyRepository,
                     metricsRepository,

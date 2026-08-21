@@ -271,8 +271,6 @@ class SkillReportWriterIntegrationTest {
         val liteRtNodeExecutor =
             LiteRtNodeExecutor(
                 llmEngine,
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 metricsRepository,
                 mockk(relaxed = true),
@@ -280,8 +278,6 @@ class SkillReportWriterIntegrationTest {
                 loadModelUseCase,
             )
         val cloudLlmNodeExecutor = CloudLlmNodeExecutor(
-            toolRepository,
-            chatRepository,
             settingsRepository,
             mockk<ApiKeyRepository>(relaxed = true),
             metricsRepository,

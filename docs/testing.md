@@ -147,7 +147,7 @@ All tests, static analysis and coverage must pass via:
 ```
 
 This is the same task that CI runs on every pull request. It executes
-detekt (including the coroutine-cancellation gate, `detektFullDebug` +
+detekt (including the type-resolution gate, `detektFullDebug` +
 `detektFossDebug`), ktlint, Android lint, the unit-test suite for both
 flavours (`testFullDebugUnitTest` + `testFossDebugUnitTest`), and
 `koverVerifyFullDebug`. Lint must pass with no new warnings.

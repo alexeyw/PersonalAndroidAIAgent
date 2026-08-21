@@ -1,4 +1,5 @@
 import app.knotwork.android.buildtools.BrowserEditorConstantsGenerator
+import app.knotwork.android.buildtools.DetektAnalysisModeGuard
 import app.knotwork.android.buildtools.DexInstantiabilityChecker
 import app.knotwork.android.buildtools.DocsHygieneChecker
 import app.knotwork.android.buildtools.ExternalAutomationDocsGenerator
@@ -470,25 +471,81 @@ detekt {
     source.setFrom("src/main/java", "src/main/kotlin")
 }
 
-// Coroutine-cancellation gate. `SuspendFunSwallowedCancellation` requires
-// type resolution, which the plain `detekt` task above cannot provide, so the
-// rule lives in a second, deliberately narrow run: the plugin-generated
-// type-resolution tasks for the debug variant of each distribution flavour
-// (`detektFullDebug` / `detektFossDebug`) are rewired to
-// `detekt-cancellation.yml`, a config that activates only that single rule.
-// Both flavours are wired so the gate also covers the flavour-specific
-// crash-reporting sources (`src/full` / `src/foss`). Running the full strict
-// config under type resolution instead would surface ~1.1k findings from rules
-// that have never been part of the gate — adopting them is a separate effort,
-// not a side effect of this wiring. Full-config type-resolution analysis
-// remains available via `detektMain`/`detektRelease`.
-val cancellationGateDetektTasks = setOf("detektFullDebug", "detektFossDebug")
-tasks.matching { it.name in cancellationGateDetektTasks }.configureEach {
+// Type-resolution gate. A detekt rule that implements
+// `dev.detekt.api.RequiresAnalysisApi` cannot run in the `light` analysis mode
+// of the plain `detekt` task above — and is skipped by it *silently*, so a rule
+// listed in `detekt.yml` may be checking nothing at all. Those rules live in a
+// second, deliberately narrow run: the plugin-generated type-resolution tasks
+// for the debug variant of each distribution flavour (`detektFullDebug` /
+// `detektFossDebug`) are rewired to `detekt-type-resolution.yml`, a config that
+// activates exactly the four rules this project declared it wants and can only
+// get here (`SuspendFunSwallowedCancellation`, `LongParameterList`,
+// `UnusedImport`, `UnusedPrivateFunction`). Both flavours are wired so the gate
+// also covers the flavour-specific crash-reporting sources (`src/full` /
+// `src/foss`) — which the plain task's `source` never reached either.
+//
+// Running the full strict config under type resolution instead surfaces 296
+// findings (measured), 263 of them from rules that have never been part of the
+// gate — adopting them is a separate effort, not a side effect of this wiring.
+// Full-config type-resolution analysis remains available via
+// `detektMain`/`detektRelease`.
+val typeResolutionGateDetektTasks = setOf("detektFullDebug", "detektFossDebug")
+tasks.matching { it.name in typeResolutionGateDetektTasks }.configureEach {
     this as Detekt
-    config.setFrom(files("$rootDir/config/detekt/detekt-cancellation.yml"))
+    config.setFrom(files("$rootDir/config/detekt/detekt-type-resolution.yml"))
     buildUponDefaultConfig.set(false)
 }
-tasks.named("check") { dependsOn(cancellationGateDetektTasks) }
+tasks.named("check") { dependsOn(typeResolutionGateDetektTasks) }
+
+// The guard behind the split above: it reads every rule the light-mode config
+// activates, resolves which rule classes on detekt's own classpath implement
+// `RequiresAnalysisApi`, and fails when the two sets intersect — i.e. when a
+// rule has been added to `detekt.yml` that the `detekt` task would skip without
+// saying so. Wired into `check` because the failure it prevents is invisible by
+// construction: the build stays green, the report stays empty, and the rule
+// checks nothing. It reads the rule set from the `detekt` configuration's own
+// jars rather than a pinned list, so a detekt upgrade that moves a rule across
+// the boundary is caught by the next build instead of by nobody.
+val verifyDetektAnalysisMode by tasks.registering {
+    group = "verification"
+    description = "Fails if config/detekt/detekt.yml activates a rule that needs type resolution."
+    val lightConfig: File = rootProject.file("config/detekt/detekt.yml")
+    val lightConfigPath: String = lightConfig.relativeTo(rootDir).path
+    val detektClasspath = configurations.named("detekt")
+    inputs.file(lightConfig)
+    inputs.files(detektClasspath)
+    doLast {
+        val analysisApiRules = DetektAnalysisModeGuard.rulesRequiringAnalysisApi(detektClasspath.get().files)
+        // A guard that finds no rules to compare against passes everything,
+        // which is this task's own failure mode. Detekt 2.x ships 93 such rules,
+        // so an empty set means the scan stopped finding them — a renamed marker
+        // interface or a relocated rule package after an upgrade — not that the
+        // distinction went away.
+        if (analysisApiRules.isEmpty()) {
+            throw GradleException(
+                "verifyDetektAnalysisMode found no detekt rule requiring the Analysis API on the " +
+                    "`detekt` classpath. The marker interface or the rule package has moved; the " +
+                    "guard is scanning nothing and would pass any configuration. Update " +
+                    "DetektAnalysisModeGuard before trusting this build.",
+            )
+        }
+        val violations = DetektAnalysisModeGuard.scan(
+            lightModeRules = DetektAnalysisModeGuard.activeRuleIds(lightConfig.readText()),
+            analysisApiRules = analysisApiRules,
+            configPath = lightConfigPath,
+        )
+        if (violations.isNotEmpty()) {
+            throw GradleException(
+                "Detekt rules configured where they cannot run (${violations.size} rule(s)):\n" +
+                    violations.joinToString(separator = "\n") { it.format() } +
+                    "\n\nThe `detekt` task runs in `light` analysis mode and skips these rules in " +
+                    "silence — green build, empty report, nothing checked. Move them to " +
+                    "config/detekt/detekt-type-resolution.yml, which runs under type resolution.",
+            )
+        }
+    }
+}
+tasks.named("check") { dependsOn(verifyDetektAnalysisMode) }
 
 tasks.withType<Detekt>().configureEach {
     reports {

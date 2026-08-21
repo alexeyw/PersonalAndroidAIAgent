@@ -1,6 +1,5 @@
 package app.knotwork.android.data.services
 
-import androidx.work.WorkManager
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.repositories.PowerStateRepository
 import kotlinx.coroutines.CoroutineScope
@@ -11,19 +10,20 @@ import timber.log.Timber
 /**
  * Manages the power-saving logic for the AI Agent.
  * Listens to the [PowerStateRepository] and forcefully unloads the [LlmInferenceEngine]
- * and cancels all background tasks in [WorkManager] if the battery is low and the device
- * is not charging.
+ * if the battery is low and the device is not charging.
+ *
+ * It deliberately does **not** touch scheduled background work — see
+ * [enforcePowerSavingMode] for why cancelling it would be destructive rather
+ * than thrifty.
  *
  * @property scope The [CoroutineScope] used for observing the power state.
  * @property powerStateRepository The repository providing the current power state.
  * @property engine The [LlmInferenceEngine] to unload to save memory and battery.
- * @property workManager The [WorkManager] instance to cancel background jobs.
  */
 class AgentPowerManager(
     private val scope: CoroutineScope,
     private val powerStateRepository: PowerStateRepository,
     private val engine: LlmInferenceEngine,
-    private val workManager: WorkManager,
 ) {
 
     /**
@@ -51,10 +51,12 @@ class AgentPowerManager(
             engine.unload()
         }
 
-        // We avoid calling workManager.cancelAllWork() here because it would
-        // permanently delete scheduled tasks. WorkManager constraints (like
-        // setRequiresBatteryNotLow(true)) should be used in ScheduleTaskUseCase
-        // to naturally pause execution without losing the task definitions.
+        // Scheduled background work is deliberately left alone. Cancelling it
+        // (`WorkManager.cancelAllWork()`) would permanently delete the user's
+        // scheduled tasks rather than defer them; WorkManager constraints such as
+        // `setRequiresBatteryNotLow(true)`, applied in `ScheduleTaskUseCase`, are
+        // what pause execution without losing the task definitions. That is why
+        // this class holds no `WorkManager` reference at all.
         Timber.i("Power saving mode enforced. Scheduled tasks will pause if they have battery constraints.")
     }
 }

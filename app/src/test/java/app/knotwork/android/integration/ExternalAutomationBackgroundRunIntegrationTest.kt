@@ -446,8 +446,6 @@ class ExternalAutomationBackgroundRunIntegrationTest {
             toolNodeExecutor,
             LiteRtNodeExecutor(
                 llmEngine,
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 mockk(relaxed = true),
                 mockk(relaxed = true),
@@ -455,8 +453,6 @@ class ExternalAutomationBackgroundRunIntegrationTest {
                 loadModelUseCase,
             ),
             CloudLlmNodeExecutor(
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 mockk(relaxed = true),
                 mockk(relaxed = true),

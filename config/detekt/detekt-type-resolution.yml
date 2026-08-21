@@ -1,0 +1,90 @@
+# Detekt configuration for the type-resolution gate.
+#
+# This config backs the dedicated `detektFullDebug` / `detektFossDebug` runs
+# wired into `./gradlew check` (see `app/build.gradle.kts`). It exists because
+# a detekt rule that implements `dev.detekt.api.RequiresAnalysisApi` is
+# **silently skipped** by the plain `detekt` task (the main strict gate,
+# `config/detekt/detekt.yml`), which runs in `light` analysis mode: no error,
+# no warning, no report entry — the rule simply never fires. Detekt 2.0 has 93
+# such rules, so "the rule is in the config" is not evidence that the rule runs.
+# The `verifyDetektAnalysisMode` task turns that invariant into a build failure
+# instead of a silence; the rules listed here are the ones this project wants
+# and can only get under type resolution.
+#
+# Running the *full* strict config under type resolution instead is not the
+# answer: measured on this repository it surfaces 296 findings, 263 of them from
+# rules the project never declared it wants (`InjectDispatcher` alone is 131).
+# Adopting those is a separate, deliberate effort — not a side effect of making
+# four declared rules work.
+#
+# `buildUponDefaultConfig = false` on the task keeps detekt's bundled defaults
+# out of the run, and a rule that is not named below stays inactive even when
+# its own default is `active: true` (measured on 2.0.0-alpha.6: activating the
+# `style` rule set and naming only `UnusedImport` yields `UnusedImport`
+# findings and nothing else). If a future detekt changes that, this gate goes
+# loudly red with a flood of undeclared findings rather than quietly wrong —
+# which is the failure direction to prefer.
+#
+# ── The rules ───────────────────────────────────────────────────────────────
+#
+# `SuspendFunSwallowedCancellation` enforces the project-wide coroutine-
+# cancellation contract (docs/code-style.md § Coroutines & Flow):
+#  - a `try`/`catch` around suspend calls must re-throw
+#    `CancellationException` from a dedicated first catch clause whose
+#    body is exactly `throw e`;
+#  - `runCatching` must never wrap suspend calls — use `try`/`catch`
+#    with the explicit re-throw instead.
+#
+# `LongParameterList`, `UnusedImport` and `UnusedPrivateFunction` carry the
+# thresholds and the intent they had in `detekt.yml`, where they sat inert.
+#
+# `UnusedPrivateProperty` is deliberately NOT here even though it belongs to
+# the same triage. In 2.0.0-alpha.6 it does not count a reference made from a
+# **property initializer** — `class C(private val d: D) { val h = H(a = d) }`
+# reports `d` as unused, positional argument or named. On this repository that
+# is 24 of its 29 findings (every dependency a ViewModel forwards into a
+# delegate built as a property initializer). Turning it on would mean 24
+# `@Suppress` annotations asserting something untrue about live code. It is
+# parked until the rule is fixed upstream, and the five real findings it did
+# surface were fixed by hand.
+
+config:
+  validation: true
+
+comments:
+  active: false
+empty-blocks:
+  active: false
+exceptions:
+  active: false
+naming:
+  active: false
+performance:
+  active: false
+potential-bugs:
+  active: false
+
+complexity:
+  active: true
+  LongParameterList:
+    active: true
+    allowedFunctionParameters: 10
+    allowedConstructorParameters: 14
+    # `@Composable` slot APIs commonly take many small lambda parameters.
+    ignoreAnnotated: ['Composable']
+
+style:
+  active: true
+  UnusedImport:
+    active: true
+  # Surfaces dead private/internal functions project-wide. Triage outcome:
+  # either delete the symbol or annotate it with
+  # `@Suppress("UnusedPrivateFunction") // reason: …` when retention is
+  # intentional.
+  UnusedPrivateFunction:
+    active: true
+
+coroutines:
+  active: true
+  SuspendFunSwallowedCancellation:
+    active: true

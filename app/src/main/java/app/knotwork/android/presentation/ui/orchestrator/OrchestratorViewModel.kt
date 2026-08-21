@@ -84,6 +84,11 @@ import javax.inject.Inject
     // future refactor; not in scope for the static-analysis enforcement task.
     "TooManyFunctions",
     "LargeClass",
+    // The 25-parameter constructor is the same fact seen from the dependency
+    // side: one ViewModel coordinating a dozen flows needs a use case for each.
+    // Hilt assembles the list, so no reader ever writes it out; it shrinks when
+    // the class is split, which is the refactor tracked above.
+    "LongParameterList",
 )
 class OrchestratorViewModel @Inject constructor(
     private val savePipelineUseCase: SavePipelineUseCase,

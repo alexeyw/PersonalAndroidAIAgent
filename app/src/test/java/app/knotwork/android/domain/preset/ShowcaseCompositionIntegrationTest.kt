@@ -310,8 +310,6 @@ class ShowcaseCompositionIntegrationTest {
             toolNodeExecutor,
             LiteRtNodeExecutor(
                 llmEngine,
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 metricsRepository,
                 mockk(relaxed = true),
@@ -319,8 +317,6 @@ class ShowcaseCompositionIntegrationTest {
                 loadModelUseCase,
             ),
             CloudLlmNodeExecutor(
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 mockk<ApiKeyRepository>(relaxed = true),
                 metricsRepository,

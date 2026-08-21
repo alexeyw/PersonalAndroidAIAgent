@@ -1,13 +1,11 @@
 package app.knotwork.android.data.services
 
-import androidx.work.WorkManager
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.PowerState
 import app.knotwork.android.domain.repositories.PowerStateRepository
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -15,19 +13,26 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Before
 import org.junit.Test
 
+/**
+ * Unit tests for [AgentPowerManager].
+ *
+ * These used to also assert `verify(exactly = 0) { workManager.cancelAllWork() }`
+ * on every path — the promise that power saving defers scheduled work rather
+ * than deleting it. The class no longer holds a `WorkManager` at all, so that
+ * promise is now enforced by its constructor instead of by an assertion, which
+ * is why the verifications are gone rather than merely relaxed.
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AgentPowerManagerTest {
 
     private lateinit var powerStateRepository: PowerStateRepository
     private lateinit var engine: LlmInferenceEngine
-    private lateinit var workManager: WorkManager
     private lateinit var powerStateFlow: MutableStateFlow<PowerState>
 
     @Before
     fun setup() {
         powerStateRepository = mockk()
         engine = mockk(relaxed = true)
-        workManager = mockk(relaxed = true)
 
         powerStateFlow = MutableStateFlow(PowerState(isBatteryLow = false, isCharging = true))
         every { powerStateRepository.powerState } returns powerStateFlow
@@ -39,7 +44,6 @@ class AgentPowerManagerTest {
             scope = backgroundScope,
             powerStateRepository = powerStateRepository,
             engine = engine,
-            workManager = workManager,
         )
 
         every { engine.isInitialized } returns true
@@ -52,7 +56,6 @@ class AgentPowerManagerTest {
         kotlinx.coroutines.yield()
 
         coVerify(exactly = 1) { engine.unload() }
-        verify(exactly = 0) { workManager.cancelAllWork() }
     }
 
     @Test
@@ -61,7 +64,6 @@ class AgentPowerManagerTest {
             scope = backgroundScope,
             powerStateRepository = powerStateRepository,
             engine = engine,
-            workManager = workManager,
         )
 
         every { engine.isInitialized } returns true
@@ -74,7 +76,6 @@ class AgentPowerManagerTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { engine.unload() }
-        verify(exactly = 0) { workManager.cancelAllWork() }
     }
 
     @Test
@@ -83,7 +84,6 @@ class AgentPowerManagerTest {
             scope = backgroundScope,
             powerStateRepository = powerStateRepository,
             engine = engine,
-            workManager = workManager,
         )
 
         every { engine.isInitialized } returns true
@@ -100,7 +100,6 @@ class AgentPowerManagerTest {
         kotlinx.coroutines.yield()
 
         coVerify(exactly = 1) { engine.unload() }
-        verify(exactly = 0) { workManager.cancelAllWork() }
     }
 
     @Test
@@ -109,7 +108,6 @@ class AgentPowerManagerTest {
             scope = backgroundScope,
             powerStateRepository = powerStateRepository,
             engine = engine,
-            workManager = workManager,
         )
 
         every { engine.isInitialized } returns true
@@ -133,7 +131,6 @@ class AgentPowerManagerTest {
             scope = backgroundScope,
             powerStateRepository = powerStateRepository,
             engine = engine,
-            workManager = workManager,
         )
 
         every { engine.isInitialized } returns false
@@ -152,7 +149,6 @@ class AgentPowerManagerTest {
             scope = backgroundScope,
             powerStateRepository = powerStateRepository,
             engine = engine,
-            workManager = workManager,
         )
 
         every { engine.isInitialized } returns true
@@ -165,6 +161,5 @@ class AgentPowerManagerTest {
         advanceUntilIdle()
 
         coVerify(exactly = 0) { engine.unload() }
-        verify(exactly = 0) { workManager.cancelAllWork() }
     }
 }
