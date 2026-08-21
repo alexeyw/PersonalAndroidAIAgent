@@ -4,6 +4,7 @@
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 ![Version](https://img.shields.io/badge/version-0.7.3-orange.svg)
 ![Android API](https://img.shields.io/badge/Android-API%2036%2B-3DDC84.svg?logo=android)
+[![Google Play](https://img.shields.io/badge/Google%20Play-available-3DDC84.svg?logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=app.knotwork.android)
 
 > **An AI agent you build, not just prompt.** A local-first Android agent whose
 > behaviour you assemble from explicit, verifiable blocks — and every risky
@@ -185,6 +186,15 @@ browser's `prefers-color-scheme`.
   the full dev setup.
 
 ## Install
+
+### From Google Play
+
+[**Knotwork on Google Play**](https://play.google.com/store/apps/details?id=app.knotwork.android)
+— the simplest route, and the one that updates itself. Requires Android 16+.
+
+The Play build is the `full` flavour described below. It shares a signing key
+with the APKs on the Releases page, so you can move between those two channels
+without reinstalling.
 
 ### From a release build
 
