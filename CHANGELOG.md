@@ -306,6 +306,30 @@ details.
   dropped the bottom-bar highlight, because the list of routes that count as
   "inside settings" was maintained by hand and had never included them.
 
+- **A thinking model's private reasoning no longer arrives as the answer.**
+  Models such as Qwen3 and DeepSeek R1 work through a problem out loud before
+  replying, inside a block meant for the machine rather than the reader. That
+  block was being treated as the answer: it filled the chat bubble, it was saved
+  as the reply, and from there it was read back into every later message of the
+  same conversation — so a single long deliberation kept crowding the model's
+  own memory of the chat for the rest of it.
+
+  It also broke things that have nothing to do with chat. When a model drafts a
+  candidate tool call while thinking, the reply contains a stray fragment of
+  machine-readable text, and the part of the app that looks for such text picked
+  up the draft instead of the real thing.
+
+  The reasoning is now separated where the answer is produced, so everything
+  after it — the bubble, the saved reply, the conversation history, tool
+  handling — sees the answer alone. Conversations that already contain a stored
+  reasoning block stop feeding it back; what was written is left as it was
+  written rather than rewritten after the fact.
+
+  Two cases are handled the way the models actually behave rather than the way
+  they are documented: a reply whose reasoning block is only ever closed and
+  never opened (the usual shape for Qwen3), and one cut off mid-thought, where
+  the whole reply is kept — an untidy answer beats a blank one.
+
 - **A test of the external-automation contract was checking the wrong signal.**
   Two tests assert that a third-party caller is told the outcome of a run exactly
   once, including the case where the run parked for hours on a confirmation

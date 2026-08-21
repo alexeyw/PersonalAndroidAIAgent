@@ -1,5 +1,6 @@
 package app.knotwork.android.domain.engine
 
+import app.knotwork.android.domain.engine.structured.ReasoningBlockSplitter
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.MemoryChunk
 import app.knotwork.android.domain.models.NodeContextConfig
@@ -96,8 +97,19 @@ class NodeContextBuilder @Inject constructor() {
 
     private fun renderBlock(header: String, body: String): String = "$header\n$body"
 
+    /**
+     * Renders the live window as a numbered transcript.
+     *
+     * Agent turns are passed through [ReasoningBlockSplitter] on the way out.
+     * New answers are already split at the executor that produced them, so this
+     * is not the fix — it is what stops a chat that predates the fix from going
+     * on poisoning every later turn: a `<think>` block stored in an old message
+     * would otherwise be replayed into the prompt for the rest of that chat's
+     * life. Stored messages are deliberately left as they were written; nothing
+     * is rewritten behind the user's back for a display concern.
+     */
     private fun formatChatHistory(messages: List<ChatMessage>): String = messages.mapIndexed { index, message ->
-        "${index + 1}. ${message.role.name}: ${message.content}"
+        "${index + 1}. ${message.role.name}: ${ReasoningBlockSplitter.split(message.content).answer}"
     }.joinToString("\n")
 
     private fun formatMemory(entries: List<MemoryChunk>): String =

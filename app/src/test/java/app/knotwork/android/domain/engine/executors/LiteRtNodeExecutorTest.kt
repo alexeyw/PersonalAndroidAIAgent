@@ -222,6 +222,45 @@ class LiteRtNodeExecutorTest {
     }
 
     @Test
+    fun `given a reasoning block in the stream when execute then the result carries only the answer`() = runTest {
+        val node = NodeModel("1", NodeType.LITE_RT, 0f, 0f)
+        every { settingsRepository.systemPromptPrefix } returns flowOf("")
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+        // Streamed in pieces, the way a model actually produces it — the split
+        // has to survive the block arriving across token boundaries.
+        every { llmEngine.generateResponseStream(any()) } returns
+            flowOf("<think>The user", " is home. Be warm.</think>", "\n\nПривет!")
+
+        val outputs = executor.execute(node, "input", "session-1", "prompt").toList()
+
+        // The result is what OUTPUT persists as the chat message and what the next
+        // turn replays under `--- Chat History ---`. It must not carry scratchpad.
+        val result = outputs.filterIsInstance<NodeOutput.Result>().single().result
+        assertEquals("Привет!", result.outputText)
+        // The removal is reported rather than silent: an answer that came back
+        // shorter than the model produced should be explainable from the console.
+        val console = outputs.filterIsInstance<NodeOutput.Console>()
+        assertTrue("the split is announced: $console", console.any { it.message.contains("reasoning block") })
+    }
+
+    @Test
+    fun `given no reasoning block when execute then the answer is untouched and nothing is announced`() = runTest {
+        val node = NodeModel("1", NodeType.LITE_RT, 0f, 0f)
+        every { settingsRepository.systemPromptPrefix } returns flowOf("")
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("Just an answer.")
+
+        val outputs = executor.execute(node, "input", "session-1", "prompt").toList()
+
+        val result = outputs.filterIsInstance<NodeOutput.Result>().single().result
+        assertEquals("Just an answer.", result.outputText)
+        assertTrue(
+            "a model that never reasons must not produce console noise",
+            outputs.filterIsInstance<NodeOutput.Console>().none { it.message.contains("reasoning block") },
+        )
+    }
+
+    @Test
     fun `execute terminates with a NodeOutput Result and emits at least one State`() = runTest {
         val node = NodeModel("1", NodeType.LITE_RT, 0f, 0f)
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
