@@ -127,6 +127,18 @@ project — `:app` consumes it as an `implementation` dependency.
       (`TypedConfirmDialogState` payload + `typedConfirmMatches` keyword
       rule). Shared by the Settings destructive actions and the splash
       data-recovery wipe so the confirmation contract cannot drift.
+    - `OutcomeDialog.kt` — the one "here is what happened" dialog shape.
+      `OutcomeTone` picks the layout and glyph: `INFO` / `GUARD` / `ERROR`
+      draw an icon above a centred headline, `QUESTION` draws none and
+      left-aligns. The distinction that carries weight is **GUARD vs
+      ERROR** — a safeguard that held is not a failure, so `GUARD` is the
+      shield and red is reserved for "nothing happened". Carries an
+      optional `OutcomeNamedList` ("left out", capped at
+      `MAX_NAMED_LIST_ITEMS` with a caller-resolved summary line) and one
+      to three `OutcomeAction`s, one of which may be emphasised. The body
+      scrolls so the buttons survive large font scales. Shared by prompt
+      import and the pipeline-import schema-mismatch dialog, which was the
+      hand-rolled original.
   - `lists/` — `PipelineListRow` / `ToolListRow` / `MemoryEntryRow` /
     `KnotworkNavListRow` (leading-icon + title + chevron routing row) +
     previews.
@@ -387,9 +399,19 @@ project — `:app` consumes it as an `implementation` dependency.
       (4 sample pipelines) for snapshots.
   - `prompts/`
     - `PromptLibraryContent.kt` — prompt library (tabbed categories, card
-      list, FAB, optional edit-sheet overlay).
+      list, FAB, optional edit-sheet overlay, snackbar host slot). The
+      top bar carries the **import** action; each card's footer line
+      carries `used by N` plus Preview · Duplicate · Edit · overflow
+      (Export + Delete), or Preview · Duplicate · Export on a read-only
+      row. Two layout rules are load-bearing: the caption yields and the
+      icon cluster never does, so the overflow — and with it the only
+      route to Delete — survives font scale 200 %; and the top bar drops
+      its subtitle rather than clipping its title at the same scale. An
+      empty **library** (as opposed to an empty category) hides the tabs
+      and the FAB and offers Import / New instead.
     - `PromptLibraryViewState.kt` — visual-state enum + prompt-row /
-      editor state + category / variable tracking.
+      editor state + category / variable tracking + the import/export
+      callbacks.
     - `PromptPresetPickerSheet.kt` — modal preset picker by `NodeType`
       (Bundled / Mine tabs, searchable rows, tag filter).
   - `settings/` — the settings hub plus one content composable per

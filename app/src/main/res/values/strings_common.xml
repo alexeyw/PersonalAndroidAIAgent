@@ -16,6 +16,10 @@
     <string name="common_back">Back</string>
     <string name="common_retry">Retry</string>
     <string name="common_ok">OK</string>
+    <!-- Joins items inside one sentence or one list line ("tools and steps",
+         "Web search, Fetch a URL"). Separate from a bullet list so a
+         translation can carry its language's own spacing. -->
+    <string name="common_list_separator">", "</string>
 
     <!-- Keyword the user must type to arm a destructive typed-confirm dialog.
          Shared by every destructive confirmation surface (Settings, splash data

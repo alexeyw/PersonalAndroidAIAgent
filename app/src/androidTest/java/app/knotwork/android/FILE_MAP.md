@@ -23,6 +23,9 @@ This file maps the contents of the main application test package.
         - `HitlIntegrationTest.kt` - Tests for the HITL approval / deny flow.
     - `navigation/`
       - `AppShellNavigationTest.kt` - Tests for `AppShellScaffold` + nav-graph wiring.
+    - `orchestrator/`
+      - `presets/`
+        - `PresetCategoryBadgeLayoutTest.kt` - Layout guard for the preset category badge on both preset rows: asserts the badge sits entirely inside its row when the preset name is long. Instrumented rather than JVM because the same assertions under a Robolectric-hosted composition reported nonsense (a 62 dp root for a full-width row) and stayed green with every fix reverted. Measures **position**, not height — a starved badge that has been pushed past the right edge is the same bug one constraint later, and height does not see it.
     - `tools/`
       - `ToolDetailScreenTest.kt` - Tests for `ToolDetailScreen`.
       - `ToolsScreenTest.kt` - Tests for `ToolsScreen`.

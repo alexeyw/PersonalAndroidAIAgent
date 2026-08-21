@@ -2388,13 +2388,62 @@ to switch. Each card has:
 - A multi-line preview with `$VARIABLE` tokens highlighted inline so
   you can see at a glance which runtime values the prompt depends
   on.
-- Edit (pencil) and Delete (trash) icons in the row header.
-- A footer with `used by N pipelines` and a `Duplicate` action.
+- A footer line with `used by N pipelines` and the row's actions:
+  **Preview**, **Duplicate**, **Edit**, and a **More** menu holding
+  **Export** and **Delete**. Bundled prompts are read-only, so their
+  row shows **Preview**, **Duplicate** and **Export** directly.
 
 The FAB at the bottom-right opens the editor sheet. Inside, you can
 edit the name and category and tap any chip in the `INSERT` row to
 append the matching `$VARIABLE` to the prompt body. Save persists
 the change immediately; the next pipeline run picks it up.
+
+### Importing and exporting a prompt
+
+A prompt can travel as a **Markdown file**, so you can send one to
+somebody or keep it in a repository beside your other notes.
+
+- **Export** — from a row's **More** menu (or directly on a bundled
+  row). Pick where to save; the file is named after the prompt.
+  Exporting a bundled prompt is fine — it only reads it.
+- **Import** — the tray icon in the top bar, and the first button on
+  the empty screen. Pick a `.md` file; the prompt lands in the category
+  the file names. When there is nothing to report, a message names the
+  prompt and the category and offers to take you there; when there is,
+  you get the details instead.
+
+The file looks like this — a settings block between two lines of three
+dashes, then the prompt itself:
+
+```markdown
+---
+schemaVersion: 1
+id: concise-assistant
+name: Concise assistant
+description: Single-paragraph answers, no preamble.
+nodeType: LITE_RT
+tags: [concise, starter]
+---
+You are a helpful assistant. Answer in one paragraph, and today's
+date is $DATE.
+```
+
+Only `name`, `nodeType` and the prompt text are required, so a file
+you write by hand can be shorter than this one.
+
+**A prompt file can only supply wording.** It cannot add tools, add
+steps, or carry scripts — if a file asks for any of those, the prompt
+is still imported and the app tells you exactly what it left out. This
+is deliberate: a prompt goes into the instructions the agent follows,
+and a file you did not write should not be able to widen what the
+agent is allowed to do. For the same reason there is no "import from a
+URL" — the file picker keeps a person's decision between a link and
+your agent.
+
+If something is wrong with the file, nothing is imported and the app
+names the cause — a missing settings block, no prompt text, or a step
+type it does not have. If the prompt is already in your library and
+the file differs, you choose whether to replace it or keep both.
 
 ## Skill library
 

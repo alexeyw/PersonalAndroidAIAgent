@@ -83,7 +83,10 @@ https://github.com/user-attachments/assets/2ea06de5-6832-4e0c-ad48-430f375d8b72
   [browser editor](pipeline-editor.html) for authoring pipelines without
   launching the app. Prompt variables (`$DATE`, `$TIME`, `$TOOLS`, `$MODEL`,
   `$MEMORY_SUMMARY`, `$LANG`, `$LOCATION`, `$USER`, `$DEVICE`) render fresh on
-  every run.
+  every run. Prompts import and export as **Markdown files**, so one can be
+  written in any editor and passed around — and a prompt file supplies wording
+  only: it cannot add tools or steps, and a file that asks is imported as text
+  with the request named.
 - **Tools, gated by you.** Local actions through AppFunctions Jetpack and
   external servers through the Model Context Protocol (MCP), with reusable
   **skills** (instruction + tool allowlist + context) as pipeline steps. Every

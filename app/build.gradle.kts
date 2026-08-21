@@ -326,6 +326,16 @@ android {
         // builders). Without this flag Robolectric falls back to its own minimal
         // resource table and `context.getString(R.string.…)` returns a placeholder.
         unitTests.isIncludeAndroidResources = true
+
+        // Gradle's default test-worker heap is 512 MB, and this suite (≈3800
+        // tests, Robolectric loading a merged resource table per class) began
+        // exhausting it — as an `OutOfMemoryError` in whichever unrelated class
+        // happened to run when the heap ran out, which reads like a flake and
+        // is not one. The floor is raised once here rather than chased per
+        // class; `forkEvery` is deliberately not used, since restarting the
+        // worker every N classes costs far more wall-clock than the heap costs
+        // memory.
+        unitTests.all { test -> test.maxHeapSize = "2g" }
     }
 
     // Expose the exported Room schemas to the

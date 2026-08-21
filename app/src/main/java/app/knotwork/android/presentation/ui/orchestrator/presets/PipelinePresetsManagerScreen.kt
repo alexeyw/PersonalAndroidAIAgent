@@ -361,7 +361,7 @@ internal fun PresetCategoryChipRow(
  */
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
-private fun PresetManagerRow(
+internal fun PresetManagerRow(
     preset: PipelinePreset,
     onRename: (() -> Unit)?,
     onDelete: (() -> Unit)?,
@@ -386,11 +386,21 @@ private fun PresetManagerRow(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
             ) {
+                // `weight(fill = false)` is load-bearing, for the same reason
+                // it is on `PresetPickerRow`: without it the title is measured
+                // first against the full row width, leaving the badge zero
+                // width — its label then wraps one character per line and
+                // renders as a tall vertical sliver that inflates the row.
+                // `maxLines = 1` does not prevent this on its own, because the
+                // title only ellipsizes once something else constrains it.
+                // `fill = false` keeps a short title snug against its badge
+                // instead of pushing it to the far edge.
                 Text(
                     text = preset.name,
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
                 PresetCategoryBadge(category = preset.category)
             }

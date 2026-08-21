@@ -94,6 +94,8 @@ class PromptLibraryCallbacks(
     val onSearch: () -> Unit = {},
     val onCategorySelected: (String) -> Unit = {},
     val onNewPrompt: () -> Unit = {},
+    val onImportPrompt: () -> Unit = {},
+    val onExportPrompt: (String) -> Unit = {},
     val onEditPrompt: (String) -> Unit = {},
     val onDeletePrompt: (String) -> Unit = {},
     val onDuplicatePrompt: (String) -> Unit = {},
