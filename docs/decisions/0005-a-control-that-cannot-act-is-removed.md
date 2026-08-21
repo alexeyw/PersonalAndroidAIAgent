@@ -16,9 +16,11 @@ in a bad moment was guaranteed to do nothing.
 ## Decision
 
 The controls were **removed from the forms**, not wired up and not shown
-disabled. The underlying fields remain on the config objects, so existing
-pipeline JSON still round-trips unchanged; those values simply are no longer
-presented as adjustable.
+disabled. The underlying fields remain on `CloudConfig` (`temperature`,
+`maxTokens`, `timeoutMs`) and `LiteRtConfig` (`temperature`, `topP`,
+`maxNewTokens`, `stopTokens`) in the design-system module, so existing pipeline
+JSON still round-trips unchanged; those values simply are no longer presented as
+adjustable.
 
 ## Consequences
 

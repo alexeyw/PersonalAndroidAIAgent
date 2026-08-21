@@ -29,7 +29,17 @@ Koog is used for exactly three things:
 
 Koog's agent runtime is **not** adopted. Neither are its file tools: the agent's
 file operations are written in-house, against this project's own workspace and
-permission model.
+permission model (`WriteFileExecutor`, `EditFileExecutor`, `AppendFileExecutor`,
+`ListFilesExecutor`).
+
+**A grep will find `ai.koog.agents.*` imports, and they are not a contradiction.**
+The MCP client is built from `agents-mcp` and the tool descriptors in
+`agents-core.tools` — that is the transport surface, and it is the only part of
+those artifacts this project calls. Everything else it uses is under
+`ai.koog.prompt.*`: the provider clients, streaming, and the JSON-schema
+generator. What is *not* called is the runtime itself — no agent is constructed,
+no Koog graph is executed, and neither persistence nor the rollback tool
+registry is touched.
 
 An addition to that list is a decision, not an implementation detail, and each
 adopted module is recorded with the specific class actually invoked.

@@ -36,11 +36,19 @@ A node's language is decided by its **consumer**, never by its type:
   `OUTPUT` itself translate was rejected: it would add an on-device inference
   pass to every run and let a formatter distort an answer that was already
   correct.
-- The guard is a per-node table in the preset validation test, not a rule about
-  node types. The previous type-based heuristic required `$LANG` from every
-  text-producing node and so **enforced the defect** — it was replaced, not
-  extended. A preset node carrying a prompt that the table does not mention
-  fails the test.
+- The guard is a per-node table, not a rule about node types:
+  `promptLanguageExpectations` in `PipelinePresetCatalogValidationTest`, whose
+  values are `ENGLISH`, `USER` or `DATA`. A machine-facing prompt that does not
+  tell the model to work in English fails; a user-facing one that does not
+  reference `$LANG` fails; and a table entry for a node that no longer carries a
+  prompt fails too, so the table cannot rot quietly.
+- The previous guard was type-based — it required `$LANG` from every
+  `LITE_RT` / `CLOUD` / `SUMMARY` / `CLARIFICATION` / `OUTPUT` node — and so
+  **enforced the defect**, since it demanded the user's language from intake and
+  planning nodes whose output is read by a router. It was replaced, not
+  extended.
+- A preset node carrying a prompt that the table does not mention fails the
+  test, so adding a node means deciding who reads it.
 
 ## Status
 
