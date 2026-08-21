@@ -229,7 +229,7 @@ fun PresetPickerSheet(
  * unselected so the list doesn't jump as the user moves the selection.
  */
 @Composable
-private fun PresetPickerRow(preset: PipelinePreset, selected: Boolean, onClick: () -> Unit) {
+internal fun PresetPickerRow(preset: PipelinePreset, selected: Boolean, onClick: () -> Unit) {
     val bg = if (selected) {
         MaterialTheme.colorScheme.primary.copy(alpha = SELECTED_BG_ALPHA)
     } else {
