@@ -1067,9 +1067,23 @@ tasks.named("check") { dependsOn(verifyLintBaselineOverrides) }
 // without this declaration the test task stays UP-TO-DATE after a metadata edit
 // and the guard reports a stale pass: exactly the failure mode it exists to
 // prevent, only quieter.
+//
+// `InstrumentedTestExclusionGuardTest` has the same shape and the same trap. It
+// parses the instrumented source set (which is on no unit-test classpath) and
+// reads the emulator workflow (which is not a build input at all), so both have
+// to be declared or the guard answers from a cached run of the very edit it
+// polices — adding an exclusion, or renaming the annotation the workflow names
+// as a string. Declaring them costs a unit-test re-run after an `androidTest`
+// edit; not declaring them costs the guard its meaning.
 tasks.withType<Test>().configureEach {
     inputs.dir(rootProject.file("fastlane/metadata"))
         .withPropertyName("storeMetadata")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(layout.projectDirectory.dir("src/androidTest"))
+        .withPropertyName("instrumentedSources")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(rootProject.file(".github/workflows/instrumented.yml"))
+        .withPropertyName("instrumentedWorkflow")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 

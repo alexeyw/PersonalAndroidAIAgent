@@ -28,6 +28,7 @@ import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.services.ApprovalNotifier
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
+import app.knotwork.android.testing.DeviceOnlyInstrumentedTest
 import dagger.hilt.android.EntryPointAccessors
 import io.mockk.coEvery
 import io.mockk.every
@@ -74,6 +75,13 @@ import app.knotwork.android.domain.models.Result as DomainResult
  * or emulator; on lower API levels every test is skipped via [assumeTrue] so the
  * file is harmless in JVM-only check builds.
  *
+ * Why it carries [DeviceOnlyInstrumentedTest]: an emulator can host the class but
+ * cannot grant a third-party caller the appop-protected `EXECUTE_APP_FUNCTIONS`
+ * permission, so every scenario would resolve to a skip. The annotation excludes the
+ * class from the automated emulator runs by name instead of letting it burn the
+ * discovery poll to reach that skip; it stays part of the manual reference-device
+ * pass, where the permission gate can actually apply.
+ *
  * Why not `@HiltAndroidTest`: the agent's production application class is already
  * `@HiltAndroidApp`, so the SingletonComponent is bootstrapped automatically when the
  * instrumentation Application is created. Pulling dependencies from the production
@@ -82,6 +90,14 @@ import app.knotwork.android.domain.models.Result as DomainResult
  * scaffolding that would otherwise leak into the rest of the test suite.
  */
 @RunWith(AndroidJUnit4::class)
+@DeviceOnlyInstrumentedTest(
+    reason = "EXECUTE_APP_FUNCTIONS is declared `appop|preinstalled|module` in the Android 16 framework " +
+        "manifest. Stock emulator images refuse the grant for a third-party caller — `pm grant` reports " +
+        "the permission is not changeable and `appops set` does not recognise the op — so cross-package " +
+        "discovery never returns the probe and all five scenarios degrade to Assume-skips while still " +
+        "paying the discovery poll (measured: 78s of a 453s suite). A real verdict needs a privileged / " +
+        "preinstalled agent build on the reference device, which is where these scenarios are exercised.",
+)
 class AppFunctionsEndToEndTest {
 
     private lateinit var entryPoint: AppFunctionsE2ETestEntryPoint

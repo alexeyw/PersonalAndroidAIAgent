@@ -1,6 +1,7 @@
 # Knotwork — on-device AI agent for Android
 
 [![Check](https://github.com/alexeyw/knotwork/actions/workflows/check.yml/badge.svg)](https://github.com/alexeyw/knotwork/actions/workflows/check.yml)
+[![Instrumented](https://github.com/alexeyw/knotwork/actions/workflows/instrumented.yml/badge.svg?branch=main)](https://github.com/alexeyw/knotwork/actions/workflows/instrumented.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 ![Version](https://img.shields.io/badge/version-0.7.3-orange.svg)
 ![Android API](https://img.shields.io/badge/Android-API%2036%2B-3DDC84.svg?logo=android)
@@ -243,7 +244,7 @@ first message once it loads.
 | Local storage    | Room + DataStore                                        |
 | Crash reporting  | Firebase Crashlytics (`full` flavour) / none (`foss`)   |
 | Distribution     | `full` (Play / direct APK) + `foss` (F-Droid, no Google)|
-| Testing          | JUnit + MockK                                           |
+| Testing          | JUnit + MockK; instrumented suite on an emulator matrix in CI |
 | Architecture tests | Konsist (Clean-Architecture layer guard, in `check`)  |
 
 ## Privacy

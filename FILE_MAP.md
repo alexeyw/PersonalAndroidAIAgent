@@ -2,7 +2,10 @@
 
 - `.git/` - Git version control system internal directory.
 - `.github/` - GitHub-specific configuration.
-  - `workflows/` - GitHub Actions workflows (`check.yml` — CI quality gate).
+  - `workflows/` - GitHub Actions workflows: `check.yml` (the required, JVM-only quality gate — also compiles the instrumented source set, and reused by `release.yml`), `instrumented.yml` (the `androidTest` suite on an emulator matrix, deliberately outside the release path) and `release.yml` (tag-driven build, signing and publication).
+  - `scripts/` - Helper scripts invoked by the workflows.
+    - `run-instrumented.sh` - Runs the instrumented suite against a booted emulator with the exclusion filter applied, and classifies a failure as a test failure (never retried) or an infrastructure failure (retried once, then reported as such). Runnable by hand to reproduce a CI run locally.
+    - `run-instrumented-selftest.sh` - Exercises that classifier against a stub `gradlew`, asserting exit code, recorded class and attempt count per scenario. The classifier only executes on a failing run, so without this nothing would notice it regressing; `instrumented.yml` runs it before booting any emulator.
   - `ISSUE_TEMPLATE/` - GitHub Issue Forms templates.
     - `bug_report.yml` - Bug report form (summary, repro steps, expected/actual, device + Android + app build metadata, logs, screenshots).
     - `feature_request.yml` - Feature request form (problem, proposed solution, alternatives, context).

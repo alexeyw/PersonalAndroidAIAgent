@@ -1,0 +1,233 @@
+name: Instrumented
+
+# Runs the instrumented (`app/src/androidTest/`) suite on emulators.
+#
+# Why this is a separate workflow rather than a job inside `check.yml`:
+# `release.yml` reuses `check.yml` verbatim as its first job, so anything added
+# there also gates a signed release built from a tag. An emulator downloads
+# system images, boots a virtual machine and talks to it over adb — it can fail
+# for reasons the repository did not cause, and a release must never be blocked
+# by that class of failure. The split follows the project's own rule that a
+# build's verdict has to be a function of the repository's contents:
+#
+#   * the DETERMINISTIC half — whether the instrumented sources still compile —
+#     lives in `check.yml`, where it gates every pull request and every release;
+#   * the EXECUTION half lives here, outside the release path.
+#
+# Infrastructure failures are not swept under the rug: `run-instrumented.sh`
+# separates them from test failures, retries only the former (at most once) and
+# labels the job so the difference is readable without opening the log. The job
+# still goes red for both — a gate that turns green when its environment
+# misbehaves has stopped being a gate.
+#
+# Matrix. The app's `minSdk` is 36, so the floor and the `targetSdk` are the two
+# levels worth covering. API 37.0 publishes no `default` / `aosp` / ATD system
+# image, only `google_apis`, so both legs use `google_apis` for symmetry rather
+# than mixing image types across API levels.
+#
+# Nightly adds one `foss` leg. That flavour is what F-Droid builds, it shares
+# every `main` source with `full`, and without this leg it is never exercised on
+# a device by anything automated.
+#
+# What this workflow deliberately does NOT do: cache the AVD between runs. The
+# documented snapshot-cache dance trades a few minutes of boot time for a class
+# of staleness bugs that surface as unexplained failures, and this workflow runs
+# roughly once per phase on the pull-request path.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    # 02:17 UTC — off the hour, where GitHub's scheduler is least contended.
+    - cron: '17 2 * * *'
+  workflow_dispatch:
+    inputs:
+      extended:
+        description: 'Run the extended nightly matrix (adds the FOSS flavour leg)'
+        type: boolean
+        default: false
+
+# Deliberately keyed by event as well as ref: a push to `main` and the nightly
+# schedule both run against `refs/heads/main` but cover different matrices, and
+# cancelling the broader nightly because a merge landed would silently drop the
+# FOSS leg for that day.
+concurrency:
+  group: instrumented-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  plan:
+    name: Select the device matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.select.outputs.matrix }}
+      scope: ${{ steps.select.outputs.scope }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      # The classifier below decides whether a red job means "the code is wrong"
+      # or "the environment misbehaved", and whether to retry — but it only ever
+      # executes on a failing run, so nothing else exercises it. Tested here
+      # against a stub `gradlew`: a couple of seconds, before any emulator, and
+      # ahead of the matrix so a broken classifier fails the whole workflow
+      # rather than every leg separately.
+      - name: Self-test the failure classifier
+        run: bash .github/scripts/run-instrumented-selftest.sh
+
+      # The matrix is computed rather than written inline because a job-level
+      # `if:` cannot see the `matrix` context, so a leg cannot be skipped per
+      # event any other way.
+      - name: Select
+        id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EXTENDED_REQUESTED: ${{ inputs.extended }}
+        run: |
+          set -euo pipefail
+          base='{"api":"36","target":"google_apis","flavour":"Full"},{"api":"37.0","target":"google_apis","flavour":"Full"}'
+          foss='{"api":"36","target":"google_apis","flavour":"Foss"}'
+          if [[ "$EVENT_NAME" == "schedule" || "$EXTENDED_REQUESTED" == "true" ]]; then
+            echo "matrix={\"include\":[$base,$foss]}" >> "$GITHUB_OUTPUT"
+            echo "scope=extended" >> "$GITHUB_OUTPUT"
+          else
+            echo "matrix={\"include\":[$base]}" >> "$GITHUB_OUTPUT"
+            echo "scope=standard" >> "$GITHUB_OUTPUT"
+          fi
+
+  instrumented:
+    name: API ${{ matrix.api }} · ${{ matrix.flavour }}
+    needs: plan
+    runs-on: ubuntu-latest
+    # Sized for the worst realistic path, not the median: a cold Gradle build
+    # (~15 min), an emulator boot (~8 min), the suite (~15 min) and one retried
+    # attempt after an infrastructure failure. A timeout that trips mid-suite
+    # produces a red job with no test report, which is the least useful outcome
+    # available.
+    timeout-minutes: 75
+    strategy:
+      # One leg's failure must not hide the other's: an API-specific regression
+      # is precisely what the matrix exists to surface.
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          # Never write the shared cache from here. `check.yml`'s push-to-`main`
+          # job owns it; a second writer whose build graph differs would evict
+          # entries the merge gate depends on.
+          cache-read-only: true
+
+      # Without this the emulator falls back to software virtualisation and the
+      # suite takes multiples of its normal wall-clock, usually long enough to
+      # trip the job timeout.
+      - name: Enable KVM
+        run: |
+          set -euo pipefail
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run the instrumented suite
+        # Pinned to the commit behind v2.38.0 rather than the moving `v2` tag.
+        # A mutable ref would let the same commit of this repository behave
+        # differently from one day to the next, which is exactly the property
+        # this project refuses to accept in anything that can fail a build.
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        env:
+          GRADLE_TASK: ':app:connected${{ matrix.flavour }}DebugAndroidTest'
+          # The instrumented exclusion list. Classes carrying this annotation
+          # cannot reach a verdict on an emulator; the roster and the reason for
+          # each entry are pinned by `InstrumentedTestExclusionGuardTest`.
+          EXCLUDE_ANNOTATION: app.knotwork.android.testing.DeviceOnlyInstrumentedTest
+          LOG_DIR: build/instrumented-logs
+        with:
+          api-level: ${{ matrix.api }}
+          target: ${{ matrix.target }}
+          arch: x86_64
+          profile: pixel_6
+          cores: 4
+          ram-size: 4096M
+          disable-animations: true
+          # Compose text-field assertions are a documented flake source when the
+          # spell checker underlines input mid-assertion.
+          disable-spellchecker: true
+          emulator-boot-timeout: 900
+          force-avd-creation: true
+          script: bash .github/scripts/run-instrumented.sh
+
+      # Runs whatever the outcome, because the interesting case is the failed
+      # one: it turns the exit code the script chose into a line a human reads.
+      - name: Report the failure class
+        if: ${{ !cancelled() }}
+        env:
+          LEG: API ${{ matrix.api }} · ${{ matrix.flavour }}
+          SCOPE: ${{ needs.plan.outputs.scope }}
+        run: |
+          set -euo pipefail
+          class="$(cat build/instrumented-logs/failure-class.txt 2>/dev/null || echo unknown)"
+          {
+            echo "### Instrumented — $LEG ($SCOPE matrix)"
+            echo
+            case "$class" in
+              none)
+                echo "Passed."
+                ;;
+              test)
+                echo "**Test failure.** The suite reached the device and reported failing"
+                echo "assertions. This is a code failure and was not retried — re-running"
+                echo "the job will not change the outcome. The test report is attached to"
+                echo "this run as an artifact."
+                ;;
+              infra)
+                echo "**Infrastructure failure.** The run matched a known environment"
+                echo "signature (lost device, failed install, dependency download) rather"
+                echo "than a test assertion, twice in a row. Nothing in the repository is"
+                echo "implicated by this result; re-run the job."
+                ;;
+              *)
+                echo "**Failed before the suite could classify itself.** The emulator did"
+                echo "not reach the point of running Gradle — most often a boot timeout or"
+                echo "a system-image download. Treat as an infrastructure failure and"
+                echo "re-run; if it repeats, the image or the runner image has moved."
+                ;;
+            esac
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload instrumented test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instrumented-report-api${{ matrix.api }}-${{ matrix.flavour }}
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+          if-no-files-found: ignore
+
+      # The Gradle log, the logcat dump and the recorded failure class. On an
+      # infrastructure failure these are the only evidence there is — the test
+      # report may not exist at all.
+      - name: Upload run logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instrumented-logs-api${{ matrix.api }}-${{ matrix.flavour }}
+          path: build/instrumented-logs/
+          if-no-files-found: ignore
