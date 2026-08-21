@@ -256,7 +256,10 @@ jobs:
   # free to change.
   #
   # Require exactly two checks on `main`: `./gradlew check` and `Instrumented
-  # gate`. The classifier and the legs are covered transitively — see below.
+  # gate`. Nothing else here needs naming: this job demands success from every
+  # `needs`, and a failed classifier leaves the matrix `skipped`, which fails the
+  # gate too. A job added to this workflow later must be added to `needs` or the
+  # gate will not speak for it.
   gate:
     name: Instrumented gate
     needs: [classifier, instrumented]
@@ -265,6 +268,10 @@ jobs:
     # a failing matrix would skip the gate and the required check would go green
     # at precisely the moment the tests were red. With `always()` the job runs
     # and decides for itself.
+    #
+    # Deliberate consequence: a run cancelled part-way leaves this red rather
+    # than green. A cancelled run is not a passed run, and erring the other way
+    # is how a required check comes to mean nothing.
     if: ${{ always() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5

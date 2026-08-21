@@ -237,7 +237,8 @@ protection as a success** — without it, a failing matrix would skip the gate
 and the required check would go green exactly when the tests were red. And it
 demands `success` from both the classifier and the matrix, so a failed
 classifier (which leaves the matrix `skipped`) fails the gate rather than
-passing as an absence of news.
+passing as an absence of news. A cancelled run leaves the gate red for the
+same reason: a cancelled run is not a passed one.
 
 Leave *Require branches to be up to date before merging* off. It would force a
 rebase and a full re-run — around 35 minutes of `check` plus 16 of emulators —
@@ -258,8 +259,8 @@ pass** lives in the separate workflow.
 That does not make the emulator job optional. It runs on every pull
 request into `main` and goes red for both failure classes — the split
 labels them, it does not excuse either. (Whether the check is *blocking*
-is a branch-protection setting on the repository, configured outside the
-code.) What the script does is tell them apart.
+is a branch-protection setting — see [Making it
+blocking](#making-it-blocking).) What the script does is tell them apart.
 `.github/scripts/run-instrumented.sh` matches the output against a tight
 list of environment signatures — a lost device, a failed install, a
 dependency download that timed out — and:
