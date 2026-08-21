@@ -73,7 +73,6 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
-import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
@@ -92,11 +91,13 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import java.util.concurrent.CopyOnWriteArrayList
 import javax.inject.Provider
 
 /**
@@ -255,7 +256,10 @@ class ExternalAutomationBackgroundRunIntegrationTest {
             // The external call admitted the run; it did not approve the tool.
             coVerify(exactly = 0) { toolRepository.executeTool(TOOL_NAME, any(), any()) }
             // And nothing terminal has been reported to the caller yet.
-            verify(exactly = 0) { process.externalCallback.notifyOutcome(any(), any(), any(), any()) }
+            assertTrue(
+                "the caller must hear nothing while the run is parked",
+                process.externalCallback.calls.isEmpty(),
+            )
 
             // ── A human approves from the notification, hours later ──
             val outcome = SubmitApprovalDecisionUseCase(
@@ -278,14 +282,11 @@ class ExternalAutomationBackgroundRunIntegrationTest {
             // This is the case `AgentWorker.announceOutcome` structurally cannot
             // cover: parking stopped the worker, and the resume came back through
             // the in-process queue with no worker left to announce anything.
-            verify(exactly = 1) {
-                process.externalCallback.notifyOutcome(
-                    CALLER_PACKAGE,
-                    ExternalAutomationContract.ACTION_RUN_RESULT,
-                    REQUEST_ID,
-                    ExternalAutomationStatus.Completed,
-                )
-            }
+            val notification = awaitSingleNotification(process.externalCallback)
+            assertEquals(CALLER_PACKAGE, notification.returnPackage)
+            assertEquals(ExternalAutomationContract.ACTION_RUN_RESULT, notification.returnAction)
+            assertEquals(REQUEST_ID, notification.requestId)
+            assertEquals(ExternalAutomationStatus.Completed, notification.status)
             assertEquals(
                 ExternalAutomationStatus.Completed,
                 process.externalJournal.findByRunId(runId)?.status,
@@ -374,9 +375,9 @@ class ExternalAutomationBackgroundRunIntegrationTest {
         // A denial continues the run with a refusal recorded, so the run itself
         // completes; either way the caller is told exactly once and never left
         // waiting on a callback that does not come.
-        verify(exactly = 1) {
-            process.externalCallback.notifyOutcome(CALLER_PACKAGE, any(), REQUEST_ID, any())
-        }
+        val notification = awaitSingleNotification(process.externalCallback)
+        assertEquals(CALLER_PACKAGE, notification.returnPackage)
+        assertEquals(REQUEST_ID, notification.requestId)
         coVerify(exactly = 0) { toolRepository.executeTool(TOOL_NAME, any(), any()) }
 
         process.taskQueueManager.scope.cancel()
@@ -399,7 +400,7 @@ class ExternalAutomationBackgroundRunIntegrationTest {
         val externalJournal = ExternalAutomationJournalRepositoryImpl(
             database.externalAutomationJournalDao(),
         ).apply { dispatcher = testDispatcher }
-        val externalCallback = mockk<ExternalAutomationCallbackNotifier>(relaxed = true)
+        val externalCallback = RecordingCallbackNotifier()
         val runRepository = PipelineRunRepositoryImpl(
             database.pipelineRunDao(),
             telemetry,
@@ -569,6 +570,93 @@ class ExternalAutomationBackgroundRunIntegrationTest {
     }
 
     /**
+     * Awaits the caller-facing notification **itself**, then asserts it happened
+     * exactly once, and returns it.
+     *
+     * Why the notification rather than the journal row it follows: the production
+     * order in `PipelineRunRepositoryImpl.recordExternalAutomationOutcome` is
+     * `recordOutcome` (settle the journal) *then* `notifyOutcome` (tell the
+     * caller), because the settlement is the once-only guard — a run can reach a
+     * terminal status twice, `INTERRUPTED` being terminal *and* resumable, and the
+     * second settlement is refused. `recordOutcome` suspends and [awaitUntil] hops
+     * to `Dispatchers.Default` between passes, so a poller watching the journal can
+     * legitimately observe the settled row while the observer has not yet reached
+     * the notify. Asserting the callback at that moment is a race, and it is the
+     * one that went red on CI.
+     *
+     * Waiting on the journal is not wrong, it is one step short: it settles the
+     * *precondition* of the thing under test. So the journal wait stays where it
+     * asserts a state worth asserting, and this waits for the observable.
+     *
+     * The "exactly once" half cannot be awaited — it is a claim about a call that
+     * must never arrive. It is checked after a bounded settle, which proves "no
+     * second notification within the window" rather than "never"; that is the same
+     * guarantee the `verify(exactly = 1)` it replaces provided, now without the
+     * race on the first one.
+     */
+    private suspend fun TestScope.awaitSingleNotification(
+        callback: RecordingCallbackNotifier,
+    ): RecordingCallbackNotifier.Call {
+        awaitUntil("the caller was told the terminal status") { callback.calls.isNotEmpty() }
+        repeat(SETTLE_PASSES) {
+            advanceUntilIdle()
+            withContext(Dispatchers.Default) { delay(REAL_POLL_DELAY_MS) }
+        }
+        assertEquals(
+            "the caller must be told exactly once: ${callback.calls}",
+            1,
+            callback.calls.size,
+        )
+        return callback.calls.first()
+    }
+
+    /**
+     * Recording stand-in for the outbound broadcast — the observable this test
+     * exists to pin, since what a third-party caller is actually told is the whole
+     * contract.
+     *
+     * A MockK spy cannot serve here. `verify` can only ask whether a call has
+     * *already* happened, which forces the test to guess that the moment has
+     * arrived; recording makes the notification something the test can **await**.
+     * See [awaitSingleNotification] for the race that distinction removes.
+     *
+     * Backed by a [CopyOnWriteArrayList] because the notification arrives on a real
+     * worker thread — the repositories hop through `Dispatchers.IO` — while the
+     * polling coroutine reads the list from `Dispatchers.Default`.
+     */
+    private class RecordingCallbackNotifier : ExternalAutomationCallbackNotifier {
+
+        private val recorded = CopyOnWriteArrayList<Call>()
+
+        /** Every notification sent so far, in order. */
+        val calls: List<Call> get() = recorded
+
+        override fun notifyOutcome(
+            returnPackage: String,
+            returnAction: String,
+            requestId: String,
+            status: ExternalAutomationStatus,
+        ) {
+            recorded += Call(returnPackage, returnAction, requestId, status)
+        }
+
+        /**
+         * One recorded callback.
+         *
+         * @property returnPackage Package the broadcast was addressed to.
+         * @property returnAction Broadcast action it was sent with.
+         * @property requestId The caller's correlation id, echoed back.
+         * @property status The terminal status reported.
+         */
+        data class Call(
+            val returnPackage: String,
+            val returnAction: String,
+            val requestId: String,
+            val status: ExternalAutomationStatus,
+        )
+    }
+
+    /**
      * LLM double dispatching on the node's system-prompt marker embedded in the
      * rendered prompt, so the script stays correct no matter how many times a node
      * re-runs (checkpoint replay vs. live re-execution).
@@ -641,7 +729,7 @@ class ExternalAutomationBackgroundRunIntegrationTest {
      * @property parkedRunResumer Background-decision submission tail.
      * @property externalJournal Real request journal, shared by the admission path
      *   and the run store, so a test can read back the two-phase row.
-     * @property externalCallback Spy standing in for the outbound broadcast.
+     * @property externalCallback Recording stand-in for the outbound broadcast.
      */
     private data class ProcessHarness(
         val scheduler: QueueBridgeScheduler,
@@ -651,7 +739,7 @@ class ExternalAutomationBackgroundRunIntegrationTest {
         val approvalNotifier: ApprovalNotifier,
         val parkedRunResumer: ParkedRunResumer,
         val externalJournal: ExternalAutomationJournalRepositoryImpl,
-        val externalCallback: ExternalAutomationCallbackNotifier,
+        val externalCallback: RecordingCallbackNotifier,
     )
 
     private companion object {
@@ -672,5 +760,12 @@ class ExternalAutomationBackgroundRunIntegrationTest {
         const val LIVE_WAIT_TIMEOUT_MS = 1_000L
         const val AWAIT_TIMEOUT_MS = 30_000L
         const val REAL_POLL_DELAY_MS = 5L
+
+        /**
+         * Passes of "drain the scheduler, then let real workers run" used to check
+         * that a second notification does not follow the first. Bounded on purpose:
+         * absence cannot be awaited, only given a window to appear in.
+         */
+        const val SETTLE_PASSES = 20
     }
 }

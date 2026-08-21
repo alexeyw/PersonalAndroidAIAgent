@@ -306,6 +306,16 @@ details.
   dropped the bottom-bar highlight, because the list of routes that count as
   "inside settings" was maintained by hand and had never included them.
 
+- **A test of the external-automation contract was checking the wrong signal.**
+  Two tests assert that a third-party caller is told the outcome of a run exactly
+  once, including the case where the run parked for hours on a confirmation
+  prompt. They waited for the outcome to be written down and then checked that
+  the caller had been told — but writing it down happens *first*, deliberately,
+  because that record is what stops the same run being reported twice. In the
+  gap between the two, the check could run and find nothing, which is what made
+  it fail once on the build servers and pass everywhere else. The tests now wait
+  for the notification itself. The behaviour they test was never wrong.
+
 - **Four static-analysis rules were configured but had never run once.**
   The Kotlin analysis step splits its rules by what they need to answer: some
   read the code as text, others need the compiler's resolved types. A rule of
