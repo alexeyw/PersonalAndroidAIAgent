@@ -108,6 +108,12 @@ jobs:
     # produces a red job with no test report, which is the least useful outcome
     # available.
     timeout-minutes: 75
+    env:
+      # Declared once for the whole job: the script writes here, the summary
+      # step reads the failure class from here, and the artifact upload takes
+      # this path. Repeating the literal in three places is how one of them
+      # silently stops matching and the summary starts reporting "unknown".
+      LOG_DIR: build/instrumented-logs
     strategy:
       # One leg's failure must not hide the other's: an API-specific regression
       # is precisely what the matrix exists to surface.
@@ -157,7 +163,6 @@ jobs:
           # cannot reach a verdict on an emulator; the roster and the reason for
           # each entry are pinned by `InstrumentedTestExclusionGuardTest`.
           EXCLUDE_ANNOTATION: app.knotwork.android.testing.DeviceOnlyInstrumentedTest
-          LOG_DIR: build/instrumented-logs
         with:
           api-level: ${{ matrix.api }}
           target: ${{ matrix.target }}
@@ -182,7 +187,7 @@ jobs:
           SCOPE: ${{ needs.plan.outputs.scope }}
         run: |
           set -euo pipefail
-          class="$(cat build/instrumented-logs/failure-class.txt 2>/dev/null || echo unknown)"
+          class="$(cat "$LOG_DIR/failure-class.txt" 2>/dev/null || echo unknown)"
           {
             echo "### Instrumented — $LEG ($SCOPE matrix)"
             echo
@@ -229,5 +234,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: instrumented-logs-api${{ matrix.api }}-${{ matrix.flavour }}
-          path: build/instrumented-logs/
+          path: ${{ env.LOG_DIR }}/
           if-no-files-found: ignore

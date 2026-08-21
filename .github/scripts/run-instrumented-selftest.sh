@@ -86,10 +86,12 @@ expect "a passing run reports no failure class" \
   0 none 1 \
   "PASS"
 
+# Each scenario argument is exactly one attempt's output, so it must stay a
+# single line: a multi-line argument would silently become two attempts and the
+# assertions below would be measuring something else.
 expect "a failing assertion is a test failure and is NOT retried" \
   1 test 1 \
-  "com.example.FooTest > bar FAILED
-There were failing tests."
+  "com.example.FooTest > bar FAILED — There were failing tests."
 
 # The single most valuable case: an app-side crash is what a real regression
 # looks like, and retrying it until it passes is how one gets shipped.

@@ -12,13 +12,19 @@ package app.knotwork.android.testing
  * indistinguishable from a test that quietly stopped covering anything, whereas
  * an exclusion list has to be edited (and justified) to grow.
  *
- * Two rules keep the list honest:
+ * Three rules keep the list honest:
  *
  * 1. [reason] is mandatory and must state *what about a real device* the test
  *    needs — not merely that it fails on CI.
  * 2. `InstrumentedTestExclusionGuardTest` (in the JVM test source set) pins the
- *    set of annotated classes against an explicit roster, so adding an exclusion
- *    is a deliberate edit in two places instead of a one-line escape hatch.
+ *    set of annotated classes against an explicit roster and names the exclusion
+ *    table in `docs/testing.md`, so adding an exclusion is a deliberate edit in
+ *    several places instead of a one-line escape hatch.
+ * 3. It applies to a **class only**, never a single test method. The guard reads
+ *    class declarations, so a method-level annotation would drop a test out of
+ *    CI without appearing on any roster — the silent escape hatch this whole
+ *    mechanism exists to prevent. If one method genuinely needs excluding, split
+ *    it into its own class, which puts the decision back where it can be seen.
  *
  * An excluded test is **not** dead: it still compiles under `./gradlew check`
  * (the instrumented source set is compiled by the merge gate) and is still run
@@ -29,5 +35,5 @@ package app.knotwork.android.testing
  *   only a real device provides. Shown by the guard test when the roster drifts.
  */
 @Retention(AnnotationRetention.RUNTIME)
-@Target(AnnotationTarget.CLASS, AnnotationTarget.FUNCTION)
+@Target(AnnotationTarget.CLASS)
 annotation class DeviceOnlyInstrumentedTest(val reason: String)

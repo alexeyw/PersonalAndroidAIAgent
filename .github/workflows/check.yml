@@ -59,7 +59,13 @@ jobs:
     # cap. The push-to-`main` job (same cap) must also finish cold to *write* the
     # warm cache that makes subsequent PRs fast again, so the budget has to cover
     # one cold doubled-flavour build, not the warm steady state.
-    timeout-minutes: 60
+    #
+    # Raised 60 → 75 when the instrumented-compile step was added: the previous
+    # cap had already been forced up once by a cold doubled-flavour build that
+    # overran it, and adding work to a job whose budget is tuned to its worst
+    # case is how that happens again. A timeout kills the run outright and
+    # produces no reports; a cap that is never reached costs nothing.
+    timeout-minutes: 75
     steps:
       - name: Checkout
         uses: actions/checkout@v6

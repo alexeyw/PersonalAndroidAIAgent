@@ -49,7 +49,10 @@ LOG_DIR="${LOG_DIR:-build/instrumented-logs}"
 MAX_INFRA_ATTEMPTS="${MAX_INFRA_ATTEMPTS:-2}"
 ADB_WAIT_SECONDS="${ADB_WAIT_SECONDS:-30}"
 
-mkdir -p "$LOG_DIR"
+# Fail loudly here rather than let every later write silently no-op: without the
+# marker file the workflow can only report "failed before the suite could
+# classify itself", which would point at the emulator instead of at this.
+mkdir -p "$LOG_DIR" || { echo "Cannot create LOG_DIR '$LOG_DIR'" >&2; exit 1; }
 CLASS_FILE="$LOG_DIR/failure-class.txt"
 : > "$CLASS_FILE"
 
@@ -87,10 +90,18 @@ annotate() {
   fi
 }
 
-# Reads the tail of the run log and answers whether the failure matches a known
-# infrastructure signature. Reading a bounded tail rather than the whole log
-# keeps an unrelated historical match in an earlier attempt from misclassifying
-# a later one.
+# Answers whether this attempt's failure matches a known infrastructure
+# signature. Isolation between attempts comes from the per-attempt log file, not
+# from the tail.
+#
+# The tail bound is a separate, deliberate choice. Gradle prints the failure
+# summary last, so the tail is where the reason for THIS failure lives; scanning
+# the whole log would let an incidental match far from the failure — a test name
+# or an expected string containing, say, "device offline" — flip a genuine test
+# failure into a retry, which is the one direction that must never happen. The
+# accepted cost is the opposite case: an environment error that appears only
+# early in a very long run gets labelled a test failure. That errs toward not
+# retrying, which is the safe side.
 looks_like_infrastructure() {
   local tail_log
   tail_log="$(tail -n 400 "$LOG_FILE")"
