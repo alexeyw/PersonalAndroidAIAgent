@@ -107,6 +107,22 @@ request:
 Run `./gradlew check` **locally before pushing**. Pushing without running
 it just trades local feedback for slower CI feedback.
 
+CI adds two things `check` does not do. It compiles the instrumented
+source set — as a separate Gradle invocation, since bundling it into
+`check` makes unrelated Robolectric tests fail:
+
+```bash
+./gradlew :app:compileFullDebugAndroidTestKotlin :app:compileFossDebugAndroidTestKotlin
+```
+
+And it *runs* the instrumented suite on emulators, in a separate
+`Instrumented` workflow — API 36 and API 37 on every pull request into
+`main`, plus an API 36 FOSS leg nightly. If you have a device or emulator
+attached, `./gradlew connectedFullDebugAndroidTest` is the local
+equivalent. See [`docs/testing.md`](docs/testing.md) § *The instrumented
+gate* for the matrix, the exclusion list, and how a failure is classified
+as a test failure or as infrastructure trouble.
+
 ## Branch model
 
 Development proceeds in thematic batches, each integrated on a
@@ -156,6 +172,10 @@ Before requesting review, please confirm:
 
 - [ ] Tests added or updated for the change.
 - [ ] `./gradlew check` passes locally.
+- [ ] If the change touches `app/src/androidTest/`, the instrumented
+      sources compile
+      (`./gradlew :app:compileFullDebugAndroidTestKotlin`) and the suite
+      was run on a device or emulator.
 - [ ] Public documentation is updated where the change affects user-
       facing behaviour, the public API surface, or the build / dev setup.
 - [ ] `FILE_MAP.md` (the file map under

@@ -37,6 +37,32 @@ details.
 
 ### Changed
 
+- **The instrumented test suite now runs in continuous integration.** Around ten
+  thousand lines of Compose UI, Room migration and DAO tests lived in the
+  repository without running anywhere automatic — so they were a claim of
+  coverage rather than coverage, and once an entire instrumented source set
+  stopped compiling without a single check going red. They now run on emulators:
+  Android 16 and Android 17 on every pull request into the default branch, plus
+  a nightly run that adds the Google-free build variant, which nothing automatic
+  had ever exercised on a device.
+
+  Two failures are kept apart on purpose. A failing test is never retried —
+  retrying a real regression until it passes is how one gets shipped. A failure
+  that matches a known environment signature, such as a lost emulator or a
+  dependency download that timed out, is retried once and then labelled as
+  such, so a red build still answers the question "is the code wrong?" rather
+  than leaving it open. Both still fail the run: a gate that turns green when
+  its own environment misbehaves has stopped being a gate.
+
+  A test that an emulator genuinely cannot judge is excluded by a named list
+  with a written reason, checked by its own guard, instead of quietly reporting
+  itself as skipped inside a green run. Exactly one test is on that list today.
+
+  Whether the instrumented sources still *compile* is a different question with
+  a different answer: it depends on nothing but the repository, so it is checked
+  by the same required job as everything else, and therefore also on the path
+  that builds a signed release.
+
 - **Prompt cards were rearranged to fit their new export action.** The name now
   has the whole first line to itself, and Preview, Duplicate, Edit and a **More**
   menu — holding Export and Delete — sit on the footer line beside `used by N

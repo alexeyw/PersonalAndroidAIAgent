@@ -484,6 +484,15 @@ findings are also rendered into the job summary as an *Informational lint
 findings* table, so the answer to "what is out of date?" needs no artifact
 download.
 
+The same job also compiles the instrumented source set for both flavours, in a
+Gradle invocation of its own. `check` does not compile `androidTest`, so
+without that step an instrumented test could stop building while every gate
+stayed green. Whether those tests *pass* is decided elsewhere — by
+`.github/workflows/instrumented.yml`, which runs them on an emulator matrix and
+is deliberately kept out of the required `check` workflow (and therefore out of
+the release path) because an emulator's verdict is not purely a function of the
+repository. See [`testing.md`](testing.md) § *The instrumented gate*.
+
 The same workflow is also exposed as a reusable one (`workflow_call`) and is
 called as the first job of `.github/workflows/release.yml`, so a release cannot
 be built against a definition of "green" that has drifted from the one pull
@@ -497,8 +506,10 @@ expected certificate fingerprint. The release procedure itself is documented in
 
 ## What this gate does **not** do
 
-- It does not yet collect instrumented (androidTest / Compose UI test)
-  coverage — `*Screen.kt` Composables remain outside the Kover scope.
+- It does not collect instrumented (androidTest / Compose UI test)
+  **coverage** — `*Screen.kt` Composables remain outside the Kover scope. The
+  instrumented tests themselves do run in CI, in their own workflow; their
+  results simply do not feed the coverage number.
 - It does not run the `release` variant — lint and tests target `debug`. R8
   regressions are therefore invisible here; the release-only guard above
   (`verify<Variant>KeepRules`) runs as part of the release assemble instead,

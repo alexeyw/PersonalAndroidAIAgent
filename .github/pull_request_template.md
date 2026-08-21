@@ -33,6 +33,10 @@ Closes #
 - [ ] `./gradlew check` passes locally (detekt, ktlint, lintFullDebug +
       lintFossDebug, testFullDebugUnitTest + testFossDebugUnitTest,
       koverVerifyFullDebug).
+- [ ] If `app/src/androidTest/` changed: the instrumented sources compile
+      (`./gradlew :app:compileFullDebugAndroidTestKotlin` — its own Gradle
+      invocation, not appended to `check`) and the suite was run on a
+      device or emulator (`./gradlew connectedFullDebugAndroidTest`).
 - [ ] Tests added or updated for the changed code (target 100% logic
       coverage in new `domain` / `data` code; see `docs/testing.md`).
 - [ ] Public documentation updated where relevant (see the *Pull

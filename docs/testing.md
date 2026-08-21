@@ -108,9 +108,10 @@ fun `given valid input when execute then emits success state`() {
 
 ## Instrumented / Compose UI tests
 
-> **Note:** instrumented tests are **not** part of the automated CI gate —
-> they require a connected device or emulator and are run manually. See
-> [What the automated gate does NOT cover](#what-the-automated-gate-does-not-cover).
+> **Note:** instrumented tests run in CI on emulators — see
+> [The instrumented gate](#the-instrumented-gate) for the matrix, the
+> exclusion list and how to reproduce a CI run locally. They stay outside
+> `./gradlew check`, which remains JVM-only.
 
 ### Setup
 
@@ -151,15 +152,158 @@ detekt (including the coroutine-cancellation gate, `detektFullDebug` +
 flavours (`testFullDebugUnitTest` + `testFossDebugUnitTest`), and
 `koverVerifyFullDebug`. Lint must pass with no new warnings.
 
+`check` does not compile the instrumented source set, so CI compiles it in
+a separate step of the same job:
+
+```bash
+./gradlew :app:compileFullDebugAndroidTestKotlin :app:compileFossDebugAndroidTestKotlin
+```
+
+Run it as its own Gradle invocation, never appended to `check`: bundling
+the two into one invocation makes dozens of unrelated Robolectric unit
+tests fail with *Default FirebaseApp is not initialized in this process*.
+Run separately, both are green.
+
+## The instrumented gate
+
+The `app/src/androidTest/` suite runs on emulators in its own workflow,
+`Instrumented`, separate from `check`:
+
+It runs both distribution flavours on an API 36 `google_apis` x86_64
+emulator — `full` and `foss`, the two things the project actually ships —
+on every pull request into `main`, every push to `main`, and nightly.
+
+### Why the second axis is the flavour, not a second API level
+
+The intended shape was floor plus `targetSdk` — API 36 and API 37. Neither
+alternative API level survives contact with this app, and both were
+measured rather than assumed:
+
+- **API 37 never reaches the suite.** The image boots, and then the
+  emulator action's own post-boot `adb shell input keyevent 82` — which no
+  input can disable — dies with *Failure calling service input: Broken
+  pipe*. 0 of 2 runs.
+- **API 36.1 failed 0 of 3 runs**, at a different layer each time: the AVD
+  disk, the keyguard, then `install-write`. The first two produced fixes
+  that hardened the API 36 leg too. The third has none in sight, and 36.1
+  is still Android 16, so what it adds over API 36 is a patch level rather
+  than an API surface.
+
+API 36 has been green 3 of 3 with the full suite. So the second
+configuration is the one the project ships twice over: `foss`, which is
+what F-Droid builds, shares every `main` source with `full`, and had never
+been exercised on a device by anything automated.
+
+**The cost is real and is not hidden: the app targets API 37 and no
+emulator run covers it.** That belongs to the manual reference-device pass
+until the action makes its unlock step optional.
+
+### Two settings that are load-bearing, not decoration
+
+The AVD is given an explicit **10 GB disk**. `abiFilters` strips non-arm64
+only in `release`, so the **debug** APK carries all four ABIs at ~210 MB,
+and the default partition runs out while adb is still pushing it — *write
+failed: No space left on device*.
+
+The script **dismisses the keyguard** before starting the suite. The
+action's post-boot `input keyevent 82` retires a swipe lock on some images
+and not others, and when it does not, the failure looks nothing like a lock
+screen: instrumentation launches the app while the user is still locked and
+it dies with *SharedPreferences in credential encrypted storage are not
+available until after user (id 0) is unlocked*, running zero tests.
+
+Both gaps were invisible on API 36 — which happened to fit in the default
+disk and happens to boot unlocked. A single-configuration matrix would have
+shipped both as future "the emulator is flaky" noise.
+
+### Why it is not part of `./gradlew check`
+
+The release workflow reuses the `check` workflow verbatim as its first
+job, so anything added there also gates a signed release built from a tag.
+An emulator downloads system images, boots a virtual machine and talks to
+it over adb — it can fail for reasons the repository did not cause, and a
+release must not be blocked by that. The project's rule is that a build's
+verdict has to be a function of the repository's contents, so the two
+halves are split along exactly that line: **whether the instrumented
+sources compile** is deterministic and lives in `check`; **whether they
+pass** lives in the separate workflow.
+
+That does not make the emulator job optional. It runs on every pull
+request into `main` and goes red for both failure classes — the split
+labels them, it does not excuse either. (Whether the check is *blocking*
+is a branch-protection setting on the repository, configured outside the
+code.) What the script does is tell them apart.
+`.github/scripts/run-instrumented.sh` matches the output against a tight
+list of environment signatures — a lost device, a failed install, a
+dependency download that timed out — and:
+
+- an **infrastructure** failure is retried at most once, then reported as
+  such in the job summary;
+- everything else is attributed to the **repository** and never retried,
+  because retrying a real regression until it passes is how one gets
+  shipped.
+
+The second class is named for the repository rather than for tests on
+purpose: it also catches a build error in the instrumented sources, where
+no test ran at all, and calling that a test failure sends the next reader
+hunting for a failing test that does not exist.
+
+Anything ambiguous falls to the repository. `Process crashed.` from the
+instrumentation runner, for instance, is exactly what an app-side crash
+regression looks like, so it is not on the environment list.
+
+That classifier only ever executes on a run that is already failing, so
+nothing else would notice it regressing.
+`.github/scripts/run-instrumented-selftest.sh` drives it against a stub
+`gradlew` — asserting the exit code, the recorded class *and* the number
+of attempts — and the workflow runs it before booting any emulator. Run
+it by hand in a second:
+
+```bash
+bash .github/scripts/run-instrumented-selftest.sh
+```
+
+### Tests excluded from the emulator runs
+
+Excluded tests are named by a list, not dropped silently. A class carrying
+`@DeviceOnlyInstrumentedTest(reason = …)` is filtered out of every
+automated run by annotation name, and `InstrumentedTestExclusionGuardTest`
+pins both the roster and the reason, so the list can only grow through a
+deliberate edit that a reviewer reads.
+
+| Test | Why an emulator cannot reach a verdict |
+|---|---|
+| `AppFunctionsEndToEndTest` | `EXECUTE_APP_FUNCTIONS` is declared `appop\|preinstalled\|module` by the platform. No stock emulator image grants it to a third-party caller, so cross-package discovery never returns the probe and all five scenarios degrade to skips — while still paying the discovery poll (78 s of a 453 s suite). The round-trip is exercised in the manual pass on the reference device, where the permission gate can apply. |
+
+An excluded test is not dead code: it still has to compile under
+`./gradlew check`, and it is still run by hand on a device.
+
+### Running the instrumented suite locally
+
+Against any connected device or emulator:
+
+```bash
+./gradlew :app:connectedFullDebugAndroidTest
+```
+
+To reproduce what CI does — same task, same exclusion filter, same
+failure classification — run the CI script itself against a booted
+emulator:
+
+```bash
+GRADLE_TASK=:app:connectedFullDebugAndroidTest EXCLUDE_ANNOTATION=app.knotwork.android.testing.DeviceOnlyInstrumentedTest LOG_DIR=build/instrumented-logs bash .github/scripts/run-instrumented.sh
+```
+
 ## What the automated gate does NOT cover
 
-The entire CI gate is **JVM-based**: plain JUnit + MockK unit tests,
+`./gradlew check` is **JVM-based**: plain JUnit + MockK unit tests,
 Robolectric-driven Compose tests, and Roborazzi screenshot tests (in the
-`:catalog` module). CI runs on `ubuntu-latest` with **no emulator and no
-physical device attached**. This is a deliberate trade-off — it keeps the
-gate fast, deterministic, and runnable on every pull request without a
-device farm — but it has a hard consequence that contributors should not
-overestimate:
+`:catalog` module). It runs on `ubuntu-latest` with **no emulator and no
+physical device attached** — deliberately, so that its verdict depends on
+nothing but the repository. The instrumented suite covers part of the
+remaining gap on emulators (see [The instrumented
+gate](#the-instrumented-gate)), but an emulator is not a phone, and one
+consequence should not be overestimated:
 
 > **A green `./gradlew check` is NOT a guarantee that the app works on a
 > physical device.** It guarantees that the JVM-testable logic behaves as
@@ -168,14 +312,16 @@ overestimate:
 
 The areas below are **not** exercised by CI, and why:
 
-- **Instrumented / Espresso / on-device tests.** The
-  `app/src/androidTest/` source set (~50 test classes: Room DAO tests,
-  schema-migration tests on `MigrationTestHelper`, Compose UI flow tests,
-  the AppFunctions end-to-end test) is neither run **nor even compiled**
-  by `./gradlew check`. A change can break the instrumented-test build and
-  CI stays green — compile them locally with
-  `./gradlew :app:compileFullDebugAndroidTestKotlin` and run them with
-  `./gradlew connectedFullDebugAndroidTest` on a connected device.
+- **Real hardware.** The instrumented suite runs on emulators, which
+  reproduce the Android framework but not a phone: no real GPU or NPU, no
+  vendor OEM layer, no thermal throttling, no true Doze, no cellular
+  radio. A regression that needs any of those to appear is still found
+  only by the manual pass below.
+- **Pull requests into a phase branch.** CI fires on pull requests into
+  `main` and pushes to `main`, so a pull request that targets an
+  integration branch runs neither `check` nor the instrumented suite.
+  Run both locally, and dispatch the workflows manually on the
+  integration branch before it is merged into `main`.
 - **Real TalkBack navigation.** `TalkBackHappyPathsTest` (in the
   `:catalog` test source set) only asserts a structural pre-condition:
   every surface on the ratified happy paths publishes focusable
@@ -190,11 +336,11 @@ The areas below are **not** exercised by CI, and why:
   behaviour under real weights are device-only concerns.
 - **AppFunctions caller/callee.** The end-to-end test that resolves
   function metadata and invokes a function through
-  `AppFunctionManager.executeAppFunction(...)` is an instrumented test,
-  and it additionally skips on stock Android 16 because the
-  `EXECUTE_APP_FUNCTIONS` permission is signature-level. The full
-  caller → callee round-trip is verifiable only on a device build where
-  the gate applies.
+  `AppFunctionManager.executeAppFunction(...)` is the single entry on the
+  [emulator exclusion list](#tests-excluded-from-the-emulator-runs): no
+  stock image grants a third-party caller the appop-protected
+  `EXECUTE_APP_FUNCTIONS`, so the full caller → callee round-trip is
+  verifiable only on a device build where the gate applies.
 - **Opening the SQLCipher-encrypted database.** Robolectric cannot load
   the SQLCipher native library, so JVM tests never open the real
   encrypted database. That the passphrase provisioning, keystore-backed
@@ -210,7 +356,10 @@ The areas below are **not** exercised by CI, and why:
 These gaps are covered by a **manual smoke test on the reference
 device — Samsung Galaxy S25 Ultra (Android 16)** — performed before every
 integration merge into `main`, plus a manual TalkBack walkthrough of the
-ratified happy paths. The pre-release quality gate in
+ratified happy paths. The emulator suite narrowed what that pass has to
+carry — Room migrations, DAO round-trips and the Compose flows are now
+answered automatically — but it did not replace it: the remaining items
+above are the ones only real hardware can decide. The pre-release quality gate in
 [`release.md`](release.md) § *Quality gate before release* builds on the
 same rule: automated checks first, manual on-device verification as the
 final word.

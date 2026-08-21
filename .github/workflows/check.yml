@@ -8,6 +8,11 @@ name: Check
 # `:buildSrc:test` is added explicitly because the build-logic module's own
 # unit tests (e.g. the browser-editor constants generator) are not reachable
 # from the app's `check` aggregate and would otherwise drift unnoticed.
+# Compiling the instrumented source set is added for the same reason: `check`
+# does not compile it either, so a broken instrumented test would leave every
+# gate green. The instrumented tests are *run* by the separate `Instrumented`
+# workflow, which stays out of this one so that an emulator cannot block a
+# signed release (see the header of `instrumented.yml`).
 # Any one of them failing blocks the merge.
 #
 # Triggers: every pull request targeting `main`, and every push to `main`
@@ -54,7 +59,13 @@ jobs:
     # cap. The push-to-`main` job (same cap) must also finish cold to *write* the
     # warm cache that makes subsequent PRs fast again, so the budget has to cover
     # one cold doubled-flavour build, not the warm steady state.
-    timeout-minutes: 60
+    #
+    # Raised 60 → 75 when the instrumented-compile step was added: the previous
+    # cap had already been forced up once by a cold doubled-flavour build that
+    # overran it, and adding work to a job whose budget is tuned to its worst
+    # case is how that happens again. A timeout kills the run outright and
+    # produces no reports; a cap that is never reached costs nothing.
+    timeout-minutes: 75
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -80,6 +91,31 @@ jobs:
 
       - name: Run ./gradlew check
         run: ./gradlew check :buildSrc:test --stacktrace --no-daemon
+
+      # `check` neither runs NOR COMPILES the instrumented source set, so an
+      # instrumented test could stop compiling and every gate would stay green —
+      # which is how a whole `androidTest` source set once drifted out of
+      # buildability unnoticed. Compiling it here closes that hole for the
+      # merge gate and, because `release.yml` reuses this workflow, for the
+      # release path too. Whether those tests *pass* is decided by the separate
+      # `Instrumented` workflow; whether they *compile* is a pure function of
+      # the repository, so it belongs in the deterministic gate.
+      #
+      # Its OWN Gradle invocation on purpose: bundling
+      # `compile*DebugAndroidTestKotlin` into the same invocation as `check`
+      # makes dozens of unrelated Robolectric unit tests fail with
+      # "Default FirebaseApp is not initialized in this process". Run
+      # separately, both are green.
+      #
+      # `!cancelled()` rather than the default: otherwise a lint or unit-test
+      # failure hides an instrumented compile break for a whole extra CI cycle.
+      - name: Compile the instrumented test sources
+        if: ${{ !cancelled() }}
+        run: >
+          ./gradlew
+          :app:compileFullDebugAndroidTestKotlin
+          :app:compileFossDebugAndroidTestKotlin
+          --stacktrace --no-daemon
 
       # Renders this run's informational lint findings into the job summary, so
       # the answer to "what is out of date?" is readable without downloading the
