@@ -169,32 +169,52 @@ Run separately, both are green.
 The `app/src/androidTest/` suite runs on emulators in its own workflow,
 `Instrumented`, separate from `check`:
 
-| | Matrix | Runs on |
-|---|---|---|
-| Standard | API 36 · `full`, API 36.1 · `full` | every pull request into `main`, every push to `main` |
-| Extended | the above plus API 36 · `foss` | nightly, and on manual dispatch with *extended* ticked |
+It runs both distribution flavours on an API 36 `google_apis` x86_64
+emulator — `full` and `foss`, the two things the project actually ships —
+on every pull request into `main`, every push to `main`, and nightly.
 
-Both legs use the `google_apis` x86_64 system image, on an AVD given an
-explicit 10 GB disk. That size is load-bearing: `abiFilters` strips
-non-arm64 only in `release`, so the **debug** APK carries all four ABIs
-and weighs ~210 MB, and the default AVD partition runs out while adb is
-still pushing it — *write failed: No space left on device*.
+### Why the second axis is the flavour, not a second API level
 
-The script also dismisses the keyguard before starting the suite. The
-emulator action's own post-boot `input keyevent 82` retires a swipe lock
-on some images and not others, and when it does not the failure looks
-nothing like a lock screen: instrumentation launches the app while the
-user is still locked, and it dies with *SharedPreferences in credential
-encrypted storage are not available until after user (id 0) is unlocked*
-before any test runs.
+The intended shape was floor plus `targetSdk` — API 36 and API 37. Neither
+alternative API level survives contact with this app, and both were
+measured rather than assumed:
 
-The second leg was meant to be the `targetSdk`, API 37 — that image boots, but the emulator
-action then always issues `adb shell input keyevent 82`, with no input to
-disable it, and on Android 17 that call dies with *Failure calling service
-input: Broken pipe* before the suite starts. Observed twice, at the same
-step both times, so the second leg is API 36.1 until the action makes that
-step optional. The nightly `foss` leg is the only automated on-device
-exercise the F-Droid flavour gets.
+- **API 37 never reaches the suite.** The image boots, and then the
+  emulator action's own post-boot `adb shell input keyevent 82` — which no
+  input can disable — dies with *Failure calling service input: Broken
+  pipe*. 0 of 2 runs.
+- **API 36.1 failed 0 of 3 runs**, at a different layer each time: the AVD
+  disk, the keyguard, then `install-write`. The first two produced fixes
+  that hardened the API 36 leg too. The third has none in sight, and 36.1
+  is still Android 16, so what it adds over API 36 is a patch level rather
+  than an API surface.
+
+API 36 has been green 3 of 3 with the full suite. So the second
+configuration is the one the project ships twice over: `foss`, which is
+what F-Droid builds, shares every `main` source with `full`, and had never
+been exercised on a device by anything automated.
+
+**The cost is real and is not hidden: the app targets API 37 and no
+emulator run covers it.** That belongs to the manual reference-device pass
+until the action makes its unlock step optional.
+
+### Two settings that are load-bearing, not decoration
+
+The AVD is given an explicit **10 GB disk**. `abiFilters` strips non-arm64
+only in `release`, so the **debug** APK carries all four ABIs at ~210 MB,
+and the default partition runs out while adb is still pushing it — *write
+failed: No space left on device*.
+
+The script **dismisses the keyguard** before starting the suite. The
+action's post-boot `input keyevent 82` retires a swipe lock on some images
+and not others, and when it does not, the failure looks nothing like a lock
+screen: instrumentation launches the app while the user is still locked and
+it dies with *SharedPreferences in credential encrypted storage are not
+available until after user (id 0) is unlocked*, running zero tests.
+
+Both gaps were invisible on API 36 — which happened to fit in the default
+disk and happens to boot unlocked. A single-configuration matrix would have
+shipped both as future "the emulator is flaky" noise.
 
 ### Why it is not part of `./gradlew check`
 

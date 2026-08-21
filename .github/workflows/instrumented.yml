@@ -21,19 +21,31 @@ name: Instrumented
 # still goes red for both — a gate that turns green when its environment
 # misbehaves has stopped being a gate.
 #
-# Matrix. The app's `minSdk` is 36, so the floor is API 36 and the second leg is
-# API 36.1. The intended second leg was the `targetSdk`, API 37.0 — it is not
-# usable here, and the reason is upstream rather than ours: the emulator action
-# always issues `adb shell input keyevent 82` after boot, with no input to
-# disable it, and on the Android 17 image that call dies (`Failure calling
-# service input: Broken pipe`) before our script ever runs. Verified twice, at
-# the same step both times. Revisit when the action makes that step optional or
-# the image accepts it; API 37.0 also publishes no `default` / `aosp` / ATD
-# image, so `google_apis` is the only variant either way.
+# Matrix: API 36 x both distribution flavours. The second axis is the flavour
+# rather than a second API level, and that was decided by measurement rather
+# than taste.
 #
-# Nightly adds one `foss` leg. That flavour is what F-Droid builds, it shares
-# every `main` source with `full`, and without this leg it is never exercised on
-# a device by anything automated.
+# The intended shape was floor + `targetSdk`, API 36 and API 37. Neither
+# alternative API level survives contact with this app:
+#
+#   * **API 37** never reaches our script. The image boots, and then the
+#     emulator action's own post-boot `adb shell input keyevent 82` — which no
+#     input can disable — dies with `Failure calling service input: Broken pipe`.
+#     0 of 2 runs.
+#   * **API 36.1** failed 0 of 3 runs, at a different layer each time: the AVD
+#     disk, then the keyguard, then `install-write`. The first two produced real
+#     fixes that hardened the API 36 leg as well, which is most of what a matrix
+#     is for; the third has no fix in sight, and 36.1 is still Android 16, so
+#     what it would add over API 36 is a patch level rather than an API surface.
+#
+# API 36 has been green 3 runs out of 3 with the full suite. So the honest
+# second configuration is the one we actually ship twice: `full` and `foss`.
+# `foss` is what F-Droid builds and shares every `main` source with `full`, and
+# nothing automated had ever exercised it on a device.
+#
+# The cost is named rather than papered over: **the app targets API 37 and no
+# emulator run covers it.** That gap belongs to the manual reference-device
+# pass until the action makes its unlock step optional.
 #
 # What this workflow deliberately does NOT do: cache the AVD between runs. The
 # documented snapshot-cache dance trades a few minutes of boot time for a class
@@ -49,64 +61,35 @@ on:
     # 02:17 UTC — off the hour, where GitHub's scheduler is least contended.
     - cron: '17 2 * * *'
   workflow_dispatch:
-    inputs:
-      extended:
-        description: 'Run the extended nightly matrix (adds the FOSS flavour leg)'
-        type: boolean
-        default: false
 
 # Deliberately keyed by event as well as ref: a push to `main` and the nightly
-# schedule both run against `refs/heads/main` but cover different matrices, and
-# cancelling the broader nightly because a merge landed would silently drop the
-# FOSS leg for that day.
+# schedule both run against `refs/heads/main`, and a merge landing mid-run would
+# otherwise cancel the scheduled run whose whole purpose is to notice drift on a
+# tree nobody pushed to.
 concurrency:
   group: instrumented-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  plan:
-    name: Select the device matrix
+  # The classifier decides whether a red job means "the code is wrong" or "the
+  # environment misbehaved", and whether to retry — but it only ever executes on
+  # a failing run, so nothing else exercises it. Tested against a stub `gradlew`:
+  # a couple of seconds, no device, no SDK. It gates the matrix rather than
+  # running inside it, so a broken classifier fails once instead of per leg.
+  classifier:
+    name: Self-test the failure classifier
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    outputs:
-      matrix: ${{ steps.select.outputs.matrix }}
-      scope: ${{ steps.select.outputs.scope }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      # The classifier below decides whether a red job means "the code is wrong"
-      # or "the environment misbehaved", and whether to retry — but it only ever
-      # executes on a failing run, so nothing else exercises it. Tested here
-      # against a stub `gradlew`: a couple of seconds, before any emulator, and
-      # ahead of the matrix so a broken classifier fails the whole workflow
-      # rather than every leg separately.
-      - name: Self-test the failure classifier
+      - name: Run the self-test
         run: bash .github/scripts/run-instrumented-selftest.sh
 
-      # The matrix is computed rather than written inline because a job-level
-      # `if:` cannot see the `matrix` context, so a leg cannot be skipped per
-      # event any other way.
-      - name: Select
-        id: select
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          EXTENDED_REQUESTED: ${{ inputs.extended }}
-        run: |
-          set -euo pipefail
-          base='{"api":"36","target":"google_apis","flavour":"Full"},{"api":"36.1","target":"google_apis","flavour":"Full"}'
-          foss='{"api":"36","target":"google_apis","flavour":"Foss"}'
-          if [[ "$EVENT_NAME" == "schedule" || "$EXTENDED_REQUESTED" == "true" ]]; then
-            echo "matrix={\"include\":[$base,$foss]}" >> "$GITHUB_OUTPUT"
-            echo "scope=extended" >> "$GITHUB_OUTPUT"
-          else
-            echo "matrix={\"include\":[$base]}" >> "$GITHUB_OUTPUT"
-            echo "scope=standard" >> "$GITHUB_OUTPUT"
-          fi
-
   instrumented:
-    name: API ${{ matrix.api }} · ${{ matrix.flavour }}
-    needs: plan
+    name: ${{ matrix.flavour }} · API ${{ matrix.api }}
+    needs: classifier
     runs-on: ubuntu-latest
     # Sized for the worst realistic path, not the median: a cold Gradle build
     # (~15 min), an emulator boot (~8 min), the suite (~15 min) and one retried
@@ -124,7 +107,14 @@ jobs:
       # One leg's failure must not hide the other's: an API-specific regression
       # is precisely what the matrix exists to surface.
       fail-fast: false
-      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+      matrix:
+        include:
+          - flavour: Full
+            api: '36'
+            target: google_apis
+          - flavour: Foss
+            api: '36'
+            target: google_apis
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -198,13 +188,12 @@ jobs:
       - name: Report the failure class
         if: ${{ !cancelled() }}
         env:
-          LEG: API ${{ matrix.api }} · ${{ matrix.flavour }}
-          SCOPE: ${{ needs.plan.outputs.scope }}
+          LEG: ${{ matrix.flavour }} · API ${{ matrix.api }}
         run: |
           set -euo pipefail
           class="$(cat "$LOG_DIR/failure-class.txt" 2>/dev/null || echo unknown)"
           {
-            echo "### Instrumented — $LEG ($SCOPE matrix)"
+            echo "### Instrumented — $LEG"
             echo
             case "$class" in
               none)
@@ -239,7 +228,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: instrumented-report-api${{ matrix.api }}-${{ matrix.flavour }}
+          name: instrumented-report-${{ matrix.flavour }}-api${{ matrix.api }}
           path: |
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
@@ -252,6 +241,6 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: instrumented-logs-api${{ matrix.api }}-${{ matrix.flavour }}
+          name: instrumented-logs-${{ matrix.flavour }}-api${{ matrix.api }}
           path: ${{ env.LOG_DIR }}/
           if-no-files-found: ignore
