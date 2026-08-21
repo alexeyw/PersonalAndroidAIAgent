@@ -132,6 +132,28 @@ capture_device_state() {
   fi
 }
 
+# Makes sure the device is actually usable before the suite starts: past the
+# lock screen, and awake.
+#
+# The emulator action issues `input keyevent 82` after boot, which dismisses a
+# swipe lock on some images and not others. When it does not, the failure looks
+# nothing like a lock screen: instrumentation starts the app while the user is
+# still locked, Hilt's graph reaches credential-encrypted storage from the
+# application object, and the run dies with
+# `SharedPreferences in credential encrypted storage are not available until
+# after user (id 0) is unlocked` before a single test runs. Observed on the
+# API 36.1 image; API 36 boots unlocked and had been hiding the gap.
+#
+# `wm dismiss-keyguard` is the command that actually retires the keyguard;
+# the keyevent stays as a fallback for images that ignore it. Both are
+# best-effort — a device that refuses to unlock will fail the run on its own
+# terms, with its own diagnosis, rather than here.
+prepare_device() {
+  command -v adb >/dev/null 2>&1 || return 0
+  adb shell wm dismiss-keyguard >/dev/null 2>&1 || true
+  adb shell input keyevent 82 >/dev/null 2>&1 || true
+}
+
 # Nudges adb back to life between infrastructure attempts. A stale server is the
 # single most common reason the first attempt lost the device.
 #
@@ -153,6 +175,8 @@ reset_adb() {
     waited=$((waited + 1))
   done
 }
+
+prepare_device
 
 attempt=1
 while true; do
@@ -188,5 +212,6 @@ while true; do
   annotate warning "Instrumented CI: infrastructure failure, retrying" \
     "Attempt ${attempt} matched the environment signature /${signature}/. Retrying once; a failure attributable to the repository is never retried."
   reset_adb
+  prepare_device
   attempt=$((attempt + 1))
 done

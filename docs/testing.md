@@ -180,6 +180,14 @@ non-arm64 only in `release`, so the **debug** APK carries all four ABIs
 and weighs ~210 MB, and the default AVD partition runs out while adb is
 still pushing it — *write failed: No space left on device*.
 
+The script also dismisses the keyguard before starting the suite. The
+emulator action's own post-boot `input keyevent 82` retires a swipe lock
+on some images and not others, and when it does not the failure looks
+nothing like a lock screen: instrumentation launches the app while the
+user is still locked, and it dies with *SharedPreferences in credential
+encrypted storage are not available until after user (id 0) is unlocked*
+before any test runs.
+
 The second leg was meant to be the `targetSdk`, API 37 — that image boots, but the emulator
 action then always issues `adb shell input keyevent 82`, with no input to
 disable it, and on Android 17 that call dies with *Failure calling service
