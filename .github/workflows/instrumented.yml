@@ -244,3 +244,51 @@ jobs:
           name: instrumented-logs-${{ matrix.flavour }}-api${{ matrix.api }}
           path: ${{ env.LOG_DIR }}/
           if-no-files-found: ignore
+
+  # ── The one status check to require in branch protection ────────────────────
+  #
+  # Branch protection lives in GitHub's settings, not in this repository, so the
+  # list of required check names is a hand-maintained copy of the job names in
+  # this file with nothing to keep the two in step. Requiring the matrix legs by
+  # name means: add a leg and it is silently not required; rename one and the
+  # stale name blocks every pull request forever, waiting for a status that can
+  # no longer be reported. Requiring this single job instead leaves the matrix
+  # free to change.
+  #
+  # Require exactly two checks on `main`: `./gradlew check` and `Instrumented
+  # gate`. Nothing else here needs naming: this job demands success from every
+  # `needs`, and a failed classifier leaves the matrix `skipped`, which fails the
+  # gate too. A job added to this workflow later must be added to `needs` or the
+  # gate will not speak for it.
+  gate:
+    name: Instrumented gate
+    needs: [classifier, instrumented]
+    # `always()` is load-bearing, not defensive tidiness. A job skipped by a
+    # conditional is reported to branch protection as SUCCESS — so without this,
+    # a failing matrix would skip the gate and the required check would go green
+    # at precisely the moment the tests were red. With `always()` the job runs
+    # and decides for itself.
+    #
+    # Deliberate consequence: a run cancelled part-way leaves this red rather
+    # than green. A cancelled run is not a passed run, and erring the other way
+    # is how a required check comes to mean nothing.
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every leg to have passed
+        env:
+          CLASSIFIER: ${{ needs.classifier.result }}
+          MATRIX: ${{ needs.instrumented.result }}
+        run: |
+          set -euo pipefail
+          echo "classifier=$CLASSIFIER  matrix=$MATRIX"
+          # `success` only when EVERY matrix leg succeeded; a failed classifier
+          # leaves the matrix `skipped`, which is a failure here rather than an
+          # absence of news.
+          if [[ "$CLASSIFIER" == "success" && "$MATRIX" == "success" ]]; then
+            echo "Every instrumented leg passed." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          echo "::error title=Instrumented gate::classifier=$CLASSIFIER, matrix=$MATRIX — at least one instrumented leg did not pass. The per-leg jobs carry the diagnosis and the artifacts."
+          exit 1

@@ -63,6 +63,10 @@ details.
   by the same required job as everything else, and therefore also on the path
   that builds a signed release.
 
+  One job speaks for the whole emulator run, so that the list of checks a branch
+  requires does not have to name each configuration and quietly fall out of step
+  with them.
+
 - **Prompt cards were rearranged to fit their new export action.** The name now
   has the whole first line to itself, and Preview, Duplicate, Edit and a **More**
   menu — holding Export and Delete — sit on the footer line beside `used by N
