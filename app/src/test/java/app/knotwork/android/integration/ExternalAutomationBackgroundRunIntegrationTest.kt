@@ -378,6 +378,12 @@ class ExternalAutomationBackgroundRunIntegrationTest {
         val notification = awaitSingleNotification(process.externalCallback)
         assertEquals(CALLER_PACKAGE, notification.returnPackage)
         assertEquals(REQUEST_ID, notification.requestId)
+        // The row and the callback have to agree. The journal entry is what makes
+        // the callback once-only, so a callback carrying a different status than
+        // the one recorded would leave the caller and the device with different
+        // accounts of the same request — and this test is named for the status,
+        // not just for the count.
+        assertEquals(process.externalJournal.findByRunId(runId)?.status, notification.status)
         coVerify(exactly = 0) { toolRepository.executeTool(TOOL_NAME, any(), any()) }
 
         process.taskQueueManager.scope.cancel()
