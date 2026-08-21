@@ -20,9 +20,14 @@ import org.robolectric.annotation.GraphicsMode
  *  - `foundations_dark.png`
  *
  * The Robolectric configuration:
- *  - `sdk = [36]` — matches the project's `minSdk`. Robolectric 4.16 needs
- *    JDK 21 to render against SDK 36; the CI workflow has been bumped to
- *    JDK 21 alongside this task (production code still targets JVM 17).
+ *  - `sdk = [36]` — the newest Android release the project supports, not its
+ *    `minSdk` (which is 34). These snapshots exercise the design system rather
+ *    than any version-gated behaviour, so the render level is a fixed reference
+ *    rather than a floor to track: pinning it keeps ~58 snapshot classes and
+ *    their committed baselines stable when the floor moves. Robolectric 4.16
+ *    needs JDK 21 to render against SDK 36 — that, not `minSdk`, is where the
+ *    project's JDK 21 requirement comes from (production code still targets
+ *    JVM 17).
  *  - `qualifiers = "w360dp-h640dp-xhdpi"` — a 360×640 reference frame so
  *    snapshots stay reviewable as static images and do not balloon with the
  *    host's screen geometry.

@@ -42,8 +42,10 @@ By participating in this project you agree to abide by our
 Required toolchain:
 
 - **JDK 21** — required to run the unit-test suite. Roborazzi's
-  Robolectric backend in `:catalog` only renders against the project's
-  `minSdk 36` on JDK 21. Production code still compiles to
+  Robolectric backend in `:catalog` renders the snapshot suites against
+  SDK 36 — the newest release the project supports, pinned as a fixed
+  reference so committed baselines survive a `minSdk` change — and
+  Robolectric 4.16 needs JDK 21 for that. Production code still compiles to
   `JavaVersion.VERSION_17` / `JvmTarget.JVM_17` — building the APK works
   on JDK 17 — but `./gradlew check` (the merge gate) needs JDK 21. The
   Android Studio bundled JBR ships JDK 21 already, so installing

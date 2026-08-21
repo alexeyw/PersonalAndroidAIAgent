@@ -15,9 +15,11 @@ import androidx.appfunctions.service.AppFunction
  *
  *  - emit the `app_functions.xml` (and v2) inventory under the APK's `assets/` so the
  *    platform discovery service can advertise the function to other apps;
- *  - generate dispatch infrastructure consumed by the auto-merged
- *    `androidx.appfunctions.service.PlatformAppFunctionService`, which is enabled by the
- *    library's manifest on API 36+ (see the AAR `values-v36/values-v36.xml`).
+ *  - generate dispatch infrastructure consumed by whichever auto-merged service the
+ *    library enables for the running platform: `PlatformAppFunctionService` on API 36+,
+ *    `ExtensionAppFunctionService` below it. The choice is the AAR's own resource
+ *    qualifier (`values/` vs `values-v36/`), not ours, and since `minSdk` is 34 both
+ *    branches are reachable.
  *
  * The probe deliberately avoids declaring its own custom `AppFunctionService`: the
  * platform-provided merged service is sufficient and keeps the probe a pure data-plane

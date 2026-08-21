@@ -43,6 +43,20 @@ name: Instrumented
 # `foss` is what F-Droid builds and shares every `main` source with `full`, and
 # nothing automated had ever exercised it on a device.
 #
+# A third leg was added when `minSdk` moved from 36 to 34: API 34 × `full`. The
+# first two legs sit at the API *ceiling* we support, so until this leg existed
+# the ~10k-line suite had never run at the floor at all — anything that breaks
+# specifically at API 34 (resource resolution, startup, a platform behaviour
+# difference) had nothing to surface it.
+#
+# What this leg does NOT buy, stated so nobody assumes otherwise: it does not
+# exercise the AppFunctions extension path. Below API 36 the library selects the
+# `com.android.extensions.appfunctions` sidecar instead of the platform service,
+# which is genuinely unreachable on an API 36 emulator — but the only test that
+# would reach it, `AppFunctionsEndToEndTest`, is on the device-only exclusion
+# list because `EXECUTE_APP_FUNCTIONS` is signature-level and an emulator cannot
+# grant it. That path remains covered by nothing automated, at any API level.
+#
 # The cost is named rather than papered over: **the app targets API 37 and no
 # emulator run covers it.** That gap belongs to the manual reference-device
 # pass until the action makes its unlock step optional.
@@ -114,6 +128,17 @@ jobs:
             target: google_apis
           - flavour: Foss
             api: '36'
+            target: google_apis
+          # The floor leg. `minSdk` is 34, and until this leg existed nothing
+          # automated ran there — the suite only ever saw API 36, which is the
+          # ceiling of what we support, not the edge where things break.
+          # It buys the whole suite at the floor; it does NOT buy the AppFunctions
+          # extension path (see the header note — the only test that reaches that
+          # is excluded from emulator runs). `full` rather than `foss` because the
+          # flavour axis is already covered at 36 and the two share every
+          # measured source.
+          - flavour: Full
+            api: '34'
             target: google_apis
     steps:
       - name: Checkout
