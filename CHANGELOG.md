@@ -37,6 +37,24 @@ details.
 
 ### Changed
 
+- **Dependencies updated in one pass.** Nine were moved together rather than one
+  at a time in the middle of unrelated work: the build tool, the HTTP client and
+  its test server, the encrypted-database driver, the Markdown renderer used for
+  chat messages, the crash-reporting libraries, and — the two that matter — the
+  on-device inference engine and the text-embedding library behind long-term
+  memory.
+
+  Those last two had been deliberately held back, because the ways they break
+  are invisible to a normal build: they fail only in a shipped, optimised
+  release, and only when the app actually loads a model or writes a memory. Both
+  are now checked by the two guards that exist for exactly those failures, and
+  both pass — but the remaining verification is a real device, which is why they
+  moved now, ahead of testing, rather than quietly on their own.
+
+  One dependency could not be updated: the app-functions libraries share a
+  version, and one of the three has not been published at the newer version, so
+  moving the others would not resolve.
+
 - **Knotwork now runs on Android 14 and 15, not just Android 16.** The
   requirement had been Android 16 since the first release, which is a small
   slice of the devices in use — roughly a fifth. Nothing actually needed it.
