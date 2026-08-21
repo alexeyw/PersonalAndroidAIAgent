@@ -191,11 +191,14 @@ halves are split along exactly that line: **whether the instrumented
 sources compile** is deterministic and lives in `check`; **whether they
 pass** lives in the separate workflow.
 
-That does not make the emulator job optional. It is a required check on
-pull requests into `main`, and it goes red for both failure classes. What
-it does is label them. `.github/scripts/run-instrumented.sh` matches the
-output against a tight list of environment signatures — a lost device, a
-failed install, a dependency download that timed out — and:
+That does not make the emulator job optional. It runs on every pull
+request into `main` and goes red for both failure classes — the split
+labels them, it does not excuse either. (Whether the check is *blocking*
+is a branch-protection setting on the repository, configured outside the
+code.) What the script does is tell them apart.
+`.github/scripts/run-instrumented.sh` matches the output against a tight
+list of environment signatures — a lost device, a failed install, a
+dependency download that timed out — and:
 
 - an **infrastructure** failure is retried at most once, then reported as
   such in the job summary;

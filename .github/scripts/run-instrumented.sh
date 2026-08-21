@@ -174,7 +174,7 @@ while true; do
   if [[ "$attempt" -ge "$MAX_INFRA_ATTEMPTS" ]]; then
     echo "infra" > "$CLASS_FILE"
     annotate error "Instrumented CI: infrastructure failure" \
-      "${GRADLE_TASK} failed ${attempt} time(s) on an environment signature (/${signature}/) rather than on a test assertion. The repository is not implicated; re-run the job."
+      "${GRADLE_TASK} failed ${attempt} time(s) on the environment signature /${signature}/ rather than on a test assertion. Usually flakiness — re-run the job. But a signature naming something the repository controls (a dependency that cannot resolve) failing twice is a repository problem, not flakiness: read the log before re-running."
     exit 75
   fi
 
