@@ -324,6 +324,8 @@ class ChatHomeCallbacks(
     val onConsoleSearch: () -> Unit = {},
     val onConsoleSearchQueryChange: (String) -> Unit = {},
     val onConsoleCopyLine: (ConsoleLine) -> Unit = {},
+    val onConsoleCopyVar: (ConsoleVarRow) -> Unit = {},
+    val onConsoleCopySpan: (ConsoleTraceSpan) -> Unit = {},
     val onConsoleFilterByLineSource: (ConsoleSource) -> Unit = {},
     val onConsoleCopyAll: () -> Unit = {},
     val onConsoleClear: () -> Unit = {},

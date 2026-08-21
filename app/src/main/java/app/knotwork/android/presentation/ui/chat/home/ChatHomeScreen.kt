@@ -398,18 +398,33 @@ fun ChatHomeScreen(
         onConsoleSearch = viewModel.console::toggleConsoleSearch,
         onConsoleSearchQueryChange = viewModel.console::onConsoleSearchQueryChange,
         onConsoleCopyLine = { line ->
-            clipboardManager.setText(AnnotatedString(viewModel.console.buildConsoleLineCopyPayload(line)))
+            clipboardManager.setText(AnnotatedString(ConsoleCopyPayloads.line(line)))
+            viewModel.console.signalConsoleLineCopied()
+        },
+        onConsoleCopyVar = { row ->
+            clipboardManager.setText(AnnotatedString(ConsoleCopyPayloads.variable(row)))
+            viewModel.console.signalConsoleLineCopied()
+        },
+        onConsoleCopySpan = { span ->
+            clipboardManager.setText(AnnotatedString(ConsoleCopyPayloads.span(span)))
             viewModel.console.signalConsoleLineCopied()
         },
         onConsoleFilterByLineSource = viewModel.console::filterConsoleByLineSource,
-        // The catalog applies `console.filter` + `console.searchQuery` itself
-        // before rendering rows; the `Copy all` payload mirrors what the
-        // user is actively looking at, so the screen reproduces the same
-        // pre-filter here.
+        // `Copy all` copies the tab the user is looking at. It used to copy log
+        // lines whatever tab was open, so on Vars and Traces the button silently
+        // put something else on the clipboard. The catalog applies
+        // `console.filter` + `console.searchQuery` itself before rendering log
+        // rows, so the screen reproduces the same pre-filter for that tab; the
+        // choice of tab is made in the delegate, where a test can pin it.
         onConsoleCopyAll = {
             val console = screenState.console
-            val visible = visibleConsoleLogs(console.logs, console.filter, console.searchQuery)
-            clipboardManager.setText(AnnotatedString(viewModel.console.buildConsoleAllCopyPayload(visible)))
+            val payload = ConsoleCopyPayloads.forTab(
+                tab = console.tab,
+                visibleLogs = visibleConsoleLogs(console.logs, console.filter, console.searchQuery),
+                vars = console.vars,
+                traces = console.traces,
+            )
+            clipboardManager.setText(AnnotatedString(payload))
             viewModel.console.signalConsoleAllCopied()
         },
         onConsoleClear = viewModel.console::requestConsoleClear,
