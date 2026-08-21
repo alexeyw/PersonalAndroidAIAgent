@@ -176,6 +176,15 @@ jobs:
           profile: pixel_6
           cores: 4
           ram-size: 4096M
+          # Not a round number picked for comfort. The debug APK is ~210 MB
+          # because `abiFilters` strips non-arm64 only in `release`, so the debug
+          # build packages all four ABIs; with the test APK and the probe on top,
+          # the default AVD userdata partition runs out while adb is still
+          # pushing. That is not hypothetical — it is what "write failed: No space
+          # left on device" killed the API 36.1 leg with, twice, on the run that
+          # was meant to confirm the leg worked. API 36 happened to fit, which is
+          # luck rather than headroom, so the size is set for both.
+          disk-size: 10G
           disable-animations: true
           # Compose text-field assertions are a documented flake source when the
           # spell checker underlines input mid-assertion.

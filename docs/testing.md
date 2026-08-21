@@ -174,8 +174,13 @@ The `app/src/androidTest/` suite runs on emulators in its own workflow,
 | Standard | API 36 · `full`, API 36.1 · `full` | every pull request into `main`, every push to `main` |
 | Extended | the above plus API 36 · `foss` | nightly, and on manual dispatch with *extended* ticked |
 
-Both legs use the `google_apis` x86_64 system image. The second leg was
-meant to be the `targetSdk`, API 37 — that image boots, but the emulator
+Both legs use the `google_apis` x86_64 system image, on an AVD given an
+explicit 10 GB disk. That size is load-bearing: `abiFilters` strips
+non-arm64 only in `release`, so the **debug** APK carries all four ABIs
+and weighs ~210 MB, and the default AVD partition runs out while adb is
+still pushing it — *write failed: No space left on device*.
+
+The second leg was meant to be the `targetSdk`, API 37 — that image boots, but the emulator
 action then always issues `adb shell input keyevent 82`, with no input to
 disable it, and on Android 17 that call dies with *Failure calling service
 input: Broken pipe* before the suite starts. Observed twice, at the same
