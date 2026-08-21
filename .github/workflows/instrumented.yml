@@ -204,8 +204,10 @@ jobs:
               infra)
                 echo "**Infrastructure failure.** The run matched a known environment"
                 echo "signature (lost device, failed install, dependency download) rather"
-                echo "than a test assertion, twice in a row. Nothing in the repository is"
-                echo "implicated by this result; re-run the job."
+                echo "than a test assertion, twice in a row. Usually flakiness — re-run"
+                echo "the job. But read the signature in the log first: one that names"
+                echo "something the repository controls, such as a dependency that cannot"
+                echo "resolve, failing twice is a repository problem, not flakiness."
                 ;;
               *)
                 echo "**Failed before the suite could classify itself.** The emulator did"
