@@ -11,6 +11,7 @@ import app.knotwork.android.domain.engine.CloudLlmClientFactory
 import app.knotwork.android.domain.engine.CloudLlmModelResolver
 import app.knotwork.android.domain.engine.retry.CloudRetryListener
 import app.knotwork.android.domain.engine.retry.CollectingCloudRetryListener
+import app.knotwork.android.domain.engine.structured.ReasoningBlockSplitter
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.ConsoleEventType
@@ -244,7 +245,24 @@ class CloudLlmNodeExecutor @Inject constructor(
         // same counter.
         metricsRepository.updateMetrics(endTime - startTime, reportedOutputTokenCount ?: approximateTokenCount)
 
-        val fullResponseText = accumulatedResponse.toString().trim()
+        // Reasoning models reach this executor too — DeepSeek's R1 line natively,
+        // and any Qwen3 served through an OpenAI-compatible endpoint or Ollama.
+        // Split for the same reasons as the on-device path: the text below is
+        // persisted as the agent's message, replayed into the next turn's
+        // `--- Chat History ---`, and scanned brace-to-brace by
+        // `JsonPayloadExtractor`. See `LiteRtNodeExecutor` for why the scratchpad
+        // is reported on the console rather than carried in the node result.
+        val split = ReasoningBlockSplitter.split(accumulatedResponse.toString().trim())
+        val fullResponseText = split.answer
+        split.reasoning?.let { reasoning ->
+            trySend(
+                NodeOutput.Console(
+                    ConsoleEventType.NodeExecution,
+                    "CLOUD '${node.label}' removed a ${reasoning.length}-character reasoning block " +
+                        "from its answer",
+                ),
+            )
+        }
 
         // Record the cloud provider as the answering "model" so the root OUTPUT
         // attributes the message to the cloud source rather than to whatever local
