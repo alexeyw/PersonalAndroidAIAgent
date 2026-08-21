@@ -44,7 +44,7 @@ class ReasoningBlockSplitterTest {
     }
 
     @Test
-    fun `given an unterminated block when splitting then the raw text is kept as the answer`() {
+    fun `given an unterminated block when splitting then every word is kept but the tag is not`() {
         // Given — the generation hit a limit mid-thought. Removing everything
         // would end the run on a blank bubble, which reads as a failure.
         val raw = "<think>\nStill deciding how to phrase this and then the tokens ran"
@@ -52,21 +52,23 @@ class ReasoningBlockSplitterTest {
         // When
         val split = ReasoningBlockSplitter.split(raw)
 
-        // Then
-        assertEquals(raw, split.answer)
+        // Then — every word is kept, but the tag is not: left in, it would be
+        // replayed into the next turn's history and re-read by the next split,
+        // which is the whole defect surviving inside its own fallback.
+        assertEquals("Still deciding how to phrase this and then the tokens ran", split.answer)
         assertNull(split.reasoning)
     }
 
     @Test
-    fun `given a block that leaves nothing behind when splitting then the raw text is kept`() {
+    fun `given a block that leaves nothing behind when splitting then the words are kept untagged`() {
         // Given — the model produced scratchpad and no answer at all.
         val raw = "<think>\nI have nothing to add here.\n</think>   \n\n "
 
         // When
         val split = ReasoningBlockSplitter.split(raw)
 
-        // Then
-        assertEquals(raw, split.answer)
+        // Then — same rule as the unterminated case: the words stay, the tags go.
+        assertEquals("I have nothing to add here.", split.answer)
         assertNull(split.reasoning)
     }
 
@@ -147,6 +149,22 @@ class ReasoningBlockSplitterTest {
         // Then
         assertEquals("Here is the plan.\n\nDone.", split.answer)
         assertEquals("weighing the options\n\nsecond thought", split.reasoning)
+    }
+
+    @Test
+    fun `given a stray closing tag after a complete block when splitting then the answer is not eaten`() {
+        // Given — the orphan-closer rule exists for the template-opened block at
+        // the very start. Applying it again after a block has already been
+        // consumed would classify real answer text as scratchpad, which loses
+        // words the model did write for the reader.
+        val raw = "<think>deliberating</think>Here is the real answer.</think> And the rest."
+
+        // When
+        val split = ReasoningBlockSplitter.split(raw)
+
+        // Then
+        assertEquals("Here is the real answer. And the rest.", split.answer)
+        assertEquals("deliberating", split.reasoning)
     }
 
     @Test

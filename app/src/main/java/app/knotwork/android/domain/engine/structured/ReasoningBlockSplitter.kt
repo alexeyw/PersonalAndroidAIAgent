@@ -80,9 +80,18 @@ object ReasoningBlockSplitter {
             val close = raw.indexOfTagFrom(CLOSE_TAG, cursor, ::isProtected)
 
             // An orphan closing tag: the prompt template opened the block, so
-            // everything up to it is scratchpad even though no opener is in sight.
+            // everything up to it is scratchpad even though no opener is in
+            // sight. This only holds for the *first* segment. Once a complete
+            // block has been consumed, a further unmatched closer is stray
+            // punctuation, and swallowing the text before it would eat answer
+            // the model did write — so the tag is dropped and the text kept.
             if (close != -1 && (open == -1 || close < open)) {
-                reasoning.appendSeparated(raw.substring(cursor, close))
+                val segment = raw.substring(cursor, close)
+                if (cursor == 0) {
+                    reasoning.appendSeparated(segment)
+                } else {
+                    answer.append(segment)
+                }
                 cursor = close + CLOSE_TAG.length
                 removedAny = true
                 continue
@@ -92,8 +101,12 @@ object ReasoningBlockSplitter {
                 break
             }
             if (close == -1) {
-                // Unterminated block — the generation was cut. Keep everything.
-                return Split(answer = raw, reasoning = null)
+                // Unterminated block — the generation was cut mid-thought, so
+                // there is no answer to isolate and every word is kept. The tag
+                // itself still goes: left in, it would be replayed into the next
+                // turn's history and re-parsed by the next split, which is the
+                // whole defect surviving in its own fallback.
+                return Split(answer = raw.withoutTags(::isProtected), reasoning = null)
             }
             // Reaching here, `close` is past `open`: the orphan branch above
             // already consumed every closing tag that precedes an opening one.
@@ -107,9 +120,10 @@ object ReasoningBlockSplitter {
 
         val cleanedAnswer = answer.toString().trim()
         // Removing the block emptied the output: the model produced scratchpad
-        // and nothing else. Returning the raw text keeps the run from ending on
-        // a blank bubble, which reads as a failure rather than as an untidy answer.
-        if (cleanedAnswer.isBlank()) return Split(answer = raw, reasoning = null)
+        // and nothing else. Keeping the words stops the run ending on a blank
+        // bubble, which reads as a failure rather than as an untidy answer —
+        // but the tags go, for the reason given on the unterminated path above.
+        if (cleanedAnswer.isBlank()) return Split(answer = raw.withoutTags(::isProtected), reasoning = null)
 
         return Split(
             answer = cleanedAnswer,
@@ -131,6 +145,37 @@ object ReasoningBlockSplitter {
             at = indexOf(tag, startIndex = at + tag.length, ignoreCase = true)
         }
         return at
+    }
+
+    /**
+     * Returns [this] with every reasoning tag outside a code fence deleted and
+     * all other characters kept.
+     *
+     * Used by the fallbacks, which give up on isolating an answer but must not
+     * give up on removing the markup: a tag left in the text is replayed into
+     * the next turn's `--- Chat History ---` and re-read by the next split.
+     *
+     * @param isProtected Predicate marking indices that belong to a code fence.
+     */
+    private fun String.withoutTags(isProtected: (Int) -> Boolean): String {
+        val out = StringBuilder()
+        var cursor = 0
+        while (cursor < length) {
+            val open = indexOfTagFrom(OPEN_TAG, cursor, isProtected)
+            val close = indexOfTagFrom(CLOSE_TAG, cursor, isProtected)
+            val next = when {
+                open == -1 -> close
+                close == -1 -> open
+                else -> minOf(open, close)
+            }
+            if (next == -1) {
+                out.append(this, cursor, length)
+                break
+            }
+            out.append(this, cursor, next)
+            cursor = next + (if (next == open) OPEN_TAG.length else CLOSE_TAG.length)
+        }
+        return out.toString().trim()
     }
 
     /** Appends [text] to a reasoning accumulator, blank-line separated. */
