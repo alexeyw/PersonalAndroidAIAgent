@@ -216,6 +216,33 @@ Both gaps were invisible on API 36 — which happened to fit in the default
 disk and happens to boot unlocked. A single-configuration matrix would have
 shipped both as future "the emulator is flaky" noise.
 
+### Making it blocking
+
+The workflow runs on every pull request into `main`; whether it *blocks* is a
+branch-protection setting, which lives in GitHub rather than in this
+repository. Require exactly two checks on `main`:
+
+- `./gradlew check`
+- `Instrumented gate`
+
+Not the individual legs. The required-check list is a hand-maintained copy of
+job names with nothing to keep the two in step: naming the legs means a new
+leg is silently not required, and a renamed one leaves a stale entry that
+blocks every pull request forever, waiting for a status that can no longer be
+reported. The gate job aggregates them, so the matrix stays free to change.
+
+Two details of that job are load-bearing rather than decorative. It runs under
+`if: always()`, because **a job skipped by a conditional is reported to branch
+protection as a success** — without it, a failing matrix would skip the gate
+and the required check would go green exactly when the tests were red. And it
+demands `success` from both the classifier and the matrix, so a failed
+classifier (which leaves the matrix `skipped`) fails the gate rather than
+passing as an absence of news.
+
+Leave *Require branches to be up to date before merging* off. It would force a
+rebase and a full re-run — around 35 minutes of `check` plus 16 of emulators —
+every time anything else lands on `main`.
+
 ### Why it is not part of `./gradlew check`
 
 The release workflow reuses the `check` workflow verbatim as its first
