@@ -204,6 +204,10 @@
     <string name="knotwork_console_search_clear_cd">Clear search</string>
     <!-- Dropdown menu item label: copy the long-pressed log line to the system clipboard. -->
     <string name="knotwork_console_line_copy">Copy line</string>
+    <!-- Long-press menu on a Vars row. Copies the whole value, not a preview. -->
+    <string name="knotwork_console_var_copy">Copy value</string>
+    <!-- Long-press menu on a Traces row. -->
+    <string name="knotwork_console_span_copy">Copy span</string>
     <!-- Dropdown menu item label: enable only this source in the source filter. -->
     <string name="knotwork_console_line_filter_only">Only show this source</string>
     <!-- Empty-state label shown beneath the Logs list when the search query has no matches. -->

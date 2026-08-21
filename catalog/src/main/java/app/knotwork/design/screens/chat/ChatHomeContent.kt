@@ -1024,6 +1024,8 @@ private fun ChatHomeConsoleOverlay(state: ChatHomeViewState, callbacks: ChatHome
             searchQuery = state.console.searchQuery,
             onSearchQueryChange = callbacks.onConsoleSearchQueryChange,
             onCopyLine = callbacks.onConsoleCopyLine,
+            onCopyVar = callbacks.onConsoleCopyVar,
+            onCopySpan = callbacks.onConsoleCopySpan,
             onFilterByLineSource = callbacks.onConsoleFilterByLineSource,
         )
     }

@@ -130,6 +130,12 @@ private val ConsoleNestingIndent = 14.dp
  * visible but matches every line.
  * @param onSearchQueryChange invoked when the user edits the search query;
  * the host owns the value so it can persist across rotations and tabs.
+ * @param onCopyVar invoked when the user picks `Copy value` from a Vars row's
+ *   long-press menu. The Vars tab is where full node I/O is inspected, so the
+ *   payload the host builds is the whole value — the alternative for anyone
+ *   reporting a problem is a screenshot of a screenful of text.
+ * @param onCopySpan invoked when the user picks `Copy span` from a Traces row's
+ *   long-press menu.
  * @param onCopyLine invoked when the user picks `Copy line` from the
  * long-press menu on a [ConsoleLine] row.
  * @param onFilterByLineSource invoked when the user picks `Only show this
@@ -155,6 +161,8 @@ fun ConsolePane(
     searchQuery: String? = null,
     onSearchQueryChange: (String) -> Unit = {},
     onCopyLine: (ConsoleLine) -> Unit = {},
+    onCopyVar: (ConsoleVarRow) -> Unit = {},
+    onCopySpan: (ConsoleTraceSpan) -> Unit = {},
     onFilterByLineSource: (ConsoleSource) -> Unit = {},
 ) {
     // Stateless content — the surrounding `ModalBottomSheet` owns the
@@ -184,8 +192,8 @@ fun ConsolePane(
                 onCopyLine = onCopyLine,
                 onFilterByLineSource = onFilterByLineSource,
             )
-            ConsoleTab.Vars -> ConsoleVarsBody(rows = vars)
-            ConsoleTab.Traces -> ConsoleTracesBody(spans = traces)
+            ConsoleTab.Vars -> ConsoleVarsBody(rows = vars, onCopyVar = onCopyVar)
+            ConsoleTab.Traces -> ConsoleTracesBody(spans = traces, onCopySpan = onCopySpan)
         }
     }
 }
@@ -567,6 +575,47 @@ private fun ConsoleLineRow(line: ConsoleLine, onCopyLine: () -> Unit, onFilterBy
     }
 }
 
+/**
+ * Wraps [content] in the console's long-press copy affordance.
+ *
+ * The same shape a log row already uses — long-press opens an anchored
+ * [DropdownMenu], a short tap does nothing — so Vars and Traces gain the
+ * gesture the user already knows from Logs, and no new component or icon is
+ * introduced for it. The catalog never touches the clipboard; [onCopy] hands
+ * the decision to the host.
+ *
+ * @param label Menu-item text, e.g. `Copy value`.
+ * @param onCopy Invoked when the user picks the item.
+ * @param content The row to make copyable.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ConsoleCopyableRow(label: String, onCopy: () -> Unit, content: @Composable () -> Unit) {
+    var menuExpanded by remember { mutableStateOf(false) }
+    Box(modifier = Modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = { /* No short-tap action on console rows. */ },
+                    onLongClick = { menuExpanded = true },
+                ),
+        ) {
+            content()
+        }
+        DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+            DropdownMenuItem(
+                text = { Text(label) },
+                leadingIcon = { Icon(imageVector = AppIcons.Copy, contentDescription = null) },
+                onClick = {
+                    menuExpanded = false
+                    onCopy()
+                },
+            )
+        }
+    }
+}
+
 /** Maps a [ConsoleLevel] to its leading-strip accent. */
 @Composable
 private fun levelAccent(level: ConsoleLevel): Color = when (level) {
@@ -575,9 +624,15 @@ private fun levelAccent(level: ConsoleLevel): Color = when (level) {
     ConsoleLevel.Error -> KnotworkTheme.extended.signalError
 }
 
-/** Vars-tab body — section headers per node, then key/value rows. */
+/**
+ * Vars-tab body — section headers per node, then key/value rows.
+ *
+ * Each row carries the same long-press menu as a log row, for the same reason:
+ * this tab renders full node input and output, and the only way to get a value
+ * out of it used to be a screenshot.
+ */
 @Composable
-private fun ConsoleVarsBody(rows: List<ConsoleVarRow>) {
+private fun ConsoleVarsBody(rows: List<ConsoleVarRow>, onCopyVar: (ConsoleVarRow) -> Unit) {
     val groups = rows.groupBy { it.node }
     LazyColumn(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
         groups.forEach { (node, entries) ->
@@ -600,32 +655,37 @@ private fun ConsoleVarsBody(rows: List<ConsoleVarRow>) {
                 )
             }
             items(items = entries) { row ->
-                // Key + value laid out as a Column so the value text wraps
-                // across as many lines as it needs. The Vars tab is the
-                // debugging surface for full node I/O — truncating with
-                // ellipsis discards the very data the user opened the
-                // pane to inspect. The outer LazyColumn already gives us
-                // vertical scrolling for free.
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(
-                            start = KnotworkTheme.spacing.sp4 + groupIndent,
-                            end = KnotworkTheme.spacing.sp4,
-                            top = KnotworkTheme.spacing.sp1,
-                            bottom = KnotworkTheme.spacing.sp1,
-                        ),
+                ConsoleCopyableRow(
+                    label = stringResource(R.string.knotwork_console_var_copy),
+                    onCopy = { onCopyVar(row) },
                 ) {
-                    Text(
-                        text = row.key,
-                        style = KnotworkTextStyles.MonoBase,
-                        color = KnotworkPalette.Accent400,
-                    )
-                    Text(
-                        text = row.valueJson,
-                        style = KnotworkTextStyles.MonoBase,
-                        color = KnotworkTheme.extended.consoleFg,
-                    )
+                    // Key + value laid out as a Column so the value text wraps
+                    // across as many lines as it needs. The Vars tab is the
+                    // debugging surface for full node I/O — truncating with
+                    // ellipsis discards the very data the user opened the
+                    // pane to inspect. The outer LazyColumn already gives us
+                    // vertical scrolling for free.
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(
+                                start = KnotworkTheme.spacing.sp4 + groupIndent,
+                                end = KnotworkTheme.spacing.sp4,
+                                top = KnotworkTheme.spacing.sp1,
+                                bottom = KnotworkTheme.spacing.sp1,
+                            ),
+                    ) {
+                        Text(
+                            text = row.key,
+                            style = KnotworkTextStyles.MonoBase,
+                            color = KnotworkPalette.Accent400,
+                        )
+                        Text(
+                            text = row.valueJson,
+                            style = KnotworkTextStyles.MonoBase,
+                            color = KnotworkTheme.extended.consoleFg,
+                        )
+                    }
                 }
             }
         }
@@ -634,52 +694,57 @@ private fun ConsoleVarsBody(rows: List<ConsoleVarRow>) {
 
 /** Traces-tab body — flat list with relative-duration bars. */
 @Composable
-private fun ConsoleTracesBody(spans: List<ConsoleTraceSpan>) {
+private fun ConsoleTracesBody(spans: List<ConsoleTraceSpan>, onCopySpan: (ConsoleTraceSpan) -> Unit) {
     val maxDuration = spans.maxOfOrNull { it.durationMs }?.coerceAtLeast(1L) ?: 1L
     LazyColumn(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
         items(items = spans) { span ->
             val fraction = span.durationMs.toFloat() / maxDuration.toFloat()
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        start = KnotworkTheme.spacing.sp3 + ConsoleNestingIndent * span.depth,
-                        end = KnotworkTheme.spacing.sp3,
-                        top = KnotworkTheme.spacing.sp1,
-                        bottom = KnotworkTheme.spacing.sp1,
-                    ),
+            ConsoleCopyableRow(
+                label = stringResource(R.string.knotwork_console_span_copy),
+                onCopy = { onCopySpan(span) },
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-                    modifier = Modifier.fillMaxWidth(),
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(
+                            start = KnotworkTheme.spacing.sp3 + ConsoleNestingIndent * span.depth,
+                            end = KnotworkTheme.spacing.sp3,
+                            top = KnotworkTheme.spacing.sp1,
+                            bottom = KnotworkTheme.spacing.sp1,
+                        ),
                 ) {
-                    Text(
-                        text = span.startedAt,
-                        style = KnotworkTextStyles.MonoSm,
-                        color = KnotworkTheme.extended.consoleFg.copy(alpha = INACTIVE_TAB_ALPHA),
-                    )
-                    Text(
-                        text = span.name,
-                        style = KnotworkTextStyles.MonoBase,
-                        color = KnotworkTheme.extended.consoleFg,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        text = "${span.durationMs} ms",
-                        style = KnotworkTextStyles.MonoSm,
-                        color = traceStatusColor(span.status),
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = span.startedAt,
+                            style = KnotworkTextStyles.MonoSm,
+                            color = KnotworkTheme.extended.consoleFg.copy(alpha = INACTIVE_TAB_ALPHA),
+                        )
+                        Text(
+                            text = span.name,
+                            style = KnotworkTextStyles.MonoBase,
+                            color = KnotworkTheme.extended.consoleFg,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            text = "${span.durationMs} ms",
+                            style = KnotworkTextStyles.MonoSm,
+                            color = traceStatusColor(span.status),
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp1))
+                    Box(
+                        modifier = Modifier
+                            .height(TraceBarHeight)
+                            .width(TraceBarMaxWidth * fraction)
+                            .background(color = traceStatusColor(span.status)),
                     )
                 }
-                Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp1))
-                Box(
-                    modifier = Modifier
-                        .height(TraceBarHeight)
-                        .width(TraceBarMaxWidth * fraction)
-                        .background(color = traceStatusColor(span.status)),
-                )
             }
         }
     }

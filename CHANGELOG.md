@@ -306,6 +306,17 @@ details.
   dropped the bottom-bar highlight, because the list of routes that count as
   "inside settings" was maintained by hand and had never included them.
 
+- **Values in the run console can be copied instead of screenshotted.** The
+  console's Variables tab shows a step's full input and output — for a local
+  model that is the entire assembled prompt, which is exactly what you read when
+  an answer comes out wrong. There was no way to get any of it off the screen,
+  and the copy button in the header copied the log whichever tab was open, so on
+  Variables and Timings it quietly put something else on the clipboard.
+  Long-pressing a row now offers to copy it — the same gesture the log already
+  used — and the header button copies the tab you are actually looking at.
+  Values are copied whole: abbreviating them would recreate the problem the
+  action exists to solve.
+
 - **A test of the external-automation contract was checking the wrong signal.**
   Two tests assert that a third-party caller is told the outcome of a run exactly
   once, including the case where the run parked for hours on a confirmation

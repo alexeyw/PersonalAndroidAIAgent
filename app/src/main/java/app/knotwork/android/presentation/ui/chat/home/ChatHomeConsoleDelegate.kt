@@ -8,7 +8,6 @@ import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.design.components.console.ConsoleFilter
-import app.knotwork.design.components.console.ConsoleLine
 import app.knotwork.design.components.console.ConsoleSnap
 import app.knotwork.design.components.console.ConsoleSource
 import app.knotwork.design.components.console.ConsoleTab
@@ -253,25 +252,6 @@ class ChatHomeConsoleDelegate(
     fun signalConsoleAllCopied() {
         _consoleSnackbarEvents.tryEmit(ConsoleSnackbarEvent.AllCopied)
     }
-
-    /**
-     * Renders a single [ConsoleLine] as the plain-text clipboard payload
-     * inserted by `onConsoleCopyLine`. Format: `[timestamp] [source] text`.
-     * Public for testability — kept off the screen so unit tests can pin the
-     * format without spinning up the Compose tooling.
-     */
-    fun buildConsoleLineCopyPayload(line: ConsoleLine): String =
-        "[${line.timestamp}] [${line.source.name}] ${line.text}"
-
-    /**
-     * Renders the supplied list of [ConsoleLine]s as the multi-line
-     * clipboard payload inserted by `onConsoleCopyAll`. The caller is
-     * expected to apply the current [ConsoleFilter] / search query before
-     * passing the list in — the chat-home `Copy all` action only copies
-     * what the user is actively looking at.
-     */
-    fun buildConsoleAllCopyPayload(lines: List<ConsoleLine>): String =
-        lines.joinToString(separator = "\n") { buildConsoleLineCopyPayload(it) }
 
     /**
      * Mirrors a cumulative [AgentOrchestratorState.ConsoleLog.events]
