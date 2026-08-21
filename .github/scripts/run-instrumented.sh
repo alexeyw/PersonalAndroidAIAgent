@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Runs the instrumented test suite against an already-booted emulator and
-# classifies a failure as either a TEST failure or an INFRASTRUCTURE failure.
+# classifies a failure as either a REPOSITORY failure or an INFRASTRUCTURE one.
 #
 # Why the classification exists. The merge gate's promise is that a red build
 # means "something in the code is wrong". An emulator job cannot make that
@@ -11,9 +11,16 @@
 # indiscriminately until green, which is how a real regression gets retried away
 # — this script splits them:
 #
-#   * a TEST failure exits immediately with 1 and is NEVER retried;
+#   * a REPOSITORY failure exits immediately with 1 and is NEVER retried;
 #   * an INFRASTRUCTURE failure is retried at most once, and if it fails again
 #     exits with 75 (EX_TEMPFAIL) so the workflow can label the job.
+#
+# "Repository", not "test", because that is the whole of what the classifier can
+# actually tell: everything that does not match an environment signature is our
+# doing — a failing assertion, but equally a compile error in the instrumented
+# sources or a broken build script. Calling that bucket a test failure sends the
+# next reader hunting for a failing test that may not exist. Observed, not
+# imagined: a deliberate compile break during verification landed in it.
 #
 # The job goes red either way. A gate that turns green on infrastructure trouble
 # stops meaning anything; the point of the split is that the reason is legible
@@ -21,8 +28,8 @@
 #
 # The infra signature list is deliberately tight. Anything ambiguous — notably
 # "Process crashed." from the instrumentation runner, which is exactly what an
-# app-side crash regression looks like — is treated as a TEST failure, because
-# the expensive mistake is misfiling a real defect as flakiness.
+# app-side crash regression looks like — is treated as a REPOSITORY failure,
+# because the expensive mistake is misfiling a real defect as flakiness.
 #
 # Environment:
 #   GRADLE_TASK        Gradle task to run, e.g. `:app:connectedFullDebugAndroidTest`.
@@ -58,7 +65,7 @@ CLASS_FILE="$LOG_DIR/failure-class.txt"
 
 # Set per attempt. Each attempt gets its OWN log so the classifier reads only
 # the run it is classifying — a shared log would let attempt 1's environment
-# error decide the verdict on attempt 2's genuine test failure.
+# error decide the verdict on attempt 2's genuine repository failure.
 LOG_FILE=""
 
 # Failures that describe the environment rather than the code under test. Each
@@ -97,11 +104,11 @@ annotate() {
 # The tail bound is a separate, deliberate choice. Gradle prints the failure
 # summary last, so the tail is where the reason for THIS failure lives; scanning
 # the whole log would let an incidental match far from the failure — a test name
-# or an expected string containing, say, "device offline" — flip a genuine test
-# failure into a retry, which is the one direction that must never happen. The
-# accepted cost is the opposite case: an environment error that appears only
-# early in a very long run gets labelled a test failure. That errs toward not
-# retrying, which is the safe side.
+# or an expected string containing, say, "device offline" — flip a genuine
+# repository failure into a retry, which is the one direction that must never
+# happen. The accepted cost is the opposite case: an environment error that
+# appears only early in a very long run gets attributed to the repository. That
+# errs toward not retrying, which is the safe side.
 looks_like_infrastructure() {
   local tail_log
   tail_log="$(tail -n 400 "$LOG_FILE")"
@@ -165,9 +172,9 @@ while true; do
   capture_device_state "attempt${attempt}"
 
   if ! signature="$(looks_like_infrastructure)"; then
-    echo "test" > "$CLASS_FILE"
-    annotate error "Instrumented tests failed" \
-      "${GRADLE_TASK} reported test failures. This is a code failure, not flakiness — it is not retried. See the uploaded test report."
+    echo "repo" > "$CLASS_FILE"
+    annotate error "Instrumented run failed on the repository, not the environment" \
+      "${GRADLE_TASK} failed on something other than a known environment signature — a failing assertion, or a build error in the instrumented sources. Not retried: retrying a real defect until it passes is how one gets shipped. See the uploaded log and, if the suite got that far, the test report."
     exit 1
   fi
 
@@ -179,7 +186,7 @@ while true; do
   fi
 
   annotate warning "Instrumented CI: infrastructure failure, retrying" \
-    "Attempt ${attempt} matched the environment signature /${signature}/. Retrying once; test failures are never retried."
+    "Attempt ${attempt} matched the environment signature /${signature}/. Retrying once; a failure attributable to the repository is never retried."
   reset_adb
   attempt=$((attempt + 1))
 done

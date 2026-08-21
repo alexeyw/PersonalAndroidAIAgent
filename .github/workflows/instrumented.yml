@@ -15,15 +15,21 @@ name: Instrumented
 #   * the EXECUTION half lives here, outside the release path.
 #
 # Infrastructure failures are not swept under the rug: `run-instrumented.sh`
-# separates them from test failures, retries only the former (at most once) and
-# labels the job so the difference is readable without opening the log. The job
+# separates them from failures attributable to the repository, retries only the
+# former (at most once) and labels the job so the difference is readable without
+# opening the log. The job
 # still goes red for both — a gate that turns green when its environment
 # misbehaves has stopped being a gate.
 #
-# Matrix. The app's `minSdk` is 36, so the floor and the `targetSdk` are the two
-# levels worth covering. API 37.0 publishes no `default` / `aosp` / ATD system
-# image, only `google_apis`, so both legs use `google_apis` for symmetry rather
-# than mixing image types across API levels.
+# Matrix. The app's `minSdk` is 36, so the floor is API 36 and the second leg is
+# API 36.1. The intended second leg was the `targetSdk`, API 37.0 — it is not
+# usable here, and the reason is upstream rather than ours: the emulator action
+# always issues `adb shell input keyevent 82` after boot, with no input to
+# disable it, and on the Android 17 image that call dies (`Failure calling
+# service input: Broken pipe`) before our script ever runs. Verified twice, at
+# the same step both times. Revisit when the action makes that step optional or
+# the image accepts it; API 37.0 also publishes no `default` / `aosp` / ATD
+# image, so `google_apis` is the only variant either way.
 #
 # Nightly adds one `foss` leg. That flavour is what F-Droid builds, it shares
 # every `main` source with `full`, and without this leg it is never exercised on
@@ -88,7 +94,7 @@ jobs:
           EXTENDED_REQUESTED: ${{ inputs.extended }}
         run: |
           set -euo pipefail
-          base='{"api":"36","target":"google_apis","flavour":"Full"},{"api":"37.0","target":"google_apis","flavour":"Full"}'
+          base='{"api":"36","target":"google_apis","flavour":"Full"},{"api":"36.1","target":"google_apis","flavour":"Full"}'
           foss='{"api":"36","target":"google_apis","flavour":"Foss"}'
           if [[ "$EVENT_NAME" == "schedule" || "$EXTENDED_REQUESTED" == "true" ]]; then
             echo "matrix={\"include\":[$base,$foss]}" >> "$GITHUB_OUTPUT"
@@ -195,11 +201,13 @@ jobs:
               none)
                 echo "Passed."
                 ;;
-              test)
-                echo "**Test failure.** The suite reached the device and reported failing"
-                echo "assertions. This is a code failure and was not retried — re-running"
-                echo "the job will not change the outcome. The test report is attached to"
-                echo "this run as an artifact."
+              repo)
+                echo "**Failure in the repository, not the environment.** Gradle failed on"
+                echo "something other than a known environment signature — a failing"
+                echo "assertion, or a build error in the instrumented sources. Deliberately"
+                echo "not retried, so re-running the job will not change the outcome. The"
+                echo "log is attached to this run, and the test report too if the suite got"
+                echo "far enough to produce one."
                 ;;
               infra)
                 echo "**Infrastructure failure.** The run matched a known environment"

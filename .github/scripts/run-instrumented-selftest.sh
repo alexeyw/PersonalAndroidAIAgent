@@ -89,14 +89,14 @@ expect "a passing run reports no failure class" \
 # Each scenario argument is exactly one attempt's output, so it must stay a
 # single line: a multi-line argument would silently become two attempts and the
 # assertions below would be measuring something else.
-expect "a failing assertion is a test failure and is NOT retried" \
-  1 test 1 \
+expect "a failing assertion is attributed to the repository and is NOT retried" \
+  1 repo 1 \
   "com.example.FooTest > bar FAILED — There were failing tests."
 
 # The single most valuable case: an app-side crash is what a real regression
 # looks like, and retrying it until it passes is how one gets shipped.
-expect "an instrumentation process crash counts as a test failure" \
-  1 test 1 \
+expect "an instrumentation process crash is attributed to the repository" \
+  1 repo 1 \
   "Test run failed to complete. Instrumentation run failed due to 'Process crashed.'"
 
 expect "a lost device is infrastructure and is retried once" \
@@ -114,11 +114,19 @@ expect "an infrastructure failure that clears on the retry passes" \
   "adb: device 'emulator-5554' not found" \
   "PASS"
 
+# Added after a CI verification run: a deliberate compile break landed in this
+# bucket, which is correct (it is ours, and it must not be retried) but is NOT a
+# test failure — no test ran at all. The class is named for what the classifier
+# can actually tell, and this case pins that meaning.
+expect "a build error in the instrumented sources is attributed to the repository" \
+  1 repo 1 \
+  "e: ExampleInstrumentedTest.kt:24:9 Unresolved reference 'nope'. Execution failed for task ':app:compileFullDebugAndroidTestKotlin'."
+
 # Guards the ordering inside the loop: the retry must re-classify, not inherit
 # the first attempt's verdict. Otherwise a genuine regression exposed on the
 # second attempt would be reported — and retried — as flakiness.
-expect "a test failure after an infrastructure retry is classified as a test failure" \
-  1 test 2 \
+expect "a repository failure after an infrastructure retry is not inherited as infra" \
+  1 repo 2 \
   "device offline" \
   "com.example.FooTest > bar FAILED"
 

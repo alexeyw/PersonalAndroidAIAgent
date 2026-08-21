@@ -171,13 +171,17 @@ The `app/src/androidTest/` suite runs on emulators in its own workflow,
 
 | | Matrix | Runs on |
 |---|---|---|
-| Standard | API 36 · `full`, API 37 · `full` | every pull request into `main`, every push to `main` |
+| Standard | API 36 · `full`, API 36.1 · `full` | every pull request into `main`, every push to `main` |
 | Extended | the above plus API 36 · `foss` | nightly, and on manual dispatch with *extended* ticked |
 
-Both API levels use the `google_apis` x86_64 system image: `minSdk` is 36,
-so 36 is the floor and 37 is the `targetSdk`, and API 37 publishes no
-`default`, `aosp` or ATD image to mix in. The nightly `foss` leg is the
-only automated on-device exercise the F-Droid flavour gets.
+Both legs use the `google_apis` x86_64 system image. The second leg was
+meant to be the `targetSdk`, API 37 — that image boots, but the emulator
+action then always issues `adb shell input keyevent 82`, with no input to
+disable it, and on Android 17 that call dies with *Failure calling service
+input: Broken pipe* before the suite starts. Observed twice, at the same
+step both times, so the second leg is API 36.1 until the action makes that
+step optional. The nightly `foss` leg is the only automated on-device
+exercise the F-Droid flavour gets.
 
 ### Why it is not part of `./gradlew check`
 
@@ -202,10 +206,16 @@ dependency download that timed out — and:
 
 - an **infrastructure** failure is retried at most once, then reported as
   such in the job summary;
-- a **test** failure is never retried, because retrying a real regression
-  until it passes is how one gets shipped.
+- everything else is attributed to the **repository** and never retried,
+  because retrying a real regression until it passes is how one gets
+  shipped.
 
-Anything ambiguous counts as a test failure. `Process crashed.` from the
+The second class is named for the repository rather than for tests on
+purpose: it also catches a build error in the instrumented sources, where
+no test ran at all, and calling that a test failure sends the next reader
+hunting for a failing test that does not exist.
+
+Anything ambiguous falls to the repository. `Process crashed.` from the
 instrumentation runner, for instance, is exactly what an app-side crash
 regression looks like, so it is not on the environment list.
 
