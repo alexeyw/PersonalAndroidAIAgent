@@ -11,7 +11,6 @@ import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
-import app.knotwork.android.domain.services.isTerminal
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
 import app.knotwork.android.domain.usecases.ResumeOutcome
 import app.knotwork.android.domain.usecases.ResumePipelineRunUseCase

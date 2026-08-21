@@ -9,11 +9,9 @@ import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.Result
-import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.MetricsRepository
 import app.knotwork.android.domain.repositories.ModelPerformanceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
-import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import kotlinx.coroutines.CancellationException
@@ -37,8 +35,6 @@ import javax.inject.Inject
  */
 class LiteRtNodeExecutor @Inject constructor(
     private val llmEngine: LlmInferenceEngine,
-    private val toolRepository: ToolRepository,
-    private val chatRepository: ChatRepository,
     private val settingsRepository: SettingsRepository,
     private val metricsRepository: MetricsRepository,
     private val modelPerformanceRepository: ModelPerformanceRepository,

@@ -514,8 +514,6 @@ class TriggerBackgroundRunIntegrationTest {
             toolNodeExecutor,
             LiteRtNodeExecutor(
                 llmEngine,
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 mockk(relaxed = true),
                 mockk(relaxed = true),
@@ -523,8 +521,6 @@ class TriggerBackgroundRunIntegrationTest {
                 loadModelUseCase,
             ),
             CloudLlmNodeExecutor(
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 mockk(relaxed = true),
                 mockk(relaxed = true),

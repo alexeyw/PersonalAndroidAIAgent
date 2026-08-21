@@ -58,8 +58,6 @@ class LiteRtNodeExecutorTest {
 
         executor = LiteRtNodeExecutor(
             llmEngine,
-            toolRepository,
-            chatRepository,
             settingsRepository,
             metricsRepository,
             modelPerformanceRepository,

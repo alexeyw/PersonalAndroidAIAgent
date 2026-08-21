@@ -109,7 +109,18 @@ import javax.inject.Inject
  * duplicate the side effect.
  */
 @HiltViewModel
-class ChatHomeViewModel @Inject constructor(
+class ChatHomeViewModel
+@Inject
+// Reason: the chat surface is one screen whose behaviour is already split into
+// eight delegates, and this constructor is where their collaborators arrive
+// before being handed on. Hilt assembles the list — it is never written out by
+// hand — and the count drops only if the delegates are injected directly rather
+// than constructed here, which is a wiring change with its own blast radius
+// (each delegate would need its own Hilt binding and lifecycle owner).
+// Scoped to the constructor so it cannot silence a future finding elsewhere in
+// the class.
+@Suppress("LongParameterList")
+constructor(
     private val agentOrchestratorUseCase: AgentOrchestratorUseCase,
     private val chatRepository: ChatRepository,
     private val pipelineRepository: PipelineRepository,

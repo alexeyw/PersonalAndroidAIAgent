@@ -12,7 +12,6 @@ import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.os.PowerManager
 import androidx.annotation.VisibleForTesting
-import androidx.work.WorkManager
 import app.knotwork.android.R
 import app.knotwork.android.domain.constants.NotificationChannels
 import app.knotwork.android.domain.engine.LlmInferenceEngine
@@ -55,12 +54,6 @@ class AgentForegroundService : Service() {
      */
     @Inject
     lateinit var powerStateRepository: PowerStateRepository
-
-    /**
-     * Manager for scheduling background work and tasks.
-     */
-    @Inject
-    lateinit var workManager: WorkManager
 
     /**
      * Re-arms the background memory re-embed pass on startup when chunks remain
@@ -163,7 +156,6 @@ class AgentForegroundService : Service() {
             scope = serviceScope,
             powerStateRepository = powerStateRepository,
             engine = llmEngine,
-            workManager = workManager,
         )
         powerManager.startObserving()
 

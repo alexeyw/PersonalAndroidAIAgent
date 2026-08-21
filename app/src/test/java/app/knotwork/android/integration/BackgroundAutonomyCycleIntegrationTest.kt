@@ -363,8 +363,6 @@ class BackgroundAutonomyCycleIntegrationTest {
             toolNodeExecutor,
             LiteRtNodeExecutor(
                 llmEngine,
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 mockk(relaxed = true),
                 mockk(relaxed = true),
@@ -372,8 +370,6 @@ class BackgroundAutonomyCycleIntegrationTest {
                 loadModelUseCase,
             ),
             CloudLlmNodeExecutor(
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 mockk(relaxed = true),
                 mockk(relaxed = true),

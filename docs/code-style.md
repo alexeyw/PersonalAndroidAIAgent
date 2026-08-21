@@ -84,8 +84,8 @@ For the broader layering rationale, see
   `CancellationException` and breaks cooperative cancellation (a cancelled
   coroutine keeps running, or surfaces a false error to the user). Use the
   `try`/`catch` shape above instead. Both rules are enforced by the
-  coroutine-cancellation detekt gate — see
-  [`static-analysis.md`](static-analysis.md#coroutine-cancellation-gate-detektfulldebug--detektfossdebug);
+  type-resolution detekt gate — see
+  [`static-analysis.md`](static-analysis.md#type-resolution-gate-detektfulldebug--detektfossdebug);
   note the gate's blind spot for `try`/`catch` inside non-suspend inline
   lambdas (e.g. `forEach`), which reviewers must still check manually.
   Cleanup that must also run on the cancellation path belongs in `finally`
@@ -107,7 +107,7 @@ branch, run:
 ./gradlew check
 ```
 
-This aggregates detekt (both the strict run and the coroutine-cancellation
+This aggregates detekt (both the strict run and the type-resolution
 gate), ktlint, Android lint, unit tests and Kover. The same
 task gates every pull request in CI. See
 [`docs/static-analysis.md`](static-analysis.md) for the rule set, current

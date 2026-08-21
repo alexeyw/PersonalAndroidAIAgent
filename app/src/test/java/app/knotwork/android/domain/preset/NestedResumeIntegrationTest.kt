@@ -326,8 +326,6 @@ class NestedResumeIntegrationTest {
             toolNodeExecutor,
             LiteRtNodeExecutor(
                 llmEngine,
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 metricsRepository,
                 mockk(relaxed = true),
@@ -335,8 +333,6 @@ class NestedResumeIntegrationTest {
                 loadModelUseCase,
             ),
             CloudLlmNodeExecutor(
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 mockk<ApiKeyRepository>(relaxed = true),
                 metricsRepository,

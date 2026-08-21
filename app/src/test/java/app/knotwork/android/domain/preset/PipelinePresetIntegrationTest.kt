@@ -173,8 +173,6 @@ class PipelinePresetIntegrationTest {
             toolNodeExecutor,
             LiteRtNodeExecutor(
                 llmEngine,
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 metricsRepository,
                 mockk(relaxed = true),
@@ -182,8 +180,6 @@ class PipelinePresetIntegrationTest {
                 loadModelUseCase,
             ),
             CloudLlmNodeExecutor(
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 apiKeyRepository,
                 metricsRepository,

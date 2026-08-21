@@ -69,8 +69,6 @@ class CloudLlmNodeExecutorTest {
         every { apiKeyRepository.getAnthropicModel() } returns flowOf("claude-sonnet-4-5")
 
         executor = CloudLlmNodeExecutor(
-            toolRepository,
-            chatRepository,
             settingsRepository,
             apiKeyRepository,
             metricsRepository,

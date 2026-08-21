@@ -182,8 +182,6 @@ class PipelineSecurityContourTest {
             toolNodeExecutor,
             LiteRtNodeExecutor(
                 llmEngine,
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 metricsRepository,
                 mockk(relaxed = true),
@@ -191,8 +189,6 @@ class PipelineSecurityContourTest {
                 loadModelUseCase,
             ),
             CloudLlmNodeExecutor(
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 apiKeyRepository,
                 metricsRepository,

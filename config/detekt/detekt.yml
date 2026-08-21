@@ -9,6 +9,22 @@
 # Detekt 2.0.x naming: thresholds renamed to allowed*, `UnusedImports` →
 # `UnusedImport`, the legacy `failFast: true` top-level switch was removed in
 # 1.22 and is intentionally not present here.
+#
+# **This file may only hold rules that run in `light` analysis mode.** The
+# `detekt` task backing it cannot provide type resolution, and a rule that
+# implements `dev.detekt.api.RequiresAnalysisApi` is skipped by it in total
+# silence — no error, no warning, no report entry. Four rules sat here inert
+# for exactly that reason (`LongParameterList`, `UnusedImport`,
+# `UnusedPrivateFunction`, `UnusedPrivateProperty`); the first three are now
+# declared in `config/detekt/detekt-type-resolution.yml`, which is run under
+# type resolution, and the fourth is parked there with the reason.
+#
+# Removing them from here does not switch them off — two of the four are
+# `active: true` in the bundled defaults this file layers on, so they stay
+# nominally on and go on being skipped. It removes this project's *claim* to be
+# checking them, which is the part that was false. The
+# `verifyDetektAnalysisMode` task fails the build if such a rule is declared
+# here again, so the claim cannot be made falsely twice.
 
 config:
   validation: true
@@ -45,12 +61,8 @@ complexity:
     # `@Composable` functions are by nature declarative trees and routinely
     # exceed 120 lines; ktlint already enforces formatting.
     ignoreAnnotated: ['Composable']
-  LongParameterList:
-    active: true
-    allowedFunctionParameters: 10
-    allowedConstructorParameters: 14
-    # `@Composable` slot APIs commonly take many small lambda parameters.
-    ignoreAnnotated: ['Composable']
+  # `LongParameterList` requires the Analysis API — it lives in
+  # `detekt-type-resolution.yml`, not here.
   TooManyFunctions:
     active: true
     # DAO interfaces, repository contracts, and Hilt DI modules naturally
@@ -127,18 +139,13 @@ style:
     # there is no benefit to flagging the comment a second time.
     excludeCommentStatements: true
     excludeRawStrings: true
-  UnusedImport:
-    active: true
-  # Surface dead private/internal declarations
-  # project-wide. Triage outcome: either delete the symbol or annotate it with
-  # `@Suppress("UnusedPrivateFunction" | "UnusedPrivateProperty" | "UnusedPrivateClass") // reason: …`
-  # when retention is intentional. (detekt 2.x split the legacy
-  # `UnusedPrivateMember` rule into the three rules below.)
+  # Surface dead private/internal declarations project-wide. Triage outcome:
+  # either delete the symbol or annotate it with
+  # `@Suppress("UnusedPrivateClass") // reason: …` when retention is
+  # intentional. (detekt 2.x split the legacy `UnusedPrivateMember` rule into
+  # three rules; only this one runs without type resolution. Its two siblings
+  # and `UnusedImport` are handled in `detekt-type-resolution.yml`.)
   UnusedPrivateClass:
-    active: true
-  UnusedPrivateFunction:
-    active: true
-  UnusedPrivateProperty:
     active: true
   # Pipeline / graph traversal loops legitimately use multiple `break` /
   # `continue` for early-exit cascades; the rule produces false positives on

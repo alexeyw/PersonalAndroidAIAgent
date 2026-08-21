@@ -306,6 +306,36 @@ details.
   dropped the bottom-bar highlight, because the list of routes that count as
   "inside settings" was maintained by hand and had never included them.
 
+- **Four static-analysis rules were configured but had never run once.**
+  The Kotlin analysis step splits its rules by what they need to answer: some
+  read the code as text, others need the compiler's resolved types. A rule of
+  the second kind, placed in the configuration used by the first, is skipped in
+  complete silence — no error, no warning, nothing in the report. Four rules had
+  been sitting there since they were added, each with a comment explaining the
+  threshold chosen for it, and a deliberately absurd probe (a constructor with
+  eighteen parameters) passed the check clean.
+
+  They now run, in the analysis pass that can execute them, over both
+  distribution flavours rather than only the shared sources. What they had been
+  missing was waiting: nineteen unused imports, five constructor dependencies
+  that were injected and never read — including one whose class documentation
+  promised behaviour the dead dependency was supposed to provide — and four
+  over-long parameter lists, now each carrying a written reason for being
+  allowed to stay.
+
+  The mistake cannot be repeated silently: the build now fails if a rule that
+  needs resolved types is put back into the configuration that cannot run it,
+  and it reads the list of such rules from the analysis tool itself rather than
+  from a copy kept in this repository, so a future upgrade that moves a rule
+  across the line is caught by the next build.
+
+  One rule from the same group is deliberately still switched off. It does not
+  count a dependency that is used while an object is being constructed, which on
+  this code base is most of them — twenty-four of its twenty-nine findings were
+  wrong. Turning it on would have meant annotating live code with two dozen
+  assertions that are untrue. The five genuine findings it did surface were
+  fixed by hand.
+
 
 ## [0.7.3] - 2026-08-16
 
@@ -2030,7 +2060,8 @@ details.
 
 - **Coroutine-cancellation static gate.** `./gradlew check` now also runs
   `detektDebug`, a type-resolution detekt pass with a dedicated config
-  ([`config/detekt/detekt-cancellation.yml`](config/detekt/detekt-cancellation.yml))
+  (`config/detekt/detekt-cancellation.yml`, since renamed to
+  `detekt-type-resolution.yml`)
   that activates a single rule, `SuspendFunSwallowedCancellation`: suspend
   calls may not be wrapped in `runCatching`, and `try`/`catch` blocks
   around suspend calls must re-throw `CancellationException` before any

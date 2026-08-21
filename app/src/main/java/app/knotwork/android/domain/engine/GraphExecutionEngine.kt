@@ -71,7 +71,16 @@ import javax.inject.Singleton
 // collaborators is tracked as future work rather than forced here.
 @Suppress("LargeClass")
 @Singleton
-class GraphExecutionEngine @Inject constructor(
+class GraphExecutionEngine
+@Inject
+// LongParameterList is suppressed on the constructor rather than on the class:
+// every parameter here is a collaborator Hilt injects, so the list is assembled
+// by the container and never written out by hand, and it shrinks only when the
+// class is decomposed — the future work named above. Suppressing it class-wide
+// would also silence the acknowledged finding on `invoke` below, and every
+// future one in a 3k-line file.
+@Suppress("LongParameterList")
+constructor(
     private val nodeExecutorFactory: NodeExecutorFactory,
     private val toolNodeExecutor: ToolNodeExecutor,
     private val chatRepository: ChatRepository,
@@ -207,7 +216,15 @@ class GraphExecutionEngine @Inject constructor(
     // states, and surfaces console events. Decomposition into helpers
     // historically obscured the linear flow; the method body is structured
     // and well-commented in place.
-    @Suppress("LongMethod", "CyclomaticComplexMethod")
+    // LongParameterList is a real signal here and is suppressed knowingly, not
+    // dismissed: unlike the constructor, this is a hand-written call site,
+    // and 14 parameters is past what a reader can hold. Most of them travel
+    // together as one run's context (budget, stuck detector, notes, image
+    // delivery, generating model, origin) and belong in a parameter object.
+    // Doing that reshapes every call site including the recursive sub-pipeline
+    // one, so it is deliberately not smuggled into the change that first made
+    // this rule run.
+    @Suppress("LongMethod", "CyclomaticComplexMethod", "LongParameterList")
     operator fun invoke(
         sessionId: String,
         userPrompt: String,
