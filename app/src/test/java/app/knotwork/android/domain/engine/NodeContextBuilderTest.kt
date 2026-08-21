@@ -95,6 +95,44 @@ class NodeContextBuilderTest {
         nodeInput = mask and 0b10000 != 0,
     )
 
+    @Test
+    fun `given a stored agent message with a reasoning block when building then history omits it`() {
+        // Given — a chat written before reasoning blocks were split at the
+        // executor. Its stored message still carries the scratchpad, and without
+        // this guard it is replayed into the prompt on every later turn for the
+        // rest of that chat's life.
+        val ctx = PipelineExecutionContext(
+            originalUserMessage = "что ты помнишь?",
+            chatHistory = listOf(
+                ChatMessage(
+                    id = 1L,
+                    sessionId = "s1",
+                    role = Role.AGENT,
+                    content = "<think>\nOkay, the user just got home. Be warm.\n</think>\n\nПривет, наконец-то.",
+                    timestamp = 0L,
+                ),
+            ),
+            previousNodeOutput = "",
+            toolResults = emptyList(),
+            memoryEntries = emptyList(),
+        )
+        val config = NodeContextConfig(
+            originalTask = false,
+            chatHistory = true,
+            longTermMemory = false,
+            toolResults = false,
+            nodeInput = false,
+        )
+
+        // When
+        val rendered = builder.build(config, ctx)
+
+        // Then
+        assertTrue("the answer survives: $rendered", rendered.contains("Привет, наконец-то."))
+        assertFalse("the scratchpad is gone: $rendered", rendered.contains("Okay, the user just got home"))
+        assertFalse("no stray tags: $rendered", rendered.contains("<think>"))
+    }
+
     // ─── Group A: every one of the 32 flag combinations ─────────────────────
 
     @Test
