@@ -1,6 +1,7 @@
 package app.knotwork.design.components.console
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithText
@@ -36,6 +37,10 @@ class ConsoleCopyAffordanceTest {
     private val vars = listOf(
         ConsoleVarRow(node = "LITE_RT#501fab", key = "input", valueJson = "the assembled prompt"),
         ConsoleVarRow(node = "LITE_RT#501fab", key = "output", valueJson = "the model answer"),
+    )
+
+    private val logs = listOf(
+        ConsoleLine("12:00:00.000", ConsoleSource.NODE, ConsoleLevel.Trace, "▶ INPUT"),
     )
 
     private val traces = listOf(
@@ -81,6 +86,28 @@ class ConsoleCopyAffordanceTest {
     }
 
     @Test
+    fun `long-pressing a log row still offers both of its items`() {
+        // The Logs tab had this gesture first; Vars and Traces were given the
+        // same one by moving it into a shared wrapper rather than pasting it.
+        // This pins the row that was converted — its menu has two items, which
+        // is why the wrapper takes a menu body rather than a single label.
+        var copied: ConsoleLine? = null
+        var filtered: ConsoleSource? = null
+        composeTestRule.setContent {
+            KnotworkTheme {
+                Pane(tab = ConsoleTab.Logs, onCopyLine = { copied = it }, onFilterByLineSource = { filtered = it })
+            }
+        }
+
+        composeTestRule.onNodeWithText("▶ INPUT").performTouchInput { longClick() }
+        composeTestRule.onNodeWithText("Only show this source").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Copy line").performClick()
+
+        assertEquals(logs.single(), copied)
+        assertNull("copying must not also apply the filter", filtered)
+    }
+
+    @Test
     fun `long-pressing a traces row offers Copy span and reports that span`() {
         var copied: ConsoleTraceSpan? = null
         composeTestRule.setContent {
@@ -102,11 +129,13 @@ class ConsoleCopyAffordanceTest {
         tab: ConsoleTab,
         onCopyVar: (ConsoleVarRow) -> Unit = {},
         onCopySpan: (ConsoleTraceSpan) -> Unit = {},
+        onCopyLine: (ConsoleLine) -> Unit = {},
+        onFilterByLineSource: (ConsoleSource) -> Unit = {},
     ) {
         ConsolePane(
             tab = tab,
             onTabChange = {},
-            logs = emptyList(),
+            logs = logs,
             vars = vars,
             traces = traces,
             filter = ConsoleFilter.allOn,
@@ -117,6 +146,8 @@ class ConsoleCopyAffordanceTest {
             onCloseConsole = {},
             onCopyVar = onCopyVar,
             onCopySpan = onCopySpan,
+            onCopyLine = onCopyLine,
+            onFilterByLineSource = onFilterByLineSource,
         )
     }
 }

@@ -484,26 +484,32 @@ private fun ConsoleSourceFilterRow(filter: ConsoleFilter, onFilterChange: (Conso
 /**
  * Single log row: leading accent strip + timestamp + source + text.
  *
- * Long-press opens an anchored [DropdownMenu] with two items — "Copy line"
- * and "Only show this source" — that delegate to the host via the supplied
- * callbacks (the catalog never touches the clipboard or mutates [ConsoleFilter]
- * directly). A short tap is a no-op so a stray tap doesn't accidentally
- * fire the menu; the host can layer click-to-pin on top via a wrapping
- * composable if needed in a future iteration.
+ * Long-press offers two items — "Copy line" and "Only show this source" — that
+ * delegate to the host via the supplied callbacks (the catalog never touches
+ * the clipboard or mutates [ConsoleFilter] directly). The gesture itself lives
+ * in [ConsoleRowWithMenu], shared with the Vars and Traces rows.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ConsoleLineRow(line: ConsoleLine, onCopyLine: () -> Unit, onFilterByLineSource: () -> Unit) {
-    var menuExpanded by remember { mutableStateOf(false) }
-    Box(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .combinedClickable(
-                    onClick = { /* No short-tap action on log rows. */ },
-                    onLongClick = { menuExpanded = true },
-                ),
-        ) {
+    ConsoleRowWithMenu(
+        menu = { dismiss ->
+            ConsoleMenuItem(
+                label = stringResource(R.string.knotwork_console_line_copy),
+                icon = AppIcons.Copy,
+            ) {
+                dismiss()
+                onCopyLine()
+            }
+            ConsoleMenuItem(
+                label = stringResource(R.string.knotwork_console_line_filter_only),
+                icon = AppIcons.Filter,
+            ) {
+                dismiss()
+                onFilterByLineSource()
+            }
+        },
+    ) {
+        Row(modifier = Modifier.fillMaxWidth()) {
             Spacer(
                 modifier = Modifier
                     .width(LogAccentStripWidth)
@@ -541,56 +547,24 @@ private fun ConsoleLineRow(line: ConsoleLine, onCopyLine: () -> Unit, onFilterBy
                 )
             }
         }
-        DropdownMenu(
-            expanded = menuExpanded,
-            onDismissRequest = { menuExpanded = false },
-        ) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.knotwork_console_line_copy)) },
-                leadingIcon = {
-                    Icon(
-                        imageVector = AppIcons.Copy,
-                        contentDescription = null,
-                    )
-                },
-                onClick = {
-                    menuExpanded = false
-                    onCopyLine()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.knotwork_console_line_filter_only)) },
-                leadingIcon = {
-                    Icon(
-                        imageVector = AppIcons.Filter,
-                        contentDescription = null,
-                    )
-                },
-                onClick = {
-                    menuExpanded = false
-                    onFilterByLineSource()
-                },
-            )
-        }
     }
 }
 
 /**
- * Wraps [content] in the console's long-press copy affordance.
+ * Wraps [content] in the console's long-press menu affordance.
  *
- * The same shape a log row already uses — long-press opens an anchored
- * [DropdownMenu], a short tap does nothing — so Vars and Traces gain the
- * gesture the user already knows from Logs, and no new component or icon is
- * introduced for it. The catalog never touches the clipboard; [onCopy] hands
- * the decision to the host.
+ * One gesture for all three tabs: long-press opens an anchored [DropdownMenu],
+ * a short tap does nothing — so a row cannot fire an action while the user is
+ * scrolling past it. Every tab's rows go through here, which is what keeps the
+ * gesture from being three near-copies that drift.
  *
- * @param label Menu-item text, e.g. `Copy value`.
- * @param onCopy Invoked when the user picks the item.
- * @param content The row to make copyable.
+ * @param menu The menu body, handed a `dismiss` callback to close the menu
+ *   before running its action. The catalog never performs the action itself.
+ * @param content The row to make actionable.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ConsoleCopyableRow(label: String, onCopy: () -> Unit, content: @Composable () -> Unit) {
+private fun ConsoleRowWithMenu(menu: @Composable (dismiss: () -> Unit) -> Unit, content: @Composable () -> Unit) {
     var menuExpanded by remember { mutableStateOf(false) }
     Box(modifier = Modifier.fillMaxWidth()) {
         Box(
@@ -604,16 +578,25 @@ private fun ConsoleCopyableRow(label: String, onCopy: () -> Unit, content: @Comp
             content()
         }
         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-            DropdownMenuItem(
-                text = { Text(label) },
-                leadingIcon = { Icon(imageVector = AppIcons.Copy, contentDescription = null) },
-                onClick = {
-                    menuExpanded = false
-                    onCopy()
-                },
-            )
+            menu { menuExpanded = false }
         }
     }
+}
+
+/**
+ * One item of a console row's long-press menu.
+ *
+ * @param label Item text.
+ * @param icon Leading icon.
+ * @param onClick Invoked after the menu has been dismissed.
+ */
+@Composable
+private fun ConsoleMenuItem(label: String, icon: ImageVector, onClick: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(label) },
+        leadingIcon = { Icon(imageVector = icon, contentDescription = null) },
+        onClick = onClick,
+    )
 }
 
 /** Maps a [ConsoleLevel] to its leading-strip accent. */
@@ -655,9 +638,16 @@ private fun ConsoleVarsBody(rows: List<ConsoleVarRow>, onCopyVar: (ConsoleVarRow
                 )
             }
             items(items = entries) { row ->
-                ConsoleCopyableRow(
-                    label = stringResource(R.string.knotwork_console_var_copy),
-                    onCopy = { onCopyVar(row) },
+                ConsoleRowWithMenu(
+                    menu = { dismiss ->
+                        ConsoleMenuItem(
+                            label = stringResource(R.string.knotwork_console_var_copy),
+                            icon = AppIcons.Copy,
+                        ) {
+                            dismiss()
+                            onCopyVar(row)
+                        }
+                    },
                 ) {
                     // Key + value laid out as a Column so the value text wraps
                     // across as many lines as it needs. The Vars tab is the
@@ -699,9 +689,16 @@ private fun ConsoleTracesBody(spans: List<ConsoleTraceSpan>, onCopySpan: (Consol
     LazyColumn(modifier = Modifier.fillMaxWidth().fillMaxHeight()) {
         items(items = spans) { span ->
             val fraction = span.durationMs.toFloat() / maxDuration.toFloat()
-            ConsoleCopyableRow(
-                label = stringResource(R.string.knotwork_console_span_copy),
-                onCopy = { onCopySpan(span) },
+            ConsoleRowWithMenu(
+                menu = { dismiss ->
+                    ConsoleMenuItem(
+                        label = stringResource(R.string.knotwork_console_span_copy),
+                        icon = AppIcons.Copy,
+                    ) {
+                        dismiss()
+                        onCopySpan(span)
+                    }
+                },
             ) {
                 Column(
                     modifier = Modifier
