@@ -15,11 +15,16 @@
 # implements `dev.detekt.api.RequiresAnalysisApi` is skipped by it in total
 # silence — no error, no warning, no report entry. Four rules sat here inert
 # for exactly that reason (`LongParameterList`, `UnusedImport`,
-# `UnusedPrivateFunction`, `UnusedPrivateProperty`); the first three now live
-# in `config/detekt/detekt-type-resolution.yml`, which is run under type
-# resolution, and the fourth is parked there with the reason. The
-# `verifyDetektAnalysisMode` task fails the build if a rule requiring the
-# Analysis API is added back here, so the mistake cannot be made twice.
+# `UnusedPrivateFunction`, `UnusedPrivateProperty`); the first three are now
+# declared in `config/detekt/detekt-type-resolution.yml`, which is run under
+# type resolution, and the fourth is parked there with the reason.
+#
+# Removing them from here does not switch them off — two of the four are
+# `active: true` in the bundled defaults this file layers on, so they stay
+# nominally on and go on being skipped. It removes this project's *claim* to be
+# checking them, which is the part that was false. The
+# `verifyDetektAnalysisMode` task fails the build if such a rule is declared
+# here again, so the claim cannot be made falsely twice.
 
 config:
   validation: true

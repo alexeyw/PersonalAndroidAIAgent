@@ -116,37 +116,45 @@ object DetektAnalysisModeGuard {
      *
      * A rule set switched off wholesale (`active: false` directly under the
      * rule-set key) takes its rules with it, so nothing under it is reported.
+     * That verdict is applied per rule set at the end rather than as the lines
+     * stream past, because YAML does not promise that `active:` precedes the
+     * rule keys and a reader that assumed it would quietly under-report — the
+     * one direction this guard must never fail in.
      *
      * @param configYaml Full text of the config file.
      * @return Simple rule names, e.g. `LongParameterList`.
      */
     fun activeRuleIds(configYaml: String): Set<String> {
-        val active = mutableSetOf<String>()
-        var ruleSetEnabled = true
+        val perRuleSet = mutableMapOf<String, MutableSet<String>>()
+        val disabledRuleSets = mutableSetOf<String>()
+        var currentRuleSet = ""
         var currentRule: String? = null
         for (rawLine in configYaml.lineSequence()) {
             val line = rawLine.substringBefore('#').trimEnd()
             if (line.isBlank()) continue
             when {
                 RULE_SET_KEY.matches(line) -> {
-                    ruleSetEnabled = true
+                    currentRuleSet = line.dropLast(1)
                     currentRule = null
                 }
 
-                RULE_SET_DISABLED.matches(line) -> ruleSetEnabled = false
+                RULE_SET_DISABLED.matches(line) -> disabledRuleSets += currentRuleSet
 
                 else -> {
                     val ruleMatch = RULE_KEY.matchEntire(line)
                     if (ruleMatch != null) {
                         currentRule = ruleMatch.groupValues[1]
-                        if (ruleSetEnabled) active += currentRule
+                        perRuleSet.getOrPut(currentRuleSet) { mutableSetOf() } += currentRule
                     } else if (currentRule != null && RULE_DISABLED.matches(line)) {
-                        active -= currentRule
+                        perRuleSet[currentRuleSet]?.remove(currentRule)
                     }
                 }
             }
         }
-        return active
+        return perRuleSet.filterKeys { it !in disabledRuleSets }
+            .values
+            .flatten()
+            .toSet()
     }
 
     /**
@@ -166,8 +174,10 @@ object DetektAnalysisModeGuard {
      * same set.
      *
      * @param jars The `detekt` configuration's resolved artefacts. Entries that
-     *   are not jars, and jars that cannot be opened, are skipped — the caller
-     *   guards against an empty result, which is the failure that matters.
+     *   are not jars are skipped, since the configuration also resolves
+     *   directories and metadata. A jar that *is* one and cannot be read
+     *   propagates: silently skipping it would shrink the set the guard compares
+     *   against, which is the direction this guard must never fail in.
      * @return Simple class names, e.g. `LongParameterList`.
      */
     fun rulesRequiringAnalysisApi(jars: Collection<File>): Set<String> {

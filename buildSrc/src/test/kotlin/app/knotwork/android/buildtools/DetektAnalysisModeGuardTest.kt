@@ -84,6 +84,51 @@ class DetektAnalysisModeGuardTest {
     }
 
     @Test
+    fun `given a rule set switched off after its rules when parsing then they are still not activated`() {
+        // Given — YAML does not promise that `active:` precedes the rule keys.
+        // A line-order-dependent reader would report `UnusedImport` here, which
+        // is the direction this guard must never fail in: a rule wrongly called
+        // active is a false alarm, a rule wrongly called inactive is the very
+        // silence the guard exists to break.
+        val config = """
+            |style:
+            |  UnusedImport:
+            |    active: true
+            |  active: false
+        """.trimMargin()
+
+        // When
+        val active = DetektAnalysisModeGuard.activeRuleIds(config)
+
+        // Then
+        assertTrue("key order must not change the verdict: $active", active.isEmpty())
+    }
+
+    @Test
+    fun `given two rule sets when one is switched off then only its own rules are dropped`() {
+        // Given — the shape of `detekt-type-resolution.yml`: several rule sets
+        // off, the ones carrying the gate's rules on.
+        val config = """
+            |comments:
+            |  active: false
+            |complexity:
+            |  active: true
+            |  LongParameterList:
+            |    active: true
+            |style:
+            |  active: true
+            |  UnusedImport:
+            |    active: true
+        """.trimMargin()
+
+        // When
+        val active = DetektAnalysisModeGuard.activeRuleIds(config)
+
+        // Then
+        assertEquals(setOf("LongParameterList", "UnusedImport"), active)
+    }
+
+    @Test
     fun `given a rule named without an active key when parsing then it counts as activated`() {
         // Given — layered on the bundled defaults, a named rule with no `active`
         // key keeps whatever state it inherits, which is usually on. Erring
