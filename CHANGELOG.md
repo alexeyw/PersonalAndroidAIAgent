@@ -37,6 +37,17 @@ details.
 
 ### Changed
 
+- **The reasoning behind a handful of decisions is now written down where
+  contributors can find it.** A short catalogue explains the cases where the
+  obvious change is the wrong one — why the manifest permits unencrypted local
+  traffic while the app still refuses it, why the bundled agent library is used
+  as a transport and a client rather than as the thing that runs the agent, why
+  a few node controls were removed instead of connected. It is deliberately
+  small: a topic already explained by the architecture, security, testing or API
+  documents keeps its home there, and nine candidates were dropped for exactly
+  that reason.
+
+
 - **Dependencies updated in one pass.** Nine were moved together rather than one
   at a time in the middle of unrelated work: the build tool, the HTTP client and
   its test server, the encrypted-database driver, the Markdown renderer used for

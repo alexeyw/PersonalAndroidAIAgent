@@ -34,6 +34,11 @@ By participating in this project you agree to abide by our
 - [`docs/extending.md`](docs/extending.md) has step-by-step recipes for
   the most self-contained contributions — new node types, tools, cloud
   providers, and prompt variables.
+- [`docs/decisions/`](docs/decisions/README.md) records the handful of
+  decisions where the obvious change is the wrong one — why the manifest
+  permits cleartext, why Koog is not the agent runtime, why some node
+  controls were removed rather than wired up. Worth a glance before
+  proposing a change that looks like an oversight; it may be a decision.
 - Leave a comment on an issue before starting non-trivial work, so effort
   is not duplicated and the approach can be sanity-checked early.
 
@@ -205,10 +210,21 @@ This applies to new content as well as to edits of existing content. If
 you encounter non-English text in any of the locations above, treat it as
 a bug.
 
+## Adding a decision record
+
+Write one when a decision would otherwise be re-litigated in review — not once
+per change and not once per release. A record earns its place only if it still
+binds, if it constrains what a contributor may do rather than merely describing
+what the project does, and if no existing document already owns the topic. The
+[index](docs/decisions/README.md) states the criteria in full; most candidates
+fail the third one, which is the point.
+
 ## Further reading
 
 - [`docs/roadmap.md`](docs/roadmap.md) — where the project is headed and
   which directions welcome help.
+- [`docs/decisions/`](docs/decisions/README.md) — decisions that constrain
+  what a change may do, and the reasoning behind them.
 - [`docs/code-style.md`](docs/code-style.md) — Kotlin style and naming
   conventions.
 - [`docs/testing.md`](docs/testing.md) — test strategy, coverage policy,

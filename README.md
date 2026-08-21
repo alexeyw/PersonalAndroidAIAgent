@@ -303,6 +303,7 @@ threat model behind it, including what is explicitly *out* of scope, is in
 - Testing strategy and coverage — [docs/testing.md](docs/testing.md).
 - API & integration conventions — [docs/api-conventions.md](docs/api-conventions.md).
 - Release-build playbook (R8, signing, AAB, APK size) — [docs/release.md](docs/release.md).
+- Decisions that constrain contributions — [docs/decisions/](docs/decisions/README.md).
 - Roadmap — [docs/roadmap.md](docs/roadmap.md).
 - Contributing guide — [CONTRIBUTING.md](CONTRIBUTING.md).
 - Code of Conduct — [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
