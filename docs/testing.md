@@ -169,15 +169,35 @@ Run separately, both are green.
 The `app/src/androidTest/` suite runs on emulators in its own workflow,
 `Instrumented`, separate from `check`:
 
-It runs both distribution flavours on an API 36 `google_apis` x86_64
-emulator — `full` and `foss`, the two things the project actually ships —
-on every pull request into `main`, every push to `main`, and nightly.
+It runs three legs on `google_apis` x86_64 emulators — both distribution
+flavours at API 36 (`full` and `foss`, the two things the project actually
+ships) plus `full` at API 34, the `minSdk` floor — on every pull request
+into `main`, every push to `main`, and nightly.
+
+### Why the third leg is the API floor
+
+The first two legs sit at the API *ceiling* the project supports. When
+`minSdk` moved from 36 to 34, the floor had no automated coverage at all —
+roughly ten thousand lines of Compose, Room and DAO tests had only ever
+run at 36, so anything breaking specifically at the floor had nothing to
+surface it. The leg uses `full` because the flavour axis is already
+covered at API 36 and both flavours share every measured source.
+
+**What the floor leg does not cover, said plainly:** it does not exercise
+the AppFunctions extension path. Below API 36 the library selects the
+`com.android.extensions.appfunctions` sidecar instead of the platform
+service, and that branch genuinely cannot execute on an API 36 emulator —
+but the only test that would reach it, `AppFunctionsEndToEndTest`, is on
+the device-only exclusion list, because `EXECUTE_APP_FUNCTIONS` is
+signature-level and an emulator cannot grant it. The AppFunctions runtime
+is covered by nothing automated at any API level; it belongs to the manual
+reference-device pass, alongside `targetSdk` 37.
 
 ### Why the second axis is the flavour, not a second API level
 
-The intended shape was floor plus `targetSdk` — API 36 and API 37. Neither
-alternative API level survives contact with this app, and both were
-measured rather than assumed:
+The intended shape was floor plus `targetSdk` — API 36 and API 37, back when
+36 was the floor. Neither alternative API level survives contact with this
+app, and both were measured rather than assumed:
 
 - **API 37 never reaches the suite.** The image boots, and then the
   emulator action's own post-boot `adb shell input keyevent 82` — which no

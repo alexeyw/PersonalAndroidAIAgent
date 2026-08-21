@@ -49,8 +49,10 @@ Outputs (the flavour name is part of the path):
 - `app/build/outputs/bundle/fullRelease/app-full-release.aab`
 
 The release variant strips every ABI except `arm64-v8a`
-(`build.gradle.kts → buildTypes.release.ndk.abiFilters`). With
-`minSdk = 36` (Android 16) every supported device is 64-bit; shipping
+(`build.gradle.kts → buildTypes.release.ndk.abiFilters`). The reason is the
+inference engine rather than the API floor: `litertlm-android` ships
+`jni/arm64-v8a` and `jni/x86` only, with no `armeabi-v7a` binary, so a 32-bit
+ARM device cannot run the app at any `minSdk`. Shipping
 `armeabi-v7a` / `x86` / `x86_64` would add ~65 MB for zero benefit.
 Emulator-driven smoke-tests should use the `debug` variant instead, which
 keeps every ABI.

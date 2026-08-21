@@ -184,9 +184,12 @@
         </service>
 
         <!--
-            Callee-side AppFunctions surface is served by the auto-merged
-            androidx.appfunctions.service.PlatformAppFunctionService (from
-            `appfunctions-service`), enabled on API 36+. Functions are discovered through
+            Callee-side AppFunctions surface is served by an auto-merged service
+            from `appfunctions-service`. Which one is chosen by the library's own
+            resource qualifier, not by us: `PlatformAppFunctionService` on API 36+,
+            `ExtensionAppFunctionService` below it (the AAR ships `values/` and
+            `values-v36/` toggling a boolean each way). Since `minSdk` is 34, both
+            branches are reachable in the field. Functions are discovered through
             `@AppFunction`-annotated classes (see [SearchAppFunction]); the agent only
             needs to publish them — no hand-rolled `AppFunctionService` subclass.
         -->
@@ -250,11 +253,27 @@
             aimed at this component must match the filter below. The initiative is
             scheduled to become opt-out and then mandatory, and a receiver that
             already satisfies the strict rules cannot be broken by that transition.
+
+            The attribute exists only from API 36, and `minSdk` is 34, so
+            `tools:targetApi` marks it as deliberately version-scoped rather than
+            an oversight. Stating the consequence rather than hiding it: on
+            API 34-35 this receiver is not covered by Safer Intents.
+
+            That loss is defence-in-depth, not a hole, and the reason is worth
+            recording because the opposite reading is the obvious one: the filter
+            is NOT what validates the action. `ExternalAutomationReceiver.onReceive`
+            copies `intent.action` verbatim and hands it to the use case, which
+            refuses anything the contract does not define with `UNKNOWN_ACTION`
+            and journals it. An explicit intent carrying a foreign action reaches
+            the same refusal on API 34 as on 36. Every other gate listed above —
+            off by default, one bound pipeline, rate ceiling, journalling, HITL —
+            lives in app code and is unaffected by the platform version.
         -->
         <receiver
             android:name=".presentation.receivers.ExternalAutomationReceiver"
             android:exported="true"
             android:intentMatchingFlags="enforceIntentFilter"
+            tools:targetApi="36"
             tools:ignore="ExportedReceiver">
             <intent-filter>
                 <action android:name="app.knotwork.android.action.RUN_PIPELINE" />

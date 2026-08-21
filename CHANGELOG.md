@@ -37,14 +37,37 @@ details.
 
 ### Changed
 
+- **Knotwork now runs on Android 14 and 15, not just Android 16.** The
+  requirement had been Android 16 since the first release, which is a small
+  slice of the devices in use — roughly a fifth. Nothing actually needed it.
+  A measurement of what held the floor up came back empty: not a dependency,
+  not the on-device inference engine, not one line of the app's own code. The
+  floor had simply been set higher than anything asked for.
+
+  Two things do still need Android 16, and both fail softly rather than
+  breaking the app. Calling functions that other apps expose relies on a system
+  service that is not present on every older device; where it is missing, that
+  part of the tool catalogue is empty and everything else — local models, cloud
+  providers, MCP servers, triggers, scheduled tasks — is unchanged. The strict
+  intent-matching rules that harden the external-automation entry point are an
+  Android 16 feature, so on Android 14 and 15 that receiver keeps its other
+  defences (off by default, a single bound pipeline, a rate ceiling, a journal
+  of every request, and confirmation for anything destructive) but not that
+  one. Both are stated here rather than left to be discovered.
+
+  The hardware requirement is unchanged and is the one more likely to bind in
+  practice: a local model still needs roughly 2 GB of free RAM, and an older
+  Android version often means a device that does not have it.
+
 - **The instrumented test suite now runs in continuous integration.** Around ten
   thousand lines of Compose UI, Room migration and DAO tests lived in the
   repository without running anywhere automatic — so they were a claim of
   coverage rather than coverage, and once an entire instrumented source set
-  stopped compiling without a single check going red. They now run on emulators:
-  Android 16 and Android 17 on every pull request into the default branch, plus
-  a nightly run that adds the Google-free build variant, which nothing automatic
-  had ever exercised on a device.
+  stopped compiling without a single check going red. They now run on emulators
+  on every pull request into the default branch, on every push to it, and
+  nightly — covering both published build variants, including the Google-free
+  one that nothing automatic had ever exercised on a device, and both ends of
+  the supported Android range.
 
   Two failures are kept apart on purpose. A failing test is never retried —
   retrying a real regression until it passes is how one gets shipped. A failure

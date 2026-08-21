@@ -165,7 +165,7 @@ android {
 
     defaultConfig {
         applicationId = "app.knotwork.android"
-        minSdk = 36
+        minSdk = 34
         targetSdk = 37
         versionCode = 10
         versionName = "0.7.3"
@@ -256,11 +256,17 @@ android {
             // and signature verification are documented in `docs/release.md`.
             signingConfig = signingConfigs.findByName("release")
                 ?: signingConfigs.getByName("debug")
-            // Strip non-arm64 ABIs from the release APK. With `minSdk = 36`
-            // (Android 16) every supported device is 64-bit; shipping
-            // `armeabi-v7a` + `x86` + `x86_64` would inflate the artefact
-            // by ~65 MB for zero benefit. Emulator-based smoke tests should
-            // use the debug variant which keeps every ABI.
+            // Strip non-arm64 ABIs from the release APK. The reason is the
+            // inference engine, not the API floor: `litertlm-android` ships
+            // `jni/arm64-v8a` and `jni/x86` only — it has no `armeabi-v7a`
+            // binary at all — so a 32-bit ARM device cannot run this app at any
+            // `minSdk`. Shipping `armeabi-v7a` + `x86` + `x86_64` would inflate
+            // the artefact by ~65 MB for zero benefit. (The earlier wording
+            // justified this by "every `minSdk = 36` device is 64-bit", which
+            // was true but incidental; it would have gone stale when the floor
+            // moved to 34, where 32-bit devices do exist. The engine-level
+            // reason does not.) Emulator-based smoke tests should use the debug
+            // variant which keeps every ABI.
             ndk {
                 abiFilters += "arm64-v8a"
             }
@@ -375,8 +381,9 @@ android {
         checkDependencies = true
         htmlReport = true
         xmlReport = true
-        // The release variant ships `arm64-v8a` only
-        // (every `minSdk = 36` device is 64-bit). ChromeOS support is not in
+        // The release variant ships `arm64-v8a` only (the inference engine has
+        // no `armeabi-v7a` binary — see the `abiFilters` block above for why
+        // this does not depend on the API floor). ChromeOS support is not in
         // scope for v0.1 — disable the lint check that demands an x86 binary.
         disable += "ChromeOsAbiSupport"
         // Version-freshness and deadline checks stay ENABLED, but are demoted to

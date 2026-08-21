@@ -1,5 +1,6 @@
 package app.knotwork.android.toolsprobe
 
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -93,7 +94,16 @@ class MainActivity : ComponentActivity() {
 
     private suspend fun executeSearchTool(): String {
         val manager = AppFunctionManager.getInstance(applicationContext)
-            ?: error("AppFunctionManager unavailable (requires Android 16+).")
+            // Null has more than one cause since `minSdk` dropped to 34: below
+            // API 34 the manager never exists, on 34-35 it exists only where the
+            // platform ships the AppFunctions extension sidecar, and a work
+            // profile is refused at any level. Naming one cause would misdiagnose
+            // the other two.
+            ?: error(
+                "AppFunctionManager unavailable on API ${Build.VERSION.SDK_INT}: " +
+                    "needs API 36+, or API 34-35 with the AppFunctions extension present, " +
+                    "and never resolves inside a work profile.",
+            )
         val packages = manager
             .observeAppFunctions(AppFunctionSearchSpec(packageNames = setOf(AGENT_PACKAGE)))
             .first()

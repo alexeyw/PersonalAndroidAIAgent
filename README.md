@@ -175,7 +175,11 @@ browser's `prefers-color-scheme`.
 
 ## Requirements
 
-- **Android 16 or newer** (API level 36+).
+- **Android 14 or newer** (API level 34+). A few OS-integration features need
+  Android 16: calling functions that other apps expose, and the strict
+  intent-matching rules that harden the external-automation entry point. On
+  Android 14 and 15 everything else — local models, cloud providers, MCP
+  servers, triggers, scheduled tasks — works unchanged.
 - Approximately **2 GB of free RAM** available for the LLM at runtime.
 - Optional: hardware acceleration via **NPU or GPU** for noticeably faster
   inference. CPU-only operation works but is slower.
@@ -191,7 +195,7 @@ browser's `prefers-color-scheme`.
 ### From Google Play
 
 [**Knotwork on Google Play**](https://play.google.com/store/apps/details?id=app.knotwork.android)
-— the simplest route, and the one that updates itself. Requires Android 16+.
+— the simplest route, and the one that updates itself. Requires Android 14+.
 
 The Play build is the `full` flavour described below. It shares a signing key
 with the APKs on the Releases page, so you can move between those two channels
@@ -201,7 +205,7 @@ without reinstalling.
 
 Grab the latest APK from the
 [**Releases**](https://github.com/alexeyw/knotwork/releases) page and install it
-on an Android 16+ device. Two flavours are published:
+on an Android 14+ device. Two flavours are published:
 
 - **`full`** — the standard build, with opt-in Firebase Crashlytics for
   anonymous crash reporting (off by default, never collects message content).
