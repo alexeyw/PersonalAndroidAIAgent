@@ -322,7 +322,7 @@ private fun CallBlockBody(
             color = MaterialTheme.colorScheme.onSurface,
         )
         CallBlockLabel(text = strings.callBlockKeysLabel)
-        state.callKeys.forEach { key -> CallKeyRow(key = key, strings = strings) }
+        state.callKeys.forEach { key -> CallKeyRow(key = key) }
         KnotworkSecondaryButton(
             text = strings.callBlockCopy,
             onClick = callbacks.onCopyCallDetails,
@@ -342,7 +342,7 @@ private fun CallBlockLabel(text: String) {
 }
 
 @Composable
-private fun CallKeyRow(key: ExternalCallKeyUi, strings: ExternalAutomationJournalStrings) {
+private fun CallKeyRow(key: ExternalCallKeyUi) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
@@ -356,11 +356,6 @@ private fun CallKeyRow(key: ExternalCallKeyUi, strings: ExternalAutomationJourna
         )
         Column(modifier = Modifier.weight(2f), verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
             Text(text = key.meaning, style = KnotworkTextStyles.BodySm, color = KnotworkTheme.extended.onSurface2)
-            Text(
-                text = if (key.required) strings.callBlockRequired else strings.callBlockOptional,
-                style = KnotworkTextStyles.MonoSm,
-                color = KnotworkTheme.extended.onSurfaceDim,
-            )
         }
     }
 }

@@ -89,8 +89,6 @@
     <string name="external_automation_call_body">Send a broadcast with this action and these extras. Worked Tasker, MacroDroid and adb examples live in the project documentation.</string>
     <string name="external_automation_call_action_label">Action</string>
     <string name="external_automation_call_keys_label">Extras</string>
-    <string name="external_automation_call_required">required</string>
-    <string name="external_automation_call_optional">optional</string>
     <string name="external_automation_call_copy">Copy</string>
     <string name="external_automation_call_expand_cd">Show how another app calls this</string>
     <string name="external_automation_call_clip_label">Knotwork external automation</string>
@@ -100,7 +98,7 @@
     <string name="external_automation_key_pipeline_name">Name of the pipeline to run, matched exactly.</string>
     <string name="external_automation_key_prompt">The message the pipeline runs on.</string>
     <string name="external_automation_key_prompt_b64">The same message, base64-encoded, for shells that mangle quoting.</string>
-    <string name="external_automation_key_request_id">Your own id. It comes back with the answer, so you can match them up.</string>
+    <string name="external_automation_key_request_id">Your own id. It comes back with the answer, so you can match them up. Needed only if you ask for an answer.</string>
     <string name="external_automation_key_return_action">Action to send the answer with. Defaults to the contract’s own.</string>
     <string name="external_automation_key_return_package">Package to deliver the answer to. Leave it out for fire-and-forget.</string>
 

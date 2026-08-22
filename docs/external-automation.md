@@ -10,8 +10,8 @@ part of *what* happens.
 > **Status: the contract is live and switchable.** Requests are received, judged
 > and journalled exactly as described below, and **Settings → Background &
 > triggers → External automation** switches it on, picks the one pipeline outside
-> apps may run, and shows every inbound request. What is still missing is the
-> worked Tasker / MacroDroid / `adb` examples, which land in a later change.
+> apps may run, and shows every inbound request. Worked Tasker, MacroDroid and
+> `adb` examples are in [Worked examples](#worked-examples).
 
 ## Switching it on
 
@@ -47,6 +47,15 @@ named **either** by id **or** by name, never both; the prompt is supplied
 missing, or undecodable is refused with a reason rather than repaired to the
 nearest plausible reading.
 
+**The smallest call is two keys: a target and a prompt.** The correlation id is
+required only of a caller that asked to be answered — it exists to match an
+answer to the request that caused it, and a call that wants no answer has
+nothing to match. This is not a detail: an automation app's built-in
+send-an-intent action has a small, fixed number of extra fields, and a third
+mandatory key would put the simplest useful call out of reach of the apps this
+contract exists to complement. Omitting the id costs only the correlation chip
+on the request's journal row.
+
 **An empty value counts as an absent one.** Every key is trimmed, and a key
 whose value is blank is treated as if it had not been sent — because the callers
 are templates and shell scripts, where an unfilled variable arrives as an empty
@@ -75,7 +84,7 @@ library.
 | `EXTRA_PIPELINE_NAME` | `pipeline_name` | Request key: user-visible name of the pipeline to run. Mutually exclusive with `EXTRA_PIPELINE_ID`. |
 | `EXTRA_PROMPT` | `prompt` | Request key: the prompt to run the pipeline on, as plain text. Mutually exclusive with `EXTRA_PROMPT_B64`. |
 | `EXTRA_PROMPT_B64` | `prompt_b64` | Request key: the prompt as a base64-encoded UTF-8 string, for callers whose shell quoting cannot carry the text intact. Mutually exclusive with `EXTRA_PROMPT`. |
-| `EXTRA_REQUEST_ID` | `request_id` | Request key: caller-minted correlation id. Required. The callback carries it back under this same key, so a caller reads back the id it wrote. |
+| `EXTRA_REQUEST_ID` | `request_id` | Request key: caller-minted correlation id. Required only of a caller that asked to be answered (`EXTRA_RETURN_PACKAGE`); a fire-and-forget call may omit it. The callback carries it back under this same key, so a caller reads back the id it wrote. |
 | `EXTRA_RETURN_ACTION` | `return_action` | Request key: broadcast action to send the callback with. Optional; defaults to `ACTION_RUN_RESULT`. |
 | `EXTRA_RETURN_PACKAGE` | `return_package` | Request key: package to deliver the callback to as an explicit intent. Optional — omitting it is a valid fire-and-forget call. |
 | `EXTRA_STATUS` | `status` | Callback key: the status discriminator (`Accepted` / `Completed` / `Failed` / `Rejected` / `Blocked`). |
@@ -105,6 +114,91 @@ the sender's identity only when the *sender* opts in, which automation apps and
 is deliberately thin — the request id you chose, the status, and a reason where
 there is one — and why it never carries what the run produced. If you want the
 run's answer, have the pipeline put it somewhere you can read.
+
+## Worked examples
+
+Three callers, one broadcast. Two things are true of all of them:
+
+- **Name the package.** An intent that names no package is an *implicit*
+  broadcast, and since Android 8 a receiver declared in an app's manifest is not
+  woken by one. Every example below sets the package for that reason, not for
+  tidiness.
+- **The package is also which build you are calling.** A debug build installs
+  alongside the release one as `app.knotwork.android.debug`, and the action
+  string is identical in both. If you have both installed, the package field is
+  the only thing deciding which of them runs your pipeline.
+
+### Tasker
+
+A task action of **System → Send Intent**:
+
+| Field | Value |
+| --- | --- |
+| Action | `app.knotwork.android.action.RUN_PIPELINE` |
+| Extra | `pipeline_name:Morning brief` |
+| Extra | `prompt:%SOMEVARIABLE` |
+| Package | `app.knotwork.android` |
+| Target | **Broadcast Receiver** |
+
+Leave *Cat*, *Mime Type*, *Data* and *Class* empty.
+
+**Tasker's *Send Intent* offers two extra fields** — which is exactly the
+smallest call: a target and a prompt. That is not a coincidence; the correlation
+id is optional precisely so this call fits. If your build of Tasker offers more
+fields, the callback keys go in them; if it does not, its *Java Function* action
+builds the intent itself and is not limited to two.
+
+To receive the callback, use an **Intent Received** event with *Action* set to
+whatever you passed as `return_action` (or `app.knotwork.android.action.RUN_RESULT`
+if you passed none). Tasker hands each extra to the task as a local variable
+named after its key — lowercased, with anything non-alphanumeric turned into an
+underscore — so the callback's three keys arrive as `%request_id`, `%status` and
+`%reason`. If a name ever reads differently in your Tasker version, that
+transformation is the rule to apply, not these three spellings.
+
+### MacroDroid
+
+An action of **Send Intent** with *Intent target* set to **Broadcast**:
+
+| Field | Value |
+| --- | --- |
+| Action | `app.knotwork.android.action.RUN_PIPELINE` |
+| Package | `app.knotwork.android` |
+| Extra 1 | `pipeline_name` = `Morning brief` (String) |
+| Extra 2 | `prompt` = `Summarise today's calendar` (String) |
+| Extra 3 | `request_id` = `md-0001` (String) |
+| Extra 4 | `return_package` = `com.arlosoft.macrodroid` (String) |
+
+MacroDroid's *Send Intent* takes several extras, so the callback keys fit
+comfortably alongside the two the call needs. Any value can be magic text
+instead of a literal, which is how you pass a variable through. Leaving the
+package empty broadcasts to every app on the device rather than to this one —
+fill it in.
+
+The callback arrives on the **Intent Received** trigger, configured with the
+same action you sent as `return_action`.
+
+### adb
+
+The minimum call, from a shell:
+
+```bash
+adb shell am broadcast -a app.knotwork.android.action.RUN_PIPELINE -p app.knotwork.android --es pipeline_name 'Morning brief' --es prompt 'What is on my calendar today?'
+```
+
+When the text fights your shell's quoting, send it base64-encoded instead:
+
+```bash
+adb shell am broadcast -a app.knotwork.android.action.RUN_PIPELINE -p app.knotwork.android --es pipeline_name 'Morning brief' --es prompt_b64 "$(printf %s 'Anything with "quotes", $signs and newlines' | base64 | tr -d '\n')"
+```
+
+**`tr -d '\n'` is not decoration.** GNU `base64` wraps its output at 76
+characters, and the decoder here accepts the RFC 4648 alphabet without embedded
+whitespace — a wrapped payload is refused as `PROMPT_UNDECODABLE`, which reads
+like a mangled prompt rather than a wrapped one.
+
+A shell script has nowhere to be called back, so both examples omit
+`request_id` and `return_package`. That is a complete call, not a degraded one.
 
 ## Statuses
 
@@ -141,7 +235,7 @@ the reason where there is one.
 | `PROMPT_MISSING` | The request carried no prompt for the pipeline to run on. |
 | `PROMPT_AMBIGUOUS` | The request carried the prompt twice, in plain and base64 form. |
 | `PROMPT_UNDECODABLE` | The base64 prompt could not be decoded. |
-| `REQUEST_ID_MISSING` | The request carried no request id to correlate its outcome with. |
+| `REQUEST_ID_MISSING` | The request asked to be answered but carried no request id to correlate the answer with. A call that asks for no callback may omit the id. |
 | `RATE_LIMITED` | Too many external requests were accepted within the rate window. |
 | `RETURN_PACKAGE_MISMATCH` | The request asked for its callback to be delivered to a package other than the one the system reported as the sender. |
 

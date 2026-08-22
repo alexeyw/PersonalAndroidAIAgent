@@ -289,14 +289,12 @@ private fun callKeys(): List<ExternalCallKeyUi> = listOf(
     ExternalAutomationContract.EXTRA_RETURN_ACTION to R.string.external_automation_key_return_action,
     ExternalAutomationContract.EXTRA_RETURN_PACKAGE to R.string.external_automation_key_return_package,
 ).map { (key, meaningRes) ->
-    ExternalCallKeyUi(
-        key = key,
-        meaning = stringResource(meaningRes),
-        // The correlation id is the only unconditionally required key: a target
-        // and a prompt are each required in one of two mutually exclusive forms,
-        // which a per-key "required" flag cannot express honestly.
-        required = key == ExternalAutomationContract.EXTRA_REQUEST_ID,
-    )
+    // No required/optional tag: no key of this contract is unconditionally
+    // required — a target and a prompt are each required in one of two mutually
+    // exclusive forms, and the correlation id only when the caller asked to be
+    // answered. Every condition is stated in the key's own meaning line, which
+    // is the only place able to express one.
+    ExternalCallKeyUi(key = key, meaning = stringResource(meaningRes))
 }
 
 /**
@@ -368,8 +366,6 @@ private fun journalStrings(): ExternalAutomationJournalStrings = ExternalAutomat
     callBlockBody = stringResource(R.string.external_automation_call_body),
     callBlockActionLabel = stringResource(R.string.external_automation_call_action_label),
     callBlockKeysLabel = stringResource(R.string.external_automation_call_keys_label),
-    callBlockRequired = stringResource(R.string.external_automation_call_required),
-    callBlockOptional = stringResource(R.string.external_automation_call_optional),
     callBlockCopy = stringResource(R.string.external_automation_call_copy),
     callBlockExpandCd = stringResource(R.string.external_automation_call_expand_cd),
 )

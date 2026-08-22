@@ -214,11 +214,12 @@ class ParseExternalAutomationRequestUseCaseTest {
     }
 
     @Test
-    fun `given no request id when parsing then it is refused`() {
+    fun `given a callback is asked for and no request id when parsing then it is refused`() {
         val result = useCase(
             invocation(
                 ExternalAutomationContract.EXTRA_PIPELINE_ID to "pipe-1",
                 ExternalAutomationContract.EXTRA_PROMPT to "go",
+                ExternalAutomationContract.EXTRA_RETURN_PACKAGE to "net.dinglisch.android.taskerm",
             ),
         )
 
@@ -226,7 +227,34 @@ class ParseExternalAutomationRequestUseCaseTest {
     }
 
     @Test
-    fun `given a blank request id when parsing then blank counts as absent`() {
+    fun `given a callback is asked for and a blank request id when parsing then blank counts as absent`() {
+        val result = useCase(
+            invocation(
+                ExternalAutomationContract.EXTRA_REQUEST_ID to "   ",
+                ExternalAutomationContract.EXTRA_PIPELINE_ID to "pipe-1",
+                ExternalAutomationContract.EXTRA_PROMPT to "go",
+                ExternalAutomationContract.EXTRA_RETURN_PACKAGE to "net.dinglisch.android.taskerm",
+            ),
+        )
+
+        assertEquals(ExternalAutomationRejectionReason.REQUEST_ID_MISSING, reasonOf(result))
+    }
+
+    @Test
+    fun `given no callback is asked for and no request id when parsing then the request is accepted`() {
+        val result = useCase(
+            invocation(
+                ExternalAutomationContract.EXTRA_PIPELINE_ID to "pipe-1",
+                ExternalAutomationContract.EXTRA_PROMPT to "go",
+            ),
+        )
+
+        // The minimum call an automation app with two extra fields can make.
+        assertEquals("", parsed(result).request.requestId)
+    }
+
+    @Test
+    fun `given no callback is asked for and a blank request id when parsing then the request is accepted`() {
         val result = useCase(
             invocation(
                 ExternalAutomationContract.EXTRA_REQUEST_ID to "   ",
@@ -235,7 +263,22 @@ class ParseExternalAutomationRequestUseCaseTest {
             ),
         )
 
-        assertEquals(ExternalAutomationRejectionReason.REQUEST_ID_MISSING, reasonOf(result))
+        assertEquals("", parsed(result).request.requestId)
+    }
+
+    @Test
+    fun `given a return action but no return package and no request id when parsing then it is accepted`() {
+        val result = useCase(
+            invocation(
+                ExternalAutomationContract.EXTRA_PIPELINE_ID to "pipe-1",
+                ExternalAutomationContract.EXTRA_PROMPT to "go",
+                ExternalAutomationContract.EXTRA_RETURN_ACTION to "com.example.RESULT",
+            ),
+        )
+
+        // The callback address is the return *package*: naming only an action
+        // delivers nothing, so it must not be what makes the id required.
+        assertEquals("", parsed(result).request.requestId)
     }
 
     @Test
@@ -312,6 +355,24 @@ class ParseExternalAutomationRequestUseCaseTest {
                 ExternalAutomationContract.EXTRA_REQUEST_ID to "req-1",
                 ExternalAutomationContract.EXTRA_PIPELINE_ID to "pipe-1",
                 ExternalAutomationContract.EXTRA_PROMPT_B64 to "-_8=",
+            ),
+        )
+
+        assertEquals(ExternalAutomationRejectionReason.PROMPT_UNDECODABLE, reasonOf(result))
+    }
+
+    @Test
+    fun `given a line-wrapped base64 prompt when parsing then the embedded newline is refused`() {
+        // GNU base64 wraps its output at 76 characters, so a caller piping a long
+        // prompt through it without `tr -d '\n'` sends exactly this. The documented
+        // examples say so; this pins the behaviour they describe. Trimming cannot
+        // save it — the newline is interior, not surrounding.
+        val wrapped = "SGVsbG8sIHRoaXMgcHJvbXB0IGlzIGxvbmcgZW5vdWdoIHRoYXQgR05VIGJhc2U2NCB3b3VsZCB3\ncmFwIGl0Lg=="
+        val result = useCase(
+            invocation(
+                ExternalAutomationContract.EXTRA_REQUEST_ID to "req-1",
+                ExternalAutomationContract.EXTRA_PIPELINE_ID to "pipe-1",
+                ExternalAutomationContract.EXTRA_PROMPT_B64 to wrapped,
             ),
         )
 

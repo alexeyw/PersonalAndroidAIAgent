@@ -41,8 +41,11 @@ class ParseExternalAutomationRequestUseCase @Inject constructor() {
         if (invocation.action != ExternalAutomationContract.ACTION_RUN_PIPELINE) {
             return invalid(ExternalAutomationRejectionReason.UNKNOWN_ACTION)
         }
-        val requestId = invocation.value(ExternalAutomationContract.EXTRA_REQUEST_ID)
-            ?: return invalid(ExternalAutomationRejectionReason.REQUEST_ID_MISSING)
+        val returnPackage = invocation.value(ExternalAutomationContract.EXTRA_RETURN_PACKAGE)
+        val requestId = when (val resolved = resolveRequestId(invocation, returnPackage)) {
+            is Resolved.Failure -> return invalid(resolved.reason)
+            is Resolved.Success -> resolved.value
+        }
 
         val target = when (val resolved = resolveTarget(invocation)) {
             is Resolved.Failure -> return invalid(resolved.reason)
@@ -60,9 +63,48 @@ class ParseExternalAutomationRequestUseCase @Inject constructor() {
                 requestId = requestId,
                 returnAction = invocation.value(ExternalAutomationContract.EXTRA_RETURN_ACTION)
                     ?: ExternalAutomationContract.ACTION_RUN_RESULT,
-                returnPackage = invocation.value(ExternalAutomationContract.EXTRA_RETURN_PACKAGE),
+                returnPackage = returnPackage,
             ),
         )
+    }
+
+    /**
+     * Picks the request's correlation id, which is required only of a caller that
+     * asked to be answered.
+     *
+     * **The id exists to correlate a callback, so a call that asks for no
+     * callback is not asked for one.** A fire-and-forget caller has nothing to
+     * match an answer against — it never receives one — and requiring an id of it
+     * would be ceremony that refuses working calls. It also costs real callers:
+     * Tasker's own *Send Intent* action carries exactly two extras, so an
+     * unconditionally required id put the minimum call (target + prompt + id) one
+     * field beyond the reach of the automation app this contract exists to
+     * complement, for a value that would have been discarded.
+     *
+     * When the caller *did* ask to be answered, the id stays required: the
+     * callback's entire payload is the id, the status and a reason, so an answer
+     * without one is a broadcast the caller cannot attribute to anything.
+     *
+     * An omitted id is recorded as empty rather than invented. A minted id would
+     * appear in the request journal looking exactly like one the caller chose,
+     * and the user diagnosing a profile would search their automation app for a
+     * string that only ever existed in this app; the journal row has its own
+     * identity, and the surface already renders a blank correlation id by
+     * omitting the chip.
+     *
+     * @param invocation The raw call.
+     * @param returnPackage The caller's callback address, `null` for
+     *   fire-and-forget.
+     * @return The correlation id — empty when none was sent and none was needed —
+     *   or the reason the call was refused.
+     */
+    private fun resolveRequestId(invocation: ExternalAutomationInvocation, returnPackage: String?): Resolved<String> {
+        val requestId = invocation.value(ExternalAutomationContract.EXTRA_REQUEST_ID)
+        return when {
+            requestId != null -> Resolved.Success(requestId)
+            returnPackage != null -> Resolved.Failure(ExternalAutomationRejectionReason.REQUEST_ID_MISSING)
+            else -> Resolved.Success("")
+        }
     }
 
     /**

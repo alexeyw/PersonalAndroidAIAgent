@@ -55,7 +55,10 @@ enum class ExternalAutomationRejectionReason {
     /** The base64 prompt could not be decoded. */
     PROMPT_UNDECODABLE,
 
-    /** The request carried no request id to correlate its outcome with. */
+    /**
+     * The request asked to be answered but carried no request id to correlate the
+     * answer with. A call that asks for no callback may omit the id.
+     */
     REQUEST_ID_MISSING,
 
     /** Too many external requests were accepted within the rate window. */

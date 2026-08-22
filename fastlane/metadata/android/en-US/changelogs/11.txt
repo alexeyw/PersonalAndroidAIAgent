@@ -1,0 +1,7 @@
+Another app can now run a pipeline for you. Tasker, MacroDroid or a shell script over adb can ask Knotwork to run the one pipeline you nominate. It is off by default, opens only with an explicit yes, and every request is recorded.
+
+Background runs now have ceilings on steps and tokens, so an unattended loop cannot quietly spend your cloud API key, and a run that stops explains why.
+
+Knotwork now installs on Android 14 and 15, not only 16.
+
+A prompt can be exported and imported as a file.

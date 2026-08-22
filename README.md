@@ -3,8 +3,8 @@
 [![Check](https://github.com/alexeyw/knotwork/actions/workflows/check.yml/badge.svg)](https://github.com/alexeyw/knotwork/actions/workflows/check.yml)
 [![Instrumented](https://github.com/alexeyw/knotwork/actions/workflows/instrumented.yml/badge.svg?branch=main)](https://github.com/alexeyw/knotwork/actions/workflows/instrumented.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.7.3-orange.svg)
-![Android API](https://img.shields.io/badge/Android-API%2036%2B-3DDC84.svg?logo=android)
+![Version](https://img.shields.io/badge/version-0.8.0-orange.svg)
+![Android API](https://img.shields.io/badge/Android-API%2034%2B-3DDC84.svg?logo=android)
 [![Google Play](https://img.shields.io/badge/Google%20Play-available-3DDC84.svg?logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=app.knotwork.android)
 
 > **An AI agent you build, not just prompt.** A local-first Android agent whose
@@ -116,7 +116,10 @@ https://github.com/user-attachments/assets/2ea06de5-6832-4e0c-ad48-430f375d8b72
   smooths transient cloud failures, and background history compression keeps a
   long session from overflowing the context window. Interrupted runs resume from
   their last completed node; reopening a chat reconnects to a run still
-  executing in the background.
+  executing in the background. A run nobody is watching is bounded by step and
+  token ceilings counted across the whole run tree — so an automation that
+  starts looping cannot quietly spend your cloud key — and a run stopped that
+  way says so instead of looking broken.
 - **Remembers what matters.** Long-term memory with semantic retrieval (RAG)
   over past conversations, automatic fact extraction, manual "Save to memory,"
   and a memory manager with search, provenance, compaction, and JSON
@@ -297,6 +300,8 @@ threat model behind it, including what is explicitly *out* of scope, is in
 
 - Architecture overview — [docs/architecture.md](docs/architecture.md).
 - User guide — [docs/user-guide.md](docs/user-guide.md).
+- External-automation contract (calling the agent from Tasker, MacroDroid or
+  `adb`) — [docs/external-automation.md](docs/external-automation.md).
 - Extending the agent (new node types, tools, providers, prompt
   variables) — [docs/extending.md](docs/extending.md).
 - Code style — [docs/code-style.md](docs/code-style.md).
@@ -313,7 +318,7 @@ threat model behind it, including what is explicitly *out* of scope, is in
 
 ## Pre-release notice
 
-This project is currently at **version 0.7.3** and is published for review and
+This project is currently at **version 0.8.0** and is published for review and
 experimentation. Expect rough edges:
 
 - There are no stability guarantees for the public surface (Kotlin APIs,

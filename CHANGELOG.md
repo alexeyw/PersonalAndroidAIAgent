@@ -13,7 +13,153 @@ details.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-21
+
 ### Added
+
+- **Definition of the external-automation contract** — the vocabulary another
+  app on the device (Tasker, MacroDroid, a shell script over `adb`) will use to
+  ask Knotwork to run one of your pipelines. This change defines and documents
+  the contract; the receiver that acts on it and the setting that switches it on
+  land separately, so nothing is callable yet.
+  [`docs/external-automation.md`](docs/external-automation.md) describes the
+  request keys, the statuses and every refusal reason, and its reference tables
+  are generated from the source declarations with a build check that fails on
+  drift — a contract whose callers live in other apps cannot afford stale
+  documentation. The entry point will be **off by default** and **inert until
+  bound**, and the binding is an allowlist rather than a default: a request must
+  name the pipeline it wants, and one naming any other pipeline is refused
+  rather than quietly redirected.
+
+  **The smallest call is two keys** — which pipeline, and what to say to it. The
+  correlation id a caller can send is required only when that caller also asks
+  to be answered, because its only job is to match the answer to the request
+  that caused it. This matters more than it sounds: an automation app's built-in
+  send-an-intent action has a small, fixed number of extra fields — Tasker's has
+  two — so a third mandatory key would have put the simplest useful call beyond
+  the reach of the app this contract exists to complement, in exchange for a
+  value that would have been thrown away.
+
+- **Another app on your device can now ask Knotwork to run a pipeline.** The
+  external-automation entry point defined in the entry above is live: a
+  Tasker or MacroDroid profile, or a shell script over `adb`, can broadcast a
+  request and Knotwork will run the pipeline you bound to it. The switch that
+  turns this on is off by default; its settings screen ships in the entry
+  below.
+
+  The guarantees are the point, and each one is under test:
+  human-in-the-loop confirmation, per-tool risk overrides and the
+  destructive-tool block all apply exactly as they do to the app's own
+  background runs — an external call asks for a run, it does not approve what
+  the run then does. The binding is an allowlist, so a request naming any other
+  pipeline is refused rather than redirected. Requests are rate-limited, and
+  **every** request is recorded — admitted or refused — because an entry point
+  that leaves no trace cannot be diagnosed. A caller that asks for one gets a
+  callback when its run finishes, including hours later when the run had paused
+  to ask you something.
+
+  Android does not tell a broadcast receiver who sent the broadcast unless the
+  sender opts in, which automation apps do not, so the callback address is taken
+  at face value. That is why the callback carries only your request id and a
+  status, and never what the run produced.
+  [`docs/external-automation.md`](docs/external-automation.md) carries the whole
+  contract plus worked Tasker, MacroDroid and `adb` examples you can copy.
+
+- **External automation is now switchable, and every request is readable.**
+  Settings → Background & triggers grows three rows: the master switch, the one
+  pipeline outside apps may run, and the request journal. All three are in the
+  settings search index — the app's most security-sensitive switch should not be
+  the only one you cannot find by typing its name.
+
+  Switching it **on** raises a consent dialog that names what you are agreeing
+  to in plain language: any app on the device that can send a broadcast may ask,
+  only the pipeline you pick can be run, your tool approvals still apply exactly
+  as they do for the app's own background runs, a run can spend your cloud API
+  key, and one tap turns it all off again. The switch does not move until you
+  confirm. Switching it **off** is immediate and asks nothing — a confirmation
+  on the way out would make that last promise false.
+
+  Switched on with nothing picked is a real state, not an oversight: the surface
+  accepts a request and refuses it. The binding row says so with a warning glyph
+  and words, not only a colour.
+
+  The **request journal** shows every inbound request, accepted or refused, with
+  the reason as a sentence rather than a constant name, and keeps the two
+  refusal kinds apart — *Refused* means sending the same request again gives the
+  same answer, *Held back* means it can be accepted later. Because Android only
+  reveals who sent a broadcast when the sender opts in (automation apps do not),
+  a row shows the app the caller asked to be answered on and marks it
+  *unverified*: a claim never reads as a confirmed identity. A caller looping
+  against a switched-off contract collapses onto one row with a repeat count, so
+  a misconfigured profile reads as one recurring problem rather than dozens of
+  separate ones. The screen also carries a *How another app calls this* block —
+  the action and the extra keys, read from the contract itself so it cannot
+  describe a call the app would not answer.
+
+- **Autonomous runs now have ceilings, and a run stopped by one says so.**
+  A background run — a trigger firing overnight against your own cloud API key —
+  is now bounded on two axes across the whole run tree: how many pipeline steps
+  it may take, and how many tokens it may spend. Each axis has a soft threshold
+  that warns and nudges the run to wrap up, and a hard one that stops it
+  deterministically. Runs nobody is watching (scheduler, Quick Settings tile,
+  triggers, external automation) get their own, tighter token limit.
+
+  The step ceiling is not new, but it did not previously bind. It was counted
+  per execution attempt, and answering a background approval resumes a run — so
+  a nightly loop that asked a question each iteration received a full fresh
+  allowance every time it was answered. The counters now live on the run record,
+  survive being parked and resumed, and continue where the previous attempt
+  stopped. Work already done is never charged twice.
+
+  A **money limit is not offered, and the app says so rather than implying one.**
+  Knotwork runs on your provider keys and never sees an invoice; turning tokens
+  into currency would need a price table that goes stale between releases and
+  would show a wrong number as money. The token limit is the honest proxy.
+
+  Cloud token counts are now the provider's own figures — prompt *and*
+  completion — where the provider reports them, instead of an estimate that only
+  ever saw the answer. In a loop the prompt is what costs.
+
+- **The run limits are now visible, adjustable, and honestly described.**
+  Settings → Pipelines & structured output grows a **Run limits** row, showing
+  the current step and token limits without opening anything, and leading to a
+  screen with all four: steps and tokens, each with its own value for runs
+  nobody is watching. The background step limit follows the interactive one
+  until you set it separately, and says so on the row rather than showing two
+  identical numbers with no hint that they are linked. The spending limit is
+  there too, as a statement rather than a control: the app runs on your own key,
+  never sees your bill, and says *Not measured* instead of showing a figure it
+  would have to guess.
+
+  Until now three of those four numbers had no screen at all — a run stopped at
+  a limit you could not read, let alone change.
+
+- **A run that goes in circles is now caught and stopped, and told apart from a
+  run that has merely run out of allowance.** The agent watches each run for
+  repetition — the same step, on the same input, producing the same result — and
+  responds in two stages: first it tells the run, quietly in the chat and in the
+  agent's own context, so it can change course by itself; then, if nothing
+  changes, it ends the run and says *Stopped: the run was not getting anywhere*,
+  offering **Open console**, whose log shows the same step running over and over
+  and the line that ended it.
+
+  This is a different protection from the run limits, not a second copy of one.
+  A limit asks how much a run has spent; this asks whether it is getting
+  anywhere. A run that keeps producing genuinely different results is not
+  repeating itself however long it takes, and is left alone — and neither is a
+  run still being handed something new each time, even when its answers look
+  alike, which is what a long list of similar tasks looks like from the inside.
+  Those cases are what the limits are for. Nothing is configurable here: how
+  many identical steps count as a loop is not a preference, and a slider would
+  only invite widening it until the protection stopped protecting.
+
+  A run that stops responding altogether — a tool or a server that never answers
+  — is now reported as its own thing (*Stopped: the run went quiet*) instead of
+  borrowing the wording for repetition. It had been showing a message about work
+  that "kept repeating", which was never what had happened to it, and offering
+  to open a console to compare steps that had never repeated. It now offers to
+  run it again, which is the thing that can actually help: a step that hung once
+  often answers the next time.
 
 - **A prompt can now travel as a file.** Any prompt in the Prompt library can be
   exported as a Markdown file and imported back — yours or one of the bundled
@@ -37,34 +183,45 @@ details.
 
 ### Changed
 
-- **The reasoning behind a handful of decisions is now written down where
-  contributors can find it.** A short catalogue explains the cases where the
-  obvious change is the wrong one — why the manifest permits unencrypted local
-  traffic while the app still refuses it, why the bundled agent library is used
-  as a transport and a client rather than as the thing that runs the agent, why
-  a few node controls were removed instead of connected. It is deliberately
-  small: a topic already explained by the architecture, security, testing or API
-  documents keeps its home there, and nine candidates were dropped for exactly
-  that reason.
+- **A run that stops explains itself in its own words.**
+  Every way a run can end early — a limit, an unanswered approval, a pipeline
+  edited mid-pause, the app being killed — now has a sentence written for a
+  person, in one place, used identically by the chat, the notification and the
+  foreground status. Six of them previously showed the internal constant name
+  in the middle of a sentence, and the message a ceiling produced was assembled
+  inside the engine, persisted, and quoted verbatim in the documentation, which
+  is how it came to describe behaviour the engine does not have.
 
+  **Retry is gone from these messages.** Re-running the identical turn reaches
+  the identical limit; a run stopped by a ceiling now offers *Adjust limits*
+  instead, and the ones a fresh attempt genuinely fixes offer to run again.
+  Retry remains where it belongs, on an ordinary failure.
 
-- **Dependencies updated in one pass.** Nine were moved together rather than one
-  at a time in the middle of unrelated work: the build tool, the HTTP client and
-  its test server, the encrypted-database driver, the Markdown renderer used for
-  chat messages, the crash-reporting libraries, and — the two that matter — the
-  on-device inference engine and the text-embedding library behind long-term
-  memory.
+  A ceiling stop is also no longer *styled* as a failure: the chat, the
+  background notification and the run console all give it the same warning tone
+  and shield the trigger journal already used.
 
-  Those last two had been deliberately held back, because the ways they break
-  are invisible to a normal build: they fail only in a shipped, optimised
-  release, and only when the app actually loads a model or writes a memory. Both
-  are now checked by the two guards that exist for exactly those failures, and
-  both pass — but the remaining verification is a real device, which is why they
-  moved now, ahead of testing, rather than quietly on their own.
+- **A run stopped by a safety limit no longer reads as a broken automation.**
+  A trigger whose run hit a ceiling shows *Stopped by a safety limit* in its
+  journal and does not count against the trigger's health indicator. Why a run
+  ended is now recorded as a typed cause rather than recovered by matching the
+  error text — which was how a timed-out background approval used to be told
+  apart from a genuine failure, and would have broken the first time that
+  message was reworded.
 
-  One dependency could not be updated: the app-functions libraries share a
-  version, and one of the three has not been published at the newer version, so
-  moving the others would not resolve.
+- **Prompt cards were rearranged to fit their new export action.** The name now
+  has the whole first line to itself, and Preview, Duplicate, Edit and a **More**
+  menu — holding Export and Delete — sit on the footer line beside `used by N
+  pipelines`. Delete stops being a one-tap neighbour of Edit, and the row keeps
+  the same four action slots it had, at the same reach, including at the largest
+  font sizes. An empty Prompt library now offers **Import prompt** and **New
+  prompt** directly instead of only a `+` button.
+
+- **A settings reset no longer detaches the background step limit.**
+  Resetting to recommended defaults used to write that limit explicitly, which
+  is exactly what marks it as independently chosen — leaving you with a
+  deliberate-looking decision you never made, silently stopping it from
+  following the interactive limit. The reset now clears it, restoring the link.
 
 - **Knotwork now runs on Android 14 and 15, not just Android 16.** The
   requirement had been Android 16 since the first release, which is a small
@@ -119,182 +276,6 @@ details.
   requires does not have to name each configuration and quietly fall out of step
   with them.
 
-- **Prompt cards were rearranged to fit their new export action.** The name now
-  has the whole first line to itself, and Preview, Duplicate, Edit and a **More**
-  menu — holding Export and Delete — sit on the footer line beside `used by N
-  pipelines`. Delete stops being a one-tap neighbour of Edit, and the row keeps
-  the same four action slots it had, at the same reach, including at the largest
-  font sizes. An empty Prompt library now offers **Import prompt** and **New
-  prompt** directly instead of only a `+` button.
-
-- **A run that goes in circles is now caught and stopped, and told apart from a
-  run that has merely run out of allowance.** The agent watches each run for
-  repetition — the same step, on the same input, producing the same result — and
-  responds in two stages: first it tells the run, quietly in the chat and in the
-  agent's own context, so it can change course by itself; then, if nothing
-  changes, it ends the run and says *Stopped: the run was not getting anywhere*,
-  offering **Open console**, whose log shows the same step running over and over
-  and the line that ended it.
-
-  This is a different protection from the run limits, not a second copy of one.
-  A limit asks how much a run has spent; this asks whether it is getting
-  anywhere. A run that keeps producing genuinely different results is not
-  repeating itself however long it takes, and is left alone — and neither is a
-  run still being handed something new each time, even when its answers look
-  alike, which is what a long list of similar tasks looks like from the inside.
-  Those cases are what the limits are for. Nothing is configurable here: how
-  many identical steps count as a loop is not a preference, and a slider would
-  only invite widening it until the protection stopped protecting.
-
-  A run that stops responding altogether — a tool or a server that never answers
-  — is now reported as its own thing (*Stopped: the run went quiet*) instead of
-  borrowing the wording for repetition. It had been showing a message about work
-  that "kept repeating", which was never what had happened to it, and offering
-  to open a console to compare steps that had never repeated. It now offers to
-  run it again, which is the thing that can actually help: a step that hung once
-  often answers the next time.
-
-- **Autonomous runs now have ceilings, and a run stopped by one says so.**
-  A background run — a trigger firing overnight against your own cloud API key —
-  is now bounded on two axes across the whole run tree: how many pipeline steps
-  it may take, and how many tokens it may spend. Each axis has a soft threshold
-  that warns and nudges the run to wrap up, and a hard one that stops it
-  deterministically. Runs nobody is watching (scheduler, Quick Settings tile,
-  triggers, external automation) get their own, tighter token limit.
-
-  The step ceiling is not new, but it did not previously bind. It was counted
-  per execution attempt, and answering a background approval resumes a run — so
-  a nightly loop that asked a question each iteration received a full fresh
-  allowance every time it was answered. The counters now live on the run record,
-  survive being parked and resumed, and continue where the previous attempt
-  stopped. Work already done is never charged twice.
-
-  A **money limit is not offered, and the app says so rather than implying one.**
-  Knotwork runs on your provider keys and never sees an invoice; turning tokens
-  into currency would need a price table that goes stale between releases and
-  would show a wrong number as money. The token limit is the honest proxy.
-
-  Cloud token counts are now the provider's own figures — prompt *and*
-  completion — where the provider reports them, instead of an estimate that only
-  ever saw the answer. In a loop the prompt is what costs.
-
-- **The run limits are now visible, adjustable, and honestly described.**
-  Settings → Pipelines & structured output grows a **Run limits** row, showing
-  the current step and token limits without opening anything, and leading to a
-  screen with all four: steps and tokens, each with its own value for runs
-  nobody is watching. The background step limit follows the interactive one
-  until you set it separately, and says so on the row rather than showing two
-  identical numbers with no hint that they are linked. The spending limit is
-  there too, as a statement rather than a control: the app runs on your own key,
-  never sees your bill, and says *Not measured* instead of showing a figure it
-  would have to guess.
-
-  Until now three of those four numbers had no screen at all — a run stopped at
-  a limit you could not read, let alone change.
-
-- **A run that stops explains itself in its own words.**
-  Every way a run can end early — a limit, an unanswered approval, a pipeline
-  edited mid-pause, the app being killed — now has a sentence written for a
-  person, in one place, used identically by the chat, the notification and the
-  foreground status. Six of them previously showed the internal constant name
-  in the middle of a sentence, and the message a ceiling produced was assembled
-  inside the engine, persisted, and quoted verbatim in the documentation, which
-  is how it came to describe behaviour the engine does not have.
-
-  **Retry is gone from these messages.** Re-running the identical turn reaches
-  the identical limit; a run stopped by a ceiling now offers *Adjust limits*
-  instead, and the ones a fresh attempt genuinely fixes offer to run again.
-  Retry remains where it belongs, on an ordinary failure.
-
-  A ceiling stop is also no longer *styled* as a failure: the chat, the
-  background notification and the run console all give it the same warning tone
-  and shield the trigger journal already used.
-
-- **A run stopped by a safety limit no longer reads as a broken automation.**
-  A trigger whose run hit a ceiling shows *Stopped by a safety limit* in its
-  journal and does not count against the trigger's health indicator. Why a run
-  ended is now recorded as a typed cause rather than recovered by matching the
-  error text — which was how a timed-out background approval used to be told
-  apart from a genuine failure, and would have broken the first time that
-  message was reworded.
-
-- **External automation is now switchable, and every request is readable.**
-  Settings → Background & triggers grows three rows: the master switch, the one
-  pipeline outside apps may run, and the request journal. All three are in the
-  settings search index — the app's most security-sensitive switch should not be
-  the only one you cannot find by typing its name.
-
-  Switching it **on** raises a consent dialog that names what you are agreeing
-  to in plain language: any app on the device that can send a broadcast may ask,
-  only the pipeline you pick can be run, your tool approvals still apply exactly
-  as they do for the app's own background runs, a run can spend your cloud API
-  key, and one tap turns it all off again. The switch does not move until you
-  confirm. Switching it **off** is immediate and asks nothing — a confirmation
-  on the way out would make that last promise false.
-
-  Switched on with nothing picked is a real state, not an oversight: the surface
-  accepts a request and refuses it. The binding row says so with a warning glyph
-  and words, not only a colour.
-
-  The **request journal** shows every inbound request, accepted or refused, with
-  the reason as a sentence rather than a constant name, and keeps the two
-  refusal kinds apart — *Refused* means sending the same request again gives the
-  same answer, *Held back* means it can be accepted later. Because Android only
-  reveals who sent a broadcast when the sender opts in (automation apps do not),
-  a row shows the app the caller asked to be answered on and marks it
-  *unverified*: a claim never reads as a confirmed identity. A caller looping
-  against a switched-off contract collapses onto one row with a repeat count, so
-  a misconfigured profile reads as one recurring problem rather than dozens of
-  separate ones. The screen also carries a *How another app calls this* block —
-  the action and the extra keys, read from the contract itself so it cannot
-  describe a call the app would not answer.
-
-- **Another app on your device can now ask Knotwork to run a pipeline.** The
-  external-automation entry point defined in the previous change is live: a
-  Tasker or MacroDroid profile, or a shell script over `adb`, can broadcast a
-  request and Knotwork will run the pipeline you bound to it. The switch that
-  turns this on is off by default; its settings screen ships in the entry
-  above.
-
-  The guarantees are the point, and each one is under test:
-  human-in-the-loop confirmation, per-tool risk overrides and the
-  destructive-tool block all apply exactly as they do to the app's own
-  background runs — an external call asks for a run, it does not approve what
-  the run then does. The binding is an allowlist, so a request naming any other
-  pipeline is refused rather than redirected. Requests are rate-limited, and
-  **every** request is recorded — admitted or refused — because an entry point
-  that leaves no trace cannot be diagnosed. A caller that asks for one gets a
-  callback when its run finishes, including hours later when the run had paused
-  to ask you something.
-
-  Android does not tell a broadcast receiver who sent the broadcast unless the
-  sender opts in, which automation apps do not, so the callback address is taken
-  at face value. That is why the callback carries only your request id and a
-  status, and never what the run produced. See
-  [`docs/external-automation.md`](docs/external-automation.md).
-
-- **Definition of the external-automation contract** — the vocabulary another
-  app on the device (Tasker, MacroDroid, a shell script over `adb`) will use to
-  ask Knotwork to run one of your pipelines. This change defines and documents
-  the contract; the receiver that acts on it and the setting that switches it on
-  land separately, so nothing is callable yet.
-  [`docs/external-automation.md`](docs/external-automation.md) describes the
-  request keys, the statuses and every refusal reason, and its reference tables
-  are generated from the source declarations with a build check that fails on
-  drift — a contract whose callers live in other apps cannot afford stale
-  documentation. The entry point will be **off by default** and **inert until
-  bound**, and the binding is an allowlist rather than a default: a request must
-  name the pipeline it wants, and one naming any other pipeline is refused
-  rather than quietly redirected.
-
-### Changed
-
-- **A settings reset no longer detaches the background step limit.**
-  Resetting to recommended defaults used to write that limit explicitly, which
-  is exactly what marks it as independently chosen — leaving you with a
-  deliberate-looking decision you never made, silently stopping it from
-  following the interactive limit. The reset now clears it, restoring the link.
-
 - **The build no longer fails because a dependency released a new version.**
   Four Android Lint checks — the three "a newer version of X is available"
   checks and the target-SDK expiry warning — answer from an external version
@@ -327,6 +308,34 @@ details.
   would re-absorb the now-informational findings and quietly empty the report
   they live in, with nothing failing to say so, so the aggregated check now fails
   if a baseline suppresses one of them.
+
+- **Dependencies updated in one pass.** Nine were moved together rather than one
+  at a time in the middle of unrelated work: the build tool, the HTTP client and
+  its test server, the encrypted-database driver, the Markdown renderer used for
+  chat messages, the crash-reporting libraries, and — the two that matter — the
+  on-device inference engine and the text-embedding library behind long-term
+  memory.
+
+  Those last two had been deliberately held back, because the ways they break
+  are invisible to a normal build: they fail only in a shipped, optimised
+  release, and only when the app actually loads a model or writes a memory. Both
+  are now checked by the two guards that exist for exactly those failures, and
+  both pass — but the remaining verification is a real device, which is why they
+  moved now, ahead of testing, rather than quietly on their own.
+
+  One dependency could not be updated: the app-functions libraries share a
+  version, and one of the three has not been published at the newer version, so
+  moving the others would not resolve.
+
+- **The reasoning behind a handful of decisions is now written down where
+  contributors can find it.** A short catalogue explains the cases where the
+  obvious change is the wrong one — why the manifest permits unencrypted local
+  traffic while the app still refuses it, why the bundled agent library is used
+  as a transport and a client rather than as the thing that runs the agent, why
+  a few node controls were removed instead of connected. It is deliberately
+  small: a topic already explained by the architecture, security, testing or API
+  documents keeps its home there, and nine candidates were dropped for exactly
+  that reason.
 
 ### Fixed
 
@@ -409,7 +418,6 @@ details.
   wrong. Turning it on would have meant annotating live code with two dozen
   assertions that are untrue. The five genuine findings it did surface were
   fixed by hand.
-
 
 ## [0.7.3] - 2026-08-16
 
@@ -5037,7 +5045,8 @@ that produced the initial 0.1.0 snapshot.
 - **Master key**: `EncryptedSharedPreferences` is rooted in the Android
   Keystore, so the master key is hardware-backed where available.
 
-[Unreleased]: https://github.com/alexeyw/knotwork/compare/v0.7.3...HEAD
+[Unreleased]: https://github.com/alexeyw/knotwork/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/alexeyw/knotwork/compare/v0.7.3...v0.8.0
 [0.7.3]: https://github.com/alexeyw/knotwork/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/alexeyw/knotwork/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/alexeyw/knotwork/compare/v0.7.0...v0.7.1
