@@ -265,7 +265,6 @@ class ChatHomeConsolePaneTest {
             initialConsoleLines = listOf(line),
             initialConsoleFilter = ConsoleFilter.allOn,
         )
-        every { handles.console.buildConsoleLineCopyPayload(line) } returns "12:00:00.000 [NODE] the line we copy"
         val clipboard = RecordingClipboardManager()
         setContentWithConsoleOpen(viewModel, clipboard = clipboard)
 
@@ -282,7 +281,13 @@ class ChatHomeConsolePaneTest {
         composeTestRule.onAllNodesWithText(copyLabel)[0].performClick()
         composeTestRule.waitForIdle()
 
-        assert(clipboard.lastText?.text == "12:00:00.000 [NODE] the line we copy") {
+        // Asserted against the formatter rather than a literal: this test owns the
+        // wiring — that the long-pressed row's own line reaches the clipboard — while
+        // the format itself is pinned by `ConsoleCopyPayloadsTest` on the JVM. A
+        // literal here would duplicate that format in a source set `check` does not
+        // even compile, which is how this test came to reference a method that no
+        // longer exists.
+        assert(clipboard.lastText?.text == ConsoleCopyPayloads.line(line)) {
             "Clipboard payload mismatch — got: ${clipboard.lastText?.text}"
         }
         verify(exactly = 1) { handles.console.signalConsoleLineCopied() }
