@@ -126,11 +126,11 @@ And it *runs* the instrumented suite on emulators, in a separate
 `Instrumented` workflow — three legs, all of them on every pull request
 into `main`, on every push to `main` and nightly: API 36 for both
 flavours (`full` and `foss`), plus `full` at API 34, the `minSdk` floor.
-If you have a device or emulator
-attached, `./gradlew connectedFullDebugAndroidTest` is the local
-equivalent. See [`docs/testing.md`](docs/testing.md) § *The instrumented
-gate* for the matrix, the exclusion list, and how a failure is classified
-as a test failure or as infrastructure trouble.
+If you have a device or emulator attached,
+`./gradlew connectedFullDebugAndroidTest` is the local equivalent. See
+[`docs/testing.md`](docs/testing.md) § *The instrumented gate* for the
+matrix, the exclusion list, and how a failure is classified as a test
+failure or as infrastructure trouble.
 
 ## Branch model
 

@@ -5,7 +5,7 @@ agent for Android: what data the app handles, how it is protected, what is sent
 off-device when the user opts in to crash reporting, and how to report a
 vulnerability you discover.
 
-The project is currently a **pre-release (0.7.3)** and is published primarily
+The project is currently a **pre-release (0.8.0)** and is published primarily
 for review and experimentation. There are no stability guarantees for storage
 formats, APIs, or persisted data across versions.
 
@@ -15,12 +15,12 @@ formats, APIs, or persisted data across versions.
 
 Only the latest release line is supported. As a solo pre-release project there
 are no maintained back-release branches or long-term-support tags; fixes land on
-the current `0.7.x` line and on the latest commit on `main`.
+the current `0.8.x` line and on the latest commit on `main`.
 
 | Version            | Supported          |
 |--------------------|--------------------|
-| `0.7.x` (latest)   | :white_check_mark: |
-| `< 0.7.0`          | :x:                |
+| `0.8.x` (latest)   | :white_check_mark: |
+| `< 0.8.0`          | :x:                |
 
 ---
 
@@ -237,10 +237,14 @@ new risk surface, and the design constrains it deliberately:
   - **Accepted requests are rate-limited** per hour, and **every request is
     journalled** — admitted or refused, with its typed reason — so a profile that
     silently does nothing can be diagnosed, and a looping one is visible.
-  - On **Android 16 and above** the receiver additionally carries
-    `intentMatchingFlags="enforceIntentFilter"`. On Android 14–15 that platform
-    hardening is simply absent; every other defence above lives in app code and
-    is unaffected by the platform version.
+  - The receiver declares `intentMatchingFlags="enforceIntentFilter"`, which
+    **Android 16 and above enforce** and Android 14–15 ignore. The gap is
+    narrower than it looks, and deliberately so: that flag is not what validates
+    the action. The receiver copies the action verbatim and the use case refuses
+    anything the contract does not define, journalling the refusal — so an
+    explicit intent carrying a foreign action is refused identically on 14 as on
+    16. Every other defence above lives in app code and is unaffected by the
+    platform version.
 - **No new execution path, no relaxed gate.** A fired trigger (or an entry
   surface, or an admitted external request) runs through the **exact same
   background path** as a scheduled task — the same persisted-run lifecycle, the
@@ -249,7 +253,8 @@ new risk surface, and the design constrains it deliberately:
   accounting. **An external call asks for a run; it does not approve what the run
   then wants to do.** Crucially, the
   **human-in-the-loop gate stays fully in force**: before any `SENSITIVE` or
-  `DESTRUCTIVE` tool executes inside a background trigger run, the run **parks**
+  `DESTRUCTIVE` tool executes inside any of these unattended runs, the run
+  **parks**
   on a persistent approval notification and waits — it does **not** auto-approve
   because no UI is attached. An unattended automation can therefore *propose* a
   sensitive action but never *execute* one unreviewed; an unanswered park is
