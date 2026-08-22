@@ -12,18 +12,22 @@ package app.knotwork.design.screens.automation
  */
 object ExternalAutomationPreview {
 
+    // Meanings track the shipped strings rather than being shortened for the
+    // fixture. The block carries no required/optional tag, so the meaning line is
+    // the only place a key's condition can appear — a fixture that drops the
+    // conditions would record a baseline of the design not doing its one job.
     private val CALL_KEYS = listOf(
-        ExternalCallKeyUi("pipeline_id", "Id of the pipeline to run.", required = false),
-        ExternalCallKeyUi("pipeline_name", "Name of the pipeline to run.", required = false),
-        ExternalCallKeyUi("prompt", "The message the pipeline runs on.", required = false),
-        ExternalCallKeyUi("prompt_b64", "The message, base64-encoded.", required = false),
+        ExternalCallKeyUi("pipeline_id", "Id of the pipeline to run. Use this or the name, never both."),
+        ExternalCallKeyUi("pipeline_name", "Name of the pipeline to run, matched exactly."),
+        ExternalCallKeyUi("prompt", "The message the pipeline runs on."),
+        ExternalCallKeyUi("prompt_b64", "The same message, base64-encoded, for shells that mangle quoting."),
         ExternalCallKeyUi(
             "request_id",
-            "Your own id, echoed back with the answer. Needed only if you ask for an answer.",
-            required = false,
+            "Your own id. It comes back with the answer, so you can match them up. " +
+                "Needed only if you ask for an answer.",
         ),
-        ExternalCallKeyUi("return_action", "Action to answer with.", required = false),
-        ExternalCallKeyUi("return_package", "Package to answer to.", required = false),
+        ExternalCallKeyUi("return_action", "Action to send the answer with. Defaults to the contract's own."),
+        ExternalCallKeyUi("return_package", "Package to deliver the answer to. Leave it out for fire-and-forget."),
     )
 
     private val TODAY = ExternalRequestDayGroupUi(

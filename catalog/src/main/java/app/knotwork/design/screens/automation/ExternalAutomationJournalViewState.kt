@@ -166,11 +166,17 @@ enum class ExternalJournalVisualState {
 /**
  * One key of the wire contract, shown in the "how another app calls this" block.
  *
+ * Carries no required/optional tag. No key of this contract is unconditionally
+ * required — a target and a prompt are each required in one of two mutually
+ * exclusive forms, and the correlation id only when the caller asked to be
+ * answered — so a per-key flag could only ever have printed "optional" beside
+ * keys whose absence is a refusal. Each condition is stated in [meaning], which
+ * is the only place able to express it.
+ *
  * @property key The extra key exactly as it travels on the wire.
- * @property meaning One-line human description.
- * @property required Whether omitting it is a refusal.
+ * @property meaning One-line human description, including when the key is needed.
  */
-data class ExternalCallKeyUi(val key: String, val meaning: String, val required: Boolean)
+data class ExternalCallKeyUi(val key: String, val meaning: String)
 
 /**
  * Immutable input to `ExternalAutomationJournalContent` — the contract's current
@@ -284,8 +290,6 @@ data class ExternalAutomationJournalStrings(
             "examples live in the project documentation.",
     val callBlockActionLabel: String = "Action",
     val callBlockKeysLabel: String = "Extras",
-    val callBlockRequired: String = "required",
-    val callBlockOptional: String = "optional",
     val callBlockCopy: String = "Copy",
     val callBlockExpandCd: String = "Show how to call this",
 )

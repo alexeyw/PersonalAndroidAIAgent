@@ -89,8 +89,6 @@
     <string name="external_automation_call_body">Send a broadcast with this action and these extras. Worked Tasker, MacroDroid and adb examples live in the project documentation.</string>
     <string name="external_automation_call_action_label">Action</string>
     <string name="external_automation_call_keys_label">Extras</string>
-    <string name="external_automation_call_required">required</string>
-    <string name="external_automation_call_optional">optional</string>
     <string name="external_automation_call_copy">Copy</string>
     <string name="external_automation_call_expand_cd">Show how another app calls this</string>
     <string name="external_automation_call_clip_label">Knotwork external automation</string>
