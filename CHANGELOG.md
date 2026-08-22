@@ -13,6 +13,21 @@ details.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The `adb` examples for the external-automation contract could not work as
+  written.** `adb shell` does not pass your arguments through — it joins them
+  into one string and hands that to the phone's own shell, which splits it
+  again, so the quotation marks you type are gone before they matter. Copying
+  the documented command delivered only the first word of your message, and
+  looked for a pipeline named after only the first word of its name, then
+  reported it missing. Both looked like the app turning down a request that was
+  in fact perfectly good.
+
+  The examples now quote the whole command, and the reason is written down
+  beside them rather than left to be rediscovered. A build check refuses any
+  future example written the old way.
+
 ## [0.8.0] - 2026-08-21
 
 ### Added
