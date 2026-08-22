@@ -17,7 +17,11 @@ object ExternalAutomationPreview {
         ExternalCallKeyUi("pipeline_name", "Name of the pipeline to run.", required = false),
         ExternalCallKeyUi("prompt", "The message the pipeline runs on.", required = false),
         ExternalCallKeyUi("prompt_b64", "The message, base64-encoded.", required = false),
-        ExternalCallKeyUi("request_id", "Your own id, echoed back with the answer.", required = true),
+        ExternalCallKeyUi(
+            "request_id",
+            "Your own id, echoed back with the answer. Needed only if you ask for an answer.",
+            required = false,
+        ),
         ExternalCallKeyUi("return_action", "Action to answer with.", required = false),
         ExternalCallKeyUi("return_package", "Package to answer to.", required = false),
     )

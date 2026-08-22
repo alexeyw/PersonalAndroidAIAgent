@@ -214,11 +214,12 @@ class ParseExternalAutomationRequestUseCaseTest {
     }
 
     @Test
-    fun `given no request id when parsing then it is refused`() {
+    fun `given a callback is asked for and no request id when parsing then it is refused`() {
         val result = useCase(
             invocation(
                 ExternalAutomationContract.EXTRA_PIPELINE_ID to "pipe-1",
                 ExternalAutomationContract.EXTRA_PROMPT to "go",
+                ExternalAutomationContract.EXTRA_RETURN_PACKAGE to "net.dinglisch.android.taskerm",
             ),
         )
 
@@ -226,7 +227,34 @@ class ParseExternalAutomationRequestUseCaseTest {
     }
 
     @Test
-    fun `given a blank request id when parsing then blank counts as absent`() {
+    fun `given a callback is asked for and a blank request id when parsing then blank counts as absent`() {
+        val result = useCase(
+            invocation(
+                ExternalAutomationContract.EXTRA_REQUEST_ID to "   ",
+                ExternalAutomationContract.EXTRA_PIPELINE_ID to "pipe-1",
+                ExternalAutomationContract.EXTRA_PROMPT to "go",
+                ExternalAutomationContract.EXTRA_RETURN_PACKAGE to "net.dinglisch.android.taskerm",
+            ),
+        )
+
+        assertEquals(ExternalAutomationRejectionReason.REQUEST_ID_MISSING, reasonOf(result))
+    }
+
+    @Test
+    fun `given no callback is asked for and no request id when parsing then the request is accepted`() {
+        val result = useCase(
+            invocation(
+                ExternalAutomationContract.EXTRA_PIPELINE_ID to "pipe-1",
+                ExternalAutomationContract.EXTRA_PROMPT to "go",
+            ),
+        )
+
+        // The minimum call an automation app with two extra fields can make.
+        assertEquals("", parsed(result).request.requestId)
+    }
+
+    @Test
+    fun `given no callback is asked for and a blank request id when parsing then the request is accepted`() {
         val result = useCase(
             invocation(
                 ExternalAutomationContract.EXTRA_REQUEST_ID to "   ",
@@ -235,7 +263,22 @@ class ParseExternalAutomationRequestUseCaseTest {
             ),
         )
 
-        assertEquals(ExternalAutomationRejectionReason.REQUEST_ID_MISSING, reasonOf(result))
+        assertEquals("", parsed(result).request.requestId)
+    }
+
+    @Test
+    fun `given a return action but no return package and no request id when parsing then it is accepted`() {
+        val result = useCase(
+            invocation(
+                ExternalAutomationContract.EXTRA_PIPELINE_ID to "pipe-1",
+                ExternalAutomationContract.EXTRA_PROMPT to "go",
+                ExternalAutomationContract.EXTRA_RETURN_ACTION to "com.example.RESULT",
+            ),
+        )
+
+        // The callback address is the return *package*: naming only an action
+        // delivers nothing, so it must not be what makes the id required.
+        assertEquals("", parsed(result).request.requestId)
     }
 
     @Test

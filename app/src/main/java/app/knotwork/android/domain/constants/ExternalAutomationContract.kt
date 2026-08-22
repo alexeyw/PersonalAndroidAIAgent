@@ -47,8 +47,10 @@ object ExternalAutomationContract {
     const val EXTRA_PROMPT_B64: String = "prompt_b64"
 
     /**
-     * Request key: caller-minted correlation id. Required. The callback carries
-     * it back under this same key, so a caller reads back the id it wrote.
+     * Request key: caller-minted correlation id. Required only of a caller that
+     * asked to be answered ([EXTRA_RETURN_PACKAGE]); a fire-and-forget call may
+     * omit it. The callback carries it back under this same key, so a caller
+     * reads back the id it wrote.
      *
      * There is deliberately no separate callback-side constant holding the same
      * value: two constants for one wire key are two things to rename out of

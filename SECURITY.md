@@ -180,10 +180,11 @@ much of that derived content exists at all:
 ### Automation triggers and entry surfaces (background execution)
 
 The agent can now start a pipeline run **without an interactive prompt**: an
-**automation trigger** fires a bound pipeline when a device condition is met, and
-the OS **entry surfaces** (a share target and a Quick Settings tile) start one
-from outside the app. Autonomous, possibly-unattended execution is a new risk
-surface, and the design constrains it deliberately:
+**automation trigger** fires a bound pipeline when a device condition is met, the
+OS **entry surfaces** (a share target and a Quick Settings tile) start one from
+outside the app, and the **external-automation contract** lets another app on the
+device ask for one by broadcast. Autonomous, possibly-unattended execution is a
+new risk surface, and the design constrains it deliberately:
 
 - **Low-sensitivity conditions by default.** A trigger fires on a **time
   schedule** (every N, or daily at a set time), the device **starting to
@@ -216,11 +217,37 @@ surface, and the design constrains it deliberately:
   the privacy-first default. An unbound trigger never fires, and a bound trigger
   is **auto-disabled** if its pipeline is later deleted, so a dangling automation
   can never wake and run an unintended graph.
+- **The external-automation contract is off by default and cannot be opened by
+  accident.** It is the only entry surface reachable by code the user did not
+  write, so it carries more than the shared defaults above:
+  - The switch raises a **consent dialog** naming what is being agreed to, and
+    only moves once the user confirms. Turning it back off is immediate.
+  - Even switched on it stays **inert until bound** to exactly one pipeline, and
+    that binding is an **allowlist, not a fallback**: a request naming any other
+    pipeline is refused, never redirected to the bound one.
+  - **The sender is not attested, and the app does not pretend otherwise.**
+    Android reports a broadcast's sender only when the *sender* opts in, which
+    automation apps and `adb` do not. So the callback address a request supplies
+    is an unverified claim — shown as such in the journal — and the trust
+    decision rests entirely on the user's switch and their binding. This is why
+    the callback payload is deliberately thin (the caller's own correlation id, a
+    status, and a reason where there is one) and **never carries what the run
+    produced**: an unauthenticated address must not be able to ask this app to
+    read anything back to it.
+  - **Accepted requests are rate-limited** per hour, and **every request is
+    journalled** — admitted or refused, with its typed reason — so a profile that
+    silently does nothing can be diagnosed, and a looping one is visible.
+  - On **Android 16 and above** the receiver additionally carries
+    `intentMatchingFlags="enforceIntentFilter"`. On Android 14–15 that platform
+    hardening is simply absent; every other defence above lives in app code and
+    is unaffected by the platform version.
 - **No new execution path, no relaxed gate.** A fired trigger (or an entry
-  surface) runs through the **exact same background path** as a scheduled task —
-  the same persisted-run lifecycle, the same foreground-service promotion, and
-  the same engine — attributed with a distinct run origin
-  (`TRIGGER` / `SHARE` / `QUICK_TILE`) only for accounting. Crucially, the
+  surface, or an admitted external request) runs through the **exact same
+  background path** as a scheduled task — the same persisted-run lifecycle, the
+  same foreground-service promotion, and the same engine — attributed with a
+  distinct run origin (`TRIGGER` / `SHARE` / `QUICK_TILE` / `EXTERNAL`) only for
+  accounting. **An external call asks for a run; it does not approve what the run
+  then wants to do.** Crucially, the
   **human-in-the-loop gate stays fully in force**: before any `SENSITIVE` or
   `DESTRUCTIVE` tool executes inside a background trigger run, the run **parks**
   on a persistent approval notification and waits — it does **not** auto-approve
@@ -231,6 +258,17 @@ surface, and the design constrains it deliberately:
   background-execution arc — trigger fires → background run → notification →
   result in the bound chat, including the park-and-approve path — is covered
   end-to-end by an integration test.
+- **An unattended run is bounded, and the bound survives being answered.** A run
+  started without anyone watching can loop, and with a cloud provider configured
+  a loop spends the user's own API key. Two ceilings — a number of steps and a
+  number of tokens — are counted on the **root run record** across the whole run
+  tree, so a nested sub-pipeline cannot start a fresh allowance and, crucially,
+  neither can a resume: answering a background approval hours later continues the
+  same budget instead of restarting it. Background runs get their own, tighter
+  token ceiling than interactive ones. Breaching a ceiling ends the run with a
+  typed reason the surfaces render in plain language; it is a **defensive stop**,
+  reported as such, not a silent truncation. A separate stuck-detector ends a run
+  that is repeating work without progressing.
 - **Each trigger owns one bound chat.** A trigger's runs land in a single chat
   session named after it (recurring fires accumulate there), so the results of an
   autonomous run are visible and auditable in the same encrypted store as the

@@ -58,7 +58,7 @@ Required toolchain:
 - **Android Studio** — current stable channel (or any IDE that supports
   AGP 9.2.x and Kotlin 2.3.x).
 - **Android SDK** — install platform **API 37** (`compileSdk` +
-  `targetSdk`). Minimum runtime is API 36 (Android 16).
+  `targetSdk`). Minimum runtime is API 34 (Android 14).
 - **NDK** is not required.
 
 Debug and release install side by side:
@@ -123,8 +123,10 @@ source set — as a separate Gradle invocation, since bundling it into
 ```
 
 And it *runs* the instrumented suite on emulators, in a separate
-`Instrumented` workflow — API 36 and API 37 on every pull request into
-`main`, plus an API 36 FOSS leg nightly. If you have a device or emulator
+`Instrumented` workflow — three legs, all of them on every pull request
+into `main`, on every push to `main` and nightly: API 36 for both
+flavours (`full` and `foss`), plus `full` at API 34, the `minSdk` floor.
+If you have a device or emulator
 attached, `./gradlew connectedFullDebugAndroidTest` is the local
 equivalent. See [`docs/testing.md`](docs/testing.md) § *The instrumented
 gate* for the matrix, the exclusion list, and how a failure is classified

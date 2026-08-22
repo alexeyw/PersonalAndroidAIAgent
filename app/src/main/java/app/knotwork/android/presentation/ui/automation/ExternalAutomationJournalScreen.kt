@@ -292,10 +292,12 @@ private fun callKeys(): List<ExternalCallKeyUi> = listOf(
     ExternalCallKeyUi(
         key = key,
         meaning = stringResource(meaningRes),
-        // The correlation id is the only unconditionally required key: a target
+        // No key is unconditionally required, so none is tagged as one. A target
         // and a prompt are each required in one of two mutually exclusive forms,
-        // which a per-key "required" flag cannot express honestly.
-        required = key == ExternalAutomationContract.EXTRA_REQUEST_ID,
+        // and the correlation id is required only of a caller that asked to be
+        // answered — none of which a per-key flag can express honestly. Each
+        // condition is stated in that key's own meaning line instead.
+        required = false,
     )
 }
 

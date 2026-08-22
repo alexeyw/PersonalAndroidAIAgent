@@ -297,6 +297,8 @@ threat model behind it, including what is explicitly *out* of scope, is in
 
 - Architecture overview — [docs/architecture.md](docs/architecture.md).
 - User guide — [docs/user-guide.md](docs/user-guide.md).
+- External-automation contract (calling the agent from Tasker, MacroDroid or
+  `adb`) — [docs/external-automation.md](docs/external-automation.md).
 - Extending the agent (new node types, tools, providers, prompt
   variables) — [docs/extending.md](docs/extending.md).
 - Code style — [docs/code-style.md](docs/code-style.md).
