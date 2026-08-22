@@ -100,6 +100,7 @@ class BuildTriggerJournalExportUseCase @Inject constructor() {
         TriggerRunOutcome.CancelledBySystem -> OUTCOME_CANCELLED_BY_SYSTEM
         TriggerRunOutcome.Cancelled -> OUTCOME_CANCELLED
         TriggerRunOutcome.HitlTimeout -> OUTCOME_HITL_TIMEOUT
+        TriggerRunOutcome.StoppedByCeiling -> OUTCOME_STOPPED_BY_CEILING
     }
 
     /** The human-readable error of a [TriggerRunOutcome.Failure], else `null`. */
@@ -117,8 +118,13 @@ class BuildTriggerJournalExportUseCase @Inject constructor() {
          * - `1` — the original evaluation shape.
          * - `2` — adds the `hitl*` fields (which gates the run raised, how the
          *   latest one resolved, whether it had to park).
+         * - `3` — adds the `STOPPED_BY_CEILING` run outcome. A consumer reading
+         *   a v2 dump can assume no run was ever stopped by an autonomous-run
+         *   ceiling, because the mechanism did not exist; reading a v3 dump it
+         *   cannot, and the difference matters when the dump is the evidence
+         *   for a background-reliability criterion.
          */
-        const val SCHEMA_VERSION = 2
+        const val SCHEMA_VERSION = 3
 
         const val VERDICT_FIRED = "FIRED"
         const val VERDICT_RE_ARMED = "RE_ARMED"
@@ -129,6 +135,7 @@ class BuildTriggerJournalExportUseCase @Inject constructor() {
         const val OUTCOME_CANCELLED_BY_SYSTEM = "CANCELLED_BY_SYSTEM"
         const val OUTCOME_CANCELLED = "CANCELLED"
         const val OUTCOME_HITL_TIMEOUT = "HITL_TIMEOUT"
+        const val OUTCOME_STOPPED_BY_CEILING = "STOPPED_BY_CEILING"
 
         /** Pretty-printing config, encoding defaults so `null`s render explicitly. */
         val PRETTY_JSON = Json {

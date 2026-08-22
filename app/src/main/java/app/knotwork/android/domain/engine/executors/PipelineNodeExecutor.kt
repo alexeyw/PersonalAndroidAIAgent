@@ -11,6 +11,7 @@ import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.ResumeContext
 import app.knotwork.android.domain.models.RunOrigin
+import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
@@ -59,7 +60,7 @@ import javax.inject.Provider
  * states are intentionally not forwarded — only the sub-pipeline's final
  * response is the parent node's output.
  *
- * **Shared step budget.** [ExecutionScope.stepBudget] is threaded into the
+ * **Shared spend ledger.** [ExecutionScope.budget] is threaded into the
  * child engine invocation, so the sub-pipeline decrements the same tree-wide
  * `MAX_STEPS` ceiling instead of getting a private allowance; exhaustion in
  * depth fails the child, which becomes this node's error and terminates the
@@ -170,6 +171,7 @@ class PipelineNodeExecutor @Inject constructor(
     ) {
         var finalResponse: String? = null
         var errorMessage: String? = null
+        var terminationReason: RunTerminationReason? = null
         try {
             engineProvider.get().invoke(
                 sessionId = sessionId,
@@ -178,7 +180,16 @@ class PipelineNodeExecutor @Inject constructor(
                 runId = null,
                 resume = null,
                 depth = scope.depth + 1,
-                stepBudget = scope.stepBudget,
+                budget = scope.budget,
+                // Shared for the same reason the budget is: a parent that calls
+                // this child repeatedly with the same input is one loop, and a
+                // child with a private window would see several fresh runs
+                // where the tree has one going in circles.
+                stuckDetector = scope.stuckDetector,
+                // And the notes with it: the detector's grace period is spent
+                // by the child's steps, so a nudge the parent raised has to be
+                // able to reach the child that is spending it.
+                contextNotes = scope.contextNotes,
                 imageDelivery = scope.imageDelivery,
                 runHadImage = scope.imagePresent,
                 generatingModel = scope.generatingModel,
@@ -189,7 +200,14 @@ class PipelineNodeExecutor @Inject constructor(
             ).collect { state ->
                 when (state) {
                     is AgentOrchestratorState.Completed -> finalResponse = state.finalResponse
-                    is AgentOrchestratorState.Error -> errorMessage = state.message
+                    is AgentOrchestratorState.Error -> {
+                        errorMessage = state.message
+                        // The child's typed cause travels with it. Dropping it
+                        // here would settle a nested ceiling breach as an
+                        // ordinary failure and, for a trigger run, redden the
+                        // health badge for a guard that worked.
+                        terminationReason = state.reason
+                    }
                     else -> forwardIfObservable(state)
                 }
             }
@@ -198,7 +216,7 @@ class PipelineNodeExecutor @Inject constructor(
         } catch (e: Exception) {
             errorMessage = e.message ?: "Sub-pipeline execution failed"
         }
-        emitTerminal(errorMessage, finalResponse, targetGraph)
+        emitTerminal(errorMessage, terminationReason, finalResponse, targetGraph)
     }
 
     /**
@@ -216,6 +234,7 @@ class PipelineNodeExecutor @Inject constructor(
     ) {
         var finalResponse: String? = null
         var errorMessage: String? = null
+        var terminationReason: RunTerminationReason? = null
         var childParked = false
         try {
             engineProvider.get().invoke(
@@ -225,7 +244,16 @@ class PipelineNodeExecutor @Inject constructor(
                 runId = childRunId,
                 resume = childResume,
                 depth = scope.depth + 1,
-                stepBudget = scope.stepBudget,
+                budget = scope.budget,
+                // Shared for the same reason the budget is: a parent that calls
+                // this child repeatedly with the same input is one loop, and a
+                // child with a private window would see several fresh runs
+                // where the tree has one going in circles.
+                stuckDetector = scope.stuckDetector,
+                // And the notes with it: the detector's grace period is spent
+                // by the child's steps, so a nudge the parent raised has to be
+                // able to reach the child that is spending it.
+                contextNotes = scope.contextNotes,
                 imageDelivery = scope.imageDelivery,
                 runHadImage = scope.imagePresent,
                 generatingModel = scope.generatingModel,
@@ -236,7 +264,14 @@ class PipelineNodeExecutor @Inject constructor(
             ).collect { state ->
                 when (state) {
                     is AgentOrchestratorState.Completed -> finalResponse = state.finalResponse
-                    is AgentOrchestratorState.Error -> errorMessage = state.message
+                    is AgentOrchestratorState.Error -> {
+                        errorMessage = state.message
+                        // The child's typed cause travels with it. Dropping it
+                        // here would settle a nested ceiling breach as an
+                        // ordinary failure and, for a trigger run, redden the
+                        // health badge for a guard that worked.
+                        terminationReason = state.reason
+                    }
                     is AgentOrchestratorState.SuspendedInBackground -> {
                         // The child parked durably. Forward the suspension so
                         // the parent engine parks the whole stack, and stop
@@ -263,7 +298,13 @@ class PipelineNodeExecutor @Inject constructor(
         // The child engine never owns terminal transitions (that split mirrors
         // the task queue for top-level runs), so settle the child record here.
         when {
-            errorMessage != null -> pipelineRunRepository.finishRun(childRunId, PipelineRunStatus.FAILED, errorMessage)
+            errorMessage != null ->
+                pipelineRunRepository.finishRun(
+                    childRunId,
+                    PipelineRunStatus.FAILED,
+                    errorMessage,
+                    terminationReason,
+                )
             finalResponse != null -> pipelineRunRepository.finishRun(childRunId, PipelineRunStatus.COMPLETED)
             else -> pipelineRunRepository.finishRun(
                 childRunId,
@@ -271,7 +312,7 @@ class PipelineNodeExecutor @Inject constructor(
                 "Sub-pipeline '${targetGraph.name}' produced no output",
             )
         }
-        emitTerminal(errorMessage, finalResponse, targetGraph)
+        emitTerminal(errorMessage, terminationReason, finalResponse, targetGraph)
     }
 
     /**
@@ -333,8 +374,14 @@ class PipelineNodeExecutor @Inject constructor(
                 childRunId,
                 PipelineRunStatus.FAILED,
                 "Sub-pipeline '${targetGraph.name}' was edited since it was interrupted; restart the task instead.",
+                RunTerminationReason.GraphChanged,
             )
-            emit(failure("Sub-pipeline '${targetGraph.name}' was edited since it was interrupted; restart the task."))
+            emit(
+                failure(
+                    "Sub-pipeline '${targetGraph.name}' was edited since it was interrupted; restart the task.",
+                    RunTerminationReason.GraphChanged,
+                ),
+            )
             return ChildPrep.Aborted
         }
 
@@ -367,7 +414,11 @@ class PipelineNodeExecutor @Inject constructor(
      * Forwards a child orchestrator state to the parent engine when it is an
      * observability or HITL state — the console snapshot and per-node I/O
      * snapshot (both depth-stamped, so the console nests them) and the
-     * approval/clarification gates (so a sub-pipeline's HITL card surfaces).
+     * approval/clarification gates (so a sub-pipeline's HITL card surfaces) —
+     * plus [AgentOrchestratorState.RunNotice], because the ceilings are shared
+     * across the whole run tree: a soft crossing raised inside a sub-pipeline is
+     * about the very allowance the user is watching at depth zero, and dropping
+     * it here would make the warning arrive only for shallow runs.
      * Streaming/answer/stage states are dropped: only the sub-pipeline's final
      * response is the parent node's output. [AgentOrchestratorState.PipelineTrace]
      * is deliberately *not* forwarded live — it carries no run id, so the UI
@@ -381,6 +432,7 @@ class PipelineNodeExecutor @Inject constructor(
             is AgentOrchestratorState.NodeIO,
             is AgentOrchestratorState.WaitingForApproval,
             is AgentOrchestratorState.AwaitingClarification,
+            is AgentOrchestratorState.RunNotice,
             -> emit(NodeOutput.State(state))
             else -> Unit
         }
@@ -393,11 +445,12 @@ class PipelineNodeExecutor @Inject constructor(
      */
     private suspend fun FlowCollector<NodeOutput>.emitTerminal(
         errorMessage: String?,
+        terminationReason: RunTerminationReason?,
         finalResponse: String?,
         targetGraph: PipelineGraph,
     ) {
         when {
-            errorMessage != null -> emit(failure(errorMessage))
+            errorMessage != null -> emit(failure(errorMessage, terminationReason))
             finalResponse != null -> emit(NodeOutput.Result(NodeExecutionResult(outputText = finalResponse)))
             else -> emit(failure("Sub-pipeline '${targetGraph.name}' produced no output"))
         }
@@ -419,8 +472,14 @@ class PipelineNodeExecutor @Inject constructor(
     /**
      * Wraps an error [message] as a terminal [NodeOutput.Result] so the parent
      * engine routes it through its standard node-error channel.
+     *
+     * @param message The human-readable failure text.
+     * @param terminationReason The child's typed cause, when the app itself
+     *   ended the sub-pipeline. Carried up so the root run settles with the
+     *   same vocabulary the child used.
      */
-    private fun failure(message: String): NodeOutput.Result = NodeOutput.Result(NodeExecutionResult(error = message))
+    private fun failure(message: String, terminationReason: RunTerminationReason? = null): NodeOutput.Result =
+        NodeOutput.Result(NodeExecutionResult(error = message, terminationReason = terminationReason))
 
     private companion object {
         /**

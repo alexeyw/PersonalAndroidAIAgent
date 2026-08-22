@@ -3,7 +3,6 @@ package app.knotwork.android.data.services
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Looper
-import androidx.work.WorkManager
 import app.knotwork.android.R
 import app.knotwork.android.domain.constants.NotificationChannels
 import app.knotwork.android.domain.engine.LlmInferenceEngine
@@ -61,7 +60,6 @@ class AgentForegroundServiceTest {
     private lateinit var orchestrator: AgentOrchestratorUseCase
     private lateinit var engine: LlmInferenceEngine
     private lateinit var powerStateRepository: PowerStateRepository
-    private lateinit var workManager: WorkManager
     private lateinit var memoryReembedScheduler: MemoryReembedScheduler
     private lateinit var globalState: MutableStateFlow<AgentOrchestratorState>
 
@@ -75,7 +73,6 @@ class AgentForegroundServiceTest {
         orchestrator = mockk(relaxed = true)
         engine = mockk(relaxed = true)
         powerStateRepository = mockk(relaxed = true)
-        workManager = mockk(relaxed = true)
         memoryReembedScheduler = mockk(relaxed = true)
 
         globalState = MutableStateFlow(AgentOrchestratorState.Loading)
@@ -107,7 +104,6 @@ class AgentForegroundServiceTest {
         service.agentOrchestratorUseCase = orchestrator
         service.llmEngine = engine
         service.powerStateRepository = powerStateRepository
-        service.workManager = workManager
         service.memoryReembedScheduler = memoryReembedScheduler
         return controller
     }

@@ -92,9 +92,44 @@ sealed interface AgentOrchestratorState {
     /**
      * An error occurred during the orchestration.
      *
-     * @property message The error message.
+     * @property message What went wrong, in text. Its audience depends on
+     *   [reason]: with `reason == null` this is an ordinary failure and the
+     *   string is the user-facing description, shown verbatim; with a [reason]
+     *   present the app decided to end the run itself, and this is the terse
+     *   **diagnostic** form (`RunTerminationReason.diagnostic()`) that lands in
+     *   the console and in `pipeline_runs.errorMessage`. The sentence a person
+     *   reads for a typed stop is resolved from [reason] in the presentation
+     *   layer instead, so one event is worded once rather than once per
+     *   surface.
+     * @property reason The typed cause when the app itself decided to end the
+     *   run — a ceiling, the stuck-detector, the silence watchdog, an expired approval window.
+     *   `null` for an ordinary node or engine failure, which has no entry in
+     *   that vocabulary. Defaulted so the two dozen sites that emit a plain
+     *   failure stay unchanged, and carried so the ones that settle a run can
+     *   tell a protective stop from a defect without matching [message] by
+     *   string.
      */
-    data class Error(val message: String) : AgentOrchestratorState
+    data class Error(val message: String, val reason: RunTerminationReason? = null) : AgentOrchestratorState
+
+    /**
+     * A non-terminal advisory about the run in flight: it is still going, but
+     * something about it is worth saying while there is time to act.
+     *
+     * Emitted at most once per cause per run tree. **Live-only** — never
+     * persisted, never replayed, and it carries its own numbers precisely
+     * because it can only exist while the run is in memory (see
+     * [RunNoticeCause]).
+     *
+     * Every existing `when` over this sealed type closes with an `else`, so
+     * this variant is inert everywhere that has no opinion about it. The one
+     * place it must *not* be inert is the sub-pipeline boundary: the ceilings
+     * are shared across the whole run tree, so a notice raised at depth is
+     * about the same allowance the user is watching at depth zero, and
+     * `PipelineNodeExecutor` forwards it upward for that reason.
+     *
+     * @property cause What the notice is about.
+     */
+    data class RunNotice(val cause: RunNoticeCause) : AgentOrchestratorState
 
     /**
      * Holds the progress metadata of a single pipeline execution step.

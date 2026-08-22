@@ -34,6 +34,11 @@ By participating in this project you agree to abide by our
 - [`docs/extending.md`](docs/extending.md) has step-by-step recipes for
   the most self-contained contributions — new node types, tools, cloud
   providers, and prompt variables.
+- [`docs/decisions/`](docs/decisions/README.md) records the handful of
+  decisions where the obvious change is the wrong one — why the manifest
+  permits cleartext, why Koog is not the agent runtime, why some node
+  controls were removed rather than wired up. Worth a glance before
+  proposing a change that looks like an oversight; it may be a decision.
 - Leave a comment on an issue before starting non-trivial work, so effort
   is not duplicated and the approach can be sanity-checked early.
 
@@ -42,8 +47,10 @@ By participating in this project you agree to abide by our
 Required toolchain:
 
 - **JDK 21** — required to run the unit-test suite. Roborazzi's
-  Robolectric backend in `:catalog` only renders against the project's
-  `minSdk 36` on JDK 21. Production code still compiles to
+  Robolectric backend in `:catalog` renders the snapshot suites against
+  SDK 36 — the newest release the project supports, pinned as a fixed
+  reference so committed baselines survive a `minSdk` change — and
+  Robolectric 4.16 needs JDK 21 for that. Production code still compiles to
   `JavaVersion.VERSION_17` / `JvmTarget.JVM_17` — building the APK works
   on JDK 17 — but `./gradlew check` (the merge gate) needs JDK 21. The
   Android Studio bundled JBR ships JDK 21 already, so installing
@@ -51,7 +58,7 @@ Required toolchain:
 - **Android Studio** — current stable channel (or any IDE that supports
   AGP 9.2.x and Kotlin 2.3.x).
 - **Android SDK** — install platform **API 37** (`compileSdk` +
-  `targetSdk`). Minimum runtime is API 36 (Android 16).
+  `targetSdk`). Minimum runtime is API 34 (Android 14).
 - **NDK** is not required.
 
 Debug and release install side by side:
@@ -98,14 +105,32 @@ request:
 - **detekt** — Kotlin static analysis (configured in
   [`config/detekt/detekt.yml`](config/detekt/detekt.yml)).
 - **ktlint** — formatting.
-- **Android lint** (`lintDebug`).
-- **Unit tests** (`testDebugUnitTest`) — including the **Konsist**
-  architecture guard (Clean-Architecture layer boundaries; see
+- **Android lint** (`lintFullDebug` + `lintFossDebug`, plus `:catalog:lint`).
+- **Unit tests** (`testFullDebugUnitTest` + `testFossDebugUnitTest`) — including
+  the **Konsist** architecture guard (Clean-Architecture layer boundaries; see
   [`docs/static-analysis.md`](docs/static-analysis.md)).
-- **Kover** coverage verification (`koverVerifyDebug`).
+- **Kover** coverage verification (`koverVerifyFullDebug`).
 
 Run `./gradlew check` **locally before pushing**. Pushing without running
 it just trades local feedback for slower CI feedback.
+
+CI adds two things `check` does not do. It compiles the instrumented
+source set — as a separate Gradle invocation, since bundling it into
+`check` makes unrelated Robolectric tests fail:
+
+```bash
+./gradlew :app:compileFullDebugAndroidTestKotlin :app:compileFossDebugAndroidTestKotlin
+```
+
+And it *runs* the instrumented suite on emulators, in a separate
+`Instrumented` workflow — three legs, all of them on every pull request
+into `main`, on every push to `main` and nightly: API 36 for both
+flavours (`full` and `foss`), plus `full` at API 34, the `minSdk` floor.
+If you have a device or emulator attached,
+`./gradlew connectedFullDebugAndroidTest` is the local equivalent. See
+[`docs/testing.md`](docs/testing.md) § *The instrumented gate* for the
+matrix, the exclusion list, and how a failure is classified as a test
+failure or as infrastructure trouble.
 
 ## Branch model
 
@@ -156,6 +181,10 @@ Before requesting review, please confirm:
 
 - [ ] Tests added or updated for the change.
 - [ ] `./gradlew check` passes locally.
+- [ ] If the change touches `app/src/androidTest/`, the instrumented
+      sources compile
+      (`./gradlew :app:compileFullDebugAndroidTestKotlin`) and the suite
+      was run on a device or emulator.
 - [ ] Public documentation is updated where the change affects user-
       facing behaviour, the public API surface, or the build / dev setup.
 - [ ] `FILE_MAP.md` (the file map under
@@ -183,10 +212,21 @@ This applies to new content as well as to edits of existing content. If
 you encounter non-English text in any of the locations above, treat it as
 a bug.
 
+## Adding a decision record
+
+Write one when a decision would otherwise be re-litigated in review — not once
+per change and not once per release. A record earns its place only if it still
+binds, if it constrains what a contributor may do rather than merely describing
+what the project does, and if no existing document already owns the topic. The
+[index](docs/decisions/README.md) states the criteria in full; most candidates
+fail the third one, which is the point.
+
 ## Further reading
 
 - [`docs/roadmap.md`](docs/roadmap.md) — where the project is headed and
   which directions welcome help.
+- [`docs/decisions/`](docs/decisions/README.md) — decisions that constrain
+  what a change may do, and the reasoning behind them.
 - [`docs/code-style.md`](docs/code-style.md) — Kotlin style and naming
   conventions.
 - [`docs/testing.md`](docs/testing.md) — test strategy, coverage policy,

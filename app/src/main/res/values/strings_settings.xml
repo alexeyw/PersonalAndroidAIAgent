@@ -31,7 +31,6 @@
     <string name="settings_row_approval_window_title">Approval window</string>
     <string name="settings_row_voice_length_title">Voice input length</string>
     <string name="settings_tool_usage_helper">Extra guidance, prepended to tool-enabled prompts, on when and how to call tools.</string>
-    <string name="settings_pipeline_cap_steps_title">Cap autonomous steps</string>
     <string name="settings_pipeline_nesting_depth_title">Max nesting depth</string>
     <string name="settings_pipeline_structured_repairs_title">Structured-output repairs</string>
     <string name="settings_memory_summary_limit_title">Memory summary size</string>
@@ -184,7 +183,14 @@
     <string name="settings_pipeline_not_set">Not set</string>
     <string name="settings_pipeline_picker_share_title">Pipeline for sharing</string>
     <string name="settings_pipeline_picker_tile_title">Quick Settings pipeline</string>
+    <string name="settings_pipeline_picker_external_title">Pipeline other apps may run</string>
     <string name="settings_pipeline_picker_none">None</string>
+
+    <!-- External-automation row summary (Background category) -->
+    <string name="settings_external_pipeline_unbound">Not set — every request is refused</string>
+    <string name="settings_external_journal_none">No requests yet</string>
+    <string name="settings_external_journal_summary">%1$s · %2$s</string>
+    <string name="settings_external_journal_moment_dated">%1$s, %2$s</string>
 
     <!-- On-device usage statistics (Privacy → Usage statistics) -->
     <string name="settings_usage_runs_total">Total: %1$d</string>

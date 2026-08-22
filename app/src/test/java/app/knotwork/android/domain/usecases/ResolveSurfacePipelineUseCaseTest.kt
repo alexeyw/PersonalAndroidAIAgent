@@ -34,6 +34,20 @@ class ResolveSurfacePipelineUseCaseTest {
     }
 
     @Test
+    fun `given external binding when resolving EXTERNAL_AUTOMATION then returns it`() = runTest {
+        every { settingsRepository.externalAutomationPipelineId } returns flowOf("external-pipe")
+
+        assertEquals("external-pipe", useCase(EntrySurface.EXTERNAL_AUTOMATION))
+    }
+
+    @Test
+    fun `given no external binding when resolving EXTERNAL_AUTOMATION then returns null`() = runTest {
+        every { settingsRepository.externalAutomationPipelineId } returns flowOf(null)
+
+        assertNull(useCase(EntrySurface.EXTERNAL_AUTOMATION))
+    }
+
+    @Test
     fun `given no share binding when resolving SHARE then returns null`() = runTest {
         every { settingsRepository.shareTargetPipelineId } returns flowOf(null)
 

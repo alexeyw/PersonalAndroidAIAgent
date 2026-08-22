@@ -148,9 +148,9 @@ object SettingsSearchCatalog {
             R.string.settings_search_desc_memory_actions,
         ),
         // ─── Pipelines & structured output ───────────────────────────────────
-        "PIPELINE_MAX_STEPS" to strings(
-            R.string.settings_search_name_pipeline_max_steps,
-            R.string.settings_search_desc_pipeline_max_steps,
+        "LINK_RUN_LIMITS" to strings(
+            R.string.run_limits_entry_label,
+            R.string.run_limits_entry_search,
         ),
         "PIPELINE_MAX_NESTING_DEPTH" to strings(
             R.string.settings_search_name_pipeline_max_nesting_depth,
@@ -233,6 +233,18 @@ object SettingsSearchCatalog {
         "BACKGROUND_APPROVAL_WINDOW_HOURS" to strings(
             R.string.settings_search_name_background_approval_window_hours,
             R.string.settings_search_desc_background_approval_window_hours,
+        ),
+        "EXTERNAL_AUTOMATION_ENABLED" to strings(
+            R.string.settings_search_name_external_automation_enabled,
+            R.string.settings_search_desc_external_automation_enabled,
+        ),
+        "EXTERNAL_AUTOMATION_PIPELINE_ID" to strings(
+            R.string.settings_search_name_external_automation_pipeline_id,
+            R.string.settings_search_desc_external_automation_pipeline_id,
+        ),
+        "LINK_EXTERNAL_AUTOMATION_JOURNAL" to strings(
+            R.string.settings_search_name_link_external_automation_journal,
+            R.string.settings_search_desc_link_external_automation_journal,
         ),
         // ─── Privacy ─────────────────────────────────────────────────────────
         CRASH_REPORTING_ANCHOR to strings(

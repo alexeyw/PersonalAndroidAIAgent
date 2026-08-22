@@ -35,6 +35,7 @@ import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.models.ResumeContext
+import app.knotwork.android.domain.models.RunSpend
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.ToolApprovalPolicy
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
@@ -58,6 +59,7 @@ import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.usecases.EvaluateIfConditionUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
+import app.knotwork.android.domain.usecases.ResolveRunCeilingsUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -124,6 +126,9 @@ class NestedResumeIntegrationTest {
             flowOf("""{"question":"What color?","options":["Blue","Red"]}""")
         every { settingsRepository.pipelineMaxNestingDepth } returns flowOf(3)
         every { settingsRepository.pipelineMaxSteps } returns flowOf(50)
+        every { settingsRepository.pipelineMaxStepsBackground } returns flowOf(15)
+        every { settingsRepository.runMaxTokens } returns flowOf(1_000_000)
+        every { settingsRepository.runMaxTokensBackground } returns flowOf(100_000)
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
         every { settingsRepository.toolUsageInstruction } returns flowOf("")
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
@@ -137,6 +142,7 @@ class NestedResumeIntegrationTest {
 
         // In-memory run store (status transitions matter for resume).
         pipelineRunRepository = mockk(relaxed = true)
+        coEvery { pipelineRunRepository.getSpend(any()) } returns RunSpend()
         coEvery { pipelineRunRepository.getRun(any()) } answers { runs[firstArg()] }
         coEvery { pipelineRunRepository.createRun(any()) } answers {
             val r = firstArg<PipelineRun>()
@@ -320,8 +326,6 @@ class NestedResumeIntegrationTest {
             toolNodeExecutor,
             LiteRtNodeExecutor(
                 llmEngine,
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 metricsRepository,
                 mockk(relaxed = true),
@@ -329,8 +333,6 @@ class NestedResumeIntegrationTest {
                 loadModelUseCase,
             ),
             CloudLlmNodeExecutor(
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 mockk<ApiKeyRepository>(relaxed = true),
                 metricsRepository,
@@ -387,6 +389,7 @@ class NestedResumeIntegrationTest {
             mockk(relaxed = true),
             pipelineRunRepository,
             runTraceRepository,
+            ResolveRunCeilingsUseCase(settingsRepository),
         )
     }
 }

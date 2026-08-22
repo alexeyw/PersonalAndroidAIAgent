@@ -100,7 +100,16 @@ private val MEMORY_ENTRIES = listOf(
 )
 
 private val PIPELINES_ENTRIES = listOf(
-    setting("PIPELINE_MAX_STEPS", BASIC, SLIDER, syn = listOf("max", "safety", "cap", "steps")),
+    // Absorbed, not moved beside: the step cap used to be a lone slider here,
+    // the only one of four ceilings a user could see. It now lives on the
+    // run-limits screen with the other three and the spend statement, reached
+    // through this row — which keeps the category, so the search deep-link and
+    // its row highlight still land where they always did.
+    link(
+        BASIC,
+        "Run limits",
+        syn = listOf("steps", "tokens", "limit", "cap", "budget", "cost", "spend", "runaway"),
+    ),
     setting("PIPELINE_MAX_NESTING_DEPTH", ADVANCED, SLIDER, syn = listOf("nest", "max", "depth")),
     setting("STRUCTURED_OUTPUT_MAX_REPAIRS", ADVANCED, SLIDER, syn = listOf("json", "repair", "max")),
     link(ADVANCED, "Provider detail", syn = listOf("retry", "cloud", "delay")),
@@ -129,6 +138,23 @@ private val BACKGROUND_ENTRIES = listOf(
         BASIC,
         DROPDOWN,
         syn = listOf("tile", "quick settings", "shade", "pipeline", "surface"),
+    ),
+    setting(
+        "EXTERNAL_AUTOMATION_ENABLED",
+        BASIC,
+        TOGGLE,
+        syn = listOf("external", "automation", "tasker", "macrodroid", "adb", "broadcast", "intent"),
+    ),
+    setting(
+        "EXTERNAL_AUTOMATION_PIPELINE_ID",
+        BASIC,
+        DROPDOWN,
+        syn = listOf("external", "automation", "tasker", "pipeline", "surface", "allowlist"),
+    ),
+    link(
+        BASIC,
+        "External automation journal",
+        syn = listOf("external", "automation", "tasker", "requests", "journal", "log", "history"),
     ),
     setting("RESUME_MAX_AGE_HOURS", ADVANCED, SLIDER, syn = listOf("resume", "max")),
     setting("BACKGROUND_APPROVAL_WINDOW_HOURS", ADVANCED, SLIDER, syn = listOf("approval", "window")),

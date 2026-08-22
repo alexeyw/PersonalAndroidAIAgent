@@ -17,7 +17,6 @@ import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.coroutines.coroutineContext
 
 /**
  * Application-scoped listener that kicks off background chat-history compression

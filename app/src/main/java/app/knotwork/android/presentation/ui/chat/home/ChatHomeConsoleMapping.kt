@@ -73,6 +73,8 @@ internal fun ConsoleEventType.toConsoleSource(): ConsoleSource = when (this) {
     ConsoleEventType.Error -> ConsoleSource.RUNTIME
     ConsoleEventType.StructuredOutputRepair -> ConsoleSource.RUNTIME
     ConsoleEventType.CloudRetry -> ConsoleSource.RUNTIME
+    ConsoleEventType.RunCeiling -> ConsoleSource.RUNTIME
+    ConsoleEventType.StuckDetector -> ConsoleSource.RUNTIME
 }
 
 /**
@@ -86,6 +88,8 @@ internal fun ConsoleEventType.toConsoleLevel(): ConsoleLevel = when (this) {
     ConsoleEventType.Error -> ConsoleLevel.Error
     ConsoleEventType.StructuredOutputRepair -> ConsoleLevel.Warn
     ConsoleEventType.CloudRetry -> ConsoleLevel.Warn
+    ConsoleEventType.RunCeiling -> ConsoleLevel.Warn
+    ConsoleEventType.StuckDetector -> ConsoleLevel.Warn
     ConsoleEventType.NodeExecution -> ConsoleLevel.Trace
     ConsoleEventType.MemoryAccess,
     ConsoleEventType.HistoryCompression,

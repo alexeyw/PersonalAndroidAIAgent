@@ -105,9 +105,18 @@ class TriggerHealthEvaluator @Inject constructor() {
         TriggerCondition.Charging, is TriggerCondition.NetworkConnected -> MIN_BACKGROUND_CADENCE_MINUTES
     }
 
-    /** Whether a settled outcome represents a run that did not complete cleanly. */
+    /**
+     * Whether a settled outcome represents a run that did not complete cleanly.
+     *
+     * [TriggerRunOutcome.StoppedByCeiling] is deliberately **not** an error. A
+     * run stopped by the ceiling the user configured is the safety mechanism
+     * working, and colouring the trigger's health badge for it would report a
+     * working guard as a broken automation — which is precisely the misreading
+     * the typed termination reason exists to prevent. The stop is still visible
+     * in the journal row; it just does not count against the trigger.
+     */
     private fun TriggerRunOutcome?.isError(): Boolean = when (this) {
-        null, TriggerRunOutcome.Success -> false
+        null, TriggerRunOutcome.Success, TriggerRunOutcome.StoppedByCeiling -> false
         is TriggerRunOutcome.Failure,
         TriggerRunOutcome.CancelledBySystem,
         TriggerRunOutcome.HitlTimeout,

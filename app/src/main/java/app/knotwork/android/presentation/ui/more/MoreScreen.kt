@@ -1,8 +1,5 @@
 package app.knotwork.android.presentation.ui.more
 
-import androidx.compose.material.icons.outlined.Bolt
-import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue

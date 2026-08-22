@@ -3,17 +3,17 @@ package app.knotwork.android.domain.engine.executors
 import app.knotwork.android.domain.constants.DefaultPrompts
 import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.engine.StreamInferenceMeter
+import app.knotwork.android.domain.engine.structured.ReasoningBlockSplitter
 import app.knotwork.android.domain.models.AgentOrchestratorState
+import app.knotwork.android.domain.models.ConsoleEventType
 import app.knotwork.android.domain.models.ExecutionScope
 import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.Result
-import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.MetricsRepository
 import app.knotwork.android.domain.repositories.ModelPerformanceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
-import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import kotlinx.coroutines.CancellationException
@@ -37,8 +37,6 @@ import javax.inject.Inject
  */
 class LiteRtNodeExecutor @Inject constructor(
     private val llmEngine: LlmInferenceEngine,
-    private val toolRepository: ToolRepository,
-    private val chatRepository: ChatRepository,
     private val settingsRepository: SettingsRepository,
     private val metricsRepository: MetricsRepository,
     private val modelPerformanceRepository: ModelPerformanceRepository,
@@ -130,7 +128,26 @@ class LiteRtNodeExecutor @Inject constructor(
             )
         }
 
-        val fullResponseText = accumulatedResponse.toString().trim()
+        // A reasoning model's `<think>` scratchpad is separated here rather than
+        // anywhere downstream, because everything downstream treats this text as
+        // the answer: OUTPUT persists it as the agent's chat message, the next
+        // turn replays it under `--- Chat History ---`, and `JsonPayloadExtractor`
+        // spans from its first brace to its last. The split is deliberately not
+        // recorded into the node result — the trace's `outputText` is replayed
+        // verbatim as the node result when an interrupted run resumes, so raw
+        // text stored there would put the scratchpad straight back into the
+        // pipeline. The console line below is the durable trace of what happened.
+        val split = ReasoningBlockSplitter.split(accumulatedResponse.toString().trim())
+        val fullResponseText = split.answer
+        split.reasoning?.let { reasoning ->
+            emit(
+                NodeOutput.Console(
+                    ConsoleEventType.NodeExecution,
+                    "LITE_RT '${node.label}' removed a ${reasoning.length}-character reasoning block " +
+                        "from its answer",
+                ),
+            )
+        }
 
         // Record which model produced this answer so the root OUTPUT can attribute
         // the persisted chat message to it rather than to whatever model is active

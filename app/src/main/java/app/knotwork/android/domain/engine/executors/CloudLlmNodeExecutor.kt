@@ -11,6 +11,7 @@ import app.knotwork.android.domain.engine.CloudLlmClientFactory
 import app.knotwork.android.domain.engine.CloudLlmModelResolver
 import app.knotwork.android.domain.engine.retry.CloudRetryListener
 import app.knotwork.android.domain.engine.retry.CollectingCloudRetryListener
+import app.knotwork.android.domain.engine.structured.ReasoningBlockSplitter
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.ConsoleEventType
@@ -19,11 +20,9 @@ import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.repositories.ApiKeyRepository
-import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.MetricsRepository
 import app.knotwork.android.domain.repositories.NetworkActivityTracker
 import app.knotwork.android.domain.repositories.SettingsRepository
-import app.knotwork.android.domain.repositories.ToolRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.flow.Flow
@@ -58,8 +57,6 @@ import javax.inject.Inject
  * pipeline starts on a CLOUD node before it can run.
  */
 class CloudLlmNodeExecutor @Inject constructor(
-    private val toolRepository: ToolRepository,
-    private val chatRepository: ChatRepository,
     private val settingsRepository: SettingsRepository,
     private val apiKeyRepository: ApiKeyRepository,
     private val metricsRepository: MetricsRepository,
@@ -158,11 +155,30 @@ class CloudLlmNodeExecutor @Inject constructor(
         // stream with no finish reason, which is otherwise indistinguishable from a
         // complete answer — see [providerReportsFinishReason].
         var finishReason: String? = null
+        // Prompt + completion tokens as the provider itself counted them, when it
+        // counted them. This is the number a run ceiling should be charged, and the
+        // one this executor used to throw away: the delta count below sees only the
+        // answer, while a loop's real cost is dominated by the prompt being re-sent
+        // on every call. Stays null for a provider that reports no usage — measured
+        // in Koog 1.1.1: OpenAI (which asks for `include_usage`), Anthropic and
+        // Google populate it, DeepSeek only if its API volunteers it, and the Ollama
+        // client emits no end frame at all.
+        var reportedTokenCount: Int? = null
+        // The completion half on its own, kept apart because the run ceiling and
+        // the generation-rate display want different numbers: the ceiling is
+        // about what the call cost, the rate is about what it produced.
+        var reportedOutputTokenCount: Int? = null
 
         try {
             responseStream.collect { frame ->
                 if (frame is StreamFrame.End) {
                     finishReason = frame.finishReason
+                    val meta = frame.metaInfo
+                    reportedTokenCount = meta.totalTokensCount
+                        ?: listOfNotNull(meta.inputTokensCount, meta.outputTokensCount)
+                            .takeIf { it.isNotEmpty() }
+                            ?.sum()
+                    reportedOutputTokenCount = meta.outputTokensCount
                     return@collect
                 }
                 val token = (frame as? StreamFrame.TextDelta)?.text ?: return@collect
@@ -215,10 +231,38 @@ class CloudLlmNodeExecutor @Inject constructor(
             return@channelFlow
         }
 
-        val endTime = System.currentTimeMillis()
-        metricsRepository.updateMetrics(endTime - startTime, approximateTokenCount)
+        // Prefer what the provider counted; fall back to the delta count so a
+        // provider that reports nothing still charges the ceiling something rather
+        // than running for free.
+        val chargedTokenCount = reportedTokenCount ?: approximateTokenCount
+        val tokensEstimated = reportedTokenCount == null
 
-        val fullResponseText = accumulatedResponse.toString().trim()
+        val endTime = System.currentTimeMillis()
+        // The metrics display divides this by elapsed time to show a generation
+        // rate, so it gets the *completion* count only. Prompt tokens were not
+        // produced during this call — folding them in would inflate the figure
+        // and make it incomparable with the local-inference path that feeds the
+        // same counter.
+        metricsRepository.updateMetrics(endTime - startTime, reportedOutputTokenCount ?: approximateTokenCount)
+
+        // Reasoning models reach this executor too — DeepSeek's R1 line natively,
+        // and any Qwen3 served through an OpenAI-compatible endpoint or Ollama.
+        // Split for the same reasons as the on-device path: the text below is
+        // persisted as the agent's message, replayed into the next turn's
+        // `--- Chat History ---`, and scanned brace-to-brace by
+        // `JsonPayloadExtractor`. See `LiteRtNodeExecutor` for why the scratchpad
+        // is reported on the console rather than carried in the node result.
+        val split = ReasoningBlockSplitter.split(accumulatedResponse.toString().trim())
+        val fullResponseText = split.answer
+        split.reasoning?.let { reasoning ->
+            trySend(
+                NodeOutput.Console(
+                    ConsoleEventType.NodeExecution,
+                    "CLOUD '${node.label}' removed a ${reasoning.length}-character reasoning block " +
+                        "from its answer",
+                ),
+            )
+        }
 
         // Record the cloud provider as the answering "model" so the root OUTPUT
         // attributes the message to the cloud source rather than to whatever local
@@ -233,7 +277,15 @@ class CloudLlmNodeExecutor @Inject constructor(
 
         kotlinx.coroutines.delay(PipelineExecutionDefaults.NODE_RESULT_EMIT_DELAY_MS)
 
-        send(NodeOutput.Result(NodeExecutionResult(outputText = fullResponseText, tokenCount = approximateTokenCount)))
+        send(
+            NodeOutput.Result(
+                NodeExecutionResult(
+                    outputText = fullResponseText,
+                    tokenCount = chargedTokenCount,
+                    tokensEstimated = tokensEstimated,
+                ),
+            ),
+        )
     }
 
     /**

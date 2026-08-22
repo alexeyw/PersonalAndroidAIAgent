@@ -49,11 +49,13 @@ data class ResolvedRetrievalQuery(val text: String, val source: RetrievalQuerySo
  * | Origin                               | Key                                        |
  * |--------------------------------------|--------------------------------------------|
  * | `CHAT`, `SHARE`                      | the run's prompt ([RetrievalQuerySource.USER_PROMPT]) |
- * | `SCHEDULER`, `QUICK_TILE`, `TRIGGER` | declared query → node input → run prompt   |
+ * | `SCHEDULER`, `QUICK_TILE`, `TRIGGER`, `EXTERNAL` | declared query → node input → run prompt |
  *
  * `SHARE` counts as interactive on purpose: the shared text *is* the user's
  * query. `QUICK_TILE` counts as background: the tile launches a duty pipeline
  * under a fixed prompt and suffers exactly the trigger's genericity.
+ * `EXTERNAL` counts as background for the plainest reason of all: nobody is at
+ * the device when a third-party app fires a request.
  *
  * The object is deterministic, framework-free and clock-free — the caller
  * supplies every input, including the already-template-rendered declared query.
@@ -101,14 +103,20 @@ object MemoryRetrievalQueryResolver {
  * `true` when the run was started by a person acting on the app right now, so
  * its prompt carries the user's actual intent.
  *
- * The distinction drives the retrieval-key contract above and is deliberately
- * exhaustive (`when` over the enum): a new [RunOrigin] will not compile until it
- * is classified, which is the point — silently defaulting a new background
- * surface to "interactive" would reintroduce the very blindness this resolver
- * exists to fix.
+ * The distinction drives the retrieval-key contract above and, since the
+ * autonomous-run ceilings landed, also decides **which ceiling binds a run**
+ * (`ResolveRunCeilingsUseCase`): a run nobody is watching gets the tighter
+ * numbers. Both consumers read this one property rather than re-partitioning
+ * the enum, so a new origin is classified once.
+ *
+ * The `when` is deliberately exhaustive: a new [RunOrigin] will not compile
+ * until it is classified, which is the point — silently defaulting a new
+ * background surface to "interactive" would reintroduce the very blindness this
+ * resolver exists to fix, and would now also hand it interactive spending
+ * limits.
  */
 val RunOrigin.isInteractive: Boolean
     get() = when (this) {
         RunOrigin.CHAT, RunOrigin.SHARE -> true
-        RunOrigin.SCHEDULER, RunOrigin.QUICK_TILE, RunOrigin.TRIGGER -> false
+        RunOrigin.SCHEDULER, RunOrigin.QUICK_TILE, RunOrigin.TRIGGER, RunOrigin.EXTERNAL -> false
     }

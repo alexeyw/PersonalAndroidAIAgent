@@ -26,5 +26,6 @@ class ResolveSurfacePipelineUseCase @Inject constructor(private val settingsRepo
     suspend operator fun invoke(surface: EntrySurface): String? = when (surface) {
         EntrySurface.SHARE -> settingsRepository.shareTargetPipelineId.first()
         EntrySurface.QUICK_TILE -> settingsRepository.quickSettingsTilePipelineId.first()
+        EntrySurface.EXTERNAL_AUTOMATION -> settingsRepository.externalAutomationPipelineId.first()
     }
 }

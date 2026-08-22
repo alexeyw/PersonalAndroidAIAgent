@@ -1,9 +1,11 @@
 # Knotwork — on-device AI agent for Android
 
 [![Check](https://github.com/alexeyw/knotwork/actions/workflows/check.yml/badge.svg)](https://github.com/alexeyw/knotwork/actions/workflows/check.yml)
+[![Instrumented](https://github.com/alexeyw/knotwork/actions/workflows/instrumented.yml/badge.svg?branch=main)](https://github.com/alexeyw/knotwork/actions/workflows/instrumented.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.7.3-orange.svg)
-![Android API](https://img.shields.io/badge/Android-API%2036%2B-3DDC84.svg?logo=android)
+![Version](https://img.shields.io/badge/version-0.8.0-orange.svg)
+![Android API](https://img.shields.io/badge/Android-API%2034%2B-3DDC84.svg?logo=android)
+[![Google Play](https://img.shields.io/badge/Google%20Play-available-3DDC84.svg?logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=app.knotwork.android)
 
 > **An AI agent you build, not just prompt.** A local-first Android agent whose
 > behaviour you assemble from explicit, verifiable blocks — and every risky
@@ -83,7 +85,10 @@ https://github.com/user-attachments/assets/2ea06de5-6832-4e0c-ad48-430f375d8b72
   [browser editor](pipeline-editor.html) for authoring pipelines without
   launching the app. Prompt variables (`$DATE`, `$TIME`, `$TOOLS`, `$MODEL`,
   `$MEMORY_SUMMARY`, `$LANG`, `$LOCATION`, `$USER`, `$DEVICE`) render fresh on
-  every run.
+  every run. Prompts import and export as **Markdown files**, so one can be
+  written in any editor and passed around — and a prompt file supplies wording
+  only: it cannot add tools or steps, and a file that asks is imported as text
+  with the request named.
 - **Tools, gated by you.** Local actions through AppFunctions Jetpack and
   external servers through the Model Context Protocol (MCP), with reusable
   **skills** (instruction + tool allowlist + context) as pipeline steps. Every
@@ -94,6 +99,12 @@ https://github.com/user-attachments/assets/2ea06de5-6832-4e0c-ad48-430f375d8b72
   the background. **Triggers** (time, charging, Wi-Fi, network) fire a pipeline
   on their own and report back with a notification. Every entry surface stays
   inert until you bind a pipeline to it — a privacy-first default.
+- **Complements your automation app.** Tasker, MacroDroid or a shell script over
+  `adb` can ask the agent to run one pipeline you nominate: they decide *when*,
+  the agent does the language-model part of *what*. Off by default and behind an
+  explicit consent dialog; the binding is an allowlist, not a fallback, so a
+  request naming anything else is refused rather than redirected. Every inbound
+  request — accepted or refused — lands in a readable journal.
 - **Local-first by construction.** The Room database is SQLCipher-encrypted and
   API keys are sealed with AES-GCM under a dedicated Android Keystore key.
   On-device usage statistics (a build-time guard forbids any network on that
@@ -105,7 +116,10 @@ https://github.com/user-attachments/assets/2ea06de5-6832-4e0c-ad48-430f375d8b72
   smooths transient cloud failures, and background history compression keeps a
   long session from overflowing the context window. Interrupted runs resume from
   their last completed node; reopening a chat reconnects to a run still
-  executing in the background.
+  executing in the background. A run nobody is watching is bounded by step and
+  token ceilings counted across the whole run tree — so an automation that
+  starts looping cannot quietly spend your cloud key — and a run stopped that
+  way says so instead of looking broken.
 - **Remembers what matters.** Long-term memory with semantic retrieval (RAG)
   over past conversations, automatic fact extraction, manual "Save to memory,"
   and a memory manager with search, provenance, compaction, and JSON
@@ -164,7 +178,11 @@ browser's `prefers-color-scheme`.
 
 ## Requirements
 
-- **Android 16 or newer** (API level 36+).
+- **Android 14 or newer** (API level 34+). A few OS-integration features need
+  Android 16: calling functions that other apps expose, and the strict
+  intent-matching rules that harden the external-automation entry point. On
+  Android 14 and 15 everything else — local models, cloud providers, MCP
+  servers, triggers, scheduled tasks — works unchanged.
 - Approximately **2 GB of free RAM** available for the LLM at runtime.
 - Optional: hardware acceleration via **NPU or GPU** for noticeably faster
   inference. CPU-only operation works but is slower.
@@ -177,11 +195,20 @@ browser's `prefers-color-scheme`.
 
 ## Install
 
+### From Google Play
+
+[**Knotwork on Google Play**](https://play.google.com/store/apps/details?id=app.knotwork.android)
+— the simplest route, and the one that updates itself. Requires Android 14+.
+
+The Play build is the `full` flavour described below. It shares a signing key
+with the APKs on the Releases page, so you can move between those two channels
+without reinstalling.
+
 ### From a release build
 
 Grab the latest APK from the
 [**Releases**](https://github.com/alexeyw/knotwork/releases) page and install it
-on an Android 16+ device. Two flavours are published:
+on an Android 14+ device. Two flavours are published:
 
 - **`full`** — the standard build, with opt-in Firebase Crashlytics for
   anonymous crash reporting (off by default, never collects message content).
@@ -234,7 +261,7 @@ first message once it loads.
 | Local storage    | Room + DataStore                                        |
 | Crash reporting  | Firebase Crashlytics (`full` flavour) / none (`foss`)   |
 | Distribution     | `full` (Play / direct APK) + `foss` (F-Droid, no Google)|
-| Testing          | JUnit + MockK                                           |
+| Testing          | JUnit + MockK; instrumented suite on an emulator matrix in CI |
 | Architecture tests | Konsist (Clean-Architecture layer guard, in `check`)  |
 
 ## Privacy
@@ -273,12 +300,15 @@ threat model behind it, including what is explicitly *out* of scope, is in
 
 - Architecture overview — [docs/architecture.md](docs/architecture.md).
 - User guide — [docs/user-guide.md](docs/user-guide.md).
+- External-automation contract (calling the agent from Tasker, MacroDroid or
+  `adb`) — [docs/external-automation.md](docs/external-automation.md).
 - Extending the agent (new node types, tools, providers, prompt
   variables) — [docs/extending.md](docs/extending.md).
 - Code style — [docs/code-style.md](docs/code-style.md).
 - Testing strategy and coverage — [docs/testing.md](docs/testing.md).
 - API & integration conventions — [docs/api-conventions.md](docs/api-conventions.md).
 - Release-build playbook (R8, signing, AAB, APK size) — [docs/release.md](docs/release.md).
+- Decisions that constrain contributions — [docs/decisions/](docs/decisions/README.md).
 - Roadmap — [docs/roadmap.md](docs/roadmap.md).
 - Contributing guide — [CONTRIBUTING.md](CONTRIBUTING.md).
 - Code of Conduct — [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
@@ -288,7 +318,7 @@ threat model behind it, including what is explicitly *out* of scope, is in
 
 ## Pre-release notice
 
-This project is currently at **version 0.7.3** and is published for review and
+This project is currently at **version 0.8.0** and is published for review and
 experimentation. Expect rough edges:
 
 - There are no stability guarantees for the public surface (Kotlin APIs,

@@ -8,6 +8,11 @@ name: Check
 # `:buildSrc:test` is added explicitly because the build-logic module's own
 # unit tests (e.g. the browser-editor constants generator) are not reachable
 # from the app's `check` aggregate and would otherwise drift unnoticed.
+# Compiling the instrumented source set is added for the same reason: `check`
+# does not compile it either, so a broken instrumented test would leave every
+# gate green. The instrumented tests are *run* by the separate `Instrumented`
+# workflow, which stays out of this one so that an emulator cannot block a
+# signed release (see the header of `instrumented.yml`).
 # Any one of them failing blocks the merge.
 #
 # Triggers: every pull request targeting `main`, and every push to `main`
@@ -17,6 +22,12 @@ name: Check
 # `release.yml` reuse this exact gate as its first job instead of restating it:
 # the release build must never run against a definition of "green" that has
 # drifted from the one every pull request is measured by.
+#
+# What this gate deliberately does NOT decide: whether the project's
+# dependencies are up to date. Those lint checks answer from an external version
+# index, so their verdict changes without the repository changing; they run at
+# informational severity and surface as the "Dependency version drift" job
+# summary plus the always-uploaded lint report, never as a failure.
 
 on:
   pull_request:
@@ -48,7 +59,13 @@ jobs:
     # cap. The push-to-`main` job (same cap) must also finish cold to *write* the
     # warm cache that makes subsequent PRs fast again, so the budget has to cover
     # one cold doubled-flavour build, not the warm steady state.
-    timeout-minutes: 60
+    #
+    # Raised 60 → 75 when the instrumented-compile step was added: the previous
+    # cap had already been forced up once by a cold doubled-flavour build that
+    # overran it, and adding work to a job whose budget is tuned to its worst
+    # case is how that happens again. A timeout kills the run outright and
+    # produces no reports; a cap that is never reached costs nothing.
+    timeout-minutes: 75
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -75,6 +92,81 @@ jobs:
       - name: Run ./gradlew check
         run: ./gradlew check :buildSrc:test --stacktrace --no-daemon
 
+      # `check` neither runs NOR COMPILES the instrumented source set, so an
+      # instrumented test could stop compiling and every gate would stay green —
+      # which is how a whole `androidTest` source set once drifted out of
+      # buildability unnoticed. Compiling it here closes that hole for the
+      # merge gate and, because `release.yml` reuses this workflow, for the
+      # release path too. Whether those tests *pass* is decided by the separate
+      # `Instrumented` workflow; whether they *compile* is a pure function of
+      # the repository, so it belongs in the deterministic gate.
+      #
+      # Its OWN Gradle invocation on purpose: bundling
+      # `compile*DebugAndroidTestKotlin` into the same invocation as `check`
+      # makes dozens of unrelated Robolectric unit tests fail with
+      # "Default FirebaseApp is not initialized in this process". Run
+      # separately, both are green.
+      #
+      # `!cancelled()` rather than the default: otherwise a lint or unit-test
+      # failure hides an instrumented compile break for a whole extra CI cycle.
+      - name: Compile the instrumented test sources
+        if: ${{ !cancelled() }}
+        run: >
+          ./gradlew
+          :app:compileFullDebugAndroidTestKotlin
+          :app:compileFossDebugAndroidTestKotlin
+          --stacktrace --no-daemon
+
+      # Renders this run's informational lint findings into the job summary, so
+      # the answer to "what is out of date?" is readable without downloading the
+      # lint-report artifact below. Selects by SEVERITY rather than by a list of
+      # issue ids on purpose: the demoted set is declared once, in buildSrc's
+      # LintBaselineGuard, and a step that re-listed those ids here would be a
+      # fourth copy to keep in sync. Reads the lint XML of every module; never
+      # fails the job.
+      - name: Summarise informational lint findings
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import glob
+          import xml.etree.ElementTree as ET
+
+          # Lint's own baseline bookkeeping notices are informational too, and are
+          # noise here rather than findings.
+          META_IDS = ("LintBaseline", "LintBaselineFixed")
+          INFORMATIONAL = ("Hint", "Information", "Informational")
+
+          reports = sorted(glob.glob("*/build/reports/lint-results-*.xml"))
+          rows = set()
+          for path in reports:
+              try:
+                  root = ET.parse(path).getroot()
+              except Exception:
+                  continue
+              for issue in root.iter("issue"):
+                  issue_id = issue.get("id") or ""
+                  if issue.get("severity") not in INFORMATIONAL or issue_id in META_IDS:
+                      continue
+                  message = (issue.get("message") or "").replace("|", "\\|")
+                  rows.add((issue_id, message))
+
+          print("### Informational lint findings")
+          print()
+          print("These never fail the build: their verdict depends on an external version")
+          print("index or on the calendar, not on the contents of the repository.")
+          print("Dependencies are updated deliberately, not because a check went red.")
+          print()
+          if not reports:
+              print("No lint reports were produced by this run.")
+          elif rows:
+              print("| Check | Finding |")
+              print("| --- | --- |")
+              for issue_id, message in sorted(rows):
+                  print("| `%s` | %s |" % (issue_id, message))
+          else:
+              print("No informational findings in %d lint report(s)." % len(reports))
+          PY
+
       - name: Upload detekt report
         if: failure()
         uses: actions/upload-artifact@v4
@@ -91,8 +183,14 @@ jobs:
           path: app/build/reports/ktlint/
           if-no-files-found: ignore
 
+      # Uploaded on EVERY run, not only on failure. The version-freshness checks
+      # report at informational severity (the demoted set is declared in buildSrc's
+      # `LintBaselineGuard`), so a green run is exactly the run whose report
+      # carries the dependency drift. Gating
+      # this upload on failure would delete the signal the demotion was meant to
+      # preserve. `:catalog` is included because the root `check` lints it too.
       - name: Upload lint report
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: lint-report
@@ -101,6 +199,8 @@ jobs:
             app/build/reports/lint-results-fullDebug.xml
             app/build/reports/lint-results-fossDebug.html
             app/build/reports/lint-results-fossDebug.xml
+            catalog/build/reports/lint-results-debug.html
+            catalog/build/reports/lint-results-debug.xml
           if-no-files-found: ignore
 
       - name: Upload Kover coverage report

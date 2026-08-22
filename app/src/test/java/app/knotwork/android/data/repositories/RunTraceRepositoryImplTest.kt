@@ -203,6 +203,44 @@ class RunTraceRepositoryImplTest {
     }
 
     @Test
+    fun `given every console event type then it survives a write and read back`() = runTest {
+        // The encoder is an exhaustive `when`, so a forgotten variant there is a
+        // compile error. The DECODER ends in `else -> null`, so a forgotten
+        // variant there compiles, drops the row on read, and logs a warning
+        // nobody is watching — a console that silently loses lines for one
+        // category, on a green build. This is the only thing standing between
+        // that and a release.
+        repository.dispatcher = StandardTestDispatcher(testScheduler)
+        val everyType = ConsoleEventType::class.sealedSubclasses.mapNotNull { it.objectInstance }
+        assertEquals(
+            "every ConsoleEventType variant is a data object; a new one that is not breaks this enumeration",
+            ConsoleEventType::class.sealedSubclasses.size,
+            everyType.size,
+        )
+
+        val written = mutableListOf<List<TraceStepEntity>>()
+        coEvery { traceStepDao.insertTraceSteps(capture(written)) } returns Unit
+        everyType.forEachIndexed { i, type ->
+            repository.append(consoleEntry(seq = i.toLong()).copy(type = type))
+        }
+        repository.flush()
+        runCurrent()
+
+        val rows = written.flatten()
+        assertEquals(everyType.size, rows.size)
+        coEvery { traceStepDao.getTraceStepsForRun(RUN_ID) } returns rows.mapIndexed { i, row ->
+            row.copy(id = i.toLong() + 1)
+        }
+
+        val readBack = repository.getTraceForRun(RUN_ID)
+        assertEquals(
+            "a variant missing from the decoder is dropped, not reported",
+            everyType,
+            readBack.map { (it as RunTraceRecord.ConsoleEntry).type },
+        )
+    }
+
+    @Test
     fun `given persisted rows when getTraceForRun then records are mapped back in seq order`() = runTest {
         repository.dispatcher = StandardTestDispatcher(testScheduler)
         coEvery { traceStepDao.getTraceStepsForRun(RUN_ID) } returns listOf(

@@ -52,6 +52,7 @@ import app.knotwork.android.domain.usecases.EvaluateIfConditionUseCase
 import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
+import app.knotwork.android.domain.usecases.ResolveRunCeilingsUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -181,8 +182,6 @@ class PipelineSecurityContourTest {
             toolNodeExecutor,
             LiteRtNodeExecutor(
                 llmEngine,
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 metricsRepository,
                 mockk(relaxed = true),
@@ -190,8 +189,6 @@ class PipelineSecurityContourTest {
                 loadModelUseCase,
             ),
             CloudLlmNodeExecutor(
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 apiKeyRepository,
                 metricsRepository,
@@ -250,6 +247,7 @@ class PipelineSecurityContourTest {
             mockk(relaxed = true),
             mockk(relaxed = true),
             mockk(relaxed = true),
+            ResolveRunCeilingsUseCase(settingsRepository),
         )
 
         // The arg-generation pass returns the per-tool JSON; everything else is irrelevant.
@@ -271,6 +269,9 @@ class PipelineSecurityContourTest {
         every { settingsRepository.toolUsageInstruction } returns flowOf("")
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { settingsRepository.pipelineMaxStepsBackground } returns flowOf(15)
+        every { settingsRepository.runMaxTokens } returns flowOf(1_000_000)
+        every { settingsRepository.runMaxTokensBackground } returns flowOf(100_000)
         every { settingsRepository.toolCallTimeoutMs } returns flowOf(1_000L)
         every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(2)
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)

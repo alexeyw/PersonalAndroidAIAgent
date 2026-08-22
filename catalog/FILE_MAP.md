@@ -127,6 +127,18 @@ project — `:app` consumes it as an `implementation` dependency.
       (`TypedConfirmDialogState` payload + `typedConfirmMatches` keyword
       rule). Shared by the Settings destructive actions and the splash
       data-recovery wipe so the confirmation contract cannot drift.
+    - `OutcomeDialog.kt` — the one "here is what happened" dialog shape.
+      `OutcomeTone` picks the layout and glyph: `INFO` / `GUARD` / `ERROR`
+      draw an icon above a centred headline, `QUESTION` draws none and
+      left-aligns. The distinction that carries weight is **GUARD vs
+      ERROR** — a safeguard that held is not a failure, so `GUARD` is the
+      shield and red is reserved for "nothing happened". Carries an
+      optional `OutcomeNamedList` ("left out", capped at
+      `MAX_NAMED_LIST_ITEMS` with a caller-resolved summary line) and one
+      to three `OutcomeAction`s, one of which may be emphasised. The body
+      scrolls so the buttons survive large font scales. Shared by prompt
+      import and the pipeline-import schema-mismatch dialog, which was the
+      hand-rolled original.
   - `lists/` — `PipelineListRow` / `ToolListRow` / `MemoryEntryRow` /
     `KnotworkNavListRow` (leading-icon + title + chevron routing row) +
     previews.
@@ -252,6 +264,27 @@ project — `:app` consumes it as an `implementation` dependency.
       acknowledgments / privacy cards in a scrollable `LazyColumn`.
     - `AboutViewState.kt` — app name / version / build / commit SHA /
       license / acknowledgments / privacy render contract.
+  - `automation/`
+    - `ExternalAutomationJournalContent.kt` — external-automation
+      request journal: posture banner (off / on-but-unbound /
+      accepting), the collapsible wire-contract block, and a per-day
+      timeline of inbound requests with a status tile, the refusal
+      reason as a sentence, the claimed-versus-attested sender line and
+      a repeat-count badge.
+    - `ExternalAutomationConsentDialog.kt` — `ExternalAutomationConsentContent`,
+      the stateless card body of the consent moment raised when the
+      master switch is turned on (the host wraps it in a `Dialog`), plus
+      its `ExternalAutomationConsentStrings` copy contract. The body
+      scrolls under a height ceiling so the two buttons stay reachable
+      at font-scale 200 %.
+    - `ExternalAutomationJournalViewState.kt` — render contract: the
+      catalog mirrors of the domain status (5) and rejection-reason (12)
+      dictionaries, the sender-attestation kind, the per-day groups, the
+      wire-key rows, and the whole localisable copy surface.
+    - `ExternalAutomationPreview.kt` — deterministic fixtures for the
+      journal states, including the caller looping against a
+      switched-off contract and the request that tried to redirect its
+      answer at a third package.
   - `chat/`
     - `ChatHomeContent.kt` — chat surface: message history, composer,
       console pane, and HITL / clarification / error overlays.
@@ -366,9 +399,19 @@ project — `:app` consumes it as an `implementation` dependency.
       (4 sample pipelines) for snapshots.
   - `prompts/`
     - `PromptLibraryContent.kt` — prompt library (tabbed categories, card
-      list, FAB, optional edit-sheet overlay).
+      list, FAB, optional edit-sheet overlay, snackbar host slot). The
+      top bar carries the **import** action; each card's footer line
+      carries `used by N` plus Preview · Duplicate · Edit · overflow
+      (Export + Delete), or Preview · Duplicate · Export on a read-only
+      row. Two layout rules are load-bearing: the caption yields and the
+      icon cluster never does, so the overflow — and with it the only
+      route to Delete — survives font scale 200 %; and the top bar drops
+      its subtitle rather than clipping its title at the same scale. An
+      empty **library** (as opposed to an empty category) hides the tabs
+      and the FAB and offers Import / New instead.
     - `PromptLibraryViewState.kt` — visual-state enum + prompt-row /
-      editor state + category / variable tracking.
+      editor state + category / variable tracking + the import/export
+      callbacks.
     - `PromptPresetPickerSheet.kt` — modal preset picker by `NodeType`
       (Bundled / Mine tabs, searchable rows, tag filter).
   - `settings/` — the settings hub plus one content composable per
@@ -384,7 +427,21 @@ project — `:app` consumes it as an `implementation` dependency.
     - `MemorySettingsContent.kt` — long-term-memory controls
       (extraction, retrieval thresholds, re-embed).
     - `PipelinesSettingsContent.kt` — pipeline / structured-output
-      controls.
+      controls. Basic tier is the **Run limits** entry row, carrying the
+      current step and token limits as its subtitle.
+    - `RunLimitsContent.kt` — the run-limits screen: four ceilings plus the
+      spend statement. Carries two components of its own. `LimitSliderRow`
+      is a slider with a description and an optional state qualifier, laid
+      out in a `FlowRow` rather than a `Row` — at a 200 % font scale a
+      title and a trailing chip cannot share one line, and a `Row` resolves
+      that by clipping the chip off the screen. `StatementRow` is an axis
+      the product *states* rather than controls, deliberately not a
+      disabled slider: a disabled control implies something could enable
+      it, and nothing will.
+    - `RunLimitsViewState.kt` — `RunLimitsViewState`,
+      `LimitSliderRowState`, `StatementRowState` and `RunLimitsCallbacks`.
+      Every axis has a *move* and a *commit*, because writing a background
+      limit is what stops it following the interactive one.
     - `ToolsSettingsContent.kt` — tool-calling and approval controls.
     - `BackgroundSettingsContent.kt` — background work, triggers,
       notifications and entry-surface bindings.
@@ -550,9 +607,9 @@ project — `:app` consumes it as an `implementation` dependency.
 - `src/test/java/app/knotwork/design/screens/` — per-screen Roborazzi
   snapshot baselines (`*ContentSnapshotTest`, light / dark / a11y
   font-scale variants) plus `*AccessibilityTest` semantics checks and
-  per-screen `HeroSnapshotTest` README heroes, covering about / chat /
-  memory / models / monitoring / more / onboarding / pipelines /
-  prompts / settings / splash / taskmonitor / tools.
+  per-screen `HeroSnapshotTest` README heroes, covering about /
+  automation / chat / memory / models / monitoring / more / onboarding /
+  pipelines / prompts / settings / splash / taskmonitor / tools.
 - `src/test/snapshots/` — committed Roborazzi baselines: one `*.png`
   per catalog page / component group / screen state, each in light and
   dark (plus reduced-motion and font-scale variants where exercised by

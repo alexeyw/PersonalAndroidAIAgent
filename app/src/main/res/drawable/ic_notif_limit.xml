@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A background run stopped because a limit the user configured did its job. The
+  shield, deliberately not the failure cross: the run did not break, it was held.
+  Announcing a working guard with the failure glyph is exactly the confusion this
+  icon exists to end — the trigger journal already calls the same event "Stopped
+  by a safety limit", and the notification now agrees with it.
+
+  Not a new mark: this is the catalog's existing `AppIcons.Shield` path, packaged
+  for the status bar.
+
+  Small notification icons use the ALPHA CHANNEL ONLY: the system paints them as
+  a silhouette in its own tint, so the white here is not a colour choice and must
+  not be replaced by a theme attribute. Stroke width is baked into the file
+  because `res/drawable` has no equivalent of the code-supplied width the catalog
+  `I.*` glyphs rely on, and it is heavier than the UI norm because the mark is
+  squeezed to ~18 px in the status bar.
+
+  Source: project_docs/design/icons-src/notifications/.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M12,3l8,3v6c0,5 -3.5,8 -8,9c-4.5,-1 -8,-4 -8,-9V6z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

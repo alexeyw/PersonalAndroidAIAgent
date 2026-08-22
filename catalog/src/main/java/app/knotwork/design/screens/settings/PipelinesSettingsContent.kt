@@ -7,12 +7,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import app.knotwork.design.R
+import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 
 /**
- * Pipelines-&-structured-output category sub-screen. Basic tier surfaces the
- * cap-autonomous-steps safety slider; the Advanced disclosure holds the
- * max-nesting-depth and structured-output repair-budget sliders.
+ * Pipelines-&-structured-output category sub-screen. Basic tier links out to
+ * the run-limits screen, carrying the current limits as its subtitle; the
+ * Advanced disclosure holds the max-nesting-depth and structured-output
+ * repair-budget sliders.
  *
  * @param state Immutable Pipelines state.
  * @param modifier Layout modifier.
@@ -31,11 +33,14 @@ fun PipelinesSettingsContent(
         onBack = callbacks.onBack,
         modifier = modifier,
     ) {
-        SettingSliderList(
-            sliders = listOf(state.capAutonomousSteps),
-            tagPrefix = PIPELINE_SLIDER_TAG_PREFIX,
-            onChange = callbacks.onPipelinesSliderChange,
-        )
+        SettingsAnchor(anchorKey = SettingsRowAnchors.LINK_RUN_LIMITS) {
+            NavLinkRow(
+                icon = AppIcons.Shield,
+                title = stringResource(R.string.knotwork_settings_run_limits_title),
+                subtitle = state.runLimitsSummary,
+                onClick = callbacks.onOpenRunLimits,
+            )
+        }
         AdvancedDisclosure(initiallyExpanded = advancedExpanded) {
             Column(
                 modifier = Modifier.fillMaxWidth(),

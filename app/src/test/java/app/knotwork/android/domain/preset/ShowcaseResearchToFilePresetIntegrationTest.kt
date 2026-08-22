@@ -57,6 +57,7 @@ import app.knotwork.android.domain.usecases.GetContextWindowUseCase
 import app.knotwork.android.domain.usecases.LoadModelUseCase
 import app.knotwork.android.domain.usecases.LoadPipelineFromPresetUseCase
 import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
+import app.knotwork.android.domain.usecases.ResolveRunCeilingsUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import io.mockk.coEvery
 import io.mockk.every
@@ -184,8 +185,6 @@ class ShowcaseResearchToFilePresetIntegrationTest {
             toolNodeExecutor,
             LiteRtNodeExecutor(
                 llmEngine,
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 metricsRepository,
                 mockk(relaxed = true),
@@ -193,8 +192,6 @@ class ShowcaseResearchToFilePresetIntegrationTest {
                 loadModelUseCase,
             ),
             CloudLlmNodeExecutor(
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 apiKeyRepository,
                 metricsRepository,
@@ -253,6 +250,7 @@ class ShowcaseResearchToFilePresetIntegrationTest {
             mockk(relaxed = true),
             mockk(relaxed = true),
             mockk(relaxed = true),
+            ResolveRunCeilingsUseCase(settingsRepository),
         )
 
         // Scripted LLM: one canned answer per node / arg-generation pass. The second
@@ -270,6 +268,9 @@ class ShowcaseResearchToFilePresetIntegrationTest {
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.NeverPrompt)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { settingsRepository.pipelineMaxStepsBackground } returns flowOf(15)
+        every { settingsRepository.runMaxTokens } returns flowOf(1_000_000)
+        every { settingsRepository.runMaxTokensBackground } returns flowOf(100_000)
         every { settingsRepository.structuredOutputMaxRepairs } returns flowOf(2)
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
         coEvery { localModelRepository.getActiveModel() } returns null

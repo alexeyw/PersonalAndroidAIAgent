@@ -7,6 +7,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import app.knotwork.android.data.local.dao.ChatDao
 import app.knotwork.android.data.local.dao.ChatHistorySummaryDao
+import app.knotwork.android.data.local.dao.ExternalAutomationJournalDao
 import app.knotwork.android.data.local.dao.LocalModelDao
 import app.knotwork.android.data.local.dao.MemoryDao
 import app.knotwork.android.data.local.dao.ModelPerformanceDao
@@ -25,6 +26,7 @@ import app.knotwork.android.data.local.models.ChatHistorySummaryEntity
 import app.knotwork.android.data.local.models.ChatMessageEntity
 import app.knotwork.android.data.local.models.ChatSessionEntity
 import app.knotwork.android.data.local.models.ConnectionEntity
+import app.knotwork.android.data.local.models.ExternalAutomationRequestEntity
 import app.knotwork.android.data.local.models.LocalModelEntity
 import app.knotwork.android.data.local.models.MemoryChunkEntity
 import app.knotwork.android.data.local.models.ModelPerformanceSampleEntity
@@ -76,12 +78,13 @@ import app.knotwork.android.data.local.models.UsagePipelineDayEntity
         ModelPerformanceSampleEntity::class,
         TriggerEntity::class,
         TriggerEvaluationEntity::class,
+        ExternalAutomationRequestEntity::class,
         UsageCounterEntity::class,
         UsageActiveDayEntity::class,
         UsagePipelineDayEntity::class,
         OnboardingMilestoneEntity::class,
     ],
-    version = 57,
+    version = 59,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -210,6 +213,16 @@ abstract class AppDatabase : RoomDatabase() {
      * @return The [UsageTelemetryDao] instance.
      */
     abstract fun usageTelemetryDao(): UsageTelemetryDao
+
+    /**
+     * Provides access to the [ExternalAutomationJournalDao] backing the
+     * external-automation request journal (the `external_automation_requests`
+     * table) — the durable log of every request a third-party app sent to this
+     * one, admitted or refused.
+     *
+     * @return The [ExternalAutomationJournalDao] instance.
+     */
+    abstract fun externalAutomationJournalDao(): ExternalAutomationJournalDao
 
     companion object {
         /**
@@ -1374,6 +1387,77 @@ abstract class AppDatabase : RoomDatabase() {
                         "`day` TEXT NOT NULL, `pipelineId` TEXT NOT NULL, " +
                         "PRIMARY KEY(`day`, `pipelineId`))",
                 )
+            }
+        }
+
+        /**
+         * v57 → v58: adds the `external_automation_requests` journal — one row per
+         * request a third-party app sent to the external-automation entry point,
+         * admitted or refused.
+         *
+         * Additive: a fresh table, no existing column touched. Deliberately without
+         * a foreign key on `runId`, mirroring `trigger_evaluations`: the record must
+         * survive the run it describes (and most rows describe requests that never
+         * produced one). Growth is bounded by the retention pass, not by a cascade —
+         * which matters more here than anywhere else in the schema, because the
+         * write rate at this entry point is set by another app on the device.
+         */
+        val MIGRATION_57_58 = object : Migration(57, 58) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `external_automation_requests` (
+                        `id` TEXT NOT NULL,
+                        `requestId` TEXT NOT NULL,
+                        `receivedAt` INTEGER NOT NULL,
+                        `action` TEXT NOT NULL,
+                        `targetKind` TEXT,
+                        `targetValue` TEXT,
+                        `declaredReturnPackage` TEXT,
+                        `returnAction` TEXT NOT NULL,
+                        `attestedSenderPackage` TEXT,
+                        `statusKind` TEXT NOT NULL,
+                        `statusReason` TEXT,
+                        `runId` TEXT,
+                        `repeatCount` INTEGER NOT NULL,
+                        PRIMARY KEY(`id`)
+                    )
+                    """.trimIndent(),
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_external_automation_requests_receivedAt` " +
+                        "ON `external_automation_requests` (`receivedAt`)",
+                )
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_external_automation_requests_runId` " +
+                        "ON `external_automation_requests` (`runId`)",
+                )
+            }
+        }
+
+        /**
+         * v58 → v59: gives `pipeline_runs` the two spend counters and the typed
+         * termination reason the autonomous-run ceilings need.
+         *
+         * Purely additive. The counters default to zero, which is the truth for
+         * every pre-v59 row: nothing was counted before, so nothing was spent as
+         * far as the ceiling mechanism is concerned, and an in-flight run picked
+         * up across an upgrade simply starts its accounting here.
+         * `terminationReason` is nullable and stays null for historical rows —
+         * "why did this stop" was only ever recorded as prose, and prose is not
+         * something a migration should try to parse back into an enum.
+         *
+         * The `DEFAULT 0` on both counters is load-bearing rather than
+         * decorative: the entity declares `@ColumnInfo(defaultValue = "0")`, and
+         * Room's `TableInfo` check compares the two sides. Drop it on either
+         * side and the schema-validation suite fails — which is instrumented, so
+         * `./gradlew check` would not be the thing that told you.
+         */
+        val MIGRATION_58_59 = object : Migration(58, 59) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `pipeline_runs` ADD COLUMN `stepsSpent` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `pipeline_runs` ADD COLUMN `tokensSpent` INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE `pipeline_runs` ADD COLUMN `terminationReason` TEXT")
             }
         }
     }

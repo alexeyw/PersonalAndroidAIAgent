@@ -24,9 +24,14 @@ package app.knotwork.android.domain.models
  * @property startedAt Epoch millis when the run was enqueued.
  * @property finishedAt Epoch millis when the run reached a terminal status;
  *   `null` while the run is still active.
- * @property errorMessage Human-readable failure or interruption reason.
- *   `null` unless the run finished with [PipelineRunStatus.FAILED] or
- *   [PipelineRunStatus.INTERRUPTED].
+ * @property errorMessage Why the run did not finish, in text. `null` unless it
+ *   ended [PipelineRunStatus.FAILED] or [PipelineRunStatus.INTERRUPTED]. Its
+ *   audience depends on [terminationReason]: without one this is an ordinary
+ *   failure and the string is the description a person reads, but when the app
+ *   itself ended the run this holds the terse **diagnostic** form
+ *   (`RunTerminationReason.diagnostic()`), not user copy. Reading it as a
+ *   sentence in that case would show somebody `step-ceiling: 15/15 steps`; the
+ *   sentence is resolved from [terminationReason] in the presentation layer.
  * @property graphContentHash Content hash of the executing pipeline graph
  *   captured at the moment the run transitioned to
  *   [PipelineRunStatus.RUNNING] (see `PipelineGraph.contentHash`). Used to
@@ -48,6 +53,22 @@ package app.knotwork.android.domain.models
  *   image — can still tell presence-only consumers (an IF_CONDITION that branches
  *   on image presence, the INTENT_ROUTER image note) that the run had a picture,
  *   even for nodes that execute live past the resume point. Defaults to `false`.
+ * @property stepsSpent Node executions charged to this run **tree** so far,
+ *   accumulated across every attempt of the logical run. Meaningful only on a
+ *   tree root ([parentRunId] `null`): a child run charges its parent's root, so
+ *   a child's own counter stays `0`. Persisted because the ceiling has to
+ *   survive a resume — every answered background approval comes back through
+ *   `ResumePipelineRunUseCase`, and a per-attempt counter would hand a parking
+ *   run a fresh ceiling after every answer.
+ * @property tokensSpent Tokens charged to this run tree so far, on the same
+ *   root-keyed, resume-surviving basis as [stepsSpent]. A floor rather than an
+ *   exact total — see `RunBudgetLedger` for what is and is not charged.
+ * @property terminationReason Why the run stopped, when it stopped for a
+ *   reason the app itself decided. `null` for runs that completed, for ordinary
+ *   node failures, and for rows written before the column existed. The
+ *   human-readable rendering lives in [errorMessage]; this is the machine-
+ *   readable cause, so consumers no longer have to recover it by comparing
+ *   prose. See [RunTerminationKind].
  */
 data class PipelineRun(
     val id: String,
@@ -63,6 +84,9 @@ data class PipelineRun(
     val userPrompt: String? = null,
     val parentRunId: String? = null,
     val hadImage: Boolean = false,
+    val stepsSpent: Int = 0,
+    val tokensSpent: Int = 0,
+    val terminationReason: RunTerminationKind? = null,
 )
 
 /**
@@ -98,6 +122,17 @@ enum class RunOrigin {
      * but is attributed to the trigger surface for observability.
      */
     TRIGGER,
+
+    /**
+     * The run was started by a third-party automation app (Tasker, MacroDroid,
+     * `adb`) through the external-automation contract. Executes in the
+     * background on the same WorkManager path as [SCHEDULER] / [QUICK_TILE] /
+     * [TRIGGER], but is attributed to the external surface: it is the only
+     * origin whose rate is set by software outside the user's control, so
+     * telling it apart from the app's own background work is what makes the
+     * external entry point auditable at all.
+     */
+    EXTERNAL,
 }
 
 /**

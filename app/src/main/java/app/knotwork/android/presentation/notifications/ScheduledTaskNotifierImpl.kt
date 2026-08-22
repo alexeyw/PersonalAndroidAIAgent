@@ -12,8 +12,12 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import app.knotwork.android.R
 import app.knotwork.android.domain.constants.NotificationChannels
+import app.knotwork.android.domain.models.RunTerminationKind
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.ScheduledTaskNotifier
+import app.knotwork.android.presentation.ui.common.RunTerminationCopyMapper
+import app.knotwork.android.presentation.ui.common.RunTerminationTone
+import app.knotwork.android.presentation.ui.common.resolve
 import app.knotwork.android.presentation.ui.navigation.ChatDeepLink
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.firstOrNull
@@ -75,6 +79,44 @@ class ScheduledTaskNotifierImpl @Inject constructor(
             title = context.getString(R.string.notifications_task_failed_title),
             body = reason,
             icon = R.drawable.ic_notif_failed,
+        )
+    }
+
+    override suspend fun notifyTerminated(
+        sessionId: String,
+        kind: RunTerminationKind,
+        runLabel: String,
+        stepsSpent: Int,
+        tokensSpent: Int,
+    ) {
+        // Same vocabulary as the chat tile and the trigger journal — resolved
+        // from the typed cause rather than composed here, so this surface
+        // cannot be the one that drifts.
+        val copy = RunTerminationCopyMapper.notificationCopy(
+            kind = kind,
+            runLabel = runLabel,
+            stepsSpent = stepsSpent,
+            tokensSpent = tokensSpent,
+        )
+        post(
+            sessionId = sessionId,
+            title = context.resolve(copy.title),
+            body = context.resolve(copy.body),
+            // The shield is earned, not given to every typed cause. A limit the
+            // user configured did its job, and announcing that as a failure is
+            // what taught users to distrust their own automations. A run the
+            // watchdog killed, or one the platform killed, did not do what it
+            // was asked — dressing those as a working guard is the same mistake
+            // pointing the other way.
+            icon = when (RunTerminationCopyMapper.toneFor(kind)) {
+                RunTerminationTone.LIMIT -> R.drawable.ic_notif_limit
+                // Everything else keeps the did-not-complete cross, whose own
+                // definition already covers this set: "a background run also
+                // fails because the platform killed the process". The success
+                // tick was briefly used here and was simply wrong — it is the
+                // glyph for a task that finished, and it doubles as Approve.
+                RunTerminationTone.STUCK, RunTerminationTone.INFO -> R.drawable.ic_notif_failed
+            },
         )
     }
 

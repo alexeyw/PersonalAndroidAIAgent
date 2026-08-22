@@ -1,9 +1,12 @@
 package app.knotwork.android.presentation.ui.chat.archive
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isPopup
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onFirst
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import app.knotwork.android.domain.models.ChatSession
@@ -87,8 +90,15 @@ class ChatArchiveScreenTest {
             check(count == 0) { "Only the archived chat belongs on this screen, found $count others" }
         }
 
-        // Restore it from the inline pill.
-        composeTestRule.onAllNodesWithText(RESTORE).onFirst().performClick()
+        // Restore it from the row's overflow menu.
+        //
+        // NOT by clicking a node that merely reads "Restore": the swipe-reveal
+        // action carries that same label on a strip drawn *behind* the row, so a
+        // click on it is intercepted by the row's own `clickable` and nothing is
+        // restored. That is precisely how this test failed — the click raised no
+        // error, the chat simply never went away, and the wait below timed out.
+        composeTestRule.onNodeWithContentDescription(ROW_MENU_CD).performClick()
+        composeTestRule.onNode(hasText(RESTORE) and hasAnyAncestor(isPopup())).performClick()
 
         composeTestRule.waitUntil(TIMEOUT_MS) {
             composeTestRule.onAllNodesWithTextSafe(CHAT_TITLE) == 0
@@ -108,6 +118,7 @@ class ChatArchiveScreenTest {
         const val CHAT_TITLE = "Weekly review"
         const val EMPTY_TITLE = "Nothing archived"
         const val RESTORE = "Restore"
+        const val ROW_MENU_CD = "More actions"
         const val TIMEOUT_MS = 5_000L
     }
 }

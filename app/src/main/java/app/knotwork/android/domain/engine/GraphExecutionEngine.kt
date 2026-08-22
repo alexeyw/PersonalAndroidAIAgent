@@ -5,6 +5,9 @@ import app.knotwork.android.domain.constants.PipelineExecutionDefaults
 import app.knotwork.android.domain.engine.executors.NodeExecutorFactory
 import app.knotwork.android.domain.engine.executors.ToolNodeExecutor
 import app.knotwork.android.domain.engine.structured.JsonPayloadExtractor
+import app.knotwork.android.domain.engine.stuck.GraphStuckDetector
+import app.knotwork.android.domain.engine.stuck.RunStepObservation
+import app.knotwork.android.domain.engine.stuck.StuckVerdict
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ChatHistorySummary
 import app.knotwork.android.domain.models.ConsoleEvent
@@ -19,12 +22,17 @@ import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.ResumeContext
+import app.knotwork.android.domain.models.RunBudgetLedger
+import app.knotwork.android.domain.models.RunContextNotes
 import app.knotwork.android.domain.models.RunGeneratingModel
 import app.knotwork.android.domain.models.RunImageDelivery
+import app.knotwork.android.domain.models.RunNoticeCause
 import app.knotwork.android.domain.models.RunOrigin
-import app.knotwork.android.domain.models.RunStepBudget
+import app.knotwork.android.domain.models.RunSpend
+import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.ToolInvocationResult
+import app.knotwork.android.domain.models.diagnostic
 import app.knotwork.android.domain.models.usesContextConfig
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
 import app.knotwork.android.domain.prompt.PromptVariableProvider
@@ -36,6 +44,7 @@ import app.knotwork.android.domain.repositories.MetricsRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.usecases.ResolveRunCeilingsUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
@@ -62,7 +71,16 @@ import javax.inject.Singleton
 // collaborators is tracked as future work rather than forced here.
 @Suppress("LargeClass")
 @Singleton
-class GraphExecutionEngine @Inject constructor(
+class GraphExecutionEngine
+@Inject
+// LongParameterList is suppressed on the constructor rather than on the class:
+// every parameter here is a collaborator Hilt injects, so the list is assembled
+// by the container and never written out by hand, and it shrinks only when the
+// class is decomposed — the future work named above. Suppressing it class-wide
+// would also silence the acknowledged finding on `invoke` below, and every
+// future one in a 3k-line file.
+@Suppress("LongParameterList")
+constructor(
     private val nodeExecutorFactory: NodeExecutorFactory,
     private val toolNodeExecutor: ToolNodeExecutor,
     private val chatRepository: ChatRepository,
@@ -78,6 +96,7 @@ class GraphExecutionEngine @Inject constructor(
     private val memoryRepository: MemoryRepository,
     private val pipelineRunRepository: PipelineRunRepository,
     private val runTraceRepository: RunTraceRepository,
+    private val resolveRunCeilingsUseCase: ResolveRunCeilingsUseCase,
 ) {
 
     /**
@@ -134,13 +153,29 @@ class GraphExecutionEngine @Inject constructor(
      *   runtime nesting ceiling and to thread the next depth into its own
      *   recursive call). It also stamps every console/trace record so the console
      *   can render nested sub-pipeline output as a hierarchy.
-     * @param stepBudget The step budget shared across the whole run tree. `null`
-     *   (the default, used by top-level callers) makes the engine seed a fresh
-     *   [RunStepBudget] from [SettingsRepository.pipelineMaxSteps]; a sub-pipeline
-     *   invocation passes the parent's budget so the nested run decrements the
-     *   same ceiling instead of getting a private allowance. Exhaustion at any
-     *   depth fails the run with the max-steps error, which propagates up the
-     *   stack as the parent PIPELINE node's error.
+     * @param budget The spend ledger shared across the whole run tree. `null`
+     *   (the default, used by top-level callers) makes the engine build one:
+     *   ceilings resolved from [origin], counters seeded from whatever the run
+     *   record already holds — which is zero for a fresh run and the previous
+     *   attempt's spend for a resumed one, so the ceiling binds across a park
+     *   and resume instead of restarting. A sub-pipeline invocation passes the
+     *   parent's ledger so the nested run charges the same ceiling instead of
+     *   getting a private allowance. A breach at any depth fails the run with a
+     *   typed [RunTerminationReason], which propagates up the stack as the
+     *   parent PIPELINE node's error.
+     * @param stuckDetector The repetition detector shared across the whole run
+     *   tree, on the same terms as [budget] and for the same reason: a parent
+     *   that calls one sub-pipeline five times with the same input is one loop,
+     *   not five unrelated runs. `null` (the default) makes the engine build
+     *   one. Unlike the ledger it is **not** seeded from storage — it is
+     *   rebuilt from the replayed prefix instead, because what it needs is the
+     *   sequence of steps, which the run trace already holds and the run record
+     *   does not.
+     * @param contextNotes Advice raised for the run but not yet delivered to a
+     *   model, shared across the whole tree for the same reason [stuckDetector]
+     *   is: the detector's grace period counts steps at every depth, so a note
+     *   held in one invocation could have its clock run down by a sub-pipeline
+     *   it could never reach. `null` (the default) makes the engine build one.
      * @param imageInput The **top-level** run's single image attachment, already
      *   resolved to an absolute path + dimensions + byte size, or `null` for a
      *   text-only run (and always `null` for a sub-pipeline invocation, which
@@ -181,7 +216,15 @@ class GraphExecutionEngine @Inject constructor(
     // states, and surfaces console events. Decomposition into helpers
     // historically obscured the linear flow; the method body is structured
     // and well-commented in place.
-    @Suppress("LongMethod", "CyclomaticComplexMethod")
+    // LongParameterList is a real signal here and is suppressed knowingly, not
+    // dismissed: unlike the constructor, this is a hand-written call site,
+    // and 14 parameters is past what a reader can hold. Most of them travel
+    // together as one run's context (budget, stuck detector, notes, image
+    // delivery, generating model, origin) and belong in a parameter object.
+    // Doing that reshapes every call site including the recursive sub-pipeline
+    // one, so it is deliberately not smuggled into the change that first made
+    // this rule run.
+    @Suppress("LongMethod", "CyclomaticComplexMethod", "LongParameterList")
     operator fun invoke(
         sessionId: String,
         userPrompt: String,
@@ -189,7 +232,9 @@ class GraphExecutionEngine @Inject constructor(
         runId: String? = null,
         resume: ResumeContext? = null,
         depth: Int = 0,
-        stepBudget: RunStepBudget? = null,
+        budget: RunBudgetLedger? = null,
+        stuckDetector: GraphStuckDetector? = null,
+        contextNotes: RunContextNotes? = null,
         imageInput: EngineImageInput? = null,
         imageDelivery: RunImageDelivery? = null,
         runHadImage: Boolean = false,
@@ -320,13 +365,38 @@ class GraphExecutionEngine @Inject constructor(
             )
         }
 
-        val maxSteps = settingsRepository.pipelineMaxSteps.first()
-        // Step budget shared across the whole run tree. A top-level run seeds a
-        // fresh budget from the setting; a sub-pipeline run reuses the parent's
-        // instance (threaded in via [stepBudget]) so nested execution cannot
-        // side-step the parent's MAX_STEPS ceiling. Every node visited at any
-        // depth decrements it.
-        val budget = stepBudget ?: RunStepBudget(maxSteps)
+        // Spend ledger shared across the whole run tree. A sub-pipeline run
+        // reuses the parent's instance (threaded in via [budget]) so nested
+        // execution cannot side-step the parent's ceilings; a top-level run
+        // builds one, resolving the ceilings from its own origin and seeding
+        // the counters from what the run record already holds.
+        //
+        // The seed is what makes the ceiling bind across a resume. Every
+        // answered background approval comes back through the resume path, and
+        // a run may park an unbounded number of times — a ledger that started
+        // at zero on each attempt would hand a nightly loop a fresh ceiling
+        // after every answer, which is the one scenario these ceilings exist
+        // for.
+        val runBudget = budget ?: run {
+            val ceilings = resolveRunCeilingsUseCase(origin)
+            val spent = runId?.let { pipelineRunRepository.getSpend(it) } ?: RunSpend()
+            RunBudgetLedger(
+                ceilings = ceilings,
+                rootRunId = runId,
+                stepsAlreadySpent = spent.steps,
+                tokensAlreadySpent = spent.tokens,
+            )
+        }
+        // The repetition detector for this tree. Built fresh rather than seeded
+        // from storage: its state is a *sequence* of steps, and the sequence
+        // lives in the run trace, which the walk below re-reads anyway on a
+        // resume. Every replayed record is fed back through `replay(...)` as it
+        // passes, so a resumed run rebuilds the window it had rather than
+        // starting blind — which matters precisely because a run that parks
+        // often is a run in a loop.
+        val runStuckDetector = stuckDetector ?: GraphStuckDetector()
+        // Shared for the same reason the detector is — see the parameter doc.
+        val runContextNotes = contextNotes ?: RunContextNotes()
         // Per-`PIPELINE`-node visit counter. A PIPELINE node inside a loop
         // (QUEUE_PROCESSOR) executes once per item; the index disambiguates the
         // child run id of each visit and is re-derived deterministically on
@@ -514,11 +584,17 @@ class GraphExecutionEngine @Inject constructor(
         // the suspension resolves flips the record back to RUNNING.
         var runSuspended = false
 
-        while (currentNode != null && budget.remaining > 0) {
-            // Charge this node against the shared run-tree budget before doing
-            // any work. Replayed nodes are charged too (the budget is not
-            // persisted across resume — see [RunStepBudget]).
-            budget.remaining--
+        // Set the moment a ceiling refuses to let the walk continue, so the
+        // post-loop branch can say which one bound instead of re-deriving it.
+        var terminationReason: RunTerminationReason? = null
+
+        while (currentNode != null) {
+            // Ask the ledger before charging, so a node that is refused is never
+            // counted: a run stopped at the ceiling has spent exactly the
+            // ceiling, not one more than it.
+            terminationReason = runBudget.hardBreach()
+            if (terminationReason != null) break
+
             stepCount++
 
             // Visit index of this node when it is a PIPELINE node — incremented
@@ -576,6 +652,7 @@ class GraphExecutionEngine @Inject constructor(
                 emit(
                     AgentOrchestratorState.Error(
                         "Recorded checkpoint no longer matches the pipeline graph. Restart the task instead.",
+                        reason = RunTerminationReason.GraphChanged,
                     ),
                 )
                 return@flow
@@ -667,7 +744,41 @@ class GraphExecutionEngine @Inject constructor(
                     // before any tool has run). Step 3/6 forbids the all-flags-false
                     // case at the validation layer, so we will not silently leak
                     // previous-node output back into a node that opted out.
-                    nodeContextBuilder.build(currentNode.contextConfig, executionContext)
+                    val composed = nodeContextBuilder.build(currentNode.contextConfig, executionContext)
+                    // Deliver a soft warning raised by an earlier node into this
+                    // node's *composed prompt*, so the model can wind the task up
+                    // rather than discovering the hard stop by walking into it.
+                    //
+                    // Into `executorInput`, never into `currentInputText`. The
+                    // latter is the text that travels between nodes, and for a
+                    // node that does not compose a prompt it is *data*: a
+                    // pass-through OUTPUT persists it verbatim as the agent's
+                    // chat message, `QUEUE_PROCESSOR` parses it as a list,
+                    // `IF_CONDITION` branches on it. Writing the notice there
+                    // printed the engine's internals to the user as their
+                    // answer — and guarding only the node it was handed to was
+                    // not enough, because `INTENT_ROUTER` composes a prompt but
+                    // deliberately forwards `currentInputText` unchanged, so the
+                    // pollution outlived the router and reached OUTPUT anyway.
+                    // Scoping it to one node's input makes that structurally
+                    // impossible rather than conditionally avoided.
+                    // A crossing or a stuck verdict announces itself on the
+                    // console where it happens, but reaches the model only
+                    // here, on the next node that composes a prompt.
+                    //
+                    // Except OUTPUT, which composes one and must still never be
+                    // handed a note. Two reasons, and the second is the one
+                    // that bites: advice to wrap up has no reader at the node
+                    // that *is* the wrapping up; and `OutputNodeExecutor` falls
+                    // back to persisting its own input verbatim when the model
+                    // returns nothing, so a note delivered here becomes the
+                    // agent's chat message on any empty generation. That is the
+                    // third shape of the same defect — the first two were
+                    // writing the note to `currentInputText`, and letting it
+                    // survive an `INTENT_ROUTER` — and it is why the exclusion
+                    // is on the node type rather than on the executor.
+                    val notes = if (currentNode.type == NodeType.OUTPUT) null else runContextNotes.drain()
+                    if (notes != null) "$notes\n\n$composed" else composed
                 } else {
                     currentInputText
                 }
@@ -720,7 +831,9 @@ class GraphExecutionEngine @Inject constructor(
                         runId,
                         ExecutionScope(
                             depth = depth,
-                            stepBudget = budget,
+                            budget = runBudget,
+                            stuckDetector = runStuckDetector,
+                            contextNotes = runContextNotes,
                             pipelineVisitIndex = pipelineVisitIndex,
                             routingChoices = routingChoices,
                             imagePath = imagePathForNode,
@@ -810,6 +923,70 @@ class GraphExecutionEngine @Inject constructor(
                 }
                 nodeDurationMs = System.currentTimeMillis() - nodeStartMs
                 metricsRepository.recordNodeExecution(currentNode.type, nodeDurationMs, nodeResult?.tokenCount)
+                // Charge the tree only for work actually done. A replayed node
+                // was charged when it really ran; charging it again would make a
+                // run that parks often die earlier than one that never parks —
+                // the inverse of what the persisted ledger is for. That is why
+                // this sits in the live branch, beside the metrics write and the
+                // trace append, which are guarded the same way.
+                //
+                // Two further exclusions keep the *step* counter stable across
+                // attempts, which is the property a persisted counter has to have
+                // and the one a per-attempt budget never needed:
+                //
+                //  - INPUT and OUTPUT are never written to the trace, so they are
+                //    never replayed and run their executors again on every
+                //    resumed attempt. On a fresh attempt they are ordinary steps
+                //    and are charged; on a resume they were already charged the
+                //    first time, and charging them again would let a run that
+                //    parks fifteen times exhaust a fifteen-step ceiling on
+                //    pass-through nodes alone — which is the very scenario the
+                //    persisted counter exists to bound.
+                //  - A node whose result carries a termination reason is a
+                //    `PIPELINE` node whose child already charged this same tree
+                //    and stopped it; charging the parent node on top would
+                //    persist one more than the ceiling it just reported.
+                //
+                // Tokens are charged unconditionally: INPUT produces none, and
+                // OUTPUT is terminal, so neither can be double-counted later.
+                val replayedPassThrough = resume != null &&
+                    (currentNode.type == NodeType.INPUT || currentNode.type == NodeType.OUTPUT)
+                val chargeableStep = !replayedPassThrough && nodeResult?.terminationReason == null
+                if (chargeableStep) {
+                    runBudget.chargeStep()
+                }
+                runBudget.chargeTokens(nodeResult?.tokenCount, approximate = nodeResult?.tokensEstimated != false)
+                if (runId != null) {
+                    persistSpend(runBudget)
+                }
+                // Announce a soft crossing where it happens, not at the top of
+                // the next iteration: a run whose last node crosses the
+                // threshold would otherwise never say so, because there is no
+                // next iteration to say it in.
+                //
+                // OUTPUT is excluded for the reason the `✓` event and the
+                // `NodeIO` emission below are: its executor has already emitted
+                // `Completed`, and a console line pushed after that would shift
+                // the terminal state away from the tail of the flow. Nothing is
+                // lost — a warning that the run is approaching its limit has no
+                // reader once the answer has been delivered.
+                if (currentNode.type != NodeType.OUTPUT) {
+                    runBudget.claimSoftBreach()?.let { soft ->
+                        // The cause is typed at the source. The console gets the
+                        // terse diagnostic; the sentence the user reads is
+                        // resolved from this same value in the presentation
+                        // layer, so the crossing is worded once rather than once
+                        // per surface.
+                        val cause = RunNoticeCause.ApproachingCeiling(
+                            axis = soft.axis,
+                            spent = soft.spent,
+                            hardLimit = soft.hardLimit,
+                        )
+                        pushConsole(ConsoleEventType.RunCeiling, cause.diagnostic())
+                        emit(AgentOrchestratorState.RunNotice(cause))
+                        runContextNotes.add(SOFT_CEILING_CONTEXT_NOTE)
+                    }
+                }
             }
             val nodeTokenCount = nodeResult?.tokenCount
 
@@ -821,7 +998,10 @@ class GraphExecutionEngine @Inject constructor(
                     ConsoleEventType.Error,
                     "${currentNode.type.name}: ${nodeResult?.error}",
                 )
-                emit(AgentOrchestratorState.Error(nodeResult?.error!!))
+                // A `PIPELINE` node forwards its sub-pipeline's typed cause here.
+                // Re-emitting it is what keeps a ceiling breach one nesting
+                // level down from settling the root run as an ordinary failure.
+                emit(AgentOrchestratorState.Error(nodeResult?.error!!, reason = nodeResult?.terminationReason))
                 return@flow
             }
 
@@ -927,6 +1107,78 @@ class GraphExecutionEngine @Inject constructor(
                 )
             }
 
+            // ── Stuck-detector observation point ──────────────────────────
+            //
+            // Placed **after** the trace append above, not before it. The
+            // stop's whole user-facing promise is *Open console*, where the
+            // repetition is visible — and a `break` taken before the append
+            // would drop the one step the verdict was actually reached on, so
+            // the console would be missing precisely the evidence the reader
+            // was sent to find. Judging the same input/output pair the trace
+            // has just recorded is the point: for every node the trace carries,
+            // what the detector saw and what a person can read back are the
+            // same thing. (INPUT is the one exception, and it is the trace's
+            // rule, not this one: INPUT and OUTPUT are never recorded. INPUT is
+            // still observed, because the pass-through accounting needs it, but
+            // it can only ever contribute a pass-through — never the repetition
+            // a verdict is reached on.)
+            //
+            // OUTPUT is excluded on the same grounds as the ✓ event and the
+            // soft-ceiling notice above: its executor has already emitted
+            // `Completed`, and a console line pushed after that would shift the
+            // terminal state away from the tail of the flow. Nothing is lost —
+            // a run that has just delivered its answer is not going in circles.
+            if (currentNode.type != NodeType.OUTPUT) {
+                val observation = RunStepObservation(
+                    nodeId = currentNode.id,
+                    inputFingerprint = GraphStuckDetector.fingerprint(executorInput),
+                    // The engine's own fallback for a node that emitted no
+                    // result is to forward its input, so the fingerprints match
+                    // and the step reads as the pass-through it is.
+                    outputFingerprint = GraphStuckDetector.fingerprint(nodeResult?.outputText ?: executorInput),
+                )
+                if (replayRecord != null) {
+                    // Rebuild the window from history without re-deciding it:
+                    // the attempt that actually ran this prefix did not stop on
+                    // it, and reaching a different verdict now would be the app
+                    // rewriting what already happened.
+                    //
+                    // The escalation it earned does carry forward, though, and
+                    // that obliges us to carry the advice with it: notes are
+                    // live-only, so the attempt that raised one and then parked
+                    // destroyed it. Re-queue it for the first live node that
+                    // composes a prompt — otherwise the resumed run inherits
+                    // only the clock and is stopped for ignoring something it
+                    // was never told. The console line and the on-screen notice
+                    // are not repeated: they were emitted when the verdict was
+                    // actually reached, and a warning re-shown on every resume
+                    // is one the reader learns to skip.
+                    if (runStuckDetector.replay(observation)) {
+                        runContextNotes.add(STUCK_CONTEXT_NOTE)
+                    }
+                } else {
+                    when (val verdict = runStuckDetector.observe(observation)) {
+                        StuckVerdict.Healthy -> Unit
+                        is StuckVerdict.Nudge -> {
+                            val cause = RunNoticeCause.LooksStuck(verdict.signal)
+                            pushConsole(ConsoleEventType.StuckDetector, cause.diagnostic())
+                            emit(AgentOrchestratorState.RunNotice(cause))
+                            runContextNotes.add(STUCK_CONTEXT_NOTE)
+                        }
+                        is StuckVerdict.Stop -> {
+                            // Same seam the ceilings use: set the reason and
+                            // leave the walk. The post-loop branch owns the
+                            // console line and the typed terminal state, so a
+                            // protective stop is worded in exactly one place
+                            // however it was decided.
+                            pushConsole(ConsoleEventType.StuckDetector, verdict.signal.diagnostic)
+                            terminationReason = RunTerminationReason.NoProgress
+                            break
+                        }
+                    }
+                }
+            }
+
             if (currentNode.type == NodeType.OUTPUT) {
                 return@flow
             }
@@ -1026,17 +1278,22 @@ class GraphExecutionEngine @Inject constructor(
         // whose walk ends with no terminal node); the OUTPUT path notes it inline.
         noteUndeliveredImage()
 
-        if (budget.remaining <= 0 && currentNode != null) {
-            // Shared run-tree budget exhausted. When this run is a sub-pipeline
-            // the Error becomes the parent PIPELINE node's error and terminates
-            // the whole stack — the message names the tree-wide ceiling so the
-            // failure is unambiguous regardless of which depth ran out.
-            pushConsole(ConsoleEventType.Error, "Pipeline exceeded max steps ($maxSteps)")
-            emit(
-                AgentOrchestratorState.Error(
-                    "Pipeline execution exceeded the maximum of $maxSteps steps shared across the pipeline tree.",
-                ),
-            )
+        val breach = terminationReason
+        if (breach != null) {
+            // A ceiling refused to let the walk continue. When this run is a
+            // sub-pipeline the Error becomes the parent PIPELINE node's error and
+            // terminates the whole stack; the typed reason travels with it, so a
+            // breach at any depth stays classified all the way up.
+            //
+            // Both carriers get the *diagnostic* form, not prose. This string is
+            // persisted to `pipeline_runs.errorMessage` and written to the run
+            // trace, where it is read by engineers; the sentence a person reads
+            // is resolved from `breach` in the presentation layer. Keeping a
+            // hand-written English sentence here is what previously let one
+            // event acquire four different wordings, two of which described
+            // behaviour the engine never had.
+            pushConsole(consoleTypeFor(breach), breach.diagnostic())
+            emit(AgentOrchestratorState.Error(breach.diagnostic(), reason = breach))
         } else {
             // Loop exited because currentNode became null before reaching OUTPUT
             pushConsole(ConsoleEventType.Error, "Pipeline terminated without OUTPUT")
@@ -1197,16 +1454,23 @@ class GraphExecutionEngine @Inject constructor(
             runTraceRepository.flush()
             true
         }
-        // Console lines and node-I/O snapshots are observations *about* the run,
-        // not progress of it: they keep arriving while a HITL gate is waiting
-        // (a sub-pipeline forwards its child's console traffic upwards). Letting
-        // them fall through to the branch below made the first such line read as
-        // "the wait ended" and flip the record back to RUNNING while the gate was
-        // still open. For a nested pipeline that left the root RUNNING and the
-        // child WAITING_APPROVAL, so `ResumePipelineRunUseCase` — which requires
-        // a resumable *root* — rejected every attempt to answer the parked
-        // notification (phase-40 finding F7).
-        state is AgentOrchestratorState.ConsoleLog || state is AgentOrchestratorState.NodeIO -> wasSuspended
+        // Console lines, node-I/O snapshots and run notices are observations
+        // *about* the run, not progress of it: they keep arriving while a HITL
+        // gate is waiting (a sub-pipeline forwards its child's console traffic
+        // upwards). Letting them fall through to the branch below made the first
+        // such line read as "the wait ended" and flip the record back to RUNNING
+        // while the gate was still open. For a nested pipeline that left the root
+        // RUNNING and the child WAITING_APPROVAL, so `ResumePipelineRunUseCase`
+        // — which requires a resumable *root* — rejected every attempt to answer
+        // the parked notification (phase-40 finding F7).
+        //
+        // A notice is only ever raised just after a node is charged, so today it
+        // cannot coincide with an open gate. It is classified here anyway: the
+        // guarantee should rest on what the state *means*, not on an ordering
+        // argument that a later change could quietly invalidate.
+        state is AgentOrchestratorState.ConsoleLog ||
+            state is AgentOrchestratorState.NodeIO ||
+            state is AgentOrchestratorState.RunNotice -> wasSuspended
         wasSuspended -> {
             pipelineRunRepository.updateStatus(runId, PipelineRunStatus.RUNNING)
             false
@@ -1223,6 +1487,43 @@ class GraphExecutionEngine @Inject constructor(
      * them.
      */
     private fun shouldComposeContext(node: NodeModel): Boolean = node.usesContextConfig()
+
+    /**
+     * Which console channel a protective stop belongs on.
+     *
+     * The walk exits through one seam whatever decided to end it, so the choice
+     * of channel has to be made from the reason rather than from the site — and
+     * it is worth making, because the two channels answer different questions.
+     * A ceiling line says a number the user chose was reached; a detector line
+     * says the pipeline misbehaved. Filing the second under the first is how a
+     * console stops being searchable.
+     *
+     * Exhaustive rather than defaulting: the reasons the walk cannot produce
+     * are listed too, on the neutral channel. An `else` would file the next
+     * engine-raised reason under the ceiling channel — a console line claiming
+     * a limit was reached when none was, found only by whoever greps for it.
+     *
+     * @param reason The typed cause the walk stopped on.
+     * @return The console event type its diagnostic should be pushed under.
+     */
+    private fun consoleTypeFor(reason: RunTerminationReason): ConsoleEventType = when (reason) {
+        RunTerminationReason.NoProgress -> ConsoleEventType.StuckDetector
+        is RunTerminationReason.StepCeiling,
+        is RunTerminationReason.TokenCeiling,
+        -> ConsoleEventType.RunCeiling
+        // Exhaustive rather than an `else`, and the reasons below are listed
+        // even though the walk cannot produce them. An `else` would quietly
+        // file the next engine-raised reason under the ceiling channel — a
+        // console line that says a limit was reached when none was, discovered
+        // only by whoever greps for it later.
+        RunTerminationReason.RunStalled,
+        RunTerminationReason.HitlWindowExpired,
+        RunTerminationReason.GraphChanged,
+        RunTerminationReason.ProcessDied,
+        RunTerminationReason.DiscardedByUser,
+        RunTerminationReason.NotResumable,
+        -> ConsoleEventType.SystemMessage
+    }
 
     /**
      * Returns a copy of [node] with its `systemPrompt` rendered through
@@ -1278,7 +1579,65 @@ class GraphExecutionEngine @Inject constructor(
         return listOf(text)
     }
 
+    /**
+     * Writes the tree's accumulated spend onto the root run record.
+     *
+     * Called once per executed node, from whatever depth is running. Two things
+     * make that cadence the right one rather than an extravagance: the walk
+     * already writes to `pipeline_runs` on every node entry (`updateCurrentNode`),
+     * so this adds no new class of traffic; and the counter has to be exact at
+     * every park, because a parked run resumes by reading it back. Nodes are
+     * seconds apart — they are LLM calls — so the write is never hot.
+     *
+     * Best-effort by the repository's contract: losing the write loses accuracy,
+     * never the run, and an under-count makes the ceiling bind late rather than
+     * early.
+     *
+     * @param ledger The run tree's spend ledger.
+     */
+    private suspend fun persistSpend(ledger: RunBudgetLedger) {
+        val rootId = ledger.rootRunId ?: return
+        pipelineRunRepository.recordSpend(
+            rootRunId = rootId,
+            stepsSpent = ledger.stepsSpent,
+            tokensSpent = ledger.tokensSpent,
+        )
+    }
+
     private companion object {
+        /**
+         * Injected into the run's own context the first time an axis crosses its
+         * soft threshold, so the model driving the next node can bring the task
+         * to a close on its own terms instead of discovering the hard stop by
+         * walking into it.
+         *
+         * Deliberately says what to do rather than quoting a number: the numbers
+         * are in the console line a person reads, and a budget figure inside the
+         * prompt invites the model to reason about arithmetic instead of about
+         * the task.
+         */
+        const val SOFT_CEILING_CONTEXT_NOTE: String =
+            "SYSTEM NOTICE: this run is close to its resource limit and may be stopped before it " +
+                "finishes. Wrap up now: produce the best answer you can from what you already have, " +
+                "and do not start new sub-tasks or additional tool calls."
+
+        /**
+         * Injected into the run's own context the first time the stuck-detector
+         * decides the run is going in circles, so the model gets a chance to
+         * break the pattern itself before the run is ended for it. This first
+         * stage is meant to be the last one: a model told that it is repeating
+         * itself usually stops.
+         *
+         * Names the observation rather than the machinery. "You have produced
+         * this before" is something a model can act on; the signal name and the
+         * repetition count are for the console, where an engineer reads them.
+         */
+        const val STUCK_CONTEXT_NOTE: String =
+            "SYSTEM NOTICE: this run appears to be repeating itself — the same work has produced the " +
+                "same result more than once, and the run will be stopped if that continues. Change " +
+                "approach or finish: give the best answer you can from what you already have, and do " +
+                "not repeat a step you have already taken."
+
         /** Lenient JSON used to parse a `QUEUE_PROCESSOR` seed list (see [parseListFromText]). */
         val listJson = Json {
             ignoreUnknownKeys = true

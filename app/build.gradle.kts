@@ -1,6 +1,9 @@
 import app.knotwork.android.buildtools.BrowserEditorConstantsGenerator
+import app.knotwork.android.buildtools.DetektAnalysisModeGuard
 import app.knotwork.android.buildtools.DexInstantiabilityChecker
 import app.knotwork.android.buildtools.DocsHygieneChecker
+import app.knotwork.android.buildtools.ExternalAutomationDocsGenerator
+import app.knotwork.android.buildtools.LintBaselineGuard
 import app.knotwork.android.buildtools.R8MappingChecker
 import app.knotwork.android.buildtools.ReleaseVersionChecker
 import com.android.build.api.artifact.SingleArtifact
@@ -163,10 +166,10 @@ android {
 
     defaultConfig {
         applicationId = "app.knotwork.android"
-        minSdk = 36
+        minSdk = 34
         targetSdk = 37
-        versionCode = 10
-        versionName = "0.7.3"
+        versionCode = 11
+        versionName = "0.8.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -254,11 +257,17 @@ android {
             // and signature verification are documented in `docs/release.md`.
             signingConfig = signingConfigs.findByName("release")
                 ?: signingConfigs.getByName("debug")
-            // Strip non-arm64 ABIs from the release APK. With `minSdk = 36`
-            // (Android 16) every supported device is 64-bit; shipping
-            // `armeabi-v7a` + `x86` + `x86_64` would inflate the artefact
-            // by ~65 MB for zero benefit. Emulator-based smoke tests should
-            // use the debug variant which keeps every ABI.
+            // Strip non-arm64 ABIs from the release APK. The reason is the
+            // inference engine, not the API floor: `litertlm-android` ships
+            // `jni/arm64-v8a` and `jni/x86` only — it has no `armeabi-v7a`
+            // binary at all — so a 32-bit ARM device cannot run this app at any
+            // `minSdk`. Shipping `armeabi-v7a` + `x86` + `x86_64` would inflate
+            // the artefact by ~65 MB for zero benefit. (The earlier wording
+            // justified this by "every `minSdk = 36` device is 64-bit", which
+            // was true but incidental; it would have gone stale when the floor
+            // moved to 34, where 32-bit devices do exist. The engine-level
+            // reason does not.) Emulator-based smoke tests should use the debug
+            // variant which keeps every ABI.
             ndk {
                 abiFilters += "arm64-v8a"
             }
@@ -324,6 +333,16 @@ android {
         // builders). Without this flag Robolectric falls back to its own minimal
         // resource table and `context.getString(R.string.…)` returns a placeholder.
         unitTests.isIncludeAndroidResources = true
+
+        // Gradle's default test-worker heap is 512 MB, and this suite (≈3800
+        // tests, Robolectric loading a merged resource table per class) began
+        // exhausting it — as an `OutOfMemoryError` in whichever unrelated class
+        // happened to run when the heap ran out, which reads like a flake and
+        // is not one. The floor is raised once here rather than chased per
+        // class; `forkEvery` is deliberately not used, since restarting the
+        // worker every N classes costs far more wall-clock than the heap costs
+        // memory.
+        unitTests.all { test -> test.maxHeapSize = "2g" }
     }
 
     // Expose the exported Room schemas to the
@@ -363,16 +382,50 @@ android {
         checkDependencies = true
         htmlReport = true
         xmlReport = true
-        // The release variant ships `arm64-v8a` only
-        // (every `minSdk = 36` device is 64-bit). ChromeOS support is not in
+        // The release variant ships `arm64-v8a` only (the inference engine has
+        // no `armeabi-v7a` binary — see the `abiFilters` block above for why
+        // this does not depend on the API floor). ChromeOS support is not in
         // scope for v0.1 — disable the lint check that demands an x86 binary.
         disable += "ChromeOsAbiSupport"
-        // `NewerVersionAvailable` / `GradleDependency` (the "a newer version of
-        // X is available" checks) are kept ENABLED on purpose: surfacing an
-        // outdated dependency is the whole point of the analysis, so we update
-        // the dependency rather than silence the check. Genuine false positives
-        // (e.g. date-versioned artefacts whose "newer" version is actually
-        // older) are grandfathered individually in `lint-baseline.xml`.
+        // Version-freshness and deadline checks stay ENABLED, but are demoted to
+        // INFORMATIONAL so they report instead of gating. Their verdict is a
+        // function of an external version index (or of the calendar), not of the
+        // contents of this repository: the same commit is green today and red
+        // tomorrow without a single edit, and green locally while red in CI,
+        // because the two version indexes refresh at different times. A check
+        // whose verdict changes without the checked object changing is a report,
+        // not a gate — `decisions.md` §35, which generalises the rule to any
+        // future check that depends on external state.
+        //
+        // Demoted, NOT disabled. `disable` maps to `Severity.IGNORE`, which drops
+        // the incident before any reporter sees it; the signal has to survive.
+        // INFORMATIONAL findings still run, still match the baseline and still
+        // appear in the HTML/XML reports, which CI uploads on every run (see
+        // `.github/workflows/check.yml`). `warningsAsErrors` cannot undo the
+        // demotion: lint promotes `Severity.WARNING` only, and INFORMATIONAL is
+        // documented as exempt.
+        //
+        // Deliberate exclusions — checks that stay gates although their verdict is
+        // not purely a function of this repository, because each encodes a store
+        // publishing blocker rather than a matter of hygiene:
+        // - `ExpiredTargetSdkVersion` (FATAL), which is calendar-driven;
+        // - `PlaySdkIndexNonCompliant`, `PlaySdkIndexVulnerability`,
+        //   `PlaySdkIndexGenericIssues`, `PlaySdkIndexDeprecated`, `RiskyLibrary`
+        //   and `OutdatedLibrary`, decided by the Google Play SDK Index — a
+        //   network-refreshed dataset with a bundled offline snapshot fallback.
+        // Being interrupted by those is the point. Anything outside that list is
+        // expected to hold the rule.
+        //
+        // - Do NOT add `ignoreWarnings = true` alongside this. Unlike
+        //   `warningsAsErrors` it tests `<= WARNING`, so it would swallow
+        //   INFORMATIONAL as well and silently delete the drift report.
+        //
+        // The baseline is the third way to delete the report, and the easiest to
+        // trip over: lint records informational findings into a regenerated
+        // baseline just like errors, and then filters them out of the reports.
+        // `verifyLintBaselineOverrides` (below, wired into `check`) fails the
+        // build if a baseline ever suppresses one of these ids.
+        informational += LintBaselineGuard.DEMOTED_ISSUE_IDS
     }
 }
 
@@ -418,25 +471,81 @@ detekt {
     source.setFrom("src/main/java", "src/main/kotlin")
 }
 
-// Coroutine-cancellation gate. `SuspendFunSwallowedCancellation` requires
-// type resolution, which the plain `detekt` task above cannot provide, so the
-// rule lives in a second, deliberately narrow run: the plugin-generated
-// type-resolution tasks for the debug variant of each distribution flavour
-// (`detektFullDebug` / `detektFossDebug`) are rewired to
-// `detekt-cancellation.yml`, a config that activates only that single rule.
-// Both flavours are wired so the gate also covers the flavour-specific
-// crash-reporting sources (`src/full` / `src/foss`). Running the full strict
-// config under type resolution instead would surface ~1.1k findings from rules
-// that have never been part of the gate — adopting them is a separate effort,
-// not a side effect of this wiring. Full-config type-resolution analysis
-// remains available via `detektMain`/`detektRelease`.
-val cancellationGateDetektTasks = setOf("detektFullDebug", "detektFossDebug")
-tasks.matching { it.name in cancellationGateDetektTasks }.configureEach {
+// Type-resolution gate. A detekt rule that implements
+// `dev.detekt.api.RequiresAnalysisApi` cannot run in the `light` analysis mode
+// of the plain `detekt` task above — and is skipped by it *silently*, so a rule
+// listed in `detekt.yml` may be checking nothing at all. Those rules live in a
+// second, deliberately narrow run: the plugin-generated type-resolution tasks
+// for the debug variant of each distribution flavour (`detektFullDebug` /
+// `detektFossDebug`) are rewired to `detekt-type-resolution.yml`, a config that
+// activates exactly the four rules this project declared it wants and can only
+// get here (`SuspendFunSwallowedCancellation`, `LongParameterList`,
+// `UnusedImport`, `UnusedPrivateFunction`). Both flavours are wired so the gate
+// also covers the flavour-specific crash-reporting sources (`src/full` /
+// `src/foss`) — which the plain task's `source` never reached either.
+//
+// Running the full strict config under type resolution instead surfaces 296
+// findings (measured), 263 of them from rules that have never been part of the
+// gate — adopting them is a separate effort, not a side effect of this wiring.
+// Full-config type-resolution analysis remains available via
+// `detektMain`/`detektRelease`.
+val typeResolutionGateDetektTasks = setOf("detektFullDebug", "detektFossDebug")
+tasks.matching { it.name in typeResolutionGateDetektTasks }.configureEach {
     this as Detekt
-    config.setFrom(files("$rootDir/config/detekt/detekt-cancellation.yml"))
+    config.setFrom(files("$rootDir/config/detekt/detekt-type-resolution.yml"))
     buildUponDefaultConfig.set(false)
 }
-tasks.named("check") { dependsOn(cancellationGateDetektTasks) }
+tasks.named("check") { dependsOn(typeResolutionGateDetektTasks) }
+
+// The guard behind the split above: it reads every rule the light-mode config
+// activates, resolves which rule classes on detekt's own classpath implement
+// `RequiresAnalysisApi`, and fails when the two sets intersect — i.e. when a
+// rule has been added to `detekt.yml` that the `detekt` task would skip without
+// saying so. Wired into `check` because the failure it prevents is invisible by
+// construction: the build stays green, the report stays empty, and the rule
+// checks nothing. It reads the rule set from the `detekt` configuration's own
+// jars rather than a pinned list, so a detekt upgrade that moves a rule across
+// the boundary is caught by the next build instead of by nobody.
+val verifyDetektAnalysisMode by tasks.registering {
+    group = "verification"
+    description = "Fails if config/detekt/detekt.yml activates a rule that needs type resolution."
+    val lightConfig: File = rootProject.file("config/detekt/detekt.yml")
+    val lightConfigPath: String = lightConfig.relativeTo(rootDir).path
+    val detektClasspath = configurations.named("detekt")
+    inputs.file(lightConfig)
+    inputs.files(detektClasspath)
+    doLast {
+        val analysisApiRules = DetektAnalysisModeGuard.rulesRequiringAnalysisApi(detektClasspath.get().files)
+        // A guard that finds no rules to compare against passes everything,
+        // which is this task's own failure mode. Detekt 2.x ships 93 such rules,
+        // so an empty set means the scan stopped finding them — a renamed marker
+        // interface or a relocated rule package after an upgrade — not that the
+        // distinction went away.
+        if (analysisApiRules.isEmpty()) {
+            throw GradleException(
+                "verifyDetektAnalysisMode found no detekt rule requiring the Analysis API on the " +
+                    "`detekt` classpath. The marker interface or the rule package has moved; the " +
+                    "guard is scanning nothing and would pass any configuration. Update " +
+                    "DetektAnalysisModeGuard before trusting this build.",
+            )
+        }
+        val violations = DetektAnalysisModeGuard.scan(
+            lightModeRules = DetektAnalysisModeGuard.activeRuleIds(lightConfig.readText()),
+            analysisApiRules = analysisApiRules,
+            configPath = lightConfigPath,
+        )
+        if (violations.isNotEmpty()) {
+            throw GradleException(
+                "Detekt rules configured where they cannot run (${violations.size} rule(s)):\n" +
+                    violations.joinToString(separator = "\n") { it.format() } +
+                    "\n\nThe `detekt` task runs in `light` analysis mode and skips these rules in " +
+                    "silence — green build, empty report, nothing checked. Move them to " +
+                    "config/detekt/detekt-type-resolution.yml, which runs under type resolution.",
+            )
+        }
+    }
+}
+tasks.named("check") { dependsOn(verifyDetektAnalysisMode) }
 
 tasks.withType<Detekt>().configureEach {
     reports {
@@ -711,6 +820,13 @@ val checkNoInternalFqn by tasks.registering {
     inputs.files(ktFiles)
     doLast {
         val fqnPattern = Regex("""\bapp\.knotwork\.android\.[a-z_]+\.[A-Za-z]""")
+        // Intent action strings are namespaced by the application id by Android
+        // convention (`<applicationId>.action.NAME`), so they read like an internal
+        // FQN while being wire data rather than a Kotlin reference — nothing an
+        // import could replace, and frozen once third-party callers use them.
+        // They are scrubbed from the line rather than exempting the whole line, so a
+        // real FQN sitting beside an action string is still caught.
+        val intentActionPattern = Regex("""\bapp\.knotwork\.android\.action\.""")
         val violations = mutableListOf<String>()
         ktFiles.forEach { file ->
             file.useLines { lines ->
@@ -724,7 +840,7 @@ val checkNoInternalFqn by tasks.registering {
                     ) {
                         return@forEachIndexed
                     }
-                    if (fqnPattern.containsMatchIn(line)) {
+                    if (fqnPattern.containsMatchIn(intentActionPattern.replace(line, ""))) {
                         violations += "${file.relativeTo(rootDir)}:${index + 1}: ${line.trim()}"
                     }
                 }
@@ -823,6 +939,83 @@ val verifyBrowserEditorConstants by tasks.registering {
 }
 tasks.named("check") { dependsOn(verifyBrowserEditorConstants) }
 
+// External-automation contract documentation sync automation.
+//
+// `docs/external-automation.md` publishes the action strings, extra keys,
+// statuses and refusal reasons of a contract whose callers live in other apps.
+// Once a Tasker profile or an `adb` one-liner is written against a key, that key
+// is frozen — and documentation that has drifted from the code fails silently on
+// the caller's side, since a request built from a stale key merely looks
+// malformed to the app. `generateExternalAutomationDocs` regenerates the
+// `AUTO-GEN` tables straight from the Kotlin declarations;
+// `verifyExternalAutomationDocs` (wired into `check`) fails the build if the
+// committed Markdown has drifted. The pure generation logic lives in `buildSrc`
+// (`ExternalAutomationDocsGenerator`) and is unit-tested there.
+//
+// Inputs are resolved into local `val`s and captured by the task actions as
+// plain `File` values, so the actions never reach back into the `Project` —
+// keeping both tasks configuration-cache compatible.
+val externalAutomationDocsFile = file("$rootDir/docs/external-automation.md")
+val externalAutomationContractFile =
+    file("$projectDir/src/main/java/app/knotwork/android/domain/constants/ExternalAutomationContract.kt")
+val externalAutomationStatusFile =
+    file("$projectDir/src/main/java/app/knotwork/android/domain/models/ExternalAutomationStatus.kt")
+val externalAutomationReasonFile =
+    file("$projectDir/src/main/java/app/knotwork/android/domain/models/ExternalAutomationRejectionReason.kt")
+val externalAutomationInputFiles: Set<File> = setOf(
+    externalAutomationContractFile,
+    externalAutomationStatusFile,
+    externalAutomationReasonFile,
+)
+
+val generateExternalAutomationDocs by tasks.registering {
+    group = "build"
+    description =
+        "Regenerates the AUTO-GEN reference tables in docs/external-automation.md from the contract sources."
+    inputs.files(externalAutomationInputFiles)
+    inputs.file(externalAutomationDocsFile)
+    outputs.file(externalAutomationDocsFile)
+    doLast {
+        val current = externalAutomationDocsFile.readText()
+        val rendered = ExternalAutomationDocsGenerator.render(
+            markdown = current,
+            contractSource = externalAutomationContractFile.readText(),
+            statusSource = externalAutomationStatusFile.readText(),
+            reasonSource = externalAutomationReasonFile.readText(),
+        )
+        if (rendered != current) {
+            externalAutomationDocsFile.writeText(rendered)
+            logger.lifecycle("docs/external-automation.md: regenerated AUTO-GEN tables.")
+        } else {
+            logger.lifecycle("docs/external-automation.md: AUTO-GEN tables already up to date.")
+        }
+    }
+}
+
+val verifyExternalAutomationDocs by tasks.registering {
+    group = "verification"
+    description =
+        "Fails the build if docs/external-automation.md AUTO-GEN tables have drifted from the contract sources."
+    inputs.files(externalAutomationInputFiles)
+    inputs.file(externalAutomationDocsFile)
+    doLast {
+        val drifted = ExternalAutomationDocsGenerator.drift(
+            markdown = externalAutomationDocsFile.readText(),
+            contractSource = externalAutomationContractFile.readText(),
+            statusSource = externalAutomationStatusFile.readText(),
+            reasonSource = externalAutomationReasonFile.readText(),
+        )
+        if (drifted.isNotEmpty()) {
+            throw GradleException(
+                "docs/external-automation.md is out of sync with the external-automation contract sources.\n" +
+                    "Drifted AUTO-GEN block(s): ${drifted.joinToString(", ")}.\n" +
+                    "Run `./gradlew :app:generateExternalAutomationDocs` and commit the updated Markdown.",
+            )
+        }
+    }
+}
+tasks.named("check") { dependsOn(verifyExternalAutomationDocs) }
+
 // Public documentation hygiene guard.
 //
 // Scans the public-contour Markdown for two defect classes that are cheap to
@@ -875,15 +1068,86 @@ val verifyDocsHygiene by tasks.registering {
 }
 tasks.named("check") { dependsOn(verifyDocsHygiene) }
 
+// Lint-baseline guard for the demoted version-freshness checks.
+//
+// Those checks report at informational severity (see the `lint {}` block above),
+// which makes the lint report their only signal — and makes the baseline a way to
+// delete that signal without failing anything. Lint records informational
+// incidents into a regenerated baseline exactly as it records errors (the write
+// path filters by issue id, never by severity) and then filters baselined
+// incidents out of the reports, so one routine `updateLintBaseline` run for an
+// unrelated batch of fixes would quietly empty the drift report and leave `check`
+// green. This project has already paid for that once: four such entries had
+// accumulated and had to be deleted before the report showed the packages it
+// exists to show.
+//
+// Unlike the checks it protects, this guard is a legitimate gate: its verdict is
+// a function of the committed baselines and nothing else.
+//
+// The pure scanner lives in `buildSrc` (`LintBaselineGuard`) and is unit-tested
+// there (`./gradlew -p buildSrc test`). The file set is a SINGLE-level glob on
+// purpose: it matches `app/lint-baseline.xml` and `catalog/lint-baseline.xml`
+// while never reaching a nested copy of the tree — notably a stale git worktree
+// under `.claude/worktrees/` — which would otherwise fail the build with a
+// violation that does not exist in this checkout.
+val verifyLintBaselineOverrides by tasks.registering {
+    group = "verification"
+    description =
+        "Fails the build if a lint baseline suppresses a check that was demoted to informational severity."
+    val rootDirForAction: File = rootDir
+    val baselineFiles: Set<File> = fileTree(rootDir) { include("*/lint-baseline.xml") }.files
+    inputs.files(baselineFiles)
+    doLast {
+        val contents = baselineFiles.associate { it.relativeTo(rootDirForAction).path to it.readText() }
+        // A guard that scans nothing passes everything, which is the failure mode
+        // this task exists to prevent. `:app` always declares a baseline, so an
+        // empty match set means the glob stopped finding the modules (a module
+        // moved under a nested path, a renamed baseline file) rather than that
+        // there is nothing to check.
+        if (contents.isEmpty()) {
+            throw GradleException(
+                "verifyLintBaselineOverrides found no lint baseline to scan. At least " +
+                    "`app/lint-baseline.xml` is expected; the single-level `*/lint-baseline.xml` " +
+                    "glob has stopped matching the modules it is meant to cover.",
+            )
+        }
+        val violations = LintBaselineGuard.scan(contents)
+        if (violations.isNotEmpty()) {
+            throw GradleException(
+                "Lint baseline suppresses a demoted check (${violations.size} violation(s)):\n" +
+                    violations.joinToString(separator = "\n") { it.format() } +
+                    "\n\nThese checks are informational so that the lint report keeps showing dependency " +
+                    "drift; a baseline entry hides them again. Delete the entries above instead of " +
+                    "regenerating the baseline wholesale.",
+            )
+        }
+    }
+}
+tasks.named("check") { dependsOn(verifyLintBaselineOverrides) }
+
 // `StoreMetadataTest` reads the store listing under `fastlane/metadata/` — the
 // text limits, the changelog for the shipping versionCode, and the screenshot
 // geometry Play enforces. Those files are not on any compile classpath, so
 // without this declaration the test task stays UP-TO-DATE after a metadata edit
 // and the guard reports a stale pass: exactly the failure mode it exists to
 // prevent, only quieter.
+//
+// `InstrumentedTestExclusionGuardTest` has the same shape and the same trap. It
+// parses the instrumented source set (which is on no unit-test classpath) and
+// reads the emulator workflow (which is not a build input at all), so both have
+// to be declared or the guard answers from a cached run of the very edit it
+// polices — adding an exclusion, or renaming the annotation the workflow names
+// as a string. Declaring them costs a unit-test re-run after an `androidTest`
+// edit; not declaring them costs the guard its meaning.
 tasks.withType<Test>().configureEach {
     inputs.dir(rootProject.file("fastlane/metadata"))
         .withPropertyName("storeMetadata")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(layout.projectDirectory.dir("src/androidTest"))
+        .withPropertyName("instrumentedSources")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(rootProject.file(".github/workflows/instrumented.yml"))
+        .withPropertyName("instrumentedWorkflow")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 

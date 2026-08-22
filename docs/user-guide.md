@@ -546,13 +546,14 @@ example `[Translator] ▶ LITE_RT`), so you can read a nested run as a
 hierarchy — both live and when replaying a finished run. Each level of
 nesting adds one step of indentation.
 
-Two run-wide limits also span the whole call tree:
+Three run-wide limits span the whole call tree:
 
-- **Step budget.** The maximum-steps limit is shared across the parent
-  and every sub-pipeline it calls, so a composition cannot loop forever
-  by nesting. If the budget runs out deep inside a sub-pipeline, the
-  whole run stops with a clear "exceeded the maximum … steps shared
-  across the pipeline tree" message.
+- **Step limit.** The step ceiling is shared across the parent and every
+  sub-pipeline it calls, so a composition cannot loop forever by nesting.
+  If it runs out deep inside a sub-pipeline, the whole run stops and says
+  it was **stopped by a safety limit**.
+- **Token limit.** Charged against the same shared allowance, on the same
+  whole-tree basis.
 - **Approvals and questions.** A tool approval or clarification raised
   *inside* a sub-pipeline surfaces its card in the chat exactly like a
   top-level one, and answering it continues the nested run in place.
@@ -710,7 +711,7 @@ immediately.
 
 ## Entry surfaces
 
-Beyond opening the app, three OS surfaces let you reach the agent from
+Beyond opening the app, four OS surfaces let you reach the agent from
 elsewhere on the device. Every surface is **off by default**: it does
 nothing until you point it at a pipeline, so the agent never acts on
 shared content or a tap until you have opted in.
@@ -750,13 +751,58 @@ a tap-through into the resulting chat. While no pipeline is bound the tile
 is inactive and a tap opens the app so you can set one up. Right after you
 bind a tile pipeline in Settings, Android offers to add the tile for you.
 
+### External automation (Tasker, MacroDroid, adb)
+
+Another app on the device can ask Knotwork to run a pipeline for it — a
+Tasker or MacroDroid profile, or a shell script over `adb`. The other app
+decides *when*; Knotwork does the language-model part of *what*.
+
+This one is different from the three above, because it opens the app to
+code you did not write. So it is switched on deliberately, in two steps:
+
+1. **Settings → Background & triggers → External automation** — the switch
+   raises a dialog spelling out what you are agreeing to: any app on the
+   device that can send a broadcast may ask, only the pipeline you pick can
+   be run, your tool approvals still apply exactly as they do for the app's
+   own background runs, a run can spend your cloud API key, and one tap
+   turns it all off again. The switch only moves once you confirm; turning
+   it back off is immediate and asks nothing.
+2. **Pipeline other apps may run** — pick the one pipeline. This is an
+   allowlist, not a default: a request naming anything else is refused
+   rather than redirected to your pick. Until you pick one, the surface is
+   on but inert — every request is refused, and the row says so in amber.
+
+**Request journal.** Every inbound request is recorded, accepted or
+refused, with the reason in plain language — "It asked for a pipeline other
+than the one you picked", "Too many requests in the last hour". A refusal is
+usually a profile that needs fixing rather than a fault in the app, and the
+journal is how you tell which. It also distinguishes the two refusal kinds:
+**Refused** means sending the same request again gives the same answer,
+**Held back** means it can be accepted later.
+
+Two details worth knowing:
+
+- **The sender is not verified.** Android only tells a receiving app who
+  sent a broadcast when the *sender* opts in, which automation apps do not.
+  So a row shows the app the caller asked to be answered on, marked
+  *unverified* — it is a claim, not a confirmed identity.
+- **A repeated refusal collapses onto one row** with a count (`×43`), so a
+  misconfigured profile looping every minute reads as one recurring problem
+  instead of forty-three separate ones.
+
+The journal screen also carries a **How another app calls this** block with
+the action string and the extra keys, so you can write the profile without
+leaving the app. Full details, including the callback your profile can
+receive back, are in
+[external-automation.md](external-automation.md).
+
 ### Choosing a pipeline per surface
 
 Bind a pipeline to a surface in either place:
 
-- **Settings → Background & triggers** — the *Pipeline for sharing* and
-  *Quick Settings pipeline* rows open a picker (choose a pipeline, or
-  **None** to switch the surface back off).
+- **Settings → Background & triggers** — the *Pipeline for sharing*,
+  *Quick Settings pipeline* and *Pipeline other apps may run* rows open a
+  picker (choose a pipeline, or **None** to switch the surface back off).
 - **Pipeline library** — a pipeline's row menu (⋮) has **Use for sharing**
   and **Use for Quick Settings tile**. The bound pipelines are easy to spot
   at a glance: the library row carries an outlined **SHARE** pill when it is
@@ -894,8 +940,10 @@ and the verdict:
 
 - **Fired** — a run started. The entry is completed later with how that run
   ended: **Completed**, **Failed**, **Stopped by the system** (the app's
-  process was killed mid-run), **You stopped it**, or **Timed out waiting for
-  approval**. Until the run settles it reads **Running…**. If the run stopped
+  process was killed mid-run), **You stopped it**, **Timed out waiting for
+  approval**, or **Stopped by a safety limit** (the run reached the step or
+  token ceiling in force for background runs — a working guard, so it does not
+  count against the trigger's health indicator). Until the run settles it reads **Running…**. If the run stopped
   to ask you something, a second line says what became of the request —
   **You approved it**, **You denied it**, **You answered it**, **Waiting for
   your response**, **No response before the window closed**, or **The request
@@ -1220,7 +1268,7 @@ be saved:
 While a composed run executes, each sub-pipeline appears as its own
 **indented span** in the console — see
 [Sub-pipelines in the console](#sub-pipelines-in-the-console) for how
-nested traces, the shared step budget, approvals raised inside a
+nested traces, the shared run limits, approvals raised inside a
 sub-pipeline, and resuming across a sub-pipeline boundary all behave.
 
 ### Variables in system prompts
@@ -1894,8 +1942,8 @@ and **Send anonymous crash reports**.
 ### Search the settings
 
 The magnifying-glass field at the top of the hub searches every setting by name,
-description, owning category and a set of synonyms — so typing `max` surfaces
-*Cap autonomous steps* (via the synonym *max steps*), *Max context length*,
+description, owning category and a set of synonyms — so typing `limit` surfaces
+*Run limits* (via its synonyms), and `max` surfaces *Max context length*,
 *Max memory chunks* and more. The matched text is highlighted in each result, and
 a result row shows its category **breadcrumb** and **Basic/Advanced** tier (plus
 a `≈ "synonym"` chip when a synonym is what matched). Tapping a result opens the
@@ -2067,14 +2115,73 @@ and is discarded rather than saved.
 
 ### Pipelines & structured output
 
-- **Cap autonomous steps** *(Basic)* (5 – 100) — upper bound on planner
-  iterations per user message; the agent pauses for guidance when the cap is hit.
+- **Run limits** *(Basic link)* — opens the [Run limits](#run-limits) screen,
+  and shows the current step and token limits on the row itself.
 - **Max nesting depth** *(Advanced)* — how deep `PIPELINE` nodes may recurse.
 - **Structured-output repairs** *(Advanced)* — how many times the
   structured-output gate re-asks the model to fix malformed JSON before falling
   back to the per-node failure policy.
 - **Retry policy** *(Advanced link)* — opens the provider detail screen (the same
   retry sliders described under Models).
+
+#### Run limits
+
+An autonomous run stops itself when it reaches one of these limits. Everything a
+run starts counts towards them — pipelines it calls, and every time it resumes
+after a pause. There are four numbers and one statement:
+
+- **Steps per run** (5 – 100) — how many steps a run may take before it stops.
+  One step is one node execution.
+- **Steps per background run** — the same limit for runs you did not start
+  yourself: a trigger, a schedule, the Quick Settings tile, or another app.
+  Until you set it, it is marked *Same as above* and follows the number above
+  it, so raising your interactive limit raises theirs too. Setting it separately
+  ends that, and it keeps its own value from then on.
+- **Tokens per run** (10 000 – 10 000 000) — how many tokens a run may send and
+  receive in total. The track is logarithmic, so a proportional change costs the
+  same drag anywhere along it.
+- **Tokens per background run** — lower by default, because nobody is watching a
+  background run finish.
+- **Spending limit — *Not measured*.** Knotwork runs on your own API key, so it
+  never sees your bill and cannot measure or cap what a run costs. Rather than
+  show you a figure it would have to guess, it says so. The token limit above is
+  the closest control.
+
+A run you are watching warns you when it passes 75 % of a limit, with an
+unobtrusive note above the composer while there is still room to finish. That
+warning point is fixed and not adjustable. Two honest caveats: the note lives in
+the chat, so a run started by a trigger at 3 am has nowhere to show it; and a
+run that pauses and resumes may warn again.
+
+#### When a run goes in circles
+
+Separately from the limits above, and with nothing for you to configure, the app
+watches a run for **repetition**: the same step, on the same input, producing the
+same result over and over. The two are not the same protection. A limit asks how
+much a run has spent; this asks whether it is getting anywhere.
+
+It works in two stages. First the run is told — quietly, in the same short strip
+above the composer that the limit warning uses, and in the run's own context, so
+the agent gets a chance to change course by itself. That is usually the end of
+it. If the repetition carries on regardless, the run is ended and the chat says
+**Stopped: the run was not getting anywhere**, with **Open console**. The
+console's **Logs** tab is where the repetition shows: the same step starts and
+finishes over and over, and the last lines say what was noticed and that the run
+was ended for it. The **Vars** tab is the companion — it shows what that step was
+given and what it produced, though only the most recent pass, since it keeps one
+entry per step rather than one per visit.
+
+A run that keeps producing *different* results is not repeating itself, however
+long it takes, and this never touches it. That case is what the limits above are
+for.
+
+When a limit is actually reached, the run **ends** — it does not pause and does
+not ask what to do. The chat shows **Stopped by a safety limit**, which allowance
+ran out, how much of it was used, and an **Adjust limits** action. A background
+run that stops this way is announced the same way in its notification and
+recorded in the trigger's journal, where it deliberately does **not** count
+against the trigger's health: a limit you configured doing its job is not a
+fault.
 
 ### Tools & workspace
 
@@ -2281,13 +2388,62 @@ to switch. Each card has:
 - A multi-line preview with `$VARIABLE` tokens highlighted inline so
   you can see at a glance which runtime values the prompt depends
   on.
-- Edit (pencil) and Delete (trash) icons in the row header.
-- A footer with `used by N pipelines` and a `Duplicate` action.
+- A footer line with `used by N pipelines` and the row's actions:
+  **Preview**, **Duplicate**, **Edit**, and a **More** menu holding
+  **Export** and **Delete**. Bundled prompts are read-only, so their
+  row shows **Preview**, **Duplicate** and **Export** directly.
 
 The FAB at the bottom-right opens the editor sheet. Inside, you can
 edit the name and category and tap any chip in the `INSERT` row to
 append the matching `$VARIABLE` to the prompt body. Save persists
 the change immediately; the next pipeline run picks it up.
+
+### Importing and exporting a prompt
+
+A prompt can travel as a **Markdown file**, so you can send one to
+somebody or keep it in a repository beside your other notes.
+
+- **Export** — from a row's **More** menu (or directly on a bundled
+  row). Pick where to save; the file is named after the prompt.
+  Exporting a bundled prompt is fine — it only reads it.
+- **Import** — the tray icon in the top bar, and the first button on
+  the empty screen. Pick a `.md` file; the prompt lands in the category
+  the file names. When there is nothing to report, a message names the
+  prompt and the category and offers to take you there; when there is,
+  you get the details instead.
+
+The file looks like this — a settings block between two lines of three
+dashes, then the prompt itself:
+
+```markdown
+---
+schemaVersion: 1
+id: concise-assistant
+name: Concise assistant
+description: Single-paragraph answers, no preamble.
+nodeType: LITE_RT
+tags: [concise, starter]
+---
+You are a helpful assistant. Answer in one paragraph, and today's
+date is $DATE.
+```
+
+Only `name`, `nodeType` and the prompt text are required, so a file
+you write by hand can be shorter than this one.
+
+**A prompt file can only supply wording.** It cannot add tools, add
+steps, or carry scripts — if a file asks for any of those, the prompt
+is still imported and the app tells you exactly what it left out. This
+is deliberate: a prompt goes into the instructions the agent follows,
+and a file you did not write should not be able to widen what the
+agent is allowed to do. For the same reason there is no "import from a
+URL" — the file picker keeps a person's decision between a link and
+your agent.
+
+If something is wrong with the file, nothing is imported and the app
+names the cause — a missing settings block, no prompt text, or a step
+type it does not have. If the prompt is already in your library and
+the file differs, you choose whether to replace it or keep both.
 
 ## Skill library
 
@@ -2476,11 +2632,23 @@ default**, or rebind the chat by creating a new one.
 
 ### The agent stopped mid-run
 
-Long pipelines can hit the **Cap autonomous steps** ceiling. The console will
-show a stop event with the step count. If you legitimately need
-more iterations, raise the ceiling in **Settings → Pipelines & structured
-output → Cap autonomous steps**. If the run is looping unproductively, lower it
-instead.
+A long run can reach one of its **run limits**. The run does not pause and does
+not ask what to do — it stops, and the chat says **Stopped by a safety limit**
+along with which allowance ran out and how much of it was used. **Adjust limits**
+on that message opens the screen where you can raise it.
+
+Two things worth knowing before you raise anything. The limit that stopped the
+run may be the **token** one rather than the step one, so read the message rather
+than assuming; and a run you did not start yourself is governed by
+the **background** limits, which are set separately on the same screen.
+
+But read the message first, because not every mid-run stop is a limit. **Stopped:
+the run was not getting anywhere** means the run was repeating itself and was
+ended for that — raising a limit would only buy it more circles, so open the
+console and look at which step keeps coming back. **Stopped: the run went quiet**
+is a third thing again: a step stopped responding, most often a tool or a server
+that never answered, and the run was ended so other messages could run. That one
+may well work on a second try.
 
 ### A trigger didn't fire
 
@@ -2494,7 +2662,14 @@ always there, and which of two shapes it takes decides what to do next:
   broken — either the condition is not what you thought, or the trigger needs
   binding or enabling.
 - **There is an entry, and it fired but ended badly.** *Failed* points at the
-  pipeline (open the run in the trigger's chat and read the console);
+  pipeline (open the run in the trigger's chat and read the console). Two
+  failures name themselves: *the run was not getting anywhere* means it was
+  repeating itself, and the console's log shows the same step running again and
+  again before the line that ends it;
+  *the run went quiet* means a step stopped responding — the console's log ends
+  with the step it started and never finished, and that step is the thing to
+  look at, though the **Vars** tab will have nothing for it because it never
+  produced anything;
   *Stopped by the system* means the process was killed mid-run, which is a
   battery / memory-pressure problem, not a pipeline one; *Timed out waiting
   for approval* means the run parked on a sensitive tool and the approval

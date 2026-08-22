@@ -742,6 +742,7 @@ private fun TriggerJournalOutcomeUi.glyph(): ImageVector = when (this) {
     TriggerJournalOutcomeUi.CancelledBySystem -> AppIcons.Warn
     TriggerJournalOutcomeUi.Cancelled -> AppIcons.Stop
     TriggerJournalOutcomeUi.HitlTimeout -> AppIcons.Hourglass
+    TriggerJournalOutcomeUi.StoppedByCeiling -> AppIcons.Shield
 }
 
 private fun TriggerJournalOutcomeUi.label(strings: TriggerDetailStrings): String = when (this) {
@@ -751,6 +752,7 @@ private fun TriggerJournalOutcomeUi.label(strings: TriggerDetailStrings): String
     TriggerJournalOutcomeUi.CancelledBySystem -> strings.outcomeCancelledBySystem
     TriggerJournalOutcomeUi.Cancelled -> strings.outcomeCancelled
     TriggerJournalOutcomeUi.HitlTimeout -> strings.outcomeHitlTimeout
+    TriggerJournalOutcomeUi.StoppedByCeiling -> strings.outcomeStoppedByCeiling
 }
 
 @Composable
@@ -760,6 +762,9 @@ private fun outcomeColor(outcome: TriggerJournalOutcomeUi): Color = when (outcom
     TriggerJournalOutcomeUi.Failure -> KnotworkTheme.extended.signalError
     TriggerJournalOutcomeUi.CancelledBySystem -> KnotworkTheme.extended.signalWarn
     TriggerJournalOutcomeUi.HitlTimeout -> KnotworkTheme.extended.signalWarn
+    // A ceiling stop is a guard doing its job, so it reads as a notice rather
+    // than as the error colour a genuine failure gets.
+    TriggerJournalOutcomeUi.StoppedByCeiling -> KnotworkTheme.extended.signalWarn
     TriggerJournalOutcomeUi.Cancelled -> KnotworkTheme.extended.onSurface2
 }
 

@@ -90,6 +90,26 @@ class SettingsCategorySnapshotTest {
     }
 
     @Test
+    fun pipelines_advanced_dark() = snapshot("pipelines_advanced", dark = true) {
+        PipelinesSettingsContent(state = SettingsPreview.pipelines(), advancedExpanded = true)
+    }
+
+    /**
+     * The Basic tier on its own, which is where the run-limits entry row lives.
+     * Previously the only Pipelines baseline had the Advanced disclosure open,
+     * so the row a user actually lands on had no capture of its own.
+     */
+    @Test
+    fun pipelines_basic_light() = snapshot("pipelines_basic", dark = false) {
+        PipelinesSettingsContent(state = SettingsPreview.pipelines())
+    }
+
+    @Test
+    fun pipelines_basic_dark() = snapshot("pipelines_basic", dark = true) {
+        PipelinesSettingsContent(state = SettingsPreview.pipelines())
+    }
+
+    @Test
     fun tools_basic_light() = snapshot("tools_basic", dark = false) {
         ToolsSettingsContent(state = SettingsPreview.tools())
     }
@@ -102,6 +122,41 @@ class SettingsCategorySnapshotTest {
     @Test
     fun background_advanced_light() = snapshot("background_advanced", dark = false) {
         BackgroundSettingsContent(state = SettingsPreview.background(), advancedExpanded = true)
+    }
+
+    // The three external-automation postures. Each is a different decision for
+    // the reader — nothing can call in, something can call in but nothing will
+    // run, something can call in and one pipeline will — so each gets a baseline
+    // in both themes rather than only the working one.
+
+    @Test
+    fun background_external_off_light() = snapshot("background_external_off", dark = false) {
+        BackgroundSettingsContent(state = SettingsPreview.background())
+    }
+
+    @Test
+    fun background_external_off_dark() = snapshot("background_external_off", dark = true) {
+        BackgroundSettingsContent(state = SettingsPreview.background())
+    }
+
+    @Test
+    fun background_external_unbound_light() = snapshot("background_external_unbound", dark = false) {
+        BackgroundSettingsContent(state = SettingsPreview.backgroundExternalUnbound())
+    }
+
+    @Test
+    fun background_external_unbound_dark() = snapshot("background_external_unbound", dark = true) {
+        BackgroundSettingsContent(state = SettingsPreview.backgroundExternalUnbound())
+    }
+
+    @Test
+    fun background_external_bound_light() = snapshot("background_external_bound", dark = false) {
+        BackgroundSettingsContent(state = SettingsPreview.backgroundExternalBound())
+    }
+
+    @Test
+    fun background_external_bound_dark() = snapshot("background_external_bound", dark = true) {
+        BackgroundSettingsContent(state = SettingsPreview.backgroundExternalBound())
     }
 
     @Test

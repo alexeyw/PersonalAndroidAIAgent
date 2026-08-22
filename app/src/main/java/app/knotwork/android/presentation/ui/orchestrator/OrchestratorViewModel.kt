@@ -85,7 +85,15 @@ import javax.inject.Inject
     "TooManyFunctions",
     "LargeClass",
 )
-class OrchestratorViewModel @Inject constructor(
+class OrchestratorViewModel
+@Inject
+// The 25-parameter constructor is the same fact seen from the dependency side:
+// one ViewModel coordinating a dozen flows needs a use case for each. Hilt
+// assembles the list, so no reader ever writes it out; it shrinks when the class
+// is split, which is the refactor tracked above. Scoped to the constructor so it
+// cannot silence a future finding elsewhere in the class.
+@Suppress("LongParameterList")
+constructor(
     private val savePipelineUseCase: SavePipelineUseCase,
     private val loadPipelineUseCase: LoadPipelineUseCase,
     private val importPipelineUseCase: ImportPipelineUseCase,
@@ -230,14 +238,25 @@ class OrchestratorViewModel @Inject constructor(
     fun bindPipelineToSurface(surface: EntrySurface, pipelineId: String) {
         viewModelScope.launch {
             setSurfacePipelineUseCase(surface, pipelineId)
-            _uiState.update { it.copy(feedbackMessage = UiText(surfaceBoundFeedback(surface))) }
+            val feedback = surfaceBoundFeedback(surface) ?: return@launch
+            _uiState.update { it.copy(feedbackMessage = UiText(feedback)) }
         }
     }
 
-    /** Snackbar feedback shown after binding a pipeline to [surface]. */
-    private fun surfaceBoundFeedback(surface: EntrySurface): Int = when (surface) {
+    /**
+     * Snackbar feedback shown after binding a pipeline to [surface], or `null`
+     * for a surface the library screen cannot bind yet.
+     *
+     * The `when` stays exhaustive on purpose — a new [EntrySurface] must not
+     * compile until someone decides what this screen says about it — while a
+     * `null` branch lets a surface exist before its wording does, instead of
+     * borrowing a sentence written about a different surface.
+     */
+    private fun surfaceBoundFeedback(surface: EntrySurface): Int? = when (surface) {
         EntrySurface.SHARE -> R.string.orchestrator_feedback_share_pipeline_bound
         EntrySurface.QUICK_TILE -> R.string.orchestrator_feedback_tile_pipeline_bound
+        // Bound from its own settings surface, which owns its wording.
+        EntrySurface.EXTERNAL_AUTOMATION -> null
     }
 
     private fun observePromptTemplates() {

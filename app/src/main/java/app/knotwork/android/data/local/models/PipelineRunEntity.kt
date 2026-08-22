@@ -1,5 +1,6 @@
 package app.knotwork.android.data.local.models
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -43,6 +44,21 @@ import androidx.room.PrimaryKey
  *   Persisted so a resumed run (which never re-delivers the image) can still report
  *   image presence to IF/router nodes executing live past the resume point. Defaults
  *   to `false`.
+ * @property stepsSpent Node executions charged to this run **tree**, accumulated
+ *   across every attempt of the logical run. Written only on a tree root; a child
+ *   run charges its root, so a child row keeps `0`. `@ColumnInfo(defaultValue)`
+ *   is mandatory here and must match the `DEFAULT` in the migration exactly —
+ *   Room's `TableInfo` comparison sees both sides, and the one existing column
+ *   that got this wrong (`hadImage`, v48→49) passes only because its expected
+ *   side happens to be the null one.
+ * @property tokensSpent Tokens charged to this run tree, on the same root-keyed
+ *   basis as [stepsSpent].
+ * @property terminationReason `RunTerminationKind` name explaining why the run
+ *   stopped, when the app itself decided to stop it; `null` otherwise and for
+ *   rows written before the column existed. Decoded permissively: an unknown
+ *   string reads back as `null` rather than throwing, unlike [origin] and
+ *   [status], because an unclassified termination is a legitimate state while
+ *   an unknown origin or status is data corruption.
  */
 @Entity(
     tableName = "pipeline_runs",
@@ -75,4 +91,9 @@ data class PipelineRunEntity(
     val userPrompt: String? = null,
     val parentRunId: String? = null,
     val hadImage: Boolean = false,
+    @ColumnInfo(defaultValue = "0")
+    val stepsSpent: Int = 0,
+    @ColumnInfo(defaultValue = "0")
+    val tokensSpent: Int = 0,
+    val terminationReason: String? = null,
 )

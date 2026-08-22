@@ -15,6 +15,7 @@ import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.ResumeContext
 import app.knotwork.android.domain.models.RunOrigin
+import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.TaskPriority
 import app.knotwork.android.domain.models.ToolRisk
@@ -172,7 +173,21 @@ class TaskQueueManagerImplTest {
 
         val imageSlot = slot<EngineImageInput>()
         every {
-            graphExecutionEngine.invoke(any(), any(), any(), any(), any(), any(), any(), capture(imageSlot))
+            // Named rather than positional: this stub used to count arguments,
+            // and adding one to the engine's signature silently re-aimed the
+            // capture at a different parameter. The compiler caught it that
+            // time only because the types happened to disagree.
+            graphExecutionEngine.invoke(
+                sessionId = any(),
+                userPrompt = any(),
+                graph = any(),
+                runId = any(),
+                resume = any(),
+                depth = any(),
+                budget = any(),
+                stuckDetector = any(),
+                imageInput = capture(imageSlot),
+            )
         } returns flowOf(AgentOrchestratorState.Completed("ok"))
 
         taskQueueManager.enqueueTask(AgentTask(sessionId = "s1", prompt = "hi", attachment = attachment))
@@ -548,7 +563,26 @@ class TaskQueueManagerImplTest {
         taskQueueManager.enqueueTask(task)
         advanceUntilIdle()
 
-        coVerify { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, "node exploded") }
+        coVerify { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, "node exploded", null) }
+    }
+
+    @Test
+    fun `given an engine error carrying a typed reason then it is settled with that reason`() = runTest {
+        // The seam that carries the cause out of the engine. Verified with a
+        // real reason, not only with null: settling a ceiling stop as an
+        // untyped failure is exactly the misreading the vocabulary prevents,
+        // and a test that only ever sees null would not notice.
+        val reason = RunTerminationReason.StepCeiling(limit = 15, spent = 15)
+        every { graphExecutionEngine.invoke(any(), any(), any(), any(), any()) } returns
+            flowOf(AgentOrchestratorState.Error("over the cap", reason))
+
+        val task = AgentTask(sessionId = "session_ceiling", prompt = "p")
+        taskQueueManager.enqueueTask(task)
+        advanceUntilIdle()
+
+        coVerify {
+            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, "over the cap", reason)
+        }
     }
 
     /**
@@ -566,7 +600,7 @@ class TaskQueueManagerImplTest {
         taskQueueManager.enqueueTask(task)
         advanceUntilIdle()
 
-        coVerify { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, "engine blew up") }
+        coVerify { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, "engine blew up", null) }
     }
 
     /**
@@ -712,9 +746,19 @@ class TaskQueueManagerImplTest {
 
         val hadImageSlot = slot<Boolean>()
         every {
-            // ...imageInput(8), imageDelivery(9), runHadImage(10) — capture the 10th.
+            // Named rather than positional, for the reason above.
             graphExecutionEngine.invoke(
-                any(), any(), any(), any(), any(), any(), any(), any(), any(), capture(hadImageSlot),
+                sessionId = any(),
+                userPrompt = any(),
+                graph = any(),
+                runId = any(),
+                resume = any(),
+                depth = any(),
+                budget = any(),
+                stuckDetector = any(),
+                imageInput = any(),
+                imageDelivery = any(),
+                runHadImage = capture(hadImageSlot),
             )
         } returns flowOf(AgentOrchestratorState.Completed("ok"))
 
@@ -753,10 +797,18 @@ class TaskQueueManagerImplTest {
                 runId,
                 PipelineRunStatus.INTERRUPTED,
                 "Pipeline graph changed before resume could start. Restart the task instead.",
+                RunTerminationReason.GraphChanged,
             )
         }
         verify(exactly = 0) { graphExecutionEngine.invoke(any(), any(), any(), any(), any()) }
         coVerify(exactly = 0) { chatRepository.saveMessage(any()) }
+
+        // And the cause reaches the surface, not only the record. Without it the
+        // chat renders a refused resume as an ordinary failure with a Retry —
+        // when the useful action is to run it again against the current graph.
+        val state = taskQueueManager.observeTaskState("session_resume").first()
+        assertTrue("Expected an Error state, got $state", state is AgentOrchestratorState.Error)
+        assertEquals(RunTerminationReason.GraphChanged, (state as AgentOrchestratorState.Error).reason)
     }
 
     // endregion
@@ -823,6 +875,7 @@ class TaskQueueManagerImplTest {
                 stalling.id,
                 PipelineRunStatus.FAILED,
                 TaskQueueManagerImpl.STALLED_MESSAGE,
+                RunTerminationReason.RunStalled,
             )
         }
         coVerify { pipelineRunRepository.finishRun(following.id, PipelineRunStatus.COMPLETED) }
@@ -830,10 +883,13 @@ class TaskQueueManagerImplTest {
         // permanent, wordless "Generating…".
         val state = taskQueueManager.observeTaskState("session_stalled").first()
         assertTrue("A stalled run must not end silently, got $state", state is AgentOrchestratorState.Error)
-        assertEquals(
-            TaskQueueManagerImpl.STALLED_MESSAGE,
-            (state as AgentOrchestratorState.Error).message,
-        )
+        val error = state as AgentOrchestratorState.Error
+        assertEquals(TaskQueueManagerImpl.STALLED_MESSAGE, error.message)
+        // The cause has to reach the SURFACE, not only the record above. The
+        // record was already right while the emission dropped it, so the chat
+        // put the raw message in the destructive tile under a Retry that would
+        // stall all over again — the state this assertion exists to forbid.
+        assertEquals(RunTerminationReason.RunStalled, error.reason)
     }
 
     /**
@@ -844,7 +900,7 @@ class TaskQueueManagerImplTest {
      */
     @Test
     fun `given a slow run that keeps emitting then it is not failed`() = testScope.runTest {
-        val window = taskQueueManager.noProgressTimeoutMs
+        val window = taskQueueManager.silenceTimeoutMs
         every { graphExecutionEngine.invoke(any(), any(), any(), any()) } returns flow {
             repeat(4) {
                 delay(window - 1)
@@ -869,7 +925,7 @@ class TaskQueueManagerImplTest {
      */
     @Test
     fun `given a run waiting on an approval gate then the window does not apply`() = testScope.runTest {
-        val window = taskQueueManager.noProgressTimeoutMs
+        val window = taskQueueManager.silenceTimeoutMs
         every { graphExecutionEngine.invoke(any(), any(), any(), any()) } returns flow {
             emit(AgentOrchestratorState.WaitingForApproval("echo", "{}", ToolRisk.SENSITIVE))
             delay(window * 3)
@@ -907,6 +963,7 @@ class TaskQueueManagerImplTest {
                 task.id,
                 PipelineRunStatus.FAILED,
                 TaskQueueManagerImpl.STALLED_MESSAGE,
+                RunTerminationReason.RunStalled,
             )
         }
     }

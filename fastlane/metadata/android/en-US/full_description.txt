@@ -22,7 +22,7 @@ KNOWN LIMITATIONS
 
 This is a pre-release. The public surface, the settings layout and the on-device storage formats can still change between versions.
 
-- Android 16+ and about 2 GB of free RAM - a deliberate floor, not an oversight.
+- Android 14+ and about 2 GB of free RAM - the memory is the real constraint.
 - Shared pipeline files are not a compatibility contract yet: exports carry a version stamp, but before 1.0 that stamp is a marker, not a promise. Keep the original.
 - The reliability numbers come from one device and one operator: a scheduled pipeline ran 7.14 days without the app being opened and completed 55 of 55 firings with no unexplained misses. That is a real measurement, and it is not external validation.
 - Background runs need the battery setting on Unrestricted. Without it Android reclaims the process in about ten seconds - the platform's rule, not a bug, but until you grant it background pipelines will not run.

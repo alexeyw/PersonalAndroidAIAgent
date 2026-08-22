@@ -70,8 +70,6 @@
     <string name="settings_search_desc_memory_actions">Back up, restore, re-embed or wipe memory.</string>
 
     <!-- Pipelines &amp; structured output -->
-    <string name="settings_search_name_pipeline_max_steps">Cap autonomous steps</string>
-    <string name="settings_search_desc_pipeline_max_steps">Pause &amp; ask for guidance after N planner cycles.</string>
     <string name="settings_search_name_pipeline_max_nesting_depth">Max nesting depth</string>
     <string name="settings_search_desc_pipeline_max_nesting_depth">Deepest sub-pipeline expansion allowed.</string>
     <string name="settings_search_name_structured_output_max_repairs">Structured-output repairs</string>
@@ -116,6 +114,13 @@
     <string name="settings_search_desc_resume_max_age_hours">How long an interrupted run can still resume.</string>
     <string name="settings_search_name_background_approval_window_hours">Background approval window</string>
     <string name="settings_search_desc_background_approval_window_hours">How long a parked run waits for approval.</string>
+
+    <string name="settings_search_name_external_automation_enabled">External automation</string>
+    <string name="settings_search_desc_external_automation_enabled">Let Tasker, MacroDroid or adb start a run · off by default.</string>
+    <string name="settings_search_name_external_automation_pipeline_id">Pipeline other apps may run</string>
+    <string name="settings_search_desc_external_automation_pipeline_id">The one pipeline external automation is allowed to run.</string>
+    <string name="settings_search_name_link_external_automation_journal">External request journal</string>
+    <string name="settings_search_desc_link_external_automation_journal">Every inbound request, accepted or refused.</string>
 
     <!-- Privacy -->
     <string name="settings_search_name_crash_reporting_enabled">Crash reporting</string>

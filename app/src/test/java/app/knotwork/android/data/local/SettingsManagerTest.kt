@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -88,6 +89,11 @@ class SettingsManagerTest {
     private val requiresUserConfirmationKey = booleanPreferencesKey("requires_user_confirmation")
     private val lastReembedProviderIdKey = stringPreferencesKey("last_reembed_provider_id")
     private val pipelineMaxStepsKey = androidx.datastore.preferences.core.intPreferencesKey("pipeline_max_steps")
+    private val pipelineMaxStepsBackgroundKey =
+        androidx.datastore.preferences.core.intPreferencesKey("pipeline_max_steps_background")
+    private val runMaxTokensKey = androidx.datastore.preferences.core.intPreferencesKey("run_max_tokens")
+    private val runMaxTokensBackgroundKey =
+        androidx.datastore.preferences.core.intPreferencesKey("run_max_tokens_background")
     private val pipelineMaxNestingDepthKey =
         androidx.datastore.preferences.core.intPreferencesKey("pipeline_max_nesting_depth")
     private val audioMaxDurationSecKey =
@@ -535,6 +541,81 @@ class SettingsManagerTest {
     }
 
     @Test
+    fun `pipelineMaxStepsBackground falls back to the configured interactive cap`() = runTest {
+        // The upgrade case, and the reason this is not a plain constant default:
+        // one setting used to govern every origin, so a user who had widened the
+        // cap to 40 must not find their triggers quietly reset to 15.
+        val prefs = mockk<Preferences>()
+        every { prefs[pipelineMaxStepsBackgroundKey] } returns null
+        every { prefs[pipelineMaxStepsKey] } returns 40
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, secretStore)
+        assertEquals(40, settingsManager.pipelineMaxStepsBackground.first())
+    }
+
+    @Test
+    fun `pipelineMaxStepsBackground prefers its own stored value over the interactive one`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[pipelineMaxStepsBackgroundKey] } returns 8
+        every { prefs[pipelineMaxStepsKey] } returns 40
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, secretStore)
+        assertEquals(8, settingsManager.pipelineMaxStepsBackground.first())
+    }
+
+    @Test
+    fun `pipelineMaxStepsBackground falls back to the constant only when neither is set`() = runTest {
+        val prefs = mockk<Preferences>()
+        every { prefs[pipelineMaxStepsBackgroundKey] } returns null
+        every { prefs[pipelineMaxStepsKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, secretStore)
+        assertEquals(
+            SettingsDefaults.PIPELINE_MAX_STEPS_BACKGROUND_DEFAULT,
+            settingsManager.pipelineMaxStepsBackground.first(),
+        )
+    }
+
+    @Test
+    fun `runMaxTokens returns its default and then its stored value`() = runTest {
+        val unset = mockk<Preferences>()
+        every { unset[runMaxTokensKey] } returns null
+        every { dataStore.data } returns flowOf(unset)
+        assertEquals(
+            SettingsDefaults.RUN_MAX_TOKENS_DEFAULT,
+            SettingsManager(dataStore, secretStore).runMaxTokens.first(),
+        )
+
+        val stored = mockk<Preferences>()
+        every { stored[runMaxTokensKey] } returns 250_000
+        every { dataStore.data } returns flowOf(stored)
+        assertEquals(250_000, SettingsManager(dataStore, secretStore).runMaxTokens.first())
+    }
+
+    @Test
+    fun `runMaxTokensBackground returns its own, tighter default`() = runTest {
+        // The background number is a real default rather than an inheritance,
+        // because the token axis is new — there is no older setting a user could
+        // have configured for it.
+        val prefs = mockk<Preferences>()
+        every { prefs[runMaxTokensBackgroundKey] } returns null
+        every { dataStore.data } returns flowOf(prefs)
+
+        val settingsManager = SettingsManager(dataStore, secretStore)
+        assertEquals(
+            SettingsDefaults.RUN_MAX_TOKENS_BACKGROUND_DEFAULT,
+            settingsManager.runMaxTokensBackground.first(),
+        )
+        assertTrue(
+            "the unattended ceiling must be the tighter one",
+            SettingsDefaults.RUN_MAX_TOKENS_BACKGROUND_DEFAULT < SettingsDefaults.RUN_MAX_TOKENS_DEFAULT,
+        )
+    }
+
+    @Test
     fun `pipelineMaxNestingDepth returns default value of 3`() = runTest {
         val prefs = mockk<Preferences>()
         every { prefs[pipelineMaxNestingDepthKey] } returns null
@@ -961,6 +1042,37 @@ class SettingsManagerTest {
     private val huggingFaceTokenKey = stringPreferencesKey("hugging_face_token")
 
     /** Like [freshManagerWithRealDataStore] but also exposes the backing DataStore. */
+    @Test
+    fun `given a raised interactive cap when reset then the background ceiling inherits again`() = runTest {
+        val (manager, _, scope) = freshManagerWithExposedDataStore()
+        try {
+            // The user widens both, deliberately detaching the background one.
+            manager.setPipelineMaxSteps(40)
+            manager.setPipelineMaxStepsBackground(30)
+            assertTrue(manager.pipelineMaxStepsBackgroundIsSet.first())
+
+            manager.resetToRecommendedDefaults()
+
+            // The inheritance is the default state, so a reset has to restore
+            // it. Writing the constant instead would leave the user holding a
+            // deliberate-looking decision they never made — and from then on
+            // raising the interactive cap would silently stop moving their
+            // triggers.
+            assertFalse(
+                "a reset must not leave the background ceiling independently set",
+                manager.pipelineMaxStepsBackgroundIsSet.first(),
+            )
+            manager.setPipelineMaxSteps(40)
+            assertEquals(
+                "after a reset the background ceiling follows the interactive one again",
+                40,
+                manager.pipelineMaxStepsBackground.first(),
+            )
+        } finally {
+            scope.cancel()
+        }
+    }
+
     private fun freshManagerWithExposedDataStore(): Triple<SettingsManager, DataStore<Preferences>, CoroutineScope> {
         val file = tempFolder.newFile("settings-manager-hf-${System.nanoTime()}.preferences_pb")
         file.delete()
@@ -1489,7 +1601,21 @@ class SettingsManagerTest {
                 // break a working local setup with no explanation, and one that
                 // silently kept re-granting it would be worse.
                 "allowed_http_domains", "approved_cleartext_origins",
+                // Entry-surface bindings are user choices, not tunables. The
+                // external-automation one carries the most weight of the three:
+                // it is the allowlist of what another app may run, so a reset
+                // silently re-granting (or revoking) it would change the app's
+                // exposure without the user asking for it.
                 "share_target_pipeline_id", "quick_settings_tile_pipeline_id",
+                "external_automation_pipeline_id",
+                // Excluded because the reset REMOVES it rather than writing it,
+                // which is the only way to restore its default. Its default is
+                // not a number: while the key is absent the background step
+                // ceiling *follows* the interactive one, and writing any value
+                // — including the constant — is precisely what marks it as an
+                // independent choice. A reset that wrote it would hand the user
+                // a deliberate-looking decision they never made.
+                "pipeline_max_steps_background",
             )
 
             val uncovered = allKeys - written - excluded

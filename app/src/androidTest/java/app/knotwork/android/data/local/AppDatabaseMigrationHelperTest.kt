@@ -650,4 +650,90 @@ class AppDatabaseMigrationHelperTest {
             }
         }
     }
+
+    @Test
+    fun migrate57to58_addsExternalAutomationJournalPreservingExistingRows() {
+        helper.createDatabase(TEST_DB, 57).use { db ->
+            db.execSQL("INSERT INTO usage_active_day(day) VALUES('2026-08-18')")
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 58, true, AppDatabase.MIGRATION_57_58).use { db ->
+            db.query("SELECT COUNT(*) FROM usage_active_day").use { c ->
+                assertTrue("seeded row must survive the migration", c.moveToFirst())
+                assertEquals(1, c.getInt(0))
+            }
+            // Purely additive: an upgraded install starts with an empty journal
+            // rather than a back-filled one.
+            db.query("SELECT COUNT(*) FROM external_automation_requests").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals("upgraded install must start with no request history", 0, c.getInt(0))
+            }
+
+            // A refusal: no target, no callback address, no run — every one of
+            // those columns has to be genuinely nullable, because the commonest
+            // row in this table is a call that said almost nothing.
+            db.execSQL(
+                "INSERT INTO external_automation_requests(" +
+                    "id, requestId, receivedAt, action, targetKind, targetValue, declaredReturnPackage, " +
+                    "returnAction, attestedSenderPackage, statusKind, statusReason, runId, repeatCount) " +
+                    "VALUES('j-1', 'req-1', 100, 'app.knotwork.android.action.RUN_PIPELINE', NULL, NULL, NULL, " +
+                    "'app.knotwork.android.action.RUN_RESULT', NULL, 'Rejected', 'CONTRACT_DISABLED', NULL, 3)",
+            )
+            db.query("SELECT statusReason, repeatCount FROM external_automation_requests WHERE id = 'j-1'").use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals("CONTRACT_DISABLED", c.getString(0))
+                assertEquals(3, c.getInt(1))
+            }
+        }
+    }
+
+    /**
+     * v58 -> v59: `pipeline_runs` gains the two spend counters and the typed
+     * termination reason behind the autonomous-run ceilings.
+     *
+     * The counters must default to zero for a row that predates them — that is
+     * what lets an in-flight run picked up across an upgrade simply start
+     * counting here rather than being refused. The `DEFAULT 0` matching the
+     * entity's `@ColumnInfo(defaultValue = "0")` is validated by
+     * `runMigrationsAndValidate` itself: drop it on either side and the
+     * `TableInfo` comparison fails.
+     */
+    @Test
+    fun migrate58to59_addsSpendCountersAndTerminationReasonDefaultingToZero() {
+        helper.createDatabase(TEST_DB, 58).use { db ->
+            db.execSQL(
+                "INSERT INTO pipeline_runs(" +
+                    "id, sessionId, pipelineId, origin, status, currentNodeId, startedAt, finishedAt, " +
+                    "errorMessage, graphContentHash, userPrompt, parentRunId, hadImage) " +
+                    "VALUES('run-old', 'sess-1', 'pipe-1', 'TRIGGER', 'RUNNING', 'node-1', 100, NULL, " +
+                    "NULL, 'hash-1', 'prompt', NULL, 0)",
+            )
+        }
+
+        helper.runMigrationsAndValidate(TEST_DB, 59, true, AppDatabase.MIGRATION_58_59).use { db ->
+            db.query(
+                "SELECT stepsSpent, tokensSpent, terminationReason FROM pipeline_runs WHERE id = 'run-old'",
+            ).use { c ->
+                assertTrue("the pre-existing run must survive the migration", c.moveToFirst())
+                assertEquals("a row that predates the counters has spent nothing", 0, c.getInt(0))
+                assertEquals(0, c.getInt(1))
+                // "Why did this stop" was only ever recorded as prose, and a
+                // migration must not try to parse prose back into an enum.
+                assertTrue("historical rows carry no typed reason", c.isNull(2))
+            }
+
+            db.execSQL(
+                "UPDATE pipeline_runs SET stepsSpent = 12, tokensSpent = 4200, " +
+                    "terminationReason = 'TOKEN_CEILING' WHERE id = 'run-old'",
+            )
+            db.query(
+                "SELECT stepsSpent, tokensSpent, terminationReason FROM pipeline_runs WHERE id = 'run-old'",
+            ).use { c ->
+                assertTrue(c.moveToFirst())
+                assertEquals(12, c.getInt(0))
+                assertEquals(4200, c.getInt(1))
+                assertEquals("TOKEN_CEILING", c.getString(2))
+            }
+        }
+    }
 }

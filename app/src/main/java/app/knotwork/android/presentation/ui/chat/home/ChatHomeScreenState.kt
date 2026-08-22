@@ -5,6 +5,7 @@ import app.knotwork.android.domain.models.ClarificationRequest
 import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.MessageAttachment
 import app.knotwork.android.domain.models.PipelineSamplePrompt
+import app.knotwork.android.domain.models.RunNoticeCause
 import app.knotwork.design.components.chat.ComposerVoiceNotice
 import app.knotwork.design.screens.chat.ChatHomeConsoleState
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
@@ -55,6 +56,14 @@ import app.knotwork.design.screens.chat.ChatHomeThreadRow
  *   pipeline-agnostic set.
  * @property sourceChooserVisible whether the image-source chooser sheet
  *   (Photo library / Camera) is currently shown.
+ * @property runNotice the advisory about the run currently in flight — that it
+ *   has crossed the soft threshold on one of its limits, or that the
+ *   stuck-detector thinks it is going in circles — or `null` when there is
+ *   nothing to say. Deliberately **live-only** and deliberately
+ *   *not* part of [visual]: the run is still going, so it is not a state of the
+ *   screen but a remark about the work in it, and it must not displace the HITL
+ *   or generating visuals it coexists with. Cleared the moment the run reaches
+ *   a terminal state or the user sends again.
  * @property imageViewer target of the full-screen image viewer, or `null`
  *   when the viewer is closed.
  */
@@ -72,6 +81,7 @@ data class ChatHomeScreenState(
     val availablePipelines: List<PipelineSummary> = emptyList(),
     val activeSamplePrompts: List<PipelineSamplePrompt> = emptyList(),
     val sourceChooserVisible: Boolean = false,
+    val runNotice: RunNoticeCause? = null,
     val imageViewer: ImageViewerTarget? = null,
 )
 

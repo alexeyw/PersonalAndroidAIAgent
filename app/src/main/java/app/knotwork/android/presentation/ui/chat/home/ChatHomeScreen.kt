@@ -29,7 +29,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -71,6 +70,9 @@ import app.knotwork.android.domain.report.ContentReportComposer
 import app.knotwork.android.domain.report.ContentReportReason
 import app.knotwork.android.presentation.ui.chat.CHAT_EXPORT_MIME_JSON
 import app.knotwork.android.presentation.ui.chat.toShareChooser
+import app.knotwork.android.presentation.ui.common.RunTerminationAction
+import app.knotwork.android.presentation.ui.common.RunTerminationCopyMapper
+import app.knotwork.android.presentation.ui.common.resolve
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chat.AudioSourceChooserSheet
@@ -114,6 +116,9 @@ import java.io.File
  * @param onOpenModels deep-link callback into the Models management route.
  * @param onOpenArchive deep-link callback into the archived-chats route, fired
  *   from the drawer footer entry (which only appears once something is archived).
+ * @param onOpenRunLimits deep-link callback into the run-limits screen, offered
+ *   on a run that a ceiling stopped — the one action that can change the
+ *   outcome, where retrying the same turn cannot.
  * @param modifier optional layout modifier applied to the screen root.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -124,6 +129,7 @@ fun ChatHomeScreen(
     onOpenSettings: () -> Unit = {},
     onOpenModels: () -> Unit = {},
     onOpenArchive: () -> Unit = {},
+    onOpenRunLimits: () -> Unit = {},
 ) {
     // Single subscription to the consolidated screen state — the immutable
     // sub-structures (composer, console, pending, thread, model, tokens)
@@ -359,7 +365,7 @@ fun ChatHomeScreen(
     // `strings_chat.xml`.
     val fixtures = rememberChatHomeFixtures()
 
-    val viewState = screenState.toViewState(fixtures = fixtures)
+    val viewState = screenState.toViewState(fixtures = fixtures) { context.resolve(it) }
 
     val callbacks = ChatHomeCallbacks(
         onComposerValueChange = viewModel::onComposerValueChange,
@@ -392,18 +398,33 @@ fun ChatHomeScreen(
         onConsoleSearch = viewModel.console::toggleConsoleSearch,
         onConsoleSearchQueryChange = viewModel.console::onConsoleSearchQueryChange,
         onConsoleCopyLine = { line ->
-            clipboardManager.setText(AnnotatedString(viewModel.console.buildConsoleLineCopyPayload(line)))
+            clipboardManager.setText(AnnotatedString(ConsoleCopyPayloads.line(line)))
+            viewModel.console.signalConsoleLineCopied()
+        },
+        onConsoleCopyVar = { row ->
+            clipboardManager.setText(AnnotatedString(ConsoleCopyPayloads.variable(row)))
+            viewModel.console.signalConsoleLineCopied()
+        },
+        onConsoleCopySpan = { span ->
+            clipboardManager.setText(AnnotatedString(ConsoleCopyPayloads.span(span)))
             viewModel.console.signalConsoleLineCopied()
         },
         onConsoleFilterByLineSource = viewModel.console::filterConsoleByLineSource,
-        // The catalog applies `console.filter` + `console.searchQuery` itself
-        // before rendering rows; the `Copy all` payload mirrors what the
-        // user is actively looking at, so the screen reproduces the same
-        // pre-filter here.
+        // `Copy all` copies the tab the user is looking at. It used to copy log
+        // lines whatever tab was open, so on Vars and Traces the button silently
+        // put something else on the clipboard. The catalog applies
+        // `console.filter` + `console.searchQuery` itself before rendering log
+        // rows, so the screen reproduces the same pre-filter for that tab; the
+        // choice of tab is made in the delegate, where a test can pin it.
         onConsoleCopyAll = {
             val console = screenState.console
-            val visible = visibleConsoleLogs(console.logs, console.filter, console.searchQuery)
-            clipboardManager.setText(AnnotatedString(viewModel.console.buildConsoleAllCopyPayload(visible)))
+            val payload = ConsoleCopyPayloads.forTab(
+                tab = console.tab,
+                visibleLogs = visibleConsoleLogs(console.logs, console.filter, console.searchQuery),
+                vars = console.vars,
+                traces = console.traces,
+            )
+            clipboardManager.setText(AnnotatedString(payload))
             viewModel.console.signalConsoleAllCopied()
         },
         onConsoleClear = viewModel.console::requestConsoleClear,
@@ -415,6 +436,19 @@ fun ChatHomeScreen(
         onResumeRun = viewModel.reattach::resumeInterruptedRun,
         onDiscardRun = viewModel.reattach::discardInterruptedRun,
         onErrorRetry = viewModel::retryAfterError,
+        // One slot, three destinations. The tile carries a label, not a verb,
+        // so what the action *does* is decided here from the typed reason the
+        // label was derived from — keeping the design module free of any
+        // opinion about navigation.
+        onTerminationAction = {
+            val reason = (screenState.visual as? ChatHomeUiState.Error)?.reason
+            when (reason?.let { RunTerminationCopyMapper.terminationCopy(it).action }) {
+                RunTerminationAction.ADJUST_LIMITS -> onOpenRunLimits()
+                RunTerminationAction.OPEN_CONSOLE -> viewModel.console.openConsole()
+                RunTerminationAction.RUN_AGAIN -> viewModel.retryAfterError()
+                null -> Unit
+            }
+        },
         onTitleTripleTap = { debugPickerExpanded = true },
         onToggleFavorite = viewModel.threads::toggleFavoriteCurrent,
         onEditThread = { threadId ->

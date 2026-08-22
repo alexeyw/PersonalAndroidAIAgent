@@ -5,9 +5,15 @@ import app.knotwork.android.data.local.models.PipelineRunEntity
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.RunOrigin
+import app.knotwork.android.domain.models.RunSpend
+import app.knotwork.android.domain.models.RunTerminationKind
+import app.knotwork.android.domain.models.RunTerminationReason
+import app.knotwork.android.domain.models.externalAutomationStatusForTerminal
+import app.knotwork.android.domain.repositories.ExternalAutomationJournalRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.TriggerJournalRepository
 import app.knotwork.android.domain.repositories.UsageTelemetryRepository
+import app.knotwork.android.domain.services.ExternalAutomationCallbackNotifier
 import app.knotwork.android.domain.usecases.triggerRunOutcomeForTerminal
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -47,6 +53,8 @@ class PipelineRunRepositoryImpl @Inject constructor(
     private val pipelineRunDao: PipelineRunDao,
     private val usageTelemetry: UsageTelemetryRepository,
     private val triggerJournal: TriggerJournalRepository,
+    private val externalAutomationJournal: ExternalAutomationJournalRepository,
+    private val externalAutomationCallback: ExternalAutomationCallbackNotifier,
 ) : PipelineRunRepository {
 
     /**
@@ -106,7 +114,12 @@ class PipelineRunRepositoryImpl @Inject constructor(
         }
     }
 
-    override suspend fun finishRun(runId: String, status: PipelineRunStatus, errorMessage: String?) {
+    override suspend fun finishRun(
+        runId: String,
+        status: PipelineRunStatus,
+        errorMessage: String?,
+        reason: RunTerminationReason?,
+    ) {
         // Caller contract violation, not a storage failure — never absorbed.
         require(status.isTerminal) { "finishRun requires a terminal status, got $status" }
         val rowsTransitioned = absorbing("finishRun") {
@@ -116,6 +129,7 @@ class PipelineRunRepositoryImpl @Inject constructor(
                     status = status.name,
                     finishedAt = System.currentTimeMillis(),
                     errorMessage = errorMessage,
+                    terminationReason = reason?.kind?.name,
                     terminalStatuses = TERMINAL_STATUS_NAMES,
                 )
             }
@@ -126,34 +140,135 @@ class PipelineRunRepositoryImpl @Inject constructor(
         // an outcome already attributed to its trigger-journal row.
         if (rowsTransitioned > 0) {
             recordRunTelemetry(runId, status)
-            recordTriggerRunOutcome(runId, status, errorMessage)
+            recordOriginBoundOutcome(runId, status, errorMessage, reason)
+        }
+    }
+
+    override suspend fun recordSpend(rootRunId: String, stepsSpent: Int, tokensSpent: Int) {
+        absorbing("recordSpend") {
+            withContext(Dispatchers.IO) {
+                pipelineRunDao.recordSpend(
+                    rootRunId = rootRunId,
+                    stepsSpent = stepsSpent,
+                    tokensSpent = tokensSpent,
+                    terminalStatuses = TERMINAL_STATUS_NAMES,
+                )
+            }
+        }
+    }
+
+    override suspend fun getSpend(rootRunId: String): RunSpend {
+        val projection = absorbing("getSpend") {
+            withContext(Dispatchers.IO) { pipelineRunDao.getSpend(rootRunId) }
+        }
+        return RunSpend(steps = projection?.stepsSpent ?: 0, tokens = projection?.tokensSpent ?: 0)
+    }
+
+    /**
+     * Attributes this run's terminal fate back onto whichever per-origin record
+     * opened for it — the second phase of the two-phase entry a firing trigger or
+     * an admitted external request opened.
+     *
+     * Dispatched on origin, read through a single-column projection rather than a
+     * full run load. The mapping from run status to each surface's outcome
+     * vocabulary lives in a pure mapper ([triggerRunOutcomeForTerminal],
+     * [externalAutomationStatusForTerminal]) — in the trigger's case keeping a
+     * platform kill distinct from a deliberate stop and from a genuine failure.
+     *
+     * Best-effort throughout: the origin read is absorbed and each store absorbs
+     * its own storage failures, so this can never disturb the run it observes.
+     */
+    private suspend fun recordOriginBoundOutcome(
+        runId: String,
+        status: PipelineRunStatus,
+        errorMessage: String?,
+        reason: RunTerminationReason?,
+    ) {
+        val originName = absorbing("getRunOrigin") {
+            withContext(Dispatchers.IO) { pipelineRunDao.getRunOrigin(runId) }
+        }
+        // Parsed before branching, so the `when` below is exhaustive over the enum
+        // rather than over strings. The string form compiled happily with an
+        // `else -> Unit`, which meant a newly added origin would have slipped
+        // through here silently — the one place in the app where "this origin
+        // keeps a record a terminal transition must settle" is decided.
+        // An unparseable value is a row this build does not understand; absorbed,
+        // like every other read on this path.
+        val origin = originName?.let { name -> RunOrigin.entries.firstOrNull { it.name == name } }
+        // One projection, then one branch. Two surfaces now keep a per-run record
+        // that a terminal transition has to settle, and reading the origin once
+        // keeps the hot completion path at a single extra query however many
+        // surfaces are added later. Every other origin — interactive chat, the
+        // scheduler, the tile, a share, a nested sub-pipeline child — owns no
+        // record and does no work here.
+        when (origin) {
+            RunOrigin.TRIGGER ->
+                triggerJournal.recordRunOutcome(
+                    runId,
+                    triggerRunOutcomeForTerminal(status, errorMessage, reason),
+                )
+            RunOrigin.EXTERNAL -> recordExternalAutomationOutcome(runId, status)
+            RunOrigin.CHAT, RunOrigin.SCHEDULER, RunOrigin.SHARE, RunOrigin.QUICK_TILE, null -> Unit
         }
     }
 
     /**
-     * Attributes this run's terminal fate back onto its trigger-evaluation
-     * journal row — the second phase of the two-phase journal entry a firing
-     * trigger opened (see [app.knotwork.android.domain.models.TriggerEvaluation]).
+     * Settles an external request's journal row and tells the caller how its run
+     * ended.
      *
-     * Gated on the run being [RunOrigin.TRIGGER]: only a trigger fire ever opens a
-     * journal row, so for every other surface (interactive chat, the scheduler,
-     * the tile, a share, or a nested sub-pipeline child) the mapping and the keyed
-     * write would be pure waste on the hot completion path. The origin is read
-     * through a single-column projection rather than a full run load. The mapping
-     * from run status to the journal's outcome vocabulary — in particular keeping
-     * a platform kill distinct from a deliberate stop and from a genuine failure —
-     * lives in the pure [triggerRunOutcomeForTerminal] mapper.
+     * **This is the only seam that sees every terminal transition of an external
+     * run.** The obvious alternative — announcing from `AgentWorker`, where the app
+     * already reports scheduled-task outcomes — cannot work here: a
+     * human-in-the-loop gate that outlives its live waiting phase parks the run in a
+     * *non-terminal* status, the worker is stopped, and the answer arrives hours
+     * later through `ParkedRunResumer` and the in-process task queue, with no worker
+     * left to announce anything. A background approval window is measured in hours,
+     * so for an external request carrying a gated tool that is the normal path, not
+     * an edge case.
      *
-     * Best-effort throughout: the origin read is absorbed and the journal store
-     * absorbs its own storage failures, so this can never disturb the run it
-     * observes.
+     * **Root-only for free.** A nested sub-pipeline child inherits its parent's
+     * origin but owns no journal row, so the lookup finds nothing and the callback
+     * is not sent twice.
+     *
+     * **The first terminal outcome is the one that stands**, in the row and in the
+     * callback alike. A run that settles, is resumed and settles again keeps its
+     * first reported fate: the caller has already acted on it, so a correction it
+     * cannot undo is worth less than a record that matches what it was told. The
+     * residual is deliberate and narrow — a manually resumed external run shows its
+     * first outcome in the journal rather than its last.
+     *
+     * Best-effort throughout: the journal absorbs its own storage failures and the
+     * notifier absorbs delivery failures, so neither can disturb the run they
+     * observe. A request that asked for no callback still gets its row settled —
+     * the journal is for the user, the callback is for the caller.
+     *
+     * **A protective stop is reported here as a plain `Failed`, on purpose.** The
+     * external status vocabulary is published to third parties and frozen, and its
+     * one free-form column already carries the *refusal-reason* vocabulary for
+     * `Rejected` / `Blocked` rows. Writing a run-termination kind into that same
+     * column would put two vocabularies in one field, which is a defect waiting for
+     * the first reader that consults it for a `Failed` row. A caller that needs to
+     * know a run hit a ceiling learns it the same way it learns anything else about
+     * the run: not from the acknowledgement, which by design carries no run content.
+     * The typed reason lives on the run record and in the run's console.
      */
-    private suspend fun recordTriggerRunOutcome(runId: String, status: PipelineRunStatus, errorMessage: String?) {
-        val origin = absorbing("getRunOrigin") {
-            withContext(Dispatchers.IO) { pipelineRunDao.getRunOrigin(runId) }
-        }
-        if (origin != RunOrigin.TRIGGER.name) return
-        triggerJournal.recordRunOutcome(runId, triggerRunOutcomeForTerminal(status, errorMessage))
+    private suspend fun recordExternalAutomationOutcome(runId: String, status: PipelineRunStatus) {
+        val entry = externalAutomationJournal.findByRunId(runId) ?: return
+        val outcome = externalAutomationStatusForTerminal(status)
+        // The settlement decides whether to notify. A run can reach a terminal
+        // status twice — `INTERRUPTED` is terminal *and* resumable, so a run killed
+        // by the platform settles, is resumed from the chat, and settles again — and
+        // the second settlement is refused. Notifying anyway would send the caller
+        // `Failed` and then `Completed` for one request, which is the contradiction
+        // this guard exists to prevent.
+        if (!externalAutomationJournal.recordOutcome(runId, outcome)) return
+        val returnPackage = entry.declaredReturnPackage ?: return
+        externalAutomationCallback.notifyOutcome(
+            returnPackage = returnPackage,
+            returnAction = entry.returnAction,
+            requestId = entry.requestId,
+            status = outcome,
+        )
     }
 
     /**
@@ -303,6 +418,7 @@ class PipelineRunRepositoryImpl @Inject constructor(
                     fromStatus = PipelineRunStatus.INTERRUPTED.name,
                     toStatus = PipelineRunStatus.FAILED.name,
                     errorMessage = DISCARDED_BY_USER_MESSAGE,
+                    terminationReason = RunTerminationKind.DISCARDED_BY_USER.name,
                 )
             }
         }
@@ -376,13 +492,22 @@ private fun PipelineRun.toEntity(): PipelineRunEntity = PipelineRunEntity(
     userPrompt = userPrompt,
     parentRunId = parentRunId,
     hadImage = hadImage,
+    stepsSpent = stepsSpent,
+    tokensSpent = tokensSpent,
+    terminationReason = terminationReason?.name,
 )
 
 /**
- * Maps the persistence entity back to the domain run. Enum columns are parsed
- * strictly ([IllegalArgumentException] on unknown names) — an unreadable row
- * is data corruption; the repository's best-effort wrapper turns it into a
+ * Maps the persistence entity back to the domain run. [origin] and [status] are
+ * parsed strictly ([IllegalArgumentException] on unknown names) — an unreadable
+ * row is data corruption; the repository's best-effort wrapper turns it into a
  * logged degraded read instead of a crash.
+ *
+ * `terminationReason` is the deliberate exception, parsed permissively: an
+ * absent or unrecognised cause means "this build cannot say why the run
+ * stopped", which is an ordinary state (every row written before the column
+ * existed is in it) rather than corruption. Failing the whole row over it would
+ * hide the run instead of the one field.
  *
  * @return The domain model.
  */
@@ -400,4 +525,9 @@ private fun PipelineRunEntity.toDomain(): PipelineRun = PipelineRun(
     userPrompt = userPrompt,
     parentRunId = parentRunId,
     hadImage = hadImage,
+    stepsSpent = stepsSpent,
+    tokensSpent = tokensSpent,
+    terminationReason = terminationReason?.let { name ->
+        RunTerminationKind.entries.firstOrNull { it.name == name }
+    },
 )

@@ -39,7 +39,6 @@ import app.knotwork.design.screens.settings.SLIDER_MEMORY_RECENCY_HALF_LIFE
 import app.knotwork.design.screens.settings.SLIDER_MEMORY_SEARCH_THRESHOLD
 import app.knotwork.design.screens.settings.SLIDER_MEMORY_SEARCH_TOP_K
 import app.knotwork.design.screens.settings.SLIDER_MEMORY_SUMMARY_LIMIT
-import app.knotwork.design.screens.settings.SLIDER_PIPELINE_CAP_STEPS
 import app.knotwork.design.screens.settings.SLIDER_PIPELINE_NESTING_DEPTH
 import app.knotwork.design.screens.settings.SLIDER_PIPELINE_STRUCTURED_REPAIRS
 import app.knotwork.design.screens.settings.SLIDER_PRIVACY_RETENTION_AGE
@@ -219,17 +218,16 @@ internal fun buildMemoryViewState(uiState: SettingsUiState, context: Context): M
     )
 }
 
-/** Builds the Pipelines category state (cap steps + advanced nesting/repairs). */
+/** Builds the Pipelines category state (run-limits entry + advanced nesting/repairs). */
 @Composable
 internal fun buildPipelinesViewState(uiState: SettingsUiState): PipelinesSettingsViewState = PipelinesSettingsViewState(
-    capAutonomousSteps = SettingSliderRow(
-        id = SLIDER_PIPELINE_CAP_STEPS,
-        title = stringResource(R.string.settings_pipeline_cap_steps_title),
-        valueLabel = uiState.capAutonomousSteps.toString(),
-        value = uiState.capAutonomousSteps.toFloat(),
-        valueRange = SettingsDefaults.PIPELINE_MAX_STEPS_MIN.toFloat()
-            .rangeTo(SettingsDefaults.PIPELINE_MAX_STEPS_MAX.toFloat()),
-    ).withAnchor(),
+    // The value summary is the point of the entry row: the numbers a user opened
+    // Settings to read stay legible without opening anything further.
+    runLimitsSummary = stringResource(
+        R.string.run_limits_entry_value,
+        uiState.capAutonomousSteps,
+        uiState.runMaxTokens,
+    ),
     advancedSliders = listOf(
         SettingSliderRow(
             id = SLIDER_PIPELINE_NESTING_DEPTH,
@@ -265,7 +263,10 @@ internal fun buildToolsViewState(uiState: SettingsUiState): ToolsSettingsViewSta
     blockNetworkSubtitle = stringResource(R.string.settings_restrictions_block_network_subtitle),
 )
 
-/** Builds the Background category state (notification toggles + advanced windows). */
+/**
+ * Builds the Background category state (notification toggles, entry-surface
+ * bindings, the external-automation consent switch, and the advanced windows).
+ */
 @Composable
 internal fun buildBackgroundViewState(uiState: SettingsUiState): BackgroundSettingsViewState =
     BackgroundSettingsViewState(
@@ -274,6 +275,10 @@ internal fun buildBackgroundViewState(uiState: SettingsUiState): BackgroundSetti
         shareTargetPipelineLabel = pipelineBindingLabel(uiState, uiState.shareTargetPipelineId),
         shareReuseSessionEnabled = uiState.shareReuseSession,
         quickTilePipelineLabel = pipelineBindingLabel(uiState, uiState.quickSettingsTilePipelineId),
+        externalAutomationEnabled = uiState.externalAutomationEnabled,
+        externalAutomationPipelineLabel = externalAutomationBindingLabel(uiState),
+        externalAutomationUnbound = uiState.isExternalAutomationUnbound(),
+        externalAutomationJournalLabel = externalJournalSummary(uiState.externalAutomationLatestRequest),
         advancedSliders = listOf(
             SettingSliderRow(
                 id = SLIDER_BACKGROUND_RESUME_MAX_AGE,
@@ -493,7 +498,6 @@ internal val SLIDER_TO_ANCHOR: Map<String, String> = mapOf(
     SLIDER_REPETITION_PENALTY to "REPETITION_PENALTY",
     SLIDER_MAX_CONTEXT to "MAX_CONTEXT_LENGTH",
     SLIDER_AUDIO_MAX_DURATION to "AUDIO_MAX_DURATION_SEC",
-    SLIDER_PIPELINE_CAP_STEPS to "PIPELINE_MAX_STEPS",
     SLIDER_PIPELINE_NESTING_DEPTH to "PIPELINE_MAX_NESTING_DEPTH",
     SLIDER_PIPELINE_STRUCTURED_REPAIRS to "STRUCTURED_OUTPUT_MAX_REPAIRS",
     SLIDER_MEMORY_AUTO_SUMMARIZE to "AUTO_SUMMARIZE_THRESHOLD",

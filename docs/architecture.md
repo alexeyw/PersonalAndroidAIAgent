@@ -59,7 +59,7 @@ Each layer maps onto concrete packages:
 
 | Layer          | Packages                                                                                          |
 |----------------|---------------------------------------------------------------------------------------------------|
-| `presentation` | `presentation/ui/{about,chat,files,memory,models,monitoring,more,onboarding,orchestrator,pipeline/editor,prompts,settings,splash,taskmonitor,tools}`, `presentation/ui/navigation`, `presentation/{components,state,theme,notifications,receivers}` |
+| `presentation` | `presentation/ui/{about,automation,chat,files,memory,models,monitoring,more,onboarding,orchestrator,pipeline/editor,prompts,settings,splash,taskmonitor,tools}`, `presentation/ui/navigation`, `presentation/{components,state,theme,notifications,receivers}` |
 | `domain`       | `domain/{usecases,engine,models,repositories,prompt,constants,services,pipelineio,promptio,memoryio,report}` |
 | `data`         | `data/{engine,local,repositories,prompt,mcp,services,tools,network,mappers,logging}`              |
 
@@ -612,7 +612,7 @@ into a run is deliberately narrow so the rest of the engine stays text-only:
 2. **Announce.** At run start the engine emits one `Image input: W×H, N KB`
    console line (`SystemMessage`).
 3. **Deliver to exactly one node, anywhere in the tree.** Delivery state is a
-   tree-shared `RunImageDelivery` holder (mirroring the shared `RunStepBudget`):
+   tree-shared `RunImageDelivery` holder (mirroring the shared `RunBudgetLedger`):
    a `PIPELINE` node threads it into its sub-pipeline's engine invocation via
    `ExecutionScope.imageDelivery`. The engine hands the image to the **first
    `LITE_RT` node whose context includes the original task** in execution order
@@ -930,9 +930,9 @@ replacement.
 
 The call deadline is backed by a second, independent limit one level up:
 `TaskQueueManagerImpl` is a single serial worker, so an unbounded call does not
-merely stall its own run — it freezes every chat behind it. Its **no-progress
-valve** (`NO_PROGRESS_TIMEOUT_MS`, 5 min) fails a task that has emitted nothing
-for that long. It measures **silence, not duration**, because a healthy
+merely stall its own run — it freezes every chat behind it. Its **silence
+valve** (`SILENCE_TIMEOUT_MS`, 5 min) fails a task that has emitted nothing
+for that long, with the typed reason `RUN_STALLED`. It measures **silence, not duration**, because a healthy
 generation streams per token and must never be cut for being long; and it
 exempts the wait after `WaitingForApproval` / `AwaitingClarification`, where
 silence is the expected state, re-arming at the next emission. Two limits
@@ -1007,7 +1007,7 @@ muted `RUNTIME` warning (`Cloud retry 1/2 for openai`).
 to every client it builds: **60 s socket**, **30 s connect**, **900 s request**.
 The socket value is the load-bearing one, because Ktor applies it *per read* —
 it bounds how long a provider may stay **silent**, not how long a healthy
-answer may take, the same rule the task queue's no-progress valve uses. Passing
+answer may take, the same rule the task queue's silence valve uses. Passing
 no config is not a neutral choice: Koog's own default is 900 s for both request
 and socket, measured at 900 033 ms against a stalled provider. Unlike the MCP
 SSE path above, `HttpTimeout` *does* apply here.
@@ -1443,10 +1443,36 @@ Key invariants:
   to `parentRunId IS NULL`, and resume / park-settlement always act on
   the **root** of the tree (resolved by walking `parentRunId` up). A
   child's trace records carry a nesting `depth` so the console renders
-  them indented under the spawning node. The `MAX_STEPS` budget is a
-  single `RunStepBudget` threaded (via `ExecutionScope`) through the
-  whole tree, so a sub-pipeline decrements the parent's allowance and
-  exhaustion at any depth fails the entire stack.
+  them indented under the spawning node. The autonomous-run ceilings are
+  charged against a single `RunBudgetLedger` threaded (via
+  `ExecutionScope`) through the whole tree, so a sub-pipeline charges the
+  parent's allowance and a breach at any depth fails the entire stack
+  with a typed `RunTerminationReason`. The ledger is seeded from — and
+  written back to — the root run record, so a ceiling keeps binding across
+  a park and resume instead of restarting; work already replayed from the
+  checkpoint is never charged twice.
+
+  A second tree-shared guard rides the same `ExecutionScope` seam and
+  answers a different question. The ledger bounds what a run **spends**;
+  `GraphStuckDetector` (`domain/engine/stuck/`) bounds what it
+  **repeats** — a sliding window over executed steps, observed at the
+  same point the walk writes its `NodeIo` checkpoint, so the evidence
+  behind a stop is exactly what the console can show. It recovers in two
+  stages (a note injected into the next prompt-composing node's input —
+  never into an `OUTPUT` node, which composes one but whose executor
+  echoes its own input as the answer when a model returns nothing —
+  then a forced stop reusing the shared `RunTerminationReason`). A
+  replayed prefix rebuilds its window and carries forward whether the run
+  had already been warned — otherwise a run that parks on every iteration
+  would restart the escalation each time and never be stopped — but it
+  never returns a verdict of its own, and the note it re-queues is what
+  keeps the warning ahead of the stop. Which of the two speaks first depends on the signal: on a real
+  cycle the detector's repetition signal reaches a verdict well inside the
+  default step allowance, while a straight chain that merely repeats its
+  answers has no repeated *node* to catch and is left to the ceilings —
+  spending is what they measure. Neither can stop a run the other has
+  already stopped: the walk leaves through one seam, which owns the single
+  wording.
 
 ### 6.2. Two-phase HITL (background approvals)
 
@@ -1509,14 +1535,27 @@ surfaces enqueue work into the same background path:
   tile** — start a run from outside the app. Each is **inert until the
   user binds a pipeline** (the privacy default) and enqueues with an
   explicit `pipelineId` so it runs the user's choice regardless of the
-  app default.
+  app default. A third surface, **external automation**, lets another app
+  on the device ask for a run. Its binding is deliberately stricter than
+  the other two — an **allowlist** rather than a default, so a request
+  naming any other pipeline is refused rather than redirected. The request
+  vocabulary, the status and refusal dictionaries, and the pure parser and
+  authorizer that decide on them live in `domain`
+  (`domain/constants/ExternalAutomationContract.kt`,
+  `domain/models/ExternalAutomation*.kt`, `domain/usecases/automation/`),
+  which keeps the whole admission decision testable off-device. Its consent
+  switch and pipeline binding are rows of the Background settings category;
+  its request journal is a screen of its own
+  (`presentation/ui/automation/`), reading the same `domain` dictionaries so
+  the user-facing sentences and the persisted discriminators cannot drift.
+  See [external-automation.md](external-automation.md).
 
 Neither is a new execution path. Both land on
 `TaskScheduler.scheduleOneTime(...)` (the `WorkManagerTaskScheduler`
 impl), which drives `AgentWorker` → the **same** `TaskQueueManager` →
 `GraphExecutionEngine` chain as a `schedule_task` run — only the
-`RunOrigin` differs (`TRIGGER` / `SHARE` / `QUICK_TILE`), recorded on the
-persistent `pipeline_runs` record for accounting. Everything in §6.1–§6.3
+`RunOrigin` differs (`TRIGGER` / `SHARE` / `QUICK_TILE` / `EXTERNAL`),
+recorded on the persistent `pipeline_runs` record for accounting. Everything in §6.1–§6.3
 therefore applies unchanged: the persisted run lifecycle, foreground-service
 promotion, headless engine unload, the two-phase HITL gate (a `SENSITIVE`
 / `DESTRUCTIVE` tool inside an **unattended** trigger run **parks** on a

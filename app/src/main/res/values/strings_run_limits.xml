@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Run limits — the user-facing vocabulary for autonomous-run ceilings and for
+    every way a run can be stopped before it finishes.
+
+    ONE wording for one event. Before this file existed the step ceiling had
+    nine different formulations across the product and its documentation, two of
+    which shipped inside the app promising a pause that the engine never
+    performs. Every surface that has to name a limit or explain a forced
+    termination — the run-limits screen, the chat tile, the composer banner, the
+    background notification, the foreground service — resolves its text from
+    here, through `RunTerminationCopy`.
+
+    The domain vocabulary stays `RunCeilings` / `RunTerminationReason`; the
+    user-facing name of the surface is "Run limits". That split is deliberate:
+    "ceiling" is precise for the code and opaque on a settings screen.
+-->
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!--
+        A note on `tools:ignore="PluralsCandidate"` below.
+
+        Lint is right in general: "%d steps" wants a plural. It is wrong for
+        these particular strings, and checking is cheap — every quantity here is
+        a run limit or a spend measured against one, and the sanctioned ranges
+        start at 5 steps and 10 000 tokens. The singular form is unreachable, so
+        a `<plurals>` would ship a "one" case that can never render.
+
+        This stops being true the moment a range is allowed to reach 1, or the
+        first translation lands for a language whose plural rules split above 1
+        (Russian does: 2 -> "шага", 5 -> "шагов"). `res/values-ru/strings.xml`
+        is still the documented placeholder it has always been; when it stops
+        being one, these become plurals.
+    -->
+
+    <!-- ─── Surface A · the run-limits screen ─────────────────────────── -->
+
+
+    <!-- Entry row on the Pipelines category screen. -->
+    <string name="run_limits_entry_label">Run limits</string>
+    <!-- Value summary on the entry row: the numbers are readable without opening the screen. -->
+    <string name="run_limits_entry_value" tools:ignore="PluralsCandidate">%1$,d steps · %2$,d tokens per run</string>
+    <!-- Settings-search description for the entry row. Replaces
+         settings_search_desc_pipeline_max_steps, which shipped in the app
+         promising a pause the engine never performs. -->
+    <string name="run_limits_entry_search">Caps on how much one autonomous run may use — steps, tokens, and why spend cannot be capped.</string>
+
+    <!-- A limit, with the reader's own digit grouping. -->
+    <string name="run_limits_number" tools:ignore="PluralsCandidate">%1$,d</string>
+
+    <string name="run_limits_intro">An autonomous run stops itself when it reaches one of these limits. Everything a run starts counts towards them — pipelines it calls, and every time it resumes.</string>
+
+    <string name="run_limits_group_steps">Steps</string>
+    <string name="run_limits_group_tokens">Tokens</string>
+    <string name="run_limits_group_spend">Spend</string>
+
+    <string name="run_limits_steps_label">Steps per run</string>
+    <string name="run_limits_steps_desc">How many steps a run may take before it stops. One step is one node execution.</string>
+
+    <string name="run_limits_steps_background_label">Steps per background run</string>
+    <string name="run_limits_steps_background_desc_set">Applies to runs you did not start yourself — a trigger, a schedule, the Quick Settings tile, or another app.</string>
+    <string name="run_limits_steps_background_desc_inherited">Not set separately, so runs you did not start yourself — a trigger, a schedule, the Quick Settings tile, or another app — use the same limit as above.</string>
+
+    <string name="run_limits_tokens_label">Tokens per run</string>
+    <string name="run_limits_tokens_desc">How many tokens a run may send and receive in total.</string>
+
+    <string name="run_limits_tokens_background_label">Tokens per background run</string>
+    <string name="run_limits_tokens_background_desc">Runs you did not start yourself get a lower token limit by default, because no one is watching them finish.</string>
+
+    <!-- Shown on a background row whose key has never been written: the value is
+         the configured interactive one, not an independent choice. -->
+    <string name="run_limits_qualifier_inherited">Same as above</string>
+
+    <!-- The money axis. A statement, not a control: the app is bring-your-own-key,
+         never sees an invoice, and a bundled price table would go stale silently
+         and show a wrong number AS MONEY. -->
+    <string name="run_limits_spend_label">Spending limit</string>
+    <string name="run_limits_spend_state">Not measured</string>
+    <string name="run_limits_spend_body">The app runs on your own API key, so it never sees your bill and cannot measure or cap what a run costs. The token limit above is the closest control.</string>
+
+    <string name="run_limits_soft_note">A run in an open chat warns you when it passes 75% of a limit, while there is still room to finish. The warning point is not adjustable, and a run that resumes after a pause may warn again.</string>
+
+
+    <!-- ─── Surface B · why a run stopped, all eight typed reasons ────── -->
+
+    <!-- Tone eyebrows. Status is never carried by colour alone: each tone pairs
+         a glyph with one of these words. -->
+    <string name="run_termination_tone_limit">Safety limit</string>
+    <string name="run_termination_tone_stuck">No progress</string>
+    <string name="run_termination_tone_info">Run ended</string>
+
+    <!-- Reused verbatim from the trigger journal so one event reads the same in
+         the chat, the journal and the notification. -->
+    <string name="run_termination_title_ceiling">Stopped by a safety limit</string>
+    <string name="run_termination_body_step_ceiling">This run used all the steps it was allowed. Raise the step limit, or split the work into smaller runs.</string>
+    <string name="run_termination_body_token_ceiling">This run used all the tokens it was allowed. Raise the token limit, or ask for something narrower.</string>
+
+    <string name="run_termination_title_no_progress">Stopped: the run was not getting anywhere</string>
+    <string name="run_termination_body_no_progress">The same work kept repeating without moving the task forward, so the run was ended.</string>
+
+    <!-- A stalled run and a looping one are opposite shapes and must not share a
+         sentence: this one emitted nothing at all, which is what a step waiting
+         on an external tool that never answers looks like. Telling that user
+         that work "kept repeating" would send them to compare steps that had
+         never repeated. -->
+    <string name="run_termination_title_run_stalled">Stopped: the run went quiet</string>
+    <!-- Byte-identical to TaskQueueManagerImpl.STALLED_MESSAGE, which the queue
+         writes onto the run record and the trigger journal renders verbatim. A
+         second wording here would say two different things about one event
+         depending on which surface the user opened; RunTerminationCopyMapperTest
+         fails if the two drift apart. -->
+    <string name="run_termination_body_run_stalled">The task stopped responding and was ended so other messages can run. A step it was waiting on — most often an external tool — never answered.</string>
+
+    <string name="run_termination_title_hitl_expired">Stopped waiting for your approval</string>
+    <string name="run_termination_body_hitl_expired">A step needed your approval and the waiting window closed before an answer arrived.</string>
+
+    <string name="run_termination_title_graph_changed">The pipeline changed while this run was paused</string>
+    <string name="run_termination_body_graph_changed">This run was built on the earlier version of the pipeline, so it could not pick up where it left off. Running it again uses the current version.</string>
+
+    <string name="run_termination_title_process_died">The app stopped while this run was working</string>
+    <string name="run_termination_body_process_died">The run was found unfinished at the next start and closed out. Nothing was left half-running.</string>
+
+    <string name="run_termination_title_discarded">You discarded this run</string>
+    <string name="run_termination_body_discarded">It ended at your request, and nothing was left running.</string>
+
+    <string name="run_termination_title_not_resumable">This run could not be picked up again</string>
+    <string name="run_termination_body_not_resumable">Your answer arrived, but the run had already been closed out. Running it again starts from the beginning.</string>
+
+    <!-- The numbers line. The limit is safe to name here because a live run
+         knows the ceiling that bound it; a run read back from storage does not
+         (the limit is not persisted, and re-reading the setting could report a
+         number the user has changed since). Neither form ever consults the
+         settings. The chat message is transient by design, so only the live form
+         has a consumer today; a limit-free variant belongs with whatever first
+         renders a stopped run after a restart. -->
+    <string name="run_termination_meter_steps_live" tools:ignore="PluralsCandidate">Used %1$,d of %2$,d steps</string>
+    <string name="run_termination_meter_tokens_live" tools:ignore="PluralsCandidate">Used %1$,d of %2$,d tokens</string>
+
+    <!-- The composer banner does NOT share the tile's string. It is clamped to
+         two lines, so it gets its own single clause; sharing one sentence is what
+         cut the copy in half at large font scales. -->
+    <string name="run_termination_banner_step_ceiling" tools:ignore="PluralsCandidate">Stopped by a safety limit — used %1$,d of %2$,d steps.</string>
+    <string name="run_termination_banner_token_ceiling" tools:ignore="PluralsCandidate">Stopped by a safety limit — used %1$,d of %2$,d tokens.</string>
+    <string name="run_termination_banner_no_progress">Stopped: the run was not getting anywhere.</string>
+    <string name="run_termination_banner_run_stalled">Stopped: a step never answered.</string>
+    <string name="run_termination_banner_hitl_expired">Stopped waiting for your approval.</string>
+    <string name="run_termination_banner_graph_changed">The pipeline changed while this run was paused.</string>
+    <string name="run_termination_banner_process_died">The app stopped while this run was working.</string>
+    <string name="run_termination_banner_discarded">You discarded this run.</string>
+    <string name="run_termination_banner_not_resumable">This run could not be picked up again.</string>
+
+    <!-- Actions. Retry is deliberately absent for every typed reason: re-running
+         the same turn walks into the same wall. -->
+    <string name="run_termination_action_adjust_limits">Adjust limits</string>
+    <string name="run_termination_action_open_console">Open console</string>
+    <string name="run_termination_action_run_again">Run it again</string>
+
+    <!-- ─── Surfaces C / D · the run notice above the composer ────────── -->
+
+    <string name="run_notice_soft_steps" tools:ignore="PluralsCandidate">Nearing the step limit: %1$,d of %2$,d steps used.</string>
+    <string name="run_notice_soft_tokens" tools:ignore="PluralsCandidate">Nearing the token limit: %1$,d of %2$,d tokens used.</string>
+    <!-- The stuck-detector's sentence, held back until its cause had a producer
+         because an unreferenced resource fails lint. The wording is the one
+         already frozen in the catalog snapshot beside the soft-ceiling notice,
+         so the surface renders what was reviewed. Carries no numbers: a
+         repetition count is evidence for the console, not for a one-line
+         advisory. -->
+    <string name="run_notice_looks_stuck">This run looks stuck — the same step keeps repeating. It will stop if nothing changes.</string>
+
+    <!-- ─── Background-run notification ───────────────────────────────── -->
+
+    <!-- A working guard is not a failure. A ceiling stop drops the failure title
+         and icon it used to inherit and says what actually happened. -->
+    <string name="run_termination_notification_body_step_ceiling" tools:ignore="PluralsCandidate">“%1$s” stopped at its step limit, after %2$,d steps.</string>
+    <string name="run_termination_notification_body_token_ceiling" tools:ignore="PluralsCandidate">“%1$s” stopped at its token limit, after %2$,d tokens.</string>
+
+</resources>

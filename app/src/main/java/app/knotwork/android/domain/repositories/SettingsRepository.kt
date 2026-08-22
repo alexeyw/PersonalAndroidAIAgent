@@ -624,6 +624,66 @@ interface SettingsRepository {
     suspend fun setPipelineMaxSteps(steps: Int)
 
     /**
+     * A [Flow] representing the maximum number of pipeline execution steps for
+     * a run nobody is watching — the background origins (scheduler, quick tile,
+     * trigger, external automation). Valid range: 5–100.
+     *
+     * Until this setting existed, [pipelineMaxSteps] governed every origin.
+     * While it has never been set, it therefore reports whatever
+     * [pipelineMaxSteps] is configured to, so an upgrade cannot quietly shrink
+     * the budget of an automation the user had already widened.
+     */
+    val pipelineMaxStepsBackground: Flow<Int>
+
+    /**
+     * Whether the background step ceiling has ever been set independently.
+     *
+     * `false` means the value [pipelineMaxStepsBackground] reports is inherited
+     * from [pipelineMaxSteps] rather than chosen — a real, reachable state that
+     * a surface showing both numbers has to be able to explain, because
+     * otherwise it renders two identical figures and gives no hint that moving
+     * the first one also moves the second.
+     *
+     * Exposed rather than derived by comparing the two flows: they are equal by
+     * default, so equality cannot distinguish "inherited" from "deliberately
+     * set to the same number", and only the presence of the stored key can.
+     */
+    val pipelineMaxStepsBackgroundIsSet: Flow<Boolean>
+
+    /**
+     * Updates the background step ceiling.
+     *
+     * @param steps The new limit. Will be coerced to the range 5–100.
+     */
+    suspend fun setPipelineMaxStepsBackground(steps: Int)
+
+    /**
+     * A [Flow] representing the token ceiling for an interactive run, counted
+     * across the whole run tree. Valid range: 10 000–10 000 000.
+     */
+    val runMaxTokens: Flow<Int>
+
+    /**
+     * Updates the interactive token ceiling.
+     *
+     * @param tokens The new limit. Will be coerced to the range 10 000–10 000 000.
+     */
+    suspend fun setRunMaxTokens(tokens: Int)
+
+    /**
+     * A [Flow] representing the token ceiling for a background run, counted
+     * across the whole run tree. Valid range: 10 000–10 000 000.
+     */
+    val runMaxTokensBackground: Flow<Int>
+
+    /**
+     * Updates the background token ceiling.
+     *
+     * @param tokens The new limit. Will be coerced to the range 10 000–10 000 000.
+     */
+    suspend fun setRunMaxTokensBackground(tokens: Int)
+
+    /**
      * A [Flow] representing the maximum nesting depth allowed for PIPELINE-node
      * composition (how many levels of sub-pipeline a run may descend into).
      * Enforced statically by `PipelineCompositionValidator` and at runtime by
@@ -827,6 +887,58 @@ interface SettingsRepository {
      * @param pipelineId Pipeline id to bind, or `null` to clear the binding.
      */
     suspend fun setQuickSettingsTilePipelineId(pipelineId: String?)
+
+    /**
+     * A [Flow] of the pipeline id bound to the **external-automation** entry
+     * surface — the one a third-party automation app may ask the app to run.
+     * `null` means the surface is unbound and every external request is refused.
+     *
+     * The binding is an **allowlist**, not a default: an external request must
+     * name this exact pipeline, and one naming any other pipeline is refused
+     * rather than redirected here. That is what makes the user's choice in
+     * settings the complete statement of what another app is permitted to run.
+     *
+     * Like [defaultPipelineId] this is a user binding, not a tunable preference,
+     * so it is **never** touched by `resetToRecommendedDefaults`. It is cleared
+     * automatically when the bound pipeline is deleted.
+     */
+    val externalAutomationPipelineId: Flow<String?>
+
+    /**
+     * Updates the pipeline bound to the external-automation surface. Pass `null`
+     * to unbind (external requests are then refused outright).
+     *
+     * @param pipelineId Pipeline id to bind, or `null` to clear the binding.
+     */
+    suspend fun setExternalAutomationPipelineId(pipelineId: String?)
+
+    /**
+     * A [Flow] of the master switch for the external-automation contract —
+     * whether another app on the device may ask this one to run a pipeline at
+     * all. Defaults to `false`.
+     *
+     * Off by default is not caution for its own sake: switching it on widens the
+     * app's attack surface to every installed app, because a broadcast carries no
+     * attested sender identity. The switch is therefore the user's consent, and
+     * the only thing standing between an inbound broadcast and the parser.
+     *
+     * Being off does not merely ignore requests — it refuses them with
+     * [app.knotwork.android.domain.models.ExternalAutomationRejectionReason.CONTRACT_DISABLED]
+     * and journals the refusal, so a caller can tell "switched off" from "never
+     * arrived".
+     *
+     * This is a security-relevant preference rather than a tunable, so
+     * `resetToRecommendedDefaults` returns it to `false` — the safe direction.
+     */
+    val externalAutomationEnabled: Flow<Boolean>
+
+    /**
+     * Switches the external-automation contract on or off.
+     *
+     * @param enabled `true` to let permitted external requests through, `false`
+     *   to refuse every one of them.
+     */
+    suspend fun setExternalAutomationEnabled(enabled: Boolean)
 
     /**
      * A [Flow] indicating whether the user has opted in to anonymous crash
@@ -1155,8 +1267,10 @@ interface SettingsRepository {
      * [SettingsDefaults.TOP_K_DEFAULT], [SettingsDefaults.TOP_P_DEFAULT],
      * [SettingsDefaults.REPETITION_PENALTY_DEFAULT],
      * [SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT],
-     * [SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT]). Used by the
-     * "Reset to defaults" action in Settings → LLM parameters.
+     * [SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT]) — and, alongside them, the
+     * autonomous-run ceilings, which share this reset because they are the same
+     * family of runtime bound: the background step cap and both token caps. Used
+     * by the "Reset to defaults" action in Settings → LLM parameters.
      */
     suspend fun resetSamplingDefaults()
 

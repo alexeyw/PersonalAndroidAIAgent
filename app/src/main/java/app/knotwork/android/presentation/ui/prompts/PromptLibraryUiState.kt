@@ -1,8 +1,12 @@
 package app.knotwork.android.presentation.ui.prompts
 
 import app.knotwork.android.domain.models.NodeType
+import app.knotwork.android.domain.models.PromptPackCandidate
+import app.knotwork.android.domain.models.PromptPackImportNotes
+import app.knotwork.android.domain.models.PromptPackParseError
 import app.knotwork.android.domain.models.PromptPreset
 import app.knotwork.android.domain.prompt.PromptSegment
+import app.knotwork.android.domain.usecases.promptpack.ExportedPromptPack
 import app.knotwork.android.presentation.ui.common.UiText
 
 /**
@@ -24,6 +28,13 @@ import app.knotwork.android.presentation.ui.common.UiText
  *   available".
  * @property editorDraft Editor draft when the bottom sheet is open; `null`
  *   when closed.
+ * @property importDialog The import outcome awaiting acknowledgement or a
+ *   decision; `null` when no dialog is open.
+ * @property snackbar One-shot confirmation for the outcomes that need no
+ *   decision (imported, exported, nothing changed, unreadable file); `null`
+ *   when nothing is pending.
+ * @property pendingExport A rendered prompt waiting for the create-document
+ *   picker to return a destination; `null` when no export is in flight.
  */
 data class PromptLibraryUiState(
     val bundledPresets: List<PromptPreset> = emptyList(),
@@ -34,7 +45,62 @@ data class PromptLibraryUiState(
     val previewState: PromptPreviewState = PromptPreviewState.Hidden,
     val selectedCategory: String? = null,
     val editorDraft: PromptEditorDraft? = null,
+    val importDialog: PromptImportDialog? = null,
+    val snackbar: PromptLibrarySnackbar? = null,
+    val pendingExport: ExportedPromptPack? = null,
 )
+
+/**
+ * A one-shot confirmation shown as a snackbar.
+ *
+ * @property text What happened.
+ * @property showCategory Category tab to switch to when the user taps the
+ *   action, or `null` for a snackbar with no action. A prompt imported into a
+ *   category the user is not looking at is otherwise invisible, which is the
+ *   only reason this action exists.
+ */
+data class PromptLibrarySnackbar(val text: UiText, val showCategory: String? = null)
+
+/**
+ * The import dialog currently open.
+ *
+ * Three shapes, one visual family: something was imported and there is a
+ * caveat to state, nothing could be imported, or a question has to be
+ * answered before anything happens.
+ */
+sealed class PromptImportDialog {
+
+    /**
+     * The prompt landed, and something about the file has to be said —
+     * a version this build does not emit, keys it does not know, or a
+     * request for a capability a prompt cannot grant.
+     *
+     * @property presetName Display name of the imported prompt.
+     * @property notes What was left out.
+     */
+    data class Reported(val presetName: String, val notes: PromptPackImportNotes) : PromptImportDialog()
+
+    /**
+     * Nothing was imported.
+     *
+     * @property cause Which recognised failure occurred.
+     */
+    data class Failed(val cause: PromptPackParseError) : PromptImportDialog()
+
+    /**
+     * A prompt with this id is already saved and differs from the file.
+     *
+     * @property candidate The prompt as read from the file.
+     * @property existingName Display name of the prompt already saved.
+     * @property notes Anything that also has to be reported once the user
+     *   decides, carried across the question rather than shown before it.
+     */
+    data class Collision(
+        val candidate: PromptPackCandidate,
+        val existingName: String,
+        val notes: PromptPackImportNotes?,
+    ) : PromptImportDialog()
+}
 
 /**
  * Working copy of the preset being edited in the bottom sheet. Lives on

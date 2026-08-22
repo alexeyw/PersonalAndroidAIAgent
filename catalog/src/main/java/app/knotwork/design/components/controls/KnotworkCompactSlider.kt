@@ -49,11 +49,13 @@ fun KnotworkCompactSlider(
     steps: Int = 0,
     enabled: Boolean = true,
     colors: SliderColors = compactSliderColors(),
+    onValueChangeFinished: (() -> Unit)? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     Slider(
         value = value,
         onValueChange = onValueChange,
+        onValueChangeFinished = onValueChangeFinished,
         valueRange = valueRange,
         steps = steps,
         enabled = enabled,

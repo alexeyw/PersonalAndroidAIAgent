@@ -49,9 +49,6 @@ const val SLIDER_MEMORY_LIVE_WINDOW: String = "memory_live_window"
 /** Memory · `$MEMORY_SUMMARY` default limit slider id. */
 const val SLIDER_MEMORY_SUMMARY_LIMIT: String = "memory_summary_limit"
 
-/** Pipelines · cap-autonomous-steps slider id. */
-const val SLIDER_PIPELINE_CAP_STEPS: String = "pipeline_cap_steps"
-
 /** Pipelines · max-nesting-depth slider id. */
 const val SLIDER_PIPELINE_NESTING_DEPTH: String = "pipeline_nesting_depth"
 
@@ -212,13 +209,14 @@ data class MemorySettingsViewState(
 /**
  * Pipelines-&-structured-output category sub-screen state.
  *
- * @property capAutonomousSteps Cap-autonomous-steps slider (Basic).
+ * @property runLimitsSummary Value summary on the run-limits entry row — the
+ *   step and token limits, so the numbers a user came to read are legible
+ *   without opening anything. The limits themselves moved to their own screen:
+ *   four numbers plus a spend statement do not fit here, and the one that used
+ *   to sit on this screen was the only one of the four that was visible at all.
  * @property advancedSliders Max-nesting-depth + structured-output-repairs sliders.
  */
-data class PipelinesSettingsViewState(
-    val capAutonomousSteps: SettingSliderRow,
-    val advancedSliders: List<SettingSliderRow>,
-)
+data class PipelinesSettingsViewState(val runLimitsSummary: String, val advancedSliders: List<SettingSliderRow>)
 
 // ─── Tools ───────────────────────────────────────────────────────────────────
 
@@ -256,6 +254,19 @@ data class ToolsSettingsViewState(
  * @property shareReuseSessionEnabled "Keep shares in one chat" toggle (Basic).
  * @property quickTilePipelineLabel Bound-pipeline label for the Quick Settings
  *   tile (the pipeline name, or a localised "Not set" placeholder) (Basic).
+ * @property externalAutomationEnabled "External automation" master switch — the
+ *   consent toggle that lets another app on the device ask for a pipeline run
+ *   (Basic). Off by default.
+ * @property externalAutomationPipelineLabel Bound-pipeline label for the
+ *   external-automation surface (the pipeline name, or a localised "Not set"
+ *   placeholder) (Basic).
+ * @property externalAutomationUnbound Whether the switch is on with nothing
+ *   bound — a reachable, inert state that must read as visibly incomplete rather
+ *   than quietly do nothing. Drives the warning treatment on the binding row.
+ * @property externalAutomationJournalLabel Pre-resolved summary of the newest
+ *   inbound request ("Refused · 12m ago"), or a localised "No requests yet".
+ *   Names the last event rather than a count, because the reason to open this
+ *   screen is almost always to diagnose one.
  * @property advancedSliders Resume-window + approval-window sliders (Advanced).
  */
 data class BackgroundSettingsViewState(
@@ -264,6 +275,10 @@ data class BackgroundSettingsViewState(
     val shareTargetPipelineLabel: String,
     val shareReuseSessionEnabled: Boolean,
     val quickTilePipelineLabel: String,
+    val externalAutomationEnabled: Boolean,
+    val externalAutomationPipelineLabel: String,
+    val externalAutomationUnbound: Boolean,
+    val externalAutomationJournalLabel: String,
     val advancedSliders: List<SettingSliderRow>,
 )
 

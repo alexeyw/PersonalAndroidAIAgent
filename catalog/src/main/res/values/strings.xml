@@ -204,6 +204,10 @@
     <string name="knotwork_console_search_clear_cd">Clear search</string>
     <!-- Dropdown menu item label: copy the long-pressed log line to the system clipboard. -->
     <string name="knotwork_console_line_copy">Copy line</string>
+    <!-- Long-press menu on a Vars row. Copies the whole value, not a preview. -->
+    <string name="knotwork_console_var_copy">Copy value</string>
+    <!-- Long-press menu on a Traces row. -->
+    <string name="knotwork_console_span_copy">Copy span</string>
     <!-- Dropdown menu item label: enable only this source in the source filter. -->
     <string name="knotwork_console_line_filter_only">Only show this source</string>
     <!-- Empty-state label shown beneath the Logs list when the search query has no matches. -->
@@ -506,6 +510,18 @@
     <string name="knotwork_settings_share_reuse_title">Keep shares in one chat</string>
     <string name="knotwork_settings_share_reuse_subtitle">Add every share to a single Shared chat instead of a new one each time.</string>
     <string name="knotwork_settings_tile_pipeline_title">Quick Settings pipeline</string>
+    <string name="knotwork_settings_external_automation_title">External automation</string>
+    <string name="knotwork_settings_external_automation_subtitle_off">Off. No other app on this device can start a run.</string>
+    <string name="knotwork_settings_external_automation_subtitle_on">On. Other apps may ask to run the one pipeline you pick.</string>
+    <string name="knotwork_settings_external_pipeline_title">Pipeline other apps may run</string>
+    <string name="knotwork_settings_external_journal_title">Request journal</string>
+    <!--
+      Entry row into the run-limits screen, on the Pipelines category. It replaced
+      a slider titled "Cap autonomous steps" whose only description in the app
+      ("Pause & ask for guidance after N planner cycles.") described behaviour the
+      engine has never had: it does not pause and does not ask, it ends the run.
+    -->
+    <string name="knotwork_settings_run_limits_title">Run limits</string>
 
     <string name="knotwork_settings_crash_reporting_label">Send anonymous crash reports</string>
     <string name="knotwork_settings_crash_reporting_hint">Help improve stability by sharing anonymous crash data.</string>

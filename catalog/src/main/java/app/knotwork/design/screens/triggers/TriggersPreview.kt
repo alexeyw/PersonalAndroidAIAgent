@@ -187,6 +187,13 @@ object TriggersPreview {
                     hitlParked = true,
                 ),
                 TriggerJournalEntryUi(
+                    id = "e1b",
+                    source = TriggerJournalSourceUi.Poll,
+                    verdict = TriggerJournalVerdictUi.Fired,
+                    outcome = TriggerJournalOutcomeUi.StoppedByCeiling,
+                    timestampLabel = "09:40",
+                ),
+                TriggerJournalEntryUi(
                     id = "e2",
                     source = TriggerJournalSourceUi.Poll,
                     verdict = TriggerJournalVerdictUi.Fired,

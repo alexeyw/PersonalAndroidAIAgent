@@ -13,6 +13,412 @@ details.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-21
+
+### Added
+
+- **Definition of the external-automation contract** — the vocabulary another
+  app on the device (Tasker, MacroDroid, a shell script over `adb`) will use to
+  ask Knotwork to run one of your pipelines. This change defines and documents
+  the contract; the receiver that acts on it and the setting that switches it on
+  land separately, so nothing is callable yet.
+  [`docs/external-automation.md`](docs/external-automation.md) describes the
+  request keys, the statuses and every refusal reason, and its reference tables
+  are generated from the source declarations with a build check that fails on
+  drift — a contract whose callers live in other apps cannot afford stale
+  documentation. The entry point will be **off by default** and **inert until
+  bound**, and the binding is an allowlist rather than a default: a request must
+  name the pipeline it wants, and one naming any other pipeline is refused
+  rather than quietly redirected.
+
+  **The smallest call is two keys** — which pipeline, and what to say to it. The
+  correlation id a caller can send is required only when that caller also asks
+  to be answered, because its only job is to match the answer to the request
+  that caused it. This matters more than it sounds: an automation app's built-in
+  send-an-intent action has a small, fixed number of extra fields — Tasker's has
+  two — so a third mandatory key would have put the simplest useful call beyond
+  the reach of the app this contract exists to complement, in exchange for a
+  value that would have been thrown away.
+
+- **Another app on your device can now ask Knotwork to run a pipeline.** The
+  external-automation entry point defined in the entry above is live: a
+  Tasker or MacroDroid profile, or a shell script over `adb`, can broadcast a
+  request and Knotwork will run the pipeline you bound to it. The switch that
+  turns this on is off by default; its settings screen ships in the entry
+  below.
+
+  The guarantees are the point, and each one is under test:
+  human-in-the-loop confirmation, per-tool risk overrides and the
+  destructive-tool block all apply exactly as they do to the app's own
+  background runs — an external call asks for a run, it does not approve what
+  the run then does. The binding is an allowlist, so a request naming any other
+  pipeline is refused rather than redirected. Requests are rate-limited, and
+  **every** request is recorded — admitted or refused — because an entry point
+  that leaves no trace cannot be diagnosed. A caller that asks for one gets a
+  callback when its run finishes, including hours later when the run had paused
+  to ask you something.
+
+  Android does not tell a broadcast receiver who sent the broadcast unless the
+  sender opts in, which automation apps do not, so the callback address is taken
+  at face value. That is why the callback carries only your request id and a
+  status, and never what the run produced.
+  [`docs/external-automation.md`](docs/external-automation.md) carries the whole
+  contract plus worked Tasker, MacroDroid and `adb` examples you can copy.
+
+- **External automation is now switchable, and every request is readable.**
+  Settings → Background & triggers grows three rows: the master switch, the one
+  pipeline outside apps may run, and the request journal. All three are in the
+  settings search index — the app's most security-sensitive switch should not be
+  the only one you cannot find by typing its name.
+
+  Switching it **on** raises a consent dialog that names what you are agreeing
+  to in plain language: any app on the device that can send a broadcast may ask,
+  only the pipeline you pick can be run, your tool approvals still apply exactly
+  as they do for the app's own background runs, a run can spend your cloud API
+  key, and one tap turns it all off again. The switch does not move until you
+  confirm. Switching it **off** is immediate and asks nothing — a confirmation
+  on the way out would make that last promise false.
+
+  Switched on with nothing picked is a real state, not an oversight: the surface
+  accepts a request and refuses it. The binding row says so with a warning glyph
+  and words, not only a colour.
+
+  The **request journal** shows every inbound request, accepted or refused, with
+  the reason as a sentence rather than a constant name, and keeps the two
+  refusal kinds apart — *Refused* means sending the same request again gives the
+  same answer, *Held back* means it can be accepted later. Because Android only
+  reveals who sent a broadcast when the sender opts in (automation apps do not),
+  a row shows the app the caller asked to be answered on and marks it
+  *unverified*: a claim never reads as a confirmed identity. A caller looping
+  against a switched-off contract collapses onto one row with a repeat count, so
+  a misconfigured profile reads as one recurring problem rather than dozens of
+  separate ones. The screen also carries a *How another app calls this* block —
+  the action and the extra keys, read from the contract itself so it cannot
+  describe a call the app would not answer.
+
+- **Autonomous runs now have ceilings, and a run stopped by one says so.**
+  A background run — a trigger firing overnight against your own cloud API key —
+  is now bounded on two axes across the whole run tree: how many pipeline steps
+  it may take, and how many tokens it may spend. Each axis has a soft threshold
+  that warns and nudges the run to wrap up, and a hard one that stops it
+  deterministically. Runs nobody is watching (scheduler, Quick Settings tile,
+  triggers, external automation) get their own, tighter token limit.
+
+  The step ceiling is not new, but it did not previously bind. It was counted
+  per execution attempt, and answering a background approval resumes a run — so
+  a nightly loop that asked a question each iteration received a full fresh
+  allowance every time it was answered. The counters now live on the run record,
+  survive being parked and resumed, and continue where the previous attempt
+  stopped. Work already done is never charged twice.
+
+  A **money limit is not offered, and the app says so rather than implying one.**
+  Knotwork runs on your provider keys and never sees an invoice; turning tokens
+  into currency would need a price table that goes stale between releases and
+  would show a wrong number as money. The token limit is the honest proxy.
+
+  Cloud token counts are now the provider's own figures — prompt *and*
+  completion — where the provider reports them, instead of an estimate that only
+  ever saw the answer. In a loop the prompt is what costs.
+
+- **The run limits are now visible, adjustable, and honestly described.**
+  Settings → Pipelines & structured output grows a **Run limits** row, showing
+  the current step and token limits without opening anything, and leading to a
+  screen with all four: steps and tokens, each with its own value for runs
+  nobody is watching. The background step limit follows the interactive one
+  until you set it separately, and says so on the row rather than showing two
+  identical numbers with no hint that they are linked. The spending limit is
+  there too, as a statement rather than a control: the app runs on your own key,
+  never sees your bill, and says *Not measured* instead of showing a figure it
+  would have to guess.
+
+  Until now three of those four numbers had no screen at all — a run stopped at
+  a limit you could not read, let alone change.
+
+- **A run that goes in circles is now caught and stopped, and told apart from a
+  run that has merely run out of allowance.** The agent watches each run for
+  repetition — the same step, on the same input, producing the same result — and
+  responds in two stages: first it tells the run, quietly in the chat and in the
+  agent's own context, so it can change course by itself; then, if nothing
+  changes, it ends the run and says *Stopped: the run was not getting anywhere*,
+  offering **Open console**, whose log shows the same step running over and over
+  and the line that ended it.
+
+  This is a different protection from the run limits, not a second copy of one.
+  A limit asks how much a run has spent; this asks whether it is getting
+  anywhere. A run that keeps producing genuinely different results is not
+  repeating itself however long it takes, and is left alone — and neither is a
+  run still being handed something new each time, even when its answers look
+  alike, which is what a long list of similar tasks looks like from the inside.
+  Those cases are what the limits are for. Nothing is configurable here: how
+  many identical steps count as a loop is not a preference, and a slider would
+  only invite widening it until the protection stopped protecting.
+
+  A run that stops responding altogether — a tool or a server that never answers
+  — is now reported as its own thing (*Stopped: the run went quiet*) instead of
+  borrowing the wording for repetition. It had been showing a message about work
+  that "kept repeating", which was never what had happened to it, and offering
+  to open a console to compare steps that had never repeated. It now offers to
+  run it again, which is the thing that can actually help: a step that hung once
+  often answers the next time.
+
+- **A prompt can now travel as a file.** Any prompt in the Prompt library can be
+  exported as a Markdown file and imported back — yours or one of the bundled
+  ones, since exporting only reads it. Import is the new action in the library's
+  top bar and the first button on the empty screen; export lives on each row.
+  The file is a short settings block between two lines of three dashes followed
+  by the prompt itself, so one can be written by hand in any editor and sent
+  through a chat or kept in a repository.
+
+  **A prompt file can only supply wording.** It cannot add tools, add steps, or
+  carry scripts. If a file asks for any of those, the prompt is still imported
+  and the app names exactly what it left out, because a refusal nobody sees is
+  the same as no refusal at all. There is deliberately no "import from a URL":
+  a prompt becomes part of the instructions the agent follows, and the file
+  picker is what keeps a person's decision between a link and your agent.
+
+  When a file cannot be read, nothing is imported and the app says which of the
+  recognised causes it hit rather than calling the file invalid. When the prompt
+  is already in your library and the file differs, you choose whether to replace
+  it or keep both — the app never silently overwrites an edit you made in it.
+
+### Changed
+
+- **A run that stops explains itself in its own words.**
+  Every way a run can end early — a limit, an unanswered approval, a pipeline
+  edited mid-pause, the app being killed — now has a sentence written for a
+  person, in one place, used identically by the chat, the notification and the
+  foreground status. Six of them previously showed the internal constant name
+  in the middle of a sentence, and the message a ceiling produced was assembled
+  inside the engine, persisted, and quoted verbatim in the documentation, which
+  is how it came to describe behaviour the engine does not have.
+
+  **Retry is gone from these messages.** Re-running the identical turn reaches
+  the identical limit; a run stopped by a ceiling now offers *Adjust limits*
+  instead, and the ones a fresh attempt genuinely fixes offer to run again.
+  Retry remains where it belongs, on an ordinary failure.
+
+  A ceiling stop is also no longer *styled* as a failure: the chat, the
+  background notification and the run console all give it the same warning tone
+  and shield the trigger journal already used.
+
+- **A run stopped by a safety limit no longer reads as a broken automation.**
+  A trigger whose run hit a ceiling shows *Stopped by a safety limit* in its
+  journal and does not count against the trigger's health indicator. Why a run
+  ended is now recorded as a typed cause rather than recovered by matching the
+  error text — which was how a timed-out background approval used to be told
+  apart from a genuine failure, and would have broken the first time that
+  message was reworded.
+
+- **Prompt cards were rearranged to fit their new export action.** The name now
+  has the whole first line to itself, and Preview, Duplicate, Edit and a **More**
+  menu — holding Export and Delete — sit on the footer line beside `used by N
+  pipelines`. Delete stops being a one-tap neighbour of Edit, and the row keeps
+  the same four action slots it had, at the same reach, including at the largest
+  font sizes. An empty Prompt library now offers **Import prompt** and **New
+  prompt** directly instead of only a `+` button.
+
+- **A settings reset no longer detaches the background step limit.**
+  Resetting to recommended defaults used to write that limit explicitly, which
+  is exactly what marks it as independently chosen — leaving you with a
+  deliberate-looking decision you never made, silently stopping it from
+  following the interactive limit. The reset now clears it, restoring the link.
+
+- **Knotwork now runs on Android 14 and 15, not just Android 16.** The
+  requirement had been Android 16 since the first release, which is a small
+  slice of the devices in use — roughly a fifth. Nothing actually needed it.
+  A measurement of what held the floor up came back empty: not a dependency,
+  not the on-device inference engine, not one line of the app's own code. The
+  floor had simply been set higher than anything asked for.
+
+  Two things do still need Android 16, and both fail softly rather than
+  breaking the app. Calling functions that other apps expose relies on a system
+  service that is not present on every older device; where it is missing, that
+  part of the tool catalogue is empty and everything else — local models, cloud
+  providers, MCP servers, triggers, scheduled tasks — is unchanged. The strict
+  intent-matching rules that harden the external-automation entry point are an
+  Android 16 feature, so on Android 14 and 15 that receiver keeps its other
+  defences (off by default, a single bound pipeline, a rate ceiling, a journal
+  of every request, and confirmation for anything destructive) but not that
+  one. Both are stated here rather than left to be discovered.
+
+  The hardware requirement is unchanged and is the one more likely to bind in
+  practice: a local model still needs roughly 2 GB of free RAM, and an older
+  Android version often means a device that does not have it.
+
+- **The instrumented test suite now runs in continuous integration.** Around ten
+  thousand lines of Compose UI, Room migration and DAO tests lived in the
+  repository without running anywhere automatic — so they were a claim of
+  coverage rather than coverage, and once an entire instrumented source set
+  stopped compiling without a single check going red. They now run on emulators
+  on every pull request into the default branch, on every push to it, and
+  nightly — covering both published build variants, including the Google-free
+  one that nothing automatic had ever exercised on a device, and both ends of
+  the supported Android range.
+
+  Two failures are kept apart on purpose. A failing test is never retried —
+  retrying a real regression until it passes is how one gets shipped. A failure
+  that matches a known environment signature, such as a lost emulator or a
+  dependency download that timed out, is retried once and then labelled as
+  such, so a red build still answers the question "is the code wrong?" rather
+  than leaving it open. Both still fail the run: a gate that turns green when
+  its own environment misbehaves has stopped being a gate.
+
+  A test that an emulator genuinely cannot judge is excluded by a named list
+  with a written reason, checked by its own guard, instead of quietly reporting
+  itself as skipped inside a green run. Exactly one test is on that list today.
+
+  Whether the instrumented sources still *compile* is a different question with
+  a different answer: it depends on nothing but the repository, so it is checked
+  by the same required job as everything else, and therefore also on the path
+  that builds a signed release.
+
+  One job speaks for the whole emulator run, so that the list of checks a branch
+  requires does not have to name each configuration and quietly fall out of step
+  with them.
+
+- **The build no longer fails because a dependency released a new version.**
+  Four Android Lint checks — the three "a newer version of X is available"
+  checks and the target-SDK expiry warning — answer from an external version
+  index or from the calendar, not from the contents of this repository. That
+  made the same commit green one day and red the next with nothing changed in
+  between, and green on a contributor's machine while red in CI, because the two
+  version indexes had been refreshed at different times. Twice this year the
+  fix for a red build was a batch of version bumps unrelated to the work being
+  reviewed.
+
+  Those four checks now report instead of gating: they still run, still analyse
+  every dependency, and their findings still appear in the lint report — they
+  just no longer fail the build. The report is where the signal lives now. CI
+  uploads it on every run rather than only on failures (a green run is precisely
+  the run whose report carries the drift) and renders the findings into the job
+  summary as a table, so the answer to "what is out of date?" needs no download.
+  Dependencies are updated deliberately, when a task needs the newer version or
+  in a single pass before a release.
+
+  This is about determinism, not leniency: whether the build passes ought to be a
+  function of what is in the repository. Checks that encode a store publishing
+  blocker rather than a matter of hygiene deliberately keep failing the build —
+  the expired-target-SDK check and the Google Play SDK Index checks — because
+  being interrupted by those is the point. The design-system module, which
+  mirrors the app's strict lint configuration and is covered by the same
+  aggregate check, gets the same treatment; leaving it out would have kept the
+  gate non-deterministic.
+
+  A new build guard keeps the arrangement honest. Regenerating the lint baseline
+  would re-absorb the now-informational findings and quietly empty the report
+  they live in, with nothing failing to say so, so the aggregated check now fails
+  if a baseline suppresses one of them.
+
+- **Dependencies updated in one pass.** Nine were moved together rather than one
+  at a time in the middle of unrelated work: the build tool, the HTTP client and
+  its test server, the encrypted-database driver, the Markdown renderer used for
+  chat messages, the crash-reporting libraries, and — the two that matter — the
+  on-device inference engine and the text-embedding library behind long-term
+  memory.
+
+  Those last two had been deliberately held back, because the ways they break
+  are invisible to a normal build: they fail only in a shipped, optimised
+  release, and only when the app actually loads a model or writes a memory. Both
+  are now checked by the two guards that exist for exactly those failures, and
+  both pass — but the remaining verification is a real device, which is why they
+  moved now, ahead of testing, rather than quietly on their own.
+
+  One dependency could not be updated: the app-functions libraries share a
+  version, and one of the three has not been published at the newer version, so
+  moving the others would not resolve.
+
+- **The reasoning behind a handful of decisions is now written down where
+  contributors can find it.** A short catalogue explains the cases where the
+  obvious change is the wrong one — why the manifest permits unencrypted local
+  traffic while the app still refuses it, why the bundled agent library is used
+  as a transport and a client rather than as the thing that runs the agent, why
+  a few node controls were removed instead of connected. It is deliberately
+  small: a topic already explained by the architecture, security, testing or API
+  documents keeps its home there, and nine candidates were dropped for exactly
+  that reason.
+
+### Fixed
+
+- **The *More* tab keeps its highlight inside settings sub-screens.**
+  Opening Privacy → Usage statistics or Background & triggers → Request journal
+  dropped the bottom-bar highlight, because the list of routes that count as
+  "inside settings" was maintained by hand and had never included them.
+
+- **A thinking model's private reasoning no longer arrives as the answer.**
+  Models such as Qwen3 and DeepSeek R1 work through a problem out loud before
+  replying, inside a block meant for the machine rather than the reader. That
+  block was being treated as the answer: it filled the chat bubble, it was saved
+  as the reply, and from there it was read back into every later message of the
+  same conversation — so a single long deliberation kept crowding the model's
+  own memory of the chat for the rest of it.
+
+  It also broke things that have nothing to do with chat. When a model drafts a
+  candidate tool call while thinking, the reply contains a stray fragment of
+  machine-readable text, and the part of the app that looks for such text picked
+  up the draft instead of the real thing.
+
+  The reasoning is now separated where the answer is produced, so everything
+  after it — the bubble, the saved reply, the conversation history, tool
+  handling — sees the answer alone. Conversations that already contain a stored
+  reasoning block stop feeding it back; what was written is left as it was
+  written rather than rewritten after the fact.
+
+  Two cases are handled the way the models actually behave rather than the way
+  they are documented: a reply whose reasoning block is only ever closed and
+  never opened (the usual shape for Qwen3), and one cut off mid-thought, where
+  the whole reply is kept — an untidy answer beats a blank one.
+
+- **Values in the run console can be copied instead of screenshotted.** The
+  console's Variables tab shows a step's full input and output — for a local
+  model that is the entire assembled prompt, which is exactly what you read when
+  an answer comes out wrong. There was no way to get any of it off the screen,
+  and the copy button in the header copied the log whichever tab was open, so on
+  Variables and Timings it quietly put something else on the clipboard.
+  Long-pressing a row now offers to copy it — the same gesture the log already
+  used — and the header button copies the tab you are actually looking at.
+  Values are copied whole: abbreviating them would recreate the problem the
+  action exists to solve.
+
+- **A test of the external-automation contract was checking the wrong signal.**
+  Two tests assert that a third-party caller is told the outcome of a run exactly
+  once, including the case where the run parked for hours on a confirmation
+  prompt. They waited for the outcome to be written down and then checked that
+  the caller had been told — but writing it down happens *first*, deliberately,
+  because that record is what stops the same run being reported twice. In the
+  gap between the two, the check could run and find nothing, which is what made
+  it fail once on the build servers and pass everywhere else. The tests now wait
+  for the notification itself. The behaviour they test was never wrong.
+
+- **Four static-analysis rules were configured but had never run once.**
+  The Kotlin analysis step splits its rules by what they need to answer: some
+  read the code as text, others need the compiler's resolved types. A rule of
+  the second kind, placed in the configuration used by the first, is skipped in
+  complete silence — no error, no warning, nothing in the report. Four rules had
+  been sitting there since they were added, each with a comment explaining the
+  threshold chosen for it, and a deliberately absurd probe (a constructor with
+  eighteen parameters) passed the check clean.
+
+  They now run, in the analysis pass that can execute them, over both
+  distribution flavours rather than only the shared sources. What they had been
+  missing was waiting: nineteen unused imports, five constructor dependencies
+  that were injected and never read — including one whose class documentation
+  promised behaviour the dead dependency was supposed to provide — and four
+  over-long parameter lists, now each carrying a written reason for being
+  allowed to stay.
+
+  The mistake cannot be repeated silently: the build now fails if a rule that
+  needs resolved types is put back into the configuration that cannot run it,
+  and it reads the list of such rules from the analysis tool itself rather than
+  from a copy kept in this repository, so a future upgrade that moves a rule
+  across the line is caught by the next build.
+
+  One rule from the same group is deliberately still switched off. It does not
+  count a dependency that is used while an object is being constructed, which on
+  this code base is most of them — twenty-four of its twenty-nine findings were
+  wrong. Turning it on would have meant annotating live code with two dozen
+  assertions that are untrue. The five genuine findings it did surface were
+  fixed by hand.
+
 ## [0.7.3] - 2026-08-16
 
 ### Fixed
@@ -1736,7 +2142,8 @@ details.
 
 - **Coroutine-cancellation static gate.** `./gradlew check` now also runs
   `detektDebug`, a type-resolution detekt pass with a dedicated config
-  ([`config/detekt/detekt-cancellation.yml`](config/detekt/detekt-cancellation.yml))
+  (`config/detekt/detekt-cancellation.yml`, since renamed to
+  `detekt-type-resolution.yml`)
   that activates a single rule, `SuspendFunSwallowedCancellation`: suspend
   calls may not be wrapped in `runCatching`, and `try`/`catch` blocks
   around suspend calls must re-throw `CancellationException` before any
@@ -4638,7 +5045,8 @@ that produced the initial 0.1.0 snapshot.
 - **Master key**: `EncryptedSharedPreferences` is rooted in the Android
   Keystore, so the master key is hardware-backed where available.
 
-[Unreleased]: https://github.com/alexeyw/knotwork/compare/v0.7.3...HEAD
+[Unreleased]: https://github.com/alexeyw/knotwork/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/alexeyw/knotwork/compare/v0.7.3...v0.8.0
 [0.7.3]: https://github.com/alexeyw/knotwork/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/alexeyw/knotwork/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/alexeyw/knotwork/compare/v0.7.0...v0.7.1

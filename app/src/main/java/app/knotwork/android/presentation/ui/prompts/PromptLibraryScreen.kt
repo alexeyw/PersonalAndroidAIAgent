@@ -1,18 +1,33 @@
 package app.knotwork.android.presentation.ui.prompts
 
+import android.content.ContentResolver
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import app.knotwork.android.R
 import app.knotwork.android.domain.constants.PromptPresetConstants
 import app.knotwork.android.domain.models.PromptPreset
+import app.knotwork.android.domain.usecases.promptpack.ExportedPromptPack
 import app.knotwork.android.presentation.ui.common.asString
 import app.knotwork.android.presentation.ui.components.PromptPreviewBottomSheet
 import app.knotwork.design.screens.prompts.PromptEditorSheetBody
@@ -24,6 +39,9 @@ import app.knotwork.design.screens.prompts.PromptLibraryStrings
 import app.knotwork.design.screens.prompts.PromptLibraryViewState
 import app.knotwork.design.screens.prompts.PromptLibraryVisualState
 import app.knotwork.design.screens.prompts.PromptRow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Slim app-side Prompt Library mapper. Subscribes to
@@ -53,6 +71,36 @@ fun PromptLibraryScreen(
             fallbackErrorMessage = genericErrorMessage,
         )
     }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // SAF launcher for the top-bar import action. Reads the picked document
+    // off the main thread and hands the text to the VM, which parses,
+    // refuses what a prompt may not carry, and reconciles the id against the
+    // library. The MIME filter accepts `text/*` beside `text/markdown`
+    // because most providers report a `.md` file as plain text — or as
+    // nothing at all.
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val resolver = context.contentResolver
+            val document = withContext(Dispatchers.IO) { readText(resolver, uri) }
+            // Only an unreadable document short-circuits here. An *empty* one
+            // is readable, and the parser has a better sentence for it than
+            // "that file could not be read" — it can say the settings block
+            // is missing, which is what the user has to fix.
+            if (document == null) {
+                viewModel.onFileUnreadable()
+            } else {
+                val fileName = withContext(Dispatchers.IO) { resolveDisplayName(resolver, uri) }.orEmpty()
+                viewModel.importPromptFile(document = document, fileName = fileName)
+            }
+        }
+    }
+
     val callbacks = PromptLibraryCallbacks(
         onBack = onBack,
         // The library's text search was retired (the
@@ -79,6 +127,8 @@ fun PromptLibraryScreen(
         onEditorSave = viewModel::saveEditor,
         onEditorCancel = viewModel::closeEditor,
         onRetry = viewModel::retry,
+        onImportPrompt = { importLauncher.launch(arrayOf(MIME_MARKDOWN, MIME_TEXT_ANY)) },
+        onExportPrompt = viewModel::requestExport,
     )
 
     PromptLibraryContent(
@@ -86,7 +136,12 @@ fun PromptLibraryScreen(
         modifier = modifier,
         strings = strings.content,
         callbacks = callbacks,
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     )
+
+    PromptExportLauncher(uiState = uiState, viewModel = viewModel, resolver = context.contentResolver)
+    PromptImportSnackbar(uiState = uiState, viewModel = viewModel, hostState = snackbarHostState)
+    PromptImportDialogHost(dialog = uiState.importDialog, viewModel = viewModel)
 
     val editor = viewState.editor
     if (editor != null) {
@@ -114,6 +169,132 @@ fun PromptLibraryScreen(
             onDismiss = viewModel::dismissPromptPreview,
         )
     }
+}
+
+/** MIME type a well-behaved provider reports for a `.md` document. */
+private const val MIME_MARKDOWN = "text/markdown"
+
+/**
+ * Fallback MIME filter for the import picker.
+ *
+ * Most providers report a `.md` file as `text/plain`, and some report
+ * nothing recognisable at all, so filtering on [MIME_MARKDOWN] alone hides
+ * the very files this action exists to open.
+ */
+private const val MIME_TEXT_ANY = "text/*"
+
+/**
+ * Launches the create-document picker whenever an export has been rendered,
+ * writes the payload to the chosen destination, and confirms it.
+ *
+ * The parked payload is consumed the moment the picker launches, so a
+ * recomposition or a configuration change cannot fire the picker twice for
+ * one tap.
+ *
+ * @param uiState Current screen state; its `pendingExport` drives the picker.
+ * @param viewModel Sink for the consume / confirm / failure callbacks.
+ * @param resolver Used to write the chosen document.
+ */
+@Composable
+private fun PromptExportLauncher(
+    uiState: PromptLibraryUiState,
+    viewModel: PromptLibraryViewModel,
+    resolver: ContentResolver,
+) {
+    val scope = rememberCoroutineScope()
+    var payload by remember { mutableStateOf<ExportedPromptPack?>(null) }
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument(MIME_MARKDOWN),
+    ) { uri ->
+        val pending = payload
+        payload = null
+        if (uri == null || pending == null) return@rememberLauncherForActivityResult
+        scope.launch {
+            val written = withContext(Dispatchers.IO) { writeText(resolver, uri, pending.content) }
+            if (written) viewModel.onExported(pending.displayName) else viewModel.onExportFailed()
+        }
+    }
+    val pendingExport = uiState.pendingExport
+    LaunchedEffect(pendingExport) {
+        if (pendingExport != null) {
+            payload = pendingExport
+            viewModel.consumePendingExport()
+            exportLauncher.launch(pendingExport.fileName)
+        }
+    }
+}
+
+/**
+ * Shows the pending one-shot confirmation and, when the user takes its
+ * action, switches to the category the prompt landed in.
+ *
+ * @param uiState Current screen state; its `snackbar` drives this effect.
+ * @param viewModel Consumes the snackbar and applies the tab switch.
+ * @param hostState Host the message is shown on.
+ */
+@Composable
+private fun PromptImportSnackbar(
+    uiState: PromptLibraryUiState,
+    viewModel: PromptLibraryViewModel,
+    hostState: SnackbarHostState,
+) {
+    val snackbar = uiState.snackbar
+    val message = snackbar?.text?.asString()
+    val actionLabel = stringResource(R.string.prompts_import_success_action)
+    LaunchedEffect(snackbar) {
+        if (snackbar == null || message == null) return@LaunchedEffect
+        // Shown *before* it is consumed. Consuming first clears the state this
+        // effect is keyed on, which cancels the effect — and with it the
+        // `showSnackbar` call — so the message never reliably appears.
+        val result = hostState.showSnackbar(
+            message = message,
+            actionLabel = actionLabel.takeIf { snackbar.showCategory != null },
+            duration = SnackbarDuration.Long,
+        )
+        if (result == SnackbarResult.ActionPerformed) {
+            snackbar.showCategory?.let(viewModel::selectCategory)
+        }
+        viewModel.consumeSnackbar()
+    }
+}
+
+/**
+ * Reads a picked document as text.
+ *
+ * @return The document text, or `null` when the provider refused the read or
+ *   the document has gone. A refused read is not an exception the user needs
+ *   a stack trace for — it becomes "that file could not be read".
+ */
+private fun readText(resolver: ContentResolver, uri: Uri): String? = try {
+    resolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+} catch (_: Exception) {
+    null
+}
+
+/**
+ * Writes [content] to a chosen document.
+ *
+ * @return `true` when the bytes were written.
+ */
+private fun writeText(resolver: ContentResolver, uri: Uri, content: String): Boolean = try {
+    resolver.openOutputStream(uri)?.use { it.write(content.toByteArray()) } != null
+} catch (_: Exception) {
+    false
+}
+
+/**
+ * Reads a document's display name, used as the fallback id source when the
+ * file's frontmatter does not name one.
+ *
+ * @return The display name, or `null` when it cannot be resolved.
+ */
+private fun resolveDisplayName(resolver: ContentResolver, uri: Uri): String? = try {
+    resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+        val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+        if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
+    }
+} catch (_: Exception) {
+    null
 }
 
 /**
@@ -216,10 +397,19 @@ private fun promptLibraryStrings(): LocalisedPromptLibraryStrings = LocalisedPro
         editCd = stringResource(R.string.prompts_edit_cd),
         deleteCd = stringResource(R.string.prompts_delete_cd),
         previewCd = stringResource(R.string.prompts_preview_cd),
-        duplicate = stringResource(R.string.prompts_duplicate),
+        duplicateCd = stringResource(R.string.prompts_duplicate_cd),
         usedByFormat = stringResource(R.string.prompts_used_by_format),
         emptyTitle = stringResource(R.string.prompts_empty_title),
         emptySubtitle = stringResource(R.string.prompts_empty_subtitle),
+        emptyImportCta = stringResource(R.string.prompts_empty_import_cta),
+        emptyNewCta = stringResource(R.string.prompts_empty_new_cta),
+        emptyCategoryTitle = stringResource(R.string.prompts_empty_category_title),
+        emptyCategorySubtitle = stringResource(R.string.prompts_empty_category_subtitle),
+        importCd = stringResource(R.string.prompts_import_cd),
+        exportCdFormat = stringResource(R.string.prompts_export_cd_format),
+        moreCd = stringResource(R.string.prompts_more_cd),
+        exportAction = stringResource(R.string.prompts_action_export),
+        deleteAction = stringResource(R.string.prompts_action_delete),
         errorTitle = stringResource(R.string.prompts_error_title),
         errorRetry = stringResource(R.string.common_retry),
     ),

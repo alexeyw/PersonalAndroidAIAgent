@@ -12,6 +12,7 @@ import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.ResumeContext
 import app.knotwork.android.domain.models.Role
+import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
@@ -72,7 +73,7 @@ class TaskQueueManagerImpl @Inject constructor(
 
     /**
      * How long a run may go without emitting anything before the worker gives
-     * up on it. See [NO_PROGRESS_TIMEOUT_MS].
+     * up on it. See [SILENCE_TIMEOUT_MS].
      *
      * A non-positive value disables the valve. That exists for the integration
      * harnesses that drive real `Dispatchers.IO` work under a virtual clock:
@@ -81,7 +82,7 @@ class TaskQueueManagerImpl @Inject constructor(
      * measurement would be meaningless rather than merely inconvenient.
      */
     @VisibleForTesting
-    internal var noProgressTimeoutMs: Long = NO_PROGRESS_TIMEOUT_MS
+    internal var silenceTimeoutMs: Long = SILENCE_TIMEOUT_MS
 
     private val _globalState = MutableStateFlow<AgentOrchestratorState>(AgentOrchestratorState.Idle)
     override val globalState: StateFlow<AgentOrchestratorState> = _globalState.asStateFlow()
@@ -158,11 +159,11 @@ class TaskQueueManagerImpl @Inject constructor(
          * a database stall it could not explain.
          */
         @VisibleForTesting
-        internal const val NO_PROGRESS_TIMEOUT_MS = 5 * 60 * 1000L
+        internal const val SILENCE_TIMEOUT_MS = 5 * 60 * 1000L
 
         /**
          * User-facing explanation written to the run record when
-         * [NO_PROGRESS_TIMEOUT_MS] elapses. Names the consequence, not the
+         * [SILENCE_TIMEOUT_MS] elapses. Names the consequence, not the
          * internals: the alternative to this message is the silent
          * "Generating…" that F13 documented.
          */
@@ -204,7 +205,7 @@ class TaskQueueManagerImpl @Inject constructor(
      * configured.
      *
      * @param timeoutMs Maximum silence tolerated between emissions; a
-     *   non-positive value returns the receiver unguarded (see [noProgressTimeoutMs]).
+     *   non-positive value returns the receiver unguarded (see [silenceTimeoutMs]).
      * @return The same values as the receiver, or a failure once silence exceeds the window.
      */
     private fun Flow<AgentOrchestratorState>.failIfStalled(timeoutMs: Long): Flow<AgentOrchestratorState> {
@@ -386,8 +387,17 @@ class TaskQueueManagerImpl @Inject constructor(
         val graph = run?.pipelineId?.let { pipelineRepository.getPipelineById(it) }
         if (run == null || graph == null || recordedHash == null || graph.contentHash() != recordedHash) {
             val message = "Pipeline graph changed before resume could start. Restart the task instead."
-            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.INTERRUPTED, message)
-            val errState = AgentOrchestratorState.Error(message)
+            pipelineRunRepository.finishRun(
+                task.id,
+                PipelineRunStatus.INTERRUPTED,
+                message,
+                RunTerminationReason.GraphChanged,
+            )
+            // Same rule as the stall path below: the cause travels to the
+            // surface, not only to the record. Dropping it here left a resume
+            // the app refused wearing the destructive tile and a Retry, when
+            // what the user needs is "run it again" against the current graph.
+            val errState = AgentOrchestratorState.Error(message, RunTerminationReason.GraphChanged)
             stateFlow.emit(errState)
             _globalState.value = errState
             return
@@ -470,7 +480,7 @@ class TaskQueueManagerImpl @Inject constructor(
             )
                 // Safety valve: the worker is serial, so a run that never
                 // emits again would hold every other chat hostage (F13).
-                .failIfStalled(noProgressTimeoutMs)
+                .failIfStalled(silenceTimeoutMs)
                 .collect { state ->
                     // Terminal engine states are mirrored into the persistent run
                     // record as they pass through, so the record is already
@@ -479,7 +489,15 @@ class TaskQueueManagerImpl @Inject constructor(
                         is AgentOrchestratorState.Completed ->
                             pipelineRunRepository.finishRun(task.id, PipelineRunStatus.COMPLETED)
                         is AgentOrchestratorState.Error ->
-                            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, state.message)
+                            // The engine's typed reason travels with the state, so a
+                            // protective stop settles as one instead of arriving here
+                            // as prose the journal would have to parse back.
+                            pipelineRunRepository.finishRun(
+                                task.id,
+                                PipelineRunStatus.FAILED,
+                                state.message,
+                                state.reason,
+                            )
                         is AgentOrchestratorState.SuspendedInBackground -> runParked = true
                         else -> Unit
                     }
@@ -497,8 +515,15 @@ class TaskQueueManagerImpl @Inject constructor(
             throw e
         } catch (e: Exception) {
             val message = e.message ?: "Execution failed"
-            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, message)
-            val errState = AgentOrchestratorState.Error(message)
+            // The stall watchdog is the one exception the queue itself raises, and
+            // it is a forced termination rather than a pipeline defect — typed so
+            // it stops being recoverable only by matching its own message text.
+            val reason = if (e is RunStalledException) RunTerminationReason.RunStalled else null
+            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, message, reason)
+            // The same reason travels to the surface, not only to the record.
+            // Dropping it here left a watchdog kill wearing the destructive
+            // error tile and a Retry button that would stall all over again.
+            val errState = AgentOrchestratorState.Error(message, reason)
             stateFlow.emit(errState)
             _globalState.value = errState
         } finally {

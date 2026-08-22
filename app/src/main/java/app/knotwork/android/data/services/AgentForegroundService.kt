@@ -12,7 +12,6 @@ import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.os.PowerManager
 import androidx.annotation.VisibleForTesting
-import androidx.work.WorkManager
 import app.knotwork.android.R
 import app.knotwork.android.domain.constants.NotificationChannels
 import app.knotwork.android.domain.engine.LlmInferenceEngine
@@ -55,12 +54,6 @@ class AgentForegroundService : Service() {
      */
     @Inject
     lateinit var powerStateRepository: PowerStateRepository
-
-    /**
-     * Manager for scheduling background work and tasks.
-     */
-    @Inject
-    lateinit var workManager: WorkManager
 
     /**
      * Re-arms the background memory re-embed pass on startup when chunks remain
@@ -163,7 +156,6 @@ class AgentForegroundService : Service() {
             scope = serviceScope,
             powerStateRepository = powerStateRepository,
             engine = llmEngine,
-            workManager = workManager,
         )
         powerManager.startObserving()
 
@@ -234,11 +226,23 @@ class AgentForegroundService : Service() {
         is AgentOrchestratorState.ObservationResult -> "Processing tool result..."
         is AgentOrchestratorState.Answering -> "Answering..."
         is AgentOrchestratorState.Completed -> "Task completed"
-        is AgentOrchestratorState.Error -> "Error: ${state.message}"
+        // Unreachable in practice, and deliberately says nothing about the
+        // cause. `Error` is not active work, so `updateForegroundPresence`
+        // demotes the notification rather than promoting it with this text.
+        // Even if that changed, the cause does not belong here: `state.message`
+        // is the diagnostic for a typed stop, and the sentence a person reads
+        // is resolved once, in the presentation layer, for the chat and the
+        // background-run notification. A foreground status line must not be a
+        // third place to word it — and reaching into presentation from `data`
+        // to do so would invert the dependency direction.
+        is AgentOrchestratorState.Error -> "Run stopped"
         is AgentOrchestratorState.PipelineStage -> "Pipeline stage: ${state.stepInfo.nodeName}"
         is AgentOrchestratorState.PipelineTrace -> "Pipeline trace updated"
         is AgentOrchestratorState.ConsoleLog -> "Pipeline running..."
         is AgentOrchestratorState.NodeIO -> "Pipeline running..."
+        // An advisory is not a change of activity: the run carries on, and the
+        // strip above the composer is where the notice is worded.
+        is AgentOrchestratorState.RunNotice -> "Pipeline running..."
     }
 
     private fun createNotificationChannel() {
@@ -287,6 +291,11 @@ class AgentForegroundService : Service() {
         is AgentOrchestratorState.PipelineTrace,
         is AgentOrchestratorState.ConsoleLog,
         is AgentOrchestratorState.NodeIO,
+        // A notice is only ever raised mid-run, so the work is by definition
+        // still in flight and the status notification stays up. It does not
+        // carry the advisory's words: this line describes what the agent is
+        // doing, and the advisory is worded once, in the chat.
+        is AgentOrchestratorState.RunNotice,
         -> true
         is AgentOrchestratorState.Idle,
         is AgentOrchestratorState.Completed,

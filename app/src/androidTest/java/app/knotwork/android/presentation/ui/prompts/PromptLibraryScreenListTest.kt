@@ -99,7 +99,7 @@ class PromptLibraryScreenListTest {
     }
 
     @Test
-    fun deleteIcon_invokesDeletePrompt() {
+    fun deleteFromOverflow_invokesDeletePrompt() {
         val (vm, _) = mockPromptLibraryViewModel(
             initialUiState = PromptLibraryUiState(
                 userPresets = listOf(
@@ -114,11 +114,14 @@ class PromptLibraryScreenListTest {
         }
 
         val ctx = InstrumentationRegistry.getInstrumentation().targetContext
-        val deleteCd = ctx.getString(AppR.string.prompts_delete_cd)
 
-        // Only one card on the surface, so the first node carrying the
-        // delete content description is the one we want.
-        composeTestRule.onAllNodesWithContentDescription(label = deleteCd).onFirst().performClick()
+        // Delete moved behind the row's overflow when Export joined the
+        // action set — five verbs, four slots. A side benefit worth keeping
+        // the test honest about: the destructive verb is no longer a one-tap
+        // neighbour of Edit, so reaching it takes two taps here too.
+        val moreCd = ctx.getString(AppR.string.prompts_more_cd)
+        composeTestRule.onAllNodesWithContentDescription(label = moreCd).onFirst().performClick()
+        composeTestRule.onNodeWithText(text = ctx.getString(AppR.string.prompts_action_delete)).performClick()
 
         verify(exactly = 1) { vm.deletePrompt(id = "7") }
     }
@@ -161,10 +164,13 @@ class PromptLibraryScreenListTest {
             MaterialTheme { PromptLibraryScreen(viewModel = vm) }
         }
 
+        // Duplicate moved from a footer text button into the row's icon
+        // cluster when the row was restructured to make space for Export, so
+        // it is now reached by its content description rather than a label.
         val ctx = InstrumentationRegistry.getInstrumentation().targetContext
-        val duplicateLabel = ctx.getString(AppR.string.prompts_duplicate)
+        val duplicateCd = ctx.getString(AppR.string.prompts_duplicate_cd)
 
-        composeTestRule.onNodeWithText(text = duplicateLabel).performClick()
+        composeTestRule.onNodeWithContentDescription(label = duplicateCd).performClick()
 
         verify(exactly = 1) { vm.duplicatePrompt(id = "13") }
     }

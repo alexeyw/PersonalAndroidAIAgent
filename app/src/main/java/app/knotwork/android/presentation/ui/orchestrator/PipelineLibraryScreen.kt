@@ -47,6 +47,11 @@ import app.knotwork.android.presentation.ui.orchestrator.presets.SaveAsPresetDia
 import app.knotwork.design.components.chips.Status
 import app.knotwork.design.components.controls.KnotworkField
 import app.knotwork.design.components.controls.KnotworkTextField
+import app.knotwork.design.components.dialogs.MAX_NAMED_LIST_ITEMS
+import app.knotwork.design.components.dialogs.OutcomeAction
+import app.knotwork.design.components.dialogs.OutcomeDialog
+import app.knotwork.design.components.dialogs.OutcomeNamedList
+import app.knotwork.design.components.dialogs.OutcomeTone
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.screens.pipelines.PipelineLibraryCallbacks
 import app.knotwork.design.screens.pipelines.PipelineLibraryContent
@@ -469,35 +474,39 @@ fun PipelineLibraryScreen(
         )
     }
     uiState.pendingImport?.let { mismatch ->
-        AlertDialog(
+        // An instance of the shared outcome-dialog family rather than a
+        // second hand-rolled dialog: the prompt import raises the same three
+        // shapes, and one mechanism is the difference between two surfaces
+        // agreeing and two surfaces drifting.
+        val hidden = mismatch.droppedFields.size - MAX_NAMED_LIST_ITEMS
+        OutcomeDialog(
+            tone = OutcomeTone.INFO,
+            headline = stringResource(R.string.orchestrator_library_import_schema_title),
+            body = stringResource(
+                R.string.orchestrator_library_import_schema_body,
+                mismatch.foundVersion,
+                mismatch.expectedVersion,
+            ),
+            // Name what is actually being lost. "Some configuration may not
+            // import cleanly" is true but unactionable — the user cannot tell
+            // whether it matters without being told which settings they are
+            // agreeing to discard.
+            namedList = OutcomeNamedList(
+                heading = stringResource(R.string.orchestrator_library_import_dropped_heading),
+                items = mismatch.droppedFields,
+                moreLabel = hidden.takeIf { it > 0 }?.let {
+                    pluralStringResource(R.plurals.orchestrator_library_import_dropped_more, it, it)
+                },
+            ),
+            confirm = OutcomeAction(
+                label = stringResource(R.string.orchestrator_library_import_anyway),
+                onClick = viewModel::confirmPendingImport,
+            ),
+            dismiss = OutcomeAction(
+                label = stringResource(R.string.common_cancel),
+                onClick = viewModel::cancelPendingImport,
+            ),
             onDismissRequest = viewModel::cancelPendingImport,
-            title = { Text(stringResource(R.string.orchestrator_library_import_schema_title)) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2)) {
-                    Text(
-                        stringResource(
-                            R.string.orchestrator_library_import_schema_body,
-                            mismatch.foundVersion,
-                            mismatch.expectedVersion,
-                        ),
-                    )
-                    // Name what is actually being lost. "Some configuration may
-                    // not import cleanly" is true but unactionable — the user
-                    // cannot tell whether it matters without being told which
-                    // settings they are agreeing to discard.
-                    DroppedFieldList(fields = mismatch.droppedFields)
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = viewModel::confirmPendingImport) {
-                    Text(stringResource(R.string.orchestrator_library_import_anyway))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = viewModel::cancelPendingImport) {
-                    Text(stringResource(R.string.common_cancel))
-                }
-            },
         )
     }
     uiState.pendingCollision?.let { graph ->
@@ -701,41 +710,3 @@ private fun resolveDisplayName(resolver: ContentResolver, uri: Uri): String? =
         val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
         if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
     }
-
-/**
- * Lists the settings an import will discard, capped so a wildly out-of-date
- * document cannot turn the dialog into a scroll of paths.
- *
- * Renders nothing when [fields] is empty — a version mismatch does not
- * necessarily lose anything, and an empty "will be lost:" heading would imply
- * damage that did not happen.
- *
- * @param fields dotted paths reported by the parser, in document order.
- */
-@Composable
-private fun DroppedFieldList(fields: List<String>) {
-    if (fields.isEmpty()) return
-    Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
-        Text(
-            text = stringResource(R.string.orchestrator_library_import_dropped_heading),
-            style = KnotworkTextStyles.BodySm,
-        )
-        fields.take(MAX_LISTED_DROPPED_FIELDS).forEach { field ->
-            Text(text = "· $field", style = KnotworkTextStyles.MonoSm)
-        }
-        val remaining = fields.size - MAX_LISTED_DROPPED_FIELDS
-        if (remaining > 0) {
-            Text(
-                text = pluralStringResource(
-                    R.plurals.orchestrator_library_import_dropped_more,
-                    remaining,
-                    remaining,
-                ),
-                style = KnotworkTextStyles.BodySm,
-            )
-        }
-    }
-}
-
-/** How many dropped-field paths the mismatch dialog spells out before summarising. */
-private const val MAX_LISTED_DROPPED_FIELDS = 8

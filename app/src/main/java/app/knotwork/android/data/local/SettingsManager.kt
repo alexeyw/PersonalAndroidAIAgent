@@ -128,6 +128,9 @@ class SettingsManager @Inject constructor(
         val HTTP_TOOL_MAX_RESPONSE_BYTES =
             androidx.datastore.preferences.core.longPreferencesKey("http_tool_max_response_bytes")
         val PIPELINE_MAX_STEPS = intPreferencesKey("pipeline_max_steps")
+        val PIPELINE_MAX_STEPS_BACKGROUND = intPreferencesKey("pipeline_max_steps_background")
+        val RUN_MAX_TOKENS = intPreferencesKey("run_max_tokens")
+        val RUN_MAX_TOKENS_BACKGROUND = intPreferencesKey("run_max_tokens_background")
         val PIPELINE_MAX_NESTING_DEPTH = intPreferencesKey("pipeline_max_nesting_depth")
         val STRUCTURED_OUTPUT_MAX_REPAIRS = intPreferencesKey("structured_output_max_repairs")
         val CLOUD_RETRY_MAX_ATTEMPTS = intPreferencesKey("cloud_retry_max_attempts")
@@ -144,9 +147,11 @@ class SettingsManager @Inject constructor(
         // DEFAULT_PIPELINE_ID), so excluded from resetToRecommendedDefaults.
         val SHARE_TARGET_PIPELINE_ID = stringPreferencesKey("share_target_pipeline_id")
         val QUICK_SETTINGS_TILE_PIPELINE_ID = stringPreferencesKey("quick_settings_tile_pipeline_id")
+        val EXTERNAL_AUTOMATION_PIPELINE_ID = stringPreferencesKey("external_automation_pipeline_id")
 
         // Tunable behaviour preference (reset by resetToRecommendedDefaults).
         val SHARE_REUSE_SESSION = booleanPreferencesKey("share_reuse_session")
+        val EXTERNAL_AUTOMATION_ENABLED = booleanPreferencesKey("external_automation_enabled")
         val CRASH_REPORTING_ENABLED = booleanPreferencesKey("crash_reporting_enabled")
         val USAGE_TELEMETRY_ENABLED = booleanPreferencesKey("usage_telemetry_enabled")
         val CONSOLE_PREFERRED_TAB = stringPreferencesKey("console_preferred_tab")
@@ -1164,6 +1169,49 @@ class SettingsManager @Inject constructor(
         }
     }
 
+    override val externalAutomationPipelineId: Flow<String?> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.EXTERNAL_AUTOMATION_PIPELINE_ID]
+        }
+
+    override suspend fun setExternalAutomationPipelineId(pipelineId: String?) {
+        dataStore.edit { preferences ->
+            if (pipelineId == null) {
+                preferences.remove(PreferencesKeys.EXTERNAL_AUTOMATION_PIPELINE_ID)
+            } else {
+                preferences[PreferencesKeys.EXTERNAL_AUTOMATION_PIPELINE_ID] = pipelineId
+            }
+        }
+    }
+
+    override val externalAutomationEnabled: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.EXTERNAL_AUTOMATION_ENABLED]
+                ?: SettingsDefaults.EXTERNAL_AUTOMATION_ENABLED_DEFAULT
+        }
+
+    override suspend fun setExternalAutomationEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.EXTERNAL_AUTOMATION_ENABLED] = enabled
+        }
+    }
+
     override val localModelBackend: Flow<String> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -1524,6 +1572,100 @@ class SettingsManager @Inject constructor(
             preferences[PreferencesKeys.PIPELINE_MAX_STEPS] = steps.coerceIn(
                 SettingsDefaults.PIPELINE_MAX_STEPS_MIN,
                 SettingsDefaults.PIPELINE_MAX_STEPS_MAX,
+            )
+        }
+    }
+
+    override val pipelineMaxStepsBackground: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            // Falls back to the *configured* interactive cap, not to a constant.
+            // Until this key existed one setting governed every origin, so a user
+            // who had raised the cap to 40 would otherwise find their triggers
+            // silently dropped to the shipped default on upgrade — the exact
+            // capability regression the background default was chosen to avoid.
+            // A constant is only reached when the user never set either.
+            preferences[PreferencesKeys.PIPELINE_MAX_STEPS_BACKGROUND]
+                ?: preferences[PreferencesKeys.PIPELINE_MAX_STEPS]
+                ?: SettingsDefaults.PIPELINE_MAX_STEPS_BACKGROUND_DEFAULT
+        }
+
+    /**
+     * True once the background key exists in storage, whatever its value.
+     *
+     * Deliberately keyed on presence, not on the number: the default background
+     * ceiling equals the interactive one, so a user who deliberately sets 15
+     * and a user who has never touched it produce the same figure and only the
+     * stored key tells them apart.
+     */
+    override val pipelineMaxStepsBackgroundIsSet: Flow<Boolean> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences -> preferences.contains(PreferencesKeys.PIPELINE_MAX_STEPS_BACKGROUND) }
+
+    override suspend fun setPipelineMaxStepsBackground(steps: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.PIPELINE_MAX_STEPS_BACKGROUND] = steps.coerceIn(
+                SettingsDefaults.PIPELINE_MAX_STEPS_MIN,
+                SettingsDefaults.PIPELINE_MAX_STEPS_MAX,
+            )
+        }
+    }
+
+    override val runMaxTokens: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.RUN_MAX_TOKENS] ?: SettingsDefaults.RUN_MAX_TOKENS_DEFAULT
+        }
+
+    override suspend fun setRunMaxTokens(tokens: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.RUN_MAX_TOKENS] = tokens.coerceIn(
+                SettingsDefaults.RUN_MAX_TOKENS_MIN,
+                SettingsDefaults.RUN_MAX_TOKENS_MAX,
+            )
+        }
+    }
+
+    override val runMaxTokensBackground: Flow<Int> = dataStore.data
+        .catch { exception ->
+            if (exception is IOException) {
+                Timber.e(exception, "Error reading preferences")
+                emit(emptyPreferences())
+            } else {
+                throw exception
+            }
+        }
+        .map { preferences ->
+            preferences[PreferencesKeys.RUN_MAX_TOKENS_BACKGROUND]
+                ?: SettingsDefaults.RUN_MAX_TOKENS_BACKGROUND_DEFAULT
+        }
+
+    override suspend fun setRunMaxTokensBackground(tokens: Int) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.RUN_MAX_TOKENS_BACKGROUND] = tokens.coerceIn(
+                SettingsDefaults.RUN_MAX_TOKENS_MIN,
+                SettingsDefaults.RUN_MAX_TOKENS_MAX,
             )
         }
     }
@@ -1955,10 +2097,10 @@ class SettingsManager @Inject constructor(
     }
 
     /**
-     * Writes the local-generation sampling + pipeline/structured-output/cloud-retry
-     * defaults into [preferences]. Shared by [resetSamplingDefaults] (the
+     * Writes the local-generation sampling + pipeline/run-ceiling/structured-output/
+     * cloud-retry defaults into [preferences]. Shared by [resetSamplingDefaults] (the
      * per-card "Reset to defaults") and [resetToRecommendedDefaults] (the global
-     * reset) so the two paths cannot drift on these ten keys.
+     * reset) so the two paths cannot drift on these thirteen keys.
      */
     private fun MutablePreferences.applySamplingDefaults() {
         this[PreferencesKeys.TEMPERATURE] = SettingsDefaults.TEMPERATURE_DEFAULT
@@ -1967,6 +2109,15 @@ class SettingsManager @Inject constructor(
         this[PreferencesKeys.REPETITION_PENALTY] = SettingsDefaults.REPETITION_PENALTY_DEFAULT
         this[PreferencesKeys.MAX_CONTEXT_LENGTH] = SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT
         this[PreferencesKeys.PIPELINE_MAX_STEPS] = SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT
+        // REMOVED, not written back to its default. Writing the key is exactly
+        // what marks the background ceiling as independently chosen, so writing
+        // it here would make a reset do the one thing a reset must not: leave
+        // the user with a deliberate-looking decision they never made, silently
+        // detached from the interactive ceiling it is supposed to follow.
+        // Removing it restores the inheritance, which *is* the default state.
+        remove(PreferencesKeys.PIPELINE_MAX_STEPS_BACKGROUND)
+        this[PreferencesKeys.RUN_MAX_TOKENS] = SettingsDefaults.RUN_MAX_TOKENS_DEFAULT
+        this[PreferencesKeys.RUN_MAX_TOKENS_BACKGROUND] = SettingsDefaults.RUN_MAX_TOKENS_BACKGROUND_DEFAULT
         this[PreferencesKeys.PIPELINE_MAX_NESTING_DEPTH] = SettingsDefaults.PIPELINE_MAX_NESTING_DEPTH_DEFAULT
         this[PreferencesKeys.STRUCTURED_OUTPUT_MAX_REPAIRS] = SettingsDefaults.STRUCTURED_OUTPUT_MAX_REPAIRS_DEFAULT
         this[PreferencesKeys.CLOUD_RETRY_MAX_ATTEMPTS] = SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_DEFAULT
@@ -2047,6 +2198,11 @@ class SettingsManager @Inject constructor(
                 SettingsDefaults.CRASH_REPORTING_ENABLED_DEFAULT
             preferences[PreferencesKeys.USAGE_TELEMETRY_ENABLED] =
                 SettingsDefaults.USAGE_TELEMETRY_ENABLED_DEFAULT
+            // Security-relevant switch: reset returns it to off, the safe
+            // direction. The pipeline *binding* beside it is a user binding and
+            // stays untouched, exactly like the other two surface bindings.
+            preferences[PreferencesKeys.EXTERNAL_AUTOMATION_ENABLED] =
+                SettingsDefaults.EXTERNAL_AUTOMATION_ENABLED_DEFAULT
         }
     }
 

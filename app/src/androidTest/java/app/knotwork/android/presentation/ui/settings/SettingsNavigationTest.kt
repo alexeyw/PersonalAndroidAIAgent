@@ -61,6 +61,8 @@ class SettingsNavigationTest {
         onOpenAllowedDomains = {},
         onOpenLicenses = {},
         onOpenUsageStatistics = {},
+        onOpenExternalAutomationJournal = {},
+        onOpenRunLimits = {},
     )
 
     /** Mirror of the production category → sub-screen route mapping. */

@@ -77,6 +77,7 @@ import app.knotwork.android.domain.usecases.ParkedRunResumer
 import app.knotwork.android.domain.usecases.PendingSubmissionOutcome
 import app.knotwork.android.domain.usecases.RecordTriggerEvaluationUseCase
 import app.knotwork.android.domain.usecases.RecordTriggerHitlEventUseCase
+import app.knotwork.android.domain.usecases.ResolveRunCeilingsUseCase
 import app.knotwork.android.domain.usecases.ResumePipelineRunUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
@@ -246,6 +247,9 @@ class TriggerBackgroundRunIntegrationTest {
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        every { settingsRepository.pipelineMaxStepsBackground } returns flowOf(15)
+        every { settingsRepository.runMaxTokens } returns flowOf(1_000_000)
+        every { settingsRepository.runMaxTokensBackground } returns flowOf(100_000)
         every { settingsRepository.toolCallTimeoutMs } returns flowOf(LIVE_WAIT_TIMEOUT_MS)
         every { settingsRepository.resumeMaxAgeHours } returns flowOf(48)
         every { settingsRepository.backgroundApprovalWindowHours } returns flowOf(24)
@@ -464,7 +468,13 @@ class TriggerBackgroundRunIntegrationTest {
         val triggerJournal = TriggerJournalRepositoryImpl(database.triggerJournalDao()).apply {
             dispatcher = testDispatcher
         }
-        val runRepository = PipelineRunRepositoryImpl(database.pipelineRunDao(), telemetry, triggerJournal)
+        val runRepository = PipelineRunRepositoryImpl(
+            database.pipelineRunDao(),
+            telemetry,
+            triggerJournal,
+            mockk(relaxed = true),
+            mockk(relaxed = true),
+        )
         val traceRepository = RunTraceRepositoryImpl(database.traceStepDao())
             .apply { dispatcher = testDispatcher }
         val pendingRepository = PendingInteractionRepositoryImpl(database.pendingInteractionDao())
@@ -504,8 +514,6 @@ class TriggerBackgroundRunIntegrationTest {
             toolNodeExecutor,
             LiteRtNodeExecutor(
                 llmEngine,
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 mockk(relaxed = true),
                 mockk(relaxed = true),
@@ -513,8 +521,6 @@ class TriggerBackgroundRunIntegrationTest {
                 loadModelUseCase,
             ),
             CloudLlmNodeExecutor(
-                toolRepository,
-                chatRepository,
                 settingsRepository,
                 mockk(relaxed = true),
                 mockk(relaxed = true),
@@ -567,6 +573,7 @@ class TriggerBackgroundRunIntegrationTest {
             mockk(relaxed = true),
             runRepository,
             traceRepository,
+            ResolveRunCeilingsUseCase(settingsRepository),
         )
         val taskQueueManager = TaskQueueManagerImpl(
             chatRepository = chatRepository,
@@ -583,7 +590,7 @@ class TriggerBackgroundRunIntegrationTest {
             // threads the scheduler cannot see, so the window would elapse on a
             // healthy run. The valve itself is covered in
             // `TaskQueueManagerImplTest`, where nothing races the clock.
-            noProgressTimeoutMs = 0
+            silenceTimeoutMs = 0
         }
 
         val resumeRun = ResumePipelineRunUseCase(

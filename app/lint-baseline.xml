@@ -35,57 +35,6 @@
     </issue>
 
     <issue
-        id="GradleDependency"
-        message="A newer version of com.google.ai.edge.litertlm:litertlm-android than 0.15.0 is available: 0.16.0"
-        errorLine1="litertlm = &quot;0.15.0&quot;"
-        errorLine2="           ~~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="19"
-            column="12"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of com.google.mediapipe:tasks-text than 0.10.35 is available: 1.0.0"
-        errorLine1="mediapipe = &quot;0.10.35&quot;"
-        errorLine2="            ~~~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="20"
-            column="13"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.appfunctions:appfunctions than 1.0.0-alpha09 is available: 1.0.0-alpha10"
-        errorLine1="appfunctions = &quot;1.0.0-alpha09&quot;"
-        errorLine2="               ~~~~~~~~~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="31"
-            column="16"/>
-    </issue>
-
-    <issue
-        id="GradleDependency"
-        message="A newer version of androidx.appfunctions:appfunctions-compiler than 1.0.0-alpha09 is available: 1.0.0-alpha10"
-        errorLine1="appfunctions = &quot;1.0.0-alpha09&quot;"
-        errorLine2="               ~~~~~~~~~~~~~~~">
-        <location
-            file="../gradle/libs.versions.toml"
-            line="31"
-            column="16"/>
-    </issue>
-
-    <issue
-        id="ObsoleteSdkInt"
-        message="This folder configuration (`v26`) is unnecessary; `minSdkVersion` is 36.0. Merge all the resources in this folder into `mipmap-anydpi`.">
-        <location
-            file="src/main/res/mipmap-anydpi-v26"/>
-    </issue>
-
-    <issue
         id="ReportShortcutUsage"
         message="Calling this method indicates use of dynamic shortcuts, but there are no calls to methods that track shortcut usage, such as `pushDynamicShortcut` or `reportShortcutUsed`. Calling these methods is recommended, as they track shortcut usage and allow launchers to adjust which shortcuts appear based on activation history. Please see https://developer.android.com/develop/ui/views/launch/shortcuts/managing-shortcuts#track-usage"
         errorLine1="            ShortcutManagerCompat.setDynamicShortcuts(context, specs.map { it.toShortcutInfo() })"

@@ -6,6 +6,7 @@ import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -908,6 +909,62 @@ class AppDatabaseMigrationTest {
         assertTrue(
             "Expected non-null pipelineId column: ${sqlSlot.captured}",
             sql.contains("`PIPELINEID` TEXT NOT NULL"),
+        )
+    }
+
+    @Test
+    fun `MIGRATION_57_58 targets versions 57 to 58`() {
+        val migration = AppDatabase.MIGRATION_57_58
+
+        assertEquals(57, migration.startVersion)
+        assertEquals(58, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_57_58 creates the external-automation request journal with both indices`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        // A list, not a slot: `slot` keeps only the last capture, so an exact-count
+        // assertion would silently inspect one statement and pass.
+        val statements = mutableListOf<String>()
+
+        AppDatabase.MIGRATION_57_58.migrate(db)
+
+        // Purely additive: one CREATE TABLE plus its two indices, no existing table
+        // touched and no back-fill.
+        verify(exactly = 3) { db.execSQL(capture(statements)) }
+        val create = statements.first().uppercase()
+        assertTrue(
+            "Expected CREATE TABLE external_automation_requests, got: ${statements.first()}",
+            create.contains("CREATE TABLE IF NOT EXISTS `EXTERNAL_AUTOMATION_REQUESTS`"),
+        )
+        assertTrue("Expected id as primary key: ${statements.first()}", create.contains("PRIMARY KEY(`ID`)"))
+        // No foreign key on runId: the record must outlive the run it describes, and
+        // most rows describe requests that never produced one.
+        assertFalse("The journal must carry no foreign key: ${statements.first()}", create.contains("FOREIGN KEY"))
+        listOf(
+            "`REQUESTID` TEXT NOT NULL",
+            "`RECEIVEDAT` INTEGER NOT NULL",
+            "`ACTION` TEXT NOT NULL",
+            "`RETURNACTION` TEXT NOT NULL",
+            "`STATUSKIND` TEXT NOT NULL",
+            "`REPEATCOUNT` INTEGER NOT NULL",
+        ).forEach { column ->
+            assertTrue("Expected column $column in: ${statements.first()}", create.contains(column))
+        }
+        // Nullable by design — a refusal may carry no target, no callback address
+        // and no run.
+        listOf("`TARGETKIND` TEXT,", "`TARGETVALUE` TEXT,", "`RUNID` TEXT,").forEach { column ->
+            assertTrue("Expected nullable column $column in: ${statements.first()}", create.contains(column))
+        }
+        // Index names must be spelled exactly as Room generates them, or the
+        // exported-schema validation rejects the migrated database.
+        assertTrue(
+            "Expected the receivedAt index: ${statements[1]}",
+            statements[1].contains("`index_external_automation_requests_receivedAt`"),
+        )
+        assertTrue(
+            "Expected the runId index: ${statements[2]}",
+            statements[2].contains("`index_external_automation_requests_runId`"),
         )
     }
 }

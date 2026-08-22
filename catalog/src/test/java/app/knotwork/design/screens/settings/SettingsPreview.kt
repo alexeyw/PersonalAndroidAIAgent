@@ -35,19 +35,46 @@ internal object SettingsPreview {
 
     /** Hub with an active "max" query — results across categories incl. a synonym hit. */
     fun hubSearchResults(): SettingsHubViewState = hubDefault().copy(
+        // Every row here must be one the engine could actually return for this
+        // query. The run-limits row used to sit in this list on the strength of
+        // a "max steps" synonym that never existed; it is keyed on its own terms
+        // now — steps, tokens, limit, cap, budget, cost, spend — none of which
+        // is "max", so it does not belong in a "max" result set. Its place is
+        // taken by TOOL_CALL_TIMEOUT_MS, which matches "max" by synonym alone
+        // and so keeps the synonym-chip state this fixture exists to show.
         searchQuery = "max",
         searchResults = listOf(
             searchRow("MAX_CONTEXT_LENGTH", SettingsCategoryId.Generation, "Max context length", 0, 3),
             searchRow(
-                "PIPELINE_MAX_STEPS",
-                SettingsCategoryId.Pipelines,
-                "Cap autonomous steps",
-                basic = true,
+                "TOOL_CALL_TIMEOUT_MS",
+                SettingsCategoryId.Tools,
+                "Tool call timeout",
                 synonym = "max",
             ),
             searchRow("MAX_MEMORY_CHUNKS", SettingsCategoryId.Memory, "Max memory chunks", 0, 3),
             searchRow("WORKSPACE_MAX_FILE_SIZE_BYTES", SettingsCategoryId.Tools, "Workspace max file size", 10, 3),
             searchRow("RESUME_MAX_AGE_HOURS", SettingsCategoryId.Background, "Resume max age", 7, 3),
+        ),
+    )
+
+    /**
+     * A hit set containing a **Basic** row, which the "max" fixture above
+     * cannot produce.
+     *
+     * Its existence is not decorative. Every entry matching "max" is Advanced,
+     * so once the run-limits row stopped answering to that query the Basic tier
+     * had no depiction anywhere — the tag string and its primary-colour
+     * treatment were rendered by nothing and asserted by nothing.
+     *
+     * Producible as written: "limit" appears in exactly two indexed names —
+     * *Memory summary limit* and *Run limits* — both as substrings, so both
+     * rank the same and the stable sort keeps registry order, Memory first.
+     */
+    fun hubSearchBasicTier(): SettingsHubViewState = hubDefault().copy(
+        searchQuery = "limit",
+        searchResults = listOf(
+            searchRow("MEMORY_SUMMARY_DEFAULT_LIMIT", SettingsCategoryId.Memory, "Memory summary limit", 15, 5),
+            searchRow("LINK_RUN_LIMITS", SettingsCategoryId.Pipelines, "Run limits", 4, 5, basic = true),
         ),
     )
 
@@ -137,8 +164,93 @@ internal object SettingsPreview {
 
     // ─── Pipelines ───────────────────────────────────────────────────────────
 
+    // ─── Run limits ──────────────────────────────────────────────────────────
+
+    /**
+     * Default run limits: the background step ceiling has never been set, so it
+     * inherits — the state a fresh install is actually in, and the one the
+     * qualifier exists to explain.
+     */
+    fun runLimits(): RunLimitsViewState = RunLimitsViewState(
+        intro = "An autonomous run stops itself when it reaches one of these limits. Everything a run starts " +
+            "counts towards them — pipelines it calls, and every time it resumes.",
+        stepsGroupLabel = "Steps",
+        steps = LimitSliderRowState(
+            label = "Steps per run",
+            valueLabel = "15",
+            description = "How many steps a run may take before it stops. One step is one node execution.",
+            value = 15f,
+            valueRange = 5f..100f,
+            minLabel = "5",
+            maxLabel = "100",
+        ),
+        stepsBackground = LimitSliderRowState(
+            label = "Steps per background run",
+            valueLabel = "15",
+            description = "Not set separately, so runs you did not start yourself — a trigger, a schedule, the " +
+                "Quick Settings tile, or another app — use the same limit as above.",
+            qualifier = "Same as above",
+            value = 15f,
+            valueRange = 5f..100f,
+            minLabel = "5",
+            maxLabel = "100",
+        ),
+        tokensGroupLabel = "Tokens",
+        tokens = LimitSliderRowState(
+            label = "Tokens per run",
+            valueLabel = "1,000,000",
+            description = "How many tokens a run may send and receive in total.",
+            value = 6f,
+            valueRange = 4f..7f,
+            minLabel = "10,000",
+            maxLabel = "10,000,000",
+        ),
+        tokensBackground = LimitSliderRowState(
+            label = "Tokens per background run",
+            valueLabel = "100,000",
+            description = "Runs you did not start yourself get a lower token limit by default, because no " +
+                "one is watching them finish.",
+            value = 5f,
+            valueRange = 4f..7f,
+            minLabel = "10,000",
+            maxLabel = "10,000,000",
+        ),
+        spendGroupLabel = "Spend",
+        spend = StatementRowState(
+            label = "Spending limit",
+            stateWord = "Not measured",
+            body = "The app runs on your own API key, so it never sees your bill and cannot measure or cap " +
+                "what a run costs. The token limit above is the closest control.",
+        ),
+        softNote = "A run in an open chat warns you when it passes 75% of a limit, while there is still " +
+            "room to finish. The warning point is not adjustable, and a run that resumes after a pause " +
+            "may warn again.",
+    )
+
+    /** The user raised the interactive cap; the inherited row follows it. */
+    fun runLimitsRaised(): RunLimitsViewState = runLimits().let { base ->
+        base.copy(
+            steps = base.steps.copy(valueLabel = "40", value = 40f),
+            stepsBackground = base.stepsBackground.copy(valueLabel = "40", value = 40f),
+            tokens = base.tokens.copy(valueLabel = "4,000,000", value = 6.6f),
+        )
+    }
+
+    /** The background ceiling has been set on its own: no qualifier, its own copy. */
+    fun runLimitsBackgroundSet(): RunLimitsViewState = runLimits().let { base ->
+        base.copy(
+            stepsBackground = base.stepsBackground.copy(
+                valueLabel = "8",
+                value = 8f,
+                qualifier = null,
+                description = "Applies to runs you did not start yourself — a trigger, a schedule, the " +
+                    "Quick Settings tile, or another app.",
+            ),
+        )
+    }
+
     fun pipelines(): PipelinesSettingsViewState = PipelinesSettingsViewState(
-        capAutonomousSteps = SettingSliderRow(SLIDER_PIPELINE_CAP_STEPS, "Cap autonomous steps", "20", 20f, 5f..100f),
+        runLimitsSummary = "15 steps · 1,000,000 tokens per run",
         advancedSliders = listOf(
             SettingSliderRow(SLIDER_PIPELINE_NESTING_DEPTH, "Max nesting depth", "3", 3f, 1f..5f, steps = 3),
             SettingSliderRow(
@@ -173,10 +285,33 @@ internal object SettingsPreview {
         shareTargetPipelineLabel = "Default System Pipeline",
         shareReuseSessionEnabled = true,
         quickTilePipelineLabel = "Not set",
+        externalAutomationEnabled = false,
+        externalAutomationPipelineLabel = "Not set",
+        externalAutomationUnbound = false,
+        externalAutomationJournalLabel = "No requests yet",
         advancedSliders = listOf(
             SettingSliderRow(SLIDER_BACKGROUND_RESUME_MAX_AGE, "Resume window", "48 h", 48f, 1f..168f),
             SettingSliderRow(SLIDER_BACKGROUND_APPROVAL_WINDOW, "Approval window", "24 h", 24f, 1f..168f),
         ),
+    )
+
+    /**
+     * External automation switched on with nothing bound: reachable, inert, and
+     * the state whose whole job is to look visibly incomplete rather than
+     * quietly do nothing.
+     */
+    fun backgroundExternalUnbound(): BackgroundSettingsViewState = background().copy(
+        externalAutomationEnabled = true,
+        externalAutomationPipelineLabel = "Not set — every request is refused",
+        externalAutomationUnbound = true,
+    )
+
+    /** External automation switched on and bound — the working state, with a refusal to diagnose. */
+    fun backgroundExternalBound(): BackgroundSettingsViewState = background().copy(
+        externalAutomationEnabled = true,
+        externalAutomationPipelineLabel = "Morning digest",
+        externalAutomationUnbound = false,
+        externalAutomationJournalLabel = "Refused · 14:32",
     )
 
     // ─── Privacy ─────────────────────────────────────────────────────────────

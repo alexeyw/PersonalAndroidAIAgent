@@ -226,27 +226,6 @@ class ChatHomeConsoleDelegateTest {
             assertEquals(listOf("c"), state.value.console.logs.map { it.text })
         }
 
-    // ──────────────────────────── Copy payloads ──────────────────────────
-
-    @Test
-    fun `when buildConsoleLineCopyPayload then it renders timestamp source and text`() = runTest(testDispatcher) {
-        val delegate = backgroundScope.delegate()
-        val line = ConsoleLine("12:00:00.000", ConsoleSource.TOOL, ConsoleLevel.Info, "calendar.create")
-
-        assertEquals("[12:00:00.000] [TOOL] calendar.create", delegate.buildConsoleLineCopyPayload(line))
-    }
-
-    @Test
-    fun `when buildConsoleAllCopyPayload then it joins lines with newlines`() = runTest(testDispatcher) {
-        val delegate = backgroundScope.delegate()
-        val first = ConsoleLine("12:00:00.000", ConsoleSource.NODE, ConsoleLevel.Trace, "▶ INPUT")
-        val second = ConsoleLine("12:00:01.000", ConsoleSource.TOOL, ConsoleLevel.Info, "tool")
-
-        val payload = delegate.buildConsoleAllCopyPayload(listOf(first, second))
-
-        assertEquals("[12:00:00.000] [NODE] ▶ INPUT\n[12:00:01.000] [TOOL] tool", payload)
-    }
-
     @Test
     fun `when signalConsoleLineCopied then a LineCopied event is emitted`() = runTest(testDispatcher) {
         val delegate = backgroundScope.delegate()

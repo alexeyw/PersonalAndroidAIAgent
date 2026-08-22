@@ -20,7 +20,8 @@ see [`docs/user-guide.md`](user-guide.md).
 3. [Add a new cloud provider](#3-add-a-new-cloud-provider)
 4. [Add a new prompt variable](#4-add-a-new-prompt-variable)
 5. [Add a bundled preset](#5-add-a-bundled-preset) — pipeline (§5.1),
-   prompt (§5.2) and skill (§5.3)
+   prompt (§5.2) and skill (§5.3); §5.4 documents the portable
+   prompt-pack file format
 6. [Add a new `EmbeddingProvider`](#6-add-a-new-embeddingprovider)
 7. [Use input atoms and chip atoms](#7-use-input-atoms-and-chip-atoms)
 8. [Synchronization table — "if you change X, also touch Y"](#8-synchronization-table)
@@ -1160,6 +1161,82 @@ allows tools, add a `SkillNodeExecutorTest` case asserting an allowed call
 dispatches and an out-of-allowlist call is refused.
 
 ---
+
+### 5.4. The prompt-pack file format
+
+A prompt preset is the one preset kind a user can **hand to somebody as a
+file**: markdown with a YAML frontmatter block, imported and exported from
+the Prompt Library. This is a second serialization of the *same*
+`PromptPreset` — JSON stays the internal asset format that the build
+controls, markdown is the portable one that nobody controls. There is no
+third entity and no third library.
+
+```markdown
+---
+schemaVersion: 1
+id: concise-assistant
+name: Concise assistant
+description: Single-paragraph answers, no preamble.
+nodeType: LITE_RT
+tags: [concise, starter]
+---
+You are a helpful assistant. Answer in one paragraph. Today is $DATE.
+```
+
+Required: `name`, `nodeType`, and a non-empty body. Optional: `id` (falls
+back to the file-name stem, so re-importing the same file updates rather
+than duplicates), `description`, `tags`, and `schemaVersion` — absent means
+current, because a file meant to be written by hand should not need a
+version stamp to be readable.
+
+**The capability ceiling.** A prompt pack carries text and nothing else. It
+cannot add nodes, add tools, or widen a tool allowlist. The keys that ask
+for one (`allowed-tools`, `allowedTools`, `tools`, `mcp`, `permissions`,
+`nodes`, `steps`, `pipeline`, `scripts`) are recognised **precisely so they
+can be named** in the import result: a refusal the user never sees is
+indistinguishable from a refusal that did not happen. Two tests hold this
+and both fail when the guard is removed —
+`PromptPackMarkdownSerializerTest` asserts that such a file imports as text
+with the request reported, and that nothing in the produced model has a
+field a capability could travel in. Values read out of a file are sanitised
+before display (control characters and `U+2028`/`U+2029` stripped, length
+and count clamped) so a crafted document cannot forge dialog copy.
+
+Applicability is `PromptPresetConstants.LLM_DRIVEN_NODE_TYPES`. Three
+exclusions are load-bearing rather than incidental: `SKILL` is refused
+because `SkillNodeExecutor` **overwrites** `systemPrompt` with the rendered
+skill instruction, so a preset applied there would vanish silently; a blank
+body is refused because an empty `systemPrompt` on an `OUTPUT` node *means*
+pass-through; and a body over
+`PromptPresetConstants.MAX_SYSTEM_PROMPT_LENGTH` is refused rather than
+truncated, because a prompt cut off mid-instruction still looks like a
+prompt.
+
+**Relationship to `SKILL.md`.** The shape is borrowed from the Agent Skills
+specification — `---`-delimited frontmatter followed by a markdown body that
+*is* the instruction. The semantics are not: a skill there is a directory
+that may carry `scripts/`, its `name` must be a kebab-case identifier
+matching that directory, and it may declare `allowed-tools`. Conformance is
+therefore **not** claimed. That spec's three purely descriptive optional
+keys (`license`, `compatibility`, `metadata`) are accepted and ignored so a
+file written for another runtime imports without a warning about keys its
+author had every reason to include.
+
+**The frontmatter grammar** is a documented subset of YAML implemented in
+`domain/promptpack/PromptPackFrontmatterParser` — there is no YAML
+dependency in this project, and adding one to read six scalar keys would buy
+a LICENSE audit and a supply-chain surface for nothing. Accepted: scalars
+(with one optional layer of quotes; `\\` and `\"` unescape inside double
+quotes), inline lists (`[a, b]`), block lists (`- item`), nested maps
+(child key names recorded, values not interpreted), and whole-line comments.
+Not accepted, each producing a typed error rather than a guess: anchors and
+aliases, multi-document streams, block scalars (`|`, `>`), flow maps, tags,
+and multi-line quoted values. A `#` inside a value stays part of the value,
+so a prompt that mentions hashtags survives.
+
+Best-effort parsing is deliberately absent here. The file ends up in the
+system prompt of an agent holding tools; a guess about what the author meant
+is a guess about the contents of an instruction.
 
 ## 6. Add a new `EmbeddingProvider`
 
