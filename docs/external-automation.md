@@ -180,17 +180,29 @@ same action you sent as `return_action`.
 
 ### adb
 
+**Quote the whole command.** `adb shell` does not pass your arguments through:
+it joins them with spaces into one string and hands that to the device's shell,
+which splits it again. Quotes you write on your own machine are consumed before
+`adb` ever sees them, so a value containing a space arrives as several
+arguments — `--es prompt 'What is on my calendar today?'` reaches the app as the
+prompt `What`, and a pipeline named `Morning brief` is looked up as `Morning`
+and reported missing. Wrapping the entire command in double quotes, as below,
+keeps the inner quotes intact all the way to the device.
+
 The minimum call, from a shell:
 
 ```bash
-adb shell am broadcast -a app.knotwork.android.action.RUN_PIPELINE -p app.knotwork.android --es pipeline_name 'Morning brief' --es prompt 'What is on my calendar today?'
+adb shell "am broadcast -a app.knotwork.android.action.RUN_PIPELINE -p app.knotwork.android --es pipeline_name 'Morning brief' --es prompt 'What is on my calendar today?'"
 ```
 
 When the text fights your shell's quoting, send it base64-encoded instead:
 
 ```bash
-adb shell am broadcast -a app.knotwork.android.action.RUN_PIPELINE -p app.knotwork.android --es pipeline_name 'Morning brief' --es prompt_b64 "$(printf %s 'Anything with "quotes", $signs and newlines' | base64 | tr -d '\n')"
+adb shell "am broadcast -a app.knotwork.android.action.RUN_PIPELINE -p app.knotwork.android --es pipeline_name 'Morning brief' --es prompt_b64 '$(printf %s 'Anything with "quotes", $signs and newlines' | base64 | tr -d '\n')'"
 ```
+
+The `$(...)` still runs on your own machine — the device never sees it — so the
+encoded text is substituted before the command is sent.
 
 **`tr -d '\n'` is not decoration.** GNU `base64` wraps its output at 76
 characters, and the decoder here accepts the RFC 4648 alphabet without embedded

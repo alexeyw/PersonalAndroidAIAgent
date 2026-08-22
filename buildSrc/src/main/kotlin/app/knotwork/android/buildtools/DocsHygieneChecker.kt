@@ -37,6 +37,9 @@ object DocsHygieneChecker {
 
         /** A reference to an internal-only document not present in the public contour. */
         PRIVATE_DOC_REFERENCE("internal-document reference"),
+
+        /** An `adb shell am` example whose command is not quoted as a whole. */
+        UNQUOTED_ADB_SHELL("unquoted adb shell command"),
     }
 
     /**
@@ -129,10 +132,33 @@ object DocsHygieneChecker {
                         violations += Violation(path, lineNumber, match.value, Category.PRIVATE_DOC_REFERENCE)
                     }
                 }
+                UNQUOTED_ADB_SHELL_REGEX.find(line)?.let { match ->
+                    violations += Violation(path, lineNumber, match.value, Category.UNQUOTED_ADB_SHELL)
+                }
             }
         }
         return violations.sortedWith(
             compareBy({ it.file }, { it.line }, { it.category }),
         )
     }
+
+    /**
+     * Matches an `adb shell am ...` example whose command is not wrapped in quotes.
+     *
+     * **This exists because a shipped example was wrong in exactly this way.**
+     * `adb shell` does not forward argv: it joins the arguments with spaces and
+     * hands one string to the device shell, which splits it again. Quotes written
+     * on the host are consumed before `adb` sees them, so
+     * `--es prompt \'What is on my calendar today?\'` reaches the app as the
+     * prompt `What`, and a pipeline named `Morning brief` is looked up as
+     * `Morning`. Both failures look like the app refusing a valid request, which
+     * is the worst possible shape for a first contact with a public contract.
+     *
+     * Scoped to `am` rather than to every `adb shell`, because that is the family
+     * carrying `--es` values. It flags commands whose values happen to contain no
+     * spaces as well: quoting is never wrong, the documentation teaches it as one
+     * unconditional rule, and a guard firing only on the already-broken subset
+     * would let the next example be written in the shape that breaks.
+     */
+    private val UNQUOTED_ADB_SHELL_REGEX: Regex = Regex("adb shell +am\\b")
 }
