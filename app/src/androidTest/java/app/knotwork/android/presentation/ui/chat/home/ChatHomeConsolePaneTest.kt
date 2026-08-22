@@ -21,7 +21,6 @@ import app.knotwork.design.components.console.ConsoleLine
 import app.knotwork.design.components.console.ConsoleSnap
 import app.knotwork.design.components.console.ConsoleSource
 import app.knotwork.design.components.console.ConsoleTab
-import io.mockk.every
 import io.mockk.verify
 import org.junit.Rule
 import org.junit.Test
