@@ -98,6 +98,39 @@ class DocsHygieneCheckerTest {
     }
 
     @Test
+    fun `given an unquoted adb shell am example when scanned then flagged`() {
+        // The exact shape that shipped and failed on a device: the host's quotes
+        // never reach `am`, so a multi-word value arrives split.
+        val doc = "```bash\n" +
+            "adb shell am broadcast -a x.y.ACTION -p x.y --es prompt 'What is two plus two?'\n" +
+            "```"
+
+        val violations = DocsHygieneChecker.scan(mapOf("docs/a.md" to doc))
+
+        assertEquals(1, violations.size)
+        assertEquals(DocsHygieneChecker.Category.UNQUOTED_ADB_SHELL, violations.single().category)
+        assertEquals(2, violations.single().line)
+    }
+
+    @Test
+    fun `given a quoted adb shell am example when scanned then not flagged`() {
+        val doc = "```bash\n" +
+            "adb shell \"am broadcast -a x.y.ACTION -p x.y --es prompt 'What is two plus two?'\"\n" +
+            "```"
+
+        assertEquals(emptyList<DocsHygieneChecker.Violation>(), DocsHygieneChecker.scan(mapOf("docs/a.md" to doc)))
+    }
+
+    @Test
+    fun `given an adb shell command outside the am family when scanned then not flagged`() {
+        // The rule is about extras-carrying `am` invocations, not about every adb
+        // call — widening it would flag `adb pull` lines that cannot have the defect.
+        val doc = "adb shell pm list packages\nadb pull /sdcard/x"
+
+        assertEquals(emptyList<DocsHygieneChecker.Violation>(), DocsHygieneChecker.scan(mapOf("docs/a.md" to doc)))
+    }
+
+    @Test
     fun `given multiple hits when scanned then ordered by file then line`() {
         val files = mapOf(
             "z.md" to "clean\n</invoke>\n",
