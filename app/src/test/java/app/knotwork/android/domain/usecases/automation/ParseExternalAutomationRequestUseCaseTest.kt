@@ -362,6 +362,24 @@ class ParseExternalAutomationRequestUseCaseTest {
     }
 
     @Test
+    fun `given a line-wrapped base64 prompt when parsing then the embedded newline is refused`() {
+        // GNU base64 wraps its output at 76 characters, so a caller piping a long
+        // prompt through it without `tr -d '\n'` sends exactly this. The documented
+        // examples say so; this pins the behaviour they describe. Trimming cannot
+        // save it — the newline is interior, not surrounding.
+        val wrapped = "SGVsbG8sIHRoaXMgcHJvbXB0IGlzIGxvbmcgZW5vdWdoIHRoYXQgR05VIGJhc2U2NCB3b3VsZCB3\ncmFwIGl0Lg=="
+        val result = useCase(
+            invocation(
+                ExternalAutomationContract.EXTRA_REQUEST_ID to "req-1",
+                ExternalAutomationContract.EXTRA_PIPELINE_ID to "pipe-1",
+                ExternalAutomationContract.EXTRA_PROMPT_B64 to wrapped,
+            ),
+        )
+
+        assertEquals(ExternalAutomationRejectionReason.PROMPT_UNDECODABLE, reasonOf(result))
+    }
+
+    @Test
     fun `given a base64 prompt that decodes to blank when parsing then it is refused as missing`() {
         val result = useCase(
             invocation(

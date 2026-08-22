@@ -149,8 +149,11 @@ the intent itself and is not limited to two.
 
 To receive the callback, use an **Intent Received** event with *Action* set to
 whatever you passed as `return_action` (or `app.knotwork.android.action.RUN_RESULT`
-if you passed none). Tasker exposes the extras to the task as local variables:
-`%request_id`, `%status`, `%reason`.
+if you passed none). Tasker hands each extra to the task as a local variable
+named after its key — lowercased, with anything non-alphanumeric turned into an
+underscore — so the callback's three keys arrive as `%request_id`, `%status` and
+`%reason`. If a name ever reads differently in your Tasker version, that
+transformation is the rule to apply, not these three spellings.
 
 ### MacroDroid
 
