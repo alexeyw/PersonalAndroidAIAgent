@@ -142,10 +142,11 @@ A task action of **System → Send Intent**:
 
 Leave *Cat*, *Mime Type*, *Data* and *Class* empty.
 
-**Tasker's *Send Intent* carries two extra fields**, which is exactly the
-smallest call: a target and a prompt. Asking for a callback needs two more keys
-than that action has fields — for that, Tasker's *Java Function* action builds
-the intent itself and is not limited to two.
+**Tasker's *Send Intent* offers two extra fields** — which is exactly the
+smallest call: a target and a prompt. That is not a coincidence; the correlation
+id is optional precisely so this call fits. If your build of Tasker offers more
+fields, the callback keys go in them; if it does not, its *Java Function* action
+builds the intent itself and is not limited to two.
 
 To receive the callback, use an **Intent Received** event with *Action* set to
 whatever you passed as `return_action` (or `app.knotwork.android.action.RUN_RESULT`
@@ -164,13 +165,15 @@ An action of **Send Intent** with *Intent target* set to **Broadcast**:
 | Action | `app.knotwork.android.action.RUN_PIPELINE` |
 | Package | `app.knotwork.android` |
 | Extra 1 | `pipeline_name` = `Morning brief` (String) |
-| Extra 2 | `prompt` = `[lv=my_prompt]` (String) |
+| Extra 2 | `prompt` = `Summarise today's calendar` (String) |
 | Extra 3 | `request_id` = `md-0001` (String) |
 | Extra 4 | `return_package` = `com.arlosoft.macrodroid` (String) |
 
-MacroDroid's *Send Intent* takes six extras, so the callback keys fit
-comfortably. Leaving the package empty broadcasts to every app on the device
-rather than to this one — fill it in.
+MacroDroid's *Send Intent* takes several extras, so the callback keys fit
+comfortably alongside the two the call needs. Any value can be magic text
+instead of a literal, which is how you pass a variable through. Leaving the
+package empty broadcasts to every app on the device rather than to this one —
+fill it in.
 
 The callback arrives on the **Intent Received** trigger, configured with the
 same action you sent as `return_action`.
