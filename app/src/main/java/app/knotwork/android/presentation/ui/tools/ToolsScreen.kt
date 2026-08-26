@@ -100,7 +100,6 @@ fun ToolsScreen(
         onAddServerOpen = onAddMcpServer,
         onOpenAllowedDomains = onOpenAllowedDomains,
         onErrorRetry = { /* unreachable: discovery errors surface per-server, not as a top-level state. */ },
-        onOpenDrawer = { /* drawer ships post-v0.1. */ },
     )
 
     ToolsContent(

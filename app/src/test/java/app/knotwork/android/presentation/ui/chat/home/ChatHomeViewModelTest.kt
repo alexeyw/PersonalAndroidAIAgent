@@ -1827,18 +1827,6 @@ class ChatHomeViewModelTest {
     }
 
     @Test
-    fun `pickModel activates the model and loads it via LoadModelUseCase`() = runTest(testDispatcher) {
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        viewModel.pickModel(modelId = 17L)
-        advanceUntilIdle()
-
-        coVerify { localModelRepository.setActiveModel(17L) }
-        coVerify { loadModelUseCase() }
-    }
-
-    @Test
     fun `installedModels mirrors LocalModelRepository getAllModels emissions`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()

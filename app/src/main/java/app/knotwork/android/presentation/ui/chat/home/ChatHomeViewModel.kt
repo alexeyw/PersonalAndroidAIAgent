@@ -1139,18 +1139,6 @@ constructor(
         reattach.cancel()
     }
 
-    /**
-     * Activates the LiteRT model identified by [modelId] and reloads the
-     * inference engine. Subsequent `sendMessage` calls run against the
-     * freshly-loaded model.
-     */
-    fun pickModel(modelId: Long) {
-        viewModelScope.launch {
-            localModelRepository.setActiveModel(modelId)
-            loadModelUseCase()
-        }
-    }
-
     companion object {
         /** Fallback message for `Throwable` instances surfaced via [ChatHomeUiState.Error] without a cause. */
         const val UNKNOWN_ERROR_FALLBACK: String = "Unknown error"

@@ -1,10 +1,5 @@
 package app.knotwork.design.components.pipelineeditor
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -82,31 +77,23 @@ private val PortLabelGap = 4.dp
 /** Approximate height of the `LabelSm` row used for outbound port labels. */
 private val PortLabelLineHeight = 14.dp
 
-/** Header strip pulse range under [running] (lower bound). */
-private const val PULSE_LOW = 0.85f
-
-/** Header strip pulse range under [running] (upper bound). */
-private const val PULSE_HIGH = 1.0f
-
-/** Header strip pulse cycle in ms. */
-private const val PULSE_DURATION_MS = 1_200
+/** Header strip opacity. Constant — the card has no animated state. */
+private const val HEADER_STRIP_ALPHA = 1.0f
 
 /** Header label letter-tracking. */
 private const val HEADER_LABEL_TRACKING_EM = 0.08f
 
 /**
  * Pipeline-editor node card — single composable covering idle, selected,
- * multi-selected, error (validation / runtime), and running states.
+ * multi-selected, and error (validation / runtime) states.
  *
  * Geometry comes from the constants above; tints from
- * [NodeType.headerTint] / [headerOnColor]; reduced-motion handling reads
- * [KnotworkTheme.a11y] and collapses the running
- * pulse to a steady-state filled dot.
+ * [NodeType.headerTint] / [headerOnColor].
  *
  * **Stateless** — all interactivity (tap to select, long-press to multi-
  * select, drag from a port to enter connection mode) is owned by the
- * canvas. This composable just renders. Selection / running /
- * error visuals are driven by the parameters below.
+ * canvas. This composable just renders. Selection and error visuals are
+ * driven by the parameters below.
  *
  * @param type the node type. Drives header tint, glyph, and uppercase
  * label.
@@ -119,8 +106,6 @@ private const val HEADER_LABEL_TRACKING_EM = 0.08f
  * @param error `null` for idle; [NodeError.Validation] swaps the type
  * label for a warning glyph; [NodeError.Runtime] surfaces the cause
  * inline.
- * @param running `true` runs the header strip's 1.2 s pulse (gated by
- * reduced-motion).
  * @param multiSelected `true` swaps the outline for the 2 dp `accent300`
  * multi-select border and renders the top-right chevron marker.
  * @param ports inbound / outbound port descriptors. Multi-out nodes show
@@ -135,7 +120,6 @@ fun NodeCard(
     subtitle: String?,
     selected: Boolean,
     error: NodeError?,
-    running: Boolean,
     multiSelected: Boolean,
     ports: NodePorts,
     modifier: Modifier = Modifier,
@@ -155,7 +139,6 @@ fun NodeCard(
         selected -> KnotworkTheme.elevation.el3
         else -> KnotworkTheme.elevation.el1
     }
-    val headerAlpha = headerStripAlpha(running = running)
     val showOutboundLabels = ports.outbound.size > 1
     val topInset = if (ports.inbound > 0) PortDotRadius else 0.dp
     val bottomInset = when {
@@ -190,7 +173,7 @@ fun NodeCard(
                     strip = headerColor,
                     onStrip = onHeader,
                     error = error,
-                    alpha = headerAlpha,
+                    alpha = HEADER_STRIP_ALPHA,
                 )
                 NodeBody(title = title, subtitle = subtitle, error = error)
             }
@@ -394,28 +377,6 @@ private fun nodeBorderColor(selected: Boolean, multiSelected: Boolean, error: No
     }
 }
 
-/**
- * Drives the header-strip 1.2 s pulse for the running state. Returns
- * `1.0f` when reduced-motion is on or when [running] is `false` — both
- * cases yield a steady strip.
- */
-@Composable
-private fun headerStripAlpha(running: Boolean): Float {
-    if (!running) return PULSE_HIGH
-    if (KnotworkTheme.a11y.reducedMotion()) return PULSE_HIGH
-    val transition = rememberInfiniteTransition(label = "node-running-pulse")
-    val alpha by transition.animateFloat(
-        initialValue = PULSE_LOW,
-        targetValue = PULSE_HIGH,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = PULSE_DURATION_MS, easing = KnotworkTheme.motion.easeStd),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "node-running-pulse-alpha",
-    )
-    return alpha
-}
-
 /** Light-theme idle preview. */
 @Preview(name = "NodeCard — LiteRT idle", showBackground = true)
 @Composable
@@ -427,7 +388,6 @@ private fun NodeCardLiteRtIdlePreview() {
             subtitle = "gemma-2b-it",
             selected = false,
             error = null,
-            running = false,
             multiSelected = false,
             ports = NodePorts.forType(NodeType.LITE_RT),
         )
@@ -445,30 +405,11 @@ private fun NodeCardSelectedPreview() {
             subtitle = "5 classes",
             selected = true,
             error = null,
-            running = false,
             multiSelected = false,
             ports = NodePorts.forType(
                 NodeType.INTENT_ROUTER,
                 intentClasses = listOf("simple", "complex"),
             ),
-        )
-    }
-}
-
-/** Dark-theme running preview. */
-@Preview(name = "NodeCard — running (dark)", showBackground = true)
-@Composable
-private fun NodeCardRunningPreview() {
-    PreviewWrapper(darkTheme = true) {
-        NodeCard(
-            type = NodeType.QUEUE_PROCESSOR,
-            title = "Process items",
-            subtitle = "parallelism = 2",
-            selected = false,
-            error = null,
-            running = true,
-            multiSelected = false,
-            ports = NodePorts.forType(NodeType.QUEUE_PROCESSOR),
         )
     }
 }

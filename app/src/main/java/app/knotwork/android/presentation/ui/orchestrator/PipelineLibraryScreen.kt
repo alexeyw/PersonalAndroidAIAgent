@@ -288,15 +288,9 @@ fun PipelineLibraryScreen(
             viewModel.exportBundle(pipelineId = id, fileName = "knotwork-bundle-${LocalDate.now()}.json")
         },
         onImportJson = { importLauncher.launch(arrayOf("application/json", "text/*")) },
-        // Archive: phase-21 has no archival table yet — treat as delete so
-        // the affordance is exercised.
-        onArchive = { id ->
-            uiState.savedPipelines.firstOrNull { it.id == id }?.let { deleteTarget = it }
-        },
         onDelete = { id ->
             uiState.savedPipelines.firstOrNull { it.id == id }?.let { deleteTarget = it }
         },
-        onOpenDrawer = { /* drawer ships post-v0.1. */ },
         onNewPipeline = { showCreateDialog = true },
         onBrowseTemplates = { showPresetPicker = true },
         onSaveAsPreset = { id ->

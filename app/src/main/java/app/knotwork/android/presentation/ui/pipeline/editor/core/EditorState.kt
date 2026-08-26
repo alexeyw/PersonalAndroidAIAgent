@@ -52,12 +52,6 @@ class EditorState(undoCapacity: Int = EditorUndoRedo.DEFAULT_CAPACITY) {
     /** Canvas-space anchor for an open radial quick-add menu; `null` when closed. */
     var quickAddAnchor: Pair<Float, Float>? by mutableStateOf(null)
 
-    /** Run-trace state — currently active node id while the pipeline is running, else `null`. */
-    var activeRunningNodeId: String? by mutableStateOf(null)
-
-    /** `true` while a pipeline run is in progress; toggles the bottom bar between validation and trace. */
-    var isRunning: Boolean by mutableStateOf(false)
-
     /**
      * `true` when the mini-map overlay is visible. Toggled from the overflow
      * menu. While open the toolbar subtitle switches to the overview wording

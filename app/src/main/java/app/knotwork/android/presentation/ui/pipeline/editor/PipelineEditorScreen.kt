@@ -17,12 +17,9 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -64,16 +61,13 @@ import app.knotwork.android.presentation.ui.pipeline.editor.core.rememberEditorS
 import app.knotwork.android.presentation.ui.pipeline.editor.sheet.NodeConfigSheetHost
 import app.knotwork.design.components.controls.KnotworkField
 import app.knotwork.design.components.controls.KnotworkTextField
-import app.knotwork.design.components.pipelineeditor.EditorPrimaryAction
 import app.knotwork.design.components.pipelineeditor.LocalModelOption
 import app.knotwork.design.components.pipelineeditor.PipelineTargetDisabledReason
 import app.knotwork.design.components.pipelineeditor.PipelineTargetOption
-import app.knotwork.design.components.pipelineeditor.RunStatus
 import app.knotwork.design.components.pipelineeditor.SkillConfig
 import app.knotwork.design.components.pipelineeditor.SkillOption
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -90,10 +84,9 @@ import kotlinx.coroutines.launch
  * catalog API every iteration.
  *
  * Responsibilities:
- *  - Subscribes to the VM's `uiState` + `runState` + `focusNodeRequest` streams.
+ *  - Subscribes to the VM's `uiState` + `focusNodeRequest` streams.
  *  - Owns the screen-local [EditorState] (selection / undo / drafts).
- *  - Computes the toolbar subtitle + primary-action variant from runState /
- *    validation / node count.
+ *  - Computes the toolbar subtitle from validation / node count.
  *  - Hosts the [PipelineEditorContent] layout, the overflow menu, the catalog
  *    `NodeConfigSheet`, and the edge-removal confirm dialog.
  *  - Dispatches graph mutations back to the VM (which persists through `SavePipelineUseCase`).
@@ -108,7 +101,6 @@ import kotlinx.coroutines.launch
 @Suppress("LongMethod") // The editor screen is the orchestration seam; splitting would hide the data flow.
 fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
-    val runState by viewModel.runState.collectAsState()
     val editor: EditorState = rememberEditorState()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -140,34 +132,6 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
     // pipeline and the editor swaps onto it (see the `pendingPipelineIdFromPreset`
     // effect below).
     var showPresetPicker by remember { mutableStateOf(false) }
-    // Screen-local clock driving the [RunStatusBanner] elapsed-seconds metric.
-    // Reset to 0 every time a new run starts; ticks ~10 Hz while running so the
-    // banner reads ~"4.2 s" rather than jumping by whole seconds. Stops when
-    // `runState.isRunning` flips back to false.
-    var runElapsedSeconds by remember { mutableFloatStateOf(0f) }
-
-    LaunchedEffect(runState) {
-        editor.isRunning = runState.isRunning
-        editor.activeRunningNodeId = runState.activeNodeId
-    }
-    // Reset run state on screen leave so the banner doesn't stick around when
-    // the user navigates back to the library or switches pipelines. The
-    // OrchestratorViewModel is scoped to the `pipelines` nested nav-graph
-    // (shared with the library), so its StateFlow survives the editor screen
-    // and would otherwise re-render the banner on the next open.
-    DisposableEffect(viewModel) {
-        onDispose { viewModel.stopRunAndReset() }
-    }
-    LaunchedEffect(runState.isRunning) {
-        if (runState.isRunning) {
-            runElapsedSeconds = 0f
-            val startNanos = System.nanoTime()
-            while (true) {
-                delay(RUN_BANNER_TICK_MS)
-                runElapsedSeconds = (System.nanoTime() - startNanos) / NANOS_PER_SECOND
-            }
-        }
-    }
 
     LaunchedEffect(uiState.errorMessage) {
         val msg = uiState.errorMessage ?: return@LaunchedEffect
@@ -234,19 +198,11 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
         }
         val pipeline = uiState.currentPipeline
         val toolbarSubtitle = rememberToolbarSubtitle(
-            isRunning = runState.isRunning,
-            activeNodeId = runState.activeNodeId,
             graph = pipeline,
             validationErrorCount = validationErrors.size,
             miniMapOpen = editor.miniMapOpen,
             scale = editor.transform.scale,
         )
-        val toolbarPrimaryAction = if (runState.isRunning) {
-            EditorPrimaryAction.None
-        } else {
-            EditorPrimaryAction.Run
-        }
-        val toolbarPrimaryActionEnabled = !runState.isRunning && validationErrors.isEmpty()
         // Pre-resolve snackbar copies at composition time so the action lambdas
         // never read from `Context` (the `LocalContextGetResourceValueCall` lint
         // rule forbids `context.getString` / `getQuantityString` from Composable
@@ -256,40 +212,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
         val pasteEmptyMessage = stringResource(R.string.pipeline_editor_overflow_paste_empty)
         val autoFixDoneMessage = stringResource(R.string.pipeline_editor_validation_auto_fix_done)
         val saveDoneMessage = stringResource(R.string.pipeline_editor_save_done)
-        val runPreviewMessage = stringResource(R.string.pipeline_editor_run_preview)
         val connectionDroppedHint = stringResource(R.string.pipeline_editor_connection_dropped_hint)
-        // Banner shows Running while the orchestrator reports the run is live; falls
-        // back to Idle (banner hidden) otherwise. Done / Paused variants land when
-        // real run-completion telemetry arrives (engine wiring is tracked separately).
-        //
-        // The `remember` key set MUST include every `runState` field the derived
-        // calculation reads, otherwise the banner's step-counter sticks at the
-        // first value seen for a given run. `activeNodeId` in particular changes
-        // mid-run while `isRunning` stays true — leaving it out of the key would
-        // freeze `stepIndex` at the initial node index for the entire run.
-        val runStatus by remember(
-            runState.isRunning,
-            runState.activeNodeId,
-            pipeline.nodes.size,
-        ) {
-            derivedStateOf {
-                if (runState.isRunning) {
-                    val activeIndex = runState.activeNodeId
-                        ?.let { id -> pipeline.nodes.indexOfFirst { it.id == id } }
-                        ?.takeIf { it >= 0 }
-                        ?.let { it + 1 }
-                        ?: 1
-                    RunStatus.Running(
-                        stepIndex = activeIndex,
-                        totalSteps = pipeline.nodes.size.takeIf { it > 0 },
-                        elapsedSeconds = runElapsedSeconds,
-                    )
-                } else {
-                    RunStatus.Idle
-                }
-            }
-        }
-
         val onUndoClick: () -> Unit = {
             val previous = editor.undoRedo.undo(pipeline)
             if (previous != null) viewModel.replaceCurrentPipeline(previous)
@@ -409,51 +332,10 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
             errorsByNodeId = emptyMap(),
             reducedMotion = KnotworkTheme.a11y.reducedMotion(),
             toolbarSubtitle = toolbarSubtitle,
-            toolbarPrimaryAction = toolbarPrimaryAction,
-            toolbarPrimaryActionEnabled = toolbarPrimaryActionEnabled,
-            runStatus = runStatus,
-            onRunPause = {
-                // Pause semantics arrive with the real GraphExecutionEngine wiring;
-                // surface a hint until then so the button isn't a silent no-op.
-                scope.launch { snackbarHostState.showSnackbar("Pause arrives with the real run engine.") }
-            },
-            onRunResume = {
-                scope.launch { snackbarHostState.showSnackbar("Resume arrives with the real run engine.") }
-            },
-            onRunStop = {
-                // Fully reset isRunning + activeNodeId so the banner / per-node
-                // dimming clear together. Using `stopRunAndReset` (not
-                // `setRunning(false)`) so a paused-mid-run `activeNodeId` doesn't
-                // leak across the next run.
-                viewModel.stopRunAndReset()
-            },
-            onRunTrace = {
-                // Trace navigation will jump to the console pane (Chat home).
-                // Until that route lands, surface a placeholder so the button is discoverable.
-                scope.launch { snackbarHostState.showSnackbar("Trace navigation arrives with run telemetry.") }
-            },
             onPipelineNameChange = { name ->
                 viewModel.replaceCurrentPipeline(pipeline.copy(name = name))
             },
             onNavigateUp = onBack,
-            onPrimaryAction = {
-                // This ships only the UI-side run banner +
-                // dimming + traveling-dot scaffolding. The real
-                // `GraphExecutionEngine` wiring (actual node execution, token
-                // streaming, tool dispatch, completion-state Done variant)
-                // lands in a follow-up. Until then, `Run` flips the
-                // `isRunning` flag so the user can see the banner / dimming
-                // surfaces, and we surface a snackbar making the preview
-                // status explicit — otherwise users tap Run, see the banner,
-                // and rightly wonder why nothing else happens.
-                viewModel.saveCurrentPipeline()
-                viewModel.setRunning(running = !runState.isRunning)
-                if (runState.isRunning.not()) {
-                    // We just FLIPPED running to true above; in-line snackbar
-                    // makes the "preview only" status discoverable.
-                    scope.launch { snackbarHostState.showSnackbar(runPreviewMessage) }
-                }
-            },
             onOverflow = { overflowOpen = true },
             onMoveNode = { nodeId, dxCanvas, dyCanvas ->
                 editor.undoRedo.push(pipeline)
@@ -530,7 +412,6 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                 editor.selection = emptySet()
                 editor.multiSelectMode = false
             },
-            activeRunningEdgeIds = activeRunningEdges(runState.activeNodeId, pipeline),
             subtitleForNode = subtitleForNode,
             modifier = Modifier.fillMaxSize(),
         )
@@ -553,10 +434,7 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                 // Explicit Save sits at the top of the overflow so the action is
                 // discoverable. Most graph mutations currently update the in-memory
                 // `currentPipeline` via `replaceCurrentPipeline` but don't persist
-                // to disk; this item is the user's reliable "write to disk" lever.
-                // Pressing Run also persists (via `saveCurrentPipeline` in the
-                // primary-action callback) — the explicit Save just removes the
-                // "did anything actually persist?" guesswork.
+                // to disk; this item is the user's only "write to disk" lever.
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.pipeline_editor_overflow_save)) },
                     onClick = {
@@ -1054,31 +932,20 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
 }
 
 /**
- * Computes the [PipelineEditorContent] subtitle from the live run / validation / graph
+ * Computes the [PipelineEditorContent] subtitle from the validation / graph
  * state. Pure-Compose (read-only) — no side effects.
  *
- * Priority: running > overview > issues > editing. "Done-after-run" subtitle
- * lands when run-completion telemetry exists (engine wiring is separate scope).
+ * Priority: overview > issues > editing. The editor does not execute pipelines,
+ * so there is no run-derived subtitle: runs happen from chat, where the console
+ * reports them.
  */
 @Composable
-@Suppress("LongParameterList")
-// Each input is independent state; bundling into a data class would only obscure the contract.
 private fun rememberToolbarSubtitle(
-    isRunning: Boolean,
-    activeNodeId: String?,
     graph: PipelineGraph,
     validationErrorCount: Int,
     miniMapOpen: Boolean,
     scale: Float,
 ): String = when {
-    isRunning -> {
-        val activeLabel = activeNodeId?.let { id -> graph.nodes.find { it.id == id }?.label }
-        if (activeLabel != null) {
-            stringResource(R.string.pipeline_editor_subtitle_running, activeLabel)
-        } else {
-            stringResource(R.string.pipeline_editor_subtitle_running_idle)
-        }
-    }
     miniMapOpen -> stringResource(
         R.string.pipeline_editor_subtitle_overview,
         formatScalePercent(scale),
@@ -1110,18 +977,6 @@ private data class PendingPromptLibrary(val nodeType: NodeType, val currentPromp
  * active node's type, both forwarded to `SavePromptAsPresetUseCase` on submit.
  */
 private data class PendingSavePromptPreset(val nodeType: NodeType, val systemPrompt: String)
-
-/** Identifies the set of edge ids that should animate in run-trace mode. */
-private fun activeRunningEdges(activeNodeId: String?, graph: PipelineGraph): Set<String> {
-    if (activeNodeId == null) return emptySet()
-    return graph.connections.filter { it.targetNodeId == activeNodeId }.map { it.id }.toSet()
-}
-
-/** Run-banner clock tick (~10 Hz). One decimal place is enough for the elapsed-seconds metric. */
-private const val RUN_BANNER_TICK_MS: Long = 100L
-
-/** Nanoseconds per second — for the run-banner clock arithmetic. */
-private const val NANOS_PER_SECOND: Float = 1_000_000_000f
 
 /**
  * Canvas-space NodeCard width / height. Mirrors the catalog `NodeCardWidth = 168

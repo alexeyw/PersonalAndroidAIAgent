@@ -132,8 +132,6 @@ class ModelsCallbacks(
     val onPresetActivate: (String) -> Unit = {},
     val onPresetDelete: (String) -> Unit = {},
     val onCustomDownloadCancel: () -> Unit = {},
-    val onActiveOpen: () -> Unit = {},
-    val onOverflowMenu: () -> Unit = {},
     val onToggleVision: (Boolean) -> Unit = {},
     val onToggleAudio: (Boolean) -> Unit = {},
     val onRetry: () -> Unit = {},

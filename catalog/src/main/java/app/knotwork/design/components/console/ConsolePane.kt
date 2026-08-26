@@ -102,8 +102,9 @@ private val ConsoleNestingIndent = 14.dp
  * **Header actions.** Every action button in the Partial/Full header
  * fires the matching caller-supplied callback ([onSearch], [onCopyAll],
  * [onClear], plus the close affordance which calls [onSnapChange] with
- * `ConsoleSnap.Peek`). Pass a no-op lambda if a host explicitly wants
- * to hide functionality, but every button is always wired — no dead UI.
+ * `ConsoleSnap.Peek`). A button is rendered only where it can act: Search
+ * appears on the Logs tab alone, because the field it opens lives there.
+ * Nothing is shown disabled and nothing is shown inert.
  *
  * @param snap current snap point. Drives the pane height and the
  * Peek-vs-full header switch.
@@ -117,9 +118,9 @@ private val ConsoleNestingIndent = 14.dp
  * @param filter source filter applied to [logs].
  * @param onFilterChange invoked when the user toggles a source filter.
  * @param onSearch invoked when the user taps the header Search action
- * (Partial / Full only). Screens typically toggle an inline search bar via
- * [searchQuery]; the catalog also wires this callback so a host can keep
- * legacy "open search overlay" semantics if it wants.
+ * (Partial / Full, **Logs tab only** — the inline field this opens exists
+ * only there). Screens typically toggle an inline search bar via
+ * [searchQuery].
  * @param onCopyAll invoked when the user taps the header Copy-all action.
  * @param onClear invoked when the user taps the header Clear action.
  * Screens typically confirm via a dialog before clearing the log.
@@ -209,6 +210,10 @@ private fun ConsolePaneHeader(
     onClear: () -> Unit,
     onCloseConsole: () -> Unit,
 ) {
+    // The search field lives in `ConsoleLogsBody` and nowhere else, so the
+    // header offers Search on the Logs tab only. Rendering it on Vars/Traces
+    // put a magnifier on screen whose tap had no observable effect.
+    val searchable = tab == ConsoleTab.Logs
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
@@ -218,7 +223,7 @@ private fun ConsolePaneHeader(
     ) {
         FullTabStrip(tab = tab, onTabChange = onTabChange, modifier = Modifier.weight(1f))
         ConsoleActions(
-            onSearch = onSearch,
+            onSearch = onSearch.takeIf { searchable },
             onCopyAll = onCopyAll,
             onClear = onClear,
             onClose = onCloseConsole,
@@ -229,8 +234,9 @@ private fun ConsolePaneHeader(
 /**
  * Three-tab strip with a 2 dp accent underline on the selected tab. Each
  * tab takes an equal weighted share of the strip's allocated width so the
- * trailing [ConsoleActions] icons (4 × 48 dp ≈ 192 dp on typical phones)
- * always fit on the same row without pushing TRACES off-screen.
+ * trailing [ConsoleActions] icons (at most 4 × 48 dp ≈ 192 dp on typical
+ * phones — Search is Logs-only) always fit on the same row without pushing
+ * TRACES off-screen.
  */
 @Composable
 private fun FullTabStrip(tab: ConsoleTab, onTabChange: (ConsoleTab) -> Unit, modifier: Modifier = Modifier) {
@@ -270,15 +276,22 @@ private fun FullTabStrip(tab: ConsoleTab, onTabChange: (ConsoleTab) -> Unit, mod
     }
 }
 
-/** Trailing action row: Search / Copy all / Clear / Close. */
+/**
+ * Trailing action row: Search / Copy all / Clear / Close.
+ *
+ * A `null` [onSearch] drops the Search button rather than disabling it — the
+ * Vars and Traces tabs have no search field to open.
+ */
 @Composable
-private fun ConsoleActions(onSearch: () -> Unit, onCopyAll: () -> Unit, onClear: () -> Unit, onClose: () -> Unit) {
+private fun ConsoleActions(onSearch: (() -> Unit)?, onCopyAll: () -> Unit, onClear: () -> Unit, onClose: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        ConsoleHeaderIcon(
-            icon = AppIcons.Search,
-            contentDescription = stringResource(R.string.knotwork_console_action_search),
-            onClick = onSearch,
-        )
+        if (onSearch != null) {
+            ConsoleHeaderIcon(
+                icon = AppIcons.Search,
+                contentDescription = stringResource(R.string.knotwork_console_action_search),
+                onClick = onSearch,
+            )
+        }
         ConsoleHeaderIcon(
             icon = AppIcons.Copy,
             contentDescription = stringResource(R.string.knotwork_console_action_copy_all),

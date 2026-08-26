@@ -91,7 +91,6 @@ data class PromptLibraryViewState(
 @Suppress("LongParameterList") // Documented public API.
 class PromptLibraryCallbacks(
     val onBack: () -> Unit = {},
-    val onSearch: () -> Unit = {},
     val onCategorySelected: (String) -> Unit = {},
     val onNewPrompt: () -> Unit = {},
     val onImportPrompt: () -> Unit = {},

@@ -685,7 +685,7 @@ This file maps the contents of the main application package.
       - `MonitoringUiState.kt` - Monitoring UI state.
       - `MonitoringViewModel.kt` - Monitoring ViewModel.
     - `orchestrator/` - Pipeline library + shared orchestrator ViewModel (the canvas surface moved to `pipeline/editor/`).
-      - `OrchestratorUiState.kt` - Orchestrator UI state and `PromptPreviewState` / `PipelineRunState`.
+      - `OrchestratorUiState.kt` - Orchestrator UI state and `PromptPreviewState`.
       - `OrchestratorViewModel.kt` - Orchestrator ViewModel. Owns graph mutation, persistence, validation, run-state placeholder, and the editor `focusNodeRequest` SharedFlow. Exposes `saveCurrentAsPreset` + `saveAsPresetFromLibrary` powered by `SavePipelineAsPresetUseCase`, and `saveCurrentPromptAsPreset` powered by `SavePromptAsPresetUseCase`.
       - `PipelineLibraryScreen.kt` - Library screen listing every saved pipeline. Replaces the single FAB with `PipelineLibrarySpeedDial` (+ New / + From preset), wires `onBrowseTemplates` to `PresetPickerSheet`, and adds the `Save as preset` row overflow action.
       - `components/` - Orchestrator UI components.
@@ -701,9 +701,9 @@ This file maps the contents of the main application package.
         - `PipelineLibrarySpeedDial.kt` - Two-action speed-dial that replaces the catalog `PipelineLibraryFab` overlay (`+ New pipeline` / `+ From preset`).
         - `GraphFlowPreview.kt` - Pure-Kotlin helper rendering a one-line `INPUT → LITE_RT → OUTPUT` summary used in preset cards.
         - `PresetCategoryStyle.kt` - Theme-aware mapping from `PresetCategory` to its Knotwork accent colour + the shared `PresetCategoryBadge` chip used on every preset card.
-    - `pipeline/editor/` - Production pipeline editor — toolbar with RunStatusBanner, ZoomRail, MiniMap, FilterBar, EmptyPipelineState, DotGridBackground, ValidationAutoFix, copy/paste, search, grid toggle.
+    - `pipeline/editor/` - Production pipeline editor — toolbar, ZoomRail, MiniMap, FilterBar, EmptyPipelineState, DotGridBackground, ValidationAutoFix, copy/paste, search, grid toggle. Composes pipelines only; execution belongs to chat / triggers.
       - `PipelineEditorScreen.kt` - Stateful entry composable: subscribes to `OrchestratorViewModel` + `runState`, owns the screen-local `EditorState`, computes the toolbar subtitle / primary-action variant, hosts the overflow `DropdownMenu` (Undo / Redo / Rename… / Delete / Auto-layout / Mini-map / grid toggle / Find node… / Paste), the catalog `NodeConfigSheet`, the rename dialog, and the run-banner clock.
-      - `PipelineEditorContent.kt` - Pure-layout content. Vertical stack of `EditorToolbar` (or `MultiSelectToolbar`) + `RunStatusBanner` + `EditorCanvas` + `ValidationBar`.
+      - `PipelineEditorContent.kt` - Pure-layout content. Vertical stack of `EditorToolbar` (or `MultiSelectToolbar`) + `EditorCanvas` + `ValidationBar`.
       - `config/NodeConfigCodec.kt` - JSON ↔ catalog `NodeConfig` codec + legacy-field derivation for pre-Phase-21 rows + `defaultFor(type, title)` factory.
       - `config/NodeTypeMapper.kt` - Bridges between domain `NodeType` / `CloudProvider` and the catalog enums (`pipelineeditor.NodeType` / `CloudProvider`).
       - `core/CanvasTransform.kt` - Pan / pinch-zoom math + `snapToGrid` + `fitToBounds(bbox, viewport, padding)` + `zoomedOneStep(direction, viewport)` + `Bounds` data class with `Bounds.ofNodes(...)`; pure Kotlin.

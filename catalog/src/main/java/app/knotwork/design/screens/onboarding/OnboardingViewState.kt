@@ -195,7 +195,6 @@ data class OnboardingViewState(
 @Suppress("LongParameterList") // Mirrors user-visible affordances; collapsing further hides intent.
 class OnboardingCallbacks(
     val onNext: () -> Unit = {},
-    val onBack: () -> Unit = {},
     val onSkip: () -> Unit = {},
     val onFinish: () -> Unit = {},
     /** Invoked when the user selects a scenario card on the gallery step. */

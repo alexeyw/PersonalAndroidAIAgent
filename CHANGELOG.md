@@ -13,6 +13,43 @@ details.
 
 ## [Unreleased]
 
+### Removed
+
+- **Controls that could not act have been removed rather than disabled or
+  explained.** A control that does nothing reads from outside as a broken app,
+  and the first person to use this build who was not its author said so twice
+  without being asked. Each of these was verified inert by reading the code,
+  not by recollection:
+
+  - **Chat → long-press a message → Rate.** Its entire behaviour was a message
+    saying rating was not available.
+  - **Chat → overflow → Clear console.** A second door onto the console's own
+    Clear, offered even when the console had never been opened. Clearing lives
+    on the console header, where the thing being cleared is visible.
+  - **Console → Search on the Vars and Traces tabs.** The field it opens
+    filters log lines and exists only on Logs, so on the other two tabs the
+    magnifier did nothing. It is now shown on Logs alone.
+  - **Memory (empty) → "Open chat" and the search magnifier.** The button was
+    wired to a handler the navigation graph never supplied, and the magnifier
+    opened a search field that the empty state never rendered. Both were dead
+    on every build that shipped them. The screen keeps its explanation and its
+    working "Add memory" button. The magnifier is likewise gone from the error
+    state, which suppressed the search field for the same reason.
+  - **Chat → the model-picker sheet.** Fully built, unit-tested, and reachable
+    by nothing: no control anywhere invoked it. Models are chosen under
+    **More → Models**, which is where the user guide now points.
+  - **Pipeline editor → Run**, and the run banner behind it (Pause, Resume,
+    Stop, Trace), the running-node pulse and the traveling-dot edge animation.
+    Run did not run anything: it saved the graph, animated a banner, and raised
+    a message admitting the execution engine was not connected. Pipelines are
+    executed from chat, from a trigger, or from a scheduled task, and those
+    report progress in the chat console. **Save pipeline** is in the editor's
+    overflow menu and is unaffected.
+
+  Removed with each control: its strings (25 resource entries), its handlers,
+  and the state that fed it. Nine callback parameters that no surface rendered
+  went with them.
+
 ### Fixed
 
 - **The `adb` examples for the external-automation contract could not work as
