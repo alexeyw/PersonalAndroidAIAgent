@@ -24,9 +24,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
-import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkIconButton
-import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
@@ -56,35 +54,28 @@ private val ToolbarHeightWithSubtitle = 64.dp
  *
  * **Stateless** — every action surfaces as a lambda. The name field is fully
  * controlled via [name] / [onNameChange]; the subtitle is whatever string the
- * caller computes from `runState` / `validationErrors` / `nodes.size` / etc.
+ * caller computes from `validationErrors` / `nodes.size` / etc.
+ *
+ * The toolbar carries no run control: the editor composes pipelines, it does not
+ * execute them. Runs are started from chat, where the console reports them.
  *
  * @param name current pipeline name shown in the inline editor.
  * @param onNameChange invoked with each keystroke in the name field.
  * @param onNavigateUp invoked when the leading back icon is tapped.
- * @param onPrimaryAction invoked when the primary [primaryAction] button is tapped.
- *   No-op when [primaryAction] is [EditorPrimaryAction.None] (the button is hidden).
  * @param onOverflow invoked when the trailing overflow icon is tapped.
  * @param subtitle optional secondary line below the pipeline name — drives the
  *   bar's vertical sizing (56 dp without, 64 dp with). Typically
- *   `"Editing · N nodes · M edges"` / `"Running · 6 / 11 · 4.2 s"` / etc.
- * @param primaryAction selects which (if any) primary CTA renders on the right.
- *   Hidden during a live run (banner owns Pause / Stop).
- * @param primaryActionEnabled gates the primary action (e.g. `Run` greys out
- *   while validation errors are present).
+ *   `"Editing · N nodes · M edges"` / `"Overview · 0.42× · 11 nodes"` / etc.
  * @param modifier optional layout modifier applied to the bar root.
  */
 @Composable
-@Suppress("LongParameterList") // Stable toolbar API; collapsing into a config object would only obscure the contract.
 fun EditorToolbar(
     name: String,
     onNameChange: (String) -> Unit,
     onNavigateUp: () -> Unit,
-    onPrimaryAction: () -> Unit,
     onOverflow: () -> Unit,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
-    primaryAction: EditorPrimaryAction = EditorPrimaryAction.Run,
-    primaryActionEnabled: Boolean = true,
 ) {
     val barHeight = if (subtitle == null) ToolbarHeightSingle else ToolbarHeightWithSubtitle
     Surface(
@@ -112,26 +103,6 @@ fun EditorToolbar(
                 subtitle = subtitle,
                 modifier = Modifier.weight(1f),
             )
-            // Compact primary action: `KnotworkButtonSize.Sm` keeps the
-            // button below the toolbar height; the leading icon is dropped on
-            // narrow screens so the title + subtitle stack keeps room. The
-            // semantics (`contentDescription`) carry the action verbatim so
-            // TalkBack still announces "Run" / "Re-run".
-            when (primaryAction) {
-                EditorPrimaryAction.Run -> KnotworkPrimaryButton(
-                    text = stringResource(R.string.knotwork_editor_action_run),
-                    onClick = onPrimaryAction,
-                    enabled = primaryActionEnabled,
-                    size = KnotworkButtonSize.Sm,
-                )
-                EditorPrimaryAction.Rerun -> KnotworkPrimaryButton(
-                    text = stringResource(R.string.knotwork_editor_action_rerun),
-                    onClick = onPrimaryAction,
-                    enabled = primaryActionEnabled,
-                    size = KnotworkButtonSize.Sm,
-                )
-                EditorPrimaryAction.None -> Unit
-            }
             KnotworkIconButton(
                 onClick = onOverflow,
                 contentDescription = stringResource(R.string.knotwork_editor_action_overflow),
@@ -142,23 +113,9 @@ fun EditorToolbar(
 }
 
 /**
- * Selects which primary call-to-action renders in the toolbar's trailing slot.
- *
- * - [Run] — initial editing state and after a stop/reset. Gated by validation.
- * - [Rerun] — last completed run is the source of truth; the button replays it.
- * - [None] — hidden. Live run state owns Pause / Stop inside the run banner;
- *   showing a third button on the toolbar would compete for the same action.
- */
-sealed interface EditorPrimaryAction {
-    data object Run : EditorPrimaryAction
-    data object Rerun : EditorPrimaryAction
-    data object None : EditorPrimaryAction
-}
-
-/**
- * Title + optional subtitle stack rendered between the back icon and the primary
- * action. The pipeline name remains a [BasicTextField] (inline-editable); the
- * subtitle is a read-only [BodySm] beneath it.
+ * Title + optional subtitle stack rendered between the back icon and the
+ * overflow icon. The pipeline name remains a [BasicTextField]
+ * (inline-editable); the subtitle is a read-only [BodySm] beneath it.
  *
  * The field is laid out with a min-height equal to a single line of `TitleLg` so
  * the row collapses gracefully when [subtitle] is `null` and grows to two lines
@@ -229,32 +186,28 @@ private fun EditorToolbarLightEditingPreview() {
             name = "Weekly digest",
             onNameChange = {},
             onNavigateUp = {},
-            onPrimaryAction = {},
             onOverflow = {},
             subtitle = "Editing · 4 nodes · 3 edges",
-            primaryAction = EditorPrimaryAction.Run,
         )
     }
 }
 
-/** Dark-theme preview — Re-run after a successful run. */
-@Preview(name = "EditorToolbar — dark rerun", showBackground = true, widthDp = 720)
+/** Dark-theme preview — long name, overview subtitle. */
+@Preview(name = "EditorToolbar — dark overview", showBackground = true, widthDp = 720)
 @Composable
-private fun EditorToolbarDarkRerunPreview() {
+private fun EditorToolbarDarkOverviewPreview() {
     KnotworkTheme(darkTheme = true) {
         EditorToolbar(
             name = "research-deepdive",
             onNameChange = {},
             onNavigateUp = {},
-            onPrimaryAction = {},
             onOverflow = {},
-            subtitle = "Last run · 12.8 s · 2 408 tok",
-            primaryAction = EditorPrimaryAction.Rerun,
+            subtitle = "Overview · 0.42× · 11 nodes",
         )
     }
 }
 
-/** Preview — invalid state: subtitle reflects issues, primary action greyed. */
+/** Preview — invalid state: subtitle reflects issues. */
 @Preview(name = "EditorToolbar — issues", showBackground = true, widthDp = 720)
 @Composable
 private fun EditorToolbarIssuesPreview() {
@@ -263,28 +216,8 @@ private fun EditorToolbarIssuesPreview() {
             name = "research-deepdive",
             onNameChange = {},
             onNavigateUp = {},
-            onPrimaryAction = {},
             onOverflow = {},
-            subtitle = "2 issues · can't run",
-            primaryAction = EditorPrimaryAction.Run,
-            primaryActionEnabled = false,
-        )
-    }
-}
-
-/** Preview — running state: primary action hidden, banner owns Pause/Stop. */
-@Preview(name = "EditorToolbar — running", showBackground = true, widthDp = 720)
-@Composable
-private fun EditorToolbarRunningPreview() {
-    KnotworkTheme(darkTheme = false) {
-        EditorToolbar(
-            name = "research-deepdive",
-            onNameChange = {},
-            onNavigateUp = {},
-            onPrimaryAction = {},
-            onOverflow = {},
-            subtitle = "Running · 6 / 11 · 4.2 s",
-            primaryAction = EditorPrimaryAction.None,
+            subtitle = "2 issues · can't save",
         )
     }
 }

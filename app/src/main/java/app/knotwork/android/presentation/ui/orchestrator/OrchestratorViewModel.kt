@@ -139,17 +139,6 @@ constructor(
      */
     val focusNodeRequest: SharedFlow<String> = _focusNodeRequest.asSharedFlow()
 
-    private val _runState = MutableStateFlow(PipelineRunState())
-
-    /**
-     * Live run state surfaced by the editor's `RunStatusBanner`.
-     *
-     * Wired by [setRunning] / [setActiveRunningNode] today; the real orchestrator
-     * integration that drives these fields end-to-end lands post-v0.1 alongside the
-     * chat home → agent backend wiring.
-     */
-    val runState: StateFlow<PipelineRunState> = _runState.asStateFlow()
-
     init {
         observeSavedPipelines()
         observeProviderKeys()
@@ -1441,41 +1430,6 @@ constructor(
      */
     fun requestFocusNode(nodeId: String) {
         _focusNodeRequest.tryEmit(nodeId)
-    }
-
-    /**
-     * Flips the editor's run banner between idle and active. Placeholder —
-     * the real run loop lands post-v0.1; until then the editor exposes a debug toggle
-     * so the banner can be exercised end-to-end.
-     *
-     * Clearing the flag (`running = false`) also wipes [PipelineRunState.activeNodeId]
-     * so the banner / per-node dimming reset cleanly. Without this, a paused-mid-run
-     * `activeNodeId` would leak across runs (and across screen reopens — see
-     * [stopRunAndReset]).
-     */
-    fun setRunning(running: Boolean) {
-        _runState.update {
-            if (running) it.copy(isRunning = true) else PipelineRunState()
-        }
-    }
-
-    /**
-     * Fully resets the run banner state. Called from the editor when the user taps
-     * `Stop` on the banner, and from the screen's `DisposableEffect` when the user
-     * leaves the editor — both paths must clear `activeNodeId` and `isRunning`
-     * together, otherwise a stale banner would surface on the next pipeline open.
-     */
-    fun stopRunAndReset() {
-        _runState.value = PipelineRunState()
-    }
-
-    /**
-     * Sets (or clears with `null`) the currently-running node id during a pipeline run.
-     * Drives both the [app.knotwork.design.components.pipelineeditor.NodeCard]
-     * `running` parameter and the toolbar subtitle / run banner labels.
-     */
-    fun setActiveRunningNode(nodeId: String?) {
-        _runState.update { it.copy(activeNodeId = nodeId) }
     }
 
     /**

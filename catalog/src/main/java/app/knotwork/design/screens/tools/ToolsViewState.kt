@@ -212,7 +212,6 @@ class ToolsCallbacks(
     val onAddServerOpen: () -> Unit = {},
     val onOpenAllowedDomains: () -> Unit = {},
     val onErrorRetry: () -> Unit = {},
-    val onOpenDrawer: () -> Unit = {},
 )
 
 /** Convenience factory returning a callbacks bundle that ignores every event. */

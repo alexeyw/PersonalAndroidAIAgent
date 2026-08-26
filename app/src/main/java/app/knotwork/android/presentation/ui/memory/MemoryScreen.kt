@@ -52,7 +52,7 @@ import kotlin.math.roundToInt
  * dialogs), and forwards every interaction back to the VM.
  */
 @Composable
-fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel(), onOpenChat: () -> Unit = {}, onBack: () -> Unit = {}) {
+fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel(), onBack: () -> Unit = {}) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -134,7 +134,6 @@ fun MemoryScreen(viewModel: MemoryViewModel = hiltViewModel(), onOpenChat: () ->
         onAddDismiss = viewModel::dismissAddDialog,
         onExportAll = viewModel::requestExportAll,
         onErrorRetry = viewModel::loadAllData,
-        onEmptyCta = onOpenChat,
     )
 
     Box(modifier = Modifier.fillMaxSize().testTag(tag = MEMORY_ROOT_TEST_TAG)) {

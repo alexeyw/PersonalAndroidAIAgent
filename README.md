@@ -80,8 +80,8 @@ https://github.com/user-attachments/assets/2ea06de5-6832-4e0c-ad48-430f375d8b72
   opt-in, and bring-your-own-key — nothing leaves the device unless you
   configure it to.
 - **You build the pipeline.** A drag-and-drop editor with pan / pinch-zoom,
-  snap-to-grid, a radial node picker, auto-layout, inline validation, run-trace
-  overlay, and per-type configuration for all 14 node types — plus a standalone
+  snap-to-grid, a radial node picker, auto-layout, inline validation, and
+  per-type configuration for all 14 node types — plus a standalone
   [browser editor](pipeline-editor.html) for authoring pipelines without
   launching the app. Prompt variables (`$DATE`, `$TIME`, `$TOOLS`, `$MODEL`,
   `$MEMORY_SUMMARY`, `$LANG`, `$LOCATION`, `$USER`, `$DEVICE`) render fresh on

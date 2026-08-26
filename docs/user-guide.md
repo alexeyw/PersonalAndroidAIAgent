@@ -173,8 +173,9 @@ now built on the Knotwork design system and shows, top to bottom:
 
 - A **top app bar** with the current thread title, the active model
   name beneath it (e.g. *Gemma 2 · 2B*), a menu icon on the left that
-  opens the thread drawer, and a model picker plus overflow menu on
-  the right.
+  opens the thread drawer, and an overflow menu on the right. The model
+  name is a status line, not a control — switch models under
+  **More → Models**.
 - A **message list** with user and assistant bubbles, inline tool
   invocations, and any clarification or HITL confirmation card the
   agent surfaced for the current run.
@@ -315,9 +316,9 @@ history is portable to any app that handles JSON or plain text.
 
 Long-press any message bubble to open its context menu. From there you
 can **Copy** the text to the clipboard, **Re-run** it (drop the text back
-into the composer), **Rate** the reply, or **Save to memory** — which
-stores the message verbatim in long-term memory as a manual entry and
-confirms with a *Saved to memory* snackbar. Saved entries show up under
+into the composer), or **Save to memory** — which stores the message
+verbatim in long-term memory as a manual entry and confirms with a
+*Saved to memory* snackbar. Saved entries show up under
 **More → Memory** with the **Manual** source.
 
 ### Reporting a response
@@ -515,7 +516,12 @@ Three actions are available at the pane footer:
   the clipboard, regardless of which filter chip is active.
 - **Clear console** — wipes the on-screen log baseline for the current
   session after a destructive confirmation dialog. The underlying chat
-  messages and the saved pipeline trace are not affected.
+  messages and the saved pipeline trace are not affected. It is reachable
+  from the console header only; the chat overflow menu no longer carries a
+  second copy of it.
+- **Search** — appears on the **Logs** tab only, because the inline search
+  field it opens filters log lines. Vars and Traces have no search field,
+  so they show no magnifier.
 
 The active tab is persisted between runs, so the pane re-opens to the
 tab you used last. The pane auto-scrolls to the latest event as long as
@@ -1144,20 +1150,23 @@ is an infinite pan / zoom canvas with the following gestures:
   at the long-press point and immediately opens its configuration sheet.
 - **Toolbar** — inline-editable pipeline name on the left; Undo /
   Redo / Delete (selection-aware: edge if one is selected, otherwise
-  selected nodes) / Auto-layout / Run / overflow on the right.
+  selected nodes) / Auto-layout / overflow on the right.
   Auto-layout re-arranges nodes via a Sugiyama-style hierarchy
   (longest-path layering + median crossing reduction) so the graph
-  reads top-to-bottom.
+  reads top-to-bottom. **Save pipeline** lives in the overflow menu and
+  is the action that writes your edits to disk.
 
-The bottom of the screen alternates between two bars:
+  The editor has no Run button: it composes pipelines, it does not
+  execute them. You run a pipeline by binding it to a chat and sending a
+  message, or from a trigger / scheduled task — those paths report
+  progress in the chat console, which the editor cannot show.
 
-- **Validation bar** — lists pipeline errors (missing input, dangling
-  output, cycles, empty context, …). Tapping a row centres the canvas
-  on the offending node and selects it. The bar collapses to a
-  single-line "Pipeline is valid" when there are no errors.
-- **Run-trace bar** — replaces the validation bar while a pipeline run
-  is in progress; the active node header pulses and the connecting
-  edges show a traveling-dot animation. Reduced-motion is respected.
+At the bottom of the screen sits the **validation bar** — it lists
+pipeline errors (missing input, dangling output, cycles, empty context,
+…). Tapping a row centres the canvas on the offending node and selects
+it. The bar collapses to a single-line "Pipeline is valid" when there are
+no errors. Outstanding errors block saving, and the toolbar subtitle
+says so.
 
 The editor also has an **Import JSON** button that lets you load a
 pipeline exported from the standalone browser editor (see

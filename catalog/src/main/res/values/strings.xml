@@ -21,10 +21,9 @@
     <!-- Trailing status glyph contentDescription when delivery failed. -->
     <string name="knotwork_chat_message_status_failed">Failed to send</string>
 
-    <!-- Long-press context menu item labels (Copy / Re-run / Rate / Save to memory). -->
+    <!-- Long-press context menu item labels (Copy / Re-run / Save to memory). -->
     <string name="knotwork_chat_message_action_copy">Copy</string>
     <string name="knotwork_chat_message_action_rerun">Re-run</string>
-    <string name="knotwork_chat_message_action_rate">Rate</string>
     <string name="knotwork_chat_message_action_save_to_memory">Save to memory</string>
     <string name="knotwork_chat_message_action_report">Report response</string>
 
@@ -558,7 +557,6 @@
     <string name="knotwork_memory_search_semantic">SEMANTIC · sorted by relevance</string>
     <string name="knotwork_memory_empty_title">Nothing memorised yet</string>
     <string name="knotwork_memory_empty_subtitle">Ask the agent to remember something — facts, preferences, project notes — and it\'ll show up here.</string>
-    <string name="knotwork_memory_empty_cta">Open chat</string>
     <string name="knotwork_memory_no_match_title">Nothing matches this search</string>
     <string name="knotwork_memory_no_match_subtitle">Try a different word or clear the search.</string>
     <string name="knotwork_memory_no_match_clear">Clear search</string>
@@ -760,38 +758,8 @@
     <string name="knotwork_editor_name_placeholder">Untitled pipeline</string>
     <!-- ContentDescription for the navigation-up (back) icon button on the editor toolbar. -->
     <string name="knotwork_editor_action_navigate_up">Back</string>
-    <!-- Primary Run button label (editing state). -->
-    <string name="knotwork_editor_action_run">Run</string>
-    <!-- Primary Re-run button label (after a successful run). -->
-    <string name="knotwork_editor_action_rerun">Re-run</string>
     <!-- ContentDescription for the overflow icon button. -->
     <string name="knotwork_editor_action_overflow">More actions</string>
-
-    <!-- ============ Pipeline editor — RunStatusBanner ============ -->
-
-    <!-- Status label for the live run banner — left-side uppercase tag. -->
-    <string name="knotwork_run_banner_label_running">RUNNING</string>
-    <!-- Status label for the paused-run banner. -->
-    <string name="knotwork_run_banner_label_paused">PAUSED</string>
-    <!-- Status label for the just-completed run banner. -->
-    <string name="knotwork_run_banner_label_done">DONE</string>
-
-    <!-- Step metric while running: e.g. "step 6 / 11". %1$d = current, %2$d = total. -->
-    <string name="knotwork_run_banner_metric_step_of">step %1$d / %2$d</string>
-    <!-- Step metric while running with unknown total: e.g. "step 6". %1$d = current. -->
-    <string name="knotwork_run_banner_metric_step_only">step %1$d</string>
-    <!-- Total step metric in the done banner: e.g. "11 / 11". %1$d, %2$d = same value. -->
-    <string name="knotwork_run_banner_metric_total_steps">%1$d / %2$d</string>
-    <!-- Elapsed-time metric: e.g. "4.2 s". %1$s = pre-formatted seconds with one decimal. -->
-    <string name="knotwork_run_banner_metric_elapsed">%1$s s</string>
-    <!-- Token-count metric: e.g. "2 408 tok". %1$s = pre-formatted integer with thin-space grouping. -->
-    <string name="knotwork_run_banner_metric_tokens">%1$s tok</string>
-
-    <!-- Trailing actions on the run banner. -->
-    <string name="knotwork_run_banner_action_pause">Pause</string>
-    <string name="knotwork_run_banner_action_resume">Resume</string>
-    <string name="knotwork_run_banner_action_stop">Stop</string>
-    <string name="knotwork_run_banner_action_trace">Trace</string>
 
     <!-- ============ Pipeline editor — NodeConfigSheet ============ -->
 

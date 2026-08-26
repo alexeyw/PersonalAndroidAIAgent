@@ -72,7 +72,6 @@ fun OnboardingScreen(onCompleted: () -> Unit, viewModel: OnboardingViewModel = h
     val callbacks = remember(viewModel) {
         OnboardingCallbacks(
             onNext = viewModel::next,
-            onBack = viewModel::back,
             onSkip = {
                 viewModel.skipOnboarding()
                 onCompleted()

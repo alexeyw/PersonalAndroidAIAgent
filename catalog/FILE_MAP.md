@@ -227,8 +227,8 @@ project — `:app` consumes it as an `implementation` dependency.
     - `NodeError.kt` — sealed `Validation` / `Runtime` error states
       surfaced on `NodeCard` borders and bodies.
     - `NodeCard.kt` — unified node card covering idle / selected /
-      multi-selected / error / running states with dynamic port dots and
-      header tint.
+      multi-selected / error states with dynamic port dots and header
+      tint.
     - `EdgeLabel.kt` — floating edge-label chip (branch conditions
       True/False/Item/Done/Pass/Retry/Fail or intent class names).
     - `NodeConfig.kt` — sealed `NodeConfig` interface + 12 per-type
@@ -242,9 +242,8 @@ project — `:app` consumes it as an `implementation` dependency.
       forms with sticky Cancel/Save row and optional app-provided
       sections.
     - `EditorToolbar.kt` — editor top toolbar (back, inline-editable
-      name, subtitle, primary Run/Re-run action).
-    - `RunStatusBanner.kt` — run-status strip (status badge + metrics +
-      Pause/Stop/Resume/Trace actions per `RunStatus`).
+      name, subtitle, overflow). No run action: the editor composes
+      pipelines, it does not execute them.
     - `PipelineEditorCatalogContent.kt` — scrollable harness exercising
       every pipeline-editor base component + theme previews.
   - `topbar/` — top-app-bar chrome.

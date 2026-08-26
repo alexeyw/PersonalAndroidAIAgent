@@ -103,12 +103,6 @@ fun PromptLibraryScreen(
 
     val callbacks = PromptLibraryCallbacks(
         onBack = onBack,
-        // The library's text search was retired (the
-        // catalog `TopAppBar` actions slot is intentionally empty); the
-        // catalogue is now browsed by category tab via `onCategorySelected`.
-        // `onSearch` survives on the catalog callbacks bag as a vestigial
-        // parameter that is never invoked, so this no-op is never reached.
-        onSearch = {},
         onCategorySelected = viewModel::selectCategory,
         onNewPrompt = { viewModel.openEditor(promptId = null) },
         onEditPrompt = { viewModel.openEditor(promptId = it) },

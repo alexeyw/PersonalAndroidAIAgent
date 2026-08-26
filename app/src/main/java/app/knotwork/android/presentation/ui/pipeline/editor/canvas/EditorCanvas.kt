@@ -62,7 +62,6 @@ import app.knotwork.design.theme.KnotworkTheme
  *
  * @param graph the current pipeline graph (from the ViewModel).
  * @param editor screen-local state (transform, selection, drafts).
- * @param activeRunningEdgeIds set of edge ids to animate in run-trace mode.
  * @param errorsByNodeId map of node-id → optional inline error for the catalog NodeCard.
  * @param reducedMotion reduced-motion flag — gates animations longer than `motionSm`.
  * @param onMoveNode invoked on drag-end with the committed canvas-space delta.
@@ -78,7 +77,6 @@ import app.knotwork.design.theme.KnotworkTheme
 internal fun EditorCanvas(
     graph: PipelineGraph,
     editor: EditorState,
-    activeRunningEdgeIds: Set<String>,
     errorsByNodeId: Map<String, NodeError?>,
     reducedMotion: Boolean,
     onMoveNode: (nodeId: String, dxCanvas: Float, dyCanvas: Float) -> Unit,
@@ -269,9 +267,7 @@ internal fun EditorCanvas(
             nodesById = nodesByIdLive,
             transform = editor.transform,
             connectionDraft = draftDraw,
-            runningEdgeIds = activeRunningEdgeIds,
             selectedEdgeId = editor.selectedEdgeId,
-            reducedMotion = reducedMotion,
         )
 
         // Per-node ports are derived from the decoded NodeConfig (for IntentRouter
@@ -290,20 +286,10 @@ internal fun EditorCanvas(
                 transform = editor.transform,
                 selected = node.id in editor.selection && !editor.multiSelectMode,
                 multiSelected = node.id in editor.selection && editor.multiSelectMode,
-                running = editor.isRunning && editor.activeRunningNodeId == node.id,
                 error = errorsByNodeId[node.id],
                 ports = ports,
                 reducedMotion = reducedMotion,
                 subtitle = subtitleForNode(originalNode),
-                // While a run is live AND the orchestrator has reported an
-                // active node, dim every OTHER node so the user's eye snaps to
-                // the running card. Outside of run mode — or while the active
-                // node id is still null (run started but the engine hasn't
-                // emitted the first node tick yet) — every node renders at full
-                // opacity so the canvas stays readable.
-                dimmed = editor.isRunning &&
-                    editor.activeRunningNodeId != null &&
-                    editor.activeRunningNodeId != node.id,
                 onSelect = { editor.toggleSelection(node.id) },
                 onOpenConfig = { onOpenNodeConfig(node.id) },
                 onLongPress = {

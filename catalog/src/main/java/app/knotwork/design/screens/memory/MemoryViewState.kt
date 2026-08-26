@@ -228,7 +228,6 @@ class MemoryCallbacks(
     val onAddDismiss: () -> Unit = {},
     val onExportAll: () -> Unit = {},
     val onErrorRetry: () -> Unit = {},
-    val onEmptyCta: () -> Unit = {},
 )
 
 /** Convenience factory returning a callbacks bundle that ignores every event. */

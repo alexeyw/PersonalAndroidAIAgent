@@ -315,7 +315,6 @@ class ChatHomeCallbacks(
     val onCloseDrawer: () -> Unit = {},
     val onSelectThread: (String) -> Unit = {},
     val onNewThread: () -> Unit = {},
-    val onOpenModelPicker: () -> Unit = {},
     val onOverflow: () -> Unit = {},
     val onSamplePrompt: (String) -> Unit = {},
     val onConsoleSnapChange: (ConsoleSnap) -> Unit = {},

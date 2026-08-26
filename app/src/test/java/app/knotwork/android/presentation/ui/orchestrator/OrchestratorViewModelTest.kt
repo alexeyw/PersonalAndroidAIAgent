@@ -1047,15 +1047,6 @@ class OrchestratorViewModelTest {
     }
 
     @Test
-    fun `setRunning and setActiveRunningNode update the runState flow`() {
-        assertEquals(false, viewModel.runState.value.isRunning)
-        viewModel.setRunning(true)
-        viewModel.setActiveRunningNode("node-42")
-        assertEquals(true, viewModel.runState.value.isRunning)
-        assertEquals("node-42", viewModel.runState.value.activeNodeId)
-    }
-
-    @Test
     fun `requestFocusNode does not throw and the SharedFlow exists`() {
         // The SharedFlow is wired with `extraBufferCapacity = 1` so `tryEmit` always
         // succeeds even when no collector is active. Asserting that exposed flow is

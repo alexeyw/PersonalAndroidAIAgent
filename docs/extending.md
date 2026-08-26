@@ -1365,7 +1365,7 @@ announces the field.
 | `$DATE` / `$TIME` / `$GOAL` insert-token chip                         | `KnotworkVariableChip` (or the `insertChips` strip on `KnotworkTextArea`) |
 | Section header in the chat stream (Today / date)                      | `KnotworkDateChip`                                               |
 | Risk tier badge in HITL prompt or Tools row                           | `RiskPill`                                                       |
-| Run-state badge in pipeline library / run-trace / console             | `StatusPill`                                                     |
+| Run-state badge in pipeline library / console                         | `StatusPill`                                                     |
 
 The chip family uses the 8 dp `sm` shape by default (the spec
 deliberately diverges from Material 3's pill-shaped filter chip).

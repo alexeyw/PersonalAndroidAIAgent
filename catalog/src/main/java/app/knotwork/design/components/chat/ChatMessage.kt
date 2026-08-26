@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.outlined.BookmarkAdd
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -526,14 +525,6 @@ private fun ChatBubbleChrome(
                     onClick = {
                         menuExpanded = false
                         onContextAction(ChatContextAction.Rerun)
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.knotwork_chat_message_action_rate)) },
-                    leadingIcon = { Icon(AppIcons.Star, contentDescription = null) },
-                    onClick = {
-                        menuExpanded = false
-                        onContextAction(ChatContextAction.Rate)
                     },
                 )
                 DropdownMenuItem(
