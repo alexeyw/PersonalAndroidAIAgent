@@ -579,12 +579,18 @@ project — `:app` consumes it as an `implementation` dependency.
   the documented asymmetric radii.
 - `src/test/java/app/knotwork/design/components/chat/HitlConfirmationStateTest.kt`
   — pure-JVM coverage of the Allow / Always-Allow / typed-confirm rules.
+- `src/test/java/app/knotwork/design/components/chat/ChatMessageContextMenuTest.kt`
+  — pins the long-press menu roster: no `Rate` row (removed as inert),
+  surviving rows still dispatch.
 - `src/test/java/app/knotwork/design/components/console/ConsoleCatalogPageSnapshotTest.kt`
   — Roborazzi baseline for `ConsoleCatalogContent` (light / dark).
 - `src/test/java/app/knotwork/design/components/console/ConsoleFilterTest.kt`
   — pure-JVM coverage of `ConsoleFilter.matches` + `allOn`.
 - `src/test/java/app/knotwork/design/components/console/ConsoleSnapTest.kt`
   — pure-JVM lock-down of the three snap-point heights.
+- `src/test/java/app/knotwork/design/components/console/ConsoleSearchAffordanceTest.kt`
+  — pins Search to the Logs tab (the only tab with a search field);
+  Copy-all / Clear stay on every tab.
 - `src/test/java/app/knotwork/design/icons/AppIconsTest.kt`
 - `src/test/java/app/knotwork/design/icons/IconCatalogPageSnapshotTest.kt`
 - `src/test/java/app/knotwork/design/components/lists/ConnectionStatusTest.kt`
@@ -597,6 +603,9 @@ project — `:app` consumes it as an `implementation` dependency.
   — Roborazzi baseline for the pipeline-editor catalog page.
 - `src/test/java/app/knotwork/design/components/pipelineeditor/HeroSnapshotTest.kt`
   — Roborazzi hero baseline for the pipeline editor.
+- `src/test/java/app/knotwork/design/components/pipelineeditor/EditorToolbarTest.kt`
+  — pins the toolbar's action roster: no run affordance (the editor
+  composes pipelines, it does not execute them); back / overflow work.
 - `src/test/java/app/knotwork/design/tokens/WcagContrastTest.kt`
   — pure-JVM WCAG contrast-ratio checks over the palette.
 - `src/test/java/app/knotwork/design/a11y/A11yMatrixSnapshotTest.kt`
@@ -605,8 +614,10 @@ project — `:app` consumes it as an `implementation` dependency.
   — Robolectric TalkBack semantics happy-path coverage.
 - `src/test/java/app/knotwork/design/screens/` — per-screen Roborazzi
   snapshot baselines (`*ContentSnapshotTest`, light / dark / a11y
-  font-scale variants) plus `*AccessibilityTest` semantics checks and
-  per-screen `HeroSnapshotTest` README heroes, covering about /
+  font-scale variants), `*AccessibilityTest` semantics checks,
+  `memory/MemoryAffordanceTest.kt` (which Memory states may offer a
+  search action), and per-screen `HeroSnapshotTest` README heroes,
+  covering about /
   automation / chat / memory / models / monitoring / more / onboarding /
   pipelines / prompts / settings / splash / taskmonitor / tools.
 - `src/test/snapshots/` — committed Roborazzi baselines: one `*.png`
