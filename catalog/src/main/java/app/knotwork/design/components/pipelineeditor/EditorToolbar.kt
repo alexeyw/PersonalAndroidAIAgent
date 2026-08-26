@@ -113,9 +113,9 @@ fun EditorToolbar(
 }
 
 /**
- * Title + optional subtitle stack rendered between the back icon and the primary
- * action. The pipeline name remains a [BasicTextField] (inline-editable); the
- * subtitle is a read-only [BodySm] beneath it.
+ * Title + optional subtitle stack rendered between the back icon and the
+ * overflow icon. The pipeline name remains a [BasicTextField]
+ * (inline-editable); the subtitle is a read-only [BodySm] beneath it.
  *
  * The field is laid out with a min-height equal to a single line of `TitleLg` so
  * the row collapses gracefully when [subtitle] is `null` and grows to two lines
