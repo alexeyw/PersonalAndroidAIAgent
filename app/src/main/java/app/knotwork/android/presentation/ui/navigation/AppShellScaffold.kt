@@ -31,14 +31,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.navigation.NavOptionsBuilder
+import androidx.navigation.compose.ComposeNavigator
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.get
 import app.knotwork.android.presentation.state.TransientMessageRelay
 import app.knotwork.design.components.misc.KnotworkSnackbar
 import app.knotwork.design.components.misc.SnackbarVariant
@@ -62,19 +66,23 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  *     saveState = true } + restoreState = true`) — preserves each tab's
  *     inner back-stack and scroll position across switches and rotations.
  *
- *  3. **Root-tab Back behaviour.** While on a tab's start-destination,
- *     [BackHandler] short-circuits to `activity.finish()` so the app
- *     exits — on root tabs, Back closes the app rather than switching to
- *     the previous tab. On deeper screens the
- *     handler is disabled and default Back (pop the inner stack) takes
- *     over.
+ *  3. **Root-tab Back behaviour.** While the back stack holds nothing but
+ *     tab roots ([isTabRootStack]), [BackHandler] short-circuits to
+ *     `activity.finish()` so the app exits — on root tabs, Back closes the
+ *     app rather than switching to the previous tab. As soon as any deeper
+ *     screen is on the stack the handler is disabled and default Back (pop
+ *     the inner stack) takes over.
+ *
+ * Both (1)'s highlight and (3)'s exit predicate are derived from the **back
+ * stack**, never from the current route alone — see [TabOwnership] for why the
+ * old `route → tab` table was removed and what changed with it.
  *
  * The host activity's `AndroidAIAgentTheme` is the single source of
  * truth for the current scheme, and system-theme changes already cause a
  * natural Compose recomposition.
  *
  * @param navController The host activity's [NavHostController]; the
- *        composable observes the current back-stack entry through it.
+ *        composable observes the current back stack through it.
  * @param content The nav-graph composable to host. Typically `AppNavGraph`.
  */
 @Composable
@@ -88,8 +96,34 @@ fun AppShellScaffold(
     val showBottomNav = shouldShowBottomNav(currentRoute)
     val activity = LocalActivity.current
 
-    val isOnTabRoot = TAB_DESTINATIONS.any { it.route == currentRoute }
-    BackHandler(enabled = isOnTabRoot) {
+    // The whole stack, not just its top. `NavController.currentBackStack` is
+    // `@RestrictTo(LIBRARY_GROUP)` — its own KDoc points library consumers at
+    // the navigator's public `backStack` instead, which is what this reads. It
+    // carries only `composable` destinations (no `NavGraph` entries and no
+    // root-graph placeholder), which is exactly the set of routes a user can be
+    // "on".
+    //
+    // The read has to happen from an effect: `backStack` throws until the
+    // navigator is attached, and attachment happens while `content()`'s NavHost
+    // composes — i.e. *after* this scaffold's own composition. Effects run once
+    // the composition is applied, so by then the navigator is live. The effect
+    // is additionally keyed on `navBackStackEntry` so it re-arms on the next
+    // destination change if a host ever composes the NavHost later still, and
+    // the `isAttached` guard keeps a scaffold used without a NavHost showing no
+    // highlight instead of crashing.
+    val composeNavigator = remember(navController) {
+        navController.navigatorProvider[ComposeNavigator::class]
+    }
+    var stackRoutes: List<String> by remember(navController) { mutableStateOf(emptyList()) }
+    LaunchedEffect(composeNavigator, navBackStackEntry) {
+        if (!composeNavigator.isAttached) return@LaunchedEffect
+        composeNavigator.backStack.collect { entries ->
+            stackRoutes = entries.mapNotNull { it.destination.route }
+        }
+    }
+    val owningTab: String? = owningTabRoute(stackRoutes)
+
+    BackHandler(enabled = isTabRootStack(stackRoutes)) {
         activity?.finish()
     }
 
@@ -157,12 +191,8 @@ fun AppShellScaffold(
                 exit = exit,
             ) {
                 AppBottomNavigationBar(
-                    currentRoute = currentRoute,
-                    onTabSelected = { tab ->
-                        navController.navigate(tab.route) {
-                            applyTabSwitchOptions()
-                        }
-                    },
+                    owningTabRoute = owningTab,
+                    onTabSelected = { tab -> navController.navigateToTab(tab.route) },
                 )
             }
         },
@@ -174,7 +204,7 @@ fun AppShellScaffold(
 }
 
 @Composable
-private fun AppBottomNavigationBar(currentRoute: String?, onTabSelected: (TabDestination) -> Unit) {
+private fun AppBottomNavigationBar(owningTabRoute: String?, onTabSelected: (TabDestination) -> Unit) {
     // Lower the default Material 3 highlight to a softer tonal pill matching
     // the Knotwork design tokens: surface1 as the container, primaryContainer
     // as the indicator tint, onPrimaryContainer for the selected glyph. The
@@ -193,7 +223,7 @@ private fun AppBottomNavigationBar(currentRoute: String?, onTabSelected: (TabDes
                 unselectedTextColor = KnotworkTheme.extended.onSurfaceMuted,
             )
             TAB_DESTINATIONS.forEach { tab ->
-                val selected = currentRoute?.belongsToTab(tab) == true
+                val selected = owningTabRoute == tab.route
                 NavigationBarItem(
                     selected = selected,
                     onClick = { onTabSelected(tab) },
@@ -219,65 +249,6 @@ private fun AppBottomNavigationBar(currentRoute: String?, onTabSelected: (TabDes
         }
     }
 }
-
-/**
- * Maps a destination route to the [TabDestination] that owns it, so the
- * bottom-nav can keep the correct tab highlighted while the user is on a
- * deeper screen (e.g. the pipeline editor highlights the Pipelines tab).
- *
- * The owning-tab mapping is explicit rather than derived from
- * `NavDestination.hierarchy`: nested-graph routes (`pipeline-library`)
- * would already match, but standalone routes like `pipeline/{id}/edit`
- * would not without a table — and a wrong "no tab selected" state during
- * editing would feel like a navigation bug.
- */
-internal fun String.belongsToTab(tab: TabDestination): Boolean = when (tab.route) {
-    NavRoutes.CHAT_TAB -> this == NavRoutes.CHAT_TAB
-    NavRoutes.PIPELINES_GRAPH ->
-        this == NavRoutes.PIPELINES_GRAPH ||
-            this == NavRoutes.PIPELINE_LIBRARY ||
-            this == NavRoutes.PIPELINE_EDITOR ||
-            this == NavRoutes.PIPELINE_EDIT_WITH_ID
-    NavRoutes.TOOLS ->
-        this == NavRoutes.TOOLS ||
-            this == NavRoutes.TOOL_DETAIL ||
-            this == NavRoutes.MCP_SERVER_CONFIG
-    NavRoutes.MORE ->
-        this == NavRoutes.MORE ||
-            this == NavRoutes.MEMORY ||
-            this == NavRoutes.MODELS ||
-            this == NavRoutes.MONITORING ||
-            this == NavRoutes.TASK_MONITOR ||
-            this.belongsToSettingsGraph() ||
-            this == NavRoutes.PROMPTS ||
-            this == NavRoutes.ABOUT
-    else -> false
-}
-
-/**
- * Whether [this] route is the settings hub or one of the eight category
- * sub-screens. Settings is now a nested navigation graph, so the displayed route
- * is always a child (`settings/hub`, `settings/generation`, …) — never the bare
- * graph route — and the owning-tab table must enumerate the children to keep the
- * More tab highlighted throughout the settings subtree.
- */
-private fun String.belongsToSettingsGraph(): Boolean = this == NavRoutes.SETTINGS_HUB ||
-    this == NavRoutes.SETTINGS_GENERATION ||
-    this == NavRoutes.SETTINGS_MODELS ||
-    this == NavRoutes.SETTINGS_MEMORY ||
-    this == NavRoutes.SETTINGS_PIPELINES ||
-    this == NavRoutes.SETTINGS_TOOLS ||
-    this == NavRoutes.SETTINGS_BACKGROUND ||
-    this == NavRoutes.SETTINGS_PRIVACY ||
-    this == NavRoutes.SETTINGS_ABOUT ||
-    // The category sub-screens. These were missing: Privacy → Usage and
-    // Background → External automation are real destinations inside the
-    // settings subtree, and omitting them dropped the More tab's highlight the
-    // moment a user opened one. Listed here so the run-limits screen does not
-    // become a third instance of the same bug.
-    this == NavRoutes.SETTINGS_PRIVACY_USAGE ||
-    this == NavRoutes.SETTINGS_BACKGROUND_EXTERNAL_AUTOMATION ||
-    this == NavRoutes.SETTINGS_PIPELINES_RUN_LIMITS
 
 /**
  * Anchor route used as the [popUpTo] target during tab switches.
@@ -317,4 +288,30 @@ internal fun NavOptionsBuilder.applyTabSwitchOptions() {
     }
     launchSingleTop = true
     restoreState = true
+}
+
+/**
+ * The **only** sanctioned way to reach a bottom-nav tab root.
+ *
+ * A tab root pushed on top of another subtree's back stack is the defect behind
+ * the closed-test finding `#14`: `Settings → Tools & workspace → Manage tools`
+ * ran a bare `navigate(NavRoutes.TOOLS)`, which left the user on the Tools tab
+ * with the settings subtree still buried underneath, and flipped the bottom-nav
+ * highlight to a tab they had not chosen — the app claiming to be somewhere the
+ * user never went.
+ *
+ * Routing every tab-root entry through this helper makes that shape
+ * unrepresentable: a tab is always entered as a *tab switch*, collapsing the
+ * stack to the anchor exactly as tapping the nav bar does.
+ * `TabRootEntryKonsistTest` fails the build if a bare `navigate(<tab root>)`
+ * reappears anywhere in the navigation package.
+ *
+ * Screens that legitimately want to *push* a destination (a tool detail, the
+ * MCP form, a settings category) keep using `navigate` directly — the rule is
+ * about tab **roots**, not about navigation in general.
+ *
+ * @param route a tab root route, i.e. a member of [TAB_ROOT_ROUTES].
+ */
+internal fun NavHostController.navigateToTab(route: String) {
+    navigate(route) { applyTabSwitchOptions() }
 }

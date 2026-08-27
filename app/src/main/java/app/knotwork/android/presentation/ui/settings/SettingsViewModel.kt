@@ -171,7 +171,7 @@ class SettingsViewModel @Inject constructor(
     fun setBlockDestructiveTools(blocked: Boolean) = tools.setBlockDestructiveTools(blocked)
     fun setBlockNetworkFromLocalModel(blocked: Boolean) = tools.setBlockNetworkFromLocalModel(blocked)
 
-    // ─── Pipelines & structured output ───────────────────────────────────────
+    // ─── Run limits & structured output ──────────────────────────────────────
 
     fun setPipelineMaxNestingDepth(depth: Int) = pipelines.setPipelineMaxNestingDepth(depth)
     fun setStructuredOutputMaxRepairs(count: Int) = pipelines.setStructuredOutputMaxRepairs(count)

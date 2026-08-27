@@ -147,7 +147,7 @@ object SettingsSearchCatalog {
             R.string.settings_search_name_memory_actions,
             R.string.settings_search_desc_memory_actions,
         ),
-        // ─── Pipelines & structured output ───────────────────────────────────
+        // ─── Run limits & structured output ──────────────────────────────────
         "LINK_RUN_LIMITS" to strings(
             R.string.run_limits_entry_label,
             R.string.run_limits_entry_search,

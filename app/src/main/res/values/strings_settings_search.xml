@@ -69,7 +69,7 @@
     <string name="settings_search_name_memory_actions">Export · Import · Re-embed · Clear</string>
     <string name="settings_search_desc_memory_actions">Back up, restore, re-embed or wipe memory.</string>
 
-    <!-- Pipelines &amp; structured output -->
+    <!-- Run limits &amp; structured output -->
     <string name="settings_search_name_pipeline_max_nesting_depth">Max nesting depth</string>
     <string name="settings_search_desc_pipeline_max_nesting_depth">Deepest sub-pipeline expansion allowed.</string>
     <string name="settings_search_name_structured_output_max_repairs">Structured-output repairs</string>

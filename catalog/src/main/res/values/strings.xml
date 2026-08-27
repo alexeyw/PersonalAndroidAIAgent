@@ -450,7 +450,7 @@
     <string name="knotwork_settings_cat_models_summary">Local backend · providers</string>
     <string name="knotwork_settings_cat_memory_title">Memory</string>
     <string name="knotwork_settings_cat_memory_summary">Extraction · compaction · vectors</string>
-    <string name="knotwork_settings_cat_pipelines_title">Pipelines &amp; structured output</string>
+    <string name="knotwork_settings_cat_pipelines_title">Run limits &amp; structured output</string>
     <string name="knotwork_settings_cat_pipelines_summary">Step caps · structured output</string>
     <string name="knotwork_settings_cat_tools_title">Tools &amp; workspace</string>
     <string name="knotwork_settings_cat_tools_summary">Approvals · limits · MCP</string>

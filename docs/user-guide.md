@@ -2122,7 +2122,12 @@ Advanced:
 Each slider only offers in-range values; a rejected value shows an inline message
 and is discarded rather than saved.
 
-### Pipelines & structured output
+### Run limits & structured output
+
+The category holds the *limits and knobs* an autonomous run obeys. The pipelines
+themselves live on the **Pipelines** tab (library and editor) and under
+**More → Library**; this screen never lists them. Searching Settings for
+`pipelines` still lands here.
 
 - **Run limits** *(Basic link)* — opens the [Run limits](#run-limits) screen,
   and shows the current step and token limits on the row itself.
@@ -2208,7 +2213,9 @@ Basic:
   `null` to the inference pipeline and only the on-device LiteRT engine plus
   LAN-local Ollama remain reachable.
 - **Manage tools / MCP servers** *(link)* — enable tools, set per-tool risk
-  overrides, add MCP servers.
+  overrides, add MCP servers. It opens the same surface as the **Tools** tab but
+  *inside* Settings: the bottom-nav highlight stays on the tab you came from and
+  Back returns to this category, not to the Tools tab.
 
 Advanced:
 
@@ -2324,6 +2331,26 @@ Controls:
   baseline.
 
 ---
+
+## Getting around
+
+Four tabs sit at the bottom: **Chat**, **Pipelines**, **Tools**, **More**.
+Everything else is a screen pushed on top of one of them.
+
+- **The highlighted tab is the one you are inside.** It follows the screens you
+  actually opened, not the screen you are looking at — open the tool list from
+  **Settings** and the highlight stays where you were, because that is where
+  Back will take you.
+- **Back returns to where you came from.** On a tab's own first screen, Back
+  closes the app rather than hopping to another tab.
+- **A tab is only ever entered by tapping it** (or by a launcher shortcut /
+  notification, which behaves the same way). No link inside a screen drops you
+  onto a different tab: a surface reachable from two places opens in the place
+  you opened it from. `Settings → Tools & workspace → Manage tools` is the
+  example — same screen as the Tools tab, but it stays inside Settings.
+- **Notifications open the chat they belong to**, replacing whatever chat was on
+  screen rather than stacking a second one, so Back closes the app exactly as it
+  would after a normal launch.
 
 ## More tab
 

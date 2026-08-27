@@ -45,23 +45,25 @@ internal fun NavHostController.navigateToDeepLink(intent: Intent, chatEntryRelay
             navigateToChatHome()
             chatEntryRelay.newChat()
         }
-        "pipelines" -> navigate(NavRoutes.PIPELINE_LIBRARY) {
-            popUpTo(NavRoutes.CHAT_TAB) { inclusive = false }
-            launchSingleTop = true
-        }
+        // The Pipelines *tab* route, not its start destination: entering it the
+        // way the nav bar does keeps `restoreState`'s key identical, so a
+        // shortcut launch restores the same saved subtree a tab tap would.
+        "pipelines" -> navigateToTab(NavRoutes.PIPELINES_GRAPH)
         else -> return false
     }
     return true
 }
 
 /**
- * Lands on the single chat home, deduped and anchored at the bottom of the
- * post-splash back stack (see [AppShellScaffold]'s `TAB_BACK_STACK_ANCHOR`), so
- * a chat deep link never stacks a second chat entry.
+ * Lands on the single chat home through the one sanctioned tab entry point
+ * ([navigateToTab]), so a chat deep link never stacks a second chat entry and
+ * never leaves a tab root sitting on top of another subtree's stack.
+ *
+ * The options are the nav bar's own: `popUpTo(TAB_BACK_STACK_ANCHOR)` anchors
+ * the chat at the bottom of the post-splash stack, and `saveState` /
+ * `restoreState` mean a notification tap no longer discards the tab subtree the
+ * user was in.
  */
 private fun NavHostController.navigateToChatHome() {
-    navigate(NavRoutes.CHAT_TAB) {
-        popUpTo(NavRoutes.CHAT_TAB) { inclusive = false }
-        launchSingleTop = true
-    }
+    navigateToTab(NavRoutes.CHAT_TAB)
 }
