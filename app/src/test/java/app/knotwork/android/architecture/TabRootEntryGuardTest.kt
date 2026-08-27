@@ -26,6 +26,11 @@ import java.io.File
  *
  * Two rules are checked:
  *
+ * Scanning the navigation package is complete coverage, not a convenient
+ * subset: every `navigate(NavRoutes.…)` call in `app/src/main` lives there, and
+ * screens receive navigation as lambdas rather than reaching for the controller
+ * themselves.
+ *
  *  1. Every literal `navigate(NavRoutes.<tab root>)` in the navigation package
  *     must be a **self-replacing launch gate** — an options block containing
  *     `inclusive = true`, which leaves the tab root at the bottom of the stack

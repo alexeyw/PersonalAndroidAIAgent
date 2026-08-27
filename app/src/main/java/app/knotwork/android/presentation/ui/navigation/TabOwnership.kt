@@ -92,8 +92,11 @@ fun owningTabRoute(stackRoutes: List<String>): String? = stackRoutes.asReversed(
 
 /**
  * Whether the back stack described by [stackRoutes] consists **only** of tab
- * roots — the condition under which the system Back gesture exits the app
- * instead of popping.
+ * roots — the condition on which the shell arms its finish-the-app Back
+ * handler.
+ *
+ * Arming it is not the same as exiting — see below; that gap is the whole
+ * argument for asking about the stack rather than about the current route.
  *
  * This is the predicate the shell's `BackHandler` runs on, and it replaces a
  * check on the *current route* alone. The older check answered `true` for any
@@ -102,16 +105,19 @@ fun owningTabRoute(stackRoutes: List<String>): String? = stackRoutes.asReversed(
  * finding `#14` produced, where the user had a whole settings subtree still
  * underneath and Back had somewhere to go.
  *
- * **This is hardening, not a repair of observed behaviour, and the difference
- * was measured rather than assumed.** `NavHost` installs its own `BackHandler`
- * *after* the shell's, and `OnBackPressedDispatcher` gives the most recently
- * added enabled callback the press — so whenever anything is left to pop, the
- * NavHost consumes Back and the shell's `finish()` is never reached. Reverting
- * this predicate and re-pushing the tab root in
- * `NavigationContractTest` reproduced `#14`'s stack and Back still returned to
- * the settings category. What the stack-wide predicate buys is that the shell
- * can no longer be *wrong* about where it is: it stops depending on another
- * component winning a race to be correct.
+ * **Whether that actually closed the app is a race, and it was measured both
+ * ways.** `NavHost` installs a `BackHandler` of its own, and
+ * `OnBackPressedDispatcher` gives the press to the most recently added enabled
+ * callback. On a device, an armed shell handler over a still-poppable stack
+ * lost to the NavHost in four runs (Back popped, the activity survived) and won
+ * in one (the activity finished). No claim is made here about which wins.
+ *
+ * The point is that the shell should not be in that race at all. Under this
+ * predicate a stack with anything underneath the tab root is never armed, so
+ * Back pops whichever handler answers — the outcome stops depending on
+ * composition order. That is why this is **hardening** rather than a repair of
+ * an observed defect, and why finding `#14` is described in terms of the
+ * highlight and the buried subtree, which were reproducible every time.
  *
  * @param stackRoutes routes of the `composable` back-stack entries,
  *        bottom-first (`ComposeNavigator.backStack`; no `NavGraph` entries).

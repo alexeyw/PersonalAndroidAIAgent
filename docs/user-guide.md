@@ -61,9 +61,10 @@ The bottom of the screen always shows the four navigation tabs:
 - **More** — secondary screens (Memory, Models, Prompt library,
   Skill library, Active tasks, Live metrics, Settings, About).
 
-The Back gesture returns you up the inner stack of the current tab.
-While you are on the start screen of a tab, Back closes the app — it
-does not switch between tabs.
+The Back gesture returns you up the inner stack of the current tab; from
+Chat, the tab the app opens on, it closes the app. The full contract —
+what the highlighted tab means, and where each entry point lands — is in
+[Getting around](#getting-around).
 
 If you picked a scenario during onboarding, the model it needs is
 already downloading (or ready) and you can skip straight to chatting.
@@ -2341,8 +2342,8 @@ Everything else is a screen pushed on top of one of them.
   actually opened, not the screen you are looking at — open the tool list from
   **Settings** and the highlight stays where you were, because that is where
   Back will take you.
-- **Back returns to where you came from.** On a tab's own first screen, Back
-  closes the app rather than hopping to another tab.
+- **Back returns to where you came from**, one screen at a time — never to a
+  tab you did not open.
 - **A tab is only ever entered by tapping it** (or by a launcher shortcut /
   notification, which behaves the same way). No link inside a screen drops you
   onto a different tab: a surface reachable from two places opens in the place

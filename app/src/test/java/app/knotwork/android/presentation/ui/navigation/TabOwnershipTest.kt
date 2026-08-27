@@ -147,9 +147,12 @@ class TabOwnershipTest {
     }
 
     @Test
-    fun `given each tab root alone when asking about tab roots then Back exits the app`() {
+    fun `given each tab root alone when asking about tab roots then the finish handler is armed`() {
+        // Armed, not necessarily fired: NavHost's own Back handler wins while
+        // anything is left to pop, so only the Chat anchor alone actually
+        // exits. `NavigationContractTest` pins the observable behaviour.
         TAB_DESTINATIONS.forEach { tab ->
-            assertTrue("Back on the ${tab.route} root must exit the app", isTabRootStack(listOf(tab.route)))
+            assertTrue("${tab.route} alone on the stack is a tab-root stack", isTabRootStack(listOf(tab.route)))
         }
         // The Pipelines tab reached through its graph: only the start
         // destination reaches the stack, and it counts as that tab's root.
@@ -157,13 +160,13 @@ class TabOwnershipTest {
     }
 
     @Test
-    fun `given the anchor plus one tab when asking about tab roots then Back exits the app`() {
+    fun `given the anchor plus one tab when asking about tab roots then it is a tab-root stack`() {
         assertTrue(isTabRootStack(listOf(NavRoutes.CHAT_TAB, NavRoutes.MORE)))
         assertTrue(isTabRootStack(listOf(NavRoutes.CHAT_TAB, NavRoutes.TOOLS)))
     }
 
     @Test
-    fun `given a deeper screen on the stack when asking about tab roots then Back pops instead`() {
+    fun `given a deeper screen on the stack when asking about tab roots then the finish handler stays disarmed`() {
         assertFalse(isTabRootStack(listOf(NavRoutes.CHAT_TAB, NavRoutes.MORE, NavRoutes.MEMORY)))
         assertFalse(isTabRootStack(listOf(NavRoutes.CHAT_TAB, NavRoutes.TOOLS, NavRoutes.MCP_SERVER_CONFIG)))
         assertFalse(
@@ -172,7 +175,7 @@ class TabOwnershipTest {
     }
 
     @Test
-    fun `given the finding 14 stack when asking about tab roots then Back must not exit the app`() {
+    fun `given the finding 14 stack when asking about tab roots then the finish handler stays disarmed`() {
         // The exact stack the closed-test tester was stranded on: a tab root
         // (Tools) pushed on top of the settings subtree. The removed check
         // looked only at the top entry, saw a tab root, and answered `true` —

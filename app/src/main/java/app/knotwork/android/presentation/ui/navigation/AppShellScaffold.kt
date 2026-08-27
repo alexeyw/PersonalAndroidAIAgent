@@ -68,10 +68,20 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  *
  *  3. **Root-tab Back behaviour.** While the back stack holds nothing but
  *     tab roots ([isTabRootStack]), [BackHandler] short-circuits to
- *     `activity.finish()` so the app exits — on root tabs, Back closes the
- *     app rather than switching to the previous tab. As soon as any deeper
- *     screen is on the stack the handler is disabled and default Back (pop
- *     the inner stack) takes over.
+ *     `activity.finish()`. As soon as any deeper screen is on the stack the
+ *     handler is disabled and default Back (pop the inner stack) takes over.
+ *
+ *     Arming it is not the same as exiting, and the difference is a race
+ *     this code should not be relying on: `NavHost` installs its own
+ *     `BackHandler` too, and `OnBackPressedDispatcher` gives the press to the
+ *     most recently added enabled callback. Measured on a device, an armed
+ *     shell handler over a poppable stack lost to the NavHost in four runs and
+ *     won in one — so "armed" predicts nothing reliable when there is still
+ *     something to pop.
+ *
+ *     That is the argument for [isTabRootStack] rather than a check on the
+ *     current route: over a stack that still has entries underneath, the shell
+ *     is simply never armed, and Back pops no matter which handler wins.
  *
  * Both (1)'s highlight and (3)'s exit predicate are derived from the **back
  * stack**, never from the current route alone — see [TabOwnership] for why the

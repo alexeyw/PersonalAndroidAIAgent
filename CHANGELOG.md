@@ -25,12 +25,11 @@ details.
   drawer highlights **Chat**, not **More**, because Back from there returns to
   the chat — the highlight and the Back button now agree.
 
-- **`Settings → Tools & workspace → Manage tools` no longer throws you onto the
-  Tools tab.** It opened the Tools *tab root* from inside Settings, so the
+- **`Settings → Tools & workspace → Manage tools` no longer throws you onto
+  the Tools tab.** It opened the Tools *tab root* from inside Settings, so the
   highlight jumped to a tab the user never chose and the whole settings subtree
-  was left buried underneath it — reported in closed testing as being thrown
-  out of Settings onto the main screen's Tools tab. The same screen now opens
-  as a
+  was left buried underneath it — reported in closed testing as being thrown out
+  of Settings onto the main screen's Tools tab. The same screen now opens as a
   settings-owned destination: Back returns to the category, and the tab you came
   from stays lit. Opening an archived chat had the same shape and is fixed with
   it.
@@ -45,8 +44,8 @@ details.
   output".** The heading promised the pipelines themselves and the screen holds
   the limits an autonomous run obeys — reported in closed testing as a heading
   announcing something the screen does not contain. Pipelines live on the
-  Pipelines tab and under More → Library.
-  Searching Settings for `pipelines` still finds the category.
+  Pipelines tab and under More → Library; searching Settings for `pipelines`
+  still finds the category.
 
 ### Removed
 
