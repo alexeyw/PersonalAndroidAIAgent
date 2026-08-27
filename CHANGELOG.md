@@ -40,6 +40,34 @@ details.
   fails if a new one does not. Notification and shortcut launches additionally
   keep the tab subtree you were in instead of discarding it.
 
+- **The console has a name now.** The dark strip above the composer was already
+  a button — it announced itself to TalkBack and had done since it shipped — but
+  nothing about it said so to the eye, and the first outsider to use the app
+  could not find the console at all. It now reads `console │ [NODE] idle · ready`
+  with a chevron, and when the console is open the *same* strip becomes the
+  pane's header rather than vanishing. Its spoken description now includes the
+  live agent status instead of just "Open console".
+
+- **Adding an MCP server moved to the top of the Tools screen.** The `+ Add MCP`
+  link sat in the MCP section header — that is, below the entire built-in tool
+  list, which is exactly where it could not be found. There is now a permanent
+  `+` in the top bar, plus a labelled **Add server** button inside the empty
+  server group that disappears once you have one.
+
+- **Tools are two collapsible groups with counts.** *Built-in tools · 3 tools*
+  and *MCP servers · 3 servers* — each header counts the rows it contains, and
+  each server row still carries its own tool count. Folding a group away cannot
+  hide a problem inside it: a collapsed **MCP servers** header reports
+  `⚠ 1 disconnected`. A disconnected server now says **Disconnected** in words
+  next to a warning glyph, instead of relying on dimming and a coloured dot, and
+  offers reconnect on the row.
+
+- **The More tab is four named sections instead of twelve flat rows** —
+  Automation · Your content · Building blocks · App. **Triggers moves from
+  seventh row to first**: in closed testing it took two hours to find. Nothing
+  is re-pointed and no screen is added; the sections are labels. `Active tasks`
+  is now `Tasks`, since the section already says what kind.
+
 - **Settings → "Pipelines & structured output" is now "Run limits & structured
   output".** The heading promised the pipelines themselves and the screen holds
   the limits an autonomous run obeys — reported in closed testing as a heading

@@ -166,6 +166,36 @@ internal object ChatHomePreview {
         messages = baselineMessages(),
     )
 
+    /**
+     * Chat with the console entry strip visible, in one of its status states.
+     *
+     * No other fixture sets `agentStatusLine`, so before this one the strip —
+     * the control an external tester could not find at all — had **zero**
+     * snapshot coverage while the chat screen looked thoroughly covered.
+     *
+     * @param status the live status line, verbatim from `strings_chat.xml`.
+     * @param consoleOpen when `true`, the console sheet is up and the strip
+     *        renders as its header instead of above the composer.
+     */
+    fun consoleStrip(status: String, consoleOpen: Boolean = false): ChatHomeViewState = ChatHomeViewState(
+        visualState = if (consoleOpen) ChatHomeVisualState.ConsoleExpanded else ChatHomeVisualState.Idle,
+        threadTitle = THREAD_TITLE,
+        modelName = MODEL_NAME,
+        messages = baselineMessages(),
+        agentStatusLine = status,
+        console = if (consoleOpen) consoleExpanded().console else ChatHomeConsoleState(),
+    )
+
+    /** Every status line the strip has to render, keyed by the state that produces it. */
+    object StripStatus {
+        const val IDLE: String = "[NODE]  idle · ready"
+        const val GENERATING: String = "[NODE]  generating"
+        const val PREPARING: String = "[NODE]  loading model · please wait"
+        const val HITL: String = "[TOOL]  awaiting approval"
+        const val CLARIFICATION: String = "[NODE]  waiting on clarification"
+        const val ERROR: String = "[NODE]  error · see message"
+    }
+
     /** Generating state — the assistant is producing tokens. */
     fun generating(): ChatHomeViewState = ChatHomeViewState(
         visualState = ChatHomeVisualState.Generating,

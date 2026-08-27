@@ -448,22 +448,31 @@ your request — which pipeline node is running, which tools were
 called, which memory chunks were retrieved, and any errors that
 occurred.
 
-### Agent-status pill
+### The console strip
 
-Just above the message composer sits a single-line **status pill**
-formatted as `[TAG]  body`. It reflects the agent's current activity
-without flooding the chat — for example:
+Just above the message composer sits a dark one-line strip that says
+what it is and what the agent is doing:
 
-| Pill body                          | When you see it                     |
+```
+console │ [NODE]  idle · ready                              ^
+```
+
+The left side is the strip's name, the middle is the live status, and
+the chevron on the right points at where tapping goes. Status lines:
+
+| Status                             | When you see it                     |
 |------------------------------------|-------------------------------------|
 | `[NODE]  idle · ready`             | The agent is waiting for input.     |
-| `[NODE]  generating · streaming`   | A response is being produced.       |
+| `[NODE]  generating`               | A response is being produced.       |
+| `[NODE]  loading model · please wait` | The model is being loaded.       |
 | `[TOOL]  awaiting approval`        | The HITL card is on screen.         |
 | `[NODE]  waiting on clarification` | A clarification card is on screen.  |
 | `[NODE]  error · see message`      | The latest run failed (see banner). |
 
-Tapping the pill opens the **console pane** — a bottom sheet that
-covers most of the screen with the full chronological event log.
+Tapping the strip opens the **console pane** — a bottom sheet that
+covers most of the screen with the full chronological event log. The
+strip does not disappear when you do: it becomes the pane's header, with
+the chevron flipped, so tapping it again closes the console.
 
 ### Console pane
 
@@ -1460,6 +1469,13 @@ Tools are how the agent takes real action — looking something up,
 scheduling future work, or delegating a hard subtask to a more
 capable model. They are managed from the **Tools** screen.
 
+The screen is two collapsible groups — **Built-in tools** and **MCP
+servers** — each headed by the number of rows it holds. Folding a group
+away never hides a problem inside it: a collapsed **MCP servers** header
+still reports `⚠ 1 disconnected`. The `+` in the top bar adds an MCP
+server from anywhere on the screen; when you have none yet, the empty
+**MCP servers** group carries a labelled **Add server** button instead.
+
 ### Built-in tools
 
 The app ships with the following tools:
@@ -2355,10 +2371,26 @@ Everything else is a screen pushed on top of one of them.
 
 ## More tab
 
-The **More** tab is the landing page for every secondary surface.
+The **More** tab is the landing page for every secondary surface. Its
+twelve rows sit in four named sections:
+
+| Section | Rows |
+|---|---|
+| **Automation** | Triggers · Library · Tasks |
+| **Your content** | Memory · Files · Archive |
+| **Building blocks** | Prompts · Skills · Models |
+| **App** | Settings · Live metrics · About |
+
+Automation comes first because it holds the reasons to open More at all,
+and App comes last because that is where Settings is looked for. The
+sections are labels: nothing here is a separate screen, and no row goes
+anywhere different than it did before.
+
 Each row carries a live counter (memory chunks, active model name,
-prompt categories, active-task count + a numeric badge, app
-version), and a footer pill summarises the privacy state — when the
+prompt categories, app version). Only **Tasks** carries a numeric badge,
+which is what keeps a badge meaning "something is running right now" — a
+stored quantity like the archived-chat count lives in the row's subtitle
+instead. A footer pill summarises the privacy state — when the
 agent has not made any outbound LLM or MCP call for a minute, the
 pill reads `on-device · no network calls in last N m`; an in-flight
 cloud call flips the indicator to `online · cloud enabled`. The

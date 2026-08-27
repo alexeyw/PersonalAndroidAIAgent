@@ -36,7 +36,7 @@
     <string name="more_row_memory">Memory</string>
     <string name="more_row_models">Models</string>
     <string name="more_row_prompts">Prompt library</string>
-    <string name="more_row_task_monitor">Active tasks</string>
+    <string name="more_row_task_monitor">Tasks</string>
     <string name="more_row_monitoring">Live metrics</string>
     <string name="more_row_settings">Settings</string>
     <string name="more_row_about">About</string>
@@ -53,7 +53,15 @@
     <string name="more_row_triggers">Triggers</string>
     <string name="more_triggers_subtitle">Run pipelines on a schedule or device event</string>
     <string name="more_subtitle">Everything else</string>
-    <string name="more_search_cd">Search</string>
+    <!-- More tab section headings. Order is "why you opened More, most often
+         first"; App is last because that is where Android users look for
+         Settings. Diagnostics is deliberately not a section: only Live metrics
+         would live in it, and a section of one is a heading pretending to be
+         structure. -->
+    <string name="more_section_automation">AUTOMATION</string>
+    <string name="more_section_content">YOUR CONTENT</string>
+    <string name="more_section_blocks">BUILDING BLOCKS</string>
+    <string name="more_section_app">APP</string>
 
     <!-- About screen stub -->
     <string name="about_title">About</string>

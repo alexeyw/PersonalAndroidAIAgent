@@ -24,9 +24,25 @@ data class MoreRow(
 )
 
 /**
+ * One named group of [MoreRow]s.
+ *
+ * Sections are **labels, not screens**: nothing is navigated to differently
+ * because of them, no row is re-pointed, and the row component is unchanged.
+ * They exist because twelve flat rows made the one row a closed-test user was
+ * looking for take two hours to find.
+ *
+ * @property id stable key for the section.
+ * @property title section heading, e.g. `"Automation"`.
+ * @property rows the rows in this section, in display order.
+ */
+data class MoreSection(val id: String, val title: String, val rows: List<MoreRow>)
+
+/**
  * Top-level immutable input to `MoreContent`.
  *
- * @property rows ordered list of navigation rows.
+ * @property sections ordered, named groups of navigation rows. Order is "why
+ * you opened More, most often first"; App sits last because that is where
+ * Android users reach for Settings.
  * @property networkStatus footer text (e.g. `"on-device · no network calls in last 14 m"`).
  * Hidden when null/blank.
  * @property networkStatusOk drives the green-dot indicator on the footer
@@ -34,14 +50,10 @@ data class MoreRow(
  * window, `false` when a recent outbound call has been recorded.
  */
 data class MoreViewState(
-    val rows: List<MoreRow> = emptyList(),
+    val sections: List<MoreSection> = emptyList(),
     val networkStatus: String? = null,
     val networkStatusOk: Boolean = true,
 )
 
 /** Bundle of localised display strings threaded into `MoreContent`. */
-data class MoreStrings(
-    val title: String = "More",
-    val subtitle: String = "Everything else",
-    val searchCd: String = "Search",
-)
+data class MoreStrings(val title: String = "More", val subtitle: String = "Everything else")
