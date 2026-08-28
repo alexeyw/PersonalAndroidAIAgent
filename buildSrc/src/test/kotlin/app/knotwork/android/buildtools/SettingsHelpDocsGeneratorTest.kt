@@ -43,7 +43,25 @@ class SettingsHelpDocsGeneratorTest {
 
         val identity = rows.single { it.name == "Identity" }
         assertEquals(null, identity.meaning)
-        assertEquals("Display row", identity.noHintReason)
+        assertEquals("shows a value, decides nothing", identity.noHintReason)
+    }
+
+    @Test
+    fun `an unknown no-hint reason fails generation rather than leaking the enum name`() {
+        val invented = HELP_CATALOG.replace("NoHint.DISPLAY_ROW", "NoHint.SOME_NEW_REASON")
+
+        val error = runCatching {
+            SettingsHelpDocsGenerator.buildRows(
+                registrySource = REGISTRY,
+                helpCatalogSource = invented,
+                searchCatalogSource = SEARCH_CATALOG,
+                helpStringsXml = HELP_STRINGS,
+                nameStringsXml = listOf(NAME_STRINGS),
+            )
+        }.exceptionOrNull()
+
+        assertTrue(error is SettingsHelpDocsGenerator.GenerationException)
+        assertTrue(error!!.message!!.contains("SOME_NEW_REASON"))
     }
 
     @Test

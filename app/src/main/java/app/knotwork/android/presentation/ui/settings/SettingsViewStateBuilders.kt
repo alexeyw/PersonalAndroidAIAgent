@@ -10,8 +10,6 @@ import app.knotwork.android.domain.constants.SettingsDefaults
 import app.knotwork.android.domain.models.ActiveModelMeta
 import app.knotwork.android.domain.models.LocalBackend
 import app.knotwork.android.domain.models.ToolApprovalPolicy
-import app.knotwork.android.domain.settings.SettingsRegistry
-import app.knotwork.android.domain.settings.anchorKey
 import app.knotwork.android.presentation.common.DisplayFormat
 import app.knotwork.design.screens.settings.AboutSettingsViewState
 import app.knotwork.design.screens.settings.ApproveToolCallsOption
@@ -51,13 +49,11 @@ import app.knotwork.design.screens.settings.SLIDER_TOP_K
 import app.knotwork.design.screens.settings.SLIDER_TOP_P
 import app.knotwork.design.screens.settings.SettingSliderRow
 import app.knotwork.design.screens.settings.SettingsHubViewState
-import app.knotwork.design.screens.settings.SettingsRowAnchors
 import app.knotwork.design.screens.settings.SystemInstructionsCardState
 import app.knotwork.design.screens.settings.ToolsSettingsViewState
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.math.roundToInt
-import app.knotwork.design.screens.settings.SettingsCategoryId as CatalogCategoryId
 
 /** Builds the settings hub state (subtitle, the six inline Basic controls, restart, search). */
 @Composable
@@ -81,39 +77,7 @@ internal fun buildHubViewState(uiState: SettingsUiState): SettingsHubViewState =
         .takeIf { uiState.restartRequired },
     searchQuery = uiState.searchQuery,
     searchResults = uiState.searchResults,
-    categoryRowCounts = CATEGORY_ROW_COUNTS,
 )
-
-/**
- * How many settings each category **actually renders**, derived rather than
- * counted by hand — so a setting added anywhere updates the hub without anyone
- * remembering to.
- *
- * Shown because "how long is this screen" was a real complaint in closed
- * testing, and a count answers it before the reader commits to scrolling. Which
- * is exactly why it counts rendered rows and not registry entries: the registry
- * is **not** in sync with the screens. Five Tools entries
- * (`TOOL_CALL_TIMEOUT_MS`, the three `WORKSPACE_*` ceilings and
- * `HTTP_TOOL_MAX_RESPONSE_BYTES`) are registered and searchable but rendered by
- * no screen at all, so counting the registry would have promised ten rows on a
- * screen that shows five — a number that lies, on a row added to stop the screen
- * lying about its length. The drift itself is filed as a defect; the count
- * refuses to paper over it.
- *
- * A row "has a surface" when the catalog exposes an anchor for it
- * ([SettingsRowAnchors.ALL], non-slider rows) or a slider maps to it
- * ([SLIDER_TO_ANCHOR]) — the same two tables the deep-link highlight uses, so
- * the count cannot disagree with what search can actually reach.
- */
-private val CATEGORY_ROW_COUNTS: Map<CatalogCategoryId, Int> by lazy {
-    // `by lazy` rather than an eager initialiser: `SLIDER_TO_ANCHOR` is declared
-    // further down the file, and a top-level `val` may not read one declared
-    // after it.
-    val rendered = SettingsRowAnchors.ALL + SLIDER_TO_ANCHOR.values
-    SettingsRegistry.categories.associate { category ->
-        category.id.toCatalog() to category.entries.count { it.anchorKey() in rendered }
-    }
-}
 
 /** Builds the Generation category state (system instructions + advanced sampling). */
 @Composable

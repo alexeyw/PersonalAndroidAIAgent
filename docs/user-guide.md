@@ -1996,13 +1996,24 @@ changing it has an effect somewhere other than that row. Links to another
 screen, the identity and version rows, and plain actions like *Export memories*
 carry none, and the table below says which and why.
 
-One entry reads *"behaviour not shipped"* rather than carrying an explanation.
-That is deliberate and it is not a placeholder: **Long-running task alerts** is a
-toggle whose notification the app does not currently post, so there is nothing
-truthful to say about it yet. It is recorded here rather than papered over.
+Several entries read *"behaviour not shipped"* rather than carrying an
+explanation. That is deliberate and none of them is a placeholder: each is a
+control whose behaviour does not currently happen, so there is nothing truthful
+to say about it yet — **Long-running task alerts** posts no notification, the
+**sampling sliders** (Temperature, Top-K, Top-P, Repetition penalty) do not
+reach the on-device engine, and **Tool-usage instruction** and
+**Auto-summarize threshold** are read by nothing. They are recorded here rather
+than papered over, and each is owed an explanation as soon as its row does
+something.
+
+Five rows in the table — the **tool-call timeout** and the four **workspace and
+HTTP ceilings** — are settings the app stores and searches but does not yet
+render on any screen. Their explanations are documented here because the
+settings are real; there is no ⓘ to open, because there is no row.
 
 The table is **generated from the very strings the app shows**, so it cannot
-drift from them: what you read here is word-for-word what the ⓘ opens. What each
+drift from them: where a row has a ⓘ, what you read here is word-for-word what
+it opens. What each
 setting *does* when you change it — the measured timeouts, the retry behaviour,
 the ordering rules — is described in the prose of the sections that follow, not
 repeated here.
@@ -2012,13 +2023,13 @@ repeated here.
 
 | Setting | What it means |
 |---|---|
-| **System instructions** | Put in front of every request, in every chat and every pipeline. The agent treats it as standing orders. |
-| **Tool-usage instruction** | *(no explanation — Behaviour not shipped)* |
-| **Temperature** | Low keeps the wording predictable and repetitive; high makes it varied and less literal. |
-| **Top-K** | How many candidate words stay in play at each step. Small is safer and blander; large lets rarer words through. |
-| **Top-P** | Keeps only the likeliest words that together add up to this share of the probability. Lower cuts more. |
-| **Repetition penalty** | Pushes the model off words it has already used. Too high and it starts avoiding words the answer needs. |
-| **Max context length** | How much of the conversation the model sees at once. Larger remembers more of the thread and runs slower. |
+| **System instructions** | Put in front of every answer the agent writes, in every chat. It treats this as standing orders; internal planning steps skip it. |
+| **Tool-usage instruction** | *(no explanation — behaviour not shipped yet)* |
+| **Temperature** | *(no explanation — behaviour not shipped yet)* |
+| **Top-K** | *(no explanation — behaviour not shipped yet)* |
+| **Top-P** | *(no explanation — behaviour not shipped yet)* |
+| **Repetition penalty** | *(no explanation — behaviour not shipped yet)* |
+| **Max context length** | The working window of the on-device model. Larger holds more at once and runs slower; cloud models use their own window. |
 | **Voice input length** | Recording stops on its own at this point and sends what it has. |
 
 #### Models
@@ -2026,8 +2037,8 @@ repeated here.
 | Setting | What it means |
 |---|---|
 | **Local model backend** | Which chip runs the on-device model. NPU is fastest where it works; the app falls back on its own if it does not. |
-| **External providers** | *(no explanation — Link row)* |
-| **Default pipeline** | *(no explanation — Link row)* |
+| **External providers** | *(no explanation — opens a screen that explains itself)* |
+| **Default pipeline** | *(no explanation — opens a screen that explains itself)* |
 
 #### Memory
 
@@ -2036,27 +2047,27 @@ repeated here.
 | **Auto-extract memories** | On, durable facts from your chats — names, preferences, project details — are saved and reused later. |
 | **Memory compaction** | Old memories get merged into shorter summaries once there are many. Frees room; loses the exact wording. |
 | **Compress chat history** | Long threads are summarised past the live window, so the agent keeps the gist instead of forgetting the start. |
-| **Auto-summarize threshold** | *(no explanation — Behaviour not shipped)* |
+| **Auto-summarize threshold** | *(no explanation — behaviour not shipped yet)* |
 | **Memory search top-K** | How many memories are pulled into a reply at most. More context, slower start, and more room for noise. |
 | **Memory search threshold** | Higher recalls only close matches, so less is pulled in; lower recalls more, including memories that miss the point. |
 | **Recency half-life** | How fast old memories lose to new ones when both match. Short favours this week; long treats everything as current. |
 | **Compaction age** | How old a memory must be before compaction may merge it. Fresher facts keep their exact wording until they pass it. |
 | **Max memory chunks** | The ceiling on stored pieces. Reaching it starts a compaction pass, so it does nothing at all while compaction is switched off. |
-| **History compression threshold** | How large a thread grows before its older half is summarised. Lower compresses sooner and keeps less of the original wording. |
+| **History compression threshold** | How large a thread grows before everything past the live window is summarised. Lower compresses sooner and keeps less wording. |
 | **Live window size** | How many recent messages stay word-for-word after a thread is summarised. Anything older survives only as the summary. |
-| **Memory summary limit** | How many recent memories are written into the prompt's memory block. More recall, less room for everything else. |
+| **Memory summary limit** | How many recent memories the $MEMORY_SUMMARY prompt variable lists. Pipelines that do not use that variable are unaffected. |
 | **Embedding provider** | The model that turns text into the numbers memory search compares. Change it and recall stays poor until you re-embed by hand. |
-| **Verbose memory logging** | Every retrieval is written to the console — useful when answers cite the wrong thing, noisy otherwise. |
+| **Verbose memory logging** | Adds each recalled memory, text included, to the console — useful when answers cite the wrong thing, and revealing on a shared screen. |
 | **Export · Import · Re-embed · Clear** | Re-embed rebuilds every vector for the current model. Stay on this screen while it runs, and expect poor recall until it finishes. |
 
 #### Run limits & structured output
 
 | Setting | What it means |
 |---|---|
-| **Run limits** | *(no explanation — Link row)* |
+| **Run limits** | *(no explanation — opens a screen that explains itself)* |
 | **Max nesting depth** | How many levels of sub-pipeline a run may descend into before it is refused. Deeper composes more; shallow fails a runaway sooner. |
 | **Structured-output repairs** | When a model answers in the wrong shape, how many times it is shown its own output and asked again before the node gives up. |
-| **Cloud retry attempts / base delay** | *(no explanation — Link row)* |
+| **Cloud retry attempts / base delay** | *(no explanation — opens a screen that explains itself)* |
 
 #### Tools & workspace
 
@@ -2065,26 +2076,26 @@ repeated here.
 | **Approve tool calls** | Which tool calls stop and wait for your approval. Never lets them all through, destructive ones too, unless you also block those. |
 | **Block destructive tools** | On, a destructive tool call is refused outright rather than offered for approval, and the run sees it as a failed call. |
 | **Block network from local model** | On, no cloud provider can be reached even with a key saved. Only a model on this device, or Ollama on your own network, answers. |
-| **Manage tools / MCP servers** | *(no explanation — Link row)* |
-| **Tool-call timeout** | How long one tool call may take before it is abandoned. Short frees a stuck run sooner; long suits slow servers. |
+| **Manage tools / MCP servers** | *(no explanation — opens a screen that explains itself)* |
+| **Tool-call timeout** | How long a run waits for you to approve a tool call before it parks and asks again later. It does not bound the call itself. |
 | **Workspace max file size** | The largest single file the workspace accepts, for both writing one and reading one whole. |
 | **Workspace max total size** | How much device storage the whole workspace may hold. A write that would push past it is refused rather than trimmed. |
 | **Workspace read budget** | How much of a file one read may put in front of the model. The rest is cut, leaving room for the prompt and the thread. |
 | **HTTP response cap** | How much of a web response reaches the model. Past it the body is cut and marked, so remote text cannot flood the context. |
-| **Allowed HTTP domains** | *(no explanation — Link row)* |
+| **Allowed HTTP domains** | *(no explanation — opens a screen that explains itself)* |
 
 #### Background & triggers
 
 | Setting | What it means |
 |---|---|
-| **Long-running task alerts** | *(no explanation — Behaviour not shipped)* |
+| **Long-running task alerts** | *(no explanation — behaviour not shipped yet)* |
 | **Scheduled task alerts** | A notification arrives when a scheduled task finishes or fails, so a background result does not wait for you to open the app. |
 | **Pipeline for sharing** | Which pipeline runs when you share text or a link into the app from somewhere else. |
 | **Keep shares in one chat** | On, every share lands in one Shared chat. Off, each share opens its own, so the chat list grows with each one. |
 | **Quick Settings pipeline** | Which pipeline the Quick Settings tile runs when you tap it from the notification shade. |
 | **External automation** | Other apps on this device can start a run — Tasker, MacroDroid, adb. Off, those requests are refused. |
 | **Pipeline other apps may run** | The only pipeline an outside app may start. Nothing else can be named in the request, whatever it asks for. |
-| **External request journal** | *(no explanation — Link row)* |
+| **External request journal** | *(no explanation — opens a screen that explains itself)* |
 | **Resume max age** | How stale a parked run may be and still resume. Past it the run is dropped, because its gathered context no longer holds. |
 | **Background approval window** | How long a background run waits for you to approve a tool call. Unanswered past it, the run ends rather than waiting forever. |
 
@@ -2092,7 +2103,7 @@ repeated here.
 
 | Setting | What it means |
 |---|---|
-| **Crash reporting** | Off, nothing leaves the device. On, crashes and error-level log lines are sent — never your messages, files, prompts or keys. |
+| **Crash reporting** | Off, nothing leaves the device. On, crashes plus warning and error log lines go out — never your messages, prompts or keys. |
 | **Trace retention · runs** | How many past runs keep their step-by-step trace in a chat. Older traces are dropped; the messages themselves stay. |
 | **Trace retention · age** | How long a trace is kept before it is dropped, whatever the per-chat count. Bounds what accumulates on disk. |
 
@@ -2100,9 +2111,9 @@ repeated here.
 
 | Setting | What it means |
 |---|---|
-| **Identity** | *(no explanation — Display row)* |
-| **App version & licenses** | *(no explanation — Link row)* |
-| **Reset all settings** | *(no explanation — Self evident)* |
+| **Identity** | *(no explanation — shows a value, decides nothing)* |
+| **App version & licenses** | *(no explanation — opens a screen that explains itself)* |
+| **Reset all settings** | *(no explanation — does what its name says)* |
 <!-- /AUTO-GEN:SETTINGS_HELP -->
 
 ### Generation

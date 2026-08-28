@@ -40,6 +40,15 @@ enum class NoHint {
      *    appears as a node-editor template, which is not the same thing.
      *  - `AUTO_SUMMARIZE_THRESHOLD` — read by the settings plumbing and by
      *    nothing else; moving the slider changes no behaviour.
+     *  - `TEMPERATURE`, `TOP_K`, `TOP_P`, `REPETITION_PENALTY` — the sampling
+     *    sliders. `LiteRTLlmEngine` opens an ordinary conversation with **no**
+     *    `SamplerConfig` at all, leaving the model's native sampler in place;
+     *    its own KDoc says the override "is only ever used for the
+     *    structured-output repair loop", where the values are hardcoded. The
+     *    cloud path builds no sampling params either. Four confident sentences
+     *    about sampling behaviour were written here before this was checked —
+     *    which is the failure this whole task exists to stop, so they are gone
+     *    rather than softened.
      */
     BEHAVIOUR_NOT_SHIPPED,
 }
@@ -86,10 +95,10 @@ object SettingsHelpCatalog {
     val HELP: Map<String, SettingHelp> = mapOf(
         "SYSTEM_PROMPT_PREFIX" to text(R.string.settings_help_system_prompt_prefix),
         "TOOL_USAGE_INSTRUCTION" to none(NoHint.BEHAVIOUR_NOT_SHIPPED),
-        "TEMPERATURE" to text(R.string.settings_help_temperature),
-        "TOP_K" to text(R.string.settings_help_top_k),
-        "TOP_P" to text(R.string.settings_help_top_p),
-        "REPETITION_PENALTY" to text(R.string.settings_help_repetition_penalty),
+        "TEMPERATURE" to none(NoHint.BEHAVIOUR_NOT_SHIPPED),
+        "TOP_K" to none(NoHint.BEHAVIOUR_NOT_SHIPPED),
+        "TOP_P" to none(NoHint.BEHAVIOUR_NOT_SHIPPED),
+        "REPETITION_PENALTY" to none(NoHint.BEHAVIOUR_NOT_SHIPPED),
         "MAX_CONTEXT_LENGTH" to text(R.string.settings_help_max_context_length),
         "AUDIO_MAX_DURATION_SEC" to text(R.string.settings_help_audio_max_duration_sec),
         "LOCAL_MODEL_BACKEND" to text(R.string.settings_help_local_model_backend),

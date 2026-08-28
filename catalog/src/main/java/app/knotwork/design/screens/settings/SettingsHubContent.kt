@@ -188,11 +188,7 @@ private fun HubDefaultBody(state: SettingsHubViewState, callbacks: SettingsCallb
     ) {
         HubBasicBlock(state = state, callbacks = callbacks)
         HorizontalDivider(color = KnotworkTheme.extended.divider)
-        HubCategoriesBlock(
-            loading = state.loading,
-            rowCounts = state.categoryRowCounts,
-            onOpenCategory = callbacks.onOpenCategory,
-        )
+        HubCategoriesBlock(loading = state.loading, onOpenCategory = callbacks.onOpenCategory)
     }
 }
 
@@ -471,29 +467,20 @@ private fun HubBasicBlock(state: SettingsHubViewState, callbacks: SettingsCallba
 }
 
 @Composable
-private fun HubCategoriesBlock(
-    loading: Boolean,
-    rowCounts: Map<SettingsCategoryId, Int>,
-    onOpenCategory: (SettingsCategoryId) -> Unit,
-) {
+private fun HubCategoriesBlock(loading: Boolean, onOpenCategory: (SettingsCategoryId) -> Unit) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
     ) {
         SettingsSectionLabel(text = stringResource(R.string.knotwork_settings_hub_categories))
         HUB_CATEGORIES.forEach { meta ->
-            HubCategoryRow(
-                meta = meta,
-                loading = loading,
-                rowCount = rowCounts[meta.id],
-                onClick = { onOpenCategory(meta.id) },
-            )
+            HubCategoryRow(meta = meta, loading = loading, onClick = { onOpenCategory(meta.id) })
         }
     }
 }
 
 @Composable
-private fun HubCategoryRow(meta: HubCategoryMeta, loading: Boolean, rowCount: Int?, onClick: () -> Unit) {
+private fun HubCategoryRow(meta: HubCategoryMeta, loading: Boolean, onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
@@ -535,13 +522,6 @@ private fun HubCategoryRow(meta: HubCategoryMeta, loading: Boolean, rowCount: In
                     color = KnotworkTheme.extended.onSurface2,
                 )
             }
-        }
-        if (rowCount != null && !loading) {
-            Text(
-                text = rowCount.toString(),
-                style = KnotworkTextStyles.MonoSm,
-                color = KnotworkTheme.extended.onSurfaceMuted,
-            )
         }
         Icon(imageVector = AppIcons.ArrowR, contentDescription = null, tint = KnotworkTheme.extended.onSurfaceMuted)
     }

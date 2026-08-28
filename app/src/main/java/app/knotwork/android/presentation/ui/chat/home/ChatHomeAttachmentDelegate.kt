@@ -115,7 +115,8 @@ class ChatHomeAttachmentDelegate(
     fun onImagePicked(uri: String) {
         // Discard any prior pending attachment's file (it was never sent) before
         // replacing the draft, so a re-pick doesn't leave an orphan behind.
-        val replacedPath = (state.value.composer.attachment as? ComposerAttachmentDraft.Ready)?.attachment?.path
+        val replaced = state.value.composer.attachment as? ComposerAttachmentDraft.Ready
+        val replacedPath = replaced?.attachment?.path
         state.update {
             it.copy(
                 sourceChooserVisible = false,
@@ -123,29 +124,34 @@ class ChatHomeAttachmentDelegate(
             )
         }
         scope.launch {
-            if (replacedPath != null) {
-                attachmentStore.delete(replacedPath)
-            }
+            // The previous file is deleted only once its replacement exists.
+            // Deleting first meant a failed ingest destroyed the image the user
+            // already had and left the composer empty — the loss was real
+            // whether or not anything said so.
             val stored = attachmentStore.ingestUri(uri).getOrNull()
             if (stored != null) {
+                if (replacedPath != null) {
+                    attachmentStore.delete(replacedPath)
+                }
                 val ready = ComposerAttachmentDraft.Ready(
                     attachment = stored,
                     absolutePath = attachmentStore.absolutePathFor(stored.path),
                     detail = attachmentDetailLabel(stored.width, stored.height, attachmentStore.sizeBytes(stored.path)),
                 )
                 state.update { it.copy(composer = it.composer.copy(attachment = ready)) }
-                // Announced only once the replacement is actually in hand.
-                // Emitting beside the delete above meant a failed ingest told
-                // the user "replaced" and then "couldn't attach" — and the
-                // first of those was false, since the old image was gone and
-                // nothing had taken its place.
                 if (replacedPath != null) {
                     _attachmentReplacedEvents.tryEmit(Unit)
                 }
             } else {
                 // Transient failure — surface a snackbar rather than flipping the
                 // whole surface to Error (which would clobber an in-flight run).
-                state.update { it.copy(composer = it.composer.copy(attachment = null)) }
+                //
+                // The draft goes back to whatever was attached before, not to
+                // null: a failed re-pick has replaced nothing, and clearing the
+                // slot would take away an image the user still has (its file is
+                // no longer deleted up front either) on the strength of an
+                // attempt that did not succeed.
+                state.update { it.copy(composer = it.composer.copy(attachment = replaced)) }
                 _attachmentErrorEvents.tryEmit(Unit)
             }
         }

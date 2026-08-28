@@ -17,12 +17,8 @@
       repeated back at the reader.
 -->
 <resources>
-    <string name="settings_help_system_prompt_prefix">Put in front of every request, in every chat and every pipeline. The agent treats it as standing orders.</string>
-    <string name="settings_help_temperature">Low keeps the wording predictable and repetitive; high makes it varied and less literal.</string>
-    <string name="settings_help_top_k">How many candidate words stay in play at each step. Small is safer and blander; large lets rarer words through.</string>
-    <string name="settings_help_top_p">Keeps only the likeliest words that together add up to this share of the probability. Lower cuts more.</string>
-    <string name="settings_help_repetition_penalty">Pushes the model off words it has already used. Too high and it starts avoiding words the answer needs.</string>
-    <string name="settings_help_max_context_length">How much of the conversation the model sees at once. Larger remembers more of the thread and runs slower.</string>
+    <string name="settings_help_system_prompt_prefix">Put in front of every answer the agent writes, in every chat. It treats this as standing orders; internal planning steps skip it.</string>
+    <string name="settings_help_max_context_length">The working window of the on-device model. Larger holds more at once and runs slower; cloud models use their own window.</string>
     <string name="settings_help_audio_max_duration_sec">Recording stops on its own at this point and sends what it has.</string>
     <string name="settings_help_local_model_backend">Which chip runs the on-device model. NPU is fastest where it works; the app falls back on its own if it does not.</string>
     <string name="settings_help_auto_extract_enabled">On, durable facts from your chats — names, preferences, project details — are saved and reused later.</string>
@@ -33,18 +29,18 @@
     <string name="settings_help_memory_recency_half_life_days">How fast old memories lose to new ones when both match. Short favours this week; long treats everything as current.</string>
     <string name="settings_help_memory_compaction_age_days">How old a memory must be before compaction may merge it. Fresher facts keep their exact wording until they pass it.</string>
     <string name="settings_help_max_memory_chunks">The ceiling on stored pieces. Reaching it starts a compaction pass, so it does nothing at all while compaction is switched off.</string>
-    <string name="settings_help_chat_history_compression_threshold_tokens">How large a thread grows before its older half is summarised. Lower compresses sooner and keeps less of the original wording.</string>
+    <string name="settings_help_chat_history_compression_threshold_tokens">How large a thread grows before everything past the live window is summarised. Lower compresses sooner and keeps less wording.</string>
     <string name="settings_help_chat_history_live_window_size">How many recent messages stay word-for-word after a thread is summarised. Anything older survives only as the summary.</string>
-    <string name="settings_help_memory_summary_default_limit">How many recent memories are written into the prompt\'s memory block. More recall, less room for everything else.</string>
+    <string name="settings_help_memory_summary_default_limit">How many recent memories the $MEMORY_SUMMARY prompt variable lists. Pipelines that do not use that variable are unaffected.</string>
     <string name="settings_help_active_embedding_provider_id">The model that turns text into the numbers memory search compares. Change it and recall stays poor until you re-embed by hand.</string>
-    <string name="settings_help_verbose_memory_logging_enabled">Every retrieval is written to the console — useful when answers cite the wrong thing, noisy otherwise.</string>
+    <string name="settings_help_verbose_memory_logging_enabled">Adds each recalled memory, text included, to the console — useful when answers cite the wrong thing, and revealing on a shared screen.</string>
     <string name="settings_help_memory_actions">Re-embed rebuilds every vector for the current model. Stay on this screen while it runs, and expect poor recall until it finishes.</string>
     <string name="settings_help_pipeline_max_nesting_depth">How many levels of sub-pipeline a run may descend into before it is refused. Deeper composes more; shallow fails a runaway sooner.</string>
     <string name="settings_help_structured_output_max_repairs">When a model answers in the wrong shape, how many times it is shown its own output and asked again before the node gives up.</string>
     <string name="settings_help_tool_approval_policy">Which tool calls stop and wait for your approval. Never lets them all through, destructive ones too, unless you also block those.</string>
     <string name="settings_help_block_destructive_tools">On, a destructive tool call is refused outright rather than offered for approval, and the run sees it as a failed call.</string>
     <string name="settings_help_block_network_from_local_model">On, no cloud provider can be reached even with a key saved. Only a model on this device, or Ollama on your own network, answers.</string>
-    <string name="settings_help_tool_call_timeout_ms">How long one tool call may take before it is abandoned. Short frees a stuck run sooner; long suits slow servers.</string>
+    <string name="settings_help_tool_call_timeout_ms">How long a run waits for you to approve a tool call before it parks and asks again later. It does not bound the call itself.</string>
     <string name="settings_help_workspace_max_file_size_bytes">The largest single file the workspace accepts, for both writing one and reading one whole.</string>
     <string name="settings_help_workspace_max_total_bytes">How much device storage the whole workspace may hold. A write that would push past it is refused rather than trimmed.</string>
     <string name="settings_help_workspace_read_token_budget">How much of a file one read may put in front of the model. The rest is cut, leaving room for the prompt and the thread.</string>
@@ -57,7 +53,7 @@
     <string name="settings_help_external_automation_pipeline_id">The only pipeline an outside app may start. Nothing else can be named in the request, whatever it asks for.</string>
     <string name="settings_help_resume_max_age_hours">How stale a parked run may be and still resume. Past it the run is dropped, because its gathered context no longer holds.</string>
     <string name="settings_help_background_approval_window_hours">How long a background run waits for you to approve a tool call. Unanswered past it, the run ends rather than waiting forever.</string>
-    <string name="settings_help_crash_reporting_enabled">Off, nothing leaves the device. On, crashes and error-level log lines are sent — never your messages, files, prompts or keys.</string>
+    <string name="settings_help_crash_reporting_enabled">Off, nothing leaves the device. On, crashes plus warning and error log lines go out — never your messages, prompts or keys.</string>
     <string name="settings_help_trace_retention_runs_per_session">How many past runs keep their step-by-step trace in a chat. Older traces are dropped; the messages themselves stay.</string>
     <string name="settings_help_trace_retention_max_age_days">How long a trace is kept before it is dropped, whatever the per-chat count. Bounds what accumulates on disk.</string>
 </resources>

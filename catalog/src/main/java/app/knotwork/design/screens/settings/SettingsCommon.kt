@@ -529,6 +529,10 @@ internal fun SystemInstructionsField(
             KnotworkChip(label = placeholder, style = ChipStyle.Outline, onClick = { onChipInsert(placeholder) })
         }
     }
+    // The panel the header's glyph opens. Without it the glyph rendered, was
+    // announced by TalkBack, took the "one open at a time" slot away from
+    // whichever hint was open — and showed nothing.
+    SettingsHintBody()
     // The prose helper that used to sit here is gone: it explained what the
     // field is for, which the header's hint now does, and it was drawn in a Row
     // with the counter without a width constraint of its own — so at any real

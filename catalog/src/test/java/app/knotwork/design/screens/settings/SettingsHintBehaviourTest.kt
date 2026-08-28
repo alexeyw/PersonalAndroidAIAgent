@@ -2,6 +2,7 @@ package app.knotwork.design.screens.settings
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertIsDisplayed
@@ -157,7 +158,7 @@ class SettingsHintBehaviourTest {
     @Test
     fun `bespoke settings controls render a help glyph too`() {
         composeTestRule.setContent {
-            val hints = remember { SettingsHintController { SettingsHint("explained") } }
+            val hints = remember { SettingsHintController { SettingsHint(BESPOKE_HINT) } }
             KnotworkTheme {
                 CompositionLocalProvider(LocalSettingsHints provides hints) {
                     GenerationSettingsContent(state = SettingsPreview.generation(), advancedExpanded = true)
@@ -165,14 +166,29 @@ class SettingsHintBehaviourTest {
             }
         }
 
-        composeTestRule.onNodeWithContentDescription("Explain: System instructions").assertIsDisplayed()
-        composeTestRule.onNodeWithContentDescription("Explain: Tool-usage instruction").assertIsDisplayed()
+        // Asserting the glyph is displayed is NOT enough, and this test used to
+        // stop there. The System-instructions header shipped a glyph with no
+        // panel beneath it: it rendered, TalkBack announced it, it took the
+        // one-open-at-a-time slot from whatever was open — and showed nothing.
+        // So every bespoke control is opened and its panel demanded.
+        listOf("System instructions", "Tool-usage instruction").forEach { name ->
+            composeTestRule.onNodeWithContentDescription("Explain: $name").assertIsDisplayed()
+        }
+        composeTestRule.onNodeWithContentDescription("Explain: System instructions").performClick()
+        composeTestRule.onNodeWithText(BESPOKE_HINT).assertIsDisplayed()
     }
 
     @Test
     fun `the memory action strip and the embedding dropdown carry a glyph`() {
         composeTestRule.setContent {
-            val hints = remember { SettingsHintController { SettingsHint("explained") } }
+            val hints = remember { SettingsHintController { SettingsHint(BESPOKE_HINT) } }
+            // Opened through the controller rather than by tapping: both rows sit
+            // below the fold on a 760 dp frame, and a tap there does not land.
+            // What is being asserted is that the control renders BOTH halves of
+            // the affordance — the glyph and the panel it opens — which is what
+            // the System-instructions header failed to do while a glyph-only
+            // assertion passed.
+            LaunchedEffect(Unit) { hints.toggle(SettingsRowAnchors.ACTIVE_EMBEDDING_PROVIDER_ID) }
             KnotworkTheme {
                 CompositionLocalProvider(LocalSettingsHints provides hints) {
                     MemorySettingsContent(state = SettingsPreview.memory(), advancedExpanded = true)
@@ -180,11 +196,24 @@ class SettingsHintBehaviourTest {
             }
         }
 
-        // `assertExists`, not `assertIsDisplayed`: the action strip sits below
-        // the fold on a 760 dp frame. What is being asserted is that the glyph
-        // is rendered at all, not where it lands.
         composeTestRule.onNodeWithContentDescription("Explain: Memory data").assertExists()
         composeTestRule.onNodeWithContentDescription("Explain: Embedding model").assertExists()
+        composeTestRule.onNodeWithText(BESPOKE_HINT).assertExists()
+    }
+
+    @Test
+    fun `the memory action strip opens its explanation too`() {
+        composeTestRule.setContent {
+            val hints = remember { SettingsHintController { SettingsHint(BESPOKE_HINT) } }
+            LaunchedEffect(Unit) { hints.toggle(SettingsRowAnchors.MEMORY_ACTIONS) }
+            KnotworkTheme {
+                CompositionLocalProvider(LocalSettingsHints provides hints) {
+                    MemorySettingsContent(state = SettingsPreview.memory(), advancedExpanded = true)
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithText(BESPOKE_HINT).assertExists()
     }
 
     @Test
@@ -231,6 +260,7 @@ class SettingsHintBehaviourTest {
 
     private companion object {
         const val MIN_TARGET_DP = 48f
+        const val BESPOKE_HINT = "What this control does, in one sentence."
         const val AUTO_EXTRACT_HINT = "Durable facts from your chats are saved and reused later."
         const val COMPACTION_HINT = "Old memories get merged into shorter summaries once there are many."
 

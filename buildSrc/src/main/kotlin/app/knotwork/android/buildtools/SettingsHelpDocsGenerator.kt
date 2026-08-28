@@ -150,7 +150,7 @@ object SettingsHelpDocsGenerator {
                 category = categoryTitle(category),
                 name = name,
                 meaning = meaning,
-                noHintReason = decision.noHintReason?.let(::humanise),
+                noHintReason = decision.noHintReason?.let(::noHintReason),
             )
         }
         // The guard the sibling generator learned the hard way: a parser that
@@ -272,9 +272,22 @@ object SettingsHelpDocsGenerator {
         return out.toString()
     }
 
-    /** `LINK_PROVIDER_LIST` -> `Link provider list`; used for the no-hint reasons. */
-    private fun humanise(raw: String): String =
-        raw.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
+    /**
+     * Reader-facing wording for a no-hint reason.
+     *
+     * Written out rather than derived: lowercasing the enum name published
+     * "Self evident" and "Behaviour not shipped" into the public guide, which
+     * reads as a leaked constant. An unknown reason fails generation.
+     */
+    private fun noHintReason(raw: String): String = NO_HINT_REASONS[raw]
+        ?: throw GenerationException("No reader-facing wording known for no-hint reason `$raw`.")
+
+    private val NO_HINT_REASONS: Map<String, String> = mapOf(
+        "LINK_ROW" to "opens a screen that explains itself",
+        "DISPLAY_ROW" to "shows a value, decides nothing",
+        "SELF_EVIDENT" to "does what its name says",
+        "BEHAVIOUR_NOT_SHIPPED" to "behaviour not shipped yet",
+    )
 
     /**
      * Display title for a category, keyed by the registry's Kotlin list name.

@@ -134,11 +134,12 @@ class SettingsHelpCatalogTest {
 
     private companion object {
         /**
-         * Registry rows that no screen renders, so their explanation has nowhere
-         * to open. All five are Tools ceilings that are registered and findable
-         * by search but drawn by nothing — a pre-existing registry/UI drift this
-         * task surfaced rather than caused. Filed as a defect; the set may only
-         * shrink.
+         * Registry rows that no screen renders, so their explanation has
+         * nowhere to open. All five are Tools ceilings that are registered and
+         * findable by search but drawn by nothing — a pre-existing registry/UI
+         * drift this task surfaced rather than caused, and the reason the hub
+         * cannot honestly count a category's rows. Filed as a defect; the set
+         * may only shrink.
          */
         val KNOWN_SURFACELESS: Set<String> = setOf(
             "TOOL_CALL_TIMEOUT_MS",

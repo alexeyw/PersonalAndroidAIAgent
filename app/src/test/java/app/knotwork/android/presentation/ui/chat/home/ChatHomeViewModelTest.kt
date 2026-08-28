@@ -838,10 +838,14 @@ class ChatHomeViewModelTest {
         viewModel.attachments.onImagePicked("content://bad")
         advanceUntilIdle()
 
-        // The old file is already deleted, so saying "replaced" here would be a
-        // lie the user then sees contradicted by the failure snackbar.
+        // A failed re-pick replaces nothing, says nothing about replacing, and —
+        // the part that actually mattered — costs the user nothing: the image
+        // that was already attached is still attached.
         assertTrue("a failed ingest replaced nothing", replaced.isEmpty())
-        assertNull(viewModel.state.value.composer.attachment)
+        val draft = viewModel.state.value.composer.attachment
+        assertTrue("the previous attachment must survive a failed re-pick", draft is ComposerAttachmentDraft.Ready)
+        assertEquals(first, (draft as ComposerAttachmentDraft.Ready).attachment)
+        coVerify(exactly = 0) { attachmentStore.delete("first.jpg") }
     }
 
     @Test

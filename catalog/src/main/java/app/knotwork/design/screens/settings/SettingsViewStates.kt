@@ -115,7 +115,6 @@ data class SettingsHubViewState(
     val restartRequiredMessage: String? = null,
     val searchQuery: String = "",
     val searchResults: List<HubSearchResultRow> = emptyList(),
-    val categoryRowCounts: Map<SettingsCategoryId, Int> = emptyMap(),
 )
 
 // ─── Generation ──────────────────────────────────────────────────────────────
