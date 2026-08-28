@@ -88,18 +88,13 @@ data class KnotworkHintLink(val label: String, val onClick: () -> Unit)
  * @param modifier Layout modifier applied to the touch target.
  */
 @Composable
-fun KnotworkHelpEntry(
-    settingName: String,
-    expanded: Boolean,
-    onToggle: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
+fun KnotworkHelpEntry(settingName: String, expanded: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
     val collapsedState = stringResource(R.string.knotwork_settings_hint_state_collapsed)
     val expandedState = stringResource(R.string.knotwork_settings_hint_state_expanded)
     IconButton(
         onClick = onToggle,
         modifier = modifier
-            .size(HelpEntryTouchTarget)
+            .size(HelpEntryFootprint)
             .testTag(SETTINGS_HELP_ENTRY_TEST_TAG)
             .semantics { stateDescription = if (expanded) expandedState else collapsedState },
     ) {
@@ -155,12 +150,7 @@ fun KnotworkHelpEntry(
  * @param link Optional in-app destination; never a URL or a documentation page.
  */
 @Composable
-fun KnotworkHintPanel(
-    visible: Boolean,
-    text: String,
-    modifier: Modifier = Modifier,
-    link: KnotworkHintLink? = null,
-) {
+fun KnotworkHintPanel(visible: Boolean, text: String, modifier: Modifier = Modifier, link: KnotworkHintLink? = null) {
     val reducedMotion = KnotworkTheme.a11y.reducedMotion()
     val duration = KnotworkTheme.motion.dur2
     AnimatedVisibility(
@@ -251,8 +241,17 @@ const val SETTINGS_HELP_ENTRY_TEST_TAG: String = "settings-help-entry"
 /** Test tag of the expanded hint panel. */
 const val SETTINGS_HINT_PANEL_TEST_TAG: String = "settings-hint-panel"
 
-/** 48 dp — the platform minimum touch target, carried by the entry point itself. */
-private val HelpEntryTouchTarget = 48.dp
+/**
+ * Layout footprint of the entry point.
+ *
+ * Deliberately smaller than the 48 dp minimum touch target: `IconButton` applies
+ * `minimumInteractiveComponentSize`, so the *touchable* bounds stay 48 dp while
+ * the space the glyph takes from the label does not. Sizing the layout box at
+ * 48 dp instead pushed the glyph onto a second line on any row with a label of
+ * ordinary length, which read as a broken row rather than as an affordance.
+ * Asserted on `touchBoundsInRoot`, not on the node size.
+ */
+private val HelpEntryFootprint = 28.dp
 
 /** The tonal disc drawn behind the glyph while its hint is open. */
 private val HelpEntryDisc = 26.dp

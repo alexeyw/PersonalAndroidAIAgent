@@ -98,7 +98,8 @@ object SettingsHelpCatalog {
         "MEMORY_RECENCY_HALF_LIFE_DAYS" to text(R.string.settings_help_memory_recency_half_life_days),
         "MEMORY_COMPACTION_AGE_DAYS" to text(R.string.settings_help_memory_compaction_age_days),
         "MAX_MEMORY_CHUNKS" to text(R.string.settings_help_max_memory_chunks),
-        "CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS" to text(R.string.settings_help_chat_history_compression_threshold_tokens),
+        "CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS" to
+            text(R.string.settings_help_chat_history_compression_threshold_tokens),
         "CHAT_HISTORY_LIVE_WINDOW_SIZE" to text(R.string.settings_help_chat_history_live_window_size),
         "MEMORY_SUMMARY_DEFAULT_LIMIT" to text(R.string.settings_help_memory_summary_default_limit),
         "ACTIVE_EMBEDDING_PROVIDER_ID" to text(R.string.settings_help_active_embedding_provider_id),

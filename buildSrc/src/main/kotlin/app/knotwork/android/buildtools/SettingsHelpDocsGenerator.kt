@@ -310,10 +310,15 @@ object SettingsHelpDocsGenerator {
     private val FIRST_STRING_RE = Regex(""""([^"]+)"""")
     private val ROW_CONTROL_RE = Regex("""^\s*\w+,\s*(\w+)""")
     private val NON_ALNUM = Regex("[^A-Z0-9]+")
-    private val HELP_TEXT_RE = Regex(""""([A-Z_0-9]+)" to text\(R\.string\.(\w+)\)""")
-    private val HELP_NONE_RE = Regex(""""([A-Z_0-9]+)" to none\(NoHint\.(\w+)\)""")
-    private val SEARCH_NAME_RE = Regex(""""([A-Z_0-9]+)" to strings\(\s*R\.string\.(\w+)""")
-    private val SEARCH_NAME_CONST_RE = Regex("""(\w+_ANCHOR) to strings\(\s*R\.string\.(\w+)""")
+    // `\s*` around every separator on purpose: ktlint wraps a long entry onto a
+    // second line, and a regex that only matched the one-line shape would stop
+    // seeing that row — silently, which is the whole failure mode this file is
+    // written against. The count guard in [buildRows] catches it either way, but
+    // a formatter should not be able to break the build at all.
+    private val HELP_TEXT_RE = Regex(""""([A-Z_0-9]+)"\s+to\s+text\(\s*R\.string\.(\w+)\s*,?\s*\)""")
+    private val HELP_NONE_RE = Regex(""""([A-Z_0-9]+)"\s+to\s+none\(\s*NoHint\.(\w+)\s*,?\s*\)""")
+    private val SEARCH_NAME_RE = Regex(""""([A-Z_0-9]+)"\s+to\s+strings\(\s*R\.string\.(\w+)""")
+    private val SEARCH_NAME_CONST_RE = Regex("""(\w+_ANCHOR)\s+to\s+strings\(\s*R\.string\.(\w+)""")
     private val STRING_RE = Regex("""<string name="(\w+)">([\s\S]*?)</string>""")
 
 }

@@ -2,6 +2,8 @@ package app.knotwork.design.screens.settings
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
@@ -189,17 +191,130 @@ class SettingsCategorySnapshotTest {
         UsageTelemetryContent(state = SettingsPreview.usageTelemetryEmpty())
     }
 
-    private fun snapshot(name: String, dark: Boolean, fontScale: Float = 1f, content: @Composable () -> Unit) {
+    // ─── Hints ───────────────────────────────────────────────────────────────
+    // Closed testing found the settings screens unreadable — "Тут тумблеров" ·
+    // "Я тут состарюсь" — and the explanations that did exist unread, because
+    // they sat in the muted micro-type slot the app uses for machine state.
+    // These baselines cover both halves of the answer: what the screen looks
+    // like at rest (shorter than before, every prose subtitle gone) and what one
+    // summoned explanation looks like.
+
+    @Test
+    fun memory_hints_collapsed_light() = snapshot("memory_hints_collapsed", dark = false) {
+        MemorySettingsContent(state = SettingsPreview.memory(), advancedExpanded = true)
+    }
+
+    @Test
+    fun memory_hints_collapsed_dark() = snapshot("memory_hints_collapsed", dark = true) {
+        MemorySettingsContent(state = SettingsPreview.memory(), advancedExpanded = true)
+    }
+
+    @Test
+    fun memory_hint_open_light() = snapshot("memory_hint_open", dark = false, openHint = LONG_HINT_ANCHOR) {
+        MemorySettingsContent(state = SettingsPreview.memory(), advancedExpanded = true)
+    }
+
+    @Test
+    fun memory_hint_open_dark() = snapshot("memory_hint_open", dark = true, openHint = LONG_HINT_ANCHOR) {
+        MemorySettingsContent(state = SettingsPreview.memory(), advancedExpanded = true)
+    }
+
+    /** A toggle row's hint: the panel sits under the whole row, switch included. */
+    @Test
+    fun memory_hint_open_toggle_light() =
+        snapshot("memory_hint_open_toggle", dark = false, openHint = "AUTO_EXTRACT_ENABLED") {
+            MemorySettingsContent(state = SettingsPreview.memory())
+        }
+
+    /**
+     * The worst case the 140-character ceiling was measured against: the longest
+     * permitted explanation at the largest font scale. If a hint ever pushes the
+     * row it explains off the top of the screen, it shows here first.
+     */
+    @Test
+    fun memory_hint_open_font_scale_2x_light() = snapshot(
+        "memory_hint_open_font_scale_2x",
+        dark = false,
+        fontScale = 2f,
+        openHint = "AUTO_EXTRACT_ENABLED",
+    ) {
+        // The hint opened here is the FIRST row, not the longest one buried
+        // under the Advanced disclosure: at 200 % a row that far down sits
+        // below the capture frame, so the baseline would show the glyph
+        // wrapping and prove nothing about the panel it opens. The panel has
+        // to be inside the frame for this snapshot to be evidence.
+        MemorySettingsContent(state = SettingsPreview.memory())
+    }
+
+    private fun snapshot(
+        name: String,
+        dark: Boolean,
+        fontScale: Float = 1f,
+        openHint: String? = null,
+        content: @Composable () -> Unit,
+    ) {
         composeTestRule.setContent {
             val baseDensity = LocalDensity.current
+            // The hint controller has to be in scope or no row renders its help
+            // glyph, and every one of these baselines would certify a screen
+            // that looks complete while the control this task added is in none
+            // of them. The fixture opens one hint when asked, so the expanded
+            // panel is captured too, not just the collapsed affordance.
+            val hints = remember { SettingsHintController { anchor -> SNAPSHOT_HINTS[anchor] } }
+            LaunchedEffect(openHint) { if (openHint != null) hints.toggle(openHint) }
             KnotworkTheme(darkTheme = dark) {
                 CompositionLocalProvider(
                     LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true, fontScale = fontScale),
                     LocalDensity provides Density(density = baseDensity.density, fontScale = fontScale),
+                    LocalSettingsHints provides hints,
                 ) { content() }
             }
         }
         val themeTag = if (dark) "dark" else "light"
         composeTestRule.onRoot().captureRoboImage(filePath = "src/test/snapshots/settings_${name}_$themeTag.png")
+    }
+
+    private companion object {
+        /** The longest shipped explanation, so the panel is captured at its worst case. */
+        const val LONG_HINT_ANCHOR = "MEMORY_SEARCH_THRESHOLD"
+
+        /**
+         * Help text for the snapshot fixtures. Held here rather than read from
+         * the app module — the catalog does not depend on it — but kept
+         * verbatim from the shipped strings so the baselines show real copy at
+         * real length.
+         */
+        val SNAPSHOT_HINTS: Map<String, SettingsHint> = mapOf(
+            "AUTO_EXTRACT_ENABLED" to SettingsHint(
+                "On, durable facts from your chats — names, preferences, project details — are saved and reused later.",
+            ),
+            "MEMORY_COMPACTION_ENABLED" to SettingsHint(
+                "Old memories get merged into shorter summaries once there are many. " +
+                    "Frees room; loses the exact wording.",
+            ),
+            LONG_HINT_ANCHOR to SettingsHint(
+                "Higher recalls only close matches, so less is pulled in; " +
+                    "lower recalls more, including memories that miss the point.",
+            ),
+            "MEMORY_SEARCH_TOP_K" to SettingsHint(
+                "How many memories are pulled into a reply at most. " +
+                    "More context, slower start, and more room for noise.",
+            ),
+            "MAX_MEMORY_CHUNKS" to SettingsHint(
+                "The ceiling on stored pieces. At the ceiling the oldest are dropped, compaction or not.",
+            ),
+            "AUTO_SUMMARIZE_THRESHOLD" to SettingsHint(
+                "How full the context window gets before the thread is summarised. " +
+                    "Lower summarises sooner and more often.",
+            ),
+            "MEMORY_RECENCY_HALF_LIFE_DAYS" to SettingsHint(
+                "How fast old memories lose to new ones when both match. " +
+                    "Short favours this week; long treats everything as current.",
+            ),
+            "MEMORY_COMPACTION_AGE_DAYS" to SettingsHint(
+                "How old a memory must be before compaction may merge it. " +
+                    "Fresher facts keep their exact wording until they pass it.",
+            ),
+        )
     }
 }

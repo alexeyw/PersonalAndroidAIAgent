@@ -288,40 +288,40 @@ internal fun IconToggleRow(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) },
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = KnotworkTheme.extended.onSurfaceMuted,
-            modifier = Modifier.size(KnotworkTheme.spacing.sp5),
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            RowLabelWithHint(title = title)
-            if (state.isNotBlank()) {
-                Text(
-                    text = state,
-                    style = KnotworkTextStyles.MonoSm,
-                    color = KnotworkTheme.extended.onSurfaceMuted,
-                )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onCheckedChange(!checked) },
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = KnotworkTheme.extended.onSurfaceMuted,
+                modifier = Modifier.size(KnotworkTheme.spacing.sp5),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                RowLabelWithHint(title = title)
+                if (state.isNotBlank()) {
+                    Text(
+                        text = state,
+                        style = KnotworkTextStyles.MonoSm,
+                        color = KnotworkTheme.extended.onSurfaceMuted,
+                    )
+                }
             }
+            Switch(
+                checked = checked,
+                onCheckedChange = null,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                    checkedTrackColor = MaterialTheme.colorScheme.primary,
+                    checkedBorderColor = MaterialTheme.colorScheme.primary,
+                ),
+                modifier = Modifier.scale(SWITCH_SCALE),
+            )
         }
-        Switch(
-            checked = checked,
-            onCheckedChange = null,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                checkedBorderColor = MaterialTheme.colorScheme.primary,
-            ),
-            modifier = Modifier.scale(SWITCH_SCALE),
-        )
-    }
         SettingsHintBody()
     }
 }
@@ -366,54 +366,54 @@ internal fun NavLinkRow(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     stateWarning: Boolean = false,
-                        ) {
+) {
     Column(modifier = modifier.fillMaxWidth()) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = KnotworkTheme.extended.onSurfaceMuted,
-            modifier = Modifier.size(KnotworkTheme.spacing.sp5),
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            RowLabelWithHint(title = title)
-            if (state.isNotBlank()) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
-                ) {
-                    if (stateWarning) {
-                        Icon(
-                            imageVector = AppIcons.Warn,
-                            contentDescription = null,
-                            tint = KnotworkTheme.extended.signalWarn,
-                            modifier = Modifier.size(NavLinkWarnGlyphSize),
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = KnotworkTheme.extended.onSurfaceMuted,
+                modifier = Modifier.size(KnotworkTheme.spacing.sp5),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                RowLabelWithHint(title = title)
+                if (state.isNotBlank()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+                    ) {
+                        if (stateWarning) {
+                            Icon(
+                                imageVector = AppIcons.Warn,
+                                contentDescription = null,
+                                tint = KnotworkTheme.extended.signalWarn,
+                                modifier = Modifier.size(NavLinkWarnGlyphSize),
+                            )
+                        }
+                        Text(
+                            text = state,
+                            style = KnotworkTextStyles.MonoSm,
+                            color = if (stateWarning) {
+                                KnotworkTheme.extended.signalWarn
+                            } else {
+                                KnotworkTheme.extended.onSurfaceMuted
+                            },
                         )
                     }
-                    Text(
-                        text = state,
-                        style = KnotworkTextStyles.MonoSm,
-                        color = if (stateWarning) {
-                            KnotworkTheme.extended.signalWarn
-                        } else {
-                            KnotworkTheme.extended.onSurfaceMuted
-                        },
-                    )
                 }
             }
+            Icon(
+                imageVector = AppIcons.ArrowR,
+                contentDescription = null,
+                tint = KnotworkTheme.extended.onSurfaceMuted,
+            )
         }
-        Icon(
-            imageVector = AppIcons.ArrowR,
-            contentDescription = null,
-            tint = KnotworkTheme.extended.onSurfaceMuted,
-        )
-    }
         SettingsHintBody()
     }
 }

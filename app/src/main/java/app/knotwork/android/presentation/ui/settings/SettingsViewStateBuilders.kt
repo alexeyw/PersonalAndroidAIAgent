@@ -50,12 +50,12 @@ import app.knotwork.design.screens.settings.SLIDER_TOP_K
 import app.knotwork.design.screens.settings.SLIDER_TOP_P
 import app.knotwork.design.screens.settings.SettingSliderRow
 import app.knotwork.design.screens.settings.SettingsHubViewState
-import app.knotwork.design.screens.settings.SettingsCategoryId as CatalogCategoryId
 import app.knotwork.design.screens.settings.SystemInstructionsCardState
 import app.knotwork.design.screens.settings.ToolsSettingsViewState
 import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.math.roundToInt
+import app.knotwork.design.screens.settings.SettingsCategoryId as CatalogCategoryId
 
 /** Builds the settings hub state (subtitle, the six inline Basic controls, restart, search). */
 @Composable

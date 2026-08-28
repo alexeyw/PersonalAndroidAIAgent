@@ -108,9 +108,8 @@ class SettingsHelpCatalogTest {
     }
 
     /** Every row that carries an explanation, paired with its anchor. */
-    private fun explanations(): List<Pair<String, SettingHelp.Text>> =
-        SettingsHelpCatalog.HELP.entries
-            .mapNotNull { (anchor, help) -> (help as? SettingHelp.Text)?.let { anchor to it } }
+    private fun explanations(): List<Pair<String, SettingHelp.Text>> = SettingsHelpCatalog.HELP.entries
+        .mapNotNull { (anchor, help) -> (help as? SettingHelp.Text)?.let { anchor to it } }
 
     private companion object {
         /**
