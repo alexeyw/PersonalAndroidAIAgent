@@ -26,8 +26,7 @@ details.
   glyph, and the reason each one carries none is recorded rather than left
   implicit.
 
-- **Seven settings now say plainly that they do nothing yet, instead of being
-  described.** Writing an explanation for each row turned out to be a way of
+- **Seven settings carry no explanation at all, rather than a plausible one.** Writing an explanation for each row turned out to be a way of
   auditing it, and seven rows failed the audit: the four sampling sliders
   (**Temperature**, **Top-K**, **Top-P**, **Repetition penalty**) never reach
   the on-device engine, **Tool-usage instruction** and **Auto-summarize

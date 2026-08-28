@@ -560,6 +560,7 @@ private fun triggerDetailStrings(): TriggerDetailStrings = TriggerDetailStrings(
     stateEnabled = stringResource(R.string.triggers_detail_state_enabled),
     stateDisabled = stringResource(R.string.triggers_detail_state_disabled),
     unboundHint = stringResource(R.string.triggers_unbound_hint),
+    unboundAction = stringResource(R.string.triggers_unbound_action),
     edit = stringResource(R.string.triggers_detail_edit),
     delete = stringResource(R.string.triggers_detail_delete),
     staleBannerTitleFormat = stringResource(R.string.triggers_detail_stale_title_format),

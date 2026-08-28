@@ -451,8 +451,16 @@ green. Here the decision is an explicit `SettingHelp.Text | SettingHelp.None`
 with a recorded reason, which is what makes "every row decided" assertable at
 all.
 
-All five failure modes were observed failing before the gate was wired in, each
-on its own assertion.
+- an explanation exists for a row that no screen renders (the set of such rows is
+  pinned by name, so it can only shrink — a *new* unreachable explanation fails
+  the build).
+
+Each failure mode was observed failing before the gate was wired in, on its own
+assertion. Note the one thing this gate cannot see: it knows an anchor is
+*declared*, not that the control emits both the glyph and the panel. A header
+that shipped a glyph opening nothing passed it, and was caught by
+`SettingsHintBehaviourTest` — which opens each bespoke control and demands the
+panel — instead.
 
 ### `verifySettingsHelpDocs` — the guide quotes rather than restates
 

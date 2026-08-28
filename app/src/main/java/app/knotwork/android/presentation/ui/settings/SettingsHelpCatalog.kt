@@ -30,7 +30,8 @@ enum class NoHint {
      * exists to stop. Each is filed against the bug-fix container, and each is
      * owed a hint as soon as its row does something.
      *
-     * Three rows qualify, all found by trying to write their explanation:
+     * Seven rows qualify, every one of them found by trying to write its
+     * explanation and failing to find the code that would make it true:
      *  - `LONG_RUNNING_TASKS_NOTIFICATIONS` — gates a notification production
      *    never posts (`LongRunningTaskNotifier.notify` is called from nothing
      *    but its own unit test).

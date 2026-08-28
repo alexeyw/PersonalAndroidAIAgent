@@ -97,9 +97,9 @@ internal object SettingsPreview {
         systemInstructions = systemInstructions(),
         toolUsageValue = "Prefer the workspace file tools over inlining large outputs into chat.",
         advancedSliders = listOf(
-            SettingSliderRow(SLIDER_TEMPERATURE, "Temperature", "0.7", 0.7f, 0f..2f, anchorKey = "TEMPERATURE"),
-            SettingSliderRow(SLIDER_TOP_K, "Top-K", "40", 40f, 1f..100f, steps = 99, anchorKey = "TOP_K"),
-            SettingSliderRow(SLIDER_TOP_P, "Top-P", "0.90", 0.9f, 0f..1f, anchorKey = "TOP_P"),
+            SettingSliderRow(SLIDER_TEMPERATURE, "Temperature", "0.7", 0.7f, 0f..2f),
+            SettingSliderRow(SLIDER_TOP_K, "Top-K", "40", 40f, 1f..100f, steps = 99),
+            SettingSliderRow(SLIDER_TOP_P, "Top-P", "0.90", 0.9f, 0f..1f),
             SettingSliderRow(
                 SLIDER_REPETITION_PENALTY,
                 "Repetition penalty",
@@ -494,8 +494,29 @@ internal object SettingsPreview {
             1000f..20000f,
             anchorKey = "MAX_MEMORY_CHUNKS",
         ),
-        SettingSliderRow(SLIDER_MEMORY_COMPRESSION_THRESHOLD, "Compression threshold", "3 500", 3500f, 1000f..8000f),
-        SettingSliderRow(SLIDER_MEMORY_LIVE_WINDOW, "Live message window", "10", 10f, 2f..50f),
-        SettingSliderRow(SLIDER_MEMORY_SUMMARY_LIMIT, "Memory summary size", "5", 5f, 1f..50f),
+        SettingSliderRow(
+            SLIDER_MEMORY_COMPRESSION_THRESHOLD,
+            "Compression threshold",
+            "3 500",
+            3500f,
+            1000f..8000f,
+            anchorKey = "CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS",
+        ),
+        SettingSliderRow(
+            SLIDER_MEMORY_LIVE_WINDOW,
+            "Live message window",
+            "10",
+            10f,
+            2f..50f,
+            anchorKey = "CHAT_HISTORY_LIVE_WINDOW_SIZE",
+        ),
+        SettingSliderRow(
+            SLIDER_MEMORY_SUMMARY_LIMIT,
+            "Memory summary size",
+            "5",
+            5f,
+            1f..50f,
+            anchorKey = "MEMORY_SUMMARY_DEFAULT_LIMIT",
+        ),
     )
 }

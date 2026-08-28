@@ -849,6 +849,30 @@ class ChatHomeViewModelTest {
     }
 
     @Test
+    fun `removing the draft while a pick is in flight is not undone by the pick landing`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val first = MessageAttachment(path = "first.jpg", mimeType = "image/jpeg", width = 10, height = 10)
+        coEvery { attachmentStore.ingestUri("content://first") } returns kotlin.Result.success(first)
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/x.jpg"
+        viewModel.attachments.onImagePicked("content://first")
+        advanceUntilIdle()
+
+        // Pick a second image and drop the whole draft before the ingest lands.
+        // The remove button is live during Processing, so this is reachable.
+        val second = MessageAttachment(path = "second.jpg", mimeType = "image/jpeg", width = 20, height = 20)
+        coEvery { attachmentStore.ingestUri("content://second") } returns kotlin.Result.success(second)
+        viewModel.attachments.onImagePicked("content://second")
+        viewModel.attachments.removeAttachment()
+        advanceUntilIdle()
+
+        // Neither image comes back: the user said remove, and a pick landing
+        // afterwards must not overrule that.
+        assertNull(viewModel.state.value.composer.attachment)
+        coVerify { attachmentStore.delete("second.jpg") }
+    }
+
+    @Test
     fun `onImagePicked failure clears draft and emits a transient error event without clobbering visual`() =
         runTest(testDispatcher) {
             viewModel = createViewModel()

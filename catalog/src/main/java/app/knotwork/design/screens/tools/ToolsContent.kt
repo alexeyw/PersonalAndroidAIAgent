@@ -16,6 +16,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -1160,7 +1162,7 @@ fun ToolDetailContent(
  * state and translates submissions into persistence calls; this
  * composable renders the chrome and dispatches per-field callbacks.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun McpServerConfigContent(
     form: AddMcpServerForm,
@@ -1216,12 +1218,16 @@ fun McpServerConfigContent(
             // raising is answered by the hint rather than by the field.
             var addressHintOpen by remember { mutableStateOf(false) }
             val addressLabel = stringResource(R.string.knotwork_tools_add_form_header)
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            // FlowRow, not Row: an unweighted label measured against the full
+            // width leaves the 28 dp glyph nothing, which is the same squeeze
+            // the settings approval row had to be moved away from.
+            FlowRow(verticalArrangement = Arrangement.Center) {
                 FormSectionLabel(text = addressLabel)
                 KnotworkHelpEntry(
                     settingName = addressLabel,
                     expanded = addressHintOpen,
                     onToggle = { addressHintOpen = !addressHintOpen },
+                    modifier = Modifier.align(Alignment.CenterVertically),
                 )
             }
             OutlinedFormTextField(

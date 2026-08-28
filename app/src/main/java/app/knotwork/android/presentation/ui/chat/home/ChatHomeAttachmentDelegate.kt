@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
  * Owns the composer image attachment (`composer.attachment`), the image-source
  * chooser sheet (`sourceChooserVisible`), and the full-screen image viewer
  * (`imageViewer`) — the leaf slices of [ChatHomeScreenState] it writes — plus
- * the `attachmentErrorEvents` one-shot. The multimodal **pre-flight**
+ * the `attachmentErrorEvents` / `attachmentReplacedEvents` one-shots. The multimodal **pre-flight**
  * ([preflightBlockReason]) is exposed publicly because the send path
  * ([ChatHomeViewModel.sendMessage]) consults it before enqueueing an image
  * message; everything else is self-contained.
@@ -129,7 +129,13 @@ class ChatHomeAttachmentDelegate(
             // already had and left the composer empty — the loss was real
             // whether or not anything said so.
             val stored = attachmentStore.ingestUri(uri).getOrNull()
-            if (stored != null) {
+            // The ✕ is live during Processing, so the user may have dropped the
+            // whole draft while the ingest was in flight. Anything that puts an
+            // image back — the new one on success, the previous one on failure —
+            // has to check that the slot is still the one this pick owns, or a
+            // removal silently un-does itself.
+            val stillOurs = state.value.composer.attachment is ComposerAttachmentDraft.Processing
+            if (stored != null && stillOurs) {
                 if (replacedPath != null) {
                     attachmentStore.delete(replacedPath)
                 }
@@ -142,7 +148,7 @@ class ChatHomeAttachmentDelegate(
                 if (replacedPath != null) {
                     _attachmentReplacedEvents.tryEmit(Unit)
                 }
-            } else {
+            } else if (stillOurs) {
                 // Transient failure — surface a snackbar rather than flipping the
                 // whole surface to Error (which would clobber an in-flight run).
                 //
@@ -153,6 +159,12 @@ class ChatHomeAttachmentDelegate(
                 // attempt that did not succeed.
                 state.update { it.copy(composer = it.composer.copy(attachment = replaced)) }
                 _attachmentErrorEvents.tryEmit(Unit)
+            } else {
+                // The user removed the draft while this pick was in flight, so
+                // nothing goes back into the slot — but the file that was
+                // ingested has no owner and must not be left behind.
+                if (stored != null) attachmentStore.delete(stored.path)
+                if (replacedPath != null) attachmentStore.delete(replacedPath)
             }
         }
     }

@@ -2023,7 +2023,7 @@ repeated here.
 
 | Setting | What it means |
 |---|---|
-| **System instructions** | Put in front of every answer the agent writes, in every chat. It treats this as standing orders; internal planning steps skip it. |
+| **System instructions** | Put in front of the chat and cloud steps that write an answer, in every chat. Other node types build their prompt without it. |
 | **Tool-usage instruction** | *(no explanation — behaviour not shipped yet)* |
 | **Temperature** | *(no explanation — behaviour not shipped yet)* |
 | **Top-K** | *(no explanation — behaviour not shipped yet)* |

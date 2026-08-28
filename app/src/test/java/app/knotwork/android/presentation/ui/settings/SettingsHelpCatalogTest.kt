@@ -110,7 +110,10 @@ class SettingsHelpCatalogTest {
 
     @Test
     fun `every explained row has somewhere to show its explanation`() {
-        val rendered = SettingsRowAnchors.ALL + sliderAnchors()
+        // Read from the production tables, not mirrored: SLIDER_TO_ANCHOR is
+        // `internal` and in this very package, and a hand-copied set would be
+        // one more unenforced duplicate of exactly the kind this task removes.
+        val rendered = SettingsRowAnchors.ALL + SLIDER_TO_ANCHOR.values
         val unreachable = explanations().map { it.first }.filterNot { it in rendered }
 
         // A hint nobody can open is the same defect this task exists to remove,
@@ -129,9 +132,6 @@ class SettingsHelpCatalogTest {
     private fun explanations(): List<Pair<String, SettingHelp.Text>> = SettingsHelpCatalog.HELP.entries
         .mapNotNull { (anchor, help) -> (help as? SettingHelp.Text)?.let { anchor to it } }
 
-    /** Registry anchors reachable through a rendered slider row. */
-    private fun sliderAnchors(): Set<String> = SLIDER_ANCHORS
-
     private companion object {
         /**
          * Registry rows that no screen renders, so their explanation has
@@ -147,34 +147,6 @@ class SettingsHelpCatalogTest {
             "WORKSPACE_MAX_TOTAL_BYTES",
             "WORKSPACE_READ_TOKEN_BUDGET",
             "HTTP_TOOL_MAX_RESPONSE_BYTES",
-        )
-
-        /**
-         * Registry anchors a rendered slider maps to. Mirrors the production
-         * `SLIDER_TO_ANCHOR` table, which is file-private.
-         */
-        val SLIDER_ANCHORS: Set<String> = setOf(
-            "TEMPERATURE",
-            "TOP_K",
-            "TOP_P",
-            "REPETITION_PENALTY",
-            "MAX_CONTEXT_LENGTH",
-            "AUDIO_MAX_DURATION_SEC",
-            "PIPELINE_MAX_NESTING_DEPTH",
-            "STRUCTURED_OUTPUT_MAX_REPAIRS",
-            "AUTO_SUMMARIZE_THRESHOLD",
-            "MEMORY_SEARCH_TOP_K",
-            "MEMORY_SEARCH_THRESHOLD",
-            "MEMORY_RECENCY_HALF_LIFE_DAYS",
-            "MEMORY_COMPACTION_AGE_DAYS",
-            "MAX_MEMORY_CHUNKS",
-            "CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS",
-            "CHAT_HISTORY_LIVE_WINDOW_SIZE",
-            "MEMORY_SUMMARY_DEFAULT_LIMIT",
-            "RESUME_MAX_AGE_HOURS",
-            "BACKGROUND_APPROVAL_WINDOW_HOURS",
-            "TRACE_RETENTION_RUNS_PER_SESSION",
-            "TRACE_RETENTION_MAX_AGE_DAYS",
         )
 
         /**

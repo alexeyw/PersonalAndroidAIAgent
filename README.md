@@ -134,8 +134,8 @@ https://github.com/user-attachments/assets/2ea06de5-6832-4e0c-ad48-430f375d8b72
   threshold*, *Recency half-life* and the retention windows stop being words you
   have to look up elsewhere. There is exactly one copy of each explanation: the
   reference table in the user guide is generated from the strings the app itself
-  shows, and a setting whose behaviour is not wired up yet says so instead of
-  being described.
+  shows. A setting whose behaviour is not wired up yet carries no explanation at
+  all rather than a plausible one — the reference table records which, and why.
 
 The full feature tour lives in the [user guide](docs/user-guide.md).
 

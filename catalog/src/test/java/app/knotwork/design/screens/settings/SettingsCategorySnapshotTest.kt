@@ -287,6 +287,11 @@ class SettingsCategorySnapshotTest {
         /**
          * Help text for the snapshot fixtures.
          *
+         * Anchors here must match the rows production actually gives a glyph:
+         * a fixture entry for a `BEHAVIOUR_NOT_SHIPPED` row would certify an
+         * affordance the app omits, and a missing one leaves a shipped glyph in
+         * no baseline. Both directions were wrong here at once.
+         *
          * Deliberately **not** copies of the shipped strings. The catalog cannot
          * read the app module's resources, and a hand-kept "verbatim" copy would
          * be a fifth wording of the same sentences with nothing enforcing the
@@ -319,10 +324,6 @@ class SettingsCategorySnapshotTest {
             "MAX_MEMORY_CHUNKS" to SettingsHint(
                 "The ceiling on stored pieces. At the ceiling the oldest are dropped, compaction or not.",
             ),
-            "AUTO_SUMMARIZE_THRESHOLD" to SettingsHint(
-                "How full the context window gets before the thread is summarised. " +
-                    "Lower summarises sooner and more often.",
-            ),
             "MEMORY_RECENCY_HALF_LIFE_DAYS" to SettingsHint(
                 "How fast old memories lose to new ones when both match. " +
                     "Short favours this week; long treats everything as current.",
@@ -335,12 +336,16 @@ class SettingsCategorySnapshotTest {
                 "Put in front of every request, in every chat and every pipeline. " +
                     "The agent treats it as standing orders.",
             ),
-            "TEMPERATURE" to SettingsHint(
-                "Low keeps the wording predictable and repetitive; high makes it varied and less literal.",
+            // The three sliders whose hint production ships but whose fixture
+            // anchor was missing, so their glyph was in no baseline at all.
+            "CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS" to SettingsHint(
+                "How large a thread grows before everything past the live window is summarised.",
             ),
-            "TOP_K" to SettingsHint(
-                "How many candidate words stay in play at each step. " +
-                    "Small is safer and blander; large lets rarer words through.",
+            "CHAT_HISTORY_LIVE_WINDOW_SIZE" to SettingsHint(
+                "How many recent messages stay word-for-word after a thread is summarised.",
+            ),
+            "MEMORY_SUMMARY_DEFAULT_LIMIT" to SettingsHint(
+                "How many recent memories the memory-summary prompt variable lists.",
             ),
             "MEMORY_COMPACTION_AGE_DAYS" to SettingsHint(
                 "How old a memory must be before compaction may merge it. " +
