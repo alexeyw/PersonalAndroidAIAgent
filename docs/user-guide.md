@@ -2062,13 +2062,13 @@ repeated here.
 
 | Setting | What it means |
 |---|---|
-| **Approve tool calls** | Which tool calls stop and wait for you. Destructive ones are gated separately and stay gated whatever you pick here. |
-| **Block destructive tools** | Destructive calls always stop for a typed confirmation, even when approvals are set to Never. |
-| **Block network from local model** | The on-device model gets no network of its own. Cloud providers are gated separately, by their keys. |
+| **Approve tool calls** | Which tool calls stop and wait for your approval. Never lets them all through, destructive ones too, unless you also block those. |
+| **Block destructive tools** | On, a destructive tool call is refused outright rather than offered for approval, and the run sees it as a failed call. |
+| **Block network from local model** | On, no cloud provider can be reached even with a key saved. Only a model on this device, or Ollama on your own network, answers. |
 | **Manage tools / MCP servers** | *(no explanation — Link row)* |
 | **Tool-call timeout** | How long one tool call may take before it is abandoned. Short frees a stuck run sooner; long suits slow servers. |
 | **Workspace max file size** | The largest single file the workspace accepts, for both writing one and reading one whole. |
-| **Workspace max total size** | How much device storage the whole workspace may hold. A write that would pass it is refused rather than trimmed. |
+| **Workspace max total size** | How much device storage the whole workspace may hold. A write that would push past it is refused rather than trimmed. |
 | **Workspace read budget** | How much of a file one read may put in front of the model. The rest is cut, leaving room for the prompt and the thread. |
 | **HTTP response cap** | How much of a web response reaches the model. Past it the body is cut and marked, so remote text cannot flood the context. |
 | **Allowed HTTP domains** | *(no explanation — Link row)* |
