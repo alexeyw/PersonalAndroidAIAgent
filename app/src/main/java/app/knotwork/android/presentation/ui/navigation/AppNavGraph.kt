@@ -78,6 +78,13 @@ import app.knotwork.design.screens.settings.SettingsCategoryId
  *    the graph entry — exactly as before this task, just with a different
  *    parent route.
  *
+ * **Tab roots are entered only through [navigateToTab].** Pushing a tab root on
+ * top of another subtree's stack strands the user on a tab they did not choose
+ * and moves the bottom-nav highlight there with them (closed-test finding
+ * `#14`); a screen that wants to be reachable from two subtrees gets a second
+ * route instead — see [NavRoutes.SETTINGS_TOOLS_MANAGE] and [ToolsRoute]. The
+ * rule is enforced by `TabRootEntryGuardTest`, not by review.
+ *
  * Modal bottom-sheet routes (`sheet/...`) are registered with the shared
  * [KnotworkModalRoute] wrapper; their bodies arrive in Tasks 6/7/10.
  *
@@ -235,26 +242,7 @@ fun AppNavGraph(
         }
 
         // ─── Tools tab ─────────────────────────────────────────────────────
-        composable(NavRoutes.TOOLS) {
-            ToolsScreen(
-                modifier = Modifier.fillMaxSize(),
-                onBack = { navController.popBackStack() },
-                onAddMcpServer = { navController.navigate(NavRoutes.MCP_SERVER_CONFIG_ADD) },
-                onEditMcpServer = { originalUrl ->
-                    navController.navigate(NavRoutes.mcpServerConfigEditRoute(originalUrl = originalUrl))
-                },
-                onOpenToolDetail = { toolId ->
-                    // AppFunction-shaped tool ids embed `/` and `#` (e.g.
-                    // `<pkg>/<FQN>#invoke`). Percent-encode them via
-                    // `Uri.encode` so they fit a single `{toolId}`
-                    // segment; Navigation's internal `Uri.decode` is the
-                    // inverse, so the receiver gets the raw id back.
-                    val encoded = android.net.Uri.encode(toolId)
-                    navController.navigate(NavRoutes.TOOL_DETAIL.replace(oldValue = "{toolId}", newValue = encoded))
-                },
-                onOpenAllowedDomains = { navController.navigate(NavRoutes.ALLOWED_DOMAINS) },
-            )
-        }
+        composable(NavRoutes.TOOLS) { ToolsRoute(navController = navController) }
         composable(NavRoutes.ALLOWED_DOMAINS) {
             AllowedDomainsScreen(
                 onBack = { navController.popBackStack() },
@@ -361,11 +349,7 @@ fun AppNavGraph(
             val taskMonitorViewModel: TaskMonitorViewModel = hiltViewModel()
             TaskMonitorScreen(
                 viewModel = taskMonitorViewModel,
-                onNavigateToChat = { _ ->
-                    navController.navigate(NavRoutes.CHAT_TAB) {
-                        applyTabSwitchOptions()
-                    }
-                },
+                onNavigateToChat = { _ -> navController.navigateToTab(NavRoutes.CHAT_TAB) },
                 onBack = { navController.popBackStack() },
             )
         }
@@ -389,6 +373,12 @@ fun AppNavGraph(
             composable(NavRoutes.SETTINGS_TOOLS) { entry ->
                 ToolsSettingsScreen(viewModel = settingsGraphViewModel(navController, entry), nav = nav)
             }
+            // Tool / MCP management as a settings-owned destination. See
+            // `NavRoutes.SETTINGS_TOOLS_MANAGE`: pushing the surface here keeps
+            // the interaction inside settings, where linking to the Tools *tab*
+            // dropped the user onto a tab they had not chosen (closed-test
+            // finding `#14`).
+            composable(NavRoutes.SETTINGS_TOOLS_MANAGE) { ToolsRoute(navController = navController) }
             composable(NavRoutes.SETTINGS_BACKGROUND) { entry ->
                 BackgroundSettingsScreen(viewModel = settingsGraphViewModel(navController, entry), nav = nav)
             }
@@ -468,7 +458,11 @@ fun AppNavGraph(
                 // un-archives.
                 onOpenChat = { sessionId ->
                     chatEntryRequestRelay.openThread(sessionId)
-                    navController.navigate(NavRoutes.CHAT_TAB) { launchSingleTop = true }
+                    // Same mechanism as closed-test finding `#14`, second
+                    // instance: a bare `navigate(CHAT_TAB)` pushed the Chat tab
+                    // root on top of the More subtree, leaving the archive and
+                    // the whole More stack buried under the chat.
+                    navController.navigateToTab(NavRoutes.CHAT_TAB)
                 },
             )
         }
@@ -490,6 +484,43 @@ fun AppNavGraph(
             KnotworkModalRoute(onDismiss = { navController.popBackStack() }) { _ -> }
         }
     }
+}
+
+/**
+ * The tool / MCP management surface, registered at two routes.
+ *
+ * [NavRoutes.TOOLS] is the Tools tab root; [NavRoutes.SETTINGS_TOOLS_MANAGE] is
+ * the settings-owned twin reached from `Settings → Tools & workspace → Manage
+ * tools`. Both render the identical screen and push the identical detail /
+ * form / allowed-domains destinations on top of whichever stack they are on, so
+ * Back always returns to the surface the user actually came from.
+ *
+ * Hoisting the wiring here rather than duplicating it at both registrations
+ * keeps the two entries from drifting apart — a divergence would show up as
+ * "the same screen behaves differently depending on how you got here", which is
+ * the class of confusion this task exists to remove.
+ *
+ * @param navController controller the nested destinations are pushed onto.
+ */
+@Composable
+private fun ToolsRoute(navController: NavHostController) {
+    ToolsScreen(
+        modifier = Modifier.fillMaxSize(),
+        onBack = { navController.popBackStack() },
+        onAddMcpServer = { navController.navigate(NavRoutes.MCP_SERVER_CONFIG_ADD) },
+        onEditMcpServer = { originalUrl ->
+            navController.navigate(NavRoutes.mcpServerConfigEditRoute(originalUrl = originalUrl))
+        },
+        onOpenToolDetail = { toolId ->
+            // AppFunction-shaped tool ids embed `/` and `#` (e.g.
+            // `<pkg>/<FQN>#invoke`). Percent-encode them via `Uri.encode` so
+            // they fit a single `{toolId}` segment; Navigation's internal
+            // `Uri.decode` is the inverse, so the receiver gets the raw id back.
+            val encoded = android.net.Uri.encode(toolId)
+            navController.navigate(NavRoutes.TOOL_DETAIL.replace(oldValue = "{toolId}", newValue = encoded))
+        },
+        onOpenAllowedDomains = { navController.navigate(NavRoutes.ALLOWED_DOMAINS) },
+    )
 }
 
 /**
@@ -517,7 +548,7 @@ private fun settingsNavActions(navController: NavHostController): SettingsNavAct
         )
     },
     onOpenAddProvider = { navController.navigate(NavRoutes.ADD_PROVIDER) },
-    onOpenManageTools = { navController.navigate(NavRoutes.TOOLS) },
+    onOpenManageTools = { navController.navigate(NavRoutes.SETTINGS_TOOLS_MANAGE) },
     onOpenAllowedDomains = { navController.navigate(NavRoutes.ALLOWED_DOMAINS) },
     onOpenLicenses = { navController.navigate(NavRoutes.ABOUT) },
     onOpenUsageStatistics = { navController.navigate(NavRoutes.SETTINGS_PRIVACY_USAGE) },

@@ -306,11 +306,32 @@
     </plurals>
     <!-- ContentDescription for the trailing overflow icon. -->
     <!-- BUILT-IN section header. -->
-    <string name="knotwork_tools_section_built_in">BUILT-IN (APPFUNCTIONS)</string>
+    <!-- Collapsible tool groups: the title, the row count, and the problem a
+         collapsed group may not hide. -->
+    <string name="knotwork_tools_section_built_in">BUILT-IN TOOLS</string>
+    <plurals name="knotwork_tools_group_count_tools">
+        <item quantity="one">%1$d tool</item>
+        <item quantity="other">%1$d tools</item>
+    </plurals>
+    <plurals name="knotwork_tools_group_count_servers">
+        <item quantity="one">%1$d server</item>
+        <item quantity="other">%1$d servers</item>
+    </plurals>
+    <plurals name="knotwork_tools_group_warn_disconnected">
+        <item quantity="one">%1$d disconnected</item>
+        <item quantity="other">%1$d disconnected</item>
+    </plurals>
+    <!-- The permanent, icon-only door to adding a server; the loud one-time CTA
+         lives inside the empty MCP group and disappears once a server exists. -->
+    <string name="knotwork_tools_add_mcp_cd">Add an MCP server</string>
+    <string name="knotwork_tools_empty_mcp_title">No servers yet</string>
+    <string name="knotwork_tools_empty_mcp_body">An MCP server adds tools the agent can call — web search, files, shell.</string>
+    <string name="knotwork_tools_empty_mcp_cta">Add server</string>
+    <!-- Disconnected is never colour alone: glyph + word + the action it needs. -->
+    <string name="knotwork_tools_mcp_disconnected">Disconnected</string>
+    <string name="knotwork_tools_mcp_reconnect">Reconnect</string>
     <!-- MCP SERVERS section header. -->
     <string name="knotwork_tools_section_mcp">MCP SERVERS</string>
-    <!-- Trailing "+ Add MCP" link in the MCP section header. -->
-    <string name="knotwork_tools_add_mcp_link">Add MCP</string>
     <!-- Outline pill label for a Read-only tool. -->
     <string name="knotwork_tools_pill_readonly">Read only</string>
     <!-- Outline pill label for a Sensitive tool. -->
@@ -450,7 +471,7 @@
     <string name="knotwork_settings_cat_models_summary">Local backend · providers</string>
     <string name="knotwork_settings_cat_memory_title">Memory</string>
     <string name="knotwork_settings_cat_memory_summary">Extraction · compaction · vectors</string>
-    <string name="knotwork_settings_cat_pipelines_title">Pipelines &amp; structured output</string>
+    <string name="knotwork_settings_cat_pipelines_title">Run limits &amp; structured output</string>
     <string name="knotwork_settings_cat_pipelines_summary">Step caps · structured output</string>
     <string name="knotwork_settings_cat_tools_title">Tools &amp; workspace</string>
     <string name="knotwork_settings_cat_tools_summary">Approvals · limits · MCP</string>
@@ -923,8 +944,16 @@
     <string name="knotwork_chat_home_error_retry">Retry</string>
     <!-- Debug state picker label (visible only in debug builds). -->
     <string name="knotwork_chat_home_debug_picker_title">Debug state</string>
-    <!-- Content description for the agent-status pill above the composer — tapping it opens the console pane. -->
-    <string name="knotwork_chat_home_agent_status_open_console_cd">Open console</string>
+    <!-- Section header: the labels TalkBack speaks for the expand / collapse
+         action, so a folded group announces its state and not just its title. -->
+    <string name="knotwork_section_header_expand">Expand section</string>
+    <string name="knotwork_section_header_collapse">Collapse section</string>
+
+    <!-- Console entry strip: the label, and the content descriptions that speak the live agent status. -->
+    <!-- Console entry strip (chat body, and the console sheet's own header) -->
+    <string name="knotwork_console_strip_label">console</string>
+    <string name="knotwork_console_strip_open_cd">Open console. Agent status: %1$s</string>
+    <string name="knotwork_console_strip_close_cd">Close console</string>
 
     <!-- Common content descriptions shared across catalog screens. -->
     <string name="knotwork_common_back">Back</string>

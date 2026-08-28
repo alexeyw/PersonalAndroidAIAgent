@@ -142,6 +142,13 @@ project — `:app` consumes it as an `implementation` dependency.
   - `lists/` — `PipelineListRow` / `ToolListRow` / `MemoryEntryRow` /
     `KnotworkNavListRow` (leading-icon + title + chevron routing row) +
     previews.
+    - `KnotworkSectionHeader.kt` — the one section header for list
+      surfaces: mono title, formatted row count, optional warning,
+      optional collapse chevron with `expand`/`collapse` semantics.
+      Replaces the private copies `ToolsContent` and `ModelsContent` had
+      each grown, and serves the More tab's headings. Encodes two rules:
+      the count describes the rows the section *contains*, and a
+      collapsed section may not hide a problem.
     - `SwipeRevealRow.kt` — wraps a list row in a **single** 64 dp
       swipe-revealed action (`SwipeRevealAction`: glyph + spoken label +
       tint). `PipelineListRow`'s mechanics — `Animatable` offset driven by
@@ -212,6 +219,11 @@ project — `:app` consumes it as an `implementation` dependency.
       `ConsoleTraceSpan`, `SpanStatus`.
     - `ConsolePane.kt` — bottom-sheet container with sticky header,
       three tabs, source-filter chips, and per-tab body.
+    - `ConsoleEntryStrip.kt` — the console's own entry point:
+      `console │ [NODE] idle · ready ⌃`. One element in two positions —
+      above the composer when closed, the console sheet's own header when
+      open. It carries the literal word because `Role.Button` plus a
+      content description was not enough to make it findable by eye.
     - `ConsoleCatalogContent.kt` — single-column harness covering each
       snap × tab combination + theme previews.
   - `pipelineeditor/` — pipeline-editor base components.
@@ -567,6 +579,23 @@ project — `:app` consumes it as an `implementation` dependency.
 - `src/test/java/app/knotwork/design/components/chips/KnotworkChipTest.kt`
 - `src/test/java/app/knotwork/design/components/chips/RiskPillTest.kt`
 - `src/test/java/app/knotwork/design/components/chips/StatusPillTest.kt`
+- `src/test/java/app/knotwork/design/components/console/ConsoleEntryStripAffordanceTest.kt`
+  — the strip says its own name, and its description speaks the live
+  status rather than only the verb.
+- `src/test/java/app/knotwork/design/components/console/ConsoleEntryStripSnapshotTest.kt`
+  — `chat_console_strip_*` baselines: every status state, the open form,
+  and font-scale 200 %. No chat fixture set `agentStatusLine` before, so
+  the strip had no visual coverage at all.
+- `src/test/java/app/knotwork/design/screens/tools/ToolsGroupAffordanceTest.kt`
+  — one door to adding a server, a collapsed group that still reports a
+  disconnected one, an empty group that does not collapse. Observed
+  failing on both mutations.
+- `src/test/java/app/knotwork/design/screens/tools/ToolsGroupsSnapshotTest.kt`
+  — `tools_group*` baselines, reached by tapping the headers rather than
+  by handing the surface a pre-folded state.
+- `src/test/java/app/knotwork/design/screens/more/MoreSectionsTest.kt`
+  — Triggers first, App last, no row lost in the regrouping, Tasks the
+  only badge.
 - `src/test/java/app/knotwork/design/components/lists/KnotworkListsSnapshotTest.kt`
 - `src/test/java/app/knotwork/design/components/lists/PipelineListRowTest.kt`
 - `src/test/java/app/knotwork/design/components/lists/ConnectionStatusTest.kt`

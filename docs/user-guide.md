@@ -61,9 +61,10 @@ The bottom of the screen always shows the four navigation tabs:
 - **More** — secondary screens (Memory, Models, Prompt library,
   Skill library, Active tasks, Live metrics, Settings, About).
 
-The Back gesture returns you up the inner stack of the current tab.
-While you are on the start screen of a tab, Back closes the app — it
-does not switch between tabs.
+The Back gesture returns you up the inner stack of the current tab; from
+Chat, the tab the app opens on, it closes the app. The full contract —
+what the highlighted tab means, and where each entry point lands — is in
+[Getting around](#getting-around).
 
 If you picked a scenario during onboarding, the model it needs is
 already downloading (or ready) and you can skip straight to chatting.
@@ -447,22 +448,31 @@ your request — which pipeline node is running, which tools were
 called, which memory chunks were retrieved, and any errors that
 occurred.
 
-### Agent-status pill
+### The console strip
 
-Just above the message composer sits a single-line **status pill**
-formatted as `[TAG]  body`. It reflects the agent's current activity
-without flooding the chat — for example:
+Just above the message composer sits a dark one-line strip that says
+what it is and what the agent is doing:
 
-| Pill body                          | When you see it                     |
+```
+console │ [NODE]  idle · ready                              ^
+```
+
+The left side is the strip's name, the middle is the live status, and
+the chevron on the right points at where tapping goes. Status lines:
+
+| Status                             | When you see it                     |
 |------------------------------------|-------------------------------------|
 | `[NODE]  idle · ready`             | The agent is waiting for input.     |
-| `[NODE]  generating · streaming`   | A response is being produced.       |
+| `[NODE]  generating`               | A response is being produced.       |
+| `[NODE]  loading model · please wait` | The model is being loaded.       |
 | `[TOOL]  awaiting approval`        | The HITL card is on screen.         |
 | `[NODE]  waiting on clarification` | A clarification card is on screen.  |
 | `[NODE]  error · see message`      | The latest run failed (see banner). |
 
-Tapping the pill opens the **console pane** — a bottom sheet that
-covers most of the screen with the full chronological event log.
+Tapping the strip opens the **console pane** — a bottom sheet that
+covers most of the screen with the full chronological event log. The
+strip does not disappear when you do: it becomes the pane's header, with
+the chevron flipped, so tapping it again closes the console.
 
 ### Console pane
 
@@ -1459,6 +1469,13 @@ Tools are how the agent takes real action — looking something up,
 scheduling future work, or delegating a hard subtask to a more
 capable model. They are managed from the **Tools** screen.
 
+The screen is two collapsible groups — **Built-in tools** and **MCP
+servers** — each headed by the number of rows it holds. Folding a group
+away never hides a problem inside it: a collapsed **MCP servers** header
+still reports `⚠ 1 disconnected`. The `+` in the top bar adds an MCP
+server from anywhere on the screen; when you have none yet, the empty
+**MCP servers** group carries a labelled **Add server** button instead.
+
 ### Built-in tools
 
 The app ships with the following tools:
@@ -2122,7 +2139,12 @@ Advanced:
 Each slider only offers in-range values; a rejected value shows an inline message
 and is discarded rather than saved.
 
-### Pipelines & structured output
+### Run limits & structured output
+
+The category holds the *limits and knobs* an autonomous run obeys. The pipelines
+themselves live on the **Pipelines** tab (library and editor) and under
+**More → Library**; this screen never lists them. Searching Settings for
+`pipelines` still lands here.
 
 - **Run limits** *(Basic link)* — opens the [Run limits](#run-limits) screen,
   and shows the current step and token limits on the row itself.
@@ -2208,7 +2230,9 @@ Basic:
   `null` to the inference pipeline and only the on-device LiteRT engine plus
   LAN-local Ollama remain reachable.
 - **Manage tools / MCP servers** *(link)* — enable tools, set per-tool risk
-  overrides, add MCP servers.
+  overrides, add MCP servers. It opens the same surface as the **Tools** tab but
+  *inside* Settings: the bottom-nav highlight stays on the tab you came from and
+  Back returns to this category, not to the Tools tab.
 
 Advanced:
 
@@ -2325,12 +2349,48 @@ Controls:
 
 ---
 
+## Getting around
+
+Four tabs sit at the bottom: **Chat**, **Pipelines**, **Tools**, **More**.
+Everything else is a screen pushed on top of one of them.
+
+- **The highlighted tab is the one you are inside.** It follows the screens you
+  actually opened, not the screen you are looking at — open the tool list from
+  **Settings** and the highlight stays where you were, because that is where
+  Back will take you.
+- **Back returns to where you came from**, one screen at a time — never to a
+  tab you did not open.
+- **A tab is only ever entered by tapping it** (or by a launcher shortcut /
+  notification, which behaves the same way). No link inside a screen drops you
+  onto a different tab: a surface reachable from two places opens in the place
+  you opened it from. `Settings → Tools & workspace → Manage tools` is the
+  example — same screen as the Tools tab, but it stays inside Settings.
+- **Notifications open the chat they belong to**, replacing whatever chat was on
+  screen rather than stacking a second one, so Back closes the app exactly as it
+  would after a normal launch.
+
 ## More tab
 
-The **More** tab is the landing page for every secondary surface.
+The **More** tab is the landing page for every secondary surface. Its
+twelve rows sit in four named sections:
+
+| Section | Rows |
+|---|---|
+| **Automation** | Triggers · Library · Tasks |
+| **Your content** | Memory · Files · Archive |
+| **Building blocks** | Prompts · Skills · Models |
+| **App** | Settings · Live metrics · About |
+
+Automation comes first because it holds the reasons to open More at all,
+and App comes last because that is where Settings is looked for. The
+sections are labels: nothing here is a separate screen, and no row goes
+anywhere different than it did before.
+
 Each row carries a live counter (memory chunks, active model name,
-prompt categories, active-task count + a numeric badge, app
-version), and a footer pill summarises the privacy state — when the
+prompt categories, app version). Only **Tasks** carries a numeric badge,
+which is what keeps a badge meaning "something is running right now" — a
+stored quantity like the archived-chat count lives in the row's subtitle
+instead. A footer pill summarises the privacy state — when the
 agent has not made any outbound LLM or MCP call for a minute, the
 pill reads `on-device · no network calls in last N m`; an in-flight
 cloud call flips the indicator to `online · cloud enabled`. The

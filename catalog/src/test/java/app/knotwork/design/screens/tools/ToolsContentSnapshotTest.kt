@@ -345,6 +345,17 @@ internal object ToolsPreview {
         ),
     )
 
+    /**
+     * Built-in tools present, no MCP servers yet. Not [ToolsVisualState.Empty]:
+     * the built-in group is never empty, so the screen is a normal Default
+     * surface with one empty group in it.
+     */
+    fun noMcpServers(): ToolsViewState = ToolsViewState(
+        visualState = ToolsVisualState.Default,
+        builtInTools = builtIns(),
+        mcpServers = emptyList(),
+    )
+
     fun error(): ToolsViewState = ToolsViewState(
         visualState = ToolsVisualState.Error,
         errorMessage = "Tool discovery handshake failed: connection refused.",

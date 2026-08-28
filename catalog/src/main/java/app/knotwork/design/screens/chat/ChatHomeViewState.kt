@@ -229,7 +229,7 @@ data class ChatHomeViewState(
      */
     val samplePromptCards: List<ChatHomeSamplePromptCard> = emptyList(),
     /**
-     * Single-line agent status pill rendered above the composer
+     * Single-line agent status rendered in the console entry strip
      * (`"[NODE]  idle · ready"`). `null` hides the pill.
      */
     val agentStatusLine: String? = null,
@@ -371,7 +371,7 @@ class ChatHomeCallbacks(
     val onOpenSettings: () -> Unit = {},
     val onSamplePromptCard: (ChatHomeSamplePromptCard) -> Unit = {},
     /**
-     * Fired when the user taps the agent-status pill above the composer.
+     * Fired when the user taps the console entry strip above the composer.
      * Hosts wire this to opening the console pane at the Partial snap so
      * the user can drill into pipeline activity in one tap (the pill
      * itself surfaces only a one-line summary).

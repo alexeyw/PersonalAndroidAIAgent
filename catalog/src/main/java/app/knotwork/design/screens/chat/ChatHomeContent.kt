@@ -63,7 +63,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -78,6 +77,7 @@ import app.knotwork.design.components.chat.ChatContent
 import app.knotwork.design.components.chat.ChatMessage
 import app.knotwork.design.components.chips.KnotworkSuggestionChip
 import app.knotwork.design.components.chips.Risk
+import app.knotwork.design.components.console.ConsoleEntryStrip
 import app.knotwork.design.components.console.ConsolePane
 import app.knotwork.design.components.console.ConsoleSnap
 import app.knotwork.design.components.misc.KnotworkLoader
@@ -95,8 +95,9 @@ private val ChatRowGap = 12.dp
 /**
  * Bottom clearance reserved under the message list so a short last message
  * (clamped to the bottom of the scroll range) clears the single-line
- * agent-status console pill sitting above the composer. Sized to a one-line
- * pill (~mono line + its vertical padding).
+ * console entry strip sitting above the composer. Sized to the strip's fixed
+ * height, which does not grow with font scale — only its status zone gives
+ * ground.
  */
 private val ChatConsoleClearance = 40.dp
 
@@ -342,9 +343,10 @@ private const val TOKEN_FORMAT_THRESHOLD = 1000
  * surface is paused, but typing is allowed so the user can prepare the
  * next turn.
  *
- * When [ChatHomeViewState.agentStatusLine] is non-null a single-line
- * mono pill is rendered above the composer (the
- * `[NODE]  idle · ready` strip).
+ * When [ChatHomeViewState.agentStatusLine] is non-null the console entry
+ * strip is rendered above the composer — `console │ [NODE]  idle · ready ⌃`.
+ * When the console is open the same strip renders as the sheet's header
+ * instead, never both at once.
  */
 @Composable
 private fun ChatHomeBottomBar(state: ChatHomeViewState, callbacks: ChatHomeCallbacks) {
@@ -354,7 +356,17 @@ private fun ChatHomeBottomBar(state: ChatHomeViewState, callbacks: ChatHomeCallb
     }
     Column {
         if (state.agentStatusLine != null) {
-            AgentStatusPill(text = state.agentStatusLine, onClick = callbacks.onAgentStatusClick)
+            AgentStatusStrip(
+                text = state.agentStatusLine,
+                // Closed here by construction: when the console is up it is the
+                // sheet's header instead, never both at once.
+                open = false,
+                onClick = callbacks.onAgentStatusClick,
+                modifier = Modifier.padding(
+                    horizontal = ChatHorizontalPadding,
+                    vertical = KnotworkTheme.spacing.sp1,
+                ),
+            )
         }
         // Directly above the composer, where a remark about the run sits in the
         // reader's path without interrupting it. A run still going shows its
@@ -429,54 +441,33 @@ private fun ChatHomeArchivedBar(onRestore: () -> Unit) {
 }
 
 /**
- * Compact agent-status pill rendered above the composer: dark console
- * surface, monospace text, leading `[TAG]` token tinted brand-primary.
- * Parses a leading `[X]` segment as the tag colour cue — anything else
- * renders as one continuous mono line.
+ * The console entry strip rendered above the composer.
  *
- * Tappable: the pill is the user-facing affordance for opening the
- * console pane. The host wires [onClick] to its
- * `openConsole(Partial)` callback. The whole row carries Role.Button +
- * `contentDescription` so TalkBack announces it as a button rather than
- * two separate text labels.
+ * Delegates to the catalog [ConsoleEntryStrip] so the chat body and the console
+ * sheet's header are literally the same element — see that component for why the
+ * strip carries the word `console` rather than a glyph. This wrapper only splits
+ * the leading `[TAG]` off the status line so it can be tinted brand-primary
+ * while the rest stays console foreground.
  */
 @Composable
-private fun AgentStatusPill(text: String, onClick: () -> Unit) {
-    val openConsoleCd = stringResource(R.string.knotwork_chat_home_agent_status_open_console_cd)
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(
-                horizontal = ChatHorizontalPadding,
-                vertical = KnotworkTheme.spacing.sp1,
-            )
-            .clip(KnotworkTheme.shapes.sm)
-            .background(color = KnotworkTheme.extended.consoleBg)
-            .clickable(role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = openConsoleCd }
-            .padding(
-                horizontal = KnotworkTheme.spacing.sp3,
-                vertical = KnotworkTheme.spacing.sp2,
-            ),
-    ) {
-        val (tag, rest) = splitAgentStatusTag(text)
-        if (tag != null) {
-            Text(
-                text = tag,
-                style = KnotworkTextStyles.MonoBase.copy(
-                    fontWeight = FontWeight.SemiBold,
-                ),
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
-        Text(
-            text = rest,
-            style = KnotworkTextStyles.MonoBase,
-            color = KnotworkTheme.extended.consoleFg,
-        )
-    }
+private fun AgentStatusStrip(text: String, open: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val (tag, rest) = splitAgentStatusTag(text)
+    ConsoleEntryStrip(
+        statusLine = rest,
+        open = open,
+        onClick = onClick,
+        modifier = modifier,
+        leadingStatus = tag?.let {
+            {
+                Text(
+                    text = it,
+                    style = KnotworkTextStyles.MonoBase.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1,
+                )
+            }
+        },
+    )
 }
 
 /** Splits "[TAG] rest of line" into (`"[TAG]"`, `"rest of line"`). */
@@ -684,7 +675,7 @@ private fun ChatHomeMessageList(
         top = padding.calculateTopPadding() + KnotworkTheme.spacing.sp2,
         // Extra bottom clearance so a short last message that clamps to the
         // bottom of the scroll range rests clear of the single-line agent-status
-        // console pill that sits just above the composer, instead of tucking
+        // console entry strip that sits just above the composer, instead of tucking
         // under it.
         bottom = padding.calculateBottomPadding() + KnotworkTheme.spacing.sp2 + ChatConsoleClearance,
     )
@@ -998,10 +989,22 @@ private fun ChatHomeConsoleOverlay(state: ChatHomeViewState, callbacks: ChatHome
         sheetState = sheetState,
         containerColor = KnotworkTheme.extended.consoleBg,
         contentColor = KnotworkTheme.extended.consoleFg,
+        // The strip *becomes* the sheet's header rather than being replaced by a
+        // drag handle: one element with one name in two positions, so "where did
+        // the strip go" is never the next question. Tapping it here closes the
+        // console, which is what the flipped chevron promises.
         dragHandle = {
-            BottomSheetDefaults.DragHandle(
-                color = KnotworkTheme.extended.consoleFg.copy(alpha = CONSOLE_DRAG_HANDLE_ALPHA),
-            )
+            if (state.agentStatusLine != null) {
+                AgentStatusStrip(
+                    text = state.agentStatusLine,
+                    open = true,
+                    onClick = { scope.launch { sheetState.hide() } },
+                )
+            } else {
+                BottomSheetDefaults.DragHandle(
+                    color = KnotworkTheme.extended.consoleFg.copy(alpha = CONSOLE_DRAG_HANDLE_ALPHA),
+                )
+            }
         },
     ) {
         ConsolePane(

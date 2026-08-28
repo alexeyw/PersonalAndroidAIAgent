@@ -52,6 +52,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,6 +61,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -69,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
+import app.knotwork.design.components.lists.KnotworkSectionHeader
 import app.knotwork.design.components.misc.EmptyState
 import app.knotwork.design.components.misc.KnotworkWarningBanner
 import app.knotwork.design.components.misc.StripedPlaceholder
@@ -109,7 +112,13 @@ private const val DISCONNECTED_ROW_ALPHA = 0.6f
 private data class ServerSubtitle(val state: McpConnectionState, val label: String, val count: Int)
 
 /**
- * Stateless Knotwork tools surface.
+ * Knotwork tools surface.
+ *
+ * Stateless except for one thing: which groups are folded. That is view state
+ * with no consumer outside this surface, so it is held here in
+ * `rememberSaveable` rather than hoisted into a bag every caller would have to
+ * thread. Everything else — the rows, the counts, the connection states —
+ * arrives in [ToolsViewState].
  *
  *  - TopAppBar with title + monospace "N built-in · M MCP" subtitle;
  *    trailing overflow icon.
@@ -137,7 +146,7 @@ fun ToolsContent(
         containerColor = MaterialTheme.colorScheme.surface,
         topBar = {
             app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
-                ToolsTopBar(state = state)
+                ToolsTopBar(state = state, callbacks = callbacks)
             }
         },
         // The outer `AppShellScaffold` already absorbs both the system
@@ -158,7 +167,7 @@ fun ToolsContent(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ToolsTopBar(state: ToolsViewState) {
+private fun ToolsTopBar(state: ToolsViewState, callbacks: ToolsCallbacks) {
     TopAppBar(
         title = {
             Column {
@@ -179,9 +188,25 @@ private fun ToolsTopBar(state: ToolsViewState) {
                 )
             }
         },
-        // No top-bar overflow: connect-server lives on the FAB / empty-state
-        // CTA and per-server actions live inline on each server card, so the
-        // menu had nothing to host.
+        // The permanent door to adding a server. It sits here rather than on a
+        // FAB or a stuck-bottom button because the bottom edge already carries
+        // the system nav bar *and* the app's own bottom nav: a FAB would park a
+        // 56 dp circle over the last row's switch and claim to be the screen's
+        // primary action, which on Tools is switching tools on and off. Below
+        // the whole built-in list — where the link used to be — is exactly
+        // where the closed-test tester could not find it.
+        //
+        // Still no overflow menu: per-server actions live on each row, so it
+        // would have nothing to host.
+        actions = {
+            IconButton(onClick = callbacks.onAddServerOpen) {
+                Icon(
+                    imageVector = AppIcons.Add,
+                    contentDescription = stringResource(R.string.knotwork_tools_add_mcp_cd),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+            }
+        },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
@@ -239,92 +264,149 @@ private fun ToolsError(state: ToolsViewState, callbacks: ToolsCallbacks, padding
     }
 }
 
+/**
+ * The two-group tool list.
+ *
+ * Both groups are always present and both are collapsible — with one exception:
+ * an **empty** group has no chevron, because a chevron that reveals emptiness
+ * teaches the wrong thing. Splitting the two into separate screens is excluded:
+ * built-in tools and MCP tools are the same thing to the model, and the tester
+ * who asked for them to be "разнесены" wanted them *grouped*, not relocated.
+ *
+ * Collapse state is view state, held here rather than hoisted: it survives
+ * rotation and process death through `rememberSaveable`, and nothing outside
+ * this surface has an opinion about whether a list section is folded.
+ */
 @Composable
 private fun ToolsList(state: ToolsViewState, callbacks: ToolsCallbacks, padding: PaddingValues) {
+    var builtInCollapsed by rememberSaveable { mutableStateOf(false) }
+    var mcpCollapsed by rememberSaveable { mutableStateOf(false) }
+    val disconnectedCount = state.mcpServers.count { it.state == McpConnectionState.Disconnected }
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(padding),
         contentPadding = PaddingValues(bottom = KnotworkTheme.spacing.sp2),
     ) {
         item(key = "built-in-header") {
-            SimpleSectionHeader(
+            KnotworkSectionHeader(
                 title = stringResource(R.string.knotwork_tools_section_built_in),
-                trailing = null,
+                // The count describes the rows this group contains: its rows
+                // are tools, so it counts tools.
+                countLabel = pluralStringResource(
+                    R.plurals.knotwork_tools_group_count_tools,
+                    state.builtInTools.size,
+                    state.builtInTools.size,
+                ),
+                collapsible = state.builtInTools.isNotEmpty(),
+                collapsed = builtInCollapsed,
+                onToggleCollapsed = { builtInCollapsed = !builtInCollapsed },
+                showDivider = true,
             )
         }
-        items(items = state.builtInTools, key = { "builtin-${it.id}" }) { tool ->
-            BuiltInToolRowView(tool = tool, callbacks = callbacks)
-            if (tool.allowedDomainsCount != null) {
-                AllowedDomainsEntryRow(
-                    hostCount = tool.allowedDomainsCount,
-                    onClick = callbacks.onOpenAllowedDomains,
-                )
-            }
-            HorizontalDivider(color = KnotworkTheme.extended.divider)
-        }
-        item(key = "mcp-header") {
-            SimpleSectionHeader(
-                title = stringResource(R.string.knotwork_tools_section_mcp),
-                trailing = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
-                        modifier = Modifier.clickable(onClick = callbacks.onAddServerOpen),
-                    ) {
-                        Icon(
-                            imageVector = AppIcons.Add,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                        )
-                        Text(
-                            text = stringResource(R.string.knotwork_tools_add_mcp_link),
-                            style = KnotworkTextStyles.LabelLg.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.primary,
-                        )
-                    }
-                },
-            )
-        }
-        state.mcpServers.forEach { server ->
-            // In the Disconnected state, the server row plus
-            // every nested tool row renders at 60 % opacity so the disabled-by-
-            // server-failure affordances read at a glance. The opacity stops at
-            // the row level (it does NOT cascade into the catalog `EmptyState`
-            // or `StripedPlaceholder` containers, which live outside this loop).
-            val rowAlpha = if (server.state == McpConnectionState.Disconnected) DISCONNECTED_ROW_ALPHA else 1f
-            item(key = "mcp-${server.id}") {
-                McpServerRowView(server = server, callbacks = callbacks, rowAlpha = rowAlpha)
+        if (!builtInCollapsed) {
+            items(items = state.builtInTools, key = { "builtin-${it.id}" }) { tool ->
+                BuiltInToolRowView(tool = tool, callbacks = callbacks)
+                if (tool.allowedDomainsCount != null) {
+                    AllowedDomainsEntryRow(
+                        hostCount = tool.allowedDomainsCount,
+                        onClick = callbacks.onOpenAllowedDomains,
+                    )
+                }
                 HorizontalDivider(color = KnotworkTheme.extended.divider)
             }
-            if (server.expanded) {
-                items(items = server.tools, key = { "mcp-tool-${it.id}" }) { entry ->
-                    McpToolEntryRowView(entry = entry, callbacks = callbacks, rowAlpha = rowAlpha)
+        }
+        item(key = "mcp-header") {
+            KnotworkSectionHeader(
+                title = stringResource(R.string.knotwork_tools_section_mcp),
+                // Its rows are servers, so it counts servers; each server row
+                // carries its own tool count. A header whose number matched no
+                // row beneath it would be a number the reader cannot check.
+                countLabel = pluralStringResource(
+                    R.plurals.knotwork_tools_group_count_servers,
+                    state.mcpServers.size,
+                    state.mcpServers.size,
+                ),
+                // A collapsed group may not hide a problem. Expanded, the rows
+                // say it themselves and the header drops it.
+                warning = if (mcpCollapsed && disconnectedCount > 0) {
+                    pluralStringResource(
+                        R.plurals.knotwork_tools_group_warn_disconnected,
+                        disconnectedCount,
+                        disconnectedCount,
+                    )
+                } else {
+                    null
+                },
+                collapsible = state.mcpServers.isNotEmpty(),
+                collapsed = mcpCollapsed,
+                onToggleCollapsed = { mcpCollapsed = !mcpCollapsed },
+                showDivider = true,
+            )
+        }
+        if (state.mcpServers.isEmpty()) {
+            // The empty state lives *inside* the group that is actually empty.
+            // A full-screen "no tools" would be a lie: the built-in group is
+            // never empty.
+            item(key = "mcp-empty") { McpEmptyGroupCard(onAddServer = callbacks.onAddServerOpen) }
+        }
+        if (!mcpCollapsed) {
+            state.mcpServers.forEach { server ->
+                // In the Disconnected state, the server row plus
+                // every nested tool row renders at 60 % opacity so the disabled-by-
+                // server-failure affordances read at a glance. The opacity stops at
+                // the row level (it does NOT cascade into the catalog `EmptyState`
+                // or `StripedPlaceholder` containers, which live outside this loop).
+                val rowAlpha = if (server.state == McpConnectionState.Disconnected) DISCONNECTED_ROW_ALPHA else 1f
+                item(key = "mcp-${server.id}") {
+                    McpServerRowView(server = server, callbacks = callbacks, rowAlpha = rowAlpha)
                     HorizontalDivider(color = KnotworkTheme.extended.divider)
+                }
+                if (server.expanded) {
+                    items(items = server.tools, key = { "mcp-tool-${it.id}" }) { entry ->
+                        McpToolEntryRowView(entry = entry, callbacks = callbacks, rowAlpha = rowAlpha)
+                        HorizontalDivider(color = KnotworkTheme.extended.divider)
+                    }
                 }
             }
         }
     }
 }
 
+/**
+ * The one-time CTA shown inside an empty MCP group.
+ *
+ * It coexists with the top bar's permanent `+` without being the duplicate the
+ * closed test found elsewhere: `#8`'s dupes were two *permanent* controls for
+ * one verb. This one is loud, labelled, and gone the moment a server exists —
+ * which is why nobody has to discover the top-bar slot on day one.
+ */
 @Composable
-private fun SimpleSectionHeader(title: String, trailing: (@Composable () -> Unit)?) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+private fun McpEmptyGroupCard(onAddServer: () -> Unit) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(
-                horizontal = KnotworkTheme.spacing.sp4,
-                vertical = KnotworkTheme.spacing.sp3,
-            ),
+            .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3)
+            .clip(KnotworkTheme.shapes.md)
+            .background(color = KnotworkTheme.extended.surface1)
+            .border(width = 1.dp, color = MaterialTheme.colorScheme.outline, shape = KnotworkTheme.shapes.md)
+            .padding(KnotworkTheme.spacing.sp4),
     ) {
         Text(
-            text = title,
-            style = KnotworkTextStyles.MonoSm,
-            color = KnotworkTheme.extended.onSurfaceMuted,
-            modifier = Modifier.weight(1f),
+            text = stringResource(R.string.knotwork_tools_empty_mcp_title),
+            style = KnotworkTextStyles.LabelLg.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface,
         )
-        if (trailing != null) trailing()
+        Text(
+            text = stringResource(R.string.knotwork_tools_empty_mcp_body),
+            style = KnotworkTextStyles.BodySm,
+            color = KnotworkTheme.extended.onSurfaceMuted,
+        )
+        KnotworkPrimaryButton(
+            text = stringResource(R.string.knotwork_tools_empty_mcp_cta),
+            onClick = onAddServer,
+            leadingIcon = AppIcons.Add,
+        )
     }
-    HorizontalDivider(color = KnotworkTheme.extended.divider)
 }
 
 @Composable
@@ -568,10 +650,53 @@ private fun McpServerRowView(server: McpServerRow, callbacks: ToolsCallbacks, ro
                 },
                 label = "mcpServerSubtitle",
             ) { subtitle ->
-                Text(
-                    text = "${subtitle.count} tools · ${subtitle.label}",
-                    style = KnotworkTextStyles.MonoSm,
-                    color = KnotworkTheme.extended.onSurfaceMuted,
+                if (subtitle.state == McpConnectionState.Disconnected) {
+                    // Opacity alone is a colour-only signal. The state gets a
+                    // glyph and a word where the tool count usually sits, so it
+                    // survives both a screen reader and a 60 % dimmed row.
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+                    ) {
+                        Icon(
+                            imageVector = AppIcons.Warn,
+                            contentDescription = null,
+                            tint = KnotworkTheme.extended.signalWarn,
+                            modifier = Modifier.size(StatusDotSize),
+                        )
+                        Text(
+                            text = stringResource(R.string.knotwork_tools_mcp_disconnected),
+                            style = KnotworkTextStyles.MonoSm,
+                            color = KnotworkTheme.extended.signalWarn,
+                            maxLines = 1,
+                        )
+                    }
+                } else {
+                    Text(
+                        text = "${subtitle.count} tools · ${subtitle.label}",
+                        style = KnotworkTextStyles.MonoSm,
+                        color = KnotworkTheme.extended.onSurfaceMuted,
+                    )
+                }
+            }
+        }
+        if (server.state == McpConnectionState.Disconnected) {
+            // The action the state calls for, promoted out of the row's
+            // overflow: a row that reports a problem should offer the fix.
+            //
+            // A *labelled* button was drawn in the handoff and measured here as
+            // unaffordable: at 360 dp, `Reconnect` + expand chevron + overflow
+            // left ~120 dp for the URL, which truncated to `mcp://a…` and wrapped
+            // `Disconnected` onto two lines. A disconnected server keeps its
+            // cached tool list (the status flow changes, `tools` does not), so
+            // the chevron is genuinely there — this is not a fixture artefact.
+            // The word survives where it carries the a11y weight: in the
+            // subtitle, beside the glyph.
+            IconButton(onClick = { callbacks.onServerRefresh(server.id) }) {
+                Icon(
+                    imageVector = AppIcons.Refresh,
+                    contentDescription = stringResource(R.string.knotwork_tools_mcp_reconnect),
+                    tint = MaterialTheme.colorScheme.primary,
                 )
             }
         }

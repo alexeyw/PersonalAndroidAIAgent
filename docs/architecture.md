@@ -86,9 +86,17 @@ The presentation layer is hosted by a single `NavHost` declared in
 - **Secondary destinations** live as additional `composable(...)` entries
   reachable from inside a tab. The pipelines tab is a nested `navigation { }`
   graph so the library and editor share a single `OrchestratorViewModel`
-  scoped to the graph entry. The More tab is the umbrella for Memory,
-  Models, Prompt library, Active tasks, Live metrics, Settings, and
-  About.
+  scoped to the graph entry. The More tab is the umbrella for the twelve
+  secondary surfaces, grouped into four named sections (Automation, Your
+  content, Building blocks, App); the sections are labels rendered by
+  `MoreContent`, not destinations.
+- **Which tab is highlighted, and whether Back exits, are derived from the
+  back stack** (`presentation/ui/navigation/TabOwnership.kt`), not from a
+  `route → tab` table. A screen belongs to the tab it was opened from, so a
+  destination added to the graph cannot silently highlight nothing. A tab root
+  is entered only through `navigateToTab`, never pushed on top of another
+  subtree's stack; a surface that must be reachable from two subtrees is
+  registered at two routes instead (`NavRoutes.SETTINGS_TOOLS_MANAGE`).
 - **Modal sheets** (`NodeConfigSheet`, `ConsolePane`, `AddMcpServerScreen`)
   share a single `KnotworkModalRoute` wrapper that combines Material3
   `ModalBottomSheet` with `PredictiveBackHandler` so Android 14+

@@ -1,6 +1,5 @@
 package app.knotwork.android.presentation.ui.navigation
 
-import android.net.Uri
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.test.assertIsDisplayed
@@ -8,12 +7,9 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.navigation.NavHostController
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
-import androidx.navigation.navDeepLink
 import app.knotwork.android.presentation.state.TransientMessageRelay
 import org.junit.Assert.assertEquals
 import org.junit.Rule
@@ -25,10 +21,15 @@ import org.junit.Test
  *
  * These tests stand up [AppShellScaffold] with a minimal `NavHost` whose
  * destinations render plain text — enough to assert navigation behaviour
- * (tab selection, deep-link routing, back-stack containment) without
- * standing up the full Hilt graph. The real screens (`ChatScreen`, etc.)
- * are exercised by their own per-screen tests; here we are only
- * verifying the shell's contract.
+ * (tab selection, back-stack containment) without standing up the full Hilt
+ * graph. The real screens (`ChatScreen`, etc.) are exercised by their own
+ * per-screen tests; here we are only verifying the shell's contract.
+ *
+ * Deep links and the tab-root entry contract live in [NavigationContractTest]:
+ * a `navDeepLink`-based test used to sit here, but the production graph
+ * removed those registrations (they raced the splash) and routes every
+ * `knotwork://` intent through [navigateToDeepLink] instead — so the test was
+ * certifying a mechanism the app no longer uses.
  */
 class AppShellNavigationTest {
 
@@ -120,55 +121,6 @@ class AppShellNavigationTest {
             val tabsOnStack = navController.tabRoutesOnStack()
             assertEquals(listOf(NavRoutes.CHAT_TAB), tabsOnStack)
         }
-    }
-
-    @Test
-    fun deepLinkRoutesToChatThreadDestination() {
-        // We fire the deep-link from inside the composition through a
-        // captured NavController. This bypasses the system intent
-        // pipeline (that would require a `createAndroidComposeRule` host
-        // with the real MainActivity) while still exercising the
-        // navDeepLink matching logic, which is the unit under test.
-        //
-        // Note: the `LaunchedEffect` that fires `navigate(...)` must live
-        // *inside* the NavHost's start-destination composable. A
-        // top-level `LaunchedEffect(navController)` would run before the
-        // sibling `NavHost(...)` composition installs the graph, and the
-        // navigate call would fail with "Navigation graph has not been
-        // set for NavController". By the time the CHAT_TAB destination
-        // composes, the graph is guaranteed to be registered.
-        composeTestRule.setContent {
-            val navController = rememberNavController()
-            AppShellScaffold(navController = navController, transientMessageRelay = TransientMessageRelay()) { _ ->
-                NavHost(navController = navController, startDestination = NavRoutes.CHAT_TAB) {
-                    composable(NavRoutes.CHAT_TAB) {
-                        LaunchedEffect(Unit) {
-                            navController.navigate(
-                                Uri.parse("${NavRoutes.DEEP_LINK_SCHEME}://chat/thread-42"),
-                            )
-                        }
-                        Text(CHAT_TAB_BODY)
-                    }
-                    composable(
-                        route = NavRoutes.CHAT_WITH_THREAD,
-                        arguments = listOf(
-                            navArgument(NavRoutes.CHAT_THREAD_ARG) {
-                                type = NavType.StringType
-                                nullable = false
-                            },
-                        ),
-                        deepLinks = listOf(
-                            navDeepLink { uriPattern = NavRoutes.CHAT_DEEP_LINK_PATTERN },
-                        ),
-                    ) { entry ->
-                        val threadId = entry.arguments?.getString(NavRoutes.CHAT_THREAD_ARG)
-                        Text("chat-thread:$threadId")
-                    }
-                }
-            }
-        }
-
-        composeTestRule.onNodeWithText("chat-thread:thread-42").assertIsDisplayed()
     }
 
     /** Returns the subset of the back-stack that corresponds to top-level tab routes. */

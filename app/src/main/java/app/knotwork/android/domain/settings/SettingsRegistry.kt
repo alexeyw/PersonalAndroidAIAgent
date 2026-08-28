@@ -105,12 +105,19 @@ private val PIPELINES_ENTRIES = listOf(
     // run-limits screen with the other three and the spend statement, reached
     // through this row — which keeps the category, so the search deep-link and
     // its row highlight still land where they always did.
+    // "pipelines" is carried as an explicit synonym on both pipeline-scoped
+    // rows because the category title no longer contains the word: it was
+    // renamed from "Pipelines & structured output" to "Run limits & structured
+    // output" (closed-test finding `#12` — the old title promised the pipelines
+    // themselves, which live in the Pipelines tab). Search matches the category
+    // title, so without these synonyms the rename would have made the category
+    // unreachable for the term users actually type.
     link(
         BASIC,
         "Run limits",
-        syn = listOf("steps", "tokens", "limit", "cap", "budget", "cost", "spend", "runaway"),
+        syn = listOf("steps", "tokens", "limit", "cap", "budget", "cost", "spend", "runaway", "pipelines"),
     ),
-    setting("PIPELINE_MAX_NESTING_DEPTH", ADVANCED, SLIDER, syn = listOf("nest", "max", "depth")),
+    setting("PIPELINE_MAX_NESTING_DEPTH", ADVANCED, SLIDER, syn = listOf("nest", "max", "depth", "pipelines")),
     setting("STRUCTURED_OUTPUT_MAX_REPAIRS", ADVANCED, SLIDER, syn = listOf("json", "repair", "max")),
     link(ADVANCED, "Provider detail", syn = listOf("retry", "cloud", "delay")),
 )

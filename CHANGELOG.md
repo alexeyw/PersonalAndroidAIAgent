@@ -13,6 +13,68 @@ details.
 
 ## [Unreleased]
 
+### Changed
+
+- **The bottom-nav highlight now follows the screens you opened, not a lookup
+  table.** It was decided by a hand-maintained `route → tab` map, and **ten**
+  registered screens were missing from it — Allowed domains, Files, Skills,
+  Triggers, Library, Chat archive, Discover and its detail, and both provider
+  screens showed *no* tab highlighted at all. The tab is now derived from the
+  back stack, so a screen belongs to the tab it was opened from and the class of
+  omission is gone. One deliberate consequence: Settings opened from the chat
+  drawer highlights **Chat**, not **More**, because Back from there returns to
+  the chat — the highlight and the Back button now agree.
+
+- **`Settings → Tools & workspace → Manage tools` no longer throws you onto
+  the Tools tab.** It opened the Tools *tab root* from inside Settings, so the
+  highlight jumped to a tab the user never chose and the whole settings subtree
+  was left buried underneath it — reported in closed testing as being thrown out
+  of Settings onto the main screen's Tools tab. The same screen now opens as a
+  settings-owned destination: Back returns to the category, and the tab you came
+  from stays lit. Opening an archived chat had the same shape and is fixed with
+  it.
+
+- **A bottom-nav tab is now only ever entered as a tab switch.** Every entry
+  point — the nav bar, launcher shortcuts, notification deep links, the task
+  monitor, the chat archive — goes through one code path, and a build-time check
+  fails if a new one does not. Notification and shortcut launches additionally
+  keep the tab subtree you were in instead of discarding it.
+
+- **The console has a name now.** The dark strip above the composer was already
+  a button — it announced itself to TalkBack and had done since it shipped — but
+  nothing about it said so to the eye, and the first outsider to use the app
+  could not find the console at all. It now reads `console │ [NODE] idle · ready`
+  with a chevron, and when the console is open the *same* strip becomes the
+  pane's header rather than vanishing. Its spoken description now includes the
+  live agent status instead of just "Open console".
+
+- **Adding an MCP server moved to the top of the Tools screen.** The `+ Add MCP`
+  link sat in the MCP section header — that is, below the entire built-in tool
+  list, which is exactly where it could not be found. There is now a permanent
+  `+` in the top bar, plus a labelled **Add server** button inside the empty
+  server group that disappears once you have one.
+
+- **Tools are two collapsible groups with counts.** *Built-in tools · 3 tools*
+  and *MCP servers · 3 servers* — each header counts the rows it contains, and
+  each server row still carries its own tool count. Folding a group away cannot
+  hide a problem inside it: a collapsed **MCP servers** header reports
+  `⚠ 1 disconnected`. A disconnected server now says **Disconnected** in words
+  next to a warning glyph, instead of relying on dimming and a coloured dot, and
+  offers reconnect on the row.
+
+- **The More tab is four named sections instead of twelve flat rows** —
+  Automation · Your content · Building blocks · App. **Triggers moves from
+  seventh row to first**: in closed testing it took two hours to find. Nothing
+  is re-pointed and no screen is added; the sections are labels. `Active tasks`
+  is now `Tasks`, since the section already says what kind.
+
+- **Settings → "Pipelines & structured output" is now "Run limits & structured
+  output".** The heading promised the pipelines themselves and the screen holds
+  the limits an autonomous run obeys — reported in closed testing as a heading
+  announcing something the screen does not contain. Pipelines live on the
+  Pipelines tab and under More → Library; searching Settings for `pipelines`
+  still finds the category.
+
 ### Removed
 
 - **Controls that could not act have been removed rather than disabled or
