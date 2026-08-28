@@ -1985,17 +1985,27 @@ for the search results in action.
 
 ### What every setting means
 
-Every row in Settings carries a small **ⓘ** next to its label; tapping it opens a
+Most rows in Settings carry a small **ⓘ** next to the label. Tapping it opens a
 one-sentence explanation in place, under the row, and closes whichever
-explanation was already open. Rows whose meaning follows from their name — links
-to another screen, the identity and version rows, plain actions like *Export
-memories* — carry no glyph.
+explanation was already open — so the screen never grows by more than one panel,
+and nothing is left open when you come back.
 
-The table below is **generated from the very strings the app shows**, so it
-cannot drift from them: what you read here is word-for-word what the ⓘ opens.
-What each setting *does* when you change it — the measured timeouts, the retry
-behaviour, the ordering rules — is described in the prose of the sections that
-follow, not repeated here.
+A row carries one when its meaning does not follow from its name: it has a
+number, it borrows a word (*Top-K*, *threshold*, *half-life*, *embedding*), or
+changing it has an effect somewhere other than that row. Links to another
+screen, the identity and version rows, and plain actions like *Export memories*
+carry none, and the table below says which and why.
+
+One entry reads *"behaviour not shipped"* rather than carrying an explanation.
+That is deliberate and it is not a placeholder: **Long-running task alerts** is a
+toggle whose notification the app does not currently post, so there is nothing
+truthful to say about it yet. It is recorded here rather than papered over.
+
+The table is **generated from the very strings the app shows**, so it cannot
+drift from them: what you read here is word-for-word what the ⓘ opens. What each
+setting *does* when you change it — the measured timeouts, the retry behaviour,
+the ordering rules — is described in the prose of the sections that follow, not
+repeated here.
 
 <!-- AUTO-GEN:SETTINGS_HELP -->
 #### Generation
@@ -2076,7 +2086,7 @@ follow, not repeated here.
 | **Pipeline other apps may run** | The only pipeline an outside app may start. Nothing else can be named in the request, whatever it asks for. |
 | **External request journal** | *(no explanation — Link row)* |
 | **Resume max age** | How stale a parked run may be and still resume. Past it the run is dropped, because its gathered context no longer holds. |
-| **Background approval window** | How long a background run waits for you to approve a tool call. Unanswered past it, the run ends instead of waiting on. |
+| **Background approval window** | How long a background run waits for you to approve a tool call. Unanswered past it, the run ends rather than waiting forever. |
 
 #### Privacy
 
@@ -2360,8 +2370,11 @@ Notifications and the windows that govern parked / resumable runs.
 
 Basic:
 
-- **Long-running tasks** — when on, a low-importance system notification fires
-  when a backgrounded pipeline run exceeds the long-running threshold.
+- **Long-running tasks** — *this notification is not currently posted.* The
+  toggle and its notification channel exist, but nothing in the app asks for the
+  notification to be sent, so switching it on changes nothing today. Stated here
+  rather than left as a promise; the defect is tracked and the row will either
+  start working or be removed.
 - **Scheduled task results** — when on, finishing a scheduled background task
   posts a **Task completed** notification with the first line of the answer (or
   **Task failed** with the reason); tapping it opens the conversation the result
