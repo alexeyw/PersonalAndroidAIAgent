@@ -37,7 +37,7 @@ fun BackgroundSettingsContent(
             IconToggleRow(
                 icon = AppIcons.Bolt,
                 title = stringResource(R.string.knotwork_settings_notifications_long_running),
-                state = stringResource(R.string.knotwork_settings_notifications_long_running_subtitle),
+                state = "",
                 checked = state.longRunningEnabled,
                 onCheckedChange = callbacks.onLongRunningToggle,
             )
@@ -46,7 +46,7 @@ fun BackgroundSettingsContent(
             IconToggleRow(
                 icon = AppIcons.History,
                 title = stringResource(R.string.knotwork_settings_notifications_scheduled_results),
-                state = stringResource(R.string.knotwork_settings_notifications_scheduled_results_subtitle),
+                state = "",
                 checked = state.scheduledResultsEnabled,
                 onCheckedChange = callbacks.onScheduledResultsToggle,
             )
@@ -63,7 +63,7 @@ fun BackgroundSettingsContent(
             IconToggleRow(
                 icon = AppIcons.Chat,
                 title = stringResource(R.string.knotwork_settings_share_reuse_title),
-                state = stringResource(R.string.knotwork_settings_share_reuse_subtitle),
+                state = "",
                 checked = state.shareReuseSessionEnabled,
                 onCheckedChange = callbacks.onShareReuseSessionToggle,
             )
@@ -80,13 +80,7 @@ fun BackgroundSettingsContent(
             IconToggleRow(
                 icon = AppIcons.External,
                 title = stringResource(R.string.knotwork_settings_external_automation_title),
-                state = stringResource(
-                    if (state.externalAutomationEnabled) {
-                        R.string.knotwork_settings_external_automation_subtitle_on
-                    } else {
-                        R.string.knotwork_settings_external_automation_subtitle_off
-                    },
-                ),
+                state = "",
                 checked = state.externalAutomationEnabled,
                 onCheckedChange = callbacks.onExternalAutomationToggle,
             )

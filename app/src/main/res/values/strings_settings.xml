@@ -18,8 +18,6 @@
     <string name="settings_restrictions_approve_all">All</string>
     <string name="settings_restrictions_approve_sensitive">Sensitive +</string>
     <string name="settings_restrictions_approve_never">Never</string>
-    <string name="settings_restrictions_block_destructive_subtitle">schedule_task · delegate_task · file write — agent refuses these.</string>
-    <string name="settings_restrictions_block_network_subtitle">LiteRT runs offline · cloud providers gated server-side.</string>
 
     <!-- LLM parameters card -->
     <string name="settings_row_temperature_title">Temperature</string>
@@ -61,7 +59,6 @@
     <string name="settings_memory_stat_avg_score">Avg score</string>
     <string name="settings_memory_stat_dash">—</string>
     <string name="settings_memory_auto_extract_title">Auto-extract from conversations</string>
-    <string name="settings_memory_auto_extract_subtitle">After each chat, the agent saves durable facts you state (preferences, events, relationships) to long-term memory. Small talk is ignored.</string>
     <string name="settings_memory_auto_summarize_title">Auto-summarize threshold</string>
 
     <!-- Memory tuning sliders. -->
@@ -76,11 +73,9 @@
 
     <!-- Chat-history compression toggle. -->
     <string name="settings_memory_history_compression_title">Compress long chat history</string>
-    <string name="settings_memory_history_compression_subtitle">Summarizes older messages in long sessions so they keep fitting the on-device context window.</string>
 
     <!-- Background-compaction toggle. -->
     <string name="settings_memory_compaction_title">Background compaction</string>
-    <string name="settings_memory_compaction_subtitle">Clusters stale, unpinned chunks into summaries while the device is charging and idle.</string>
 
     <string name="settings_memory_embedding_title">Embedding model</string>
 

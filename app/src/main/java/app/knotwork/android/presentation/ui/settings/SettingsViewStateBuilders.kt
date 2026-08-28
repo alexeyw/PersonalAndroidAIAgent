@@ -188,13 +188,10 @@ internal fun buildMemoryViewState(uiState: SettingsUiState, context: Context): M
         ),
         autoExtractEnabled = uiState.autoExtractEnabled,
         autoExtractLabel = stringResource(R.string.settings_memory_auto_extract_title),
-        autoExtractSubtitle = stringResource(R.string.settings_memory_auto_extract_subtitle),
         compactionEnabled = uiState.memoryCompactionEnabled,
         compactionLabel = stringResource(R.string.settings_memory_compaction_title),
-        compactionSubtitle = stringResource(R.string.settings_memory_compaction_subtitle),
         chatHistoryCompressionEnabled = uiState.chatHistoryCompressionEnabled,
         chatHistoryCompressionLabel = stringResource(R.string.settings_memory_history_compression_title),
-        chatHistoryCompressionSubtitle = stringResource(R.string.settings_memory_history_compression_subtitle),
         advancedSliders = memoryAdvancedSliders(uiState, locale),
         verboseLoggingEnabled = uiState.verboseMemoryLoggingEnabled,
         embeddingTitle = stringResource(R.string.settings_memory_embedding_title),
@@ -258,9 +255,7 @@ internal fun buildToolsViewState(uiState: SettingsUiState): ToolsSettingsViewSta
     approveSensitiveLabel = stringResource(R.string.settings_restrictions_approve_sensitive),
     approveNeverLabel = stringResource(R.string.settings_restrictions_approve_never),
     blockDestructive = uiState.blockDestructiveTools,
-    blockDestructiveSubtitle = stringResource(R.string.settings_restrictions_block_destructive_subtitle),
     blockNetwork = uiState.blockNetworkFromLocalModel,
-    blockNetworkSubtitle = stringResource(R.string.settings_restrictions_block_network_subtitle),
 )
 
 /**

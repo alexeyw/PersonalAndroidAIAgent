@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Settings help text — the canonical source.
+
+  These strings are the single source of truth for what a setting means. The
+  `Settings` section of `docs/user-guide.md` is generated from them, so the
+  guide can never drift from what the app actually says; the in-app hint and
+  the documented sentence are the same sentence.
+
+  Rules, enforced by SettingsHelpCatalogTest:
+    * 140 characters, hard. Measured against the 200 % font-scale frame: past
+      that the panel pushes the row it explains off the top of the screen.
+    * What changes -> what you will notice. Present tense. A number names both
+      ends of its range; a borrowed word is replaced, never defined.
+    * Never a threshold the code does not hold as a constant.
+    * Never "enables", "allows you to", the default value, or the row name
+      repeated back at the reader.
+-->
+<resources>
+    <string name="settings_help_system_prompt_prefix">Put in front of every request, in every chat and every pipeline. The agent treats it as standing orders.</string>
+    <string name="settings_help_tool_usage_instruction">Added only when tools are available. Use it for house rules — which tool to prefer, what never to touch.</string>
+    <string name="settings_help_temperature">Low keeps the wording predictable and repetitive; high makes it varied and less literal.</string>
+    <string name="settings_help_top_k">How many candidate words stay in play at each step. Small is safer and blander; large lets rarer words through.</string>
+    <string name="settings_help_top_p">Keeps only the likeliest words that together add up to this share of the probability. Lower cuts more.</string>
+    <string name="settings_help_repetition_penalty">Pushes the model off words it has already used. Too high and it starts avoiding words the answer needs.</string>
+    <string name="settings_help_max_context_length">How much of the conversation the model sees at once. Larger remembers more of the thread and runs slower.</string>
+    <string name="settings_help_audio_max_duration_sec">Recording stops on its own at this point and sends what it has.</string>
+    <string name="settings_help_local_model_backend">Which chip runs the on-device model. NPU is fastest where it works; the app falls back on its own if it does not.</string>
+    <string name="settings_help_auto_extract_enabled">On, durable facts from your chats — names, preferences, project details — are saved and reused later.</string>
+    <string name="settings_help_memory_compaction_enabled">Old memories get merged into shorter summaries once there are many. Frees room; loses the exact wording.</string>
+    <string name="settings_help_chat_history_compression_enabled">Long threads are summarised past the live window, so the agent keeps the gist instead of forgetting the start.</string>
+    <string name="settings_help_auto_summarize_threshold">How full the context window gets before the thread is summarised. Lower summarises sooner and more often.</string>
+    <string name="settings_help_memory_search_top_k">How many memories are pulled into a reply at most. More context, slower start, and more room for noise.</string>
+    <string name="settings_help_memory_search_threshold">Higher recalls only close matches, so less is pulled in; lower recalls more, including memories that miss the point.</string>
+    <string name="settings_help_memory_recency_half_life_days">How fast old memories lose to new ones when both match. Short favours this week; long treats everything as current.</string>
+    <string name="settings_help_memory_compaction_age_days">How old a memory must be before compaction may merge it. Fresher facts keep their exact wording until they pass it.</string>
+    <string name="settings_help_max_memory_chunks">The ceiling on stored pieces. At the ceiling the oldest are dropped, compaction or not.</string>
+    <string name="settings_help_chat_history_compression_threshold_tokens">How large a thread grows before its older half is summarised. Lower compresses sooner and keeps less of the original wording.</string>
+    <string name="settings_help_chat_history_live_window_size">How many recent messages stay word-for-word after a thread is summarised. Anything older survives only as the summary.</string>
+    <string name="settings_help_memory_summary_default_limit">How many recent memories are written into the prompt\'s memory block. More recall, less room for everything else.</string>
+    <string name="settings_help_active_embedding_provider_id">The model that turns text into the numbers memory search compares. Changing it re-indexes everything you have saved.</string>
+    <string name="settings_help_verbose_memory_logging_enabled">Every retrieval is written to the console — useful when answers cite the wrong thing, noisy otherwise.</string>
+    <string name="settings_help_memory_actions">Re-embed rebuilds every vector with the current provider; it runs in the background and memory search is unreliable until it ends.</string>
+    <string name="settings_help_pipeline_max_nesting_depth">How many levels of sub-pipeline a run may descend into before it is refused. Deeper composes more; shallow fails a runaway sooner.</string>
+    <string name="settings_help_structured_output_max_repairs">When a model answers in the wrong shape, how many times it is shown its own output and asked again before the node gives up.</string>
+    <string name="settings_help_tool_approval_policy">Which tool calls stop and wait for you. Destructive ones are gated separately and stay gated whatever you pick here.</string>
+    <string name="settings_help_block_destructive_tools">Destructive calls always stop for a typed confirmation, even when approvals are set to Never.</string>
+    <string name="settings_help_block_network_from_local_model">The on-device model gets no network of its own. Cloud providers are gated separately, by their keys.</string>
+    <string name="settings_help_tool_call_timeout_ms">How long one tool call may take before it is abandoned. Short frees a stuck run sooner; long suits slow servers.</string>
+    <string name="settings_help_workspace_max_file_size_bytes">The largest single file the workspace accepts, for both writing one and reading one whole.</string>
+    <string name="settings_help_workspace_max_total_bytes">How much device storage the whole workspace may hold. A write that would pass it is refused rather than trimmed.</string>
+    <string name="settings_help_workspace_read_token_budget">How much of a file one read may put in front of the model. The rest is cut, leaving room for the prompt and the thread.</string>
+    <string name="settings_help_http_tool_max_response_bytes">How much of a web response reaches the model. Past it the body is cut and marked, so remote text cannot flood the context.</string>
+    <string name="settings_help_scheduled_task_notifications">A notification arrives when a scheduled task finishes or fails, so a background result does not wait for you to open the app.</string>
+    <string name="settings_help_share_target_pipeline_id">Which pipeline runs when you share text or a link into the app from somewhere else.</string>
+    <string name="settings_help_share_reuse_session">On, every share lands in one Shared chat. Off, each share opens its own, so the chat list grows with each one.</string>
+    <string name="settings_help_quick_settings_tile_pipeline_id">Which pipeline the Quick Settings tile runs when you tap it from the notification shade.</string>
+    <string name="settings_help_external_automation_enabled">Other apps on this device can start a run — Tasker, MacroDroid, adb. Off, those requests are refused.</string>
+    <string name="settings_help_external_automation_pipeline_id">The only pipeline an outside app may start. Nothing else can be named in the request, whatever it asks for.</string>
+    <string name="settings_help_resume_max_age_hours">How stale a parked run may be and still resume. Past it the run is dropped, because its gathered context no longer holds.</string>
+    <string name="settings_help_background_approval_window_hours">How long a background run waits for you to approve a tool call. Unanswered past it, the run ends instead of waiting on.</string>
+    <string name="settings_help_crash_reporting_enabled">Off, nothing leaves the device. On, a crash sends the stack trace only — never your messages, files or keys.</string>
+    <string name="settings_help_trace_retention_runs_per_session">How many past runs keep their step-by-step trace in a chat. Older traces are dropped; the messages themselves stay.</string>
+    <string name="settings_help_trace_retention_max_age_days">How long a trace is kept before it is dropped, whatever the per-chat count. Bounds what accumulates on disk.</string>
+</resources>

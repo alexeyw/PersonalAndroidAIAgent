@@ -40,7 +40,7 @@ fun PrivacySettingsContent(
                 IconToggleRow(
                     icon = AppIcons.Shield,
                     title = stringResource(R.string.knotwork_settings_crash_reporting_label),
-                    state = stringResource(R.string.knotwork_settings_crash_reporting_hint),
+                    state = "",
                     checked = state.crashReportingEnabled,
                     onCheckedChange = callbacks.onCrashReportingToggle,
                 )

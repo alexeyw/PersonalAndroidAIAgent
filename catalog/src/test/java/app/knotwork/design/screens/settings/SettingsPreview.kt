@@ -128,13 +128,10 @@ internal object SettingsPreview {
         ),
         autoExtractEnabled = true,
         autoExtractLabel = "Auto-extract from conversations",
-        autoExtractSubtitle = "Saves durable facts to memory after each chat",
         compactionEnabled = true,
         compactionLabel = "Background compaction",
-        compactionSubtitle = "Daily clustering of stale chunks while charging",
         chatHistoryCompressionEnabled = true,
         chatHistoryCompressionLabel = "Compress chat history",
-        chatHistoryCompressionSubtitle = "Summarise long threads past the live window",
         advancedSliders = memorySliders(),
         verboseLoggingEnabled = false,
         embeddingTitle = "Embedding model",
@@ -272,9 +269,7 @@ internal object SettingsPreview {
         approveSensitiveLabel = "Sensitive",
         approveNeverLabel = "Never",
         blockDestructive = true,
-        blockDestructiveSubtitle = "Always require a typed confirm for destructive calls.",
         blockNetwork = true,
-        blockNetworkSubtitle = "LiteRT runs offline · cloud gated separately.",
     )
 
     // ─── Background ──────────────────────────────────────────────────────────

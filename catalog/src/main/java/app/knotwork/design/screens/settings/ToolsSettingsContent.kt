@@ -64,7 +64,7 @@ fun ToolsSettingsContent(
             IconToggleRow(
                 icon = AppIcons.Shield,
                 title = stringResource(R.string.knotwork_settings_restrictions_block_destructive),
-                state = state.blockDestructiveSubtitle,
+                state = "",
                 checked = state.blockDestructive,
                 onCheckedChange = callbacks.onBlockDestructiveChange,
             )
@@ -73,7 +73,7 @@ fun ToolsSettingsContent(
             IconToggleRow(
                 icon = AppIcons.Block,
                 title = stringResource(R.string.knotwork_settings_restrictions_block_network),
-                state = state.blockNetworkSubtitle,
+                state = "",
                 checked = state.blockNetwork,
                 onCheckedChange = callbacks.onBlockNetworkChange,
             )
