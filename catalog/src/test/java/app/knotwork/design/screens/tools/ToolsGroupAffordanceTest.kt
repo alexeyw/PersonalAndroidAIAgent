@@ -6,10 +6,12 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.knotwork.design.R
 import app.knotwork.design.theme.KnotworkTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -126,7 +128,31 @@ class ToolsGroupAffordanceTest {
         assertEquals(disconnected.mcpServers.first().id, refreshed)
     }
 
+    @Test
+    fun `a collapsible header offers a finger-sized target`() {
+        setContent { ToolsContent(state = ToolsPreview.default()) }
+
+        // `node.size` reports the drawn box; only `touchBoundsInRoot` sees the
+        // minimum-target expansion Compose applies around a clickable, which is
+        // what a finger actually aims at.
+        val floorPx = with(composeTestRule.density) { MIN_TOUCH_TARGET.toPx() }
+        val bounds = composeTestRule
+            .onNodeWithText(string(R.string.knotwork_tools_section_built_in))
+            .fetchSemanticsNode()
+            .touchBoundsInRoot
+
+        assertTrue(
+            "section header touch area is ${bounds.width}x${bounds.height} px, below the floor",
+            bounds.height >= floorPx,
+        )
+    }
+
     private fun setContent(content: @Composable () -> Unit) {
         composeTestRule.setContent { KnotworkTheme { content() } }
+    }
+
+    private companion object {
+        /** Material's minimum touch target. */
+        val MIN_TOUCH_TARGET = 48.dp
     }
 }

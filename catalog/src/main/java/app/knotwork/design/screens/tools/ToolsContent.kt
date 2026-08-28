@@ -112,7 +112,13 @@ private const val DISCONNECTED_ROW_ALPHA = 0.6f
 private data class ServerSubtitle(val state: McpConnectionState, val label: String, val count: Int)
 
 /**
- * Stateless Knotwork tools surface.
+ * Knotwork tools surface.
+ *
+ * Stateless except for one thing: which groups are folded. That is view state
+ * with no consumer outside this surface, so it is held here in
+ * `rememberSaveable` rather than hoisted into a bag every caller would have to
+ * thread. Everything else — the rows, the counts, the connection states —
+ * arrives in [ToolsViewState].
  *
  *  - TopAppBar with title + monospace "N built-in · M MCP" subtitle;
  *    trailing overflow icon.

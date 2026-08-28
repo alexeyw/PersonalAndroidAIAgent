@@ -148,14 +148,18 @@ fun KnotworkSectionHeader(
                 },
             )
             .heightIn(min = if (collapsible) HeaderMinHeight else 0.dp)
+            // The heading lives on the header row itself, not on an inner
+            // column. An inner `mergeDescendants` block would be a second
+            // merged node inside the one `clickable` already creates, so the
+            // header announced twice — as a button, and separately as a
+            // heading — and the count and warning landed on the half that
+            // carries no action.
+            .semantics(mergeDescendants = true) { heading() }
             .padding(horizontal = KnotworkTheme.spacing.sp4, vertical = KnotworkTheme.spacing.sp3),
     ) {
         Column(
             verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
-            // The whole header announces as one heading, so a screen reader
-            // hears the title, the count and the warning together rather than
-            // three unrelated labels.
-            modifier = Modifier.weight(1f).semantics(mergeDescendants = true) { heading() },
+            modifier = Modifier.weight(1f),
         ) {
             Text(
                 text = title,

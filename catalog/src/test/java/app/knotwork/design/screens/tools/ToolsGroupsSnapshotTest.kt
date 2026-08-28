@@ -35,15 +35,11 @@ class ToolsGroupsSnapshotTest {
     @get:Rule
     val composeTestRule = createComposeRule()
 
-    @Test
-    fun tools_groups_expanded_light() = snapshot(name = "groups_expanded", dark = false) {
-        ToolsContent(state = ToolsPreview.default())
-    }
-
-    @Test
-    fun tools_groups_expanded_dark() = snapshot(name = "groups_expanded", dark = true) {
-        ToolsContent(state = ToolsPreview.default())
-    }
+    // Both-groups-expanded is the default surface, already pinned byte-for-byte
+    // by `tools_default_{light,dark}` in `ToolsContentSnapshotTest`. The handoff
+    // named it `tools_groups_expanded_*`; recording it under a second name
+    // produced two identical PNGs and a second thing to re-record on every
+    // change, so the existing baseline keeps the job.
 
     @Test
     fun tools_group_builtin_collapsed_light() = snapshot(
