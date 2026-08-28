@@ -15,8 +15,8 @@ details.
 
 ### Changed
 
-- **Every settings option now explains itself, in one sentence, where it
-  lives.** Tap the **ⓘ** beside a row's label and a short explanation opens in
+- **Settings options now explain themselves, in one sentence, where they
+  live.** Tap the **ⓘ** beside a row's label and a short explanation opens in
   place, under the row; opening one closes the other, so a category screen is
   never more than one panel taller than at rest. Sliders had *no* explanation
   slot at all before this — the controls whose meaning is least guessable
@@ -25,6 +25,16 @@ details.
   identity and version rows, plain actions like *Export memories* — carry no
   glyph, and the reason each one carries none is recorded rather than left
   implicit.
+
+- **Seven settings now say plainly that they do nothing yet, instead of being
+  described.** Writing an explanation for each row turned out to be a way of
+  auditing it, and seven rows failed the audit: the four sampling sliders
+  (**Temperature**, **Top-K**, **Top-P**, **Repetition penalty**) never reach
+  the on-device engine, **Tool-usage instruction** and **Auto-summarize
+  threshold** are read by nothing, and **Long-running task alerts** gates a
+  notification that is never posted. Each is recorded as *behaviour not shipped*
+  rather than given a fluent sentence about behaviour the build does not have.
+  The defects are filed; the rows will either start working or be removed.
 
 - **The explanations that used to sit under a row are gone from that slot.**
   Small muted text under a label is where the app shows what a row is *set to*
@@ -35,8 +45,8 @@ details.
   one of them quoting an "8 s" threshold that no constant in the code holds.
   There is now one copy, and `docs/user-guide.md` is generated from it.
 
-- **The settings hub tells you how long each category is** before you open it,
-  and its category summaries are no longer rendered as muted micro-type.
+- **The settings hub's category summaries are no longer muted micro-type.** They
+  explain what a category is for, and that slot is reserved for machine state.
 
 - **A switch you cannot use is no longer greyed out.** An unbound trigger row
   used to show a dimmed switch, which reads as broken rather than as waiting on
