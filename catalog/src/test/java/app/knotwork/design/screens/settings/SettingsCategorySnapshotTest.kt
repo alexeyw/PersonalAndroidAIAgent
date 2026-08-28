@@ -287,6 +287,13 @@ class SettingsCategorySnapshotTest {
         /**
          * Help text for the snapshot fixtures.
          *
+         * **Hand-maintained, and nothing enforces it.** The catalog module
+         * cannot read the app's `SettingsHelpCatalog`, so the key set is kept in
+         * step by review — which is how `CHAT_HISTORY_COMPRESSION_ENABLED` came
+         * to be missing while sitting between two rows that had their glyph, in
+         * the most-viewed frame of the screen. When adding a hint to a row that
+         * appears on a captured screen, add its anchor here too.
+         *
          * Anchors here must match the rows production actually gives a glyph:
          * a fixture entry for a `BEHAVIOUR_NOT_SHIPPED` row would certify an
          * affordance the app omits, and a missing one leaves a shipped glyph in
@@ -305,6 +312,27 @@ class SettingsCategorySnapshotTest {
             "MEMORY_SEARCH_THRESHOLD" to SettingsHint(
                 "Higher recalls only close matches, so less is pulled in; " +
                     "lower recalls more, including memories that miss the point.",
+            ),
+            // Basic, and directly below the two rows above it — so its absence
+            // showed as a row without a glyph next to two that had one, in the
+            // most-viewed frame of the screen.
+            "CHAT_HISTORY_COMPRESSION_ENABLED" to SettingsHint(
+                "Long threads are summarised past the live window, so the agent keeps the gist.",
+            ),
+            "ACTIVE_EMBEDDING_PROVIDER_ID" to SettingsHint(
+                "The model that turns text into the numbers memory search compares.",
+            ),
+            "VERBOSE_MEMORY_LOGGING_ENABLED" to SettingsHint(
+                "Adds each recalled memory, text included, to the console.",
+            ),
+            "MEMORY_ACTIONS" to SettingsHint(
+                "Re-embed rebuilds every vector for the current model.",
+            ),
+            "MAX_CONTEXT_LENGTH" to SettingsHint(
+                "The working window of the on-device model. Larger holds more at once and runs slower.",
+            ),
+            "AUDIO_MAX_DURATION_SEC" to SettingsHint(
+                "Recording stops on its own at this point and sends what it has.",
             ),
             "MEMORY_COMPACTION_ENABLED" to SettingsHint(
                 "Old memories get merged into shorter summaries once there are many. " +

@@ -813,7 +813,13 @@ class ChatHomeViewModelTest {
         assertTrue("the first attachment replaces nothing", replaced.isEmpty())
 
         val second = MessageAttachment(path = "second.jpg", mimeType = "image/jpeg", width = 20, height = 20)
-        coEvery { attachmentStore.ingestUri("content://second") } returns kotlin.Result.success(second)
+        coEvery { attachmentStore.ingestUri("content://second") } coAnswers {
+            // Asserted mid-flight: counting events at the end would pass just as
+            // well if the announcement fired before the ingest, which is the
+            // bug this test is named for.
+            assertTrue("nothing may be announced while the ingest is in flight", replaced.isEmpty())
+            kotlin.Result.success(second)
+        }
         viewModel.attachments.onImagePicked("content://second")
         advanceUntilIdle()
 
