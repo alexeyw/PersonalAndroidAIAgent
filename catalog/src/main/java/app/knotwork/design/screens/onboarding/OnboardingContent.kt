@@ -265,10 +265,15 @@ private fun StepHeadline(text: String) {
 
 @Composable
 private fun StepBody(text: String) {
+    // Near-full ink, not muted. This paragraph is the one that says cloud
+    // providers exist and are optional, and the first external tester skipped it
+    // on sight — "Серенькым обычно неважное" · "Я такое не читаю". Muted type is
+    // the slot this app uses for machine state, and a reader who learns that
+    // slot stops reading anything in it, however important the sentence is.
     Text(
         text = text,
         style = KnotworkTextStyles.BodyBase,
-        color = KnotworkTheme.extended.onSurfaceMuted,
+        color = KnotworkTheme.extended.onSurface2,
     )
 }
 

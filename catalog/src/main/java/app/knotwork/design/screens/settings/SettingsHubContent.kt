@@ -59,7 +59,9 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * @property id Stable category id (routed on tap).
  * @property icon Leading glyph (reuses an existing `AppIcons.*`).
  * @property titleRes Localised category title.
- * @property summaryRes Localised one-line summary.
+ * @property summaryRes Localised one-line summary. This is the category-level
+ *   explanation, which is why no category row carries a help glyph of its own:
+ *   a glyph there would explain a door.
  */
 private data class HubCategoryMeta(
     val id: SettingsCategoryId,
@@ -186,7 +188,11 @@ private fun HubDefaultBody(state: SettingsHubViewState, callbacks: SettingsCallb
     ) {
         HubBasicBlock(state = state, callbacks = callbacks)
         HorizontalDivider(color = KnotworkTheme.extended.divider)
-        HubCategoriesBlock(loading = state.loading, onOpenCategory = callbacks.onOpenCategory)
+        HubCategoriesBlock(
+            loading = state.loading,
+            rowCounts = state.categoryRowCounts,
+            onOpenCategory = callbacks.onOpenCategory,
+        )
     }
 }
 
@@ -465,20 +471,29 @@ private fun HubBasicBlock(state: SettingsHubViewState, callbacks: SettingsCallba
 }
 
 @Composable
-private fun HubCategoriesBlock(loading: Boolean, onOpenCategory: (SettingsCategoryId) -> Unit) {
+private fun HubCategoriesBlock(
+    loading: Boolean,
+    rowCounts: Map<SettingsCategoryId, Int>,
+    onOpenCategory: (SettingsCategoryId) -> Unit,
+) {
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
     ) {
         SettingsSectionLabel(text = stringResource(R.string.knotwork_settings_hub_categories))
         HUB_CATEGORIES.forEach { meta ->
-            HubCategoryRow(meta = meta, loading = loading, onClick = { onOpenCategory(meta.id) })
+            HubCategoryRow(
+                meta = meta,
+                loading = loading,
+                rowCount = rowCounts[meta.id],
+                onClick = { onOpenCategory(meta.id) },
+            )
         }
     }
 }
 
 @Composable
-private fun HubCategoryRow(meta: HubCategoryMeta, loading: Boolean, onClick: () -> Unit) {
+private fun HubCategoryRow(meta: HubCategoryMeta, loading: Boolean, rowCount: Int?, onClick: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
@@ -511,12 +526,22 @@ private fun HubCategoryRow(meta: HubCategoryMeta, loading: Boolean, onClick: () 
                         .height(LOADING_SUMMARY_HEIGHT),
                 )
             } else {
+                // Body-size and near-full ink, because the summary explains the
+                // category. Muted micro-type is reserved for machine state, and
+                // a reader who learns that slot stops reading anything in it.
                 Text(
                     text = stringResource(meta.summaryRes),
-                    style = KnotworkTextStyles.MonoSm,
-                    color = KnotworkTheme.extended.onSurfaceMuted,
+                    style = KnotworkTextStyles.BodySm,
+                    color = KnotworkTheme.extended.onSurface2,
                 )
             }
+        }
+        if (rowCount != null && !loading) {
+            Text(
+                text = rowCount.toString(),
+                style = KnotworkTextStyles.MonoSm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
         }
         Icon(imageVector = AppIcons.ArrowR, contentDescription = null, tint = KnotworkTheme.extended.onSurfaceMuted)
     }

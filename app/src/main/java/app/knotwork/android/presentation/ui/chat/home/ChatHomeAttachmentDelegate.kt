@@ -54,6 +54,18 @@ class ChatHomeAttachmentDelegate(
      */
     val attachmentErrorEvents: SharedFlow<Unit> = _attachmentErrorEvents.asSharedFlow()
 
+    private val _attachmentReplacedEvents: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 1)
+
+    /**
+     * Emitted when picking an image discards one already attached.
+     *
+     * The composer holds exactly one attachment, and the replacement used to be
+     * silent: the first external tester attached a second image, watched the
+     * first vanish with no explanation, and called it "an unpleasant surprise".
+     * The limit stays — saying so is what was missing.
+     */
+    val attachmentReplacedEvents: SharedFlow<Unit> = _attachmentReplacedEvents.asSharedFlow()
+
     /**
      * Resolves whether an image message must be blocked before it is enqueued,
      * returning the user-facing block reason or `null` when the send may proceed.
@@ -113,6 +125,7 @@ class ChatHomeAttachmentDelegate(
         scope.launch {
             if (replacedPath != null) {
                 attachmentStore.delete(replacedPath)
+                _attachmentReplacedEvents.tryEmit(Unit)
             }
             val stored = attachmentStore.ingestUri(uri).getOrNull()
             if (stored != null) {

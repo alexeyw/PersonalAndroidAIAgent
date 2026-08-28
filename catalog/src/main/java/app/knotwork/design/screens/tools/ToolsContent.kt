@@ -76,6 +76,8 @@ import app.knotwork.design.components.misc.EmptyState
 import app.knotwork.design.components.misc.KnotworkWarningBanner
 import app.knotwork.design.components.misc.StripedPlaceholder
 import app.knotwork.design.icons.AppIcons
+import app.knotwork.design.screens.settings.KnotworkHelpEntry
+import app.knotwork.design.screens.settings.KnotworkHintPanel
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -1208,12 +1210,29 @@ fun McpServerConfigContent(
                 .verticalScroll(state = rememberScrollState())
                 .padding(KnotworkTheme.spacing.sp4),
         ) {
-            FormSectionLabel(text = stringResource(R.string.knotwork_tools_add_form_header))
+            // The placeholder used to read `https://… or mcp://host:port`, which
+            // sent the first external tester looking for a port number he had no
+            // way to know. It is now one real address, and the question it kept
+            // raising is answered by the hint rather than by the field.
+            var addressHintOpen by remember { mutableStateOf(false) }
+            val addressLabel = stringResource(R.string.knotwork_tools_add_form_header)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                FormSectionLabel(text = addressLabel)
+                KnotworkHelpEntry(
+                    settingName = addressLabel,
+                    expanded = addressHintOpen,
+                    onToggle = { addressHintOpen = !addressHintOpen },
+                )
+            }
             OutlinedFormTextField(
                 value = form.url,
                 onValueChange = callbacks.onUrlChange,
                 placeholder = stringResource(R.string.knotwork_tools_add_form_placeholder),
                 isError = form.urlError != null,
+            )
+            KnotworkHintPanel(
+                visible = addressHintOpen,
+                text = stringResource(R.string.knotwork_tools_add_form_address_hint),
             )
             if (form.urlError != null) {
                 Text(

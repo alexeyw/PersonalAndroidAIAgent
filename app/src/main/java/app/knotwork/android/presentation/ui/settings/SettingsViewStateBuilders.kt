@@ -10,6 +10,7 @@ import app.knotwork.android.domain.constants.SettingsDefaults
 import app.knotwork.android.domain.models.ActiveModelMeta
 import app.knotwork.android.domain.models.LocalBackend
 import app.knotwork.android.domain.models.ToolApprovalPolicy
+import app.knotwork.android.domain.settings.SettingsRegistry
 import app.knotwork.android.presentation.common.DisplayFormat
 import app.knotwork.design.screens.settings.AboutSettingsViewState
 import app.knotwork.design.screens.settings.ApproveToolCallsOption
@@ -49,6 +50,7 @@ import app.knotwork.design.screens.settings.SLIDER_TOP_K
 import app.knotwork.design.screens.settings.SLIDER_TOP_P
 import app.knotwork.design.screens.settings.SettingSliderRow
 import app.knotwork.design.screens.settings.SettingsHubViewState
+import app.knotwork.design.screens.settings.SettingsCategoryId as CatalogCategoryId
 import app.knotwork.design.screens.settings.SystemInstructionsCardState
 import app.knotwork.design.screens.settings.ToolsSettingsViewState
 import java.text.SimpleDateFormat
@@ -77,7 +79,20 @@ internal fun buildHubViewState(uiState: SettingsUiState): SettingsHubViewState =
         .takeIf { uiState.restartRequired },
     searchQuery = uiState.searchQuery,
     searchResults = uiState.searchResults,
+    categoryRowCounts = CATEGORY_ROW_COUNTS,
 )
+
+/**
+ * How many settings each category holds, derived from the registry rather than
+ * counted by hand — so a setting added anywhere updates the hub without anyone
+ * remembering to.
+ *
+ * Shown because "how long is this screen" was a real complaint in closed
+ * testing ("Тут тумблеров" / "Я тут состарюсь"), and a count answers it before
+ * the reader commits to scrolling.
+ */
+private val CATEGORY_ROW_COUNTS: Map<CatalogCategoryId, Int> =
+    SettingsRegistry.categories.associate { category -> category.id.toCatalog() to category.entries.size }
 
 /** Builds the Generation category state (system instructions + advanced sampling). */
 @Composable

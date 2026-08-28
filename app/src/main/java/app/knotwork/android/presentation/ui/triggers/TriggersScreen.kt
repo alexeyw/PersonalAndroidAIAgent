@@ -605,6 +605,7 @@ private fun triggersStrings(): TriggersStrings = TriggersStrings(
     moreCd = stringResource(R.string.triggers_more_cd),
     fab = stringResource(R.string.triggers_fab),
     unboundHint = stringResource(R.string.triggers_unbound_hint),
+    bind = stringResource(R.string.triggers_bind),
     menuEdit = stringResource(R.string.triggers_menu_edit),
     menuDelete = stringResource(R.string.triggers_menu_delete),
     emptyTitle = stringResource(R.string.triggers_empty_title),

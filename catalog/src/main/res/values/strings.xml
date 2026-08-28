@@ -343,7 +343,9 @@
     <string name="knotwork_tools_cleartext_consent_body">Traffic to %1$s is not encrypted. Anyone on the same network can read what you send, including any token set below. Approve it only if this address is a machine you trust on your own network.</string>
     <string name="knotwork_tools_cleartext_consent_action">Approve unencrypted connection</string>
     <!-- Add-server form placeholder. -->
-    <string name="knotwork_tools_add_form_placeholder">https://… or mcp://host:port</string>
+    <string name="knotwork_tools_add_form_placeholder">http://192.168.1.42:3000/sse</string>
+    <!-- Add-server address explanation, opened from the field\'s help glyph. -->
+    <string name="knotwork_tools_add_form_address_hint">The SSE endpoint your MCP server prints when it starts. Addresses on your own network work; the app never proxies it.</string>
     <!-- Add-server cancel button label. -->
     <string name="knotwork_tools_add_form_cancel">Cancel</string>
     <!-- Add-server submit button label. -->
@@ -961,7 +963,7 @@
     <string name="knotwork_files_title">Files</string>
     <string name="knotwork_files_subtitle">AGENT WORKSPACE</string>
     <string name="knotwork_files_back_cd">Back</string>
-    <string name="knotwork_files_refresh_cd">Refresh</string>
+    <string name="knotwork_files_refresh_cd">Rescan the workspace</string>
     <!-- Quota header. -->
     <plurals name="knotwork_files_count">
         <item quantity="one">file</item>
