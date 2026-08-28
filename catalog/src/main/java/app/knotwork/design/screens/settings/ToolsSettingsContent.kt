@@ -64,7 +64,7 @@ fun ToolsSettingsContent(
             IconToggleRow(
                 icon = AppIcons.Shield,
                 title = stringResource(R.string.knotwork_settings_restrictions_block_destructive),
-                subtitle = state.blockDestructiveSubtitle,
+                state = state.blockDestructiveSubtitle,
                 checked = state.blockDestructive,
                 onCheckedChange = callbacks.onBlockDestructiveChange,
             )
@@ -73,7 +73,7 @@ fun ToolsSettingsContent(
             IconToggleRow(
                 icon = AppIcons.Block,
                 title = stringResource(R.string.knotwork_settings_restrictions_block_network),
-                subtitle = state.blockNetworkSubtitle,
+                state = state.blockNetworkSubtitle,
                 checked = state.blockNetwork,
                 onCheckedChange = callbacks.onBlockNetworkChange,
             )
@@ -82,7 +82,7 @@ fun ToolsSettingsContent(
             NavLinkRow(
                 icon = AppIcons.Tool,
                 title = stringResource(R.string.knotwork_settings_tools_manage_title),
-                subtitle = stringResource(R.string.knotwork_settings_tools_manage_subtitle),
+                state = stringResource(R.string.knotwork_settings_tools_manage_subtitle),
                 onClick = callbacks.onOpenManageTools,
             )
         }
@@ -95,7 +95,7 @@ fun ToolsSettingsContent(
                     NavLinkRow(
                         icon = AppIcons.Block,
                         title = stringResource(R.string.knotwork_settings_tools_domains_title),
-                        subtitle = stringResource(R.string.knotwork_settings_tools_domains_subtitle),
+                        state = stringResource(R.string.knotwork_settings_tools_domains_subtitle),
                         onClick = callbacks.onOpenAllowedDomains,
                     )
                 }

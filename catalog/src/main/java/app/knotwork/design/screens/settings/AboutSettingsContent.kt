@@ -61,7 +61,7 @@ fun AboutSettingsContent(
             NavLinkRow(
                 icon = AppIcons.Info,
                 title = stringResource(R.string.knotwork_settings_about_version_title),
-                subtitle = state.versionLine,
+                state = state.versionLine,
                 onClick = callbacks.onOpenLicenses,
             )
         }

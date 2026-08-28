@@ -465,6 +465,11 @@
     <string name="knotwork_settings_advanced_title">Advanced</string>
     <string name="knotwork_settings_advanced_subtitle">change deliberately</string>
 
+    <!-- Settings hints: the entry glyph's action, and the state it announces. -->
+    <string name="knotwork_settings_hint_open_cd">Explain: %1$s</string>
+    <string name="knotwork_settings_hint_state_collapsed">collapsed</string>
+    <string name="knotwork_settings_hint_state_expanded">expanded</string>
+
     <string name="knotwork_settings_cat_generation_title">Generation</string>
     <string name="knotwork_settings_cat_generation_summary">System prompt · sampling · voice</string>
     <string name="knotwork_settings_cat_models_title">Models</string>

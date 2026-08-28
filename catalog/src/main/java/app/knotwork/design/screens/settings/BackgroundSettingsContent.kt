@@ -37,7 +37,7 @@ fun BackgroundSettingsContent(
             IconToggleRow(
                 icon = AppIcons.Bolt,
                 title = stringResource(R.string.knotwork_settings_notifications_long_running),
-                subtitle = stringResource(R.string.knotwork_settings_notifications_long_running_subtitle),
+                state = stringResource(R.string.knotwork_settings_notifications_long_running_subtitle),
                 checked = state.longRunningEnabled,
                 onCheckedChange = callbacks.onLongRunningToggle,
             )
@@ -46,7 +46,7 @@ fun BackgroundSettingsContent(
             IconToggleRow(
                 icon = AppIcons.History,
                 title = stringResource(R.string.knotwork_settings_notifications_scheduled_results),
-                subtitle = stringResource(R.string.knotwork_settings_notifications_scheduled_results_subtitle),
+                state = stringResource(R.string.knotwork_settings_notifications_scheduled_results_subtitle),
                 checked = state.scheduledResultsEnabled,
                 onCheckedChange = callbacks.onScheduledResultsToggle,
             )
@@ -55,7 +55,7 @@ fun BackgroundSettingsContent(
             NavLinkRow(
                 icon = AppIcons.Share,
                 title = stringResource(R.string.knotwork_settings_share_pipeline_title),
-                subtitle = state.shareTargetPipelineLabel,
+                state = state.shareTargetPipelineLabel,
                 onClick = callbacks.onShareTargetPipelineClick,
             )
         }
@@ -63,7 +63,7 @@ fun BackgroundSettingsContent(
             IconToggleRow(
                 icon = AppIcons.Chat,
                 title = stringResource(R.string.knotwork_settings_share_reuse_title),
-                subtitle = stringResource(R.string.knotwork_settings_share_reuse_subtitle),
+                state = stringResource(R.string.knotwork_settings_share_reuse_subtitle),
                 checked = state.shareReuseSessionEnabled,
                 onCheckedChange = callbacks.onShareReuseSessionToggle,
             )
@@ -72,7 +72,7 @@ fun BackgroundSettingsContent(
             NavLinkRow(
                 icon = AppIcons.Bolt,
                 title = stringResource(R.string.knotwork_settings_tile_pipeline_title),
-                subtitle = state.quickTilePipelineLabel,
+                state = state.quickTilePipelineLabel,
                 onClick = callbacks.onQuickTilePipelineClick,
             )
         }
@@ -80,7 +80,7 @@ fun BackgroundSettingsContent(
             IconToggleRow(
                 icon = AppIcons.External,
                 title = stringResource(R.string.knotwork_settings_external_automation_title),
-                subtitle = stringResource(
+                state = stringResource(
                     if (state.externalAutomationEnabled) {
                         R.string.knotwork_settings_external_automation_subtitle_on
                     } else {
@@ -95,12 +95,12 @@ fun BackgroundSettingsContent(
             NavLinkRow(
                 icon = AppIcons.Flow,
                 title = stringResource(R.string.knotwork_settings_external_pipeline_title),
-                subtitle = state.externalAutomationPipelineLabel,
+                state = state.externalAutomationPipelineLabel,
                 onClick = callbacks.onExternalAutomationPipelineClick,
                 // A switched-on surface with nothing bound accepts nothing. Left
                 // as an ordinary "Not set" it reads as an untouched default; the
                 // warning treatment is what tells it apart from one.
-                subtitleWarning = state.externalAutomationUnbound,
+                stateWarning = state.externalAutomationUnbound,
             )
         }
         SettingsAnchor(anchorKey = SettingsRowAnchors.LINK_EXTERNAL_AUTOMATION_JOURNAL) {
@@ -110,7 +110,7 @@ fun BackgroundSettingsContent(
                 // shorter scan of the list read them as the same kind of thing.
                 icon = AppIcons.Monitor,
                 title = stringResource(R.string.knotwork_settings_external_journal_title),
-                subtitle = state.externalAutomationJournalLabel,
+                state = state.externalAutomationJournalLabel,
                 onClick = callbacks.onOpenExternalAutomationJournal,
             )
         }

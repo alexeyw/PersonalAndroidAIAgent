@@ -55,7 +55,7 @@ fun MemorySettingsContent(
             IconToggleRow(
                 icon = AppIcons.Bolt,
                 title = state.autoExtractLabel,
-                subtitle = state.autoExtractSubtitle,
+                state = state.autoExtractSubtitle,
                 checked = state.autoExtractEnabled,
                 onCheckedChange = callbacks.onAutoExtractToggle,
             )
@@ -64,7 +64,7 @@ fun MemorySettingsContent(
             IconToggleRow(
                 icon = AppIcons.Refresh,
                 title = state.compactionLabel,
-                subtitle = state.compactionSubtitle,
+                state = state.compactionSubtitle,
                 checked = state.compactionEnabled,
                 onCheckedChange = callbacks.onMemoryCompactionToggle,
             )
@@ -73,7 +73,7 @@ fun MemorySettingsContent(
             IconToggleRow(
                 icon = AppIcons.History,
                 title = state.chatHistoryCompressionLabel,
-                subtitle = state.chatHistoryCompressionSubtitle,
+                state = state.chatHistoryCompressionSubtitle,
                 checked = state.chatHistoryCompressionEnabled,
                 onCheckedChange = callbacks.onChatHistoryCompressionToggle,
             )
@@ -100,7 +100,7 @@ fun MemorySettingsContent(
                     IconToggleRow(
                         icon = AppIcons.Ram,
                         title = stringResource(R.string.knotwork_settings_verbose_memory_logging_label),
-                        subtitle = stringResource(R.string.knotwork_settings_verbose_memory_logging_hint),
+                        state = stringResource(R.string.knotwork_settings_verbose_memory_logging_hint),
                         checked = state.verboseLoggingEnabled,
                         onCheckedChange = callbacks.onVerboseMemoryLoggingToggle,
                     )

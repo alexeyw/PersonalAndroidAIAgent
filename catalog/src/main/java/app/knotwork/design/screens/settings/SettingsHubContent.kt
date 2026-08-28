@@ -409,7 +409,7 @@ private fun HubBasicBlock(state: SettingsHubViewState, callbacks: SettingsCallba
         NavLinkRow(
             icon = AppIcons.Spark,
             title = stringResource(R.string.knotwork_settings_section_system_instructions),
-            subtitle = state.systemInstructionsPreview.ifBlank {
+            state = state.systemInstructionsPreview.ifBlank {
                 stringResource(R.string.knotwork_settings_hub_system_instructions_empty)
             },
             onClick = callbacks.onOpenSystemInstructions,
@@ -436,7 +436,7 @@ private fun HubBasicBlock(state: SettingsHubViewState, callbacks: SettingsCallba
         IconToggleRow(
             icon = AppIcons.Shield,
             title = stringResource(R.string.knotwork_settings_restrictions_block_destructive),
-            subtitle = "",
+            state = "",
             checked = state.blockDestructive,
             onCheckedChange = callbacks.onBlockDestructiveChange,
         )
@@ -450,14 +450,14 @@ private fun HubBasicBlock(state: SettingsHubViewState, callbacks: SettingsCallba
         IconToggleRow(
             icon = AppIcons.Bolt,
             title = stringResource(R.string.knotwork_settings_notifications_long_running),
-            subtitle = "",
+            state = "",
             checked = state.longRunningEnabled,
             onCheckedChange = callbacks.onLongRunningToggle,
         )
         IconToggleRow(
             icon = AppIcons.Shield,
             title = stringResource(R.string.knotwork_settings_crash_reporting_label),
-            subtitle = "",
+            state = "",
             checked = state.crashReportingEnabled,
             onCheckedChange = callbacks.onCrashReportingToggle,
         )

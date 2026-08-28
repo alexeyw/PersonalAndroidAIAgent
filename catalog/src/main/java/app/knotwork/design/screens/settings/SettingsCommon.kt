@@ -18,6 +18,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -268,20 +270,28 @@ internal fun AdvancedDisclosure(initiallyExpanded: Boolean = false, content: @Co
 
 // ─── Rows ────────────────────────────────────────────────────────────────────
 
-/** Icon + title + subtitle + trailing Material Switch; the whole row toggles. */
+/**
+ * Icon + title + state + trailing Material Switch; the whole row toggles.
+ *
+ * @param state What the row is set to **now** — `NPU · auto`, `412 memories`.
+ *   Never a sentence about what the row means: that is what [hintAnchor]
+ *   summons. The two were one slot until the closed test showed that muted text
+ *   under a label reads as machine state and goes unread.
+ */
 @Composable
 internal fun IconToggleRow(
     icon: ImageVector,
     title: String,
-    subtitle: String,
+    state: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    Column(modifier = modifier.fillMaxWidth()) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .clickable { onCheckedChange(!checked) },
     ) {
@@ -292,14 +302,10 @@ internal fun IconToggleRow(
             modifier = Modifier.size(KnotworkTheme.spacing.sp5),
         )
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            if (subtitle.isNotBlank()) {
+            RowLabelWithHint(title = title)
+            if (state.isNotBlank()) {
                 Text(
-                    text = subtitle,
+                    text = state,
                     style = KnotworkTextStyles.MonoSm,
                     color = KnotworkTheme.extended.onSurfaceMuted,
                 )
@@ -316,12 +322,37 @@ internal fun IconToggleRow(
             modifier = Modifier.scale(SWITCH_SCALE),
         )
     }
+        SettingsHintBody()
+    }
 }
 
 /**
- * Icon + title + subtitle + trailing chevron; routes to another screen.
+ * A row label with its help glyph, laid out so the glyph wraps onto its own
+ * line instead of squeezing the label at large font scales.
  *
- * @param subtitleWarning Renders the subtitle as a warning — a leading warn glyph
+ * @param title Row label.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RowLabelWithHint(title: String) {
+    FlowRow(verticalArrangement = Arrangement.Center) {
+        Text(
+            text = title,
+            style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.align(Alignment.CenterVertically),
+        )
+        SettingsHintGlyph(
+            settingName = title,
+            modifier = Modifier.align(Alignment.CenterVertically),
+        )
+    }
+}
+
+/**
+ * Icon + title + state + trailing chevron; routes to another screen.
+ *
+ * @param stateWarning Renders the state line as a warning — a leading warn glyph
  *   plus the warn tint — for a row whose current value leaves the feature
  *   incomplete. The glyph is not decoration: it is what carries the state for a
  *   reader who cannot see the tint, so the row never says "something is wrong"
@@ -331,15 +362,16 @@ internal fun IconToggleRow(
 internal fun NavLinkRow(
     icon: ImageVector,
     title: String,
-    subtitle: String,
+    state: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    subtitleWarning: Boolean = false,
-) {
+    stateWarning: Boolean = false,
+                        ) {
+    Column(modifier = modifier.fillMaxWidth()) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-        modifier = modifier
+        modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
     ) {
@@ -350,17 +382,13 @@ internal fun NavLinkRow(
             modifier = Modifier.size(KnotworkTheme.spacing.sp5),
         )
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            if (subtitle.isNotBlank()) {
+            RowLabelWithHint(title = title)
+            if (state.isNotBlank()) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
                 ) {
-                    if (subtitleWarning) {
+                    if (stateWarning) {
                         Icon(
                             imageVector = AppIcons.Warn,
                             contentDescription = null,
@@ -369,9 +397,9 @@ internal fun NavLinkRow(
                         )
                     }
                     Text(
-                        text = subtitle,
+                        text = state,
                         style = KnotworkTextStyles.MonoSm,
-                        color = if (subtitleWarning) {
+                        color = if (stateWarning) {
                             KnotworkTheme.extended.signalWarn
                         } else {
                             KnotworkTheme.extended.onSurfaceMuted
@@ -386,9 +414,11 @@ internal fun NavLinkRow(
             tint = KnotworkTheme.extended.onSurfaceMuted,
         )
     }
+        SettingsHintBody()
+    }
 }
 
-/** Leading glyph size of a [NavLinkRow] warning subtitle. */
+/** Leading glyph size of a [NavLinkRow] warning state. */
 private val NavLinkWarnGlyphSize = 13.dp
 
 /** Collapsed external-provider row (masked key fingerprint + model + LAN pill). */
@@ -897,10 +927,12 @@ internal fun SettingsAnchor(anchorKey: String?, modifier: Modifier = Modifier, c
     // emit several siblings (e.g. the system-instructions field + chip row), which
     // would otherwise overlap when wrapped. Single-child rows are unaffected.
     if (!active) {
-        Column(
-            modifier = modifier,
-            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-        ) { content() }
+        androidx.compose.runtime.CompositionLocalProvider(LocalSettingsRowAnchor provides anchorKey) {
+            Column(
+                modifier = modifier,
+                verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+            ) { content() }
+        }
         return
     }
     val reducedMotion = KnotworkTheme.a11y.reducedMotion()

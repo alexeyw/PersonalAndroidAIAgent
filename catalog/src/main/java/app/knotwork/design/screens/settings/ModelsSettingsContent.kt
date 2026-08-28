@@ -66,7 +66,7 @@ fun ModelsSettingsContent(
         NavLinkRow(
             icon = AppIcons.Download,
             title = stringResource(R.string.knotwork_settings_local_model_manage),
-            subtitle = stringResource(R.string.knotwork_settings_models_manage_subtitle),
+            state = stringResource(R.string.knotwork_settings_models_manage_subtitle),
             onClick = callbacks.onManageModelsClick,
         )
         SettingsAnchor(anchorKey = SettingsRowAnchors.LINK_PROVIDER_LIST) {
