@@ -54,6 +54,17 @@ class ChatHomeAttachmentDelegate(
      */
     val attachmentErrorEvents: SharedFlow<Unit> = _attachmentErrorEvents.asSharedFlow()
 
+    /**
+     * Monotonic id of the most recent pick.
+     *
+     * A type check on the draft cannot tell "my pick still owns the slot" from
+     * "a newer pick replaced it and is also in flight" — both read as
+     * `Processing`. Under two quick picks that let whichever ingest finished
+     * *first* win and the later one delete its own file, which is backwards.
+     * The token makes ownership identity rather than shape.
+     */
+    private var pickGeneration: Long = 0
+
     private val _attachmentReplacedEvents: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 1)
 
     /**
@@ -117,6 +128,7 @@ class ChatHomeAttachmentDelegate(
         // replacing the draft, so a re-pick doesn't leave an orphan behind.
         val replaced = state.value.composer.attachment as? ComposerAttachmentDraft.Ready
         val replacedPath = replaced?.attachment?.path
+        val generation = ++pickGeneration
         state.update {
             it.copy(
                 sourceChooserVisible = false,
@@ -129,12 +141,13 @@ class ChatHomeAttachmentDelegate(
             // already had and left the composer empty — the loss was real
             // whether or not anything said so.
             val stored = attachmentStore.ingestUri(uri).getOrNull()
-            // The ✕ is live during Processing, so the user may have dropped the
-            // whole draft while the ingest was in flight. Anything that puts an
-            // image back — the new one on success, the previous one on failure —
-            // has to check that the slot is still the one this pick owns, or a
-            // removal silently un-does itself.
-            val stillOurs = state.value.composer.attachment is ComposerAttachmentDraft.Processing
+            // Two ways this pick can stop owning the slot while its ingest is in
+            // flight: the user taps ✕ (live during `Processing`), or picks again.
+            // Anything that puts an image back — the new one on success, the
+            // previous one on failure — must check both, or a removal un-does
+            // itself and an older pick overwrites a newer one.
+            val stillOurs = generation == pickGeneration &&
+                state.value.composer.attachment is ComposerAttachmentDraft.Processing
             if (stored != null && stillOurs) {
                 if (replacedPath != null) {
                     attachmentStore.delete(replacedPath)
@@ -160,11 +173,18 @@ class ChatHomeAttachmentDelegate(
                 state.update { it.copy(composer = it.composer.copy(attachment = replaced)) }
                 _attachmentErrorEvents.tryEmit(Unit)
             } else {
-                // The user removed the draft while this pick was in flight, so
-                // nothing goes back into the slot — but the file that was
-                // ingested has no owner and must not be left behind.
+                // The slot moved on — removed, or claimed by a later pick — so
+                // nothing goes back into it, and the file THIS pick ingested has
+                // no owner and is deleted.
+                //
+                // `replacedPath` is deliberately left alone: it is not this
+                // pick's file, and whoever owns the slot now may still be
+                // showing it or may hand it back on its own failure. Deleting it
+                // from here could take away an image the user still has. If it
+                // does end up unreferenced, `CleanupOrphanAttachmentsUseCase`
+                // sweeps it — an orphaned file is recoverable, a deleted one the
+                // user wanted is not.
                 if (stored != null) attachmentStore.delete(stored.path)
-                if (replacedPath != null) attachmentStore.delete(replacedPath)
             }
         }
     }

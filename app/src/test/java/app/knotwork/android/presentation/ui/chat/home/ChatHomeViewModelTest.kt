@@ -873,6 +873,40 @@ class ChatHomeViewModelTest {
     }
 
     @Test
+    fun `when two picks race the later one wins`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/x.jpg"
+        val first = MessageAttachment(path = "first.jpg", mimeType = "image/jpeg", width = 10, height = 10)
+        val second = MessageAttachment(path = "second.jpg", mimeType = "image/jpeg", width = 20, height = 20)
+        // Both ingests are in flight at once and the EARLIER pick finishes
+        // first — the only ordering in which the bug shows. (With the later pick
+        // finishing first the slot is already `Ready`, and even a bare type
+        // check rejects the straggler, which is why the first version of this
+        // test passed against the broken code.)
+        coEvery { attachmentStore.ingestUri("content://earlier") } coAnswers {
+            delay(EARLIER_INGEST_MS)
+            kotlin.Result.success(first)
+        }
+        coEvery { attachmentStore.ingestUri("content://later") } coAnswers {
+            delay(LATER_INGEST_MS)
+            kotlin.Result.success(second)
+        }
+
+        viewModel.attachments.onImagePicked("content://earlier")
+        viewModel.attachments.onImagePicked("content://later")
+        advanceUntilIdle()
+
+        // Ownership is the pick's identity, not the draft's shape: both picks see
+        // a `Processing` slot, so a type check alone let whichever finished first
+        // win — which for the user means the image they picked second vanishes.
+        val draft = viewModel.state.value.composer.attachment
+        assertTrue(draft is ComposerAttachmentDraft.Ready)
+        assertEquals(second, (draft as ComposerAttachmentDraft.Ready).attachment)
+        coVerify { attachmentStore.delete("first.jpg") }
+    }
+
+    @Test
     fun `onImagePicked failure clears draft and emits a transient error event without clobbering visual`() =
         runTest(testDispatcher) {
             viewModel = createViewModel()
@@ -2838,6 +2872,8 @@ class ChatHomeViewModelTest {
     // endregion
 
     private companion object {
+        const val EARLIER_INGEST_MS = 30L
+        const val LATER_INGEST_MS = 60L
         const val DEFAULT_TOKENS_MAX: Int = 4096
         const val ALT_TOKENS_MAX: Int = 8192
         const val AUDIO_LIMIT_SEC: Int = 30
