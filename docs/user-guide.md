@@ -1983,6 +1983,118 @@ See [`docs/images/settings-search.png`](images/settings-search.png)
 (dark variant: [`settings-search-dark.png`](images/settings-search-dark.png))
 for the search results in action.
 
+### What every setting means
+
+Every row in Settings carries a small **ⓘ** next to its label; tapping it opens a
+one-sentence explanation in place, under the row, and closes whichever
+explanation was already open. Rows whose meaning follows from their name — links
+to another screen, the identity and version rows, plain actions like *Export
+memories* — carry no glyph.
+
+The table below is **generated from the very strings the app shows**, so it
+cannot drift from them: what you read here is word-for-word what the ⓘ opens.
+What each setting *does* when you change it — the measured timeouts, the retry
+behaviour, the ordering rules — is described in the prose of the sections that
+follow, not repeated here.
+
+<!-- AUTO-GEN:SETTINGS_HELP -->
+#### Generation
+
+| Setting | What it means |
+|---|---|
+| **System instructions** | Put in front of every request, in every chat and every pipeline. The agent treats it as standing orders. |
+| **Tool-usage instruction** | Added only when tools are available. Use it for house rules — which tool to prefer, what never to touch. |
+| **Temperature** | Low keeps the wording predictable and repetitive; high makes it varied and less literal. |
+| **Top-K** | How many candidate words stay in play at each step. Small is safer and blander; large lets rarer words through. |
+| **Top-P** | Keeps only the likeliest words that together add up to this share of the probability. Lower cuts more. |
+| **Repetition penalty** | Pushes the model off words it has already used. Too high and it starts avoiding words the answer needs. |
+| **Max context length** | How much of the conversation the model sees at once. Larger remembers more of the thread and runs slower. |
+| **Voice input length** | Recording stops on its own at this point and sends what it has. |
+
+#### Models
+
+| Setting | What it means |
+|---|---|
+| **Local model backend** | Which chip runs the on-device model. NPU is fastest where it works; the app falls back on its own if it does not. |
+| **External providers** | *(no explanation — Link row)* |
+| **Default pipeline** | *(no explanation — Link row)* |
+
+#### Memory
+
+| Setting | What it means |
+|---|---|
+| **Auto-extract memories** | On, durable facts from your chats — names, preferences, project details — are saved and reused later. |
+| **Memory compaction** | Old memories get merged into shorter summaries once there are many. Frees room; loses the exact wording. |
+| **Compress chat history** | Long threads are summarised past the live window, so the agent keeps the gist instead of forgetting the start. |
+| **Auto-summarize threshold** | How full the context window gets before the thread is summarised. Lower summarises sooner and more often. |
+| **Memory search top-K** | How many memories are pulled into a reply at most. More context, slower start, and more room for noise. |
+| **Memory search threshold** | Higher recalls only close matches, so less is pulled in; lower recalls more, including memories that miss the point. |
+| **Recency half-life** | How fast old memories lose to new ones when both match. Short favours this week; long treats everything as current. |
+| **Compaction age** | How old a memory must be before compaction may merge it. Fresher facts keep their exact wording until they pass it. |
+| **Max memory chunks** | The ceiling on stored pieces. At the ceiling the oldest are dropped, compaction or not. |
+| **History compression threshold** | How large a thread grows before its older half is summarised. Lower compresses sooner and keeps less of the original wording. |
+| **Live window size** | How many recent messages stay word-for-word after a thread is summarised. Anything older survives only as the summary. |
+| **Memory summary limit** | How many recent memories are written into the prompt's memory block. More recall, less room for everything else. |
+| **Embedding provider** | The model that turns text into the numbers memory search compares. Changing it re-indexes everything you have saved. |
+| **Verbose memory logging** | Every retrieval is written to the console — useful when answers cite the wrong thing, noisy otherwise. |
+| **Export · Import · Re-embed · Clear** | Re-embed rebuilds every vector with the current provider; it runs in the background and memory search is unreliable until it ends. |
+
+#### Pipelines
+
+| Setting | What it means |
+|---|---|
+| **Run limits** | *(no explanation — Link row)* |
+| **Max nesting depth** | How many levels of sub-pipeline a run may descend into before it is refused. Deeper composes more; shallow fails a runaway sooner. |
+| **Structured-output repairs** | When a model answers in the wrong shape, how many times it is shown its own output and asked again before the node gives up. |
+| **Cloud retry attempts / base delay** | *(no explanation — Link row)* |
+
+#### Tools
+
+| Setting | What it means |
+|---|---|
+| **Approve tool calls** | Which tool calls stop and wait for you. Destructive ones are gated separately and stay gated whatever you pick here. |
+| **Block destructive tools** | Destructive calls always stop for a typed confirmation, even when approvals are set to Never. |
+| **Block network from local model** | The on-device model gets no network of its own. Cloud providers are gated separately, by their keys. |
+| **Manage tools / MCP servers** | *(no explanation — Link row)* |
+| **Tool-call timeout** | How long one tool call may take before it is abandoned. Short frees a stuck run sooner; long suits slow servers. |
+| **Workspace max file size** | The largest single file the workspace accepts, for both writing one and reading one whole. |
+| **Workspace max total size** | How much device storage the whole workspace may hold. A write that would pass it is refused rather than trimmed. |
+| **Workspace read budget** | How much of a file one read may put in front of the model. The rest is cut, leaving room for the prompt and the thread. |
+| **HTTP response cap** | How much of a web response reaches the model. Past it the body is cut and marked, so remote text cannot flood the context. |
+| **Allowed HTTP domains** | *(no explanation — Link row)* |
+
+#### Background
+
+| Setting | What it means |
+|---|---|
+| **Long-running task alerts** | *(no explanation — Behaviour not shipped)* |
+| **Scheduled task alerts** | A notification arrives when a scheduled task finishes or fails, so a background result does not wait for you to open the app. |
+| **Pipeline for sharing** | Which pipeline runs when you share text or a link into the app from somewhere else. |
+| **Keep shares in one chat** | On, every share lands in one Shared chat. Off, each share opens its own, so the chat list grows with each one. |
+| **Quick Settings pipeline** | Which pipeline the Quick Settings tile runs when you tap it from the notification shade. |
+| **External automation** | Other apps on this device can start a run — Tasker, MacroDroid, adb. Off, those requests are refused. |
+| **Pipeline other apps may run** | The only pipeline an outside app may start. Nothing else can be named in the request, whatever it asks for. |
+| **External request journal** | *(no explanation — Link row)* |
+| **Resume max age** | How stale a parked run may be and still resume. Past it the run is dropped, because its gathered context no longer holds. |
+| **Background approval window** | How long a background run waits for you to approve a tool call. Unanswered past it, the run ends instead of waiting on. |
+
+#### Privacy
+
+| Setting | What it means |
+|---|---|
+| **Crash reporting** | Off, nothing leaves the device. On, a crash sends the stack trace only — never your messages, files or keys. |
+| **Trace retention · runs** | How many past runs keep their step-by-step trace in a chat. Older traces are dropped; the messages themselves stay. |
+| **Trace retention · age** | How long a trace is kept before it is dropped, whatever the per-chat count. Bounds what accumulates on disk. |
+
+#### About
+
+| Setting | What it means |
+|---|---|
+| **Identity** | *(no explanation — Display row)* |
+| **App version & licenses** | *(no explanation — Link row)* |
+| **Reset all settings** | *(no explanation — Self evident)* |
+<!-- /AUTO-GEN:SETTINGS_HELP -->
+
 ### Generation
 
 System-prompt and sampling controls.
