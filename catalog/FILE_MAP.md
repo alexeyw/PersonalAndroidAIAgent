@@ -478,10 +478,17 @@ project — `:app` consumes it as an `implementation` dependency.
     - `SettingsCommon.kt` — the shared building blocks of the stack
       (category scaffold, section labels, advanced disclosure, toggle /
       nav / provider rows).
+    - `SettingsHint.kt` — the settings help affordance: `KnotworkHelpEntry`
+      (18 dp glyph after a row label, 48 dp touch bounds, TalkBack action +
+      state), `KnotworkHintPanel` (tinted in-place panel, owning its motion
+      and its reduced-motion branch), and `SettingsHintController` /
+      `LocalSettingsHints` / `LocalSettingsRowAnchor`, which enforce one
+      explanation open at a time and bind each hint to its own row.
     - `KnotworkMonoTextArea.kt` — multi-line monospace textarea (brand
       outline) for system instructions.
     - `KnotworkParamSlider.kt` — labelled numeric-parameter slider with
-      value label and optional validation error.
+      value label, optional validation error, and (inside a settings
+      screen) its own help glyph and explanation panel under the track.
     - `KnotworkProviderRow.kt` — cloud-provider row with optional
       Ollama-specific fields (base URL, model) and validation.
   - `skills/` — reusable-skill surfaces (a skill = instruction + tool

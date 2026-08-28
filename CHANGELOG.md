@@ -15,6 +15,44 @@ details.
 
 ### Changed
 
+- **Every settings option now explains itself, in one sentence, where it
+  lives.** Tap the **ⓘ** beside a row's label and a short explanation opens in
+  place, under the row; opening one closes the other, so a category screen is
+  never more than one panel taller than at rest. Sliders had *no* explanation
+  slot at all before this — the controls whose meaning is least guessable
+  (Top-K, thresholds, the run ceilings) were the ones with nothing on screen to
+  say what they do. Rows whose meaning follows from their name — links, the
+  identity and version rows, plain actions like *Export memories* — carry no
+  glyph, and the reason each one carries none is recorded rather than left
+  implicit.
+
+- **The explanations that used to sit under a row are gone from that slot.**
+  Small muted text under a label is where the app shows what a row is *set to*
+  (`NPU · auto`, `412 memories`), and closed testing found that readers learn
+  the slot and stop reading anything in it — meaning included. That slot now
+  carries values only. One consequence worth stating: a setting's meaning used
+  to be written in four separate places, and they had already drifted apart —
+  one of them quoting an "8 s" threshold that no constant in the code holds.
+  There is now one copy, and `docs/user-guide.md` is generated from it.
+
+- **The settings hub tells you how long each category is** before you open it,
+  and its category summaries are no longer rendered as muted micro-type.
+
+- **A switch you cannot use is no longer greyed out.** An unbound trigger row
+  used to show a dimmed switch, which reads as broken rather than as waiting on
+  you. The switch is replaced by the verb that fixes it — **Bind** — and the
+  reason stays on the row in words.
+
+- **Adding an MCP server shows a real address as the placeholder**, with the
+  endpoint explained next to the field, instead of `https://… or mcp://host:port`
+  — which sent the first external tester looking for a port number.
+
+- **Attaching a second image says so.** The composer holds one attachment, and
+  replacing the first used to happen silently.
+
+- **The onboarding text about cloud providers is no longer muted**, having been
+  skipped on sight for looking like a build number.
+
 - **The bottom-nav highlight now follows the screens you opened, not a lookup
   table.** It was decided by a hand-maintained `route → tab` map, and **ten**
   registered screens were missing from it — Allowed domains, Files, Skills,
