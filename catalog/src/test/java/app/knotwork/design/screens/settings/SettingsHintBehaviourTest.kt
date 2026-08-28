@@ -114,6 +114,79 @@ class SettingsHintBehaviourTest {
         composeTestRule.onNodeWithText(AUTO_EXTRACT_HINT).assertDoesNotExist()
     }
 
+    /**
+     * Regression: the deep-linked row kept its help glyph.
+     *
+     * `SettingsAnchor` renders a highlighted row through a different branch than
+     * an ordinary one, and the anchor `CompositionLocalProvider` originally
+     * wrapped only the ordinary branch — so arriving at a setting from search,
+     * the one moment the user has demonstrably asked what it is, was the one
+     * moment with no explanation to open.
+     */
+    @Test
+    fun `the row a search deep-link highlights still offers its explanation`() {
+        composeTestRule.setContent {
+            val hints = remember { SettingsHintController { anchor -> HINTS[anchor] } }
+            KnotworkTheme {
+                CompositionLocalProvider(
+                    LocalSettingsHints provides hints,
+                    LocalSettingsHighlightKey provides SettingsRowAnchors.AUTO_EXTRACT_ENABLED,
+                ) {
+                    MemorySettingsContent(state = SettingsPreview.memory())
+                }
+            }
+        }
+
+        composeTestRule
+            .onNodeWithContentDescription("Explain: Auto-extract from conversations")
+            .performClick()
+
+        composeTestRule.onNodeWithText(AUTO_EXTRACT_HINT).assertIsDisplayed()
+    }
+
+    /**
+     * The assertion the app-side completeness gate cannot make: that a control
+     * which is not one of the standard rows still *renders* an affordance.
+     *
+     * Six settings are drawn by bespoke Composables — the two textareas, the two
+     * dropdown rows, the approval segmented control and the memory action strip
+     * — and every one of them shipped its explanation with no way to open it
+     * until this was asserted. A hint nobody can reach is the same defect as a
+     * hint that is wrong, one step removed.
+     */
+    @Test
+    fun `bespoke settings controls render a help glyph too`() {
+        composeTestRule.setContent {
+            val hints = remember { SettingsHintController { SettingsHint("explained") } }
+            KnotworkTheme {
+                CompositionLocalProvider(LocalSettingsHints provides hints) {
+                    GenerationSettingsContent(state = SettingsPreview.generation(), advancedExpanded = true)
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("Explain: System instructions").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("Explain: Tool-usage instruction").assertIsDisplayed()
+    }
+
+    @Test
+    fun `the memory action strip and the embedding dropdown carry a glyph`() {
+        composeTestRule.setContent {
+            val hints = remember { SettingsHintController { SettingsHint("explained") } }
+            KnotworkTheme {
+                CompositionLocalProvider(LocalSettingsHints provides hints) {
+                    MemorySettingsContent(state = SettingsPreview.memory(), advancedExpanded = true)
+                }
+            }
+        }
+
+        // `assertExists`, not `assertIsDisplayed`: the action strip sits below
+        // the fold on a 760 dp frame. What is being asserted is that the glyph
+        // is rendered at all, not where it lands.
+        composeTestRule.onNodeWithContentDescription("Explain: Memory data").assertExists()
+        composeTestRule.onNodeWithContentDescription("Explain: Embedding model").assertExists()
+    }
+
     @Test
     fun `a row with no hint has no glyph`() {
         setContent { MemorySettingsContent(state = SettingsPreview.memory()) }

@@ -39,6 +39,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -303,6 +305,13 @@ private fun TriggerRow(row: TriggerRowUi, strings: TriggersStrings, menuOpen: Bo
                         KnotworkTextButton(
                             text = strings.bind,
                             onClick = { callbacks.onRowClick(row.id) },
+                            // Named per row: in a list of unbound triggers a bare
+                            // "Bind, button" repeated N times tells a screen-reader
+                            // user which rows need attention but not which one they
+                            // are on. The switch it replaced inherited the row label.
+                            modifier = Modifier.semantics {
+                                contentDescription = strings.bindCd.format(row.name)
+                            },
                         )
                     }
                     Box {
@@ -489,6 +498,7 @@ data class TriggersStrings(
     val fab: String = "New trigger",
     val unboundHint: String = "No pipeline yet",
     val bind: String = "Bind",
+    val bindCd: String = "Bind a pipeline to %1\$s",
     val menuEdit: String = "Edit",
     val menuDelete: String = "Delete",
     val emptyTitle: String = "Run the agent on its own",

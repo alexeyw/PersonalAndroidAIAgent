@@ -126,6 +126,27 @@ class SettingsHelpDocsGeneratorTest {
     }
 
     @Test
+    fun `a category with no known display title fails generation`() {
+        // The heading is looked up, not derived from the Kotlin name, because
+        // the Pipelines category was deliberately renamed in the app and
+        // humanising the variable would republish the title that rename removed.
+        val renamed = REGISTRY.replace("MODELS_ENTRIES", "SOMETHING_NEW_ENTRIES")
+
+        val error = runCatching {
+            SettingsHelpDocsGenerator.buildRows(
+                registrySource = renamed,
+                helpCatalogSource = HELP_CATALOG,
+                searchCatalogSource = SEARCH_CATALOG,
+                helpStringsXml = HELP_STRINGS,
+                nameStringsXml = listOf(NAME_STRINGS),
+            )
+        }.exceptionOrNull()
+
+        assertTrue(error is SettingsHelpDocsGenerator.GenerationException)
+        assertTrue(error!!.message!!.contains("SOMETHING_NEW"))
+    }
+
+    @Test
     fun `missing markers fail loudly`() {
         val error = runCatching { render("# Guide\n\nNo markers here.\n") }.exceptionOrNull()
 

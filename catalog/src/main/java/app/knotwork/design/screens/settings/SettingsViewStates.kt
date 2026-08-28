@@ -125,14 +125,12 @@ data class SettingsHubViewState(
  *
  * @property systemInstructions Basic system-instructions textarea slice.
  * @property toolUsageValue Advanced tool-usage instruction textarea content.
- * @property toolUsageHelper Helper copy beneath the tool-usage field.
  * @property advancedSliders Sampling + voice sliders (temperature, top-K, top-P,
  *   repetition penalty, max context, voice length), all Advanced.
  */
 data class GenerationSettingsViewState(
     val systemInstructions: SystemInstructionsCardState,
     val toolUsageValue: String,
-    val toolUsageHelper: String,
     val advancedSliders: List<SettingSliderRow>,
 )
 

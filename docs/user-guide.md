@@ -2013,7 +2013,7 @@ repeated here.
 | Setting | What it means |
 |---|---|
 | **System instructions** | Put in front of every request, in every chat and every pipeline. The agent treats it as standing orders. |
-| **Tool-usage instruction** | Added only when tools are available. Use it for house rules — which tool to prefer, what never to touch. |
+| **Tool-usage instruction** | *(no explanation — Behaviour not shipped)* |
 | **Temperature** | Low keeps the wording predictable and repetitive; high makes it varied and less literal. |
 | **Top-K** | How many candidate words stay in play at each step. Small is safer and blander; large lets rarer words through. |
 | **Top-P** | Keeps only the likeliest words that together add up to this share of the probability. Lower cuts more. |
@@ -2036,20 +2036,20 @@ repeated here.
 | **Auto-extract memories** | On, durable facts from your chats — names, preferences, project details — are saved and reused later. |
 | **Memory compaction** | Old memories get merged into shorter summaries once there are many. Frees room; loses the exact wording. |
 | **Compress chat history** | Long threads are summarised past the live window, so the agent keeps the gist instead of forgetting the start. |
-| **Auto-summarize threshold** | How full the context window gets before the thread is summarised. Lower summarises sooner and more often. |
+| **Auto-summarize threshold** | *(no explanation — Behaviour not shipped)* |
 | **Memory search top-K** | How many memories are pulled into a reply at most. More context, slower start, and more room for noise. |
 | **Memory search threshold** | Higher recalls only close matches, so less is pulled in; lower recalls more, including memories that miss the point. |
 | **Recency half-life** | How fast old memories lose to new ones when both match. Short favours this week; long treats everything as current. |
 | **Compaction age** | How old a memory must be before compaction may merge it. Fresher facts keep their exact wording until they pass it. |
-| **Max memory chunks** | The ceiling on stored pieces. At the ceiling the oldest are dropped, compaction or not. |
+| **Max memory chunks** | The ceiling on stored pieces. Reaching it starts a compaction pass, so it does nothing at all while compaction is switched off. |
 | **History compression threshold** | How large a thread grows before its older half is summarised. Lower compresses sooner and keeps less of the original wording. |
 | **Live window size** | How many recent messages stay word-for-word after a thread is summarised. Anything older survives only as the summary. |
 | **Memory summary limit** | How many recent memories are written into the prompt's memory block. More recall, less room for everything else. |
-| **Embedding provider** | The model that turns text into the numbers memory search compares. Changing it re-indexes everything you have saved. |
+| **Embedding provider** | The model that turns text into the numbers memory search compares. Change it and recall stays poor until you re-embed by hand. |
 | **Verbose memory logging** | Every retrieval is written to the console — useful when answers cite the wrong thing, noisy otherwise. |
-| **Export · Import · Re-embed · Clear** | Re-embed rebuilds every vector with the current provider; it runs in the background and memory search is unreliable until it ends. |
+| **Export · Import · Re-embed · Clear** | Re-embed rebuilds every vector for the current model. Stay on this screen while it runs, and expect poor recall until it finishes. |
 
-#### Pipelines
+#### Run limits & structured output
 
 | Setting | What it means |
 |---|---|
@@ -2058,7 +2058,7 @@ repeated here.
 | **Structured-output repairs** | When a model answers in the wrong shape, how many times it is shown its own output and asked again before the node gives up. |
 | **Cloud retry attempts / base delay** | *(no explanation — Link row)* |
 
-#### Tools
+#### Tools & workspace
 
 | Setting | What it means |
 |---|---|
@@ -2073,7 +2073,7 @@ repeated here.
 | **HTTP response cap** | How much of a web response reaches the model. Past it the body is cut and marked, so remote text cannot flood the context. |
 | **Allowed HTTP domains** | *(no explanation — Link row)* |
 
-#### Background
+#### Background & triggers
 
 | Setting | What it means |
 |---|---|
@@ -2092,7 +2092,7 @@ repeated here.
 
 | Setting | What it means |
 |---|---|
-| **Crash reporting** | Off, nothing leaves the device. On, a crash sends the stack trace only — never your messages, files or keys. |
+| **Crash reporting** | Off, nothing leaves the device. On, crashes and error-level log lines are sent — never your messages, files, prompts or keys. |
 | **Trace retention · runs** | How many past runs keep their step-by-step trace in a chat. Older traces are dropped; the messages themselves stay. |
 | **Trace retention · age** | How long a trace is kept before it is dropped, whatever the per-chat count. Bounds what accumulates on disk. |
 

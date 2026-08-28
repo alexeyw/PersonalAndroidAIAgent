@@ -3,6 +3,7 @@ package app.knotwork.android.presentation.ui.settings
 import android.content.Context
 import app.knotwork.android.domain.settings.SettingsRegistry
 import app.knotwork.android.domain.settings.anchorKey
+import app.knotwork.design.screens.settings.SettingsRowAnchors
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -107,11 +108,74 @@ class SettingsHelpCatalogTest {
         assertEquals("tapping the open hint closes it", null, controller.expandedAnchor)
     }
 
+    @Test
+    fun `every explained row has somewhere to show its explanation`() {
+        val rendered = SettingsRowAnchors.ALL + sliderAnchors()
+        val unreachable = explanations().map { it.first }.filterNot { it in rendered }
+
+        // A hint nobody can open is the same defect this task exists to remove,
+        // one level up: text that claims to be in the product and is not. The
+        // registry rows with no surface at all are excluded by name here, with
+        // the defect filed — so this list can only shrink, and a NEW unreachable
+        // hint fails the build.
+        assertEquals(
+            "these explanations cannot be opened anywhere in the app",
+            KNOWN_SURFACELESS,
+            unreachable.toSet(),
+        )
+    }
+
     /** Every row that carries an explanation, paired with its anchor. */
     private fun explanations(): List<Pair<String, SettingHelp.Text>> = SettingsHelpCatalog.HELP.entries
         .mapNotNull { (anchor, help) -> (help as? SettingHelp.Text)?.let { anchor to it } }
 
+    /** Registry anchors reachable through a rendered slider row. */
+    private fun sliderAnchors(): Set<String> = SLIDER_ANCHORS
+
     private companion object {
+        /**
+         * Registry rows that no screen renders, so their explanation has nowhere
+         * to open. All five are Tools ceilings that are registered and findable
+         * by search but drawn by nothing — a pre-existing registry/UI drift this
+         * task surfaced rather than caused. Filed as a defect; the set may only
+         * shrink.
+         */
+        val KNOWN_SURFACELESS: Set<String> = setOf(
+            "TOOL_CALL_TIMEOUT_MS",
+            "WORKSPACE_MAX_FILE_SIZE_BYTES",
+            "WORKSPACE_MAX_TOTAL_BYTES",
+            "WORKSPACE_READ_TOKEN_BUDGET",
+            "HTTP_TOOL_MAX_RESPONSE_BYTES",
+        )
+
+        /**
+         * Registry anchors a rendered slider maps to. Mirrors the production
+         * `SLIDER_TO_ANCHOR` table, which is file-private.
+         */
+        val SLIDER_ANCHORS: Set<String> = setOf(
+            "TEMPERATURE",
+            "TOP_K",
+            "TOP_P",
+            "REPETITION_PENALTY",
+            "MAX_CONTEXT_LENGTH",
+            "AUDIO_MAX_DURATION_SEC",
+            "PIPELINE_MAX_NESTING_DEPTH",
+            "STRUCTURED_OUTPUT_MAX_REPAIRS",
+            "AUTO_SUMMARIZE_THRESHOLD",
+            "MEMORY_SEARCH_TOP_K",
+            "MEMORY_SEARCH_THRESHOLD",
+            "MEMORY_RECENCY_HALF_LIFE_DAYS",
+            "MEMORY_COMPACTION_AGE_DAYS",
+            "MAX_MEMORY_CHUNKS",
+            "CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS",
+            "CHAT_HISTORY_LIVE_WINDOW_SIZE",
+            "MEMORY_SUMMARY_DEFAULT_LIMIT",
+            "RESUME_MAX_AGE_HOURS",
+            "BACKGROUND_APPROVAL_WINDOW_HOURS",
+            "TRACE_RETENTION_RUNS_PER_SESSION",
+            "TRACE_RETENTION_MAX_AGE_DAYS",
+        )
+
         /**
          * The hard ceiling, measured rather than chosen by taste: at 200 % font
          * scale a sentence this long fills about half of a 760 dp screen, which

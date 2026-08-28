@@ -96,7 +96,6 @@ internal object SettingsPreview {
     fun generation(): GenerationSettingsViewState = GenerationSettingsViewState(
         systemInstructions = systemInstructions(),
         toolUsageValue = "Prefer the workspace file tools over inlining large outputs into chat.",
-        toolUsageHelper = "Extra guidance on when and how to call tools.",
         advancedSliders = listOf(
             SettingSliderRow(SLIDER_TEMPERATURE, "Temperature", "0.7", 0.7f, 0f..2f),
             SettingSliderRow(SLIDER_TOP_K, "Top-K", "40", 40f, 1f..100f, steps = 99),

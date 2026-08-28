@@ -3,8 +3,6 @@ package app.knotwork.android.presentation.ui.settings
 import android.content.Context
 import androidx.annotation.StringRes
 import app.knotwork.android.R
-import app.knotwork.android.domain.settings.SettingsRegistry
-import app.knotwork.android.domain.settings.anchorKey
 import app.knotwork.design.screens.settings.SettingsHint
 import app.knotwork.design.screens.settings.SettingsHintController
 
@@ -27,13 +25,21 @@ enum class NoHint {
 
     /**
      * The row's behaviour does not currently happen, so there is nothing
-     * truthful to explain. Applies to `LONG_RUNNING_TASKS_NOTIFICATIONS`: the
-     * toggle gates a notification that production never posts —
-     * `LongRunningTaskNotifier.notify` is called from nothing but its own unit
-     * test. Writing a hint here would document behaviour the build does not
-     * have, which is the failure this whole task exists to stop. The defect
-     * itself is filed against the bug-fix container, and the hint is owed as
-     * soon as the row does something.
+     * truthful to explain. Writing a hint for one of these would document
+     * behaviour the build does not have, which is the failure this whole task
+     * exists to stop. Each is filed against the bug-fix container, and each is
+     * owed a hint as soon as its row does something.
+     *
+     * Three rows qualify, all found by trying to write their explanation:
+     *  - `LONG_RUNNING_TASKS_NOTIFICATIONS` — gates a notification production
+     *    never posts (`LongRunningTaskNotifier.notify` is called from nothing
+     *    but its own unit test).
+     *  - `TOOL_USAGE_INSTRUCTION` — the edited text has no consumer; both LLM
+     *    executors build the prompt from the system prefix and the node prompt
+     *    only. `DefaultPrompts.TOOL_USAGE_INSTRUCTION` seeds the field and
+     *    appears as a node-editor template, which is not the same thing.
+     *  - `AUTO_SUMMARIZE_THRESHOLD` — read by the settings plumbing and by
+     *    nothing else; moving the slider changes no behaviour.
      */
     BEHAVIOUR_NOT_SHIPPED,
 }
@@ -79,7 +85,7 @@ object SettingsHelpCatalog {
     /** Anchor -> explanation, or the recorded reason there is none. */
     val HELP: Map<String, SettingHelp> = mapOf(
         "SYSTEM_PROMPT_PREFIX" to text(R.string.settings_help_system_prompt_prefix),
-        "TOOL_USAGE_INSTRUCTION" to text(R.string.settings_help_tool_usage_instruction),
+        "TOOL_USAGE_INSTRUCTION" to none(NoHint.BEHAVIOUR_NOT_SHIPPED),
         "TEMPERATURE" to text(R.string.settings_help_temperature),
         "TOP_K" to text(R.string.settings_help_top_k),
         "TOP_P" to text(R.string.settings_help_top_p),
@@ -92,7 +98,7 @@ object SettingsHelpCatalog {
         "AUTO_EXTRACT_ENABLED" to text(R.string.settings_help_auto_extract_enabled),
         "MEMORY_COMPACTION_ENABLED" to text(R.string.settings_help_memory_compaction_enabled),
         "CHAT_HISTORY_COMPRESSION_ENABLED" to text(R.string.settings_help_chat_history_compression_enabled),
-        "AUTO_SUMMARIZE_THRESHOLD" to text(R.string.settings_help_auto_summarize_threshold),
+        "AUTO_SUMMARIZE_THRESHOLD" to none(NoHint.BEHAVIOUR_NOT_SHIPPED),
         "MEMORY_SEARCH_TOP_K" to text(R.string.settings_help_memory_search_top_k),
         "MEMORY_SEARCH_THRESHOLD" to text(R.string.settings_help_memory_search_threshold),
         "MEMORY_RECENCY_HALF_LIFE_DAYS" to text(R.string.settings_help_memory_recency_half_life_days),
@@ -150,9 +156,6 @@ object SettingsHelpCatalog {
             else -> null
         }
     }
-
-    /** Registry anchors in their ratified display order — the order the docs generator writes. */
-    fun anchorsInOrder(): List<String> = SettingsRegistry.allEntries().map { it.anchorKey() }
 }
 
 private fun text(@StringRes res: Int): SettingHelp = SettingHelp.Text(res)

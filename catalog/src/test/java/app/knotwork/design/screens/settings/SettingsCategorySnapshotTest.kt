@@ -210,12 +210,12 @@ class SettingsCategorySnapshotTest {
     }
 
     @Test
-    fun memory_hint_open_light() = snapshot("memory_hint_open", dark = false, openHint = LONG_HINT_ANCHOR) {
+    fun memory_hint_open_light() = snapshot("memory_hint_open", dark = false, openHint = "MEMORY_SEARCH_THRESHOLD") {
         MemorySettingsContent(state = SettingsPreview.memory(), advancedExpanded = true)
     }
 
     @Test
-    fun memory_hint_open_dark() = snapshot("memory_hint_open", dark = true, openHint = LONG_HINT_ANCHOR) {
+    fun memory_hint_open_dark() = snapshot("memory_hint_open", dark = true, openHint = "MEMORY_SEARCH_THRESHOLD") {
         MemorySettingsContent(state = SettingsPreview.memory(), advancedExpanded = true)
     }
 
@@ -275,26 +275,42 @@ class SettingsCategorySnapshotTest {
     }
 
     private companion object {
-        /** The longest shipped explanation, so the panel is captured at its worst case. */
-        const val LONG_HINT_ANCHOR = "MEMORY_SEARCH_THRESHOLD"
+        /**
+         * The row whose fixture hint sits at the 140-character ceiling.
+         *
+         * It is the FIRST Basic row on purpose: at 200 % font scale anything
+         * further down is below the capture frame, and a baseline that cannot
+         * show the panel proves nothing about the limit it exists to justify.
+         */
+        const val LONG_HINT_ANCHOR = "AUTO_EXTRACT_ENABLED"
 
         /**
-         * Help text for the snapshot fixtures. Held here rather than read from
-         * the app module — the catalog does not depend on it — but kept
-         * verbatim from the shipped strings so the baselines show real copy at
-         * real length.
+         * Help text for the snapshot fixtures.
+         *
+         * Deliberately **not** copies of the shipped strings. The catalog cannot
+         * read the app module's resources, and a hand-kept "verbatim" copy would
+         * be a fifth wording of the same sentences with nothing enforcing the
+         * match — the exact failure this task exists to remove. So these are
+         * fixture sentences, written to the same 140-character ceiling and the
+         * same shape, chosen to exercise the layout rather than to restate the
+         * product copy. What the user actually reads is asserted in
+         * `SettingsHelpCatalogTest`, against the real resources.
          */
         val SNAPSHOT_HINTS: Map<String, SettingsHint> = mapOf(
-            "AUTO_EXTRACT_ENABLED" to SettingsHint(
-                "On, durable facts from your chats — names, preferences, project details — are saved and reused later.",
+            "MEMORY_SEARCH_THRESHOLD" to SettingsHint(
+                "Higher recalls only close matches, so less is pulled in; " +
+                    "lower recalls more, including memories that miss the point.",
             ),
             "MEMORY_COMPACTION_ENABLED" to SettingsHint(
                 "Old memories get merged into shorter summaries once there are many. " +
                     "Frees room; loses the exact wording.",
             ),
+            // 140 characters exactly — the ceiling itself, so the font-scale
+            // baseline shows the worst case the limit was measured against
+            // rather than a comfortable sentence well inside it.
             LONG_HINT_ANCHOR to SettingsHint(
-                "Higher recalls only close matches, so less is pulled in; " +
-                    "lower recalls more, including memories that miss the point.",
+                "Higher recalls only the very closest matches, so less is pulled in; lower " +
+                    "recalls a great deal more, including memories that miss the point.",
             ),
             "MEMORY_SEARCH_TOP_K" to SettingsHint(
                 "How many memories are pulled into a reply at most. " +

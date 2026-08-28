@@ -19,6 +19,7 @@
     <string name="triggers_unbound_hint">No pipeline yet</string>
     <!-- The verb that takes the place of the switch an unbound trigger cannot offer. -->
     <string name="triggers_bind">Bind</string>
+    <string name="triggers_bind_cd">Bind a pipeline to %1$s</string>
     <string name="triggers_menu_edit">Edit</string>
     <string name="triggers_menu_delete">Delete</string>
 

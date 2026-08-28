@@ -51,6 +51,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -501,6 +502,9 @@ internal fun SystemInstructionsField(
             fieldValue = TextFieldValue(text = state.value, selection = TextRange(state.value.length))
         }
     }
+    SettingsFieldHeader(
+        title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_system_instructions_title),
+    )
     OutlinedTextField(
         value = fieldValue,
         onValueChange = { next ->
@@ -525,17 +529,12 @@ internal fun SystemInstructionsField(
             KnotworkChip(label = placeholder, style = ChipStyle.Outline, onClick = { onChipInsert(placeholder) })
         }
     }
+    // The prose helper that used to sit here is gone: it explained what the
+    // field is for, which the header's hint now does, and it was drawn in a Row
+    // with the counter without a width constraint of its own — so at any real
+    // length the two overlapped. The counter is state, and stays.
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        if (state.helperText.isNotBlank()) {
-            Text(
-                text = state.helperText,
-                style = KnotworkTextStyles.MonoSm,
-                color = KnotworkTheme.extended.onSurfaceMuted,
-                modifier = Modifier.weight(1f),
-            )
-        } else {
-            Spacer(modifier = Modifier.weight(1f))
-        }
+        Spacer(modifier = Modifier.weight(1f))
         Text(
             text = androidx.compose.ui.res.stringResource(
                 R.string.knotwork_settings_system_instructions_counter,
@@ -558,7 +557,7 @@ internal fun SystemInstructionsField(
 
 /** Plain multi-line text field for the tool-usage instruction (no chips/counter). */
 @Composable
-internal fun ToolUsageField(value: String, helper: String, onValueChange: (String) -> Unit) {
+internal fun ToolUsageField(value: String, onValueChange: (String) -> Unit) {
     var fieldValue by remember {
         mutableStateOf(TextFieldValue(text = value, selection = TextRange(value.length)))
     }
@@ -567,6 +566,7 @@ internal fun ToolUsageField(value: String, helper: String, onValueChange: (Strin
             fieldValue = TextFieldValue(text = value, selection = TextRange(value.length))
         }
     }
+    SettingsFieldHeader(title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_tool_usage_title))
     OutlinedTextField(
         value = fieldValue,
         onValueChange = { next ->
@@ -581,8 +581,32 @@ internal fun ToolUsageField(value: String, helper: String, onValueChange: (Strin
             .fillMaxWidth()
             .testTag(TOOL_USAGE_FIELD_TEST_TAG),
     )
-    if (helper.isNotBlank()) {
-        Text(text = helper, style = KnotworkTextStyles.MonoSm, color = KnotworkTheme.extended.onSurfaceMuted)
+    // Same reason as the system-instructions helper above: prose about what the
+    // field does now lives in the header's hint, not in the muted slot.
+    SettingsHintBody()
+}
+
+/**
+ * Title line for a settings control that has no label of its own — the two
+ * textareas and the rows built from bare Composables rather than from
+ * [IconToggleRow] / [NavLinkRow].
+ *
+ * Carries the row's help glyph, so a control that is not one of the standard
+ * rows still has somewhere to open its explanation.
+ *
+ * @param title The control's name.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun SettingsFieldHeader(title: String) {
+    FlowRow(verticalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.align(Alignment.CenterVertically),
+        )
+        SettingsHintGlyph(settingName = title, modifier = Modifier.align(Alignment.CenterVertically))
     }
 }
 
@@ -614,11 +638,7 @@ internal fun BackendDropdownRow(
                 modifier = Modifier.size(KnotworkTheme.spacing.sp5),
             )
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
+                RowLabelWithHint(title = title)
                 Text(
                     text = backendLabel,
                     style = KnotworkTextStyles.MonoSm,
@@ -648,6 +668,7 @@ internal fun BackendDropdownRow(
             }
         }
     }
+    SettingsHintBody()
 }
 
 /** Embedding-provider selector (labelled row + dropdown menu). */
@@ -676,11 +697,7 @@ internal fun EmbeddingProviderDropdownRow(
                 modifier = Modifier.size(KnotworkTheme.spacing.sp5),
             )
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
+                RowLabelWithHint(title = title)
                 Text(
                     text = selectedLabel,
                     style = KnotworkTextStyles.MonoSm,
@@ -705,6 +722,7 @@ internal fun EmbeddingProviderDropdownRow(
             }
         }
     }
+    SettingsHintBody()
 }
 
 // ─── Active pill / re-embed banner / loading ─────────────────────────────────
@@ -923,16 +941,40 @@ val LocalSettingsHighlightKey = androidx.compose.runtime.compositionLocalOf<Stri
 @Composable
 internal fun SettingsAnchor(anchorKey: String?, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val active = anchorKey != null && LocalSettingsHighlightKey.current == anchorKey
+    // The anchor is provided around BOTH branches. Providing it only around the
+    // unhighlighted one would take the help glyph away from the row a search
+    // deep-link just landed on — the single moment the user has demonstrably
+    // asked "what is this?" — and pop it back in when the flash expires.
+    CompositionLocalProvider(LocalSettingsRowAnchor provides anchorKey) {
+        SettingsAnchorBody(active = active, anchorKey = anchorKey, modifier = modifier, content = content)
+    }
+}
+
+/**
+ * The highlight body of [SettingsAnchor], split out so the anchor
+ * `CompositionLocalProvider` wraps both branches rather than one.
+ *
+ * @param active Whether this row is the deep-link target being flashed.
+ * @param anchorKey Stable anchor of the wrapped row.
+ * @param modifier Layout modifier applied to the wrapper.
+ * @param content The row to render.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SettingsAnchorBody(
+    active: Boolean,
+    anchorKey: String?,
+    modifier: Modifier,
+    content: @Composable () -> Unit,
+) {
     // A Column (not Box) preserves the vertical stacking + spacing of rows that
     // emit several siblings (e.g. the system-instructions field + chip row), which
     // would otherwise overlap when wrapped. Single-child rows are unaffected.
     if (!active) {
-        androidx.compose.runtime.CompositionLocalProvider(LocalSettingsRowAnchor provides anchorKey) {
-            Column(
-                modifier = modifier,
-                verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-            ) { content() }
-        }
+        Column(
+            modifier = modifier,
+            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        ) { content() }
         return
     }
     val reducedMotion = KnotworkTheme.a11y.reducedMotion()

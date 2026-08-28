@@ -123,7 +123,15 @@ fun MemorySettingsContent(
                     )
                 }
                 SettingsAnchor(anchorKey = SettingsRowAnchors.MEMORY_ACTIONS) {
+                    // The row is a button strip with no label of its own, so the
+                    // header carries both the name and the help glyph — without
+                    // it, Re-embed (the one action here with a consequence you
+                    // cannot see) would have nowhere to explain itself.
+                    SettingsFieldHeader(
+                        title = stringResource(R.string.knotwork_settings_memory_actions_title),
+                    )
                     MemoryActionButtons(state, callbacks)
+                    SettingsHintBody()
                 }
                 if (state.reembedProgressPercent != null) {
                     ReembedProgress(progressPercent = state.reembedProgressPercent)

@@ -147,7 +147,7 @@ object SettingsHelpDocsGenerator {
                 throw GenerationException("Help text for `$anchor` is blank.")
             }
             HelpRow(
-                category = humanise(category),
+                category = categoryTitle(category),
                 name = name,
                 meaning = meaning,
                 noHintReason = decision.noHintReason?.let(::humanise),
@@ -272,9 +272,33 @@ object SettingsHelpDocsGenerator {
         return out.toString()
     }
 
-    /** `LINK_PROVIDER_LIST` / `GENERATION` -> `Link provider list` / `Generation`. */
+    /** `LINK_PROVIDER_LIST` -> `Link provider list`; used for the no-hint reasons. */
     private fun humanise(raw: String): String =
         raw.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() }
+
+    /**
+     * Display title for a category, keyed by the registry's Kotlin list name.
+     *
+     * Not derived from that name: the `PIPELINES` category was deliberately
+     * renamed to "Run limits & structured output" (closed-test finding `#12` —
+     * the old title promised the pipelines themselves), and humanising the
+     * variable would have published the very title the rename removed. A
+     * category missing from this table fails generation rather than shipping a
+     * guessed heading.
+     */
+    private fun categoryTitle(raw: String): String = CATEGORY_TITLES[raw]
+        ?: throw GenerationException("No display title known for settings category `$raw`.")
+
+    private val CATEGORY_TITLES: Map<String, String> = mapOf(
+        "GENERATION" to "Generation",
+        "MODELS" to "Models",
+        "MEMORY" to "Memory",
+        "PIPELINES" to "Run limits & structured output",
+        "TOOLS" to "Tools & workspace",
+        "BACKGROUND" to "Background & triggers",
+        "PRIVACY" to "Privacy",
+        "ABOUT" to "About",
+    )
 
     /** Table cells are pipe-delimited, so a literal pipe has to be escaped. */
     private fun escapePipes(text: String): String = text.replace("|", "\\|")

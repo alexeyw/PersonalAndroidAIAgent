@@ -797,6 +797,54 @@ class ChatHomeViewModelTest {
     }
 
     @Test
+    fun `replacing an attachment announces it only once the replacement is in hand`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val first = MessageAttachment(path = "first.jpg", mimeType = "image/jpeg", width = 10, height = 10)
+        coEvery { attachmentStore.ingestUri("content://first") } returns kotlin.Result.success(first)
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/x.jpg"
+        val replaced = mutableListOf<Unit>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.attachments.attachmentReplacedEvents.collect { replaced.add(it) }
+        }
+
+        viewModel.attachments.onImagePicked("content://first")
+        advanceUntilIdle()
+        assertTrue("the first attachment replaces nothing", replaced.isEmpty())
+
+        val second = MessageAttachment(path = "second.jpg", mimeType = "image/jpeg", width = 20, height = 20)
+        coEvery { attachmentStore.ingestUri("content://second") } returns kotlin.Result.success(second)
+        viewModel.attachments.onImagePicked("content://second")
+        advanceUntilIdle()
+
+        assertEquals("the replacement is announced once", 1, replaced.size)
+    }
+
+    @Test
+    fun `a replacement that fails to ingest is not announced as a replacement`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val first = MessageAttachment(path = "first.jpg", mimeType = "image/jpeg", width = 10, height = 10)
+        coEvery { attachmentStore.ingestUri("content://first") } returns kotlin.Result.success(first)
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/x.jpg"
+        val replaced = mutableListOf<Unit>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.attachments.attachmentReplacedEvents.collect { replaced.add(it) }
+        }
+        viewModel.attachments.onImagePicked("content://first")
+        advanceUntilIdle()
+
+        coEvery { attachmentStore.ingestUri("content://bad") } returns kotlin.Result.failure(RuntimeException("bad"))
+        viewModel.attachments.onImagePicked("content://bad")
+        advanceUntilIdle()
+
+        // The old file is already deleted, so saying "replaced" here would be a
+        // lie the user then sees contradicted by the failure snackbar.
+        assertTrue("a failed ingest replaced nothing", replaced.isEmpty())
+        assertNull(viewModel.state.value.composer.attachment)
+    }
+
+    @Test
     fun `onImagePicked failure clears draft and emits a transient error event without clobbering visual`() =
         runTest(testDispatcher) {
             viewModel = createViewModel()

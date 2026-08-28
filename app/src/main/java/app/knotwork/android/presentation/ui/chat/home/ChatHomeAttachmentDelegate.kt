@@ -125,7 +125,6 @@ class ChatHomeAttachmentDelegate(
         scope.launch {
             if (replacedPath != null) {
                 attachmentStore.delete(replacedPath)
-                _attachmentReplacedEvents.tryEmit(Unit)
             }
             val stored = attachmentStore.ingestUri(uri).getOrNull()
             if (stored != null) {
@@ -135,6 +134,14 @@ class ChatHomeAttachmentDelegate(
                     detail = attachmentDetailLabel(stored.width, stored.height, attachmentStore.sizeBytes(stored.path)),
                 )
                 state.update { it.copy(composer = it.composer.copy(attachment = ready)) }
+                // Announced only once the replacement is actually in hand.
+                // Emitting beside the delete above meant a failed ingest told
+                // the user "replaced" and then "couldn't attach" — and the
+                // first of those was false, since the old image was gone and
+                // nothing had taken its place.
+                if (replacedPath != null) {
+                    _attachmentReplacedEvents.tryEmit(Unit)
+                }
             } else {
                 // Transient failure — surface a snackbar rather than flipping the
                 // whole surface to Error (which would clobber an in-flight run).

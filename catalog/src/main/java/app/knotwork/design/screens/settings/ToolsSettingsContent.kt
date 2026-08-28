@@ -40,18 +40,21 @@ fun ToolsSettingsContent(
         modifier = modifier,
     ) {
         SettingsAnchor(anchorKey = SettingsRowAnchors.TOOL_APPROVAL_POLICY) {
+            val approveTitle = stringResource(R.string.knotwork_settings_restrictions_approve)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(
-                    text = stringResource(R.string.knotwork_settings_restrictions_approve),
-                    style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    modifier = Modifier.weight(1f),
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = approveTitle,
+                        style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                    )
+                    SettingsHintGlyph(settingName = approveTitle)
+                }
                 KnotworkSegmentedControl(
                     options = listOf(state.approveAllLabel, state.approveSensitiveLabel, state.approveNeverLabel),
                     selectedIndex = state.approveSelection.toIndex(),
@@ -59,6 +62,7 @@ fun ToolsSettingsContent(
                     modifier = Modifier.weight(SEGMENTED_TRAILING_WEIGHT),
                 )
             }
+            SettingsHintBody()
         }
         SettingsAnchor(anchorKey = SettingsRowAnchors.BLOCK_DESTRUCTIVE_TOOLS) {
             IconToggleRow(

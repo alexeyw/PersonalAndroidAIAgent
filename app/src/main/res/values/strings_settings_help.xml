@@ -18,7 +18,6 @@
 -->
 <resources>
     <string name="settings_help_system_prompt_prefix">Put in front of every request, in every chat and every pipeline. The agent treats it as standing orders.</string>
-    <string name="settings_help_tool_usage_instruction">Added only when tools are available. Use it for house rules — which tool to prefer, what never to touch.</string>
     <string name="settings_help_temperature">Low keeps the wording predictable and repetitive; high makes it varied and less literal.</string>
     <string name="settings_help_top_k">How many candidate words stay in play at each step. Small is safer and blander; large lets rarer words through.</string>
     <string name="settings_help_top_p">Keeps only the likeliest words that together add up to this share of the probability. Lower cuts more.</string>
@@ -29,18 +28,17 @@
     <string name="settings_help_auto_extract_enabled">On, durable facts from your chats — names, preferences, project details — are saved and reused later.</string>
     <string name="settings_help_memory_compaction_enabled">Old memories get merged into shorter summaries once there are many. Frees room; loses the exact wording.</string>
     <string name="settings_help_chat_history_compression_enabled">Long threads are summarised past the live window, so the agent keeps the gist instead of forgetting the start.</string>
-    <string name="settings_help_auto_summarize_threshold">How full the context window gets before the thread is summarised. Lower summarises sooner and more often.</string>
     <string name="settings_help_memory_search_top_k">How many memories are pulled into a reply at most. More context, slower start, and more room for noise.</string>
     <string name="settings_help_memory_search_threshold">Higher recalls only close matches, so less is pulled in; lower recalls more, including memories that miss the point.</string>
     <string name="settings_help_memory_recency_half_life_days">How fast old memories lose to new ones when both match. Short favours this week; long treats everything as current.</string>
     <string name="settings_help_memory_compaction_age_days">How old a memory must be before compaction may merge it. Fresher facts keep their exact wording until they pass it.</string>
-    <string name="settings_help_max_memory_chunks">The ceiling on stored pieces. At the ceiling the oldest are dropped, compaction or not.</string>
+    <string name="settings_help_max_memory_chunks">The ceiling on stored pieces. Reaching it starts a compaction pass, so it does nothing at all while compaction is switched off.</string>
     <string name="settings_help_chat_history_compression_threshold_tokens">How large a thread grows before its older half is summarised. Lower compresses sooner and keeps less of the original wording.</string>
     <string name="settings_help_chat_history_live_window_size">How many recent messages stay word-for-word after a thread is summarised. Anything older survives only as the summary.</string>
     <string name="settings_help_memory_summary_default_limit">How many recent memories are written into the prompt\'s memory block. More recall, less room for everything else.</string>
-    <string name="settings_help_active_embedding_provider_id">The model that turns text into the numbers memory search compares. Changing it re-indexes everything you have saved.</string>
+    <string name="settings_help_active_embedding_provider_id">The model that turns text into the numbers memory search compares. Change it and recall stays poor until you re-embed by hand.</string>
     <string name="settings_help_verbose_memory_logging_enabled">Every retrieval is written to the console — useful when answers cite the wrong thing, noisy otherwise.</string>
-    <string name="settings_help_memory_actions">Re-embed rebuilds every vector with the current provider; it runs in the background and memory search is unreliable until it ends.</string>
+    <string name="settings_help_memory_actions">Re-embed rebuilds every vector for the current model. Stay on this screen while it runs, and expect poor recall until it finishes.</string>
     <string name="settings_help_pipeline_max_nesting_depth">How many levels of sub-pipeline a run may descend into before it is refused. Deeper composes more; shallow fails a runaway sooner.</string>
     <string name="settings_help_structured_output_max_repairs">When a model answers in the wrong shape, how many times it is shown its own output and asked again before the node gives up.</string>
     <string name="settings_help_tool_approval_policy">Which tool calls stop and wait for your approval. Never lets them all through, destructive ones too, unless you also block those.</string>
@@ -59,7 +57,7 @@
     <string name="settings_help_external_automation_pipeline_id">The only pipeline an outside app may start. Nothing else can be named in the request, whatever it asks for.</string>
     <string name="settings_help_resume_max_age_hours">How stale a parked run may be and still resume. Past it the run is dropped, because its gathered context no longer holds.</string>
     <string name="settings_help_background_approval_window_hours">How long a background run waits for you to approve a tool call. Unanswered past it, the run ends rather than waiting forever.</string>
-    <string name="settings_help_crash_reporting_enabled">Off, nothing leaves the device. On, a crash sends the stack trace only — never your messages, files or keys.</string>
+    <string name="settings_help_crash_reporting_enabled">Off, nothing leaves the device. On, crashes and error-level log lines are sent — never your messages, files, prompts or keys.</string>
     <string name="settings_help_trace_retention_runs_per_session">How many past runs keep their step-by-step trace in a chat. Older traces are dropped; the messages themselves stay.</string>
     <string name="settings_help_trace_retention_max_age_days">How long a trace is kept before it is dropped, whatever the per-chat count. Bounds what accumulates on disk.</string>
 </resources>

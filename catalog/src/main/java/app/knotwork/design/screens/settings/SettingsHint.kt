@@ -78,8 +78,12 @@ data class KnotworkHintLink(val label: String, val onClick: () -> Unit)
  *    read as a column of buttons, while eleven glyphs after eleven labels read
  *    as punctuation of the label.
  *
- * The caller must keep the row's own click area clear of this target, so
- * reaching for the explanation can never flip the switch it explains.
+ * The glyph sits inside the row's clickable area and stays a control of its own:
+ * an `IconButton` consumes the press before the row sees it, and — being a
+ * merging semantics node in its own right — it is not swallowed into the row's
+ * merged node, so a screen reader reaches it separately. Both halves are
+ * asserted (`SettingsHintBehaviourTest`), because either one silently regressing
+ * would put the explanation out of reach without changing how the screen looks.
  *
  * @param settingName Row label, spoken as part of the action description.
  * @param expanded Whether this row's [KnotworkHintPanel] is currently open.
