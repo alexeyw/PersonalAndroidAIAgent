@@ -327,6 +327,21 @@ class SettingsCategorySnapshotTest {
                 "How fast old memories lose to new ones when both match. " +
                     "Short favours this week; long treats everything as current.",
             ),
+            // Generation's own rows, so the baselines for that screen contain
+            // the glyph the bespoke textarea header now carries. Without them
+            // the screen looks covered while the control added here is in none
+            // of its captures — the third time this phase.
+            "SYSTEM_PROMPT_PREFIX" to SettingsHint(
+                "Put in front of every request, in every chat and every pipeline. " +
+                    "The agent treats it as standing orders.",
+            ),
+            "TEMPERATURE" to SettingsHint(
+                "Low keeps the wording predictable and repetitive; high makes it varied and less literal.",
+            ),
+            "TOP_K" to SettingsHint(
+                "How many candidate words stay in play at each step. " +
+                    "Small is safer and blander; large lets rarer words through.",
+            ),
             "MEMORY_COMPACTION_AGE_DAYS" to SettingsHint(
                 "How old a memory must be before compaction may merge it. " +
                     "Fresher facts keep their exact wording until they pass it.",
