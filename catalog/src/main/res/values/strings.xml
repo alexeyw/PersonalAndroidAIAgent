@@ -194,7 +194,6 @@
     <!-- ContentDescription for the Clear header action. -->
     <string name="knotwork_console_action_clear">Clear log</string>
     <!-- ContentDescription for the Close header action. -->
-    <string name="knotwork_console_action_close">Collapse console</string>
     <!-- Placeholder text inside the inline search field rendered above the Logs list. -->
     <string name="knotwork_console_search_placeholder">Search log</string>
     <!-- ContentDescription announced when the inline search bar is open and focused. -->
@@ -343,7 +342,9 @@
     <string name="knotwork_tools_cleartext_consent_body">Traffic to %1$s is not encrypted. Anyone on the same network can read what you send, including any token set below. Approve it only if this address is a machine you trust on your own network.</string>
     <string name="knotwork_tools_cleartext_consent_action">Approve unencrypted connection</string>
     <!-- Add-server form placeholder. -->
-    <string name="knotwork_tools_add_form_placeholder">https://… or mcp://host:port</string>
+    <string name="knotwork_tools_add_form_placeholder">https://mcp.example.com/sse</string>
+    <!-- Add-server address explanation, opened from the field\'s help glyph. -->
+    <string name="knotwork_tools_add_form_address_hint">The endpoint your server prints when it starts. Match the transport below it, and an address on your own network is fine.</string>
     <!-- Add-server cancel button label. -->
     <string name="knotwork_tools_add_form_cancel">Cancel</string>
     <!-- Add-server submit button label. -->
@@ -463,7 +464,15 @@
     <string name="knotwork_settings_hub_system_instructions_empty">Tap to edit the system prompt.</string>
     <string name="knotwork_settings_count" tools:ignore="PluralsCandidate">%1$d settings</string>
     <string name="knotwork_settings_advanced_title">Advanced</string>
-    <string name="knotwork_settings_advanced_subtitle">change deliberately</string>
+
+    <!-- Settings hints: the entry glyph's action, and the state it announces. -->
+    <!-- Titles for the two settings textareas, which had no label of their own. -->
+    <string name="knotwork_settings_system_instructions_title">System instructions</string>
+    <string name="knotwork_settings_tool_usage_title">Tool-usage instruction</string>
+    <string name="knotwork_settings_memory_actions_title">Memory data</string>
+    <string name="knotwork_settings_hint_open_cd">Explain: %1$s</string>
+    <string name="knotwork_settings_hint_state_collapsed">collapsed</string>
+    <string name="knotwork_settings_hint_state_expanded">expanded</string>
 
     <string name="knotwork_settings_cat_generation_title">Generation</string>
     <string name="knotwork_settings_cat_generation_summary">System prompt · sampling · voice</string>
@@ -523,16 +532,11 @@
     <string name="knotwork_settings_providers_not_configured">Not configured · tap to add API key</string>
 
     <string name="knotwork_settings_notifications_long_running">Long-running tasks</string>
-    <string name="knotwork_settings_notifications_long_running_subtitle">Ping when a pipeline runs &gt; 8 s in background.</string>
     <string name="knotwork_settings_notifications_scheduled_results">Scheduled task results</string>
-    <string name="knotwork_settings_notifications_scheduled_results_subtitle">Notify when a scheduled task completes or fails.</string>
     <string name="knotwork_settings_share_pipeline_title">Pipeline for sharing</string>
     <string name="knotwork_settings_share_reuse_title">Keep shares in one chat</string>
-    <string name="knotwork_settings_share_reuse_subtitle">Add every share to a single Shared chat instead of a new one each time.</string>
     <string name="knotwork_settings_tile_pipeline_title">Quick Settings pipeline</string>
     <string name="knotwork_settings_external_automation_title">External automation</string>
-    <string name="knotwork_settings_external_automation_subtitle_off">Off. No other app on this device can start a run.</string>
-    <string name="knotwork_settings_external_automation_subtitle_on">On. Other apps may ask to run the one pipeline you pick.</string>
     <string name="knotwork_settings_external_pipeline_title">Pipeline other apps may run</string>
     <string name="knotwork_settings_external_journal_title">Request journal</string>
     <!--
@@ -544,9 +548,7 @@
     <string name="knotwork_settings_run_limits_title">Run limits</string>
 
     <string name="knotwork_settings_crash_reporting_label">Send anonymous crash reports</string>
-    <string name="knotwork_settings_crash_reporting_hint">Help improve stability by sharing anonymous crash data.</string>
     <string name="knotwork_settings_verbose_memory_logging_label">Verbose memory logging</string>
-    <string name="knotwork_settings_verbose_memory_logging_hint">Show memory retrieval hits and scores in the console, and log compaction details.</string>
     <string name="knotwork_settings_reset_button">Reset all settings</string>
     <string name="knotwork_settings_reset_hint">Defaults are sensible starting points, refined through real-world use. Resets settings only — your chats, memory, pipelines, presets and connections are left untouched.</string>
     <string name="knotwork_settings_restart_action">Restart</string>
@@ -963,7 +965,7 @@
     <string name="knotwork_files_title">Files</string>
     <string name="knotwork_files_subtitle">AGENT WORKSPACE</string>
     <string name="knotwork_files_back_cd">Back</string>
-    <string name="knotwork_files_refresh_cd">Refresh</string>
+    <string name="knotwork_files_refresh_cd">Rescan the workspace</string>
     <!-- Quota header. -->
     <plurals name="knotwork_files_count">
         <item quantity="one">file</item>

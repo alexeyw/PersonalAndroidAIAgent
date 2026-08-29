@@ -19,7 +19,7 @@ import kotlinx.coroutines.launch
  * Owns the composer image attachment (`composer.attachment`), the image-source
  * chooser sheet (`sourceChooserVisible`), and the full-screen image viewer
  * (`imageViewer`) — the leaf slices of [ChatHomeScreenState] it writes — plus
- * the `attachmentErrorEvents` one-shot. The multimodal **pre-flight**
+ * the `attachmentErrorEvents` / `attachmentReplacedEvents` one-shots. The multimodal **pre-flight**
  * ([preflightBlockReason]) is exposed publicly because the send path
  * ([ChatHomeViewModel.sendMessage]) consults it before enqueueing an image
  * message; everything else is self-contained.
@@ -53,6 +53,29 @@ class ChatHomeAttachmentDelegate(
      * surface's main visual state (e.g. an in-flight `Generating` run).
      */
     val attachmentErrorEvents: SharedFlow<Unit> = _attachmentErrorEvents.asSharedFlow()
+
+    /**
+     * Monotonic id of the most recent pick.
+     *
+     * A type check on the draft cannot tell "my pick still owns the slot" from
+     * "a newer pick replaced it and is also in flight" — both read as
+     * `Processing`. Under two quick picks that let whichever ingest finished
+     * *first* win and the later one delete its own file, which is backwards.
+     * The token makes ownership identity rather than shape.
+     */
+    private var pickGeneration: Long = 0
+
+    private val _attachmentReplacedEvents: MutableSharedFlow<Unit> = MutableSharedFlow(extraBufferCapacity = 1)
+
+    /**
+     * Emitted when picking an image discards one already attached.
+     *
+     * The composer holds exactly one attachment, and the replacement used to be
+     * silent: the first external tester attached a second image, watched the
+     * first vanish with no explanation, and called it "an unpleasant surprise".
+     * The limit stays — saying so is what was missing.
+     */
+    val attachmentReplacedEvents: SharedFlow<Unit> = _attachmentReplacedEvents.asSharedFlow()
 
     /**
      * Resolves whether an image message must be blocked before it is enqueued,
@@ -103,7 +126,9 @@ class ChatHomeAttachmentDelegate(
     fun onImagePicked(uri: String) {
         // Discard any prior pending attachment's file (it was never sent) before
         // replacing the draft, so a re-pick doesn't leave an orphan behind.
-        val replacedPath = (state.value.composer.attachment as? ComposerAttachmentDraft.Ready)?.attachment?.path
+        val replaced = state.value.composer.attachment as? ComposerAttachmentDraft.Ready
+        val replacedPath = replaced?.attachment?.path
+        val generation = ++pickGeneration
         state.update {
             it.copy(
                 sourceChooserVisible = false,
@@ -111,22 +136,55 @@ class ChatHomeAttachmentDelegate(
             )
         }
         scope.launch {
-            if (replacedPath != null) {
-                attachmentStore.delete(replacedPath)
-            }
+            // The previous file is deleted only once its replacement exists.
+            // Deleting first meant a failed ingest destroyed the image the user
+            // already had and left the composer empty — the loss was real
+            // whether or not anything said so.
             val stored = attachmentStore.ingestUri(uri).getOrNull()
-            if (stored != null) {
+            // Two ways this pick can stop owning the slot while its ingest is in
+            // flight: the user taps ✕ (live during `Processing`), or picks again.
+            // Anything that puts an image back — the new one on success, the
+            // previous one on failure — must check both, or a removal un-does
+            // itself and an older pick overwrites a newer one.
+            val stillOurs = generation == pickGeneration &&
+                state.value.composer.attachment is ComposerAttachmentDraft.Processing
+            if (stored != null && stillOurs) {
+                if (replacedPath != null) {
+                    attachmentStore.delete(replacedPath)
+                }
                 val ready = ComposerAttachmentDraft.Ready(
                     attachment = stored,
                     absolutePath = attachmentStore.absolutePathFor(stored.path),
                     detail = attachmentDetailLabel(stored.width, stored.height, attachmentStore.sizeBytes(stored.path)),
                 )
                 state.update { it.copy(composer = it.composer.copy(attachment = ready)) }
-            } else {
+                if (replacedPath != null) {
+                    _attachmentReplacedEvents.tryEmit(Unit)
+                }
+            } else if (stillOurs) {
                 // Transient failure — surface a snackbar rather than flipping the
                 // whole surface to Error (which would clobber an in-flight run).
-                state.update { it.copy(composer = it.composer.copy(attachment = null)) }
+                //
+                // The draft goes back to whatever was attached before, not to
+                // null: a failed re-pick has replaced nothing, and clearing the
+                // slot would take away an image the user still has (its file is
+                // no longer deleted up front either) on the strength of an
+                // attempt that did not succeed.
+                state.update { it.copy(composer = it.composer.copy(attachment = replaced)) }
                 _attachmentErrorEvents.tryEmit(Unit)
+            } else {
+                // The slot moved on — removed, or claimed by a later pick — so
+                // nothing goes back into it, and the file THIS pick ingested has
+                // no owner and is deleted.
+                //
+                // `replacedPath` is deliberately left alone: it is not this
+                // pick's file, and whoever owns the slot now may still be
+                // showing it or may hand it back on its own failure. Deleting it
+                // from here could take away an image the user still has. If it
+                // does end up unreferenced, `CleanupOrphanAttachmentsUseCase`
+                // sweeps it — an orphaned file is recoverable, a deleted one the
+                // user wanted is not.
+                if (stored != null) attachmentStore.delete(stored.path)
             }
         }
     }

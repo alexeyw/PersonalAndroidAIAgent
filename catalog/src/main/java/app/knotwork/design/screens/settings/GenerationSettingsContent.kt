@@ -49,7 +49,6 @@ fun GenerationSettingsContent(
                 SettingsAnchor(anchorKey = SettingsRowAnchors.TOOL_USAGE_INSTRUCTION) {
                     ToolUsageField(
                         value = state.toolUsageValue,
-                        helper = state.toolUsageHelper,
                         onValueChange = callbacks.onToolUsageInstructionChange,
                     )
                 }

@@ -122,6 +122,18 @@ class ToolsContentSnapshotTest {
         McpServerConfigContent(form = ToolsPreview.addMcpDefault())
     }
 
+    /**
+     * The empty form, which is where the placeholder actually shows.
+     *
+     * The `add_mcp_default` boards above all carry a typed URL, so the
+     * placeholder — the string that sent the first external tester looking for a
+     * port number he had no way to know — was in no baseline at all.
+     */
+    @Test
+    fun add_mcp_empty_light() = snapshot(name = "add_mcp_empty", dark = false) {
+        McpServerConfigContent(form = AddMcpServerForm())
+    }
+
     @Test
     fun add_mcp_invalid_light() = snapshot(name = "add_mcp_invalid", dark = false) {
         McpServerConfigContent(form = ToolsPreview.addMcpInvalid())

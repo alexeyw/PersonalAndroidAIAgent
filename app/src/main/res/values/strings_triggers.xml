@@ -16,7 +16,12 @@
         <item quantity="one">%1$d trigger · %2$d active</item>
         <item quantity="other">%1$d triggers · %2$d active</item>
     </plurals>
-    <string name="triggers_unbound_hint">No pipeline — tap to bind</string>
+    <string name="triggers_unbound_hint">No pipeline yet</string>
+    <!-- The verb that takes the place of the switch an unbound trigger cannot offer. -->
+    <string name="triggers_bind">Bind</string>
+    <string name="triggers_bind_cd">Bind a pipeline to %1$s</string>
+    <!-- Detail screen: the row itself is the control, so it names the verb. -->
+    <string name="triggers_unbound_action">No pipeline yet — tap to bind</string>
     <string name="triggers_menu_edit">Edit</string>
     <string name="triggers_menu_delete">Delete</string>
 

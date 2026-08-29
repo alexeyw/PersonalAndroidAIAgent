@@ -233,7 +233,8 @@ data class TriggerDetailStrings(
     val stateLabel: String = "State",
     val stateEnabled: String = "Enabled",
     val stateDisabled: String = "Disabled",
-    val unboundHint: String = "No pipeline — tap to bind",
+    val unboundHint: String = "No pipeline yet",
+    val unboundAction: String = "No pipeline yet — tap to bind",
     val edit: String = "Edit",
     val delete: String = "Delete",
     // Stale banner.

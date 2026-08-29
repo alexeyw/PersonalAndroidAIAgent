@@ -96,7 +96,6 @@ fun ConsoleCatalogContent() {
                 onSearch = {},
                 onCopyAll = {},
                 onClear = {},
-                onCloseConsole = {},
             )
 
             SectionLabel(text = "ConsolePane — Vars")
@@ -111,7 +110,6 @@ fun ConsoleCatalogContent() {
                 onSearch = {},
                 onCopyAll = {},
                 onClear = {},
-                onCloseConsole = {},
             )
 
             SectionLabel(text = "ConsolePane — Traces")
@@ -126,7 +124,6 @@ fun ConsoleCatalogContent() {
                 onSearch = {},
                 onCopyAll = {},
                 onClear = {},
-                onCloseConsole = {},
             )
         }
     }

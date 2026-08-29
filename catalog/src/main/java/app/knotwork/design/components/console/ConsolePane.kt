@@ -157,7 +157,6 @@ fun ConsolePane(
     onSearch: () -> Unit,
     onCopyAll: () -> Unit,
     onClear: () -> Unit,
-    onCloseConsole: () -> Unit,
     modifier: Modifier = Modifier,
     searchQuery: String? = null,
     onSearchQueryChange: (String) -> Unit = {},
@@ -181,7 +180,6 @@ fun ConsolePane(
             onSearch = onSearch,
             onCopyAll = onCopyAll,
             onClear = onClear,
-            onCloseConsole = onCloseConsole,
         )
         when (tab) {
             ConsoleTab.Logs -> ConsoleLogsBody(
@@ -208,7 +206,6 @@ private fun ConsolePaneHeader(
     onSearch: () -> Unit,
     onCopyAll: () -> Unit,
     onClear: () -> Unit,
-    onCloseConsole: () -> Unit,
 ) {
     // The search field lives in `ConsoleLogsBody` and nowhere else, so the
     // header offers Search on the Logs tab only. Rendering it on Vars/Traces
@@ -226,7 +223,6 @@ private fun ConsolePaneHeader(
             onSearch = onSearch.takeIf { searchable },
             onCopyAll = onCopyAll,
             onClear = onClear,
-            onClose = onCloseConsole,
         )
     }
 }
@@ -283,7 +279,7 @@ private fun FullTabStrip(tab: ConsoleTab, onTabChange: (ConsoleTab) -> Unit, mod
  * Vars and Traces tabs have no search field to open.
  */
 @Composable
-private fun ConsoleActions(onSearch: (() -> Unit)?, onCopyAll: () -> Unit, onClear: () -> Unit, onClose: () -> Unit) {
+private fun ConsoleActions(onSearch: (() -> Unit)?, onCopyAll: () -> Unit, onClear: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (onSearch != null) {
             ConsoleHeaderIcon(
@@ -302,11 +298,10 @@ private fun ConsoleActions(onSearch: (() -> Unit)?, onCopyAll: () -> Unit, onCle
             contentDescription = stringResource(R.string.knotwork_console_action_clear),
             onClick = onClear,
         )
-        ConsoleHeaderIcon(
-            icon = AppIcons.X,
-            contentDescription = stringResource(R.string.knotwork_console_action_close),
-            onClick = onClose,
-        )
+        // No ✕ here. The strip above this row IS the console's header when the
+        // sheet is open, and its chevron already closes it — two controls a
+        // finger apart doing one thing is the duplication task 2/11 removed
+        // elsewhere ("one door, one verb"), reintroduced by proximity.
     }
 }
 

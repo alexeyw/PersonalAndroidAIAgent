@@ -1,5 +1,7 @@
 package app.knotwork.android.presentation.ui.settings.provider
 
+import android.content.Context
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -13,17 +15,19 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -37,8 +41,16 @@ import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.CleartextPolicy
 import app.knotwork.design.components.misc.KnotworkWarningBanner
 import app.knotwork.design.icons.AppIcons
+import app.knotwork.design.screens.settings.KnotworkParamSlider
 import app.knotwork.design.screens.settings.KnotworkProviderRow
+import app.knotwork.design.screens.settings.LocalSettingsHints
+import app.knotwork.design.screens.settings.LocalSettingsRowAnchor
 import app.knotwork.design.screens.settings.OllamaProviderInputs
+import app.knotwork.design.screens.settings.SettingsHint
+import app.knotwork.design.screens.settings.SettingsHintBody
+import app.knotwork.design.screens.settings.SettingsHintController
+import app.knotwork.design.screens.settings.SettingsHintGlyph
+import app.knotwork.design.screens.settings.SettingsSectionLabel
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -232,38 +244,76 @@ private fun CloudRetrySection(
     val minDelay = SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_MIN.toFloat()
     val maxDelay = SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_MAX.toFloat()
     val delayRange = minDelay..maxDelay
-    Column(modifier = Modifier.fillMaxWidth().padding(top = KnotworkTheme.spacing.sp4)) {
-        Text(
-            text = stringResource(R.string.settings_cloud_retry_title),
-            style = KnotworkTextStyles.TitleMd,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Text(
-            text = stringResource(R.string.settings_cloud_retry_subtitle),
-            style = KnotworkTextStyles.BodySm,
-            color = KnotworkTheme.extended.onSurfaceMuted,
-        )
-        Text(
-            text = stringResource(R.string.settings_cloud_retry_attempts_label, maxAttempts),
-            style = KnotworkTextStyles.BodyBase,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Slider(
-            value = maxAttempts.toFloat(),
-            onValueChange = { onMaxAttemptsChange(it.toInt()) },
-            valueRange = attemptsRange,
-            steps = maxAttemptsBound - minAttempts - 1,
-        )
-        Text(
-            text = stringResource(R.string.settings_cloud_retry_delay_label, baseDelayMs),
-            style = KnotworkTextStyles.BodyBase,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        Slider(
-            value = baseDelayMs.toFloat(),
-            onValueChange = { onBaseDelayChange(it.toLong()) },
-            valueRange = delayRange,
-        )
+    // Built from the catalog's settings components rather than raw Material
+    // ones. This screen had grown its own look — a title in `TitleMd`, a grey
+    // paragraph, `Text` + bare `Slider` pairs — so a reader arriving from any
+    // other settings screen met a different visual language, and none of the
+    // help affordance the rest of Settings had just gained.
+    val context = LocalContext.current
+    val hints = remember(context) { retryHints(context) }
+    CompositionLocalProvider(LocalSettingsHints provides hints) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(top = KnotworkTheme.spacing.sp4),
+            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        ) {
+            CompositionLocalProvider(LocalSettingsRowAnchor provides RETRY_SECTION_ANCHOR) {
+                SettingsSectionLabel(text = stringResource(R.string.settings_cloud_retry_title)) {
+                    SettingsHintGlyph(settingName = stringResource(R.string.settings_cloud_retry_title))
+                }
+                // The paragraph that used to sit here explained the policy in
+                // muted body text — the slot this app reserves for machine
+                // state, and the reason such text went unread. It is the
+                // section's hint now.
+                SettingsHintBody()
+            }
+            CompositionLocalProvider(LocalSettingsRowAnchor provides RETRY_ATTEMPTS_ANCHOR) {
+                KnotworkParamSlider(
+                    label = stringResource(R.string.settings_cloud_retry_attempts_title),
+                    valueLabel = maxAttempts.toString(),
+                    value = maxAttempts.toFloat(),
+                    onValueChange = { onMaxAttemptsChange(it.toInt()) },
+                    valueRange = attemptsRange,
+                    steps = maxAttemptsBound - minAttempts - 1,
+                )
+            }
+            CompositionLocalProvider(LocalSettingsRowAnchor provides RETRY_DELAY_ANCHOR) {
+                KnotworkParamSlider(
+                    label = stringResource(R.string.settings_cloud_retry_delay_title),
+                    valueLabel = stringResource(R.string.settings_cloud_retry_delay_value, baseDelayMs),
+                    value = baseDelayMs.toFloat(),
+                    onValueChange = { onBaseDelayChange(it.toLong()) },
+                    valueRange = delayRange,
+                )
+            }
+        }
+    }
+}
+
+/** Anchor of the retry-policy section header. */
+private const val RETRY_SECTION_ANCHOR = "CLOUD_RETRY_POLICY"
+
+/** Anchor of the max-attempts slider. */
+private const val RETRY_ATTEMPTS_ANCHOR = "CLOUD_RETRY_MAX_ATTEMPTS"
+
+/** Anchor of the base-delay slider. */
+private const val RETRY_DELAY_ANCHOR = "CLOUD_RETRY_BASE_DELAY_MS"
+
+/**
+ * Hints for the retry rows.
+ *
+ * Local rather than from `SettingsHelpCatalog`: these three live on the provider
+ * screen and are not rows of the settings registry, which the catalogue and its
+ * completeness gate are keyed to. They follow the same rules — one sentence,
+ * what changes and what you will notice.
+ *
+ * @param context Resource resolution for the localized text.
+ */
+private fun retryHints(context: Context): SettingsHintController = SettingsHintController { anchor ->
+    when (anchor) {
+        RETRY_SECTION_ANCHOR -> SettingsHint(context.getString(R.string.settings_cloud_retry_hint))
+        RETRY_ATTEMPTS_ANCHOR -> SettingsHint(context.getString(R.string.settings_cloud_retry_attempts_hint))
+        RETRY_DELAY_ANCHOR -> SettingsHint(context.getString(R.string.settings_cloud_retry_delay_hint))
+        else -> null
     }
 }
 

@@ -108,7 +108,7 @@ fun UsageTelemetryContent(
         IconToggleRow(
             icon = AppIcons.Gauge,
             title = stringResource(R.string.knotwork_usage_record_label),
-            subtitle = stringResource(R.string.knotwork_usage_record_hint),
+            state = stringResource(R.string.knotwork_usage_record_hint),
             checked = state.recordingEnabled,
             onCheckedChange = callbacks.onToggleRecording,
         )

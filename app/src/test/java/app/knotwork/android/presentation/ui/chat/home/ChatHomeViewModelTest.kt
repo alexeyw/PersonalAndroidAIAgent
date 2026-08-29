@@ -797,6 +797,122 @@ class ChatHomeViewModelTest {
     }
 
     @Test
+    fun `replacing an attachment announces it only once the replacement is in hand`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val first = MessageAttachment(path = "first.jpg", mimeType = "image/jpeg", width = 10, height = 10)
+        coEvery { attachmentStore.ingestUri("content://first") } returns kotlin.Result.success(first)
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/x.jpg"
+        val replaced = mutableListOf<Unit>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.attachments.attachmentReplacedEvents.collect { replaced.add(it) }
+        }
+
+        viewModel.attachments.onImagePicked("content://first")
+        advanceUntilIdle()
+        assertTrue("the first attachment replaces nothing", replaced.isEmpty())
+
+        val second = MessageAttachment(path = "second.jpg", mimeType = "image/jpeg", width = 20, height = 20)
+        coEvery { attachmentStore.ingestUri("content://second") } coAnswers {
+            // Asserted mid-flight: counting events at the end would pass just as
+            // well if the announcement fired before the ingest, which is the
+            // bug this test is named for.
+            assertTrue("nothing may be announced while the ingest is in flight", replaced.isEmpty())
+            kotlin.Result.success(second)
+        }
+        viewModel.attachments.onImagePicked("content://second")
+        advanceUntilIdle()
+
+        assertEquals("the replacement is announced once", 1, replaced.size)
+    }
+
+    @Test
+    fun `a replacement that fails to ingest is not announced as a replacement`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val first = MessageAttachment(path = "first.jpg", mimeType = "image/jpeg", width = 10, height = 10)
+        coEvery { attachmentStore.ingestUri("content://first") } returns kotlin.Result.success(first)
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/x.jpg"
+        val replaced = mutableListOf<Unit>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.attachments.attachmentReplacedEvents.collect { replaced.add(it) }
+        }
+        viewModel.attachments.onImagePicked("content://first")
+        advanceUntilIdle()
+
+        coEvery { attachmentStore.ingestUri("content://bad") } returns kotlin.Result.failure(RuntimeException("bad"))
+        viewModel.attachments.onImagePicked("content://bad")
+        advanceUntilIdle()
+
+        // A failed re-pick replaces nothing, says nothing about replacing, and —
+        // the part that actually mattered — costs the user nothing: the image
+        // that was already attached is still attached.
+        assertTrue("a failed ingest replaced nothing", replaced.isEmpty())
+        val draft = viewModel.state.value.composer.attachment
+        assertTrue("the previous attachment must survive a failed re-pick", draft is ComposerAttachmentDraft.Ready)
+        assertEquals(first, (draft as ComposerAttachmentDraft.Ready).attachment)
+        coVerify(exactly = 0) { attachmentStore.delete("first.jpg") }
+    }
+
+    @Test
+    fun `removing the draft while a pick is in flight is not undone by the pick landing`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val first = MessageAttachment(path = "first.jpg", mimeType = "image/jpeg", width = 10, height = 10)
+        coEvery { attachmentStore.ingestUri("content://first") } returns kotlin.Result.success(first)
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/x.jpg"
+        viewModel.attachments.onImagePicked("content://first")
+        advanceUntilIdle()
+
+        // Pick a second image and drop the whole draft before the ingest lands.
+        // The remove button is live during Processing, so this is reachable.
+        val second = MessageAttachment(path = "second.jpg", mimeType = "image/jpeg", width = 20, height = 20)
+        coEvery { attachmentStore.ingestUri("content://second") } returns kotlin.Result.success(second)
+        viewModel.attachments.onImagePicked("content://second")
+        viewModel.attachments.removeAttachment()
+        advanceUntilIdle()
+
+        // Neither image comes back: the user said remove, and a pick landing
+        // afterwards must not overrule that.
+        assertNull(viewModel.state.value.composer.attachment)
+        coVerify { attachmentStore.delete("second.jpg") }
+    }
+
+    @Test
+    fun `when two picks race the later one wins`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/x.jpg"
+        val first = MessageAttachment(path = "first.jpg", mimeType = "image/jpeg", width = 10, height = 10)
+        val second = MessageAttachment(path = "second.jpg", mimeType = "image/jpeg", width = 20, height = 20)
+        // Both ingests are in flight at once and the EARLIER pick finishes
+        // first — the only ordering in which the bug shows. (With the later pick
+        // finishing first the slot is already `Ready`, and even a bare type
+        // check rejects the straggler, which is why the first version of this
+        // test passed against the broken code.)
+        coEvery { attachmentStore.ingestUri("content://earlier") } coAnswers {
+            delay(EARLIER_INGEST_MS)
+            kotlin.Result.success(first)
+        }
+        coEvery { attachmentStore.ingestUri("content://later") } coAnswers {
+            delay(LATER_INGEST_MS)
+            kotlin.Result.success(second)
+        }
+
+        viewModel.attachments.onImagePicked("content://earlier")
+        viewModel.attachments.onImagePicked("content://later")
+        advanceUntilIdle()
+
+        // Ownership is the pick's identity, not the draft's shape: both picks see
+        // a `Processing` slot, so a type check alone let whichever finished first
+        // win — which for the user means the image they picked second vanishes.
+        val draft = viewModel.state.value.composer.attachment
+        assertTrue(draft is ComposerAttachmentDraft.Ready)
+        assertEquals(second, (draft as ComposerAttachmentDraft.Ready).attachment)
+        coVerify { attachmentStore.delete("first.jpg") }
+    }
+
+    @Test
     fun `onImagePicked failure clears draft and emits a transient error event without clobbering visual`() =
         runTest(testDispatcher) {
             viewModel = createViewModel()
@@ -2762,6 +2878,8 @@ class ChatHomeViewModelTest {
     // endregion
 
     private companion object {
+        const val EARLIER_INGEST_MS = 30L
+        const val LATER_INGEST_MS = 60L
         const val DEFAULT_TOKENS_MAX: Int = 4096
         const val ALT_TOKENS_MAX: Int = 8192
         const val AUDIO_LIMIT_SEC: Int = 30

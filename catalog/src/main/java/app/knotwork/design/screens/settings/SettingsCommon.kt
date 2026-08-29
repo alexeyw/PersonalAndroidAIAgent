@@ -10,7 +10,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,6 +17,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -36,6 +37,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,6 +51,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +69,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.chips.ChipStyle
@@ -178,7 +182,7 @@ private fun CategoryTopBar(title: String, subtitle: String, onBack: () -> Unit) 
  * trailing slot.
  */
 @Composable
-internal fun SettingsSectionLabel(text: String, trailing: @Composable () -> Unit = {}) {
+fun SettingsSectionLabel(text: String, trailing: @Composable () -> Unit = {}) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Text(
             text = text.uppercase(),
@@ -213,47 +217,40 @@ internal fun AdvancedDisclosure(initiallyExpanded: Boolean = false, content: @Co
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
     ) {
-        Surface(
-            shape = KnotworkTheme.shapes.md,
-            color = KnotworkTheme.extended.surface1,
-            border = BorderStroke(SectionCardBorder, KnotworkTheme.extended.divider),
+        // A labelled rule, not a card. The card read as one more setting to
+        // decide about — the heaviest object on a screen the closed test already
+        // called too long — where this is what it always was: the line where the
+        // everyday settings end. Drawn to the design handoff: mono, uppercase,
+        // muted, a divider taking the remaining width, and the chevron.
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
             modifier = Modifier
                 .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(vertical = KnotworkTheme.spacing.sp2)
                 .testTag(ADVANCED_DISCLOSURE_TEST_TAG),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+            Text(
+                text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_advanced_title),
+                style = KnotworkTextStyles.MonoSm.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = AdvancedLabelTracking,
+                ),
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+            HorizontalDivider(
+                color = KnotworkTheme.extended.divider,
+                modifier = Modifier.weight(1f),
+            )
+            Icon(
+                imageVector = AppIcons.ArrowDown,
+                contentDescription = null,
+                tint = KnotworkTheme.extended.onSurfaceMuted,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = !expanded }
-                    .padding(KnotworkTheme.spacing.sp3),
-            ) {
-                Icon(
-                    imageVector = AppIcons.Sliders,
-                    contentDescription = null,
-                    tint = KnotworkTheme.extended.onSurfaceMuted,
-                    modifier = Modifier.size(KnotworkTheme.spacing.sp5),
-                )
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_advanced_title),
-                        style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-                    Text(
-                        text = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_advanced_subtitle),
-                        style = KnotworkTextStyles.MonoSm,
-                        color = KnotworkTheme.extended.onSurfaceMuted,
-                    )
-                }
-                Icon(
-                    imageVector = AppIcons.ArrowDown,
-                    contentDescription = null,
-                    tint = KnotworkTheme.extended.onSurfaceMuted,
-                    modifier = Modifier.rotate(chevronRotation),
-                )
-            }
+                    .size(AdvancedChevronSize)
+                    .rotate(chevronRotation),
+            )
         }
         AnimatedVisibility(visible = expanded) {
             Column(
@@ -268,60 +265,109 @@ internal fun AdvancedDisclosure(initiallyExpanded: Boolean = false, content: @Co
 
 // ─── Rows ────────────────────────────────────────────────────────────────────
 
-/** Icon + title + subtitle + trailing Material Switch; the whole row toggles. */
+/**
+ * Icon + title + state + trailing Material Switch; the whole row toggles.
+ *
+ * @param state What the row is set to **now** — `NPU · auto`, `412 memories`.
+ *   Never a sentence about what the row means: that is what [hintAnchor]
+ *   summons. The two were one slot until the closed test showed that muted text
+ *   under a label reads as machine state and goes unread.
+ */
 @Composable
 internal fun IconToggleRow(
     icon: ImageVector,
     title: String,
-    subtitle: String,
+    state: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) },
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = KnotworkTheme.extended.onSurfaceMuted,
-            modifier = Modifier.size(KnotworkTheme.spacing.sp5),
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onCheckedChange(!checked) },
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = KnotworkTheme.extended.onSurfaceMuted,
+                modifier = Modifier.size(KnotworkTheme.spacing.sp5),
             )
-            if (subtitle.isNotBlank()) {
-                Text(
-                    text = subtitle,
-                    style = KnotworkTextStyles.MonoSm,
-                    color = KnotworkTheme.extended.onSurfaceMuted,
-                )
+            Column(modifier = Modifier.weight(1f)) {
+                RowLabelWithHint(title = title)
+                if (state.isNotBlank()) {
+                    Text(
+                        text = state,
+                        style = KnotworkTextStyles.MonoSm,
+                        color = KnotworkTheme.extended.onSurfaceMuted,
+                    )
+                }
             }
+            Switch(
+                checked = checked,
+                onCheckedChange = null,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                    checkedTrackColor = MaterialTheme.colorScheme.primary,
+                    checkedBorderColor = MaterialTheme.colorScheme.primary,
+                ),
+                modifier = Modifier.scale(SWITCH_SCALE),
+            )
         }
-        Switch(
-            checked = checked,
-            onCheckedChange = null,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                checkedTrackColor = MaterialTheme.colorScheme.primary,
-                checkedBorderColor = MaterialTheme.colorScheme.primary,
-            ),
-            modifier = Modifier.scale(SWITCH_SCALE),
-        )
+        SettingsHintBody()
     }
 }
 
 /**
- * Icon + title + subtitle + trailing chevron; routes to another screen.
+ * Plain label for a dropdown row.
  *
- * @param subtitleWarning Renders the subtitle as a warning — a leading warn glyph
+ * Carries **no** help glyph: the whole row is the dropdown's `menuAnchor`, and
+ * a press anywhere inside it — the glyph included — opens the menu instead of
+ * the explanation. The glyph is emitted by [DropdownRowHeader] above the row,
+ * outside the anchor, where a press reaches it.
+ *
+ * @param title Row label.
+ */
+@Composable
+private fun DropdownRowLabel(title: String) {
+    Text(
+        text = title,
+        style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+}
+
+/**
+ * A row label with its help glyph, laid out so the glyph wraps onto its own
+ * line instead of squeezing the label at large font scales.
+ *
+ * @param title Row label.
+ */
+@Composable
+private fun RowLabelWithHint(title: String) {
+    // Row with a weighted label, not FlowRow. FlowRow wraps the glyph onto a
+    // line of its own as soon as the label fills the width — which on
+    // "Auto-extract from conversations" left the ⓘ sitting under the text,
+    // reading as a stray control. Weighting the label lets the text wrap inside
+    // itself and keeps the glyph beside it.
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = title,
+            style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f, fill = false),
+        )
+        SettingsHintGlyph(settingName = title)
+    }
+}
+
+/**
+ * Icon + title + state + trailing chevron; routes to another screen.
+ *
+ * @param stateWarning Renders the state line as a warning — a leading warn glyph
  *   plus the warn tint — for a row whose current value leaves the feature
  *   incomplete. The glyph is not decoration: it is what carries the state for a
  *   reader who cannot see the tint, so the row never says "something is wrong"
@@ -331,64 +377,69 @@ internal fun IconToggleRow(
 internal fun NavLinkRow(
     icon: ImageVector,
     title: String,
-    subtitle: String,
+    state: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    subtitleWarning: Boolean = false,
+    stateWarning: Boolean = false,
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = KnotworkTheme.extended.onSurfaceMuted,
-            modifier = Modifier.size(KnotworkTheme.spacing.sp5),
-        )
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = title,
-                style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = KnotworkTheme.extended.onSurfaceMuted,
+                modifier = Modifier.size(KnotworkTheme.spacing.sp5),
             )
-            if (subtitle.isNotBlank()) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
-                ) {
-                    if (subtitleWarning) {
-                        Icon(
-                            imageVector = AppIcons.Warn,
-                            contentDescription = null,
-                            tint = KnotworkTheme.extended.signalWarn,
-                            modifier = Modifier.size(NavLinkWarnGlyphSize),
+            Column(modifier = Modifier.weight(1f)) {
+                RowLabelWithHint(title = title)
+                if (state.isNotBlank()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
+                    ) {
+                        if (stateWarning) {
+                            Icon(
+                                imageVector = AppIcons.Warn,
+                                contentDescription = null,
+                                tint = KnotworkTheme.extended.signalWarn,
+                                modifier = Modifier.size(NavLinkWarnGlyphSize),
+                            )
+                        }
+                        Text(
+                            text = state,
+                            style = KnotworkTextStyles.MonoSm,
+                            color = if (stateWarning) {
+                                KnotworkTheme.extended.signalWarn
+                            } else {
+                                KnotworkTheme.extended.onSurfaceMuted
+                            },
                         )
                     }
-                    Text(
-                        text = subtitle,
-                        style = KnotworkTextStyles.MonoSm,
-                        color = if (subtitleWarning) {
-                            KnotworkTheme.extended.signalWarn
-                        } else {
-                            KnotworkTheme.extended.onSurfaceMuted
-                        },
-                    )
                 }
             }
+            Icon(
+                imageVector = AppIcons.ArrowR,
+                contentDescription = null,
+                tint = KnotworkTheme.extended.onSurfaceMuted,
+            )
         }
-        Icon(
-            imageVector = AppIcons.ArrowR,
-            contentDescription = null,
-            tint = KnotworkTheme.extended.onSurfaceMuted,
-        )
+        SettingsHintBody()
     }
 }
 
-/** Leading glyph size of a [NavLinkRow] warning subtitle. */
+/** Letter-spacing of the ADVANCED rule label. */
+private val AdvancedLabelTracking = 0.9.sp
+
+/** Chevron size on the ADVANCED rule. */
+private val AdvancedChevronSize = 16.dp
+
+/** Leading glyph size of a [NavLinkRow] warning state. */
 private val NavLinkWarnGlyphSize = 13.dp
 
 /** Collapsed external-provider row (masked key fingerprint + model + LAN pill). */
@@ -471,6 +522,9 @@ internal fun SystemInstructionsField(
             fieldValue = TextFieldValue(text = state.value, selection = TextRange(state.value.length))
         }
     }
+    SettingsFieldHeader(
+        title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_system_instructions_title),
+    )
     OutlinedTextField(
         value = fieldValue,
         onValueChange = { next ->
@@ -495,17 +549,16 @@ internal fun SystemInstructionsField(
             KnotworkChip(label = placeholder, style = ChipStyle.Outline, onClick = { onChipInsert(placeholder) })
         }
     }
+    // The panel the header's glyph opens. Without it the glyph rendered, was
+    // announced by TalkBack, took the "one open at a time" slot away from
+    // whichever hint was open — and showed nothing.
+    SettingsHintBody()
+    // The prose helper that used to sit here is gone: it explained what the
+    // field is for, which the header's hint now does, and it was drawn in a Row
+    // with the counter without a width constraint of its own — so at any real
+    // length the two overlapped. The counter is state, and stays.
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        if (state.helperText.isNotBlank()) {
-            Text(
-                text = state.helperText,
-                style = KnotworkTextStyles.MonoSm,
-                color = KnotworkTheme.extended.onSurfaceMuted,
-                modifier = Modifier.weight(1f),
-            )
-        } else {
-            Spacer(modifier = Modifier.weight(1f))
-        }
+        Spacer(modifier = Modifier.weight(1f))
         Text(
             text = androidx.compose.ui.res.stringResource(
                 R.string.knotwork_settings_system_instructions_counter,
@@ -528,7 +581,7 @@ internal fun SystemInstructionsField(
 
 /** Plain multi-line text field for the tool-usage instruction (no chips/counter). */
 @Composable
-internal fun ToolUsageField(value: String, helper: String, onValueChange: (String) -> Unit) {
+internal fun ToolUsageField(value: String, onValueChange: (String) -> Unit) {
     var fieldValue by remember {
         mutableStateOf(TextFieldValue(text = value, selection = TextRange(value.length)))
     }
@@ -537,6 +590,7 @@ internal fun ToolUsageField(value: String, helper: String, onValueChange: (Strin
             fieldValue = TextFieldValue(text = value, selection = TextRange(value.length))
         }
     }
+    SettingsFieldHeader(title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_tool_usage_title))
     OutlinedTextField(
         value = fieldValue,
         onValueChange = { next ->
@@ -551,8 +605,32 @@ internal fun ToolUsageField(value: String, helper: String, onValueChange: (Strin
             .fillMaxWidth()
             .testTag(TOOL_USAGE_FIELD_TEST_TAG),
     )
-    if (helper.isNotBlank()) {
-        Text(text = helper, style = KnotworkTextStyles.MonoSm, color = KnotworkTheme.extended.onSurfaceMuted)
+    // Same reason as the system-instructions helper above: prose about what the
+    // field does now lives in the header's hint, not in the muted slot.
+    SettingsHintBody()
+}
+
+/**
+ * Title line for a settings control that has no label of its own — the two
+ * textareas and the rows built from bare Composables rather than from
+ * [IconToggleRow] / [NavLinkRow].
+ *
+ * Carries the row's help glyph, so a control that is not one of the standard
+ * rows still has somewhere to open its explanation.
+ *
+ * @param title The control's name.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun SettingsFieldHeader(title: String) {
+    FlowRow(verticalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.align(Alignment.CenterVertically),
+        )
+        SettingsHintGlyph(settingName = title, modifier = Modifier.align(Alignment.CenterVertically))
     }
 }
 
@@ -570,41 +648,45 @@ internal fun BackendDropdownRow(
 ) {
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-            modifier = Modifier
-                .fillMaxWidth()
-                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true),
-        ) {
-            Icon(
-                imageVector = AppIcons.Chip,
-                contentDescription = null,
-                tint = KnotworkTheme.extended.onSurfaceMuted,
-                modifier = Modifier.size(KnotworkTheme.spacing.sp5),
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
+        // The glyph sits on the row but OUTSIDE the menu anchor, which is
+        // applied to the inner Row. Anchoring the whole row made every press
+        // inside it — the glyph included — open the dropdown instead of the
+        // explanation; hoisting the glyph to a line of its own fixed that and
+        // left it floating above the row, attached to nothing.
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+                modifier = Modifier
+                    .weight(1f)
+                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true),
+            ) {
+                Icon(
+                    imageVector = AppIcons.Chip,
+                    contentDescription = null,
+                    tint = KnotworkTheme.extended.onSurfaceMuted,
+                    modifier = Modifier.size(KnotworkTheme.spacing.sp5),
                 )
+                Column(modifier = Modifier.weight(1f)) {
+                    DropdownRowLabel(title = title)
+                    Text(
+                        text = backendLabel,
+                        style = KnotworkTextStyles.MonoSm,
+                        color = KnotworkTheme.extended.onSurfaceMuted,
+                    )
+                }
                 Text(
-                    text = backendLabel,
+                    text = selectedBackend,
                     style = KnotworkTextStyles.MonoSm,
                     color = KnotworkTheme.extended.onSurfaceMuted,
                 )
+                Icon(
+                    imageVector = AppIcons.ArrowDown,
+                    contentDescription = null,
+                    tint = KnotworkTheme.extended.onSurfaceMuted,
+                )
             }
-            Text(
-                text = selectedBackend,
-                style = KnotworkTextStyles.MonoSm,
-                color = KnotworkTheme.extended.onSurfaceMuted,
-            )
-            Icon(
-                imageVector = AppIcons.ArrowDown,
-                contentDescription = null,
-                tint = KnotworkTheme.extended.onSurfaceMuted,
-            )
+            SettingsHintGlyph(settingName = title)
         }
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { option ->
@@ -618,6 +700,7 @@ internal fun BackendDropdownRow(
             }
         }
     }
+    SettingsHintBody()
 }
 
 /** Embedding-provider selector (labelled row + dropdown menu). */
@@ -631,37 +714,36 @@ internal fun EmbeddingProviderDropdownRow(
 ) {
     var expanded by remember { mutableStateOf(false) }
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-            modifier = Modifier
-                .fillMaxWidth()
-                .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true)
-                .testTag(MEMORY_EMBEDDING_ROW_TAG),
-        ) {
-            Icon(
-                imageVector = AppIcons.Ram,
-                contentDescription = null,
-                tint = KnotworkTheme.extended.onSurfaceMuted,
-                modifier = Modifier.size(KnotworkTheme.spacing.sp5),
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+                modifier = Modifier
+                    .weight(1f)
+                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true)
+                    .testTag(MEMORY_EMBEDDING_ROW_TAG),
+            ) {
+                Icon(
+                    imageVector = AppIcons.Ram,
+                    contentDescription = null,
+                    tint = KnotworkTheme.extended.onSurfaceMuted,
+                    modifier = Modifier.size(KnotworkTheme.spacing.sp5),
                 )
-                Text(
-                    text = selectedLabel,
-                    style = KnotworkTextStyles.MonoSm,
-                    color = KnotworkTheme.extended.onSurfaceMuted,
+                Column(modifier = Modifier.weight(1f)) {
+                    DropdownRowLabel(title = title)
+                    Text(
+                        text = selectedLabel,
+                        style = KnotworkTextStyles.MonoSm,
+                        color = KnotworkTheme.extended.onSurfaceMuted,
+                    )
+                }
+                Icon(
+                    imageVector = AppIcons.ArrowDown,
+                    contentDescription = null,
+                    tint = KnotworkTheme.extended.onSurfaceMuted,
                 )
             }
-            Icon(
-                imageVector = AppIcons.ArrowDown,
-                contentDescription = null,
-                tint = KnotworkTheme.extended.onSurfaceMuted,
-            )
+            SettingsHintGlyph(settingName = title)
         }
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { option ->
@@ -675,6 +757,7 @@ internal fun EmbeddingProviderDropdownRow(
             }
         }
     }
+    SettingsHintBody()
 }
 
 // ─── Active pill / re-embed banner / loading ─────────────────────────────────
@@ -893,6 +976,32 @@ val LocalSettingsHighlightKey = androidx.compose.runtime.compositionLocalOf<Stri
 @Composable
 internal fun SettingsAnchor(anchorKey: String?, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
     val active = anchorKey != null && LocalSettingsHighlightKey.current == anchorKey
+    // The anchor is provided around BOTH branches. Providing it only around the
+    // unhighlighted one would take the help glyph away from the row a search
+    // deep-link just landed on — the single moment the user has demonstrably
+    // asked "what is this?" — and pop it back in when the flash expires.
+    CompositionLocalProvider(LocalSettingsRowAnchor provides anchorKey) {
+        SettingsAnchorBody(active = active, anchorKey = anchorKey, modifier = modifier, content = content)
+    }
+}
+
+/**
+ * The highlight body of [SettingsAnchor], split out so the anchor
+ * `CompositionLocalProvider` wraps both branches rather than one.
+ *
+ * @param active Whether this row is the deep-link target being flashed.
+ * @param anchorKey Stable anchor of the wrapped row.
+ * @param modifier Layout modifier applied to the wrapper.
+ * @param content The row to render.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SettingsAnchorBody(
+    active: Boolean,
+    anchorKey: String?,
+    modifier: Modifier,
+    content: @Composable () -> Unit,
+) {
     // A Column (not Box) preserves the vertical stacking + spacing of rows that
     // emit several siblings (e.g. the system-instructions field + chip row), which
     // would otherwise overlap when wrapped. Single-child rows are unaffected.

@@ -6,6 +6,7 @@ import app.knotwork.android.buildtools.ExternalAutomationDocsGenerator
 import app.knotwork.android.buildtools.LintBaselineGuard
 import app.knotwork.android.buildtools.R8MappingChecker
 import app.knotwork.android.buildtools.ReleaseVersionChecker
+import app.knotwork.android.buildtools.SettingsHelpDocsGenerator
 import com.android.build.api.artifact.SingleArtifact
 import dev.detekt.gradle.Detekt
 import java.util.Properties
@@ -912,6 +913,80 @@ val generateBrowserEditorConstants by tasks.registering {
         }
     }
 }
+
+// ── Settings help documentation ─────────────────────────────────────────────
+// `strings_settings_help.xml` is the canonical source for what a setting means;
+// the guide's reference table quotes it rather than restating it. Before this,
+// one setting's meaning lived in four places and closed testing found them
+// already disagreeing — one copy quoting a threshold no constant in the code
+// held. `generateSettingsHelpDocs` rewrites the AUTO-GEN block;
+// `verifySettingsHelpDocs` (wired into `check`) fails the build on drift.
+val settingsHelpGuideFile = file("$rootDir/docs/user-guide.md")
+val settingsHelpRegistryFile =
+    file("$projectDir/src/main/java/app/knotwork/android/domain/settings/SettingsRegistry.kt")
+val settingsHelpCatalogFile =
+    file("$projectDir/src/main/java/app/knotwork/android/presentation/ui/settings/SettingsHelpCatalog.kt")
+val settingsSearchCatalogFile =
+    file("$projectDir/src/main/java/app/knotwork/android/presentation/ui/settings/SettingsSearchCatalog.kt")
+val settingsHelpStringsFile = file("$projectDir/src/main/res/values/strings_settings_help.xml")
+val settingsNameStringsFiles = listOf(
+    file("$projectDir/src/main/res/values/strings_settings_search.xml"),
+    file("$projectDir/src/main/res/values/strings_run_limits.xml"),
+)
+val settingsHelpInputFiles = files(
+    settingsHelpRegistryFile,
+    settingsHelpCatalogFile,
+    settingsSearchCatalogFile,
+    settingsHelpStringsFile,
+    settingsNameStringsFiles,
+)
+
+val generateSettingsHelpDocs by tasks.registering {
+    group = "build"
+    description = "Regenerates the settings reference table of docs/user-guide.md from the shipped help strings."
+    inputs.files(settingsHelpInputFiles)
+    inputs.file(settingsHelpGuideFile)
+    outputs.file(settingsHelpGuideFile)
+    doLast {
+        val rendered = SettingsHelpDocsGenerator.render(
+            markdown = settingsHelpGuideFile.readText(),
+            registrySource = settingsHelpRegistryFile.readText(),
+            helpCatalogSource = settingsHelpCatalogFile.readText(),
+            searchCatalogSource = settingsSearchCatalogFile.readText(),
+            helpStringsXml = settingsHelpStringsFile.readText(),
+            nameStringsXml = settingsNameStringsFiles.map { it.readText() },
+        )
+        if (rendered != settingsHelpGuideFile.readText()) {
+            settingsHelpGuideFile.writeText(rendered)
+            logger.lifecycle("Regenerated the settings reference table in docs/user-guide.md.")
+        }
+    }
+}
+
+val verifySettingsHelpDocs by tasks.registering {
+    group = "verification"
+    description = "Fails the build if the settings reference table in docs/user-guide.md has drifted."
+    inputs.files(settingsHelpInputFiles)
+    inputs.file(settingsHelpGuideFile)
+    doLast {
+        val drifted = SettingsHelpDocsGenerator.drift(
+            markdown = settingsHelpGuideFile.readText(),
+            registrySource = settingsHelpRegistryFile.readText(),
+            helpCatalogSource = settingsHelpCatalogFile.readText(),
+            searchCatalogSource = settingsSearchCatalogFile.readText(),
+            helpStringsXml = settingsHelpStringsFile.readText(),
+            nameStringsXml = settingsNameStringsFiles.map { it.readText() },
+        )
+        if (drifted) {
+            throw GradleException(
+                "The settings reference table in docs/user-guide.md has drifted from the shipped help strings. " +
+                    "Run `./gradlew :app:generateSettingsHelpDocs` and commit the updated docs/user-guide.md.",
+            )
+        }
+    }
+}
+
+tasks.named("check") { dependsOn(verifySettingsHelpDocs) }
 
 val verifyBrowserEditorConstants by tasks.registering {
     group = "verification"

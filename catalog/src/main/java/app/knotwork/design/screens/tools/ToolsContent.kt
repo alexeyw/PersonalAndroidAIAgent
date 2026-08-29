@@ -16,6 +16,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -76,6 +77,8 @@ import app.knotwork.design.components.misc.EmptyState
 import app.knotwork.design.components.misc.KnotworkWarningBanner
 import app.knotwork.design.components.misc.StripedPlaceholder
 import app.knotwork.design.icons.AppIcons
+import app.knotwork.design.screens.settings.KnotworkHelpEntry
+import app.knotwork.design.screens.settings.KnotworkHintPanel
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -854,11 +857,12 @@ private fun McpToolEntryRowView(entry: McpToolEntry, callbacks: ToolsCallbacks, 
 }
 
 @Composable
-private fun FormSectionLabel(text: String) {
+private fun FormSectionLabel(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
         style = KnotworkTextStyles.MonoSm,
         color = KnotworkTheme.extended.onSurfaceMuted,
+        modifier = modifier,
     )
 }
 
@@ -1158,7 +1162,7 @@ fun ToolDetailContent(
  * state and translates submissions into persistence calls; this
  * composable renders the chrome and dispatches per-field callbacks.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun McpServerConfigContent(
     form: AddMcpServerForm,
@@ -1208,12 +1212,37 @@ fun McpServerConfigContent(
                 .verticalScroll(state = rememberScrollState())
                 .padding(KnotworkTheme.spacing.sp4),
         ) {
-            FormSectionLabel(text = stringResource(R.string.knotwork_tools_add_form_header))
+            // The placeholder used to read `https://… or mcp://host:port`, which
+            // sent the first external tester looking for a port number he had no
+            // way to know. It is now one real address, and the question it kept
+            // raising is answered by the hint rather than by the field.
+            var addressHintOpen by remember { mutableStateOf(false) }
+            val addressLabel = stringResource(R.string.knotwork_tools_add_form_header)
+            // FlowRow, not Row: an unweighted label measured against the full
+            // width leaves the 28 dp glyph nothing, which is the same squeeze
+            // the settings approval row had to be moved away from.
+            // `Row` with both children centred on the same axis. The FlowRow
+            // used here first left the glyph sitting below the label's baseline:
+            // the label is 11 sp mono and the glyph's target is 28 dp, so
+            // aligning the *line boxes* puts them visibly out of line. Weighting
+            // the label instead keeps the glyph beside it and still lets it wrap.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                FormSectionLabel(text = addressLabel, modifier = Modifier.weight(1f, fill = false))
+                KnotworkHelpEntry(
+                    settingName = addressLabel,
+                    expanded = addressHintOpen,
+                    onToggle = { addressHintOpen = !addressHintOpen },
+                )
+            }
             OutlinedFormTextField(
                 value = form.url,
                 onValueChange = callbacks.onUrlChange,
                 placeholder = stringResource(R.string.knotwork_tools_add_form_placeholder),
                 isError = form.urlError != null,
+            )
+            KnotworkHintPanel(
+                visible = addressHintOpen,
+                text = stringResource(R.string.knotwork_tools_add_form_address_hint),
             )
             if (form.urlError != null) {
                 Text(

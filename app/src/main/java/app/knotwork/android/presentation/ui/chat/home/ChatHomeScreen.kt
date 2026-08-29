@@ -226,6 +226,7 @@ fun ChatHomeScreen(
     val reportNoBrowserMessage = stringResource(R.string.chat_report_snackbar_no_browser)
     val savedToMemoryMessage = stringResource(R.string.chat_snackbar_saved_to_memory)
     val attachmentFailedMessage = stringResource(R.string.chat_snackbar_attachment_failed)
+    val attachmentReplacedMessage = stringResource(R.string.chat_snackbar_attachment_replaced)
     val voiceFailedMessage = stringResource(R.string.chat_snackbar_voice_failed)
     val saveToMemoryFailedMessage = stringResource(R.string.chat_snackbar_save_to_memory_failed)
     val resumeGraphChangedMessage = stringResource(R.string.chat_snackbar_resume_graph_changed)
@@ -283,6 +284,11 @@ fun ChatHomeScreen(
     LaunchedEffect(viewModel) {
         viewModel.attachments.attachmentErrorEvents.collect {
             snackbarHostState.showSnackbar(message = attachmentFailedMessage)
+        }
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.attachments.attachmentReplacedEvents.collect {
+            snackbarHostState.showSnackbar(message = attachmentReplacedMessage)
         }
     }
     LaunchedEffect(viewModel) {

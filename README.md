@@ -128,6 +128,14 @@ https://github.com/user-attachments/assets/2ea06de5-6832-4e0c-ad48-430f375d8b72
   out of the drawer without deleting a single message: it waits, whole and
   exportable, on its own screen until you restore it — and opens read-only in
   the meantime, so nothing brings it back except you.
+- **Settings that say what they do.** Options that carry a number, a borrowed
+  term, or a consequence beyond their own row explain themselves in one
+  sentence, opened in place from the **ⓘ** beside the label — so *Similarity
+  threshold*, *Recency half-life* and the retention windows stop being words you
+  have to look up elsewhere. There is exactly one copy of each explanation: the
+  reference table in the user guide is generated from the strings the app itself
+  shows. A setting whose behaviour is not wired up yet carries no explanation at
+  all rather than a plausible one — the reference table records which, and why.
 
 The full feature tour lives in the [user guide](docs/user-guide.md).
 

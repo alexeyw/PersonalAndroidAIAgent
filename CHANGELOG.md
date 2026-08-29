@@ -15,6 +15,53 @@ details.
 
 ### Changed
 
+- **Settings options now explain themselves, in one sentence, where they
+  live.** Tap the **ⓘ** beside a row's label and a short explanation opens in
+  place, under the row; opening one closes the other, so a category screen is
+  never more than one panel taller than at rest. Sliders had *no* explanation
+  slot at all before this — the controls whose meaning is least guessable
+  (Top-K, thresholds, the run ceilings) were the ones with nothing on screen to
+  say what they do. Rows whose meaning follows from their name — links, the
+  identity and version rows, plain actions like *Export memories* — carry no
+  glyph, and the reason each one carries none is recorded rather than left
+  implicit.
+
+- **Seven settings carry no explanation at all, rather than a plausible one.** Writing an explanation for each row turned out to be a way of
+  auditing it, and seven rows failed the audit: the four sampling sliders
+  (**Temperature**, **Top-K**, **Top-P**, **Repetition penalty**) never reach
+  the on-device engine, **Tool-usage instruction** and **Auto-summarize
+  threshold** are read by nothing, and **Long-running task alerts** gates a
+  notification that is never posted. Each is recorded as *behaviour not shipped*
+  rather than given a fluent sentence about behaviour the build does not have.
+  The defects are filed; the rows will either start working or be removed.
+
+- **The explanations that used to sit under a row are gone from that slot.**
+  Small muted text under a label is where the app shows what a row is *set to*
+  (`NPU · auto`, `412 memories`), and closed testing found that readers learn
+  the slot and stop reading anything in it — meaning included. That slot now
+  carries values only. One consequence worth stating: a setting's meaning used
+  to be written in four separate places, and they had already drifted apart —
+  one of them quoting an "8 s" threshold that no constant in the code holds.
+  There is now one copy, and `docs/user-guide.md` is generated from it.
+
+- **The settings hub's category summaries are no longer muted micro-type.** They
+  explain what a category is for, and that slot is reserved for machine state.
+
+- **A switch you cannot use is no longer greyed out.** An unbound trigger row
+  used to show a dimmed switch, which reads as broken rather than as waiting on
+  you. The switch is replaced by the verb that fixes it — **Bind** — and the
+  reason stays on the row in words.
+
+- **Adding an MCP server shows a real address as the placeholder**, with the
+  endpoint explained next to the field, instead of `https://… or mcp://host:port`
+  — which sent the first external tester looking for a port number.
+
+- **Attaching a second image says so.** The composer holds one attachment, and
+  replacing the first used to happen silently.
+
+- **The onboarding text about cloud providers is no longer muted**, having been
+  skipped on sight for looking like a build number.
+
 - **The bottom-nav highlight now follows the screens you opened, not a lookup
   table.** It was decided by a hand-maintained `route → tab` map, and **ten**
   registered screens were missing from it — Allowed domains, Files, Skills,

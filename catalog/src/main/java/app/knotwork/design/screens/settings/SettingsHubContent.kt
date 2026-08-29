@@ -59,7 +59,9 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * @property id Stable category id (routed on tap).
  * @property icon Leading glyph (reuses an existing `AppIcons.*`).
  * @property titleRes Localised category title.
- * @property summaryRes Localised one-line summary.
+ * @property summaryRes Localised one-line summary. This is the category-level
+ *   explanation, which is why no category row carries a help glyph of its own:
+ *   a glyph there would explain a door.
  */
 private data class HubCategoryMeta(
     val id: SettingsCategoryId,
@@ -399,6 +401,7 @@ private fun HubTopBar(state: SettingsHubViewState, onBack: () -> Unit) {
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun HubBasicBlock(state: SettingsHubViewState, callbacks: SettingsCallbacks) {
     Column(
@@ -406,61 +409,85 @@ private fun HubBasicBlock(state: SettingsHubViewState, callbacks: SettingsCallba
         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
     ) {
         SettingsSectionLabel(text = stringResource(R.string.knotwork_settings_hub_basic))
-        NavLinkRow(
-            icon = AppIcons.Spark,
-            title = stringResource(R.string.knotwork_settings_section_system_instructions),
-            subtitle = state.systemInstructionsPreview.ifBlank {
-                stringResource(R.string.knotwork_settings_hub_system_instructions_empty)
-            },
-            onClick = callbacks.onOpenSystemInstructions,
-        )
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Text(
-                text = stringResource(R.string.knotwork_settings_restrictions_approve),
-                style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 2,
-                modifier = Modifier.weight(1f),
-            )
-            KnotworkSegmentedControl(
-                options = listOf(state.approveAllLabel, state.approveSensitiveLabel, state.approveNeverLabel),
-                selectedIndex = state.approveSelection.toIndex(),
-                onSelect = { callbacks.onApproveSelectionChange(approveOptionFromIndex(it)) },
-                modifier = Modifier.weight(SEGMENTED_TRAILING_WEIGHT),
+        // Every hub row is anchored, exactly like a category row. Without this
+        // the six controls most people ever touch were the six with no
+        // explanation available — the hub was the one screen where the whole
+        // feature was invisible.
+        SettingsAnchor(anchorKey = SettingsRowAnchors.SYSTEM_PROMPT_PREFIX) {
+            NavLinkRow(
+                icon = AppIcons.Spark,
+                title = stringResource(R.string.knotwork_settings_section_system_instructions),
+                state = state.systemInstructionsPreview.ifBlank {
+                    stringResource(R.string.knotwork_settings_hub_system_instructions_empty)
+                },
+                onClick = callbacks.onOpenSystemInstructions,
             )
         }
-        IconToggleRow(
-            icon = AppIcons.Shield,
-            title = stringResource(R.string.knotwork_settings_restrictions_block_destructive),
-            subtitle = "",
-            checked = state.blockDestructive,
-            onCheckedChange = callbacks.onBlockDestructiveChange,
-        )
-        BackendDropdownRow(
-            title = stringResource(R.string.knotwork_settings_local_model_backend_title),
-            backendLabel = state.backendLabel,
-            selectedBackend = state.selectedBackend,
-            options = state.backendOptions,
-            onSelected = callbacks.onBackendSelected,
-        )
-        IconToggleRow(
-            icon = AppIcons.Bolt,
-            title = stringResource(R.string.knotwork_settings_notifications_long_running),
-            subtitle = "",
-            checked = state.longRunningEnabled,
-            onCheckedChange = callbacks.onLongRunningToggle,
-        )
-        IconToggleRow(
-            icon = AppIcons.Shield,
-            title = stringResource(R.string.knotwork_settings_crash_reporting_label),
-            subtitle = "",
-            checked = state.crashReportingEnabled,
-            onCheckedChange = callbacks.onCrashReportingToggle,
-        )
+        SettingsAnchor(anchorKey = SettingsRowAnchors.TOOL_APPROVAL_POLICY) {
+            val approveTitle = stringResource(R.string.knotwork_settings_restrictions_approve)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                // Row, not FlowRow: the label already wraps to two lines here,
+                // and a FlowRow put the glyph on a third of its own, reading as
+                // a stray control rather than as part of the label.
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = approveTitle,
+                        style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    SettingsHintGlyph(settingName = approveTitle)
+                }
+                KnotworkSegmentedControl(
+                    options = listOf(state.approveAllLabel, state.approveSensitiveLabel, state.approveNeverLabel),
+                    selectedIndex = state.approveSelection.toIndex(),
+                    onSelect = { callbacks.onApproveSelectionChange(approveOptionFromIndex(it)) },
+                    modifier = Modifier.weight(SEGMENTED_TRAILING_WEIGHT),
+                )
+            }
+            SettingsHintBody()
+        }
+        SettingsAnchor(anchorKey = SettingsRowAnchors.BLOCK_DESTRUCTIVE_TOOLS) {
+            IconToggleRow(
+                icon = AppIcons.Shield,
+                title = stringResource(R.string.knotwork_settings_restrictions_block_destructive),
+                state = "",
+                checked = state.blockDestructive,
+                onCheckedChange = callbacks.onBlockDestructiveChange,
+            )
+        }
+        SettingsAnchor(anchorKey = SettingsRowAnchors.LOCAL_MODEL_BACKEND) {
+            BackendDropdownRow(
+                title = stringResource(R.string.knotwork_settings_local_model_backend_title),
+                backendLabel = state.backendLabel,
+                selectedBackend = state.selectedBackend,
+                options = state.backendOptions,
+                onSelected = callbacks.onBackendSelected,
+            )
+        }
+        SettingsAnchor(anchorKey = SettingsRowAnchors.LONG_RUNNING_TASKS_NOTIFICATIONS) {
+            IconToggleRow(
+                icon = AppIcons.Bolt,
+                title = stringResource(R.string.knotwork_settings_notifications_long_running),
+                state = "",
+                checked = state.longRunningEnabled,
+                onCheckedChange = callbacks.onLongRunningToggle,
+            )
+        }
+        SettingsAnchor(anchorKey = SettingsRowAnchors.CRASH_REPORTING_ENABLED) {
+            IconToggleRow(
+                icon = AppIcons.Shield,
+                title = stringResource(R.string.knotwork_settings_crash_reporting_label),
+                state = "",
+                checked = state.crashReportingEnabled,
+                onCheckedChange = callbacks.onCrashReportingToggle,
+            )
+        }
     }
 }
 
@@ -511,10 +538,13 @@ private fun HubCategoryRow(meta: HubCategoryMeta, loading: Boolean, onClick: () 
                         .height(LOADING_SUMMARY_HEIGHT),
                 )
             } else {
+                // Body-size and near-full ink, because the summary explains the
+                // category. Muted micro-type is reserved for machine state, and
+                // a reader who learns that slot stops reading anything in it.
                 Text(
                     text = stringResource(meta.summaryRes),
-                    style = KnotworkTextStyles.MonoSm,
-                    color = KnotworkTheme.extended.onSurfaceMuted,
+                    style = KnotworkTextStyles.BodySm,
+                    color = KnotworkTheme.extended.onSurface2,
                 )
             }
         }

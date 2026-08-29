@@ -2,6 +2,7 @@ package app.knotwork.design.screens.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
@@ -26,6 +27,7 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  * @param modifier Layout modifier.
  * @param callbacks Interaction callbacks.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ToolsSettingsContent(
     state: ToolsSettingsViewState,
@@ -40,18 +42,26 @@ fun ToolsSettingsContent(
         modifier = modifier,
     ) {
         SettingsAnchor(anchorKey = SettingsRowAnchors.TOOL_APPROVAL_POLICY) {
+            val approveTitle = stringResource(R.string.knotwork_settings_restrictions_approve)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
                 modifier = Modifier.fillMaxWidth(),
             ) {
-                Text(
-                    text = stringResource(R.string.knotwork_settings_restrictions_approve),
-                    style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    modifier = Modifier.weight(1f),
-                )
+                // FlowRow, like every other glyph site: a plain Row measures the
+                // unweighted label against the whole 1f column and leaves the
+                // 28 dp glyph nothing — and this label already fills both lines
+                // at 1x, so the glyph would have been squeezed to zero width.
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = approveTitle,
+                        style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 2,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    SettingsHintGlyph(settingName = approveTitle)
+                }
                 KnotworkSegmentedControl(
                     options = listOf(state.approveAllLabel, state.approveSensitiveLabel, state.approveNeverLabel),
                     selectedIndex = state.approveSelection.toIndex(),
@@ -59,12 +69,13 @@ fun ToolsSettingsContent(
                     modifier = Modifier.weight(SEGMENTED_TRAILING_WEIGHT),
                 )
             }
+            SettingsHintBody()
         }
         SettingsAnchor(anchorKey = SettingsRowAnchors.BLOCK_DESTRUCTIVE_TOOLS) {
             IconToggleRow(
                 icon = AppIcons.Shield,
                 title = stringResource(R.string.knotwork_settings_restrictions_block_destructive),
-                subtitle = state.blockDestructiveSubtitle,
+                state = "",
                 checked = state.blockDestructive,
                 onCheckedChange = callbacks.onBlockDestructiveChange,
             )
@@ -73,7 +84,7 @@ fun ToolsSettingsContent(
             IconToggleRow(
                 icon = AppIcons.Block,
                 title = stringResource(R.string.knotwork_settings_restrictions_block_network),
-                subtitle = state.blockNetworkSubtitle,
+                state = "",
                 checked = state.blockNetwork,
                 onCheckedChange = callbacks.onBlockNetworkChange,
             )
@@ -82,7 +93,7 @@ fun ToolsSettingsContent(
             NavLinkRow(
                 icon = AppIcons.Tool,
                 title = stringResource(R.string.knotwork_settings_tools_manage_title),
-                subtitle = stringResource(R.string.knotwork_settings_tools_manage_subtitle),
+                state = stringResource(R.string.knotwork_settings_tools_manage_subtitle),
                 onClick = callbacks.onOpenManageTools,
             )
         }
@@ -95,7 +106,7 @@ fun ToolsSettingsContent(
                     NavLinkRow(
                         icon = AppIcons.Block,
                         title = stringResource(R.string.knotwork_settings_tools_domains_title),
-                        subtitle = stringResource(R.string.knotwork_settings_tools_domains_subtitle),
+                        state = stringResource(R.string.knotwork_settings_tools_domains_subtitle),
                         onClick = callbacks.onOpenAllowedDomains,
                     )
                 }

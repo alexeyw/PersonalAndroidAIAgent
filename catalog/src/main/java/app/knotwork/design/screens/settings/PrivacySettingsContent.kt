@@ -40,7 +40,7 @@ fun PrivacySettingsContent(
                 IconToggleRow(
                     icon = AppIcons.Shield,
                     title = stringResource(R.string.knotwork_settings_crash_reporting_label),
-                    subtitle = stringResource(R.string.knotwork_settings_crash_reporting_hint),
+                    state = "",
                     checked = state.crashReportingEnabled,
                     onCheckedChange = callbacks.onCrashReportingToggle,
                 )
@@ -49,7 +49,7 @@ fun PrivacySettingsContent(
         NavLinkRow(
             icon = AppIcons.Gauge,
             title = stringResource(R.string.knotwork_settings_privacy_usage_title),
-            subtitle = stringResource(R.string.knotwork_settings_privacy_usage_subtitle),
+            state = stringResource(R.string.knotwork_settings_privacy_usage_subtitle),
             onClick = callbacks.onOpenUsageStatistics,
         )
         AdvancedDisclosure(initiallyExpanded = advancedExpanded) {

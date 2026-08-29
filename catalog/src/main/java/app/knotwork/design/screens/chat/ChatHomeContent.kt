@@ -461,7 +461,7 @@ private fun AgentStatusStrip(text: String, open: Boolean, onClick: () -> Unit, m
             {
                 Text(
                     text = it,
-                    style = KnotworkTextStyles.MonoBase.copy(fontWeight = FontWeight.SemiBold),
+                    style = KnotworkTextStyles.MonoSm.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.primary,
                     maxLines = 1,
                 )
@@ -1018,12 +1018,6 @@ private fun ChatHomeConsoleOverlay(state: ChatHomeViewState, callbacks: ChatHome
             onSearch = callbacks.onConsoleSearch,
             onCopyAll = callbacks.onConsoleCopyAll,
             onClear = callbacks.onConsoleClear,
-            onCloseConsole = {
-                // Trigger the sheet's hide animation; the resulting
-                // `Hidden` state propagates through `onDismissRequest`
-                // which calls the host's `onCloseConsole`.
-                scope.launch { sheetState.hide() }
-            },
             searchQuery = state.console.searchQuery,
             onSearchQueryChange = callbacks.onConsoleSearchQueryChange,
             onCopyLine = callbacks.onConsoleCopyLine,

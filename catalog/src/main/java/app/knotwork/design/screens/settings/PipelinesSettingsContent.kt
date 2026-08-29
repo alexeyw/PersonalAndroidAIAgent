@@ -37,7 +37,7 @@ fun PipelinesSettingsContent(
             NavLinkRow(
                 icon = AppIcons.Shield,
                 title = stringResource(R.string.knotwork_settings_run_limits_title),
-                subtitle = state.runLimitsSummary,
+                state = state.runLimitsSummary,
                 onClick = callbacks.onOpenRunLimits,
             )
         }

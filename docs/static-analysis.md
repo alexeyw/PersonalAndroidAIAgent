@@ -32,6 +32,8 @@ This invokes (transitively):
 | `:app:verifyBrowserEditorConstants`           | Fails if `pipeline-editor.html` `AUTO-GEN` blocks drift from the domain sources. |
 | `:app:verifyDocsHygiene`                      | Custom rule: guard the public docs against LLM tool-call artifacts and internal-document references (see below). |
 | `:app:verifyExternalAutomationDocs`           | Fails if the `docs/external-automation.md` `AUTO-GEN` tables drift from the contract sources (see below). |
+| `:app:verifySettingsHelpDocs`                 | Fails if the settings reference table in `docs/user-guide.md` drifts from the shipped help strings (see below). |
+| `:app:testFullDebugUnitTest` (`SettingsHelpCatalogTest`) | Fails if a registered setting has no help decision, or its text is blank, over-long, duplicated or in a forbidden register (see below). |
 | `:app:verifyLintBaselineOverrides`            | Custom rule: fail if a lint baseline suppresses a check demoted to informational severity (see below). |
 | `:app:verifyDetektAnalysisMode`               | Custom rule: fail if `detekt.yml` activates a rule that only runs under type resolution (see below). |
 | `:app:testFullDebugUnitTest` (Konsist suite)      | Architecture guard: Clean-Architecture layer boundaries (see below).        |
@@ -408,6 +410,89 @@ and is unit-tested there (`./gradlew -p buildSrc test`), including idempotence,
 per-block drift detection, and the two failure modes above. The gate itself was
 verified by renaming a wire key and watching `check` fail with the drifted block
 named.
+
+---
+
+## Settings help-text guards (`SettingsHelpCatalogTest`, `verifySettingsHelpDocs`)
+
+Two guards, one rule: **a setting's meaning is written once**, in
+`app/src/main/res/values/strings_settings_help.xml`, and everything else quotes
+it.
+
+The rule exists because the alternative was measured. Before it, one setting's
+explanation lived in four places — the catalog row subtitle, the search-index
+description, a second copy of the subtitle in the app resources, and the user
+guide's prose — and closed testing found them already disagreeing. The
+long-running-tasks row said "runs > 8 s", the search index said "runs long", the
+guide said "exceeds the long-running threshold", and **no constant anywhere in
+the code held any such number**. Prose kept in sync by review alone drifts, and a
+reader cannot tell which copy is true.
+
+### `SettingsHelpCatalogTest` — completeness and register
+
+A Robolectric unit test, so it can resolve real string resources. It fails when:
+
+- a row in `SettingsRegistry` has no decision in `SettingsHelpCatalog` (or a
+  decision exists for a row that does not);
+- an explained row's string resource is missing or resolves to blank text;
+- an explanation exceeds **140 characters** — the ceiling measured against the
+  200 % font-scale frame, past which the panel pushes the row it explains off
+  the top of the screen;
+- two rows are explained by the same sentence;
+- an explanation uses a phrasing the copy standard rules out (`enables …`,
+  `allows you to …`, `this setting …`, `when enabled …`) — each describes the
+  control rather than what the reader will notice, which is the register that
+  went unread.
+
+Note what this fixes about its predecessor. `SettingsSearchCatalogTest` reads
+like a completeness guard and is one on **names only**: `descRes` is nullable and
+no assertion looks at it, so a description could be deleted and the build stayed
+green. Here the decision is an explicit `SettingHelp.Text | SettingHelp.None`
+with a recorded reason, which is what makes "every row decided" assertable at
+all.
+
+- an explanation exists for a row that no screen renders (the set of such rows is
+  pinned by name, so it can only shrink — a *new* unreachable explanation fails
+  the build).
+
+Each failure mode was observed failing before the gate was wired in, on its own
+assertion. Note the one thing this gate cannot see: it knows an anchor is
+*declared*, not that the control emits both the glyph and the panel. A header
+that shipped a glyph opening nothing passed it, and was caught by
+`SettingsHintBehaviourTest` — which opens each bespoke control and demands the
+panel — instead.
+
+### `verifySettingsHelpDocs` — the guide quotes rather than restates
+
+`:app:verifySettingsHelpDocs` fails `check` when the `AUTO-GEN:SETTINGS_HELP`
+block of [`docs/user-guide.md`](user-guide.md) no longer matches the shipped
+strings. Regenerate with:
+
+```bash
+./gradlew :app:generateSettingsHelpDocs
+```
+
+The generated table answers *"what does this option mean"*. The hand-written
+prose around it answers *"what happens when you change it"* — the measured
+timeouts, the retry behaviour, the ordering rules — and is never touched.
+
+**One thing to know before editing this generator.** A doc generator paired with
+its own drift check can delete a real row and stay green: if the parser stops
+seeing a declaration, the block loses that row and the verify task then confirms
+the shortened block matches. Guarding against it needs a count taken from a
+**different file read by a different parser** — here, the help catalogue, whose
+keys `SettingsHelpCatalogTest` independently pins to the registry. Comparing the
+registry parse against itself does not work, and this generator shipped two
+drafts that did exactly that: the first emitted **five rows for fifty-six
+settings** with its own check green.
+
+The logic is a pure string transform in `buildSrc`
+([`SettingsHelpDocsGenerator`](../buildSrc/src/main/kotlin/app/knotwork/android/buildtools/SettingsHelpDocsGenerator.kt)),
+unit-tested there including idempotence, drift detection, a missing string
+resource, a display name that lives in another values file, and a crippled
+parser. The gate was verified by editing a help string without regenerating, by
+hand-editing the generated table, and by breaking the registry parser — each
+failed with the cause named.
 
 ---
 

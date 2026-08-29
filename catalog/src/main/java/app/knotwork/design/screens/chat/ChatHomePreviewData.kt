@@ -190,6 +190,15 @@ internal object ChatHomePreview {
     object StripStatus {
         const val IDLE: String = "[NODE]  idle · ready"
         const val GENERATING: String = "[NODE]  generating"
+
+        /**
+         * The line the app actually shows while answering: backend and a
+         * growing token count. Every other fixture here is short enough to fit,
+         * so the strip's overflow behaviour was in no baseline at all — and the
+         * first two attempts at it (trailing, then middle ellipsis) each ate
+         * something worth keeping before anyone saw it on a device.
+         */
+        const val GENERATING_LONG: String = "[NODE]  generating (GPU) · 128 tok"
         const val PREPARING: String = "[NODE]  loading model · please wait"
         const val HITL: String = "[TOOL]  awaiting approval"
         const val CLARIFICATION: String = "[NODE]  waiting on clarification"

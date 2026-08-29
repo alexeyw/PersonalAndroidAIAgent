@@ -124,14 +124,12 @@ data class SettingsHubViewState(
  *
  * @property systemInstructions Basic system-instructions textarea slice.
  * @property toolUsageValue Advanced tool-usage instruction textarea content.
- * @property toolUsageHelper Helper copy beneath the tool-usage field.
  * @property advancedSliders Sampling + voice sliders (temperature, top-K, top-P,
  *   repetition penalty, max context, voice length), all Advanced.
  */
 data class GenerationSettingsViewState(
     val systemInstructions: SystemInstructionsCardState,
     val toolUsageValue: String,
-    val toolUsageHelper: String,
     val advancedSliders: List<SettingSliderRow>,
 )
 
@@ -157,12 +155,11 @@ data class ModelsSettingsViewState(
  *
  * @property stats Stat cells (chunks / size / threads / avg-score).
  * @property autoExtractEnabled "Auto-extract" toggle (Basic).
- * @property autoExtractLabel / [autoExtractSubtitle] Localised toggle copy.
+ * @property autoExtractLabel Localised toggle label.
  * @property compactionEnabled "Background compaction" toggle (Basic).
- * @property compactionLabel / [compactionSubtitle] Localised toggle copy.
+ * @property compactionLabel Localised toggle label.
  * @property chatHistoryCompressionEnabled "Compress chat history" toggle (Basic).
- * @property chatHistoryCompressionLabel / [chatHistoryCompressionSubtitle]
- *   Localised toggle copy.
+ * @property chatHistoryCompressionLabel Localised toggle label.
  * @property advancedSliders Memory-tuning sliders (Advanced).
  * @property verboseLoggingEnabled Verbose memory-logging toggle (Advanced).
  * @property embeddingTitle Embedding-dropdown row title.
@@ -181,13 +178,10 @@ data class MemorySettingsViewState(
     val stats: List<MemoryStatCell>,
     val autoExtractEnabled: Boolean,
     val autoExtractLabel: String,
-    val autoExtractSubtitle: String,
     val compactionEnabled: Boolean,
     val compactionLabel: String,
-    val compactionSubtitle: String,
     val chatHistoryCompressionEnabled: Boolean,
     val chatHistoryCompressionLabel: String,
-    val chatHistoryCompressionSubtitle: String,
     val advancedSliders: List<SettingSliderRow>,
     val verboseLoggingEnabled: Boolean,
     val embeddingTitle: String,
@@ -227,9 +221,7 @@ data class PipelinesSettingsViewState(val runLimitsSummary: String, val advanced
  * @property approveAllLabel / [approveSensitiveLabel] / [approveNeverLabel]
  *   Localised segmented labels.
  * @property blockDestructive "Block destructive tools" toggle (Basic).
- * @property blockDestructiveSubtitle Localised toggle subtitle.
  * @property blockNetwork "Block network from local model" toggle (Basic).
- * @property blockNetworkSubtitle Localised toggle subtitle.
  */
 data class ToolsSettingsViewState(
     val approveSelection: ApproveToolCallsOption,
@@ -237,9 +229,7 @@ data class ToolsSettingsViewState(
     val approveSensitiveLabel: String,
     val approveNeverLabel: String,
     val blockDestructive: Boolean,
-    val blockDestructiveSubtitle: String,
     val blockNetwork: Boolean,
-    val blockNetworkSubtitle: String,
 )
 
 // ─── Background ──────────────────────────────────────────────────────────────

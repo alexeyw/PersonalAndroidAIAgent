@@ -51,6 +51,7 @@ import app.knotwork.design.screens.settings.BackgroundSettingsContent
 import app.knotwork.design.screens.settings.GenerationSettingsContent
 import app.knotwork.design.screens.settings.HubSearchResultRow
 import app.knotwork.design.screens.settings.LocalSettingsHighlightKey
+import app.knotwork.design.screens.settings.LocalSettingsHints
 import app.knotwork.design.screens.settings.MemorySettingsContent
 import app.knotwork.design.screens.settings.ModelsSettingsContent
 import app.knotwork.design.screens.settings.PipelinesSettingsContent
@@ -422,14 +423,21 @@ fun AboutSettingsScreen(viewModel: SettingsViewModel, nav: SettingsNavActions) {
 private fun SettingsSurface(viewModel: SettingsViewModel, content: @Composable () -> Unit) {
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
+    // Remembered per screen, not saved: a hint is a sentence you read once, so
+    // returning to a category finds every explanation closed again. (Collapsible
+    // row *groups* do persist — a group is a workspace, a hint is not.)
+    val hints = remember(context) { SettingsHelpCatalog.controller(context) }
     LaunchedEffect(uiState.snackbarMessage) {
         val message = uiState.snackbarMessage ?: return@LaunchedEffect
         snackbarHostState.showSnackbar(message)
         viewModel.snackbarShown()
     }
-    Box(modifier = Modifier.fillMaxSize()) {
-        content()
-        SnackbarHost(hostState = snackbarHostState)
+    CompositionLocalProvider(LocalSettingsHints provides hints) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            content()
+            SnackbarHost(hostState = snackbarHostState)
+        }
     }
 }
 
