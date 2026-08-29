@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -858,11 +857,12 @@ private fun McpToolEntryRowView(entry: McpToolEntry, callbacks: ToolsCallbacks, 
 }
 
 @Composable
-private fun FormSectionLabel(text: String) {
+private fun FormSectionLabel(text: String, modifier: Modifier = Modifier) {
     Text(
         text = text,
         style = KnotworkTextStyles.MonoSm,
         color = KnotworkTheme.extended.onSurfaceMuted,
+        modifier = modifier,
     )
 }
 
@@ -1221,13 +1221,17 @@ fun McpServerConfigContent(
             // FlowRow, not Row: an unweighted label measured against the full
             // width leaves the 28 dp glyph nothing, which is the same squeeze
             // the settings approval row had to be moved away from.
-            FlowRow(verticalArrangement = Arrangement.Center) {
-                FormSectionLabel(text = addressLabel)
+            // `Row` with both children centred on the same axis. The FlowRow
+            // used here first left the glyph sitting below the label's baseline:
+            // the label is 11 sp mono and the glyph's target is 28 dp, so
+            // aligning the *line boxes* puts them visibly out of line. Weighting
+            // the label instead keeps the glyph beside it and still lets it wrap.
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                FormSectionLabel(text = addressLabel, modifier = Modifier.weight(1f, fill = false))
                 KnotworkHelpEntry(
                     settingName = addressLabel,
                     expanded = addressHintOpen,
                     onToggle = { addressHintOpen = !addressHintOpen },
-                    modifier = Modifier.align(Alignment.CenterVertically),
                 )
             }
             OutlinedFormTextField(

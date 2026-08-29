@@ -122,7 +122,7 @@ fun ConsoleEntryStrip(
     }
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
+        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
         modifier = modifier
             .fillMaxWidth()
             .height(StripHeight)
@@ -132,7 +132,7 @@ fun ConsoleEntryStrip(
             .background(color = KnotworkTheme.extended.consoleBg)
             .clickable(role = Role.Button, onClick = onClick)
             .semantics { contentDescription = description }
-            .padding(horizontal = KnotworkTheme.spacing.sp3),
+            .padding(horizontal = KnotworkTheme.spacing.sp2),
     ) {
         Text(
             text = stringResource(R.string.knotwork_console_strip_label),
@@ -153,12 +153,17 @@ fun ConsoleEntryStrip(
             modifier = Modifier.weight(1f),
         ) {
             if (leadingStatus != null) leadingStatus()
+            // Middle ellipsis, not trailing: the status line is
+            // `state · detail · N tok`, so cutting the tail threw away the
+            // token count and the outcome — the two things worth glancing at —
+            // and kept the word the reader already knew. Cutting the middle
+            // keeps both ends.
             Text(
                 text = statusLine,
-                style = KnotworkTextStyles.MonoBase,
+                style = KnotworkTextStyles.MonoSm,
                 color = KnotworkTheme.extended.consoleFg,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+                overflow = TextOverflow.MiddleEllipsis,
                 modifier = Modifier.weight(1f, fill = false),
             )
             if (trailingStatus != null) trailingStatus()

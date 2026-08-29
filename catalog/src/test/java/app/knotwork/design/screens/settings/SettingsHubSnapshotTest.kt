@@ -2,6 +2,7 @@ package app.knotwork.design.screens.settings
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
@@ -72,14 +73,35 @@ class SettingsHubSnapshotTest {
     private fun snapshot(name: String, dark: Boolean, fontScale: Float = 1f, content: @Composable () -> Unit) {
         composeTestRule.setContent {
             val baseDensity = LocalDensity.current
+            // The hub's six Basic rows carry hints too, and without a controller
+            // in scope none of them draws its glyph — which is how the hub
+            // shipped as the one screen where the feature was invisible, and how
+            // its baselines certified that as correct.
+            val hints = remember { SettingsHintController { anchor -> HUB_HINTS[anchor] } }
             KnotworkTheme(darkTheme = dark) {
                 CompositionLocalProvider(
                     LocalKnotworkA11y provides FixedKnotworkA11y(reducedMotion = true, fontScale = fontScale),
                     LocalDensity provides Density(density = baseDensity.density, fontScale = fontScale),
+                    LocalSettingsHints provides hints,
                 ) { content() }
             }
         }
         val themeTag = if (dark) "dark" else "light"
         composeTestRule.onRoot().captureRoboImage(filePath = "src/test/snapshots/settings_hub_${name}_$themeTag.png")
+    }
+
+    private companion object {
+        /**
+         * Hints for the hub's Basic rows. Fixture sentences, not copies of the
+         * shipped strings — see `SettingsCategorySnapshotTest.SNAPSHOT_HINTS`
+         * for why, and for the same hand-maintained caveat.
+         */
+        val HUB_HINTS: Map<String, SettingsHint> = mapOf(
+            SettingsRowAnchors.SYSTEM_PROMPT_PREFIX to SettingsHint("What the agent is told before every request."),
+            SettingsRowAnchors.TOOL_APPROVAL_POLICY to SettingsHint("Which tool calls stop and wait for you."),
+            SettingsRowAnchors.BLOCK_DESTRUCTIVE_TOOLS to SettingsHint("Destructive calls are refused outright."),
+            SettingsRowAnchors.LOCAL_MODEL_BACKEND to SettingsHint("Which chip runs the on-device model."),
+            SettingsRowAnchors.CRASH_REPORTING_ENABLED to SettingsHint("Off, nothing leaves the device."),
+        )
     }
 }

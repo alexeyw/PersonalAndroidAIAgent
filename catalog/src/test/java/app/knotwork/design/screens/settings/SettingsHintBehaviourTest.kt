@@ -1,5 +1,6 @@
 package app.knotwork.design.screens.settings
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -214,6 +215,47 @@ class SettingsHintBehaviourTest {
         }
 
         composeTestRule.onNodeWithText(BESPOKE_HINT).assertExists()
+    }
+
+    /**
+     * Regression: the dropdown rows' glyph opened the dropdown, not the hint.
+     *
+     * The whole row is the dropdown's `menuAnchor`, so a press anywhere inside
+     * it — the glyph included — was claimed by the menu. Found by using the app,
+     * not by any test: three review passes read this code without noticing that
+     * the affordance they were checking for was unreachable in practice.
+     */
+    @Test
+    fun `the backend dropdown glyph opens the explanation, not the menu`() {
+        composeTestRule.setContent {
+            val hints = remember { SettingsHintController { SettingsHint(BESPOKE_HINT) } }
+            KnotworkTheme {
+                CompositionLocalProvider(LocalSettingsHints provides hints) {
+                    CompositionLocalProvider(
+                        LocalSettingsRowAnchor provides SettingsRowAnchors.LOCAL_MODEL_BACKEND,
+                    ) {
+                        // A Column, because the row emits three siblings (header,
+                        // dropdown, panel) and `setContent`'s implicit Box would
+                        // stack them on top of each other.
+                        Column {
+                            BackendDropdownRow(
+                                title = "Inference backend",
+                                backendLabel = "GPU",
+                                selectedBackend = "GPU",
+                                options = listOf("NPU", "GPU", "CPU"),
+                                onSelected = {},
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("Explain: Inference backend").performClick()
+
+        composeTestRule.onNodeWithText(BESPOKE_HINT).assertIsDisplayed()
+        // The menu must not have opened: its options would be on screen if it had.
+        composeTestRule.onNodeWithText("CPU").assertDoesNotExist()
     }
 
     @Test

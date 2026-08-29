@@ -194,7 +194,6 @@
     <!-- ContentDescription for the Clear header action. -->
     <string name="knotwork_console_action_clear">Clear log</string>
     <!-- ContentDescription for the Close header action. -->
-    <string name="knotwork_console_action_close">Collapse console</string>
     <!-- Placeholder text inside the inline search field rendered above the Logs list. -->
     <string name="knotwork_console_search_placeholder">Search log</string>
     <!-- ContentDescription announced when the inline search bar is open and focused. -->
@@ -465,7 +464,6 @@
     <string name="knotwork_settings_hub_system_instructions_empty">Tap to edit the system prompt.</string>
     <string name="knotwork_settings_count" tools:ignore="PluralsCandidate">%1$d settings</string>
     <string name="knotwork_settings_advanced_title">Advanced</string>
-    <string name="knotwork_settings_advanced_subtitle">change deliberately</string>
 
     <!-- Settings hints: the entry glyph's action, and the state it announces. -->
     <!-- Titles for the two settings textareas, which had no label of their own. -->

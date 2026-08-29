@@ -3,7 +3,6 @@ package app.knotwork.design.screens.settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
@@ -53,21 +52,15 @@ fun ToolsSettingsContent(
                 // unweighted label against the whole 1f column and leaves the
                 // 28 dp glyph nothing — and this label already fills both lines
                 // at 1x, so the glyph would have been squeezed to zero width.
-                FlowRow(
-                    verticalArrangement = Arrangement.Center,
-                    modifier = Modifier.weight(1f),
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
                     Text(
                         text = approveTitle,
                         style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 2,
-                        modifier = Modifier.align(Alignment.CenterVertically),
+                        modifier = Modifier.weight(1f, fill = false),
                     )
-                    SettingsHintGlyph(
-                        settingName = approveTitle,
-                        modifier = Modifier.align(Alignment.CenterVertically),
-                    )
+                    SettingsHintGlyph(settingName = approveTitle)
                 }
                 KnotworkSegmentedControl(
                     options = listOf(state.approveAllLabel, state.approveSensitiveLabel, state.approveNeverLabel),

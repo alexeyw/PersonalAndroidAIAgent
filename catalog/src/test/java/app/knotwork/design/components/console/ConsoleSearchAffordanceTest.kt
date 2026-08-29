@@ -127,7 +127,6 @@ class ConsoleSearchAffordanceTest {
             onSearch = onSearch,
             onCopyAll = onCopyAll,
             onClear = onClear,
-            onCloseConsole = {},
         )
     }
 }

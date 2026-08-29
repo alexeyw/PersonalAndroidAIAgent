@@ -143,7 +143,6 @@ class ConsoleCopyAffordanceTest {
             onSearch = {},
             onCopyAll = {},
             onClear = {},
-            onCloseConsole = {},
             onCopyVar = onCopyVar,
             onCopySpan = onCopySpan,
             onCopyLine = onCopyLine,

@@ -1018,12 +1018,6 @@ private fun ChatHomeConsoleOverlay(state: ChatHomeViewState, callbacks: ChatHome
             onSearch = callbacks.onConsoleSearch,
             onCopyAll = callbacks.onConsoleCopyAll,
             onClear = callbacks.onConsoleClear,
-            onCloseConsole = {
-                // Trigger the sheet's hide animation; the resulting
-                // `Hidden` state propagates through `onDismissRequest`
-                // which calls the host's `onCloseConsole`.
-                scope.launch { sheetState.hide() }
-            },
             searchQuery = state.console.searchQuery,
             onSearchQueryChange = callbacks.onConsoleSearchQueryChange,
             onCopyLine = callbacks.onConsoleCopyLine,
