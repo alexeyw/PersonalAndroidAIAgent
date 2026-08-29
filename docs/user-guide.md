@@ -1996,15 +1996,14 @@ changing it has an effect somewhere other than that row. Links to another
 screen, the identity and version rows, and plain actions like *Export memories*
 carry none, and the table below says which and why.
 
-Several entries read *"behaviour not shipped"* rather than carrying an
-explanation. That is deliberate and none of them is a placeholder: each is a
-control whose behaviour does not currently happen, so there is nothing truthful
-to say about it yet — **Long-running task alerts** posts no notification, the
-**sampling sliders** (Temperature, Top-K, Top-P, Repetition penalty) do not
-reach the on-device engine, and **Tool-usage instruction** and
-**Auto-summarize threshold** are read by nothing. They are recorded here rather
-than papered over, and each is owed an explanation as soon as its row does
-something.
+Seven explanations begin with *"Not wired up yet"*. That is not a placeholder:
+those rows store a value that nothing currently reads — the **sampling sliders**
+(Temperature, Top-K, Top-P, Repetition penalty) never reach the on-device
+engine, **Long-running task alerts** posts no notification, and **Tool-usage
+instruction** and **Auto-summarize threshold** are read by nothing at all. The
+setting says so where you would look for it, which is the honest answer to "I
+moved this and nothing changed". Each is a filed defect; the wording changes as
+soon as the row does something.
 
 Five rows in the table — the **tool-call timeout** and the four **workspace and
 HTTP ceilings** — are settings the app stores and searches but does not yet
@@ -2024,11 +2023,11 @@ repeated here.
 | Setting | What it means |
 |---|---|
 | **System instructions** | Goes in front of every Local LLM, Cloud and Skill step, wherever it runs — chats, triggers, background. Other node types skip it. |
-| **Tool-usage instruction** | *(no explanation — behaviour not shipped yet)* |
-| **Temperature** | *(no explanation — behaviour not shipped yet)* |
-| **Top-K** | *(no explanation — behaviour not shipped yet)* |
-| **Top-P** | *(no explanation — behaviour not shipped yet)* |
-| **Repetition penalty** | *(no explanation — behaviour not shipped yet)* |
+| **Tool-usage instruction** | Not wired up yet: this text is saved but reaches no prompt. Put tool rules in System instructions until it does. |
+| **Temperature** | Not wired up yet: the on-device engine runs with the model's own sampler, so moving this changes nothing today. |
+| **Top-K** | Not wired up yet — the on-device engine keeps the model's own sampler, so this slider has no effect on answers. |
+| **Top-P** | Not wired up yet, like the other sampling sliders: the value is stored, but no engine reads it when answering. |
+| **Repetition penalty** | Not wired up yet. Stored, but nothing applies it — if answers repeat themselves, this slider will not stop them. |
 | **Max context length** | The working window of the on-device model. Larger holds more at once and runs slower; cloud models use their own window. |
 | **Voice input length** | Recording stops on its own at this point and sends what it has. |
 
@@ -2047,7 +2046,7 @@ repeated here.
 | **Auto-extract memories** | On, durable facts from your chats — names, preferences, project details — are saved and reused later. |
 | **Memory compaction** | Old memories get merged into shorter summaries once there are many. Frees room; loses the exact wording. |
 | **Compress chat history** | Long threads are summarised past the live window, so the agent keeps the gist instead of forgetting the start. |
-| **Auto-summarize threshold** | *(no explanation — behaviour not shipped yet)* |
+| **Auto-summarize threshold** | Not wired up yet. Summarising is driven by the compression threshold below; this value is stored and unused. |
 | **Memory search top-K** | How many memories are pulled into a reply at most. More context, slower start, and more room for noise. |
 | **Memory search threshold** | Higher recalls only close matches, so less is pulled in; lower recalls more, including memories that miss the point. |
 | **Recency half-life** | How fast old memories lose to new ones when both match. Short favours this week; long treats everything as current. |
@@ -2088,7 +2087,7 @@ repeated here.
 
 | Setting | What it means |
 |---|---|
-| **Long-running task alerts** | *(no explanation — behaviour not shipped yet)* |
+| **Long-running task alerts** | Not wired up yet: the notification channel exists but nothing posts to it, so switching this on changes nothing. |
 | **Scheduled task alerts** | A notification arrives when a scheduled task finishes or fails, so a background result does not wait for you to open the app. |
 | **Pipeline for sharing** | Which pipeline runs when you share text or a link into the app from somewhere else. |
 | **Keep shares in one chat** | On, every share lands in one Shared chat. Off, each share opens its own, so the chat list grows with each one. |

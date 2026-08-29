@@ -54,6 +54,17 @@ class ConsoleEntryStripSnapshotTest {
         ChatHomeContent(state = ChatHomePreview.consoleStrip(ChatHomePreview.StripStatus.GENERATING))
     }
 
+    /**
+     * The overflow case: at 360 dp this line does not fit, so the baseline is
+     * the record of WHICH end survives. The backend and the token count are the
+     * two things that exist nowhere else on screen; the word `generating`
+     * repeats the bubble directly above it.
+     */
+    @Test
+    fun chat_console_strip_generating_long() = snapshot(name = "generating_long", dark = false) {
+        ChatHomeContent(state = ChatHomePreview.consoleStrip(ChatHomePreview.StripStatus.GENERATING_LONG))
+    }
+
     @Test
     fun chat_console_strip_preparing() = snapshot(name = "preparing", dark = false) {
         ChatHomeContent(state = ChatHomePreview.consoleStrip(ChatHomePreview.StripStatus.PREPARING))

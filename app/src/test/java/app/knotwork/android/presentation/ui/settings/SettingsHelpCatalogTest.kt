@@ -44,16 +44,16 @@ class SettingsHelpCatalogTest {
 
     @Test
     fun `every explained row resolves to non-blank text`() {
-        explanations().forEach { (anchor, help) ->
-            assertTrue("zero string resource for $anchor", help.res != 0)
-            assertTrue("blank help text for $anchor", context.getString(help.res).isNotBlank())
+        explanations().forEach { (anchor, res) ->
+            assertTrue("zero string resource for $anchor", res != 0)
+            assertTrue("blank help text for $anchor", context.getString(res).isNotBlank())
         }
     }
 
     @Test
     fun `no explanation exceeds the character ceiling`() {
-        explanations().forEach { (anchor, help) ->
-            val length = context.getString(help.res).length
+        explanations().forEach { (anchor, res) ->
+            val length = context.getString(res).length
             assertTrue(
                 "help for $anchor is $length characters, over the $MAX_HELP_CHARS ceiling",
                 length <= MAX_HELP_CHARS,
@@ -63,7 +63,7 @@ class SettingsHelpCatalogTest {
 
     @Test
     fun `no two rows are explained by the same sentence`() {
-        val byText = explanations().groupBy { (_, help) -> context.getString(help.res) }
+        val byText = explanations().groupBy { (_, res) -> context.getString(res) }
         val shared = byText.filterValues { it.size > 1 }
         assertTrue(
             "the same sentence explains more than one row: ${shared.mapValues { entry ->
@@ -75,11 +75,28 @@ class SettingsHelpCatalogTest {
 
     @Test
     fun `no explanation uses the phrasings the copy standard forbids`() {
-        explanations().forEach { (anchor, help) ->
-            val text = context.getString(help.res).lowercase()
+        explanations().forEach { (anchor, res) ->
+            val text = context.getString(res).lowercase()
             FORBIDDEN_PHRASES.forEach { phrase ->
                 assertTrue("help for $anchor uses the forbidden phrasing \"$phrase\"", !text.contains(phrase))
             }
+        }
+    }
+
+    @Test
+    fun `a row whose behaviour is not shipped says so rather than staying silent`() {
+        val notShipped = SettingsHelpCatalog.HELP
+            .filterValues { it is SettingHelp.NotShipped }
+            .keys
+
+        // Leaving these silent was the first attempt, and using the app showed
+        // why it was wrong: a row with no glyph beside rows that have one reads
+        // as unfinished, and "moving this changes nothing yet" is exactly what
+        // the person who just dragged the slider needs to be told.
+        assertEquals(NOT_SHIPPED_ROWS, notShipped)
+        val controller = SettingsHelpCatalog.controller(context)
+        notShipped.forEach { anchor ->
+            assertTrue("$anchor must still offer an explanation", controller.hintFor(anchor) != null)
         }
     }
 
@@ -89,7 +106,7 @@ class SettingsHelpCatalogTest {
         val explained = explanations().first().first
         val unexplained = SettingsHelpCatalog.HELP.entries.first { it.value is SettingHelp.None }.key
 
-        assertEquals(context.getString(explanations().first().second.res), controller.hintFor(explained)?.text)
+        assertEquals(context.getString(explanations().first().second), controller.hintFor(explained)?.text)
         assertEquals(null, controller.hintFor(unexplained))
         assertEquals(null, controller.hintFor(null))
     }
@@ -129,10 +146,36 @@ class SettingsHelpCatalogTest {
     }
 
     /** Every row that carries an explanation, paired with its anchor. */
-    private fun explanations(): List<Pair<String, SettingHelp.Text>> = SettingsHelpCatalog.HELP.entries
-        .mapNotNull { (anchor, help) -> (help as? SettingHelp.Text)?.let { anchor to it } }
+    /**
+     * Every row that carries an explanation, paired with its string resource —
+     * `NotShipped` rows included, since they carry text and render a glyph
+     * exactly like an ordinary one.
+     */
+    private fun explanations(): List<Pair<String, Int>> = SettingsHelpCatalog.HELP.entries
+        .mapNotNull { (anchor, help) ->
+            when (help) {
+                is SettingHelp.Text -> anchor to help.res
+                is SettingHelp.NotShipped -> anchor to help.res
+                is SettingHelp.None -> null
+            }
+        }
 
     private companion object {
+        /**
+         * Rows whose behaviour does not happen yet. Each still carries an
+         * explanation saying so; the set is pinned because it is also the
+         * defect list, and it may only shrink.
+         */
+        val NOT_SHIPPED_ROWS: Set<String> = setOf(
+            "TOOL_USAGE_INSTRUCTION",
+            "TEMPERATURE",
+            "TOP_K",
+            "TOP_P",
+            "REPETITION_PENALTY",
+            "AUTO_SUMMARIZE_THRESHOLD",
+            "LONG_RUNNING_TASKS_NOTIFICATIONS",
+        )
+
         /**
          * Registry rows that no screen renders, so their explanation has
          * nowhere to open. All five are Tools ceilings that are registered and

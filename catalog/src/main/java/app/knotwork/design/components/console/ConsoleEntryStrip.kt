@@ -136,7 +136,7 @@ fun ConsoleEntryStrip(
     ) {
         Text(
             text = stringResource(R.string.knotwork_console_strip_label),
-            style = KnotworkTextStyles.MonoBase.copy(fontWeight = FontWeight.SemiBold),
+            style = KnotworkTextStyles.MonoSm.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.primary,
             maxLines = 1,
         )
@@ -153,17 +153,19 @@ fun ConsoleEntryStrip(
             modifier = Modifier.weight(1f),
         ) {
             if (leadingStatus != null) leadingStatus()
-            // Middle ellipsis, not trailing: the status line is
-            // `state · detail · N tok`, so cutting the tail threw away the
-            // token count and the outcome — the two things worth glancing at —
-            // and kept the word the reader already knew. Cutting the middle
-            // keeps both ends.
+            // Start ellipsis. The line is `state · where · N tok`, and the two
+            // ends are not equally worth keeping: the state is already visible
+            // in the chat bubble above, while the backend and the token count
+            // exist nowhere else. Trailing ellipsis cut both; middle ellipsis
+            // then ate the backend from the inside — `generating (…U) · 56 tok`
+            // — because the token count grows and pushes the cut leftwards.
+            // Dropping the head keeps the whole tail at any count.
             Text(
                 text = statusLine,
                 style = KnotworkTextStyles.MonoSm,
                 color = KnotworkTheme.extended.consoleFg,
                 maxLines = 1,
-                overflow = TextOverflow.MiddleEllipsis,
+                overflow = TextOverflow.StartEllipsis,
                 modifier = Modifier.weight(1f, fill = false),
             )
             if (trailingStatus != null) trailingStatus()

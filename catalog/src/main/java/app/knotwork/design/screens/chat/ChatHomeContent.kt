@@ -461,7 +461,7 @@ private fun AgentStatusStrip(text: String, open: Boolean, onClick: () -> Unit, m
             {
                 Text(
                     text = it,
-                    style = KnotworkTextStyles.MonoBase.copy(fontWeight = FontWeight.SemiBold),
+                    style = KnotworkTextStyles.MonoSm.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.primary,
                     maxLines = 1,
                 )

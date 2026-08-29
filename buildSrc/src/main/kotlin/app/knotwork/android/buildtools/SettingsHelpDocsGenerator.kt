@@ -234,8 +234,13 @@ object SettingsHelpDocsGenerator {
         val body = source.substringAfter("val HELP: Map<String, SettingHelp> = mapOf(", "")
         if (body.isEmpty()) throw GenerationException("`HELP` map not found in SettingsHelpCatalog.kt.")
         val text = HELP_TEXT_RE.findAll(body).map { it.groupValues[1] to Decision(it.groupValues[2], null) }
+        // `notShipped(...)` rows are read exactly like `text(...)` ones: their
+        // sentence already opens with "Not wired up yet", so nothing needs to
+        // mark them a second time.
+        val notShipped = HELP_NOT_SHIPPED_RE.findAll(body)
+            .map { it.groupValues[1] to Decision(it.groupValues[2], null) }
         val none = HELP_NONE_RE.findAll(body).map { it.groupValues[1] to Decision(null, it.groupValues[2]) }
-        return (text + none).toMap()
+        return (text + notShipped + none).toMap()
     }
 
     /** Extracts `anchor -> name-resource` from the search catalogue. */
@@ -353,6 +358,8 @@ object SettingsHelpDocsGenerator {
     // written against. The count guard in [buildRows] catches it either way, but
     // a formatter should not be able to break the build at all.
     private val HELP_TEXT_RE = Regex(""""([A-Z_0-9]+)"\s+to\s+text\(\s*R\.string\.(\w+)\s*,?\s*\)""")
+    private val HELP_NOT_SHIPPED_RE =
+        Regex(""""([A-Z_0-9]+)"\s+to\s+notShipped\(\s*R\.string\.(\w+)\s*,?\s*\)""")
     private val HELP_NONE_RE = Regex(""""([A-Z_0-9]+)"\s+to\s+none\(\s*NoHint\.(\w+)\s*,?\s*\)""")
     private val SEARCH_NAME_RE = Regex(""""([A-Z_0-9]+)"\s+to\s+strings\(\s*R\.string\.(\w+)""")
     private val SEARCH_NAME_CONST_RE = Regex("""(\w+_ANCHOR)\s+to\s+strings\(\s*R\.string\.(\w+)""")

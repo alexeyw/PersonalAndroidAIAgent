@@ -67,6 +67,18 @@ sealed interface SettingHelp {
     /** The row explains itself through [res]. */
     data class Text(@StringRes val res: Int) : SettingHelp
 
+    /**
+     * The row's behaviour does not happen yet, and [res] says so.
+     *
+     * Distinct from [Text] so the docs generator and the defect list can still
+     * tell these rows apart mechanically — but it **does** carry text and
+     * **does** render a glyph. Leaving them silent was the wrong call: a row
+     * with no explanation beside rows that have one reads as unfinished work,
+     * and "moving this changes nothing yet" is precisely the explanation a user
+     * who just dragged the slider needs.
+     */
+    data class NotShipped(@StringRes val res: Int) : SettingHelp
+
     /** The row carries no explanation, for [why]. */
     data class None(val why: NoHint) : SettingHelp
 }
@@ -95,11 +107,11 @@ object SettingsHelpCatalog {
     /** Anchor -> explanation, or the recorded reason there is none. */
     val HELP: Map<String, SettingHelp> = mapOf(
         "SYSTEM_PROMPT_PREFIX" to text(R.string.settings_help_system_prompt_prefix),
-        "TOOL_USAGE_INSTRUCTION" to none(NoHint.BEHAVIOUR_NOT_SHIPPED),
-        "TEMPERATURE" to none(NoHint.BEHAVIOUR_NOT_SHIPPED),
-        "TOP_K" to none(NoHint.BEHAVIOUR_NOT_SHIPPED),
-        "TOP_P" to none(NoHint.BEHAVIOUR_NOT_SHIPPED),
-        "REPETITION_PENALTY" to none(NoHint.BEHAVIOUR_NOT_SHIPPED),
+        "TOOL_USAGE_INSTRUCTION" to notShipped(R.string.settings_help_tool_usage_instruction),
+        "TEMPERATURE" to notShipped(R.string.settings_help_temperature),
+        "TOP_K" to notShipped(R.string.settings_help_top_k),
+        "TOP_P" to notShipped(R.string.settings_help_top_p),
+        "REPETITION_PENALTY" to notShipped(R.string.settings_help_repetition_penalty),
         "MAX_CONTEXT_LENGTH" to text(R.string.settings_help_max_context_length),
         "AUDIO_MAX_DURATION_SEC" to text(R.string.settings_help_audio_max_duration_sec),
         "LOCAL_MODEL_BACKEND" to text(R.string.settings_help_local_model_backend),
@@ -108,7 +120,7 @@ object SettingsHelpCatalog {
         "AUTO_EXTRACT_ENABLED" to text(R.string.settings_help_auto_extract_enabled),
         "MEMORY_COMPACTION_ENABLED" to text(R.string.settings_help_memory_compaction_enabled),
         "CHAT_HISTORY_COMPRESSION_ENABLED" to text(R.string.settings_help_chat_history_compression_enabled),
-        "AUTO_SUMMARIZE_THRESHOLD" to none(NoHint.BEHAVIOUR_NOT_SHIPPED),
+        "AUTO_SUMMARIZE_THRESHOLD" to notShipped(R.string.settings_help_auto_summarize_threshold),
         "MEMORY_SEARCH_TOP_K" to text(R.string.settings_help_memory_search_top_k),
         "MEMORY_SEARCH_THRESHOLD" to text(R.string.settings_help_memory_search_threshold),
         "MEMORY_RECENCY_HALF_LIFE_DAYS" to text(R.string.settings_help_memory_recency_half_life_days),
@@ -135,7 +147,7 @@ object SettingsHelpCatalog {
         "WORKSPACE_READ_TOKEN_BUDGET" to text(R.string.settings_help_workspace_read_token_budget),
         "HTTP_TOOL_MAX_RESPONSE_BYTES" to text(R.string.settings_help_http_tool_max_response_bytes),
         "LINK_FILES_DOMAINS" to none(NoHint.LINK_ROW),
-        "LONG_RUNNING_TASKS_NOTIFICATIONS" to none(NoHint.BEHAVIOUR_NOT_SHIPPED),
+        "LONG_RUNNING_TASKS_NOTIFICATIONS" to notShipped(R.string.settings_help_long_running_tasks_notifications),
         "SCHEDULED_TASK_NOTIFICATIONS" to text(R.string.settings_help_scheduled_task_notifications),
         "SHARE_TARGET_PIPELINE_ID" to text(R.string.settings_help_share_target_pipeline_id),
         "SHARE_REUSE_SESSION" to text(R.string.settings_help_share_reuse_session),
@@ -163,6 +175,7 @@ object SettingsHelpCatalog {
     fun controller(context: Context): SettingsHintController = SettingsHintController { anchorKey ->
         when (val help = HELP[anchorKey]) {
             is SettingHelp.Text -> SettingsHint(text = context.getString(help.res))
+            is SettingHelp.NotShipped -> SettingsHint(text = context.getString(help.res))
             else -> null
         }
     }
@@ -171,3 +184,5 @@ object SettingsHelpCatalog {
 private fun text(@StringRes res: Int): SettingHelp = SettingHelp.Text(res)
 
 private fun none(why: NoHint): SettingHelp = SettingHelp.None(why)
+
+private fun notShipped(@StringRes res: Int): SettingHelp = SettingHelp.NotShipped(res)

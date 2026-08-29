@@ -56,4 +56,11 @@
     <string name="settings_help_crash_reporting_enabled">Off, nothing leaves the device. On, crashes plus warning and error log lines go out — never your messages, prompts or keys.</string>
     <string name="settings_help_trace_retention_runs_per_session">How many past runs keep their step-by-step trace in a chat. Older traces are dropped; the messages themselves stay.</string>
     <string name="settings_help_trace_retention_max_age_days">How long a trace is kept before it is dropped, whatever the per-chat count. Bounds what accumulates on disk.</string>
+    <string name="settings_help_temperature">Not wired up yet: the on-device engine runs with the model\'s own sampler, so moving this changes nothing today.</string>
+    <string name="settings_help_top_k">Not wired up yet — the on-device engine keeps the model\'s own sampler, so this slider has no effect on answers.</string>
+    <string name="settings_help_top_p">Not wired up yet, like the other sampling sliders: the value is stored, but no engine reads it when answering.</string>
+    <string name="settings_help_repetition_penalty">Not wired up yet. Stored, but nothing applies it — if answers repeat themselves, this slider will not stop them.</string>
+    <string name="settings_help_tool_usage_instruction">Not wired up yet: this text is saved but reaches no prompt. Put tool rules in System instructions until it does.</string>
+    <string name="settings_help_auto_summarize_threshold">Not wired up yet. Summarising is driven by the compression threshold below; this value is stored and unused.</string>
+    <string name="settings_help_long_running_tasks_notifications">Not wired up yet: the notification channel exists but nothing posts to it, so switching this on changes nothing.</string>
 </resources>
