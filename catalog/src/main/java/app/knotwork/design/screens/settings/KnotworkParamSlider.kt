@@ -3,7 +3,6 @@ package app.knotwork.design.screens.settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
@@ -71,20 +70,17 @@ fun KnotworkParamSlider(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            FlowRow(
-                verticalArrangement = Arrangement.Center,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f),
             ) {
                 Text(
                     text = label,
                     style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.align(Alignment.CenterVertically),
+                    modifier = Modifier.weight(1f, fill = false),
                 )
-                SettingsHintGlyph(
-                    settingName = label,
-                    modifier = Modifier.align(Alignment.CenterVertically),
-                )
+                SettingsHintGlyph(settingName = label)
             }
             Text(
                 text = valueLabel,

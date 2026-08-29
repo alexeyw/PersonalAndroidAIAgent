@@ -182,7 +182,7 @@ private fun CategoryTopBar(title: String, subtitle: String, onBack: () -> Unit) 
  * trailing slot.
  */
 @Composable
-internal fun SettingsSectionLabel(text: String, trailing: @Composable () -> Unit = {}) {
+fun SettingsSectionLabel(text: String, trailing: @Composable () -> Unit = {}) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Text(
             text = text.uppercase(),
@@ -346,20 +346,21 @@ private fun DropdownRowLabel(title: String) {
  *
  * @param title Row label.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun RowLabelWithHint(title: String) {
-    FlowRow(verticalArrangement = Arrangement.Center) {
+    // Row with a weighted label, not FlowRow. FlowRow wraps the glyph onto a
+    // line of its own as soon as the label fills the width — which on
+    // "Auto-extract from conversations" left the ⓘ sitting under the text,
+    // reading as a stray control. Weighting the label lets the text wrap inside
+    // itself and keeps the glyph beside it.
+    Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
             text = title,
             style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.align(Alignment.CenterVertically),
+            modifier = Modifier.weight(1f, fill = false),
         )
-        SettingsHintGlyph(
-            settingName = title,
-            modifier = Modifier.align(Alignment.CenterVertically),
-        )
+        SettingsHintGlyph(settingName = title)
     }
 }
 
