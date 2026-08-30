@@ -15,6 +15,31 @@ details.
 
 ### Added
 
+- **A pipeline cookbook — [`docs/cookbook.md`](docs/cookbook.md).** Every node
+  type in one place: what it does, its ports, which blocks of the run's context
+  it is given, and a table of its configuration fields. The reference is
+  generated from the sources that define a node and a build check fails when it
+  drifts, so it cannot quietly describe a version of the app that no longer
+  exists.
+
+  Its most useful column is the one saying whether a field changes anything at
+  run time. A node's configuration sheet mixes fields the engine reads with
+  fields it stores and ignores, and the app gives no sign which is which — an
+  ignored field still accepts input, still survives a reopen, still exports.
+  Notably, the prompt fields of the **Intent Router**, **Decomposition**,
+  **Evaluation** and **Summary** sheets are not written back to the node, so
+  editing one appears to work while the node goes on running the prompt it was
+  created with. That is a defect, and it is documented as one rather than
+  smoothed over; a unit test holds every verdict in the table against what the
+  editor's codec actually does.
+
+- **Five importable pipeline recipes — [`docs/recipes/`](docs/recipes/).**
+  Routing on intent, decomposition with a queue, a tool call behind the
+  approval gate, a run that uses long-term memory, and one pipeline calling
+  another as a bundle. Each is a working file checked on every build with the
+  same parser the app's import uses, so a recipe that stopped importing fails
+  the build rather than the reader.
+
 - **A questions-and-answers page — [`docs/faq.md`](docs/faq.md).** Short
   answers to what is supported, what is not, and where a thing lives, each one
   pointing at the page that covers it properly rather than restating it. Its

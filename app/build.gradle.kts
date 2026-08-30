@@ -1,4 +1,5 @@
 import app.knotwork.android.buildtools.BrowserEditorConstantsGenerator
+import app.knotwork.android.buildtools.CookbookDocsGenerator
 import app.knotwork.android.buildtools.DetektAnalysisModeGuard
 import app.knotwork.android.buildtools.DexInstantiabilityChecker
 import app.knotwork.android.buildtools.DocsHygieneChecker
@@ -1090,6 +1091,105 @@ val verifyExternalAutomationDocs by tasks.registering {
     }
 }
 tasks.named("check") { dependsOn(verifyExternalAutomationDocs) }
+
+// ── Node-type cookbook reference ────────────────────────────────────────────
+// `docs/cookbook.md` is the public per-node reference. Before it existed the
+// only one was `node-specs.md`, an internal design document the public guide
+// nevertheless pointed readers at — so the reference a reader could reach was
+// no reference at all. Written by hand it would have drifted on the first node
+// type added after publication, exactly as `FILE_MAP.md` did.
+//
+// `generateCookbookDocs` rebuilds the AUTO-GEN blocks from the sources that
+// define a node — the domain enum, the `:catalog` mirror, the ports factory,
+// the context defaults, the config hierarchy and the default prompts;
+// `verifyCookbookDocs` (wired into `check`) fails the build on drift. The pure
+// generation logic lives in `buildSrc` (`CookbookDocsGenerator`) and is
+// unit-tested there.
+//
+// Inputs are resolved into local `val`s and captured by the task actions as
+// plain `File` values, so the actions never reach back into the `Project` —
+// keeping both tasks configuration-cache compatible.
+val cookbookDocsFile = file("$rootDir/docs/cookbook.md")
+val cookbookDomainNodeTypeFile =
+    file("$projectDir/src/main/java/app/knotwork/android/domain/models/NodeType.kt")
+val cookbookCatalogNodeTypeFile =
+    file("$rootDir/catalog/src/main/java/app/knotwork/design/components/pipelineeditor/NodeType.kt")
+val cookbookNodePortsFile =
+    file("$rootDir/catalog/src/main/java/app/knotwork/design/components/pipelineeditor/NodePorts.kt")
+val cookbookNodeContextConfigFile =
+    file("$projectDir/src/main/java/app/knotwork/android/domain/models/NodeContextConfig.kt")
+val cookbookNodeConfigFile =
+    file("$rootDir/catalog/src/main/java/app/knotwork/design/components/pipelineeditor/NodeConfig.kt")
+val cookbookDefaultPromptsFile =
+    file("$projectDir/src/main/java/app/knotwork/android/domain/constants/DefaultPrompts.kt")
+val cookbookInputFiles: Set<File> = setOf(
+    cookbookDomainNodeTypeFile,
+    cookbookCatalogNodeTypeFile,
+    cookbookNodePortsFile,
+    cookbookNodeContextConfigFile,
+    cookbookNodeConfigFile,
+    cookbookDefaultPromptsFile,
+)
+
+// Built inline in each task action rather than by a shared helper: a `doLast`
+// block that calls a top-level function declared in the same build script is
+// not configuration-cache compatible, because the lambda then captures the
+// script instance rather than a class reference.
+val generateCookbookDocs by tasks.registering {
+    group = "build"
+    description = "Regenerates the AUTO-GEN node reference in docs/cookbook.md from the node sources."
+    inputs.files(cookbookInputFiles)
+    inputs.file(cookbookDocsFile)
+    outputs.file(cookbookDocsFile)
+    doLast {
+        val current = cookbookDocsFile.readText()
+        val rendered = CookbookDocsGenerator.render(
+            markdown = current,
+            sources = CookbookDocsGenerator.Sources(
+                domainNodeType = cookbookDomainNodeTypeFile.readText(),
+                catalogNodeType = cookbookCatalogNodeTypeFile.readText(),
+                nodePorts = cookbookNodePortsFile.readText(),
+                nodeContextConfig = cookbookNodeContextConfigFile.readText(),
+                nodeConfig = cookbookNodeConfigFile.readText(),
+                defaultPrompts = cookbookDefaultPromptsFile.readText(),
+            ),
+        )
+        if (rendered != current) {
+            cookbookDocsFile.writeText(rendered)
+            logger.lifecycle("docs/cookbook.md: regenerated the AUTO-GEN node reference.")
+        } else {
+            logger.lifecycle("docs/cookbook.md: AUTO-GEN node reference already up to date.")
+        }
+    }
+}
+
+val verifyCookbookDocs by tasks.registering {
+    group = "verification"
+    description = "Fails the build if the AUTO-GEN node reference in docs/cookbook.md has drifted."
+    inputs.files(cookbookInputFiles)
+    inputs.file(cookbookDocsFile)
+    doLast {
+        val drifted = CookbookDocsGenerator.drift(
+            markdown = cookbookDocsFile.readText(),
+            sources = CookbookDocsGenerator.Sources(
+                domainNodeType = cookbookDomainNodeTypeFile.readText(),
+                catalogNodeType = cookbookCatalogNodeTypeFile.readText(),
+                nodePorts = cookbookNodePortsFile.readText(),
+                nodeContextConfig = cookbookNodeContextConfigFile.readText(),
+                nodeConfig = cookbookNodeConfigFile.readText(),
+                defaultPrompts = cookbookDefaultPromptsFile.readText(),
+            ),
+        )
+        if (drifted.isNotEmpty()) {
+            throw GradleException(
+                "docs/cookbook.md is out of sync with the node sources.\n" +
+                    "Drifted AUTO-GEN block(s): ${drifted.joinToString(", ")}.\n" +
+                    "Run `./gradlew :app:generateCookbookDocs` and commit the updated docs/cookbook.md.",
+            )
+        }
+    }
+}
+tasks.named("check") { dependsOn(verifyCookbookDocs) }
 
 // Public documentation hygiene guard.
 //

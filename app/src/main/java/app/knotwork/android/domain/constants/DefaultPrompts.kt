@@ -637,7 +637,8 @@ object DefaultPrompts {
      * value pre-seeded into `node.systemPrompt` by `DefaultPipelineFactory`.
      *
      * `null` for nodes that do not carry a `systemPrompt` field
-     * (`INPUT`, `IF_CONDITION`, `TOOL`, `QUEUE_PROCESSOR`, `SYSTEM`).
+     * (`INPUT`, `IF_CONDITION`, `TOOL`, `QUEUE_PROCESSOR`, `PIPELINE`, `SKILL`)
+     * and for `OUTPUT`, which starts in pass-through mode by design.
      */
     fun getDefaultPromptForNodeType(type: NodeType): String? = when (type) {
         NodeType.INTENT_ROUTER -> INTENT_ROUTER_PROMPT

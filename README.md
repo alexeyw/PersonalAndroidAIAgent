@@ -311,6 +311,9 @@ threat model behind it, including what is explicitly *out* of scope, is in
 
 - Architecture overview — [docs/architecture.md](docs/architecture.md).
 - User guide — [docs/user-guide.md](docs/user-guide.md).
+- Pipeline cookbook — what every node type does, which of its settings
+  actually change a run, and importable recipes —
+  [docs/cookbook.md](docs/cookbook.md).
 - Frequently asked questions, and the standing list of what the app
   deliberately does not do — [docs/faq.md](docs/faq.md).
 - Troubleshooting — [docs/troubleshooting.md](docs/troubleshooting.md).

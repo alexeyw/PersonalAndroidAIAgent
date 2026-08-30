@@ -1,0 +1,320 @@
+{
+  "bundleVersion": 1,
+  "exportedAt": 1756400000000,
+  "pipelines": [
+    {
+      "schemaVersion": 1,
+      "id": "recipe-composition-parent",
+      "name": "Recipe — composition with a Pipeline node",
+      "updatedAt": 1756400000000,
+      "nodes": [
+        {
+          "id": "input",
+          "type": "INPUT",
+          "position": {
+            "x": 80,
+            "y": 200
+          },
+          "label": "Input",
+          "config": {
+            "systemPrompt": null,
+            "cloudProvider": null,
+            "modelPath": null,
+            "toolName": null,
+            "targetPipelineId": null,
+            "skillId": null,
+            "clarificationTimeoutMs": null,
+            "conditionPrompt": null,
+            "conditionKeywords": null,
+            "conditionComplexity": null,
+            "conditionHasImage": null
+          },
+          "contextConfig": {
+            "chatHistory": false,
+            "originalTask": false,
+            "nodeInput": true,
+            "longTermMemory": false,
+            "toolResults": false
+          },
+          "nodeConfig": {
+            "v": 1,
+            "type": "INPUT",
+            "title": "Input",
+            "inputName": "user.message"
+          }
+        },
+        {
+          "id": "answer",
+          "type": "LITE_RT",
+          "position": {
+            "x": 300,
+            "y": 200
+          },
+          "label": "Answer",
+          "config": {
+            "systemPrompt": "Answer the user's question in one short paragraph. Today is $DATE.\n\nReply in the user's language ($LANG).",
+            "cloudProvider": null,
+            "modelPath": null,
+            "toolName": null,
+            "targetPipelineId": null,
+            "skillId": null,
+            "clarificationTimeoutMs": null,
+            "conditionPrompt": null,
+            "conditionKeywords": null,
+            "conditionComplexity": null,
+            "conditionHasImage": null
+          },
+          "contextConfig": {
+            "chatHistory": false,
+            "originalTask": true,
+            "nodeInput": true,
+            "longTermMemory": false,
+            "toolResults": false
+          },
+          "nodeConfig": {
+            "v": 1,
+            "type": "LITE_RT",
+            "title": "Answer",
+            "modelId": "",
+            "systemPrompt": "Answer the user's question in one short paragraph. Today is $DATE.\n\nReply in the user's language ($LANG).",
+            "temperature": 0.7,
+            "topP": 0.9,
+            "maxNewTokens": 1024,
+            "stopTokens": []
+          }
+        },
+        {
+          "id": "tidy_call",
+          "type": "PIPELINE",
+          "position": {
+            "x": 560,
+            "y": 200
+          },
+          "label": "Tidy up",
+          "config": {
+            "systemPrompt": null,
+            "cloudProvider": null,
+            "modelPath": null,
+            "toolName": null,
+            "targetPipelineId": "recipe-composition-tidy",
+            "skillId": null,
+            "clarificationTimeoutMs": null,
+            "conditionPrompt": null,
+            "conditionKeywords": null,
+            "conditionComplexity": null,
+            "conditionHasImage": null
+          },
+          "contextConfig": {
+            "chatHistory": false,
+            "originalTask": false,
+            "nodeInput": true,
+            "longTermMemory": false,
+            "toolResults": false
+          },
+          "nodeConfig": {
+            "v": 1,
+            "type": "PIPELINE",
+            "title": "Tidy up",
+            "targetPipelineId": "recipe-composition-tidy",
+            "targetPipelineName": "Recipe — tidy up (sub-pipeline)"
+          }
+        },
+        {
+          "id": "output",
+          "type": "OUTPUT",
+          "position": {
+            "x": 820,
+            "y": 200
+          },
+          "label": "Reply",
+          "config": {
+            "systemPrompt": null,
+            "cloudProvider": null,
+            "modelPath": null,
+            "toolName": null,
+            "targetPipelineId": null,
+            "skillId": null,
+            "clarificationTimeoutMs": null,
+            "conditionPrompt": null,
+            "conditionKeywords": null,
+            "conditionComplexity": null,
+            "conditionHasImage": null
+          },
+          "contextConfig": {
+            "chatHistory": false,
+            "originalTask": false,
+            "nodeInput": true,
+            "longTermMemory": false,
+            "toolResults": false
+          },
+          "nodeConfig": {
+            "v": 1,
+            "type": "OUTPUT",
+            "title": "Reply",
+            "format": "PLAIN_TEXT",
+            "systemPrompt": ""
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "c1",
+          "fromNodeId": "input",
+          "toNodeId": "answer",
+          "label": null
+        },
+        {
+          "id": "c2",
+          "fromNodeId": "answer",
+          "toNodeId": "tidy_call",
+          "label": null
+        },
+        {
+          "id": "c3",
+          "fromNodeId": "tidy_call",
+          "toNodeId": "output",
+          "label": null
+        }
+      ],
+      "samplePrompts": [
+        {
+          "title": "Explain why bread dough needs to rest"
+        }
+      ]
+    },
+    {
+      "schemaVersion": 1,
+      "id": "recipe-composition-tidy",
+      "name": "Recipe — tidy up (sub-pipeline)",
+      "updatedAt": 1756400000000,
+      "nodes": [
+        {
+          "id": "input",
+          "type": "INPUT",
+          "position": {
+            "x": 80,
+            "y": 200
+          },
+          "label": "Input",
+          "config": {
+            "systemPrompt": null,
+            "cloudProvider": null,
+            "modelPath": null,
+            "toolName": null,
+            "targetPipelineId": null,
+            "skillId": null,
+            "clarificationTimeoutMs": null,
+            "conditionPrompt": null,
+            "conditionKeywords": null,
+            "conditionComplexity": null,
+            "conditionHasImage": null
+          },
+          "contextConfig": {
+            "chatHistory": false,
+            "originalTask": false,
+            "nodeInput": true,
+            "longTermMemory": false,
+            "toolResults": false
+          },
+          "nodeConfig": {
+            "v": 1,
+            "type": "INPUT",
+            "title": "Input",
+            "inputName": "user.message"
+          }
+        },
+        {
+          "id": "tidy",
+          "type": "LITE_RT",
+          "position": {
+            "x": 320,
+            "y": 200
+          },
+          "label": "Tidy",
+          "config": {
+            "systemPrompt": "Rewrite the text you are given as clean prose: fix grammar and punctuation, keep every fact, change nothing else. Reply with the rewritten text only.\n\nKeep the text in its original language.",
+            "cloudProvider": null,
+            "modelPath": null,
+            "toolName": null,
+            "targetPipelineId": null,
+            "skillId": null,
+            "clarificationTimeoutMs": null,
+            "conditionPrompt": null,
+            "conditionKeywords": null,
+            "conditionComplexity": null,
+            "conditionHasImage": null
+          },
+          "contextConfig": {
+            "chatHistory": false,
+            "originalTask": true,
+            "nodeInput": true,
+            "longTermMemory": false,
+            "toolResults": false
+          },
+          "nodeConfig": {
+            "v": 1,
+            "type": "LITE_RT",
+            "title": "Tidy",
+            "modelId": "",
+            "systemPrompt": "Rewrite the text you are given as clean prose: fix grammar and punctuation, keep every fact, change nothing else. Reply with the rewritten text only.\n\nKeep the text in its original language.",
+            "temperature": 0.7,
+            "topP": 0.9,
+            "maxNewTokens": 1024,
+            "stopTokens": []
+          }
+        },
+        {
+          "id": "output",
+          "type": "OUTPUT",
+          "position": {
+            "x": 580,
+            "y": 200
+          },
+          "label": "Tidied",
+          "config": {
+            "systemPrompt": null,
+            "cloudProvider": null,
+            "modelPath": null,
+            "toolName": null,
+            "targetPipelineId": null,
+            "skillId": null,
+            "clarificationTimeoutMs": null,
+            "conditionPrompt": null,
+            "conditionKeywords": null,
+            "conditionComplexity": null,
+            "conditionHasImage": null
+          },
+          "contextConfig": {
+            "chatHistory": false,
+            "originalTask": false,
+            "nodeInput": true,
+            "longTermMemory": false,
+            "toolResults": false
+          },
+          "nodeConfig": {
+            "v": 1,
+            "type": "OUTPUT",
+            "title": "Tidied",
+            "format": "PLAIN_TEXT",
+            "systemPrompt": ""
+          }
+        }
+      ],
+      "connections": [
+        {
+          "id": "c1",
+          "fromNodeId": "input",
+          "toNodeId": "tidy",
+          "label": null
+        },
+        {
+          "id": "c2",
+          "fromNodeId": "tidy",
+          "toNodeId": "output",
+          "label": null
+        }
+      ],
+      "samplePrompts": []
+    }
+  ]
+}

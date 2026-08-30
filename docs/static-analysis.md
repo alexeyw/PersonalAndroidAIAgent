@@ -33,6 +33,8 @@ This invokes (transitively):
 | `:app:verifyDocsHygiene`                      | Custom rule: guard the public docs against LLM tool-call artifacts and internal-document references (see below). |
 | `:app:verifyExternalAutomationDocs`           | Fails if the `docs/external-automation.md` `AUTO-GEN` tables drift from the contract sources (see below). |
 | `:app:verifySettingsHelpDocs`                 | Fails if the settings reference table in `docs/user-guide.md` drifts from the shipped help strings (see below). |
+| `:app:verifyCookbookDocs`                     | Fails if the node reference in `docs/cookbook.md` drifts from the node sources (see below). |
+| `:app:testFullDebugUnitTest` (`CookbookRuntimeReachTest`, `CookbookRecipeValidationTest`) | Fails if the cookbook's run-time verdicts disagree with `NodeConfigCodec`, or a published recipe no longer imports (see below). |
 | `:app:testFullDebugUnitTest` (`SettingsHelpCatalogTest`) | Fails if a registered setting has no help decision, or its text is blank, over-long, duplicated or in a forbidden register (see below). |
 | `:app:verifyLintBaselineOverrides`            | Custom rule: fail if a lint baseline suppresses a check demoted to informational severity (see below). |
 | `:app:verifyDetektAnalysisMode`               | Custom rule: fail if `detekt.yml` activates a rule that only runs under type resolution (see below). |
@@ -410,6 +412,74 @@ and is unit-tested there (`./gradlew -p buildSrc test`), including idempotence,
 per-block drift detection, and the two failure modes above. The gate itself was
 verified by renaming a wire key and watching `check` fail with the drifted block
 named.
+
+---
+
+## Node-cookbook guards (`verifyCookbookDocs`, `CookbookRuntimeReachTest`, `CookbookRecipeValidationTest`)
+
+Three guards over [`docs/cookbook.md`](cookbook.md) and the recipes it
+publishes. They are separate on purpose: each answers a question the others
+cannot.
+
+### `verifyCookbookDocs` — the reference is derived, not written
+
+A build-time verification task, wired into `check`, that regenerates the
+`AUTO-GEN` blocks of the cookbook from the sources that define a node — the
+`NodeType` enum, the `:catalog` mirror of it, `NodePorts.forType`,
+`NodeContextConfig.defaultForType`, the `NodeConfig` hierarchy and
+`DefaultPrompts` — and fails when the committed document differs.
+
+Regenerate with:
+
+```bash
+./gradlew :app:generateCookbookDocs
+```
+
+Two things the generator cannot read out of the sources are hand-maintained in
+[`CookbookDocsGenerator`](../buildSrc/src/main/kotlin/app/knotwork/android/buildtools/CookbookDocsGenerator.kt):
+the reader-facing sentence per node type (the domain KDoc is written for
+whoever implements an executor, not for whoever wires a pipeline), and the
+per-field verdict of whether a configuration field reaches the run. Neither is
+unguarded — generation fails when a node type has no sentence or a field has no
+verdict, so the reference cannot quietly lose a row.
+
+The count guard matters more here than the drift check, because a generator
+paired with its own drift check agrees with itself exactly when it is wrong. So
+the node set is derived **five times over four files in two modules** — the
+`:app` enum, the `:catalog` enum, the ports factory, the context-defaults
+`when`, and the config hierarchy — and generation stops unless all five agree.
+
+### `CookbookRuntimeReachTest` — the verdicts are checked against the codec
+
+The column saying whether a configuration field changes anything at run time is
+the reason the document is worth reading, and it is the one claim a build-time
+parser cannot settle: no static reading of a declaration reveals whether the
+engine later reads the value.
+
+So the check runs from the other side. The test mutates every field of every
+node configuration, pushes it through the real `NodeConfigCodec`, observes which
+properties of the stored node actually moved, and compares that against the
+committed Markdown — a different file, produced by different code, read by a
+different parser. A verdict claiming a field works when it does not fails the
+unit suite; fixing the codec so an ignored field starts working fails it too,
+until the document is regenerated, so the fix and its documentation land
+together.
+
+### `CookbookRecipeValidationTest` — the recipes still import
+
+The five documents under [`docs/recipes/`](recipes/) are what the cookbook tells
+a reader to download and import. They go through the **same parser the app's
+import uses** and the graphs through the same `PipelineGraph.validate()` the
+editor's validation bar runs — not a validator written alongside them. The test
+also asserts nothing is dropped on parse, that every prompt variable is one the
+app registers (read out of the Hilt module rather than a list in the test), that
+every router's declared classes match its outgoing edge labels, and that each
+recipe is linked from the cookbook so one cannot rot unread.
+
+The generation logic is a pure string transform in `buildSrc` and is unit-tested
+there (`./gradlew -p buildSrc test`). Every gate was observed failing before
+being trusted: a removed `FIELD_REACH` entry, a node type dropped from the meta,
+an edited verdict, and a broken recipe each fail with the cause named.
 
 ---
 

@@ -173,6 +173,12 @@ guardrails that apply to runs, not the pipelines themselves; it used to be named
 in a way that promised otherwise. See
 [Library and active pipeline](user-guide.md#library-and-active-pipeline).
 
+### What does this node actually do?
+
+Every node type is described in the [pipeline cookbook](cookbook.md), together
+with what it does with its input, which of its configuration fields change a run
+and which are stored but ignored, and five importable recipes.
+
 ### Can I edit a pipeline on a computer?
 
 Yes — there is a standalone browser editor that reads and writes the same JSON,
@@ -426,6 +432,7 @@ would change it.
 ## See also
 
 - [`user-guide.md`](user-guide.md) — how every screen and feature works.
+- [`cookbook.md`](cookbook.md) — what each node type does, and recipes to import.
 - [`troubleshooting.md`](troubleshooting.md) — what to do when something breaks.
 - [`external-automation.md`](external-automation.md) — the contract other apps
   call.
