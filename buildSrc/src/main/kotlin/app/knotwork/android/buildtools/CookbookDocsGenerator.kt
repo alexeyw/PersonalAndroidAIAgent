@@ -573,7 +573,7 @@ object CookbookDocsGenerator {
             out.append("| Field | Default | Reaches the run |\n|---|---|---|\n")
             node.fields.forEach { field ->
                 out.append("| `").append(field.name).append("` | ")
-                    .append(field.default?.let { "`$it`" } ?: "*required*").append(" | ")
+                    .append(field.default?.let { "`${escapePipes(it)}`" } ?: "*required*").append(" | ")
                     .append(escapePipes(describeReach(field.reach))).append(" |\n")
             }
             out.append('\n')
@@ -592,6 +592,7 @@ object CookbookDocsGenerator {
     /** Compact context description for the overview table. */
     private fun describeContext(node: NodeEntry): String = when {
         !node.usesContext -> "input forwarded as-is"
+        node.context.isEmpty() -> "**none** — the editor rejects this"
         node.doc.id in CONTEXT_EXCEPTIONS -> node.context.joinToString(", ") + " \\*"
         else -> node.context.joinToString(", ")
     }
@@ -614,6 +615,9 @@ object CookbookDocsGenerator {
     private fun sentenceContext(node: NodeEntry): String {
         if (!node.usesContext) {
             return "This type ignores the context configuration — it forwards the upstream text unchanged."
+        }
+        if (node.context.isEmpty()) {
+            return "No block is enabled, which the editor rejects as a validation error."
         }
         val flags = node.context.joinToString(", ") { "`$it`" }
         val caveat = CONTEXT_EXCEPTIONS[node.doc.id]?.let { " — $it" }.orEmpty()

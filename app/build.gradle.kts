@@ -987,6 +987,12 @@ val verifySettingsHelpDocs by tasks.registering {
     }
 }
 
+// A verify task reads the file its sibling generate task writes. Without an
+// ordering rule Gradle rejects the pair the moment both are requested in one
+// invocation — `./gradlew :app:generateSettingsHelpDocs check`, which is exactly
+// how the pair is meant to be used. `mustRunAfter` states the ordering without
+// making verification depend on regeneration.
+verifySettingsHelpDocs { mustRunAfter(generateSettingsHelpDocs) }
 tasks.named("check") { dependsOn(verifySettingsHelpDocs) }
 
 val verifyBrowserEditorConstants by tasks.registering {
@@ -1013,6 +1019,7 @@ val verifyBrowserEditorConstants by tasks.registering {
         }
     }
 }
+verifyBrowserEditorConstants { mustRunAfter(generateBrowserEditorConstants) }
 tasks.named("check") { dependsOn(verifyBrowserEditorConstants) }
 
 // External-automation contract documentation sync automation.
@@ -1090,6 +1097,7 @@ val verifyExternalAutomationDocs by tasks.registering {
         }
     }
 }
+verifyExternalAutomationDocs { mustRunAfter(generateExternalAutomationDocs) }
 tasks.named("check") { dependsOn(verifyExternalAutomationDocs) }
 
 // ── Node-type cookbook reference ────────────────────────────────────────────
@@ -1189,6 +1197,7 @@ val verifyCookbookDocs by tasks.registering {
         }
     }
 }
+verifyCookbookDocs { mustRunAfter(generateCookbookDocs) }
 tasks.named("check") { dependsOn(verifyCookbookDocs) }
 
 // Public documentation hygiene guard.

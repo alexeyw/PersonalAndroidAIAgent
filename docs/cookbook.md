@@ -393,8 +393,10 @@ Input → Draft the note → Save it (write_file) → Confirm
 ```
 
 The model writes the text, the Tool node writes the file. `write_file` is not a
-read-only tool, so the run pauses and asks you before it happens — the approval
-card appears in the chat and the run resumes on your answer. This is the whole
+read-only tool, so by default the run pauses and asks you before it happens —
+the approval card appears in the chat and the run resumes on your answer. What
+is asked about is governed by the approval settings; the risk level is the
+tool's own. This is the whole
 point of the shape: the model decides *what*, you decide *whether*.
 
 **What to change.** The tool. Every tool declares a risk level, and that is

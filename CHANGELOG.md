@@ -214,6 +214,12 @@ details.
 
 ### Fixed
 
+- **Regenerating a documentation table and running `check` in one command no
+  longer fails.** The four `generate…` / `verify…` task pairs each read and
+  write the same file, and Gradle rejected the pair whenever both were asked
+  for at once — which is the natural way to use them. Contributors only; no
+  effect on the app.
+
 - **The `adb` examples for the external-automation contract could not work as
   written.** `adb shell` does not pass your arguments through — it joins them
   into one string and hands that to the phone's own shell, which splits it
