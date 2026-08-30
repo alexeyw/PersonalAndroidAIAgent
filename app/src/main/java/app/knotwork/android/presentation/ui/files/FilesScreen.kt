@@ -235,6 +235,7 @@ private suspend fun Context.stageAndShare(paths: List<String>, viewModel: FilesV
             if (ok) FileProvider.getUriForFile(this@stageAndShare, "$packageName.fileprovider", staged) else null
         }
     }
+    viewModel.messages.shareStaged(staged = uris.size, requested = paths.size)
     if (uris.isEmpty()) return
     val intent = if (uris.size == 1) {
         Intent(Intent.ACTION_SEND).apply {

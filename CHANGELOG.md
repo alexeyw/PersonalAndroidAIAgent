@@ -279,6 +279,12 @@ details.
   floor. The operation appeared to do nothing at all. They now surface as
   snackbars.
 
+  Sharing was worse than silent. A file that could not be prepared was dropped
+  from the selection without a word, so the share sheet opened carrying fewer
+  files than were picked; and when none could be prepared, no sheet opened
+  either — the tap did nothing at all. Both cases now say so, and the partial
+  one names how many of how many went.
+
 - **An imported pipeline can no longer be impossible to save.** The node
   configuration sheet still validated the temperature, top-P, token and timeout
   values of the on-device and cloud nodes, whose controls were removed in

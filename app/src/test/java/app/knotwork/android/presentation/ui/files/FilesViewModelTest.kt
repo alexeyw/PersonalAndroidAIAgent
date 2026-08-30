@@ -83,8 +83,14 @@ class FilesViewModelTest {
     @After
     fun tearDown() = Dispatchers.resetMain()
 
-    private fun build(): FilesViewModel =
-        FilesViewModel(listUseCase, previewUseCase, deleteUseCase, importUseCase, exportUseCase, relay, appContext)
+    private fun build(): FilesViewModel = FilesViewModel(
+        listUseCase,
+        previewUseCase,
+        deleteUseCase,
+        importUseCase,
+        exportUseCase,
+        FilesMessenger(relay, appContext),
+    )
 
     @Test
     fun `given listing succeeds when initialised then state is populated`() = runTest {
@@ -304,8 +310,6 @@ class FilesViewModelTest {
         coEvery { previewUseCase("a.txt") } throws IOException("disk fault")
         val vm = build()
         advanceUntilIdle()
-        val events = mutableListOf<FilesEvent>()
-        val job = launch(UnconfinedTestDispatcher(testScheduler)) { vm.events.collect { events += it } }
 
         vm.onRowClick("a.txt")
         advanceUntilIdle()
@@ -317,7 +321,6 @@ class FilesViewModelTest {
         // saw nothing at all.
         assertEquals(R.string.files_message_preview_failed, resolvedRes.captured)
         verify { relay.post(SNACKBAR_TEXT) }
-        job.cancel()
     }
 
     @Test
@@ -325,8 +328,6 @@ class FilesViewModelTest {
         coEvery { deleteUseCase(any()) } throws IOException("disk fault")
         val vm = build()
         advanceUntilIdle()
-        val events = mutableListOf<FilesEvent>()
-        val job = launch(UnconfinedTestDispatcher(testScheduler)) { vm.events.collect { events += it } }
         vm.requestDelete("a.txt")
 
         vm.confirmDelete()
@@ -335,7 +336,6 @@ class FilesViewModelTest {
         assertNull(vm.uiState.value.pendingDelete)
         assertEquals(R.string.files_message_delete_partial, resolvedRes.captured)
         verify { relay.post(SNACKBAR_TEXT) }
-        job.cancel()
     }
 
     private fun streamOf(content: String = "data"): InputStream = ByteArrayInputStream(content.toByteArray())
