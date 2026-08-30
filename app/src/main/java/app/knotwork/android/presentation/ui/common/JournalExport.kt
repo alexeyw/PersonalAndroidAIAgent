@@ -12,7 +12,9 @@ import timber.log.Timber
 import java.io.File
 import java.io.IOException
 import java.io.OutputStream
-import java.text.SimpleDateFormat
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
 
@@ -35,11 +37,23 @@ const val EXTERNAL_REQUESTS_EXPORT_STEM: String = "external-requests"
  */
 private const val JOURNAL_SHARE_DIR = "journal"
 
-/** Filesystem-safe timestamp for the export filename. */
-private val FILE_STAMP_FORMAT = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US)
+/**
+ * Filesystem-safe timestamp for the export filename.
+ *
+ * `DateTimeFormatter`, not `SimpleDateFormat`: these two formatters are shared by
+ * the in-app export (main thread) and the debug dump receiver (its own IO scope),
+ * and `SimpleDateFormat` is mutable and not thread-safe — two concurrent formats
+ * can interleave into a corrupted string. Immutable formatters remove the hazard
+ * rather than relying on the two callers never overlapping.
+ */
+private val FILE_STAMP_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss", Locale.US)
 
 /** Human-readable "generated at" label baked into the document header. */
-private val GENERATED_AT_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+private val GENERATED_AT_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss", Locale.US)
+
+/** Renders [at] in the device's own zone with [formatter]. */
+private fun format(formatter: DateTimeFormatter, at: Date): String =
+    formatter.format(LocalDateTime.ofInstant(at.toInstant(), ZoneId.systemDefault()))
 
 private const val TAG = "JournalExport"
 
@@ -57,7 +71,7 @@ private const val TAG = "JournalExport"
  * @param at Moment to label; defaults to now.
  * @return The label, e.g. `2026-08-30 21:30:00`.
  */
-fun journalGeneratedAtLabel(at: Date = Date()): String = GENERATED_AT_FORMAT.format(at)
+fun journalGeneratedAtLabel(at: Date = Date()): String = format(GENERATED_AT_FORMAT, at)
 
 /**
  * Builds the filename of a journal export: `<stem>-yyyyMMdd-HHmmss.json`.
@@ -72,7 +86,7 @@ fun journalGeneratedAtLabel(at: Date = Date()): String = GENERATED_AT_FORMAT.for
  * @param at Moment to stamp the name with; defaults to now.
  * @return The filename, extension included.
  */
-fun journalExportFileName(stem: String, at: Date = Date()): String = "$stem-${FILE_STAMP_FORMAT.format(at)}.json"
+fun journalExportFileName(stem: String, at: Date = Date()): String = "$stem-${format(FILE_STAMP_FORMAT, at)}.json"
 
 /**
  * Stages [json] as a real file and offers it to the system share sheet.

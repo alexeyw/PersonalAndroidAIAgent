@@ -6,6 +6,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -13,6 +14,20 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import app.knotwork.android.R
 import timber.log.Timber
+import java.io.IOException
+
+/**
+ * One outcome message waiting to be shown, tagged with the emission that produced
+ * it.
+ *
+ * The tag is the point: it makes two identical consecutive outcomes two distinct
+ * values, so the snackbar effect restarts for the second one instead of treating
+ * it as the same message it is already showing.
+ *
+ * @property sequence Monotonic emission counter.
+ * @property text The message to show.
+ */
+private data class PendingExportMessage(val sequence: Int, val text: UiText)
 
 /**
  * The two journal-export actions a screen hands to its top bar.
@@ -52,7 +67,15 @@ fun rememberJournalExportHandlers(
     // Outcomes are held as UiText and resolved in composition below, rather than
     // read off `Context` inside the collector: the `LocalContextGetResourceValueCall`
     // lint rule forbids that, and the count-bearing message needs a plural anyway.
-    var pendingMessage by remember { mutableStateOf<UiText?>(null) }
+    //
+    // Each is tagged with a sequence number, and that number — not the text — is
+    // what drives the snackbar. Keying on the text loses the second of two
+    // identical outcomes in a row (two failed saves, say): the key would not
+    // change, the effect would not restart, and the user would be told once about
+    // something that happened twice. Which is the exact silence this surface
+    // exists to avoid.
+    var pending by remember { mutableStateOf<PendingExportMessage?>(null) }
+    var emitted by remember { mutableIntStateOf(0) }
 
     val saveLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument(JOURNAL_EXPORT_MIME),
@@ -66,17 +89,22 @@ fun rememberJournalExportHandlers(
             // A provider that offered the document and then refused to open it.
             Timber.w(e, "Could not open the picked journal-export document")
             null
+        } catch (e: IOException) {
+            // `openOutputStream` declares FileNotFoundException; a provider that
+            // created the document and then lost it must not crash the screen.
+            Timber.w(e, "The picked journal-export document could not be opened")
+            null
         }
         if (stream != null) {
             delegate.saveTo(stream)
         } else {
-            pendingMessage = UiText(R.string.journal_export_save_failed)
+            pending = PendingExportMessage(++emitted, UiText(R.string.journal_export_save_failed))
         }
     }
 
     LaunchedEffect(delegate) {
         delegate.events.collect { event ->
-            pendingMessage = when (event) {
+            val text = when (event) {
                 is JournalExportEvent.Share -> {
                     val shared = shareJournalDocument(
                         context = context,
@@ -99,14 +127,13 @@ fun rememberJournalExportHandlers(
 
                 JournalExportEvent.RenderFailed -> UiText(R.string.journal_export_render_failed)
             }
+            if (text != null) pending = PendingExportMessage(++emitted, text)
         }
     }
 
-    val message = pendingMessage?.asString()
-    LaunchedEffect(message) {
-        val text = message ?: return@LaunchedEffect
-        snackbarHostState.showSnackbar(text)
-        pendingMessage = null
+    val message = pending?.text?.asString()
+    LaunchedEffect(pending?.sequence) {
+        snackbarHostState.showSnackbar(message ?: return@LaunchedEffect)
     }
 
     return remember(delegate, saveLauncher) {
