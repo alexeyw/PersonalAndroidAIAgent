@@ -113,6 +113,12 @@ class ExternalAutomationJournalRepositoryImpl @Inject constructor(private val da
         }
         .flowOn(dispatcher)
 
+    override suspend fun readAll(): List<ExternalAutomationJournalEntry> = absorbingStoreFailure(
+        { "External-automation journal readAll failed; returning empty snapshot" },
+    ) {
+        withContext(dispatcher) { dao.getAllOrderedByReceivedAt().mapNotNull { it.toDomainOrNull() } }
+    } ?: emptyList()
+
     override suspend fun applyRetention(olderThanEpochMs: Long, maxRecords: Int): Int {
         // Fail fast on a misconfigured cap: `maxRecords <= 0` makes the enforce-cap
         // DELETE keep zero rows and wipe the journal. A programming error, not a

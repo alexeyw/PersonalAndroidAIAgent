@@ -15,6 +15,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -38,7 +39,9 @@ import app.knotwork.android.domain.usecases.JournalTimestamp
 import app.knotwork.android.domain.usecases.TriggerHealthEvaluator
 import app.knotwork.android.domain.usecases.TriggerJournalGrouper
 import app.knotwork.android.domain.usecases.TriggerJournalView
+import app.knotwork.android.presentation.ui.common.JournalExportActionHandlers
 import app.knotwork.android.presentation.ui.common.asString
+import app.knotwork.android.presentation.ui.common.rememberJournalExportHandlers
 import app.knotwork.design.screens.triggers.TriggerConditionType
 import app.knotwork.design.screens.triggers.TriggerDeleteDialogContent
 import app.knotwork.design.screens.triggers.TriggerDeleteStrings
@@ -94,6 +97,11 @@ fun TriggersScreen(
     val uiState by viewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
+
+    // Built here, where the snackbar host lives, and passed down: the export
+    // reports every outcome on that host, including the ones nobody is looking at
+    // (a save into a folder the user then leaves).
+    val journalExport = rememberJournalExportHandlers(viewModel.journalExport, snackbarHostState)
 
     // Reading a connected Wi-Fi SSID needs fine location; request it the first time
     // the user scopes a trigger to specific networks. The SSID is stored regardless
@@ -162,7 +170,13 @@ fun TriggersScreen(
                 viewModel = viewModel,
                 nowMillis = nowMillis,
             )
-            else -> TriggersList(uiState = uiState, viewModel = viewModel, onBack = onBack, nowMillis = nowMillis)
+            else -> TriggersList(
+                uiState = uiState,
+                viewModel = viewModel,
+                onBack = onBack,
+                nowMillis = nowMillis,
+                journalExport = journalExport,
+            )
         }
 
         // Shared delete dialog — surfaces over whichever surface (list or detail)
@@ -178,13 +192,22 @@ fun TriggersScreen(
                 )
             }
         }
-        SnackbarHost(hostState = snackbarHostState)
+        // Bottom-centre, matching the request-journal screen: the two surfaces
+        // report the same journal-export outcomes, and a message that appears in a
+        // different corner on each reads as two different features.
+        SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
     }
 }
 
 /** The list surface + its delete dialog, shown when the editor is closed. */
 @Composable
-private fun TriggersList(uiState: TriggersUiState, viewModel: TriggersViewModel, onBack: () -> Unit, nowMillis: Long) {
+private fun TriggersList(
+    uiState: TriggersUiState,
+    viewModel: TriggersViewModel,
+    onBack: () -> Unit,
+    nowMillis: Long,
+    journalExport: JournalExportActionHandlers,
+) {
     val resolvedError = uiState.loadError?.asString()
     val fallbackError = stringResource(R.string.triggers_error_body)
     TriggersContent(
@@ -211,6 +234,8 @@ private fun TriggersList(uiState: TriggersUiState, viewModel: TriggersViewModel,
             onEditTrigger = viewModel::openEditTrigger,
             onDeleteTrigger = viewModel::requestDelete,
             onRetry = viewModel::retry,
+            onShareJournal = journalExport.onShare,
+            onSaveJournal = journalExport.onSave,
         ),
     )
 }
@@ -621,6 +646,8 @@ private fun triggersStrings(): TriggersStrings = TriggersStrings(
     healthHealthy = stringResource(R.string.triggers_health_healthy),
     healthOverdue = stringResource(R.string.triggers_health_overdue),
     healthLastRunFailed = stringResource(R.string.triggers_health_last_run_failed),
+    exportShareCd = stringResource(R.string.triggers_export_share_cd),
+    exportSaveCd = stringResource(R.string.triggers_export_save_cd),
 )
 
 @Composable

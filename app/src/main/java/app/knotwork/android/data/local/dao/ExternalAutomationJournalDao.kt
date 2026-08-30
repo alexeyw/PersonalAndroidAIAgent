@@ -184,6 +184,18 @@ interface ExternalAutomationJournalDao {
     fun observeAll(): Flow<List<ExternalAutomationRequestEntity>>
 
     /**
+     * Reads the whole journal once, newest request first.
+     *
+     * Deliberately the same `ORDER BY` as [observeAll] — the export and the screen
+     * describe one journal, and a row order that differed between them would make
+     * an exported file impossible to check against what its owner is looking at.
+     *
+     * @return Every stored row, newest first.
+     */
+    @Query("SELECT * FROM external_automation_requests ORDER BY receivedAt DESC, id ASC")
+    suspend fun getAllOrderedByReceivedAt(): List<ExternalAutomationRequestEntity>
+
+    /**
      * Deletes every record received before [cutoff].
      *
      * @param cutoff Age cutoff, epoch-millis.

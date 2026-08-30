@@ -9,11 +9,15 @@ import app.knotwork.android.domain.models.TriggerEvaluationVerdict
 import app.knotwork.android.domain.models.TriggerHealthInputs
 import app.knotwork.android.domain.models.TriggerRunOutcome
 import app.knotwork.android.domain.repositories.PipelineRepository
+import app.knotwork.android.domain.repositories.TriggerJournalRepository
 import app.knotwork.android.domain.repositories.TriggerRepository
+import app.knotwork.android.domain.usecases.BuildTriggerJournalExportUseCase
+import app.knotwork.android.domain.usecases.ExportTriggerJournalUseCase
 import app.knotwork.android.domain.usecases.ObserveTriggerHealthInputsUseCase
 import app.knotwork.android.domain.usecases.ObserveTriggerJournalUseCase
 import app.knotwork.android.domain.usecases.SaveTriggerUseCase
 import app.knotwork.android.domain.usecases.SyncTriggersUseCase
+import app.knotwork.android.presentation.ui.common.JournalExportEvent
 import app.knotwork.design.screens.triggers.TriggerConditionType
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -24,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -48,6 +53,14 @@ class TriggersViewModelTest {
     private lateinit var syncTriggers: SyncTriggersUseCase
     private lateinit var observeHealthInputs: ObserveTriggerHealthInputsUseCase
     private lateinit var observeJournal: ObserveTriggerJournalUseCase
+
+    /**
+     * The journal store behind the export. Mocked, but the export use case around
+     * it is real: the assertions below are about the document the screen hands
+     * out, and a mocked renderer could not tell whether it is the right one.
+     */
+    private lateinit var journalStore: TriggerJournalRepository
+    private lateinit var exportTriggerJournal: ExportTriggerJournalUseCase
 
     private val daily = trigger(
         id = "morning",
@@ -89,6 +102,9 @@ class TriggersViewModelTest {
         syncTriggers = mockk(relaxed = true)
         observeHealthInputs = mockk { every { this@mockk.invoke() } returns flowOf(emptyMap()) }
         observeJournal = mockk { every { this@mockk.invoke(any()) } returns flowOf(emptyList()) }
+        journalStore = mockk()
+        coEvery { journalStore.readAll() } returns emptyList()
+        exportTriggerJournal = ExportTriggerJournalUseCase(journalStore, BuildTriggerJournalExportUseCase())
     }
 
     @After
@@ -103,6 +119,7 @@ class TriggersViewModelTest {
         syncTriggers,
         observeHealthInputs,
         observeJournal,
+        exportTriggerJournal,
     )
 
     @Test
@@ -431,4 +448,82 @@ class TriggersViewModelTest {
 
         assertEquals(inputs, vm.uiState.value.healthInputs)
     }
+
+    // --- Journal export ----------------------------------------------------
+
+    @Test
+    fun `given several triggers when the journal is exported then every trigger's evaluations travel`() =
+        runTest(testDispatcher) {
+            coEvery { journalStore.readAll() } returns listOf(
+                evaluation(id = "e1", triggerId = "morning"),
+                evaluation(id = "e2", triggerId = "backup"),
+            )
+            val vm = viewModel()
+            val received = mutableListOf<JournalExportEvent>()
+            val collector = launch { vm.journalExportEvents.collect(received::add) }
+
+            vm.journalExport.share()
+            advanceUntilIdle()
+            collector.cancel()
+
+            // The action sits on the list, and the document is the whole journal —
+            // not the trigger a detail sheet happens to have open. A per-trigger
+            // export could not answer "was there a day with no evaluation at all?".
+            val event = received.single() as JournalExportEvent.Share
+            assertEquals(2, event.document.entryCount)
+            assertTrue(event.document.json.contains("\"triggerId\": \"morning\""))
+            assertTrue(event.document.json.contains("\"triggerId\": \"backup\""))
+        }
+
+    @Test
+    fun `given a trigger detail is open when the journal is exported then the export is still unfiltered`() =
+        runTest(testDispatcher) {
+            coEvery { journalStore.readAll() } returns listOf(
+                evaluation(id = "e1", triggerId = "morning"),
+                evaluation(id = "e2", triggerId = "backup"),
+            )
+            val vm = viewModel()
+            advanceUntilIdle()
+            vm.onRowClick("morning")
+            advanceUntilIdle()
+            val received = mutableListOf<JournalExportEvent>()
+            val collector = launch { vm.journalExportEvents.collect(received::add) }
+
+            vm.journalExport.share()
+            advanceUntilIdle()
+            collector.cancel()
+
+            // The open detail narrows what is *rendered*, never what is exported.
+            assertEquals(2, (received.single() as JournalExportEvent.Share).document.entryCount)
+        }
+
+    @Test
+    fun `given an unreadable journal when exported then an empty document is produced rather than a failure`() =
+        runTest(testDispatcher) {
+            // The store degrades a storage error to an empty snapshot; the export
+            // inherits that, so a broken database yields an empty file instead of
+            // crashing the screen the user opened to diagnose it.
+            coEvery { journalStore.readAll() } returns emptyList()
+            val vm = viewModel()
+            val received = mutableListOf<JournalExportEvent>()
+            val collector = launch { vm.journalExportEvents.collect(received::add) }
+
+            vm.journalExport.share()
+            advanceUntilIdle()
+            collector.cancel()
+
+            val event = received.single() as JournalExportEvent.Share
+            assertEquals(0, event.document.entryCount)
+            assertTrue(event.document.json.contains("\"totalEvaluations\": 0"))
+        }
+
+    private fun evaluation(id: String, triggerId: String) = TriggerEvaluation(
+        id = id,
+        triggerId = triggerId,
+        evaluatedAt = 42L,
+        source = TriggerEvaluationSource.POLL,
+        verdict = TriggerEvaluationVerdict.Fired,
+        runId = "run-$id",
+        outcome = TriggerRunOutcome.Success,
+    )
 }

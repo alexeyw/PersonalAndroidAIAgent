@@ -190,4 +190,9 @@
     <string name="triggers_journal_time_minutes_ago">%1$dm ago</string>
     <string name="triggers_journal_day_today">Today</string>
     <string name="triggers_journal_day_yesterday">Yesterday</string>
+
+    <!-- Evaluation-journal export. On the list, not on a trigger's detail: the
+         document is the whole journal, every trigger at once. -->
+    <string name="triggers_export_share_cd">Share the evaluation journal</string>
+    <string name="triggers_export_save_cd">Save the evaluation journal</string>
 </resources>

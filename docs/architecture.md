@@ -1661,7 +1661,27 @@ flowchart TD
     Queue --> Finish["PipelineRunRepositoryImpl.finishRun<br/>(terminal transition)"]
     Finish -.->|"outcome by runId<br/>(origin = TRIGGER only)"| Journal
     Journal --> Health["TriggerHealthEvaluator / TriggerJournalGrouper<br/>→ health badge + detail journal"]
+    Journal --> Export["ExportTriggerJournalUseCase<br/>(readAll + render)"]
+    Export --> Debug["TriggerJournalDumpReceiver<br/>(src/debug, adb → soak file)"]
+    Export --> InApp["Share sheet / SAF document<br/>(any build, explicit user action)"]
 ```
+
+**Getting the journal out.** The renderer has exactly one caller-facing seam,
+`ExportTriggerJournalUseCase`, and both doors go through it: the debug-only
+`TriggerJournalDumpReceiver` (adb, during a soak run where the app is never
+opened) and the two top-bar actions on the Triggers list, which exist on a
+release build as well. Filename and `generatedAt` formatting are shared too, so
+the two produce the identical document and one parser reads both — the property
+`JournalExportRoundTripTest` pins.
+
+The export is the whole journal rather than the open trigger's slice, which is
+why the action sits on the list and not on the detail screen: the questions a
+journal is read for span triggers ("was there a day with no evaluation at
+all?"). The external-request journal — the entry-surface screen described
+earlier in this section — carries the same pair of actions over its own
+format, from the same catalog component. Nothing about a *run* travels in either document — the
+journals never held it — and no file on the path may import a network client
+(`JournalExportNoNetworkKonsistTest`).
 
 ---
 

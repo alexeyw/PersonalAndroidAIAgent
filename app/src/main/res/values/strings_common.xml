@@ -70,4 +70,19 @@
     <!-- Prompt preview bottom sheet (reused across orchestrator + prompts) -->
     <string name="prompt_preview_title">Prompt preview</string>
     <string name="prompt_preview_variable_not_found">Variable not found</string>
+
+    <!-- Journal export (shared by the trigger journal and the external-request
+         journal: one operation, so one set of words for its outcomes). -->
+    <string name="journal_export_chooser_title">Share journal</string>
+    <string name="journal_export_share_failed">No app on this phone can receive the file</string>
+    <string name="journal_export_save_failed">Couldn\'t save the journal</string>
+    <!-- Distinct from the two above: nothing was produced to save or share. -->
+    <string name="journal_export_render_failed">Couldn\'t read the journal</string>
+    <!-- The count is in the message on purpose: an export of an empty journal
+         produces a real file, so only the number tells the reader there was
+         nothing in it. -->
+    <plurals name="journal_export_saved">
+        <item quantity="one">Saved %1$d entry</item>
+        <item quantity="other">Saved %1$d entries</item>
+    </plurals>
 </resources>

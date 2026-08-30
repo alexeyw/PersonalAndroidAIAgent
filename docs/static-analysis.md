@@ -367,6 +367,7 @@ flag them with spurious, environment-dependent violations.
 | `FirebaseIsolationKonsistTest`     | No file in the shared `main` source set imports the Firebase SDK, so the `foss` build is provably free of it. |
 | `UsageTelemetryNoNetworkKonsistTest` | No file on the local usage-telemetry path imports a network client. The statistics stay on-device. |
 | `PromptPackNoNetworkKonsistTest`   | No file on the prompt-pack path imports a network client — a pack is imported from a file the user picked, never fetched (see below). |
+| `JournalExportNoNetworkKonsistTest` | No file on the journal-export path imports a network client — the trigger and external-request journals leave the device only through the share sheet or a file the user picked (see below). |
 | `TabRootEntryGuardTest`            | A bottom-nav tab root is entered as a tab switch, never pushed onto another subtree's back stack. |
 | `InstrumentedTestExclusionGuardTest` | The roster of device-only instrumented tests, and the annotation the emulator workflow excludes by, stay in step. |
 
@@ -384,8 +385,9 @@ catch: reintroducing a `domain -> data` import (or an `android.*` import in
 `domain`) turns both `LayerDependencyKonsistTest` and
 `DomainPurityKonsistTest` red — verified during the suite's introduction.
 
-**The two no-network rules, and the trap they share.** Both
-`UsageTelemetryNoNetworkKonsistTest` and `PromptPackNoNetworkKonsistTest`
+**The three no-network rules, and the trap they share.**
+`UsageTelemetryNoNetworkKonsistTest`, `PromptPackNoNetworkKonsistTest` and
+`JournalExportNoNetworkKonsistTest`
 select their files by name and path, and a filter of that shape goes stale in
 silence: a new file on the same logical path, named something the filter does
 not match, is simply unguarded and nothing says so. The prompt-pack rule closes
@@ -397,13 +399,24 @@ that names a prompt pack falls outside the guarded set. The rule to follow when
 adding to either surface is still the cheap one: name the new file **into** the
 guard rather than widening the filter until it matches everything.
 
-`android.net` is deliberately not on the forbidden list of the prompt-pack
-rule. The file picker legitimately hands the import path an `android.net.Uri`,
-and a rule that has to be suppressed on its first day is not a rule.
+The journal-export rule takes the same two instruments and adds a third, after
+the coverage test earned its keep on its first run: a name-only filter left the
+two `Export…JournalUseCase`s and both journal screens unguarded, because none of
+them carries the export token in its own name. The filter now also matches on
+*imports* containing that token, and a third test pins the token to the real
+declarations' names — so a rename fails loudly instead of quietly emptying the
+guarded set.
 
-Both rules are pinned to `app/src/main`, so a file added under a `full` or
-`foss` flavour source set is outside their scope. Neither surface has one
-today.
+`android.net` is deliberately not on the forbidden list of the prompt-pack or
+journal-export rules. The file picker legitimately hands both paths an
+`android.net.Uri`, and a rule that has to be suppressed on its first day is not
+a rule.
+
+All three rules are pinned to `app/src/main`, so a file added under a `full` or
+`foss` flavour source set is outside their scope. No surface has one today. The
+same bound puts `TriggerJournalDumpReceiver` (in `src/debug`) outside the
+journal-export rule — acceptably, since it exists only in debuggable builds and
+renders its document through the guarded seam the in-app export uses.
 
 ---
 

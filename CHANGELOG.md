@@ -15,6 +15,21 @@ details.
 
 ### Added
 
+- **Both journals can now leave the phone — on a release build.** The Triggers
+  list and the External automation request journal each carry two actions:
+  share the journal as a JSON file, or save it to a folder you pick. Until now
+  the trigger journal could only be extracted by a diagnostic that exists in
+  debug builds alone, so on an installed release there was no way to read back
+  what the app had done in the background — which is precisely the build the
+  question comes up on.
+
+  The trigger export is the whole journal, every trigger at once, because the
+  question it answers is usually about a gap rather than a row. Both files
+  carry the journal and nothing else: no message a run was given, no answer it
+  produced. Neither path touches the network, and a build check now enforces
+  that rather than a comment claiming it. The file is byte-identical to what
+  the debug diagnostic writes, so one parser reads both.
+
 - **A pipeline cookbook — [`docs/cookbook.md`](docs/cookbook.md).** Every node
   type in one place: what it does, its ports, which blocks of the run's context
   it is given, and — first, because it is what you came for — what decides how
