@@ -242,12 +242,12 @@ Paths below are relative to `src/main/java/app/knotwork/design/`.
   - `about/` - About page — content + view-state.
     - `AboutContent.kt` - hero brand mark + version / license / acknowledgments / privacy cards in a scrollable `LazyColumn`.
     - `AboutViewState.kt` - app name / version / build / commit SHA / license / acknowledgments / privacy render contract.
-  - `automation/` - Automation pages — triggers and the external-automation surface.
+  - `automation/` - External-automation pages — the consent dialog and the request journal. Triggers live in `triggers/`.
     - `ExternalAutomationConsentDialog.kt` - `ExternalAutomationConsentContent`, the stateless card body of the consent moment raised when the master switch is turned on (the host wraps it in a `Dialog`), plus its `ExternalAutomationConsentStrings` copy contract. The body scrolls under a height ceiling so the two buttons stay reachable at font-scale 200 %.
     - `ExternalAutomationJournalContent.kt` - external-automation request journal: posture banner (off / on-but-unbound / accepting), the collapsible wire-contract block, and a per-day timeline of inbound requests with a status tile, the refusal reason as a sentence, the claimed-versus-attested sender line and a repeat-count badge.
     - `ExternalAutomationJournalViewState.kt` - render contract: the catalog mirrors of the domain status (5) and rejection-reason (12) dictionaries, the sender-attestation kind, the per-day groups, the wire-key rows, and the whole localisable copy surface.
     - `ExternalAutomationPreview.kt` - deterministic fixtures for the journal states, including the caller looping against a switched-off contract and the request that tried to redirect its answer at a third package.
-  - `chat/` - Chat pages — home, archive, composer and console.
+  - `chat/` - Chat home page, its navigation drawer and their fixtures. The archive is `chatarchive/`; the composer and console atoms live in `components/`.
     - `ChatHomeContent.kt` - chat surface: message history, composer, console pane, and HITL / clarification / error overlays.
     - `ChatHomeContentPreview.kt` - Android Studio `@Preview` group for the chat variants in both themes.
     - `ChatHomeDrawer.kt` - the alternate-nav drawer overlay extracted from `ChatHomeContent.kt`: sessions list, `+ New chat` pill, the thread row (`⋮` menu = Rename / Archive / — / Delete chat, plus a one-action Archive swipe and TalkBack custom actions; drops its status dot at font-scale 200 %) and the footer rows (`Archived chats` only when the count is positive, `Import chat`, `Settings`).
@@ -272,7 +272,7 @@ Paths below are relative to `src/main/java/app/knotwork/design/`.
     - `MemoryContent.kt` - Memory Manager surface (stats header, category chips, semantic search, provenance breakdown, entry cards).
     - `MemoryType.kt` - per-element typography overrides transcribed from the Memory Manager design spec.
     - `MemoryViewState.kt` - visual-state enum + sort/filter enums and segment / stat / category / row models.
-  - `models/` - Local-models and discovery pages.
+  - `models/` - Local-models page and the performance card. Model discovery is `discover/`.
     - `ModelsContent.kt` - Models surface (active model card, Hugging Face auth, preset rows with download progress).
     - `ModelsViewState.kt` - visual-state enum + active-card / preset-row models with download status.
     - `PerformanceCard.kt` - the Performance card below the active-model card: rolling-average TTFT / decode speed / peak memory for the active model, and the controlled benchmark with its segmented progress track.
@@ -286,11 +286,11 @@ Paths below are relative to `src/main/java/app/knotwork/design/`.
   - `onboarding/` - Onboarding pages.
     - `OnboardingContent.kt` - four-step pager (Welcome / LiteRtModel / CloudKeys / Ready) with progress bar and per-step CTAs.
     - `OnboardingViewState.kt` - step enum + model options (Gemma4E2B / Gemma4E4B / CustomUrl).
-  - `pipelines/` - Pipeline-library and preset-gallery pages.
+  - `pipelines/` - Pipeline-library page, its view-state and preview fixtures.
     - `PipelineLibraryContent.kt` - pipeline list with sort/filter, per-row overflow, default/active badges, swipe-reveal.
     - `PipelineLibraryPreview.kt` - deterministic preview fixtures (4 sample pipelines) for snapshots.
     - `PipelineLibraryViewState.kt` - visual-state enum + filter enum + pipeline-row model.
-  - `prompts/` - Prompt-library pages.
+  - `prompts/` - Prompt-library page and the prompt-preset picker sheet.
     - `PromptLibraryContent.kt` - prompt library (tabbed categories, card list, FAB, optional edit-sheet overlay, snackbar host slot). The top bar carries the **import** action; each card's footer line carries `used by N` plus Preview · Duplicate · Edit · overflow (Export + Delete), or Preview · Duplicate · Export on a read-only row. Two layout rules are load-bearing: the caption yields and the icon cluster never does, so the overflow — and with it the only route to Delete — survives font scale 200 %; and the top bar drops its subtitle rather than clipping its title at the same scale. An empty **library** (as opposed to an empty category) hides the tabs and the FAB and offers Import / New instead.
     - `PromptLibraryViewState.kt` - visual-state enum + prompt-row / editor state + category / variable tracking + the import/export callbacks.
     - `PromptPresetPickerSheet.kt` - modal preset picker by `NodeType` (Bundled / Mine tabs, searchable rows, tag filter).
@@ -328,7 +328,7 @@ Paths below are relative to `src/main/java/app/knotwork/design/`.
   - `taskmonitor/` - Task-monitor page.
     - `TaskMonitorContent.kt` - task list (filter row, task cards, expandable detail sheet with logs + actions), plus the top-bar "stop all scheduled tasks" action and its confirmation. The action appears only when something is actually stoppable; the confirm is a plain dialog rather than the typed-keyword one, since this is recoverable and is itself a recovery action.
     - `TaskMonitorViewState.kt` - visual-state enum + filter enum + task row / detail / status-lifecycle models, plus the scheduled-task count and bulk-cancel confirmation flag.
-  - `tools/` - Tools pages — tool list, MCP server editor, domain allowlist.
+  - `tools/` - Tools page and the `http_request` domain-allowlist editor.
     - `AllowedDomainsContent.kt` - pushed editor for the `http_request` host allowlist — the gesture that opts the device into outbound HTTP. Empty state (globe hero, the tool-is-off explanation, an amber risk note) and populated state (explainer + host list with per-row removal), mirroring the MCP-server editor's structure.
     - `AllowedDomainsViewState.kt` - screen state plus the sealed `AddHostState` feedback for the add-a-host field (`Idle` / `NormalizedPreview` / `Duplicate` / `Invalid`); only `NormalizedPreview` enables **Add**. Normalisation itself is the host's (`HttpRequestPolicy`) job.
     - `ToolsContent.kt` - Tools surface (built-in AppFunctions section + MCP servers with expandable tool lists and connection states).

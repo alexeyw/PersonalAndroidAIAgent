@@ -11,7 +11,7 @@ removing or reordering one by hand is undone by the next run.
 Only Kotlin files appear inside the generated blocks.
 
 <!-- AUTO-GEN:FILE_MAP -->
-- `architecture/` - Konsist architecture guards — the Clean-Architecture and no-network rules enforced as tests.
+- `architecture/` - Structural guards run as tests: Konsist layer and domain-purity rules, Firebase isolation, the usage-telemetry no-network rule, the tab-root entry guard and the instrumented-test exclusion roster.
   - `ArchitectureScope.kt` - Shared Konsist scope for the architecture guard suite.
   - `ComposableUseCaseKonsistTest.kt` - Konsist guard for the presentation rule "Composables observe a ViewModel / UiState, never the use-case layer directly".
   - `DomainPurityKonsistTest.kt` - Konsist guard enforcing the strictest project rule for the `domain` layer: it is pure Kotlin with **zero** Android/framework imports, so it can be compiled and unit-tested off-device.
@@ -211,7 +211,7 @@ Only Kotlin files appear inside the generated blocks.
     - `PipelineJsonSerializerTest.kt` - Tests for `PipelineJsonSerializer`.
     - `PipelinePresetCatalogValidationTest.kt` - Catalogue-level validation for the bundled pipeline-preset JSON files that ship under `app/src/main/assets/presets/pipelines/`.
     - `PipelinePresetJsonSerializerTest.kt` - Tests for `PipelinePresetJsonSerializer`.
-  - `preset/` - Tests for the bundled-preset loading and revision handling.
+  - `preset/` - Integration tests over the bundled pipeline and prompt presets, the showcase compositions, skill report writing and nested-pipeline resume.
     - `NestedResumeIntegrationTest.kt` - End-to-end integration test for **resume across a sub-pipeline boundary** — the nested human-in-the-loop scenario the composition feature has to get right (the scenario behind the nested-HITL fix).
     - `PipelinePresetIntegrationTest.kt` - End-to-end integration test for the **pipeline-preset** path
     - `PromptPresetIntegrationTest.kt` - End-to-end integration test for the **prompt-preset** path
@@ -227,7 +227,7 @@ Only Kotlin files appear inside the generated blocks.
   - `promptpack/` - Tests for prompt-pack parsing and its frontmatter.
     - `PromptPackFrontmatterParserTest.kt` - Pins the accepted grammar of `PromptPackFrontmatterParser`.
     - `PromptPackMarkdownSerializerTest.kt` - Contract tests for `PromptPackMarkdownSerializer`.
-  - `report/` - Tests for the diagnostic report builders.
+  - `report/` - Tests for the content-report composer.
     - `ContentReportComposerTest.kt` - Unit tests for `ContentReportComposer`.
   - `services/` - Tests for the domain service interfaces and their pure helpers.
     - `ChatHistoryCompressionCoordinatorTest.kt` - Unit tests for `ChatHistoryCompressionCoordinator`.
@@ -353,9 +353,9 @@ Only Kotlin files appear inside the generated blocks.
       - `ImportFileToWorkspaceUseCaseTest.kt` - Verifies `ImportFileToWorkspaceUseCase`'s collision policy, basename sanitisation and free-name logic.
       - `ListWorkspaceUseCaseTest.kt` - Verifies that `ListWorkspaceUseCase` bundles the listing + usage and short-circuits on failure.
       - `PreviewWorkspaceFileUseCaseTest.kt` - Verifies `PreviewWorkspaceFileUseCase` delegates with the fixed preview budget.
-- `editor/` - Tests over the browser pipeline editor — the generated constants it mirrors from the domain sources.
+- `editor/` - Guard over the browser pipeline editor: its context configuration must still mirror the domain sources.
   - `BrowserEditorContextConfigGuardTest.kt` - Drift guard for the browser pipeline editor's hand-maintained `defaultContextConfig(typeId)` JS function in `pipeline-editor.html`.
-- `integration/` - Tests that wire several real components together rather than mocking across a seam.
+- `integration/` - Background-run integration tests wiring real components end to end — the trigger path, the external-automation path and the autonomy cycle.
   - `BackgroundAutonomyCycleIntegrationTest.kt` - End-to-end JVM integration test of the background-autonomy cycle:
   - `ExternalAutomationBackgroundRunIntegrationTest.kt` - End-to-end JVM integration test of the **external request → background run → callback** arc: the entry point another app on the device broadcasts to.
   - `TriggerBackgroundRunIntegrationTest.kt` - End-to-end JVM integration test of the **automation-trigger → background run → notification → result-in-chat** arc — the privacy-sensitive surface phase 36 adds on top of the persisted background-run infrastructure.
@@ -388,7 +388,7 @@ Only Kotlin files appear inside the generated blocks.
     - `common/` - Tests for the shared presentation helpers.
       - `RunTerminationCopyMapperTest.kt` - Guards the single vocabulary of a stopped run.
       - `UiTextTest.kt` - Unit tests for `UiText`.
-    - `components/` - Tests for the app-side composables that are not in `:catalog`.
+    - `components/` - Tests for the pure helpers behind the app-side composables.
       - `TextFieldValueExtTest.kt` - Unit tests for `insertAtCursor`.
     - `discover/` - Tests for the model-discovery surface.
       - `DiscoverDetailViewModelTest.kt` - Unit tests for `DiscoverDetailViewModel`.

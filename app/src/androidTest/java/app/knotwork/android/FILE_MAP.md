@@ -93,6 +93,6 @@ Only Kotlin files appear inside the generated blocks.
       - `ToolsViewModelMockFactory.kt` - Mocked `ToolsViewModel` for screen tests, plus `AgentTool` / MCP snapshot samples built per risk classification.
     - `triggers/` - Compose tests for the triggers surface.
       - `TriggersScreenTest.kt` - Compose happy-path for the Triggers surface: starting from the empty state, create a trigger, bind a pipeline, leave it enabled, save, and confirm the new trigger appears in the list.
-- `testing/` - Shared instrumented-test infrastructure, including the emulator-exclusion annotation.
+- `testing/` - The `@DeviceOnlyInstrumentedTest` annotation, which names an instrumented test that cannot produce a meaningful verdict on an emulator.
   - `DeviceOnlyInstrumentedTest.kt` - Marks an instrumented test that **cannot produce a meaningful verdict on an emulator** and is therefore excluded from every automated CI run by name.
 <!-- /AUTO-GEN:FILE_MAP -->
