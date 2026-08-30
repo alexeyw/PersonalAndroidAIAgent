@@ -24,6 +24,8 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
 
 /**
  * Shared plumbing of the documentation checks that read the Markdown set.
@@ -164,7 +166,7 @@ abstract class ReportExternalDocLinksTask : AbstractDocsScanTask() {
             .connectTimeout(timeout)
             .followRedirects(HttpClient.Redirect.NORMAL)
             .build()
-        val outcomes = targets.map { target -> probe(client, timeout, target) }
+        val outcomes = probeAll(client, timeout, targets)
         val report = ExternalLinkReport.render(outcomes)
         val file = reportFile.get().asFile
         file.parentFile.mkdirs()
@@ -173,6 +175,37 @@ abstract class ReportExternalDocLinksTask : AbstractDocsScanTask() {
         logger.lifecycle("Probed ${outcomes.size} external URL(s); $failures did not answer. Report: ${file.path}")
         for (outcome in outcomes.filterNot { it.ok }) {
             logger.lifecycle("  ${outcome.status}  ${outcome.url}  (${outcome.references.joinToString(", ")})")
+        }
+    }
+
+    /**
+     * Probes every URL, a few at a time.
+     *
+     * Concurrent rather than sequential because of the worst case, not the
+     * common one: a runner with no egress times out on every probe, and one
+     * request after another that is 45 URLs times two requests times the
+     * timeout — half an hour, against a job budget of twenty minutes. The job
+     * would be killed and report nothing, which looks like a broken check
+     * rather than the unreachable network it is. A small fixed pool bounds
+     * that; it is deliberately small, since the point is a bounded wait, not
+     * load on anybody's server.
+     *
+     * @param client The shared HTTP client.
+     * @param timeout Per-request timeout.
+     * @param targets Every distinct URL.
+     * @return One outcome per target, in the order they were given.
+     */
+    private fun probeAll(
+        client: HttpClient,
+        timeout: Duration,
+        targets: List<ExternalLinkReport.Target>,
+    ): List<ExternalLinkReport.Outcome> {
+        if (targets.isEmpty()) return emptyList()
+        val pool = Executors.newFixedThreadPool(minOf(PROBE_CONCURRENCY, targets.size))
+        return try {
+            pool.invokeAll(targets.map { target -> Callable { probe(client, timeout, target) } }).map { it.get() }
+        } finally {
+            pool.shutdown()
         }
     }
 
@@ -238,6 +271,9 @@ abstract class ReportExternalDocLinksTask : AbstractDocsScanTask() {
 
         /** Sent so servers that reject unknown clients answer the probe. */
         const val USER_AGENT = "knotwork-docs-link-report"
+
+        /** How many URLs are probed at once. */
+        const val PROBE_CONCURRENCY = 8
     }
 }
 
