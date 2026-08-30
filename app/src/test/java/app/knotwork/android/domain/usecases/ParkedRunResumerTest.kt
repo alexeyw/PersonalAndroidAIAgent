@@ -14,7 +14,6 @@ import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
-import app.knotwork.android.domain.services.RunOutcomeAnnouncer
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -43,7 +42,6 @@ class ParkedRunResumerTest {
     private lateinit var clarificationNotifier: ClarificationNotifier
     private lateinit var resumePipelineRunUseCase: ResumePipelineRunUseCase
     private lateinit var recordTriggerHitlEvent: RecordTriggerHitlEventUseCase
-    private lateinit var runOutcomeAnnouncer: RunOutcomeAnnouncer
     private lateinit var resumer: ParkedRunResumer
 
     @Before
@@ -55,7 +53,6 @@ class ParkedRunResumerTest {
         clarificationNotifier = mockk(relaxed = true)
         resumePipelineRunUseCase = mockk()
         recordTriggerHitlEvent = mockk(relaxed = true)
-        runOutcomeAnnouncer = mockk(relaxed = true)
         resumer = ParkedRunResumer(
             pendingInteractionRepository = pendingInteractionRepository,
             pipelineRunRepository = pipelineRunRepository,
@@ -64,7 +61,6 @@ class ParkedRunResumerTest {
             clarificationNotifier = clarificationNotifier,
             resumePipelineRunUseCase = resumePipelineRunUseCase,
             recordTriggerHitlEvent = recordTriggerHitlEvent,
-            runOutcomeAnnouncer = runOutcomeAnnouncer,
         )
         coEvery { settingsRepository.backgroundApprovalWindowHours } returns flowOf(24)
         coEvery { resumePipelineRunUseCase("run-1") } returns ResumeOutcome.Resumed

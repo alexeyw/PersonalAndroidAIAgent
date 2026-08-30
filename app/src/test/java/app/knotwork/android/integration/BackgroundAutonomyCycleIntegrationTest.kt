@@ -327,6 +327,7 @@ class BackgroundAutonomyCycleIntegrationTest {
             triggerJournal,
             mockk(relaxed = true),
             mockk(relaxed = true),
+            mockk(relaxed = true),
         )
         val traceRepository = RunTraceRepositoryImpl(database.traceStepDao())
             .apply { dispatcher = testDispatcher }
@@ -439,7 +440,6 @@ class BackgroundAutonomyCycleIntegrationTest {
             pipelineRunRepository = runRepository,
             runTraceRepository = traceRepository,
             attachmentStore = mockk(relaxed = true),
-            runOutcomeAnnouncer = mockk(relaxed = true),
         ).apply {
             dispatcher = testDispatcher
             // The no-progress valve is disabled here: this harness advances a
@@ -465,7 +465,6 @@ class BackgroundAutonomyCycleIntegrationTest {
             clarificationNotifier,
             resumeRun,
             mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
-            mockk(relaxed = true),
         )
         return ProcessHarness(
             taskQueueManager = taskQueueManager,

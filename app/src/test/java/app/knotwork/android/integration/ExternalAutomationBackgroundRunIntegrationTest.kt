@@ -413,6 +413,7 @@ class ExternalAutomationBackgroundRunIntegrationTest {
             triggerJournal,
             externalJournal,
             externalCallback,
+            mockk(relaxed = true),
         )
         val traceRepository = RunTraceRepositoryImpl(database.traceStepDao())
             .apply { dispatcher = testDispatcher }
@@ -522,7 +523,6 @@ class ExternalAutomationBackgroundRunIntegrationTest {
             pipelineRunRepository = runRepository,
             runTraceRepository = traceRepository,
             attachmentStore = mockk(relaxed = true),
-            runOutcomeAnnouncer = mockk(relaxed = true),
         ).apply {
             dispatcher = testDispatcher
             // The no-progress valve is disabled here: this harness advances a
@@ -548,7 +548,6 @@ class ExternalAutomationBackgroundRunIntegrationTest {
             clarificationNotifier,
             resumeRun,
             recordTriggerHitlEvent,
-            mockk(relaxed = true),
         )
         return ProcessHarness(
             scheduler = QueueBridgeScheduler(AgentOrchestratorUseCase(taskQueueManager)),

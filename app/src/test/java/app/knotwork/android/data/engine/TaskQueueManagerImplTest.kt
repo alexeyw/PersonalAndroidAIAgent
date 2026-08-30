@@ -25,7 +25,6 @@ import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.AttachmentStore
-import app.knotwork.android.domain.services.RunOutcomeAnnouncer
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -68,7 +67,6 @@ class TaskQueueManagerImplTest {
     private lateinit var pipelineRunRepository: PipelineRunRepository
     private lateinit var runTraceRepository: RunTraceRepository
     private lateinit var attachmentStore: AttachmentStore
-    private lateinit var runOutcomeAnnouncer: RunOutcomeAnnouncer
 
     private lateinit var taskQueueManager: TaskQueueManagerImpl
 
@@ -83,7 +81,6 @@ class TaskQueueManagerImplTest {
         pipelineRunRepository = mockk(relaxed = true)
         runTraceRepository = mockk(relaxed = true)
         attachmentStore = mockk(relaxed = true)
-        runOutcomeAnnouncer = mockk(relaxed = true)
 
         // Baseline library: a single pipeline marked as the user default, so
         // tests that exercise unrelated behaviour (eviction, cancellation)
@@ -100,7 +97,6 @@ class TaskQueueManagerImplTest {
             pipelineRunRepository = pipelineRunRepository,
             runTraceRepository = runTraceRepository,
             attachmentStore = attachmentStore,
-            runOutcomeAnnouncer = runOutcomeAnnouncer,
         ).apply {
             dispatcher = testDispatcher
         }
@@ -846,77 +842,6 @@ class TaskQueueManagerImplTest {
             val state = taskQueueManager.observeTaskState(sessionId).first()
             assertTrue("Expected Idle after park, got $state", state is AgentOrchestratorState.Idle)
         }
-
-    // endregion
-
-    // region Announcing the outcome in the chat
-
-    /**
-     * The reported defect: a run that ended while the app was in the background
-     * left the thread showing the user's message and no reply, because the
-     * outcome existed only as ViewModel state. It has to be written by whatever
-     * settled the run, which is here.
-     */
-    @Test
-    fun `given an engine error with a typed reason then the chat is told with that reason`() = runTest {
-        val reason = RunTerminationReason.StepCeiling(limit = 15, spent = 15)
-        every { graphExecutionEngine.invoke(any(), any(), any(), any(), any()) } returns
-            flowOf(AgentOrchestratorState.Error("over the cap", reason))
-
-        val task = AgentTask(sessionId = "session_announce_reason", prompt = "p")
-        taskQueueManager.enqueueTask(task)
-        advanceUntilIdle()
-
-        coVerify {
-            runOutcomeAnnouncer.announce("session_announce_reason", PipelineRunStatus.FAILED, reason, "over the cap")
-        }
-    }
-
-    @Test
-    fun `given the scope is cancelled mid-run then the chat is told the run was stopped`() = testScope.runTest {
-        // Cancellation reaches the record through `finally`, which is also the
-        // path a killed process takes. It is not a failure, and the line the
-        // user reads must not call it one.
-        every { graphExecutionEngine.invoke(any(), any(), any(), any()) } returns flow {
-            emit(AgentOrchestratorState.Loading)
-            awaitCancellation()
-        }
-        val task = AgentTask(sessionId = "session_announce_cancel", prompt = "p")
-        taskQueueManager.enqueueTask(task)
-        // `runCurrent`, not `advanceUntilIdle`, for the reason the record-level
-        // cancellation test above gives: the run is deliberately silent, and
-        // skipping virtual time forward lets the no-progress valve settle it as
-        // FAILED before the cancellation under test lands.
-        runCurrent()
-
-        taskQueueManager.scope.cancel()
-        advanceUntilIdle()
-
-        coVerify {
-            runOutcomeAnnouncer.announce(
-                "session_announce_cancel",
-                PipelineRunStatus.CANCELLED,
-                null,
-                null,
-            )
-        }
-    }
-
-    @Test
-    fun `given the engine parks the run then the chat is not told anything`() = testScope.runTest {
-        // A parked run is waiting, not finished. Announcing here would put an
-        // epitaph above a question the user is still being asked.
-        every { graphExecutionEngine.invoke(any(), any(), any(), any()) } returns flow {
-            emit(AgentOrchestratorState.Loading)
-            emit(AgentOrchestratorState.SuspendedInBackground(PendingInteractionKind.APPROVAL))
-        }
-
-        val task = AgentTask(sessionId = "session_announce_park", prompt = "p")
-        taskQueueManager.enqueueTask(task)
-        advanceUntilIdle()
-
-        coVerify(exactly = 0) { runOutcomeAnnouncer.announce(any(), any(), any(), any()) }
-    }
 
     // endregion
 

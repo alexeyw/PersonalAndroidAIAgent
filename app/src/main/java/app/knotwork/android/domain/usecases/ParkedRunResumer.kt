@@ -11,7 +11,6 @@ import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
-import app.knotwork.android.domain.services.RunOutcomeAnnouncer
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
@@ -33,7 +32,6 @@ class ParkedRunResumer @Inject constructor(
     private val clarificationNotifier: ClarificationNotifier,
     private val resumePipelineRunUseCase: ResumePipelineRunUseCase,
     private val recordTriggerHitlEvent: RecordTriggerHitlEventUseCase,
-    private val runOutcomeAnnouncer: RunOutcomeAnnouncer,
 ) {
 
     /**
@@ -152,15 +150,6 @@ class ParkedRunResumer @Inject constructor(
             ),
         )
         pipelineRunRepository.finishRun(rootId, PipelineRunStatus.FAILED, reason, terminationReason)
-        // A park settles with the app closed as often as not — an approval
-        // window elapsing overnight is the ordinary case, not the exception.
-        // Without this the chat keeps the question and never gets an outcome.
-        runOutcomeAnnouncer.announce(
-            sessionId = pending.sessionId,
-            status = PipelineRunStatus.FAILED,
-            reason = terminationReason,
-            diagnostic = reason,
-        )
         pendingInteractionRepository.delete(pending.runId)
         cancelNotification(pending)
     }

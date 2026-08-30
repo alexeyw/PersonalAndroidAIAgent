@@ -10,7 +10,6 @@ import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
-import app.knotwork.android.domain.services.RunOutcomeAnnouncer
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -31,7 +30,6 @@ class InitializeAppUseCaseTest {
         coEvery { getAllRunIds() } returns emptySet()
     }
     private val seedBundledSkillsUseCase: SeedBundledSkillsUseCase = mockk(relaxed = true)
-    private val runOutcomeAnnouncer: RunOutcomeAnnouncer = mockk(relaxed = true)
     private val useCase = InitializeAppUseCase(
         settingsRepository,
         pipelineRepository,
@@ -39,7 +37,6 @@ class InitializeAppUseCaseTest {
         pipelineRunRepository,
         pendingInteractionRepository,
         seedBundledSkillsUseCase,
-        runOutcomeAnnouncer,
     )
 
     @Test

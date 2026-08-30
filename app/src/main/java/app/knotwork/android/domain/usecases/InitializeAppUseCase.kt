@@ -8,7 +8,6 @@ import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
-import app.knotwork.android.domain.services.RunOutcomeAnnouncer
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 
@@ -40,7 +39,6 @@ class InitializeAppUseCase @Inject constructor(
     private val pipelineRunRepository: PipelineRunRepository,
     private val pendingInteractionRepository: PendingInteractionRepository,
     private val seedBundledSkillsUseCase: SeedBundledSkillsUseCase,
-    private val runOutcomeAnnouncer: RunOutcomeAnnouncer,
 ) {
     /**
      * Executes the initialization logic.
@@ -109,15 +107,6 @@ class InitializeAppUseCase @Inject constructor(
                     PipelineRunStatus.INTERRUPTED,
                     ORPHANED_RUN_MESSAGE,
                     RunTerminationReason.ProcessDied,
-                )
-                // The chat this run died in still shows the user's message and
-                // no reply. Nothing was watching when the process went away, so
-                // this sweep is the only place that can say what happened.
-                runOutcomeAnnouncer.announce(
-                    sessionId = run.sessionId,
-                    status = PipelineRunStatus.INTERRUPTED,
-                    reason = RunTerminationReason.ProcessDied,
-                    diagnostic = ORPHANED_RUN_MESSAGE,
                 )
             }
     }

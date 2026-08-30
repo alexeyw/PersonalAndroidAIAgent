@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -129,6 +130,9 @@ class ChatHomePipelineBindingDelegate(
             state
                 .map { it.thread.currentSessionId }
                 .distinctUntilChanged()
+                // Blank is the window before a session is chosen, on every cold
+                // start. Querying for it would be a guaranteed-empty read.
+                .filter { it.isNotBlank() }
                 .flatMapLatest { sessionId ->
                     pipelineRunRepository.observeRunsForSession(sessionId)
                 }

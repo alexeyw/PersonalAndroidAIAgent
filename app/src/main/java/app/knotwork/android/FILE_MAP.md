@@ -84,6 +84,7 @@ Only Kotlin files appear inside the generated blocks.
       - `PipelineWithNodesAndConnections.kt` - Pipeline relational model.
       - `PromptPresetEntity.kt` - User-saved prompt preset row. Stores `id`, `name`, `description`, `nodeTypeKey`, `systemPrompt`, `tagsCsv`, `createdAt`.
       - `PromptTemplateEntity.kt` - Prompt template entity.
+      - `RunChatIdentityProjection.kt` - The two columns needed to decide whether a settled run should leave a line in a chat, and in which one.
       - `RunSpendProjection.kt` - Two-column projection of a run row's accumulated spend, so seeding the budget ledger at the top of a run reads two integers instead of mapping a whole entity.
       - `SkillEntity.kt` - Skill row (`skills` table, v36). Stores `id`, `name`, `description`, `instruction`, nullable `toolAllowlistCsv` (null = all tools, `""` = no tools, `"a,b"` = subset), `contextConfig` (via converter), `isBundled`, `createdAt`, `updatedAt`.
       - `TraceStepEntity.kt` - Run-trace row: `NODE_IO` (per-node input/output) and `CONSOLE_EVENT` (persisted console line) record kinds discriminated by `recordKind`, attributed to a run via `runId` (CASCADE FK onto `pipeline_runs`) with a per-run monotonic `seq`.
