@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.HealthBadge
 import app.knotwork.design.components.misc.EmptyState
+import app.knotwork.design.components.topbar.JournalExportActions
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
@@ -164,7 +165,18 @@ private fun TriggersTopBar(state: TriggersViewState, strings: TriggersStrings, c
                 )
             }
         },
-        actions = {},
+        actions = {
+            // Deliberately not gated on the list's own load state: the journal is
+            // read separately, so a screen that failed to list its triggers can
+            // still hand over the journal — which is exactly the file worth
+            // sending when that happens.
+            JournalExportActions(
+                shareContentDescription = strings.exportShareCd,
+                saveContentDescription = strings.exportSaveCd,
+                onShare = callbacks.onShareJournal,
+                onSave = callbacks.onSaveJournal,
+            )
+        },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
@@ -514,6 +526,12 @@ data class TriggersStrings(
     val healthHealthy: String = "Healthy",
     val healthOverdue: String = "Overdue",
     val healthLastRunFailed: String = "Last run failed",
+    // Journal export. The two actions live on the list and not on a trigger's
+    // detail screen because the document they produce is the whole journal, every
+    // trigger at once — the only shape an analysis of "which day had no
+    // evaluation at all" can be answered from.
+    val exportShareCd: String = "Share the evaluation journal",
+    val exportSaveCd: String = "Save the evaluation journal",
 )
 
 /** Resolves the localised health-badge label for a row's health state. */

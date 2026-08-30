@@ -121,6 +121,7 @@ Paths below are relative to `src/main/java/app/knotwork/design/`.
     - `NodeTypeColors.kt` - composables mapping `NodeType` to header tint, luminance-banded foreground, and display label.
     - `PipelineEditorCatalogContent.kt` - scrollable harness exercising every pipeline-editor base component + theme previews.
   - `topbar/` - top-app-bar chrome.
+    - `JournalExportActions.kt` - The pair of top-bar actions that hands a journal to the user: **share it** and **save it to a file**.
     - `KnotworkTopAppBarShell.kt` - wraps a `TopAppBar` in a column with an attached hairline divider so it never bleeds into scrolled content.
 - `foundations/` - catalog pages.
   - `FoundationsCatalogPage.kt` - palette + type scale + spacing surface, used for design review and the snapshot baseline.

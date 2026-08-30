@@ -1,9 +1,15 @@
 package app.knotwork.android.presentation.ui.automation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
@@ -22,6 +28,7 @@ import app.knotwork.android.domain.usecases.JournalDayHeader
 import app.knotwork.android.domain.usecases.JournalDaySection
 import app.knotwork.android.domain.usecases.JournalTimestamp
 import app.knotwork.android.domain.usecases.automation.CleanupExternalAutomationJournalUseCase
+import app.knotwork.android.presentation.ui.common.rememberJournalExportHandlers
 import app.knotwork.android.presentation.ui.common.writePlainClipboardText
 import app.knotwork.design.screens.automation.ExternalAutomationJournalCallbacks
 import app.knotwork.design.screens.automation.ExternalAutomationJournalContent
@@ -81,16 +88,27 @@ fun ExternalAutomationJournalScreen(
     val callKeys = callKeys()
     val clipLabel = stringResource(R.string.external_automation_call_clip_label)
 
-    ExternalAutomationJournalContent(
-        state = uiState.toViewState(nowMillis = nowMillis, callKeys = callKeys),
-        strings = journalStrings(),
-        callbacks = ExternalAutomationJournalCallbacks(
-            onBack = onBack,
-            onCopyCallDetails = {
-                writePlainClipboardText(context, clipLabel, callDetailsText(callKeys))
-            },
-        ),
-    )
+    // This screen had no snackbar host until the export arrived, because until
+    // then nothing on it could succeed or fail — it only rendered. An export can
+    // do both, silently, so the host is added rather than the outcomes dropped.
+    val snackbarHostState = remember { SnackbarHostState() }
+    val journalExport = rememberJournalExportHandlers(viewModel.journalExport, snackbarHostState)
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        ExternalAutomationJournalContent(
+            state = uiState.toViewState(nowMillis = nowMillis, callKeys = callKeys),
+            strings = journalStrings(),
+            callbacks = ExternalAutomationJournalCallbacks(
+                onBack = onBack,
+                onCopyCallDetails = {
+                    writePlainClipboardText(context, clipLabel, callDetailsText(callKeys))
+                },
+                onShareJournal = journalExport.onShare,
+                onSaveJournal = journalExport.onSave,
+            ),
+        )
+        SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
+    }
 }
 
 /**
@@ -368,4 +386,6 @@ private fun journalStrings(): ExternalAutomationJournalStrings = ExternalAutomat
     callBlockKeysLabel = stringResource(R.string.external_automation_call_keys_label),
     callBlockCopy = stringResource(R.string.external_automation_call_copy),
     callBlockExpandCd = stringResource(R.string.external_automation_call_expand_cd),
+    exportShareCd = stringResource(R.string.external_automation_export_share_cd),
+    exportSaveCd = stringResource(R.string.external_automation_export_save_cd),
 )

@@ -5,11 +5,15 @@ import androidx.lifecycle.viewModelScope
 import app.knotwork.android.R
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.TriggerRepository
+import app.knotwork.android.domain.usecases.ExportTriggerJournalUseCase
 import app.knotwork.android.domain.usecases.ObserveTriggerHealthInputsUseCase
 import app.knotwork.android.domain.usecases.ObserveTriggerJournalUseCase
 import app.knotwork.android.domain.usecases.SaveTriggerUseCase
 import app.knotwork.android.domain.usecases.SyncTriggersUseCase
 import app.knotwork.android.domain.usecases.TriggerDraftIntent
+import app.knotwork.android.presentation.ui.common.JournalExportDelegate
+import app.knotwork.android.presentation.ui.common.JournalExportEvent
+import app.knotwork.android.presentation.ui.common.TRIGGER_JOURNAL_EXPORT_STEM
 import app.knotwork.android.presentation.ui.common.UiText
 import app.knotwork.design.screens.triggers.TriggerConditionType
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,6 +21,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
@@ -46,10 +51,28 @@ class TriggersViewModel @Inject constructor(
     private val syncTriggers: SyncTriggersUseCase,
     private val observeTriggerHealthInputs: ObserveTriggerHealthInputsUseCase,
     private val observeTriggerJournal: ObserveTriggerJournalUseCase,
+    exportTriggerJournal: ExportTriggerJournalUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TriggersUiState())
     val uiState: StateFlow<TriggersUiState> = _uiState.asStateFlow()
+
+    /**
+     * The journal export half of this screen.
+     *
+     * Exports the **whole** evaluation journal, not the trigger a detail sheet
+     * happens to have open, which is why the action lives on the list: the
+     * questions a journal is read to answer ("was there a day with no evaluation
+     * at all?") span triggers, and a per-trigger file could not answer them.
+     */
+    val journalExport: JournalExportDelegate = JournalExportDelegate(
+        scope = viewModelScope,
+        fileNameStem = TRIGGER_JOURNAL_EXPORT_STEM,
+        buildDocument = { label -> exportTriggerJournal(label) },
+    )
+
+    /** One-shot journal-export outcomes, rendered by the screen. */
+    val journalExportEvents: SharedFlow<JournalExportEvent> get() = journalExport.events
 
     /** The single live collector of the trigger + pipeline + health flows; replaced on retry. */
     private var observeJob: Job? = null

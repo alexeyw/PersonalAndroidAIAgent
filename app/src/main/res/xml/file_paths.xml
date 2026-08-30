@@ -13,4 +13,11 @@
     <cache-path
         name="images"
         path="images/" />
+    <!-- Journal exports staged for the share sheet. Deliberately a sibling of
+         `shared/` rather than a directory inside it: the Files screen clears the
+         whole of `shared/` on every workspace share, which would delete a journal
+         export still waiting to be read by the app the user picked. -->
+    <cache-path
+        name="journal"
+        path="journal/" />
 </paths>

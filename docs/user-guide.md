@@ -818,6 +818,20 @@ leaving the app. Full details, including the callback your profile can
 receive back, are in
 [external-automation.md](external-automation.md).
 
+**Taking the journal with you.** Two actions in the screen's top bar hand you
+the whole request journal as a JSON file: **share** it (the system share
+sheet — mail, a chat, a notes app) or **save** it to a folder you pick. Use
+either when you are reporting a problem with a profile: the file says what
+actually reached the app and what it decided, which is the one thing the
+automation app on the other side cannot tell you.
+
+The file holds the journal and nothing else — the same rows the screen shows,
+with the request id, the action, the pipeline the caller named, the packages
+involved, the decision and its reason. Nothing about the *run* a request
+started travels with it: not the message it was given, not the answer it
+produced. Neither action touches the network; the file goes where you send
+it, and nowhere else.
+
 ### Choosing a pipeline per surface
 
 Bind a pipeline to a surface in either place:
@@ -984,7 +998,20 @@ the moment it was last checked and the likely cause.
 Entries are kept for **30 days** (with a ceiling on the total number) and age
 out in the same nightly maintenance pass as run history. Like everything else
 on this screen, they are stored in the encrypted on-device database and never
-leave the phone.
+leave the phone unless you send them somewhere yourself.
+
+**Taking the journal with you.** The Triggers list — not a single trigger's
+detail — carries two actions in its top bar: **share** the evaluation journal
+as a JSON file, or **save** it to a folder you pick. The file covers *every*
+trigger, because the question a journal answers is usually about the gaps
+("was there a day nothing was checked at all?"), and a per-trigger file could
+not answer it.
+
+It is the right thing to attach to a bug report about background reliability,
+and it is also how you get the journal off a phone that has been running a
+scenario for a week without you opening the app. The file carries the journal
+rows and nothing else: which trigger, when, what woke the check, the verdict,
+and how the run it started ended. Neither action touches the network.
 
 **Why this is worth trusting.** Every evaluation writes exactly one entry at
 the moment the decision is taken, before anything else happens — so a trigger

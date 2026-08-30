@@ -113,4 +113,7 @@
     <string name="external_automation_consent_confirm">Turn on</string>
     <string name="external_automation_consent_cancel">Cancel</string>
 
+    <!-- Request-journal export. -->
+    <string name="external_automation_export_share_cd">Share the request journal</string>
+    <string name="external_automation_export_save_cd">Save the request journal</string>
 </resources>

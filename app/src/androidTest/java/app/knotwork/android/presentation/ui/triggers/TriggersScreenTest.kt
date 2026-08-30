@@ -13,6 +13,8 @@ import app.knotwork.android.domain.models.Trigger
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.TriggerJournalRepository
 import app.knotwork.android.domain.repositories.TriggerRepository
+import app.knotwork.android.domain.usecases.BuildTriggerJournalExportUseCase
+import app.knotwork.android.domain.usecases.ExportTriggerJournalUseCase
 import app.knotwork.android.domain.usecases.ObserveTriggerHealthInputsUseCase
 import app.knotwork.android.domain.usecases.ObserveTriggerJournalUseCase
 import app.knotwork.android.domain.usecases.SaveTriggerUseCase
@@ -70,6 +72,7 @@ class TriggersScreenTest {
             syncTriggers,
             ObserveTriggerHealthInputsUseCase(journalRepository),
             ObserveTriggerJournalUseCase(journalRepository),
+            ExportTriggerJournalUseCase(journalRepository, BuildTriggerJournalExportUseCase()),
         )
 
         composeTestRule.setContent {

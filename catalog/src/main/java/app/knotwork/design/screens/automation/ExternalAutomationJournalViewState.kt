@@ -292,10 +292,18 @@ data class ExternalAutomationJournalStrings(
     val callBlockKeysLabel: String = "Extras",
     val callBlockCopy: String = "Copy",
     val callBlockExpandCd: String = "Show how to call this",
+    // Journal export.
+    val exportShareCd: String = "Share the request journal",
+    val exportSaveCd: String = "Save the request journal",
 )
 
 /** One-shot callbacks consumed by `ExternalAutomationJournalContent`. */
-class ExternalAutomationJournalCallbacks(val onBack: () -> Unit = {}, val onCopyCallDetails: () -> Unit = {})
+class ExternalAutomationJournalCallbacks(
+    val onBack: () -> Unit = {},
+    val onCopyCallDetails: () -> Unit = {},
+    val onShareJournal: () -> Unit = {},
+    val onSaveJournal: () -> Unit = {},
+)
 
 /** Convenience factory returning a no-op callback bundle. */
 fun noopExternalAutomationJournalCallbacks(): ExternalAutomationJournalCallbacks = ExternalAutomationJournalCallbacks()

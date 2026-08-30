@@ -4,8 +4,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.annotation.VisibleForTesting
-import app.knotwork.android.domain.repositories.TriggerJournalRepository
-import app.knotwork.android.domain.usecases.BuildTriggerJournalExportUseCase
+import app.knotwork.android.domain.usecases.ExportTriggerJournalUseCase
+import app.knotwork.android.presentation.ui.common.TRIGGER_JOURNAL_EXPORT_STEM
+import app.knotwork.android.presentation.ui.common.journalExportFileName
+import app.knotwork.android.presentation.ui.common.journalGeneratedAtLabel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -14,9 +16,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.io.File
-import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
 import javax.inject.Inject
 
 /**
@@ -50,13 +50,16 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class TriggerJournalDumpReceiver : BroadcastReceiver() {
 
-    /** Source of the one-shot journal snapshot to dump. */
+    /**
+     * Reads and renders the journal.
+     *
+     * The **same** call the in-app export action uses on a release build, and
+     * deliberately so: one seam means a dump pulled off a soak device and a file
+     * a user attached to a bug report are the identical document, readable by one
+     * parser rather than two that drift.
+     */
     @Inject
-    lateinit var triggerJournalRepository: TriggerJournalRepository
-
-    /** Pure formatter turning the snapshot into the JSON export document. */
-    @Inject
-    lateinit var buildTriggerJournalExport: BuildTriggerJournalExportUseCase
+    lateinit var exportTriggerJournal: ExportTriggerJournalUseCase
 
     /**
      * Host scope of the suspending dump bridged through [goAsync]. Visible for
@@ -96,14 +99,16 @@ class TriggerJournalDumpReceiver : BroadcastReceiver() {
      * @param context Application context used to resolve the external files dir.
      */
     private suspend fun dumpTo(context: Context) {
-        val evaluations = triggerJournalRepository.readAll()
-        val generatedAtLabel = TIMESTAMP_FORMAT.format(Date(System.currentTimeMillis()))
-        val json = buildTriggerJournalExport(evaluations, generatedAtLabel)
+        // Naming and header formatting are shared with the in-app export rather
+        // than repeated here: a dump pulled over adb and a file the user exported
+        // on a release build must be the same document, down to its header.
+        val now = Date(System.currentTimeMillis())
+        val document = exportTriggerJournal(journalGeneratedAtLabel(now))
 
         val soakDir = File(context.getExternalFilesDir(null), SOAK_DIR).apply { mkdirs() }
-        val outFile = File(soakDir, "trigger-journal-${FILE_STAMP_FORMAT.format(Date())}.json")
-        outFile.writeText(json)
-        Timber.tag(TAG).i("Trigger-journal dump: %d rows → %s", evaluations.size, outFile.absolutePath)
+        val outFile = File(soakDir, journalExportFileName(TRIGGER_JOURNAL_EXPORT_STEM, now))
+        outFile.writeText(document.json)
+        Timber.tag(TAG).i("Trigger-journal dump: %d rows → %s", document.entryCount, outFile.absolutePath)
     }
 
     private companion object {
@@ -114,11 +119,5 @@ class TriggerJournalDumpReceiver : BroadcastReceiver() {
 
         /** External-files subdirectory the soak dumps are written into. */
         const val SOAK_DIR = "soak"
-
-        /** Human-readable "generated at" label baked into the document. */
-        val TIMESTAMP_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
-
-        /** Filesystem-safe timestamp for the output filename. */
-        val FILE_STAMP_FORMAT = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US)
     }
 }

@@ -232,6 +232,20 @@ No — it is unloaded after five minutes idle, and also when the system asks for
 memory back (unless a generation is in flight, which is never interrupted for
 it). So it neither holds RAM nor drains the battery while nothing is running.
 
+### How do I get the background journal off my phone?
+
+Two actions in the Triggers top bar: **share** the evaluation journal as a JSON
+file, or **save** it to a folder you pick. It covers every trigger, not just the
+one you were looking at, because the useful question is normally about a gap
+rather than a row. The request journal on Settings → Background & triggers →
+External automation carries the same pair for inbound requests.
+
+Attach either to a bug report about background reliability — it says what the
+app actually did while you were not watching, which nothing else can. The file
+holds the journal rows only: no message a run was given, no answer it produced.
+Neither action touches the network. See [Checking what a trigger has been
+doing](user-guide.md#checking-what-a-trigger-has-been-doing).
+
 ---
 
 ## Tools, MCP, and confirmations

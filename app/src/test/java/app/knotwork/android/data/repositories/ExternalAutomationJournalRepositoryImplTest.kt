@@ -138,6 +138,56 @@ class ExternalAutomationJournalRepositoryImplTest {
     }
 
     @Test
+    fun `given the journal when read as a snapshot then it matches what the screen observes`() = runTest {
+        val repo = repository()
+        repo.admitAcceptedWithinCeiling(entry("old", receivedAt = 1), windowStartEpochMs = 0, limitPerWindow = 10)
+        repo.admitAcceptedWithinCeiling(entry("new", receivedAt = 2), windowStartEpochMs = 0, limitPerWindow = 10)
+
+        // The export and the screen must describe one journal in one order: a file
+        // its owner cannot line up against what they are looking at is a file that
+        // starts an argument rather than settling one.
+        assertEquals(repo.observeAll().first(), repo.readAll())
+        assertEquals(listOf("new", "old"), repo.readAll().map { it.id })
+    }
+
+    @Test
+    fun `given an undecodable row when read as a snapshot then it is skipped rather than failing the read`() = runTest {
+        val repo = repository()
+        repo.admitAcceptedWithinCeiling(entry("good", receivedAt = 2), windowStartEpochMs = 0, limitPerWindow = 10)
+        dao.insert(
+            ExternalAutomationRequestEntity(
+                id = "bad",
+                requestId = "req-bad",
+                receivedAt = 1,
+                action = ACTION,
+                targetKind = null,
+                targetValue = null,
+                declaredReturnPackage = null,
+                returnAction = "app.knotwork.android.action.RUN_RESULT",
+                attestedSenderPackage = null,
+                statusKind = "NotAStatus",
+                statusReason = null,
+                runId = null,
+                repeatCount = 1,
+            ),
+        )
+
+        // One unreadable row must not cost the export the rest of the history —
+        // the same posture the observed read already takes.
+        assertEquals(listOf("good"), repo.readAll().map { it.id })
+    }
+
+    @Test
+    fun `given the store fails when read as a snapshot then the export sees an empty journal`() = runTest {
+        val failing = mockk<ExternalAutomationJournalDao>()
+        coEvery { failing.getAllOrderedByReceivedAt() } throws IllegalStateException("db down")
+
+        // Best-effort, like every other read here: a broken database yields an
+        // empty export, never an exception on a screen opened to diagnose it.
+        assertEquals(emptyList<ExternalAutomationJournalEntry>(), repository(failing).readAll())
+    }
+
+    @Test
     fun `given the journal when observed then it is ordered newest request first`() = runTest {
         val repo = repository()
         repo.recordRefusal(refusal("old", receivedAt = 1, requestId = "r1"))

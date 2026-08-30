@@ -17,6 +17,7 @@ Only Kotlin files appear inside the generated blocks.
   - `DomainPurityKonsistTest.kt` - Konsist guard enforcing the strictest project rule for the `domain` layer: it is pure Kotlin with **zero** Android/framework imports, so it can be compiled and unit-tested off-device.
   - `FirebaseIsolationKonsistTest.kt` - Konsist guard keeping the Firebase SDK out of the shared `main` source set.
   - `InstrumentedTestExclusionGuardTest.kt` - Guard over the **instrumented-test exclusion list** — the set of instrumented tests the automated emulator runs deliberately do not execute.
+  - `JournalExportNoNetworkKonsistTest.kt` - Konsist guard on the journal exports: **the journal leaves the device only in the user's own hands.**
   - `LayerDependencyKonsistTest.kt` - Konsist architecture guard enforcing the project's Clean Architecture dependency rule: dependencies flow strictly inward, `data` -> `domain` <- `presentation`, and `domain` depends on neither sibling.
   - `PromptPackNoNetworkKonsistTest.kt` - Konsist guard enforcing the provenance rule of prompt packs: **a pack is imported from a local file the user picked, never fetched.**
   - `RepositoryPlacementKonsistTest.kt` - Konsist guard enforcing the repository placement convention from the api-conventions rule: the abstraction (`<Noun>Repository` interface) is owned by the `domain` layer, and its implementation (`<Noun>RepositoryImpl`) lives in the `data` layer.
@@ -261,6 +262,7 @@ Only Kotlin files appear inside the generated blocks.
     - `AttachmentMessageContentTest.kt` - Unit tests for `AttachmentMessageContent`, the shared image-only message contract used by both the composer and the share target.
     - `automation/` - Tests for the external-automation use cases.
       - `AuthorizeExternalAutomationRequestUseCaseTest.kt` - Unit tests for `AuthorizeExternalAutomationRequestUseCase` — the security model of the external entry point.
+      - `BuildExternalAutomationJournalExportUseCaseTest.kt` - Verifies that `BuildExternalAutomationJournalExportUseCase` renders the request journal into a correct JSON document: the header, every status and refusal reason as the discriminator already published as the callback contract, the two sender columns kept apart, and the caller's order preserved.
       - `HandleExternalAutomationRequestUseCaseTest.kt` - Verifies the security guarantees of the external-automation entry point.
       - `ParseExternalAutomationRequestUseCaseTest.kt` - Unit tests for `ParseExternalAutomationRequestUseCase`.
     - `BuildDynamicShortcutsUseCaseTest.kt` - Unit tests for `BuildDynamicShortcutsUseCase`: recency ordering, the count cap, label clamping, and the blank-name / non-positive-cap guards.
@@ -359,6 +361,8 @@ Only Kotlin files appear inside the generated blocks.
 - `integration/` - Background-run integration tests wiring real components end to end — the trigger path, the external-automation path and the autonomy cycle.
   - `BackgroundAutonomyCycleIntegrationTest.kt` - End-to-end JVM integration test of the background-autonomy cycle:
   - `ExternalAutomationBackgroundRunIntegrationTest.kt` - End-to-end JVM integration test of the **external request → background run → callback** arc: the entry point another app on the device broadcasts to.
+  - `JournalExportReader.kt` - **The** reader of the exported journal documents — the offline consumer the export formats exist for, written once and pointed at every producer.
+  - `JournalExportRoundTripTest.kt` - The round-trip guarantee of the journal exports: **one document, one parse.**
   - `TriggerBackgroundRunIntegrationTest.kt` - End-to-end JVM integration test of the **automation-trigger → background run → notification → result-in-chat** arc — the privacy-sensitive surface phase 36 adds on top of the persisted background-run infrastructure.
 - `presentation/` - Tests for the presentation layer.
   - `notifications/` - Tests for the notification channels and notifiers.
@@ -387,6 +391,7 @@ Only Kotlin files appear inside the generated blocks.
         - `ConsoleCopyPayloadsTest.kt` - Unit tests for `ConsoleCopyPayloads`.
         - `ContentReportIssueUrlTest.kt` - Unit tests for `contentReportIssueUrl`.
     - `common/` - Tests for the shared presentation helpers.
+      - `JournalExportDelegateTest.kt` - Behaviour of the shared journal-export half of the two journal ViewModels.
       - `RunTerminationCopyMapperTest.kt` - Guards the single vocabulary of a stopped run.
       - `UiTextTest.kt` - Unit tests for `UiText`.
     - `components/` - Tests for the pure helpers behind the app-side composables.

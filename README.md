@@ -104,12 +104,13 @@ https://github.com/user-attachments/assets/2ea06de5-6832-4e0c-ad48-430f375d8b72
   the agent does the language-model part of *what*. Off by default and behind an
   explicit consent dialog; the binding is an allowlist, not a fallback, so a
   request naming anything else is refused rather than redirected. Every inbound
-  request — accepted or refused — lands in a readable journal.
+  request — accepted or refused — lands in a readable journal you can export as
+  a file when a profile misbehaves.
 - **Local-first by construction.** The Room database is SQLCipher-encrypted and
   API keys are sealed with AES-GCM under a dedicated Android Keystore key.
-  On-device usage statistics (a build-time guard forbids any network on that
-  path), attachment images that never reach cloud models, and voice input
-  transcribed on-device before the pipeline runs. A **FOSS build** ships with
+  On-device usage statistics and journal exports (build-time guards forbid any
+  network on either path), attachment images that never reach cloud models, and
+  voice input transcribed on-device before the pipeline runs. A **FOSS build** ships with
   zero proprietary dependencies for F-Droid.
 - **Reliable over long, autonomous runs.** A validate-and-repair gate keeps
   structured nodes producing well-formed output, exponential-backoff retry
