@@ -279,6 +279,20 @@ object CookbookDocsGenerator {
          *   rather than only a denial.
          */
         data class EditorOnly(val note: String) : Reach
+
+        /**
+         * Not a control at all: the sheet shows the value, and the app fills it
+         * in from a choice made elsewhere in the same form.
+         *
+         * Split out of [EditorOnly] after review, because lumping the two
+         * together was itself misleading. A resolved pipeline name sitting
+         * beside a slider that does nothing reads as two defects when it is
+         * one — and the list of things that need fixing should contain only the
+         * things that need fixing.
+         *
+         * @property note Where the value comes from.
+         */
+        data class DisplayOnly(val note: String) : Reach
     }
 
     /**
@@ -293,12 +307,6 @@ object CookbookDocsGenerator {
 
     /** Shared note for the local sampling controls the inference engine ignores. */
     private const val SAMPLER_UNTOUCHED: String = "the engine leaves the model's own sampler in place"
-
-    /** Shared note for a picker field that only mirrors a resolved display name. */
-    private const val RESOLVED_FOR_DISPLAY: String = "shown in the picker; resolved from the id"
-
-    /** Shared note for the read-only previews of a selected skill. */
-    private const val EDIT_IN_SKILL_LIBRARY: String = "read-only preview; edit the skill in the skill library"
 
     /**
      * Per-field verdicts, keyed `ConfigClass.field`.
@@ -384,11 +392,15 @@ object CookbookDocsGenerator {
         "SummaryConfig.targetLengthChars" to
             Reach.EditorOnly("ask for the length in the prompt instead"),
         "PipelineConfig.targetPipelineId" to Reach.Runtime("targetPipelineId"),
-        "PipelineConfig.targetPipelineName" to Reach.EditorOnly(RESOLVED_FOR_DISPLAY),
+        "PipelineConfig.targetPipelineName" to
+            Reach.DisplayOnly("the app fills it in from the pipeline you picked"),
         "SkillConfig.skillId" to Reach.Runtime("skillId"),
-        "SkillConfig.skillName" to Reach.EditorOnly(RESOLVED_FOR_DISPLAY),
-        "SkillConfig.instructionPreview" to Reach.EditorOnly(EDIT_IN_SKILL_LIBRARY),
-        "SkillConfig.toolRestrictionSummary" to Reach.EditorOnly(EDIT_IN_SKILL_LIBRARY),
+        "SkillConfig.skillName" to
+            Reach.DisplayOnly("the app fills it in from the skill you picked"),
+        "SkillConfig.instructionPreview" to
+            Reach.DisplayOnly("the app fills it in from the skill you picked; edit the text in the skill library"),
+        "SkillConfig.toolRestrictionSummary" to
+            Reach.DisplayOnly("the app fills it in from the skill you picked; edit the allowlist in the skill library"),
         "SkillConfig.engine" to Reach.Runtime("cloudProvider"),
     )
 
@@ -926,6 +938,7 @@ object CookbookDocsGenerator {
         is Reach.Runtime -> "**Yes** — saved as the node's `${reach.field}`"
         is Reach.Graph -> "**Shapes the graph** — ${reach.effect}"
         is Reach.EditorOnly -> "**No** — stored and exported, but nothing reads it during a run (${reach.note})"
+        is Reach.DisplayOnly -> "**Not a setting** — ${reach.note}"
     }
 
     // ── Parsing ─────────────────────────────────────────────────────────────

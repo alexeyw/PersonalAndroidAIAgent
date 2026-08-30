@@ -304,8 +304,6 @@ Runs another saved pipeline as a single step and returns its answer — a functi
 |---|---|
 | Which pipeline is run as this step | the sheet's `targetPipelineId` |
 
-**Also on the sheet, and ignored by the run:** `targetPipelineName` — shown in the picker; resolved from the id.
-
 ### Skill — `SKILL`
 
 Runs a reusable skill: a fixed instruction plus the list of tools that skill may use. The allowlist is enforced when a tool is called, not merely suggested in the prompt.
@@ -319,8 +317,6 @@ Runs a reusable skill: a fixed instruction plus the list of tools that skill may
 |---|---|
 | Which skill is run — its instruction and its tool allowlist | the sheet's `skillId` |
 | Whether the skill runs on-device or in the cloud | the sheet's `engine` |
-
-**Also on the sheet, and ignored by the run:** `skillName` — shown in the picker; resolved from the id; `instructionPreview`, `toolRestrictionSummary` — read-only preview; edit the skill in the skill library.
 
 <!-- /AUTO-GEN:NODE_CONFIG -->
 
@@ -510,15 +506,19 @@ engine does with each one.
 - **Shapes the graph** — the value does not reach the engine as a value, but it
   decides which outbound ports the node has, and the run follows the edges
   those ports carry.
-- **No** — stored with the pipeline and exported with it; nothing reads it
-  during a run. The bracket says what happens instead.
+- **Not a setting** — the sheet shows it, and the app fills it in from a choice
+  you made elsewhere in the same form. Nothing to change here.
+- **No** — a control you can change that changes nothing: stored with the
+  pipeline, exported with it, never read during a run. The bracket says what to
+  do instead.
 
-The `No` rows are not a warning list to work through. Most are a form built for
-a setting the engine does not take, and the honest answer is usually in the
-bracket: ask for it in the prompt instead. Four of them are different, and are
-called out where they appear in the reference above: the prompt fields of
-Intent Router, Decomposition, Evaluation and Summary are *required* by the
-sheet and still never reach the run.
+The `No` rows are a defect list, not a design. Each one is being resolved the
+only two ways it can be — the control is wired up to the setting it names, or it
+leaves the sheet — and this table shrinks as that happens. Until then it is here
+so you do not spend an evening tuning one. Four of them are worse than the rest
+and are called out where they appear in the reference above: the prompt fields of
+Intent Router, Decomposition, Evaluation and Summary are *required* by the sheet
+and still never reach the run.
 
 <!-- AUTO-GEN:FIELD_TABLE -->
 | Node | Field | Default | Reaches the run |
@@ -570,11 +570,11 @@ sheet and still never reach the run.
 | `SUMMARY` | `customPrompt` | `null` | **No** — stored and exported, but nothing reads it during a run (editing it changes nothing; the prompt this node runs on is the one in the table above) |
 | `SUMMARY` | `targetLengthChars` | `600` | **No** — stored and exported, but nothing reads it during a run (ask for the length in the prompt instead) |
 | `PIPELINE` | `targetPipelineId` | `""` | **Yes** — saved as the node's `targetPipelineId` |
-| `PIPELINE` | `targetPipelineName` | `null` | **No** — stored and exported, but nothing reads it during a run (shown in the picker; resolved from the id) |
+| `PIPELINE` | `targetPipelineName` | `null` | **Not a setting** — the app fills it in from the pipeline you picked |
 | `SKILL` | `skillId` | `""` | **Yes** — saved as the node's `skillId` |
-| `SKILL` | `skillName` | `null` | **No** — stored and exported, but nothing reads it during a run (shown in the picker; resolved from the id) |
-| `SKILL` | `instructionPreview` | `null` | **No** — stored and exported, but nothing reads it during a run (read-only preview; edit the skill in the skill library) |
-| `SKILL` | `toolRestrictionSummary` | `null` | **No** — stored and exported, but nothing reads it during a run (read-only preview; edit the skill in the skill library) |
+| `SKILL` | `skillName` | `null` | **Not a setting** — the app fills it in from the skill you picked |
+| `SKILL` | `instructionPreview` | `null` | **Not a setting** — the app fills it in from the skill you picked; edit the text in the skill library |
+| `SKILL` | `toolRestrictionSummary` | `null` | **Not a setting** — the app fills it in from the skill you picked; edit the allowlist in the skill library |
 | `SKILL` | `engine` | `SkillEngine.LITE_RT` | **Yes** — saved as the node's `cloudProvider` |
 <!-- /AUTO-GEN:FIELD_TABLE -->
 
