@@ -40,12 +40,10 @@ details.
   It is also frank about a thing the app hides. A node's configuration sheet
   shows more than the engine reads: some fields accept input, save and export
   while nothing consults them during a run, and there is no sign on screen which
-  is which. Every one of them is marked. Four are worse than merely ignored —
-  the prompt fields of the **Intent Router**, **Decomposition**, **Evaluation**
-  and **Summary** sheets are *required* and still never reach the run, so the
-  node goes on using the prompt it was created with; the page says where that
-  prompt really lives. A unit test holds every such claim against what the
-  editor's code actually does.
+  is which. Every one of them is marked. A unit test holds every such claim
+  against what the editor's code actually does — which is how the four sheets
+  listed under *Fixed* below were caught, and how the page corrected itself the
+  moment they were repaired.
 
 - **Five importable pipeline recipes — [`docs/recipes/`](docs/recipes/).**
   Routing on intent, decomposition with a queue, a tool call behind the
@@ -264,6 +262,29 @@ details.
   went with them.
 
 ### Fixed
+
+- **The prompt you type into an Intent Router, Decomposition, Evaluation or
+  Summary node now reaches the run.** All four sheets require a prompt, saved
+  it, showed it again when the sheet was reopened — and the node went on using
+  the prompt it was created with. Nothing on screen said so, because the value
+  really was stored; it just never reached the property the engine reads. The
+  browser editor had always written it correctly, so the two editors of the
+  same file disagreed. Reopening an affected node and saving it once applies
+  the prompt that was already on screen.
+
+- **Failures on the Files screen are no longer silent.** An import refused for
+  size or quota, an export that could not be written, a preview that could not
+  be opened, a bulk delete that removed only some of the files — eight
+  outcomes in total — each raised a message that the screen dropped on the
+  floor. The operation appeared to do nothing at all. They now surface as
+  snackbars.
+
+- **An imported pipeline can no longer be impossible to save.** The node
+  configuration sheet still validated the temperature, top-P, token and timeout
+  values of the on-device and cloud nodes, whose controls were removed in
+  0.8.0. A pipeline carrying a value outside the old ranges was refused with an
+  error against a field that is not on the sheet, leaving nothing to correct.
+  Nothing reads those values during a run, and they still round-trip untouched.
 
 - **Regenerating a documentation table and running `check` in one command no
   longer fails.** The four `generate…` / `verify…` task pairs each read and

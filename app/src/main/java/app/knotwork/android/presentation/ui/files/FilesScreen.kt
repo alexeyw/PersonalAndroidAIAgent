@@ -80,7 +80,6 @@ fun FilesScreen(onBack: () -> Unit, modifier: Modifier = Modifier, viewModel: Fi
                 FilesEvent.LaunchImport -> importLauncher.launch(arrayOf(IMPORT_MIME_FILTER))
                 is FilesEvent.LaunchSaveAs -> saveAsLauncher.launch(event.suggestedName)
                 is FilesEvent.ShareFiles -> scope.launch { context.stageAndShare(event.paths, viewModel) }
-                is FilesEvent.ShowMessage -> { /* Snackbar host lives in the app shell; logged in VM. */ }
             }
         }
     }

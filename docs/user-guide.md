@@ -1776,6 +1776,14 @@ row to enter multi-select and delete several at once. Deletion asks for
 confirmation and is **permanent** — files removed here cannot be
 recovered.
 
+### When something does not work
+
+An import refused for its size or the workspace quota, a **Save as…**
+that could not be written, a file with no readable preview, and a
+multi-select delete that removed only some of its files each say so in a
+message at the bottom of the screen. If an action appears to do nothing,
+read that message — it names which of the four happened.
+
 ---
 
 ## Memory

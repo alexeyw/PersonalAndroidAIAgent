@@ -1,5 +1,7 @@
 package app.knotwork.android.presentation.ui.files
 
+import android.content.Context
+import app.knotwork.android.R
 import app.knotwork.android.domain.models.WorkspaceError
 import app.knotwork.android.domain.models.WorkspaceFile
 import app.knotwork.android.domain.models.WorkspaceListing
@@ -13,9 +15,13 @@ import app.knotwork.android.domain.usecases.workspace.ImportMode
 import app.knotwork.android.domain.usecases.workspace.ListWorkspaceUseCase
 import app.knotwork.android.domain.usecases.workspace.PreviewWorkspaceFileUseCase
 import app.knotwork.android.domain.usecases.workspace.WorkspaceDeleteSummary
+import app.knotwork.android.presentation.state.TransientMessageRelay
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
+import io.mockk.verify
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -46,6 +52,11 @@ class FilesViewModelTest {
     private lateinit var deleteUseCase: DeleteWorkspaceFilesUseCase
     private lateinit var importUseCase: ImportFileToWorkspaceUseCase
     private lateinit var exportUseCase: ExportWorkspaceFileUseCase
+    private lateinit var relay: TransientMessageRelay
+    private lateinit var appContext: Context
+
+    /** Captures the string resource each failure path resolves for its snackbar. */
+    private val resolvedRes = slot<Int>()
 
     private val textFile = WorkspaceFile("a.txt", sizeBytes = 5, lastModified = 1, isDirectory = false, isText = true)
     private val binFile = WorkspaceFile("b.bin", sizeBytes = 9, lastModified = 1, isDirectory = false, isText = false)
@@ -58,6 +69,9 @@ class FilesViewModelTest {
         deleteUseCase = mockk()
         importUseCase = mockk()
         exportUseCase = mockk()
+        relay = mockk(relaxed = true)
+        appContext = mockk()
+        every { appContext.getString(capture(resolvedRes)) } returns SNACKBAR_TEXT
         coEvery { listUseCase() } returns WorkspaceResult.Success(
             WorkspaceListing(
                 files = listOf(textFile, binFile),
@@ -70,7 +84,7 @@ class FilesViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     private fun build(): FilesViewModel =
-        FilesViewModel(listUseCase, previewUseCase, deleteUseCase, importUseCase, exportUseCase)
+        FilesViewModel(listUseCase, previewUseCase, deleteUseCase, importUseCase, exportUseCase, relay, appContext)
 
     @Test
     fun `given listing succeeds when initialised then state is populated`() = runTest {
@@ -297,7 +311,12 @@ class FilesViewModelTest {
         advanceUntilIdle()
 
         assertNull(vm.uiState.value.preview)
-        assertTrue(events.any { it is FilesEvent.ShowMessage && it.kind == FilesMessage.PreviewFailed })
+        // Asserted at the seam that actually reaches a person. The previous
+        // assertion stopped at a `FilesEvent.ShowMessage` that `FilesScreen`
+        // dropped in an empty `when` branch, so it stayed green while the user
+        // saw nothing at all.
+        assertEquals(R.string.files_message_preview_failed, resolvedRes.captured)
+        verify { relay.post(SNACKBAR_TEXT) }
         job.cancel()
     }
 
@@ -314,9 +333,19 @@ class FilesViewModelTest {
         advanceUntilIdle()
 
         assertNull(vm.uiState.value.pendingDelete)
-        assertTrue(events.any { it is FilesEvent.ShowMessage && it.kind == FilesMessage.DeletePartial })
+        assertEquals(R.string.files_message_delete_partial, resolvedRes.captured)
+        verify { relay.post(SNACKBAR_TEXT) }
         job.cancel()
     }
 
     private fun streamOf(content: String = "data"): InputStream = ByteArrayInputStream(content.toByteArray())
+
+    private companion object {
+        /**
+         * Stand-in for every resolved snackbar sentence. The test asserts
+         * *which resource* was chosen via [resolvedRes]; the rendered text is
+         * the string file's business, not this test's.
+         */
+        const val SNACKBAR_TEXT = "resolved-snackbar-text"
+    }
 }

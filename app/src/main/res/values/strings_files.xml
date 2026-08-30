@@ -9,4 +9,13 @@
 <resources>
     <!-- Title of the system share-sheet chooser when exporting workspace files. -->
     <string name="files_share_chooser_title">Share file</string>
+
+    <!-- Snackbar: an import was refused (over quota, too large, or unreadable). -->
+    <string name="files_message_import_failed">That file was not imported \u2014 it is too large or the workspace is full.</string>
+    <!-- Snackbar: a save-as or share-staging export could not be written. -->
+    <string name="files_message_export_failed">That file could not be saved out.</string>
+    <!-- Snackbar: a file has no readable text preview (binary, or an I/O failure). -->
+    <string name="files_message_preview_failed">There is no preview for this file.</string>
+    <!-- Snackbar: a bulk delete removed some files but not all of them. -->
+    <string name="files_message_delete_partial">Some of those files were not deleted.</string>
 </resources>

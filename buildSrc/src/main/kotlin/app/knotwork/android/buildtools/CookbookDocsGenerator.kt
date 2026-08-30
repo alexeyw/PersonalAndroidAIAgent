@@ -295,16 +295,6 @@ object CookbookDocsGenerator {
         data class DisplayOnly(val note: String) : Reach
     }
 
-    /**
-     * Shared note for the four prompt fields the editor cannot write through.
-     *
-     * Deliberately not a cross-reference: the row above in the same section
-     * already says where the prompt really comes from, and a note pointing at
-     * another note is how a reader ends up reading neither.
-     */
-    private const val PROMPT_NOT_WRITTEN_BACK: String =
-        "editing it changes nothing; the prompt this node runs on is the one in the table above"
-
     /** Shared note for the local sampling controls the inference engine ignores. */
     private const val SAMPLER_UNTOUCHED: String = "the engine leaves the model's own sampler in place"
 
@@ -317,9 +307,11 @@ object CookbookDocsGenerator {
      * `CookbookRuntimeReachTest` checks the verdicts themselves against the real
      * codec.
      *
-     * The four [Reach.EditorOnly] prompt fields are not an oversight in this
-     * table: they are a defect in the codec, recorded as what a reader will
-     * actually observe rather than smoothed over here.
+     * `classifierPrompt` / `planningPrompt` / `criteriaPrompt` / `customPrompt`
+     * were [Reach.EditorOnly] here for as long as `NodeConfigCodec.apply`
+     * dropped them — a defect recorded as what a reader would actually observe,
+     * rather than smoothed over. The codec now mirrors all four onto
+     * `systemPrompt`, so they are ordinary [Reach.Runtime] fields.
      */
     val FIELD_REACH: Map<String, Reach> = mapOf(
         "InputConfig.inputName" to
@@ -347,7 +339,7 @@ object CookbookDocsGenerator {
             Reach.EditorOnly("cloud timeouts come from the client's own configuration"),
         "IntentRouterConfig.classes" to
             Reach.Graph("which branches exist — one port per class, and the run follows the edge the model picks"),
-        "IntentRouterConfig.classifierPrompt" to Reach.EditorOnly(PROMPT_NOT_WRITTEN_BACK),
+        "IntentRouterConfig.classifierPrompt" to Reach.Runtime("systemPrompt"),
         "IntentRouterConfig.fallbackClass" to Reach.EditorOnly(
             "an answer matching no class takes whichever branch you connected first, not the class named " +
                 "here; connect the branch you want as the fallback before the others",
@@ -370,7 +362,7 @@ object CookbookDocsGenerator {
         "ToolConfig.confirmOverride" to
             Reach.EditorOnly("approval follows the tool's risk level and your settings"),
         "ToolConfig.engineProvider" to Reach.Runtime("cloudProvider"),
-        "DecompositionConfig.planningPrompt" to Reach.EditorOnly(PROMPT_NOT_WRITTEN_BACK),
+        "DecompositionConfig.planningPrompt" to Reach.Runtime("systemPrompt"),
         "DecompositionConfig.maxSubtasks" to
             Reach.EditorOnly("how many subtasks appear is decided by the prompt and the run's step ceiling"),
         "DecompositionConfig.outputSchemaJson" to
@@ -384,13 +376,13 @@ object CookbookDocsGenerator {
             Reach.EditorOnly("subtasks always run one at a time"),
         "QueueProcessorConfig.stopOnError" to
             Reach.EditorOnly("what happens after a failed subtask is decided by the graph, not by this switch"),
-        "EvaluationConfig.criteriaPrompt" to Reach.EditorOnly(PROMPT_NOT_WRITTEN_BACK),
+        "EvaluationConfig.criteriaPrompt" to Reach.Runtime("systemPrompt"),
         "EvaluationConfig.maxRetries" to
             Reach.Graph("whether the node has a Retry branch at all — it does not cap how often that branch is taken"),
         "EvaluationConfig.engineProvider" to Reach.Runtime("cloudProvider"),
         "SummaryConfig.format" to
             Reach.EditorOnly("ask for the shape in the prompt instead"),
-        "SummaryConfig.customPrompt" to Reach.EditorOnly(PROMPT_NOT_WRITTEN_BACK),
+        "SummaryConfig.customPrompt" to Reach.Runtime("systemPrompt"),
         "SummaryConfig.targetLengthChars" to
             Reach.EditorOnly("ask for the length in the prompt instead"),
         "PipelineConfig.targetPipelineId" to Reach.Runtime("targetPipelineId"),
@@ -445,11 +437,7 @@ object CookbookDocsGenerator {
             RuntimeInput("Which provider answers", "cloudProvider", SetVia.Sheet),
         ),
         "INTENT_ROUTER" to listOf(
-            RuntimeInput(
-                decides = "The instruction that sorts the message into a class",
-                property = "systemPrompt",
-                setVia = SetVia.NoControl(EDIT_THE_FILE),
-            ),
+            RuntimeInput("The instruction that sorts the message into a class", "systemPrompt", SetVia.Sheet),
             RuntimeInput("Whether the sorting runs on-device or in the cloud", "cloudProvider", SetVia.Sheet),
         ),
         "IF_CONDITION" to listOf(
@@ -493,28 +481,16 @@ object CookbookDocsGenerator {
             RuntimeInput("Whether the call is composed on-device or in the cloud", "cloudProvider", SetVia.Sheet),
         ),
         "DECOMPOSITION" to listOf(
-            RuntimeInput(
-                decides = "The instruction that produces the subtask list",
-                property = "systemPrompt",
-                setVia = SetVia.NoControl(EDIT_THE_FILE),
-            ),
+            RuntimeInput("The instruction that produces the subtask list", "systemPrompt", SetVia.Sheet),
             RuntimeInput("Whether the planning runs on-device or in the cloud", "cloudProvider", SetVia.Sheet),
         ),
         "QUEUE_PROCESSOR" to emptyList(),
         "EVALUATION" to listOf(
-            RuntimeInput(
-                decides = "The instruction that judges the result",
-                property = "systemPrompt",
-                setVia = SetVia.NoControl(EDIT_THE_FILE),
-            ),
+            RuntimeInput("The instruction that judges the result", "systemPrompt", SetVia.Sheet),
             RuntimeInput("Whether the judgement runs on-device or in the cloud", "cloudProvider", SetVia.Sheet),
         ),
         "SUMMARY" to listOf(
-            RuntimeInput(
-                decides = "The instruction that combines the results",
-                property = "systemPrompt",
-                setVia = SetVia.NoControl(EDIT_THE_FILE),
-            ),
+            RuntimeInput("The instruction that combines the results", "systemPrompt", SetVia.Sheet),
         ),
         "PIPELINE" to listOf(
             RuntimeInput("Which pipeline is run as this step", "targetPipelineId", SetVia.Sheet),

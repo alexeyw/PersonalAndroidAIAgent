@@ -8,8 +8,7 @@ that — followed by recipes that wire them into shapes worth copying.
 configuration sheet in the app shows more than the engine reads. The sheets
 were built ahead of some of the behaviour behind them, so a number of fields
 accept input, save, and export while nothing consults them during a run — and
-the app gives no sign which is which. This page marks every one of them, and
-for four node types it also tells you where the setting really lives. If a
+the app gives no sign which is which. This page marks every one of them. If a
 control you changed made no difference, this is the page that says why.
 
 Where the other pages stop:
@@ -186,13 +185,12 @@ Sorts the incoming text into one of the classes you declare and sends the run do
 
 | What it decides | Where the value comes from |
 |---|---|
-| The instruction that sorts the message into a class | ⚠ it stays this type's shipped default prompt, and nothing in the app writes it — export the pipeline, change `config.systemPrompt` on the node, and import it again; the browser editor also writes it correctly |
+| The instruction that sorts the message into a class | the sheet's `classifierPrompt` — a new node arrives with this type's shipped default in it |
 | Whether the sorting runs on-device or in the cloud | the sheet's `engineProvider` |
 | Which branches exist — one port per class, and the run follows the edge the model picks | the sheet's `classes` |
 
 **Also on the sheet, and ignored by the run:**
 
-- `classifierPrompt` — editing it changes nothing; the prompt this node runs on is the one in the table above
 - `fallbackClass` — an answer matching no class takes whichever branch you connected first, not the class named here; connect the branch you want as the fallback before the others
 
 ### If Condition — `IF_CONDITION`
@@ -264,12 +262,11 @@ Turns one instruction into a list of subtasks. On its own it only produces the l
 
 | What it decides | Where the value comes from |
 |---|---|
-| The instruction that produces the subtask list | ⚠ it stays this type's shipped default prompt, and nothing in the app writes it — export the pipeline, change `config.systemPrompt` on the node, and import it again; the browser editor also writes it correctly |
+| The instruction that produces the subtask list | the sheet's `planningPrompt` — a new node arrives with this type's shipped default in it |
 | Whether the planning runs on-device or in the cloud | the sheet's `engineProvider` |
 
 **Also on the sheet, and ignored by the run:**
 
-- `planningPrompt` — editing it changes nothing; the prompt this node runs on is the one in the table above
 - `maxSubtasks` — how many subtasks appear is decided by the prompt and the run's step ceiling
 - `outputSchemaJson` — the subtask list is validated against a fixed shape
 
@@ -300,13 +297,9 @@ Judges what the previous step produced and answers Pass, Retry or Fail — the n
 
 | What it decides | Where the value comes from |
 |---|---|
-| The instruction that judges the result | ⚠ it stays this type's shipped default prompt, and nothing in the app writes it — export the pipeline, change `config.systemPrompt` on the node, and import it again; the browser editor also writes it correctly |
+| The instruction that judges the result | the sheet's `criteriaPrompt` — a new node arrives with this type's shipped default in it |
 | Whether the judgement runs on-device or in the cloud | the sheet's `engineProvider` |
 | Whether the node has a Retry branch at all — it does not cap how often that branch is taken | the sheet's `maxRetries` |
-
-**Also on the sheet, and ignored by the run:**
-
-- `criteriaPrompt` — editing it changes nothing; the prompt this node runs on is the one in the table above
 
 ### Summary — `SUMMARY`
 
@@ -319,12 +312,11 @@ Condenses what several earlier steps produced into one piece of text, typically 
 
 | What it decides | Where the value comes from |
 |---|---|
-| The instruction that combines the results | ⚠ it stays this type's shipped default prompt, and nothing in the app writes it — export the pipeline, change `config.systemPrompt` on the node, and import it again; the browser editor also writes it correctly |
+| The instruction that combines the results | the sheet's `customPrompt` — a new node arrives with this type's shipped default in it |
 
 **Also on the sheet, and ignored by the run:**
 
 - `format` — ask for the shape in the prompt instead
-- `customPrompt` — editing it changes nothing; the prompt this node runs on is the one in the table above
 - `targetLengthChars` — ask for the length in the prompt instead
 
 ### Pipeline — `PIPELINE`
@@ -551,10 +543,12 @@ engine does with each one.
 The `No` rows are a defect list, not a design. Each one is being resolved the
 only two ways it can be — the control is wired up to the setting it names, or it
 leaves the sheet — and this table shrinks as that happens. Until then it is here
-so you do not spend an evening tuning one. Four of them are worse than the rest
-and are called out where they appear in the reference above: the prompt fields of
-Intent Router, Decomposition, Evaluation and Summary are *required* by the sheet
-and still never reach the run.
+so you do not spend an evening tuning one.
+
+The worst four have already gone: the prompt fields of Intent Router,
+Decomposition, Evaluation and Summary were *required* by the sheet and still
+never reached the run. They do now, and the rows above say so — this page is
+generated, so a repaired control corrects its own entry.
 
 <!-- AUTO-GEN:FIELD_TABLE -->
 | Node | Field | Default | Reaches the run |
@@ -576,7 +570,7 @@ and still never reach the run.
 | `CLOUD` | `maxTokens` | `1024` | **No** — stored and exported, but nothing reads it during a run (the request carries no sampling parameters) |
 | `CLOUD` | `timeoutMs` | `30_000` | **No** — stored and exported, but nothing reads it during a run (cloud timeouts come from the client's own configuration) |
 | `INTENT_ROUTER` | `classes` | `emptyList()` | **Shapes the graph** — which branches exist — one port per class, and the run follows the edge the model picks |
-| `INTENT_ROUTER` | `classifierPrompt` | `""` | **No** — stored and exported, but nothing reads it during a run (editing it changes nothing; the prompt this node runs on is the one in the table above) |
+| `INTENT_ROUTER` | `classifierPrompt` | `""` | **Yes** — saved as the node's `systemPrompt` |
 | `INTENT_ROUTER` | `fallbackClass` | `null` | **No** — stored and exported, but nothing reads it during a run (an answer matching no class takes whichever branch you connected first, not the class named here; connect the branch you want as the fallback before the others) |
 | `INTENT_ROUTER` | `engineProvider` | `null` | **Yes** — saved as the node's `cloudProvider` |
 | `IF_CONDITION` | `expression` | `""` | **Yes** — saved as the node's `conditionPrompt` |
@@ -591,7 +585,7 @@ and still never reach the run.
 | `TOOL` | `argumentMapping` | `emptyList()` | **No** — stored and exported, but nothing reads it during a run (arguments are produced by the model from the node's input) |
 | `TOOL` | `confirmOverride` | `null` | **No** — stored and exported, but nothing reads it during a run (approval follows the tool's risk level and your settings) |
 | `TOOL` | `engineProvider` | `null` | **Yes** — saved as the node's `cloudProvider` |
-| `DECOMPOSITION` | `planningPrompt` | `""` | **No** — stored and exported, but nothing reads it during a run (editing it changes nothing; the prompt this node runs on is the one in the table above) |
+| `DECOMPOSITION` | `planningPrompt` | `""` | **Yes** — saved as the node's `systemPrompt` |
 | `DECOMPOSITION` | `maxSubtasks` | `5` | **No** — stored and exported, but nothing reads it during a run (how many subtasks appear is decided by the prompt and the run's step ceiling) |
 | `DECOMPOSITION` | `outputSchemaJson` | `null` | **No** — stored and exported, but nothing reads it during a run (the subtask list is validated against a fixed shape) |
 | `DECOMPOSITION` | `engineProvider` | `null` | **Yes** — saved as the node's `cloudProvider` |
@@ -599,11 +593,11 @@ and still never reach the run.
 | `QUEUE_PROCESSOR` | `itemVariable` | `"item"` | **No** — stored and exported, but nothing reads it during a run (the current subtask arrives as the node's input) |
 | `QUEUE_PROCESSOR` | `parallelism` | `1` | **No** — stored and exported, but nothing reads it during a run (subtasks always run one at a time) |
 | `QUEUE_PROCESSOR` | `stopOnError` | `true` | **No** — stored and exported, but nothing reads it during a run (what happens after a failed subtask is decided by the graph, not by this switch) |
-| `EVALUATION` | `criteriaPrompt` | `""` | **No** — stored and exported, but nothing reads it during a run (editing it changes nothing; the prompt this node runs on is the one in the table above) |
+| `EVALUATION` | `criteriaPrompt` | `""` | **Yes** — saved as the node's `systemPrompt` |
 | `EVALUATION` | `maxRetries` | `2` | **Shapes the graph** — whether the node has a Retry branch at all — it does not cap how often that branch is taken |
 | `EVALUATION` | `engineProvider` | `null` | **Yes** — saved as the node's `cloudProvider` |
 | `SUMMARY` | `format` | `SummaryFormat.BULLETS` | **No** — stored and exported, but nothing reads it during a run (ask for the shape in the prompt instead) |
-| `SUMMARY` | `customPrompt` | `null` | **No** — stored and exported, but nothing reads it during a run (editing it changes nothing; the prompt this node runs on is the one in the table above) |
+| `SUMMARY` | `customPrompt` | `null` | **Yes** — saved as the node's `systemPrompt` |
 | `SUMMARY` | `targetLengthChars` | `600` | **No** — stored and exported, but nothing reads it during a run (ask for the length in the prompt instead) |
 | `PIPELINE` | `targetPipelineId` | `""` | **Yes** — saved as the node's `targetPipelineId` |
 | `PIPELINE` | `targetPipelineName` | `null` | **Not a setting** — the app fills it in from the pipeline you picked |

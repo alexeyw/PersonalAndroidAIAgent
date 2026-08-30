@@ -86,21 +86,27 @@ class CookbookRuntimeReachTest {
     }
 
     @Test
-    fun `given the cookbook when a router prompt field is read then it is still documented as ignored`() {
-        // The four prompt fields the sheet accepts and the engine never sees are
-        // the single most consequential row in the document, and the one a
-        // reader is least likely to believe. Pin them by name: if the codec is
-        // fixed, this test names what else to update.
+    fun `given the cookbook when the four prompt fields are read then each one writes systemPrompt`() {
+        // Inverted from the canary it replaces. While the codec dropped these
+        // four, the test pinned the defect *by name* so a fix could not land
+        // without updating the document that described it — which is exactly
+        // how it behaved. It now pins the repair, for the same reason: the
+        // claim a reader is least likely to believe is the one worth holding
+        // against the code.
         val documented = parseDocumentedTargets()
 
-        assertTrue(
-            "INTENT_ROUTER now writes a flat property; update the cookbook's prompt note and this test.",
-            "systemPrompt" !in documented.getValue(NodeType.INTENT_ROUTER.name),
-        )
-        assertTrue(
-            "The cookbook no longer names the four node types whose prompt field is ignored.",
-            cookbook.readText().contains("Intent Router, Decomposition, Evaluation and Summary"),
-        )
+        listOf(
+            NodeType.INTENT_ROUTER,
+            NodeType.DECOMPOSITION,
+            NodeType.EVALUATION,
+            NodeType.SUMMARY,
+        ).forEach { type ->
+            assertTrue(
+                "${'$'}{type.name}'s prompt field no longer writes `systemPrompt`; the sheet would " +
+                    "accept a prompt the run never sees. Fix `NodeConfigCodec.apply`, not this test.",
+                "systemPrompt" in documented.getValue(type.name),
+            )
+        }
     }
 
     /**

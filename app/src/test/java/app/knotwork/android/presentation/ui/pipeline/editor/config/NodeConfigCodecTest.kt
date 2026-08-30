@@ -6,11 +6,15 @@ import app.knotwork.design.components.pipelineeditor.ClarificationConfig
 import app.knotwork.design.components.pipelineeditor.CloudConfig
 import app.knotwork.design.components.pipelineeditor.CloudProvider
 import app.knotwork.design.components.pipelineeditor.DecompositionConfig
+import app.knotwork.design.components.pipelineeditor.EvaluationConfig
 import app.knotwork.design.components.pipelineeditor.IfConditionConfig
+import app.knotwork.design.components.pipelineeditor.IntentRouterConfig
 import app.knotwork.design.components.pipelineeditor.LiteRtConfig
 import app.knotwork.design.components.pipelineeditor.PipelineConfig
 import app.knotwork.design.components.pipelineeditor.SkillConfig
 import app.knotwork.design.components.pipelineeditor.SkillEngine
+import app.knotwork.design.components.pipelineeditor.SummaryConfig
+import app.knotwork.design.components.pipelineeditor.SummaryFormat
 import app.knotwork.design.components.pipelineeditor.ToolConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -256,6 +260,77 @@ class NodeConfigCodecTest {
         assertNotNull(patched.configJson)
         assertTrue(patched.configJson!!.contains("\"title\":\"New\""))
         assertEquals("sp", patched.systemPrompt)
+    }
+
+    @Test
+    fun `given IntentRouter config when apply then the classifier prompt reaches systemPrompt`() {
+        val patched = NodeConfigCodec.apply(
+            node(NodeType.INTENT_ROUTER),
+            IntentRouterConfig(title = "Router", classifierPrompt = "classify this"),
+        )
+        assertEquals("classify this", patched.systemPrompt)
+    }
+
+    @Test
+    fun `given Decomposition config when apply then the planning prompt reaches systemPrompt`() {
+        val patched = NodeConfigCodec.apply(
+            node(NodeType.DECOMPOSITION),
+            DecompositionConfig(title = "Plan", planningPrompt = "break it down"),
+        )
+        assertEquals("break it down", patched.systemPrompt)
+    }
+
+    @Test
+    fun `given Evaluation config when apply then the criteria prompt reaches systemPrompt`() {
+        val patched = NodeConfigCodec.apply(
+            node(NodeType.EVALUATION),
+            EvaluationConfig(title = "Judge", criteriaPrompt = "grade it"),
+        )
+        assertEquals("grade it", patched.systemPrompt)
+    }
+
+    @Test
+    fun `given Summary config when apply then the custom prompt reaches systemPrompt`() {
+        val patched = NodeConfigCodec.apply(
+            node(NodeType.SUMMARY),
+            SummaryConfig(title = "Sum", format = SummaryFormat.CUSTOM, customPrompt = "condense it"),
+        )
+        assertEquals("condense it", patched.systemPrompt)
+    }
+
+    @Test
+    fun `given an edited prompt when apply then it survives a decode round-trip`() {
+        // The bug this pins was invisible precisely because `decode` reads the
+        // prompt back out of `configJson`: the sheet reopened showing the edit
+        // while the run kept using the prompt the node was created with. Both
+        // halves must agree, so the round-trip is asserted on both surfaces.
+        val patched = NodeConfigCodec.apply(
+            node(NodeType.INTENT_ROUTER),
+            IntentRouterConfig(title = "Router", classifierPrompt = "edited"),
+        )
+        val decoded = NodeConfigCodec.decode(patched) as IntentRouterConfig
+        assertEquals("edited", decoded.classifierPrompt)
+        assertEquals("edited", patched.systemPrompt)
+    }
+
+    @Test
+    fun `given a blank prompt when apply then systemPrompt is null so the executor falls back`() {
+        // Not `""`: `SystemNodeExecutor` and `SummaryNodeExecutor` resolve their
+        // default with `node.systemPrompt ?: FALLBACK`, so an empty string would
+        // run the node with no instructions instead of its default prompt.
+        val router = NodeConfigCodec.apply(
+            node(NodeType.INTENT_ROUTER),
+            IntentRouterConfig(title = "Router", classifierPrompt = "   "),
+        )
+        assertNull(router.systemPrompt)
+
+        // SUMMARY reaches this state legitimately — its prompt is required only
+        // when the format is CUSTOM.
+        val summary = NodeConfigCodec.apply(
+            node(NodeType.SUMMARY),
+            SummaryConfig(title = "Sum", format = SummaryFormat.BULLETS, customPrompt = null),
+        )
+        assertNull(summary.systemPrompt)
     }
 
     @Test

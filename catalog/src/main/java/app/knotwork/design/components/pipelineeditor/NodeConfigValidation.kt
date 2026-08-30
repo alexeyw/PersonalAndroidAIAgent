@@ -119,21 +119,6 @@ enum class ValidationFailure(val stringRes: Int) {
     TARGET_SKILL_MISSING(app.knotwork.design.R.string.knotwork_node_validation_target_skill_missing),
 }
 
-/** Allowed range for [LiteRtConfig.temperature]. */
-private val TEMPERATURE_RANGE = 0f..2f
-
-/** Allowed range for [LiteRtConfig.topP]. */
-private val TOP_P_RANGE = 0f..1f
-
-/** Allowed range for [LiteRtConfig.maxNewTokens]. */
-private val MAX_NEW_TOKENS_RANGE = 32..4_096
-
-/** Allowed range for [CloudConfig.maxTokens]. */
-private val MAX_TOKENS_RANGE = 1..32_768
-
-/** Allowed range for [CloudConfig.timeoutMs]. */
-private val TIMEOUT_RANGE_MS = 1_000..600_000
-
 /** Allowed range for [DecompositionConfig.maxSubtasks]. */
 private val MAX_SUBTASKS_RANGE = 1..20
 
@@ -232,12 +217,15 @@ object NodeConfigValidation {
         // valid first-class choice. No
         // REQUIRED error in that case; the executor resolves the model at
         // run-time through `LoadModelUseCase`'s null fallback.
+        //
+        // `temperature` / `topP` / `maxNewTokens` are NOT validated, for the
+        // same reason `model` is not validated on the CLOUD sheet below: ADR
+        // 0005 removed their controls, so a range error on one of them names a
+        // field the user cannot see, cannot reach and cannot correct — it just
+        // refuses to save. The values still round-trip on `LiteRtConfig`, and
+        // an imported pipeline is free to carry any of them, because nothing
+        // reads them during a run.
         if (config.systemPrompt.isBlank()) errors[FieldId.SYSTEM_PROMPT] = ValidationFailure.REQUIRED
-        if (config.temperature !in TEMPERATURE_RANGE) errors[FieldId.TEMPERATURE] = ValidationFailure.OUT_OF_RANGE
-        if (config.topP !in TOP_P_RANGE) errors[FieldId.TOP_P] = ValidationFailure.OUT_OF_RANGE
-        if (config.maxNewTokens !in MAX_NEW_TOKENS_RANGE) {
-            errors[FieldId.MAX_NEW_TOKENS] = ValidationFailure.OUT_OF_RANGE
-        }
         return errors
     }
 
@@ -248,10 +236,11 @@ object NodeConfigValidation {
         // validator therefore no
         // longer flags a blank model — the executor falls back to the
         // provider's configured model at runtime when this field is empty.
+        // `temperature` / `maxTokens` / `timeoutMs` are unvalidated for the same
+        // reason as `model`, and as their LITE_RT counterparts above: ADR 0005
+        // took their controls off the sheet, so flagging them blocks Save on a
+        // field that is not on screen.
         if (config.systemPrompt.isBlank()) errors[FieldId.SYSTEM_PROMPT] = ValidationFailure.REQUIRED
-        if (config.temperature !in TEMPERATURE_RANGE) errors[FieldId.TEMPERATURE] = ValidationFailure.OUT_OF_RANGE
-        if (config.maxTokens !in MAX_TOKENS_RANGE) errors[FieldId.MAX_TOKENS] = ValidationFailure.OUT_OF_RANGE
-        if (config.timeoutMs !in TIMEOUT_RANGE_MS) errors[FieldId.TIMEOUT_MS] = ValidationFailure.OUT_OF_RANGE
         return errors
     }
 

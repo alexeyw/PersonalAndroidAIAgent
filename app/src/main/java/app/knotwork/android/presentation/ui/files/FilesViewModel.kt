@@ -1,7 +1,10 @@
 package app.knotwork.android.presentation.ui.files
 
+import android.content.Context
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.knotwork.android.R
 import app.knotwork.android.domain.models.WorkspaceResult
 import app.knotwork.android.domain.usecases.workspace.DeleteWorkspaceFilesUseCase
 import app.knotwork.android.domain.usecases.workspace.ExportWorkspaceFileUseCase
@@ -9,7 +12,9 @@ import app.knotwork.android.domain.usecases.workspace.ImportFileToWorkspaceUseCa
 import app.knotwork.android.domain.usecases.workspace.ImportMode
 import app.knotwork.android.domain.usecases.workspace.ListWorkspaceUseCase
 import app.knotwork.android.domain.usecases.workspace.PreviewWorkspaceFileUseCase
+import app.knotwork.android.presentation.state.TransientMessageRelay
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,6 +44,12 @@ import javax.inject.Inject
  * @property deleteUseCase Deletes one or more files.
  * @property importUseCase Imports an external document with a collision policy.
  * @property exportUseCase Streams a file out (save-as / share staging).
+ * @property transientMessageRelay Activity-level snackbar bus. Failures are
+ *   posted here rather than emitted on [events]: the host that renders them
+ *   lives in `AppShellScaffold`, above the NavGraph, so a message survives the
+ *   screen navigating away from under it.
+ * @property appContext Application context, used only to resolve the snackbar
+ *   copy for [postFailure].
  */
 @HiltViewModel
 class FilesViewModel @Inject constructor(
@@ -47,6 +58,8 @@ class FilesViewModel @Inject constructor(
     private val deleteUseCase: DeleteWorkspaceFilesUseCase,
     private val importUseCase: ImportFileToWorkspaceUseCase,
     private val exportUseCase: ExportWorkspaceFileUseCase,
+    private val transientMessageRelay: TransientMessageRelay,
+    @param:ApplicationContext private val appContext: Context,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FilesUiState())
@@ -148,14 +161,14 @@ class FilesViewModel @Inject constructor(
                         _uiState.update { it.copy(preview = FilePreviewState(path = path, preview = result.value)) }
                     is WorkspaceResult.Failure -> {
                         Timber.w("Workspace preview failed for %s: %s", path, result.error)
-                        emit(FilesEvent.ShowMessage(FilesMessage.PreviewFailed))
+                        postFailure(R.string.files_message_preview_failed)
                     }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Timber.w(e, "Workspace preview threw for %s", path)
-                emit(FilesEvent.ShowMessage(FilesMessage.PreviewFailed))
+                postFailure(R.string.files_message_preview_failed)
             }
         }
     }
@@ -200,12 +213,12 @@ class FilesViewModel @Inject constructor(
             }
             try {
                 val summary = deleteUseCase(targets)
-                if (!summary.allSucceeded) emit(FilesEvent.ShowMessage(FilesMessage.DeletePartial))
+                if (!summary.allSucceeded) postFailure(R.string.files_message_delete_partial)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Timber.w(e, "Workspace delete threw")
-                emit(FilesEvent.ShowMessage(FilesMessage.DeletePartial))
+                postFailure(R.string.files_message_delete_partial)
             }
             refresh()
         }
@@ -268,19 +281,19 @@ class FilesViewModel @Inject constructor(
             try {
                 val stream = pending.openStream()
                 if (stream == null) {
-                    emit(FilesEvent.ShowMessage(FilesMessage.ImportFailed))
+                    postFailure(R.string.files_message_import_failed)
                     return@launch
                 }
                 val result = stream.use { importUseCase(pending.name, it, mode) }
                 if (result is WorkspaceResult.Failure) {
                     Timber.w("Workspace import failed for %s: %s", pending.name, result.error)
-                    emit(FilesEvent.ShowMessage(FilesMessage.ImportFailed))
+                    postFailure(R.string.files_message_import_failed)
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Timber.w(e, "Workspace import threw for %s", pending.name)
-                emit(FilesEvent.ShowMessage(FilesMessage.ImportFailed))
+                postFailure(R.string.files_message_import_failed)
             } finally {
                 pendingImport = null
             }
@@ -304,7 +317,7 @@ class FilesViewModel @Inject constructor(
     suspend fun completeSaveAs(sink: OutputStream) {
         val path = pendingSavePath ?: return
         pendingSavePath = null
-        if (!exportTo(path, sink)) emit(FilesEvent.ShowMessage(FilesMessage.ExportFailed))
+        if (!exportTo(path, sink)) postFailure(R.string.files_message_export_failed)
     }
 
     /** Ask the screen to stage + share a single file. */
@@ -336,6 +349,21 @@ class FilesViewModel @Inject constructor(
 
     private fun emit(event: FilesEvent) {
         _events.tryEmit(event)
+    }
+
+    /**
+     * Surfaces a failed file operation to the user through the activity-level
+     * snackbar host.
+     *
+     * Every one of these paths used to emit a `FilesEvent.ShowMessage` that
+     * `FilesScreen` swallowed in an empty `when` branch, so eight distinct
+     * failures — import, export, preview, partial delete — reached nobody.
+     * Posting to the relay is what the screen's own comment said was happening.
+     *
+     * @param message String resource for the sentence the user reads.
+     */
+    private fun postFailure(@StringRes message: Int) {
+        transientMessageRelay.post(appContext.getString(message))
     }
 
     /** A picked document awaiting import; the stream factory can be re-opened per attempt. */

@@ -178,14 +178,40 @@ internal object NodeConfigCodec {
                 skillId = config.skillId.takeIf { it.isNotBlank() },
                 cloudProvider = if (config.engine == SkillEngine.CLOUD) CloudProvider.AUTO_KEY else null,
             )
-            is IntentRouterConfig ->
-                withJson.copy(cloudProvider = engineWire(config.engineProvider, source.cloudProvider))
-            is DecompositionConfig ->
-                withJson.copy(cloudProvider = engineWire(config.engineProvider, source.cloudProvider))
-            is EvaluationConfig ->
-                withJson.copy(cloudProvider = engineWire(config.engineProvider, source.cloudProvider))
+            // These four types name their prompt field differently on the
+            // sheet, but the executors read exactly one thing —
+            // `node.systemPrompt` (`SystemNodeExecutor`, `SummaryNodeExecutor`).
+            // Mirroring the rich field onto the flat property is what makes an
+            // edit take effect. Without it the field is *required* by
+            // `NodeConfigValidation`, survives a reopen (because `decode` reads
+            // it back out of `configJson`) and still never reaches the run — an
+            // edit that looks saved and is not.
+            //
+            // Blank maps to `null`, not to `""`: both executors fall back with
+            // `node.systemPrompt ?: FALLBACK`, so an empty string would run the
+            // node with no instructions at all rather than its default prompt.
+            // The browser editor writes `''` here, but its value reaches a node
+            // through `PipelineJsonSerializer`, whose `optStringOrNull` maps an
+            // empty string to `null` — so the two editors agree in effect.
+            is IntentRouterConfig -> withJson.copy(
+                systemPrompt = config.classifierPrompt.takeIf { it.isNotBlank() },
+                cloudProvider = engineWire(config.engineProvider, source.cloudProvider),
+            )
+            is DecompositionConfig -> withJson.copy(
+                systemPrompt = config.planningPrompt.takeIf { it.isNotBlank() },
+                cloudProvider = engineWire(config.engineProvider, source.cloudProvider),
+            )
+            is EvaluationConfig -> withJson.copy(
+                systemPrompt = config.criteriaPrompt.takeIf { it.isNotBlank() },
+                cloudProvider = engineWire(config.engineProvider, source.cloudProvider),
+            )
+            // SUMMARY's prompt is required only when the format is CUSTOM, so a
+            // blank value is a legitimate state here rather than an unreachable
+            // one — which is precisely why it must not become `""`.
+            is SummaryConfig -> withJson.copy(
+                systemPrompt = config.customPrompt?.takeIf { it.isNotBlank() },
+            )
             is QueueProcessorConfig,
-            is SummaryConfig,
             is InputConfig,
             -> withJson
         }

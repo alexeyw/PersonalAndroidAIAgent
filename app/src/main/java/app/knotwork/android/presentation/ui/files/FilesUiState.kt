@@ -81,26 +81,4 @@ sealed interface FilesEvent {
      * @property paths Workspace-relative paths to share.
      */
     data class ShareFiles(val paths: List<String>) : FilesEvent
-
-    /**
-     * Show a transient message.
-     *
-     * @property kind Which message to show (the screen maps it to a string).
-     */
-    data class ShowMessage(val kind: FilesMessage) : FilesEvent
-}
-
-/** Transient messages the Files screen can surface in a snackbar. */
-enum class FilesMessage {
-    /** An import failed (quota, too large, or I/O). */
-    ImportFailed,
-
-    /** A save-as / export failed. */
-    ExportFailed,
-
-    /** A preview could not be opened (binary or I/O). */
-    PreviewFailed,
-
-    /** Some files in a bulk delete could not be removed. */
-    DeletePartial,
 }
