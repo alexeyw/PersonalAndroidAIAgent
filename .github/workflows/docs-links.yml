@@ -1,0 +1,84 @@
+name: Docs links
+
+# Non-blocking report on the EXTERNAL links in the documentation.
+#
+# Why this is a workflow of its own, and not a step of the merge gate: an
+# external link's verdict is a statement about somebody else's server. It can
+# flip from green to red while this repository does not change at all, so it has
+# no business among the conditions for merging — the same reasoning that keeps
+# the dependency version-freshness checks at informational severity. INTERNAL
+# links (relative paths and `#anchors`) are the opposite kind of claim, decided
+# entirely by the commit under review, and those are gated by
+# `:app:verifyDocLinks` inside `./gradlew check`.
+#
+# Two consequences of that split, stated so nobody has to rediscover them:
+#
+#  - This workflow must never be added to the required-check list of branch
+#    protection. It reports; it does not decide.
+#  - A scheduled workflow only runs from the repository's DEFAULT branch, and
+#    only once its definition has reached that branch. Until this file is on
+#    `main`, the weekly run does not exist — use the manual trigger.
+#
+# Triggers: weekly, and on demand from the Actions tab.
+
+on:
+  schedule:
+    # Mondays, 06:17 UTC. An odd minute on purpose: the top of the hour is when
+    # every scheduled job on the platform queues at once.
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  external-links:
+    name: External link report
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      # The task lives in the `:app` project, so configuring the build needs the
+      # Android SDK even though the check itself only reads Markdown.
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: true
+
+      # The task never fails on a dead link — that is the whole point — so a red
+      # job here means the build could not run at all.
+      - name: Probe external documentation links
+        run: ./gradlew :app:reportExternalDocLinks --no-daemon
+
+      - name: Publish the report
+        if: always()
+        run: |
+          report=app/build/reports/docs-links/external-links.md
+          if [ -f "$report" ]; then
+            cat "$report" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "The report was not produced; see the build log above." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-link-report
+          path: app/build/reports/docs-links/external-links.md
+          if-no-files-found: warn

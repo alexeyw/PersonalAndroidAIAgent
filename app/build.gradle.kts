@@ -9,8 +9,12 @@ import app.knotwork.android.buildtools.GenerateFileMapTask
 import app.knotwork.android.buildtools.LintBaselineGuard
 import app.knotwork.android.buildtools.R8MappingChecker
 import app.knotwork.android.buildtools.ReleaseVersionChecker
+import app.knotwork.android.buildtools.ReportExternalDocLinksTask
 import app.knotwork.android.buildtools.SettingsHelpDocsGenerator
+import app.knotwork.android.buildtools.VerifyDocLinksTask
 import app.knotwork.android.buildtools.VerifyFileMapTask
+import app.knotwork.android.buildtools.VerifyMermaidDiagramsTask
+import app.knotwork.android.buildtools.VerifyVersionSourcesTask
 import com.android.build.api.artifact.SingleArtifact
 import dev.detekt.gradle.Detekt
 import java.util.Properties
@@ -1787,3 +1791,109 @@ tasks.register("verifyReleaseVersion") {
         logger.lifecycle("Release tag `$tag` matches the declared versionName `$declaredVersionName`.")
     }
 }
+
+// ─── Documentation gates: links, diagrams, and the version number ────────────
+//
+// Three checks over the same Markdown set, added together because they answer
+// the same class of question — "does the documentation still describe this
+// repository?" — and share one file set and one link reader.
+//
+// The set is assembled from declared roots rather than from `git ls-files`. A
+// checker that picks its inputs out of the index cannot see the files the branch
+// under review is *adding*, so it validates everything except the change being
+// reviewed and reports a clean pass; that is not a hypothetical, it happened
+// while this repository's documentation was being written. The `CLAUDE.md`
+// family is excluded because it is untracked: including it would make the gate
+// read a different corpus locally than in CI.
+//
+// `requiredPrefixes` closes the mirror-image hole — a glob that stops matching
+// makes a scan pass by covering nothing. Each root must contribute at least one
+// document, which is self-maintaining in a way a pinned file count is not.
+val documentationRoots = listOf("", "docs/", ".github/", "app/", "catalog/", "gradle/")
+
+val documentationFiles: FileCollection = files(
+    fileTree(rootDir) {
+        include("*.md")
+        exclude("CLAUDE.md", "CLAUDE.local.md")
+    },
+    fileTree("$rootDir/docs") { include("**/*.md") },
+    fileTree("$rootDir/.github") { include("**/*.md") },
+    fileTree("$rootDir/app") {
+        include("**/*.md")
+        exclude("build/**")
+    },
+    fileTree("$rootDir/catalog") {
+        include("**/*.md")
+        exclude("build/**")
+    },
+    fileTree("$rootDir/gradle") { include("**/*.md") },
+)
+
+// Internal links — a blocking gate. A relative path or an `#anchor` is a claim
+// about this repository, so its verdict is a function of the commit under review
+// and a dead one is a defect the build can refuse.
+val verifyDocLinks by tasks.registering(VerifyDocLinksTask::class) {
+    group = "verification"
+    description = "Fails the build if a relative link or an #anchor in the documentation leads nowhere."
+    repositoryRoot.set(rootProject.layout.projectDirectory)
+    documents.from(documentationFiles)
+    requiredPrefixes.set(documentationRoots)
+}
+tasks.named("check") { dependsOn(verifyDocLinks) }
+
+// External links — a report, never a gate. Their verdict depends on somebody
+// else's server and can flip without a commit, so by the same reasoning that
+// demoted the dependency version-freshness checks to informational severity,
+// this has no business among the conditions for merging. It is run by
+// `.github/workflows/docs-links.yml` on a schedule, and on demand locally.
+val reportExternalDocLinks by tasks.registering(ReportExternalDocLinksTask::class) {
+    group = "verification"
+    description = "Probes every external http link in the documentation and writes a report. Never fails the build."
+    repositoryRoot.set(rootProject.layout.projectDirectory)
+    documents.from(documentationFiles)
+    requiredPrefixes.set(documentationRoots)
+    timeoutSeconds.set(20)
+    reportFile.set(layout.buildDirectory.file("reports/docs-links/external-links.md"))
+}
+
+// Mermaid diagrams — a blocking gate, and a structural one. A full parse would
+// need Mermaid's own grammar, which means a Node toolchain and a network install
+// on the critical path of every build. The rules that are checked instead were
+// each written against the real parser: confirmed to reject the defect they
+// describe, and confirmed not to reject anything Mermaid accepts. See
+// `docs/static-analysis.md` for what that does and does not buy.
+val verifyMermaidDiagrams by tasks.registering(VerifyMermaidDiagramsTask::class) {
+    group = "verification"
+    description = "Fails the build if an embedded Mermaid diagram is structurally broken."
+    repositoryRoot.set(rootProject.layout.projectDirectory)
+    documents.from(documentationFiles)
+    requiredPrefixes.set(documentationRoots)
+    stampFile.set(layout.buildDirectory.file("reports/docs-links/mermaid-verified.txt"))
+}
+tasks.named("check") { dependsOn(verifyMermaidDiagrams) }
+
+// The `FILE_MAP.md` files are Markdown, so they are inputs to the three tasks
+// above and outputs of `generateFileMap`. Without an ordering, asking for both
+// in one invocation fails Gradle's implicit-dependency validation outright —
+// and `./gradlew :app:generateFileMap check` is exactly what the contribution
+// workflow asks for after a Kotlin file is added or moved. Ordering only:
+// neither task should drag the other into a build that did not ask for it.
+listOf(verifyDocLinks, reportExternalDocLinks, verifyMermaidDiagrams).forEach { task ->
+    task { mustRunAfter(generateFileMap) }
+}
+
+// The version number, in every place a human wrote it down. `versionName` below
+// is the single source of truth for the build; the README badge, the topmost
+// changelog heading and the two compare links at the foot of the changelog are
+// copies maintained by hand at release time, and nothing noticed when one was
+// missed. The release checklist did not even mention the badge — which is the
+// number a bug reporter quotes.
+val verifyVersionSources by tasks.registering(VerifyVersionSourcesTask::class) {
+    group = "verification"
+    description = "Fails the build if the README badge or the CHANGELOG disagrees with the declared versionName."
+    declaredVersionName.set(android.defaultConfig.versionName.orEmpty())
+    readmeFile.set(file("$rootDir/README.md"))
+    changelogFile.set(file("$rootDir/CHANGELOG.md"))
+    stampFile.set(layout.buildDirectory.file("reports/docs-links/version-sources-verified.txt"))
+}
+tasks.named("check") { dependsOn(verifyVersionSources) }

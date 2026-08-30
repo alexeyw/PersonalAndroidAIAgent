@@ -41,7 +41,7 @@ Closes #
       coverage in new `domain` / `data` code; see `docs/testing.md`).
 - [ ] Public documentation updated where relevant (see the *Pull
       requests* section in
-      [`CONTRIBUTING.md`](../blob/main/CONTRIBUTING.md)). Typical
+      [`CONTRIBUTING.md`](https://github.com/alexeyw/knotwork/blob/main/CONTRIBUTING.md)). Typical
       triggers:
       user-visible feature → `README.md` + `docs/user-guide.md`; new
       `NodeType` / `Tool` / prompt variable → `docs/extending.md` and

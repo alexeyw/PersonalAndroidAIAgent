@@ -48,6 +48,25 @@ details.
   OpenAI-compatible endpoint, OAuth, a connection test for MCP servers, more
   than one image per message, and a per-run cancel.
 
+- **Four build checks over things nobody was checking.** `./gradlew check` now
+  fails on a **dead internal documentation link** — a relative path or an
+  `#anchor` that leads nowhere, across every Markdown file in the repository —
+  and on a **structurally broken Mermaid diagram**, which until now degraded
+  into a red error box on GitHub with nothing to catch it. It also holds the
+  **version number to one value**: the badge in `README.md`, the topmost
+  released heading here, both compare links at the foot of this file, and the
+  `versionName` the build declares. The release checklist had never mentioned
+  the badge, which is the number a bug reporter quotes. Finally, a structural
+  guard now enforces what was written down and nothing enforced — **a prompt
+  pack is imported from a file you picked, never fetched over a link**; an
+  instruction file that reaches the system prompt of an agent holding tools has
+  a human action standing between it and the network, and now the build says so
+  too. Each rule was watched failing before it was trusted, and the Mermaid
+  rules were checked against the real Mermaid parser so the gate cannot start
+  disagreeing with the renderer. External `http` links are the one thing
+  deliberately left out of the gate: their verdict belongs to somebody else's
+  server, so they are reported weekly instead.
+
 ### Changed
 
 - **The file maps are generated, and now cover the whole tree.** `FILE_MAP.md`
