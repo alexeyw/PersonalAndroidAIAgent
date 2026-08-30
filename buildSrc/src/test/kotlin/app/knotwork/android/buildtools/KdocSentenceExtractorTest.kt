@@ -262,4 +262,36 @@ class KdocSentenceExtractorTest {
 
         assertNull(KdocSentenceExtractor.firstSentence("Outer.kt", source))
     }
+
+    @Test
+    fun `given a file-header KDoc above the declaration's own when extracting then the header is not attributed`() {
+        // Six files in this repository open with a header KDoc and then give the
+        // declaration its own. Treating the header as trivia would attribute it
+        // to a declaration it does not describe — a sentence that reads
+        // perfectly and is about the wrong scope.
+        val source = """
+            package p
+
+            /**
+             * Pure decision functions answering "which tab owns this route".
+             */
+
+            /** Returns the tab that owns [route]. */
+            fun tabFor(route: String) = route
+        """.trimIndent()
+
+        assertEquals("Returns the tab that owns `route`.", KdocSentenceExtractor.firstSentence("tabFor.kt", source))
+    }
+
+    @Test
+    fun `given a file whose only KDoc documents nothing when extracting then nothing is returned`() {
+        val source = """
+            package p
+
+            /** A header above a header. */
+            /** And nothing after it. */
+        """.trimIndent()
+
+        assertNull(KdocSentenceExtractor.firstSentence("Nothing.kt", source))
+    }
 }

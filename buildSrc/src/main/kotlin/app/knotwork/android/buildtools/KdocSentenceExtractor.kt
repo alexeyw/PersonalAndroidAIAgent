@@ -139,6 +139,14 @@ object KdocSentenceExtractor {
                     val newline = source.indexOf('\n', cursor)
                     cursor = if (newline < 0) source.length else newline + 1
                 }
+                // A KDoc is not trivia: it documents whatever follows it, so the
+                // block *before* it documents nothing. Six files here open with
+                // a file-header KDoc above the declaration's own — skipping it
+                // would attribute the header to a declaration it does not
+                // describe, which reads perfectly and is wrong.
+                source.startsWith(KDOC_OPEN, cursor) && !source.startsWith(EMPTY_BLOCK_COMMENT, cursor) -> {
+                    return cursor
+                }
                 source.startsWith("/*", cursor) -> {
                     var depth = 0
                     while (cursor < source.length) {
@@ -354,6 +362,9 @@ object KdocSentenceExtractor {
     }
 
     private const val KDOC_OPEN = "/**"
+
+    /** `/**/` opens with the KDoc marker but is an empty block comment, not a doc. */
+    private const val EMPTY_BLOCK_COMMENT = "/**/"
     private const val KDOC_CLOSE = "*/"
 
     /** Declaration keywords whose following identifier names the declaration. */
@@ -372,7 +383,7 @@ object KdocSentenceExtractor {
     )
 
     /** Abbreviations whose trailing period does not end a sentence. */
-    private val ABBREVIATIONS = listOf("e.g.", "i.e.", "etc.", "vs.", "cf.", "approx.", "no.", "fig.")
+    private val ABBREVIATIONS = listOf("e.g.", "i.e.", "etc.", "vs.", "cf.", "approx.")
 
     /** A KDoc `[Reference]` or `[Reference.member]`, rewritten to a code span. */
     private val KDOC_REFERENCE = Regex("""\[([A-Za-z_][\w.]*)]""")

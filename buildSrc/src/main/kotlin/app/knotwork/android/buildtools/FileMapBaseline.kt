@@ -8,10 +8,13 @@ package app.knotwork.android.buildtools
  * usable KDoc sentence to seed one from. Both are allowed to fall and not to
  * rise.
  *
- * **Why a ratchet rather than a floor of zero.** Requiring every file to be
- * described would have made this change a 550-line writing exercise before the
- * gate could be switched on, and a gate that cannot be switched on is not a
- * gate. The ratchet turns the backlog into a number that only moves one way.
+ * **Why a ratchet rather than a hard-coded floor.** Every `.undescribed` count
+ * is in fact `0` today — the 204 markers the first generation left were all
+ * filled by hand — so the ratchet currently behaves exactly like a floor of
+ * zero. It is a ratchet rather than a constant because the other number
+ * (`no-kdoc-seed`) has a real backlog that will be worked down over time, and
+ * because a floor written into the build cannot be relaxed deliberately for one
+ * block without editing the build. A committed number can, in a reviewed diff.
  *
  * **Why generation lowers it and never raises it.** [lowered] takes the minimum
  * of the measured and recorded values, so an improvement is recorded by simply

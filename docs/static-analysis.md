@@ -664,12 +664,19 @@ without a description fails `check` until one is written.
 ### Why a typed task rather than an ad-hoc block
 
 The four generate/verify pairs above are ad-hoc `doLast` blocks. Two consequences
-this pair avoids: an ad-hoc action that reads a build-script `val` captures the
-whole build script, which is what makes those four incompatible with the
-configuration cache; and an ad-hoc verification task declares no output, so
-Gradle can never treat it as up to date and re-runs it on every `check`.
-`VerifyFileMapTask` declares a stamp output and is skipped while nothing it
-reads has changed.
+this pair avoids, both measured rather than assumed:
+
+- **Configuration cache.** An ad-hoc action that reads a build-script `val`
+  captures the whole build script. On its own task graph,
+  `./gradlew :app:verifyCookbookDocs --configuration-cache` fails with *"cannot
+  serialize Gradle script object references"*; `:app:verifyFileMap` and
+  `:app:generateFileMap` store and reuse an entry. (This says nothing about the
+  whole build's compatibility — a task's problems only surface when that task is
+  in the graph.)
+- **Up-to-date checking.** A task with no declared output is never up to date, so
+  an ad-hoc verification task re-runs on every `check`. `VerifyFileMapTask`
+  declares a stamp output: observed `UP-TO-DATE` on a second consecutive run,
+  re-running on a content change, and failing on an added file.
 
 The action reads the tree **through** its declared `@InputFiles` property rather
 than walking the filesystem, so Gradle cannot fingerprint one set of files while

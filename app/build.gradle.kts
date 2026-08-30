@@ -1226,11 +1226,13 @@ tasks.named("check") { dependsOn(verifyCookbookDocs) }
 // across by path and only seeded from KDoc when a path has none. The gap count
 // is ratcheted in `config/file-map/baseline.properties`.
 //
-// Unlike the four pairs above, these are typed task classes: an ad-hoc
-// `doLast` block that reads a build-script `val` captures the whole build
-// script (which is what makes those four configuration-cache incompatible),
-// and an ad-hoc verification task declares no output, so Gradle can never treat
-// it as up to date and re-runs it on every `check`.
+// Unlike the four pairs above, these are typed task classes. Measured, on each
+// pair's own task graph: `:app:verifyCookbookDocs --configuration-cache` fails
+// with "cannot serialize Gradle script object references" (an ad-hoc `doLast`
+// block reading a build-script `val` captures the whole build script), while
+// this pair stores and reuses an entry. And an ad-hoc verification task declares
+// no output, so Gradle can never treat it as up to date; `VerifyFileMapTask`
+// declares a stamp and is skipped while nothing it reads has changed.
 val fileMapSpecs = listOf(
     FileMapSpec(
         mapPath = "app/src/main/java/app/knotwork/android/FILE_MAP.md",

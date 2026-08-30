@@ -23,14 +23,15 @@ import java.io.File
 /**
  * Shared plumbing of the two file-map tasks.
  *
- * Written as a typed task rather than an ad-hoc `doLast` block for two reasons
- * measured rather than assumed. First, an ad-hoc block capturing a build-script
- * `val` captures the whole build script, which is what makes the four older
- * generate/verify pairs in this build incompatible with the configuration
- * cache. Second, an ad-hoc verification task has untyped inputs and no output,
- * and Gradle never treats a task without outputs as up to date — so it re-runs
- * on every `check`. [VerifyFileMapTask] declares a stamp output and is skipped
- * when nothing it reads has changed.
+ * Written as a typed task rather than an ad-hoc `doLast` block for two reasons,
+ * both measured on each pair's own task graph rather than assumed. First, an
+ * ad-hoc block capturing a build-script `val` captures the whole build script:
+ * `verifyCookbookDocs --configuration-cache` fails with "cannot serialize
+ * Gradle script object references", while this pair stores and reuses an entry.
+ * Second, an ad-hoc verification task has untyped inputs and no output, and
+ * Gradle never treats a task without outputs as up to date — so it re-runs on
+ * every `check`. [VerifyFileMapTask] declares a stamp output and is skipped when
+ * nothing it reads has changed.
  *
  * The action reads the source tree **through** [sources], the declared input,
  * and never walks the filesystem on its own: a walk would fingerprint one set
