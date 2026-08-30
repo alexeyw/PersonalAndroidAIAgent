@@ -38,6 +38,11 @@ details.
   background and its answer still arrives in the conversation. The behaviour is
   unchanged and deliberate; the documentation implied otherwise.
 
+- **The guide's steps for adding an MCP server match the screen again.** They
+  still described scrolling to a section; the add action is a permanent **+** in
+  the top bar, and the steps mentioned neither the address form nor the
+  transport selector.
+
 - **Settings options now explain themselves, in one sentence, where they
   live.** Tap the **ⓘ** beside a row's label and a short explanation opens in
   place, under the row; opening one closes the other, so a category screen is
