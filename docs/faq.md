@@ -45,9 +45,11 @@ neither. See [Getting started](user-guide.md#getting-started).
 
 ### Which model should I start with?
 
-**Gemma 4 E4B** (~3.7 GB) is the default in onboarding, and **Gemma 4 E2B**
-(~2.6 GB) is the lighter alternative if space or RAM is tight. Both are offered
-as presets, so this is a tap rather than a decision about file formats.
+Onboarding picks one for you — each scenario names the model it needs and
+downloads exactly that. Choosing by hand, the two presets are **Gemma 4 E2B** and
+**Gemma 4 E4B**; take E2B when storage or RAM is tight. Either way this is a tap,
+not a decision about file formats. See
+[Getting started](user-guide.md#getting-started).
 
 ### Which cloud providers are supported?
 
@@ -64,7 +66,8 @@ nowhere to go. See [Known limitations](#known-limitations).
 
 ### My Ollama server is not on my home network. Will it work?
 
-Over `https`, yes — set the base URL under **Settings → Models**. Over plain
+Over `https`, yes — the Ollama row under **Settings → Models → External
+providers** carries its base URL. Over plain
 `http` it is refused unless the address is on a private network or you have
 approved that specific origin, because unencrypted traffic to the open internet
 is not something the app will do quietly on your behalf.
@@ -103,11 +106,15 @@ device](../PRIVACY.md#4-what-never-leaves-your-device).
 
 ### So what *can* go out?
 
-Exactly three things, and each one is something you set up yourself: a **cloud
-node** using your own key, an **MCP server** you added, and a **model download**.
-All three are visible in the pipeline or the settings that created them. See
-[PRIVACY § What can leave your
-device](../PRIVACY.md#3-what-can-leave-your-device--and-only-if-you-set-it-up).
+Five paths, and every one of them is something you switched on: a **cloud node**
+using your own key, an **MCP server** you added, a **model download**, an
+**`http_request` tool call** to a host you put on the allowed list, and **crash
+reports** if you consented to them. Nothing else has a way out. See [PRIVACY §
+What can leave your
+device](../PRIVACY.md#3-what-can-leave-your-device--and-only-if-you-set-it-up),
+and [SECURITY § Outbound HTTP and the exfiltration
+chain](../SECURITY.md#outbound-http-and-the-exfiltration-chain) for the layered
+restrictions on the tool path.
 
 ### Where are my API keys stored?
 
@@ -146,14 +153,18 @@ until you want to change something. See
 
 Five steps, start to finish:
 
-1. **Pick a scenario in onboarding** — it installs a working pipeline for you.
-2. **Models → Download** on a preset, then **Make Active**
-   ([how](user-guide.md#2-download-a-model)).
-3. **Chat → type a message.** This already works; everything below is optional.
-4. **Pipelines → open the active one** to see the graph that produced the answer
-   ([how](user-guide.md#visual-editor)).
-5. **Tools** to switch a tool on, or **Triggers** to have a pipeline run on its
-   own ([how](user-guide.md#creating-or-editing-a-trigger)).
+1. **Pick a scenario in onboarding** — it installs a working pipeline *and*
+   downloads the model that scenario needs.
+2. **Chat → type a message** once the model has landed. That is the whole loop;
+   everything below is optional. (Chose *Start from scratch* instead? Open
+   **Models**, download a preset and tap **Make Active** first —
+   [how](user-guide.md#2-download-a-model).)
+3. **Pipelines → open the active one** to see the graph that produced that
+   answer ([how](user-guide.md#visual-editor)).
+4. **Tools** to switch a tool on, or add an MCP server
+   ([how](user-guide.md#adding-an-mcp-server)).
+5. **More → Automation → Triggers** to have a pipeline run on its own
+   ([how](user-guide.md#creating-or-editing-a-trigger)).
 
 ### Settings has a "Run limits & structured output" section — where are the actual pipelines?
 
@@ -188,20 +199,20 @@ files](user-guide.md#sharing-pipeline-files-what-compatibility-you-can-count-on)
 ### Does the agent run when the app is closed?
 
 Yes — triggers, scheduled tasks and runs already in flight continue with the app
-away, and a confirmation you owe arrives as a notification. See [What happens
-when you close the app during a
+away, and a confirmation you owe arrives as a notification. This depends entirely
+on the battery setting below, which is not on by default. See [What happens when
+you close the app during a
 run](user-guide.md#what-happens-when-you-close-the-app-during-a-run).
 
 ### Why does nothing happen in the background on my phone?
 
-Almost always the battery setting: with the default, Android can reclaim the
-process within seconds. Set the app to **Unrestricted**, and on Samsung, Xiaomi
-or OnePlus also take it out of the vendor's "sleeping apps" list. This is the
-platform's rule rather than a bug, but until you grant it, background pipelines
-do not run. See [Battery
-settings](user-guide.md#battery-settings-decide-whether-any-of-this-happens),
-and [A trigger didn't fire](troubleshooting.md#a-trigger-didnt-fire) when one
-specifically misses.
+Almost always the battery setting, which is not something the app can grant
+itself. [Battery settings decide whether any of this
+happens](user-guide.md#battery-settings-decide-whether-any-of-this-happens) is
+the canonical explanation; [A background run dies the moment I leave the
+app](troubleshooting.md#a-background-run-dies-the-moment-i-leave-the-app) and [A
+trigger didn't fire](troubleshooting.md#a-trigger-didnt-fire) are the two
+specific failures.
 
 ### How soon after the condition does a trigger actually fire?
 
@@ -211,9 +222,9 @@ not. See [How soon a trigger fires](user-guide.md#how-soon-a-trigger-fires).
 
 ### Does the model stay in memory between runs?
 
-No — it is unloaded after five minutes idle, and immediately when the system
-asks for memory back, so it neither holds RAM nor drains the battery while
-nothing is running.
+No — it is unloaded after five minutes idle, and also when the system asks for
+memory back (unless a generation is in flight, which is never interrupted for
+it). So it neither holds RAM nor drains the battery while nothing is running.
 
 ---
 
@@ -242,11 +253,10 @@ errors mean](user-guide.md#what-the-common-mcp-errors-mean).
 
 ### My server publishes 16 tools but the app shows 13.
 
-The server is deciding that, not the app: tools that need client features
-Knotwork does not implement yet are left out of the list by a well-behaved
-server. It is a real limitation rather than a misconfiguration. See [What the
-tool count on a server row
-means](user-guide.md#what-the-tool-count-on-a-server-row-means).
+The server is deciding that, not the app — see [An MCP server is connected but a
+tool I expect isn't
+there](troubleshooting.md#an-mcp-server-is-connected-but-a-tool-i-expect-isnt-there),
+which explains why and what it means for the missing tool.
 
 ### Why does it ask me before every tool call?
 
@@ -290,9 +300,9 @@ callback](external-automation.md#receiving-the-callback).
 
 ### Does calling from outside skip the confirmations?
 
-No. An external call is not a form of approval: human-in-the-loop confirmation,
-per-tool risk overrides and the destructive-tool block apply exactly as they do
-to the app's own background runs. See [The safety
+No. An external call is not a form of approval: human-in-the-loop confirmation
+and the destructive-tool block apply exactly as they do to the app's own
+background runs, and the approval arrives as a notification. See [The safety
 model](external-automation.md#the-safety-model-in-one-paragraph).
 
 ---
@@ -324,10 +334,8 @@ executing. A per-run cancel is not built yet; see
 
 ### My run stopped by itself. Which limit was it?
 
-Read the message rather than assuming — it names which allowance ran out, and
-**Adjust limits** opens the right screen. Not every mid-run stop is a limit:
-*not getting anywhere* and *the run went quiet* are different endings with
-different fixes. See [The agent stopped
+The message names it, and not every mid-run stop is a limit — three different
+endings exist, with different fixes. See [The agent stopped
 mid-run](troubleshooting.md#the-agent-stopped-mid-run).
 
 ---
@@ -367,9 +375,9 @@ These are current, deliberate, and stated without softening. Each one says what
 would change it.
 
 - **No arbitrary OpenAI-compatible endpoint.** The provider list is a closed set
-  of five, and a base URL is configurable only for Ollama. Revisited when the
-  request arrives from someone who is not the maintainer — it has been asked for
-  once so far.
+  of five, and a base URL is configurable only for Ollama. Revisited on the
+  first request filed publicly as an issue. One person has asked for it in
+  private testing, which is a sample of one and does not reorder the work.
 - **No OAuth anywhere.** Not for MCP servers, not for model downloads. Bearer,
   Basic and API-key headers are what exist. Revisited with the first external
   report of a real server that cannot be reached any other way.
@@ -397,8 +405,8 @@ would change it.
   does nothing beats discovering it. Each is fixed by wiring it up or removing
   it. See [What every setting means](user-guide.md#what-every-setting-means).
 - **The node picker in the visual editor is hard to read** at the current number
-  of node types, where labels overlap. A rework is planned; the browser editor is
-  the workaround in the meantime.
+  of node types, where labels overlap. Replacing it is accepted as needed, with
+  no date attached; the browser editor is the workaround in the meantime.
 - **Pipeline files are not a compatibility contract before 1.0.** The version
   stamp is a marker, not a promise, and no import-time migration exists. See
   [README § Pre-release notice](../README.md#pre-release-notice).
