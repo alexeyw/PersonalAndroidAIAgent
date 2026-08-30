@@ -96,6 +96,8 @@ fun rememberJournalExportHandlers(
                 )
 
                 JournalExportEvent.SaveFailed -> UiText(R.string.journal_export_save_failed)
+
+                JournalExportEvent.RenderFailed -> UiText(R.string.journal_export_render_failed)
             }
         }
     }

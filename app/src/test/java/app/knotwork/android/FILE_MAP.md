@@ -392,6 +392,7 @@ Only Kotlin files appear inside the generated blocks.
         - `ContentReportIssueUrlTest.kt` - Unit tests for `contentReportIssueUrl`.
     - `common/` - Tests for the shared presentation helpers.
       - `JournalExportDelegateTest.kt` - Behaviour of the shared journal-export half of the two journal ViewModels.
+      - `JournalExportShareTest.kt` - The share half of the journal export — the part that touches the platform and therefore cannot be reached from the delegate's own tests.
       - `RunTerminationCopyMapperTest.kt` - Guards the single vocabulary of a stopped run.
       - `UiTextTest.kt` - Unit tests for `UiText`.
     - `components/` - Tests for the pure helpers behind the app-side composables.

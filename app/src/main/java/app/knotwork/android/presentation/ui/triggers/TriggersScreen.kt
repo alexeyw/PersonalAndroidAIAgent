@@ -15,6 +15,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -191,7 +192,10 @@ fun TriggersScreen(
                 )
             }
         }
-        SnackbarHost(hostState = snackbarHostState)
+        // Bottom-centre, matching the request-journal screen: the two surfaces
+        // report the same journal-export outcomes, and a message that appears in a
+        // different corner on each reads as two different features.
+        SnackbarHost(hostState = snackbarHostState, modifier = Modifier.align(Alignment.BottomCenter))
     }
 }
 

@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.OutputStream
 import java.util.Date
@@ -44,6 +45,17 @@ sealed interface JournalExportEvent {
 
     /** The document could not be written to the picked file. */
     data object SaveFailed : JournalExportEvent
+
+    /**
+     * The journal could not be rendered at all, so there is no document.
+     *
+     * Kept apart from [SaveFailed] because the two need different words and
+     * different next steps: one is a destination that would not take the file,
+     * the other is a journal that could not be read. Reported on **both** the
+     * share and the save path — an export that silently does nothing is the
+     * failure this whole surface exists to avoid.
+     */
+    data object RenderFailed : JournalExportEvent
 }
 
 /**
@@ -100,12 +112,19 @@ class JournalExportDelegate(
     fun share() {
         scope.launch {
             val now = Date()
-            val document = buildDocument(journalGeneratedAtLabel(now))
+            // Absorbed exactly as the save path absorbs it. An asymmetry here
+            // would mean one of two twin actions crashing the app where the other
+            // shows a message — and `viewModelScope` has no handler to soften it.
+            val document = renderOrNull(now)
             _events.tryEmit(
-                JournalExportEvent.Share(
-                    document = document,
-                    fileName = journalExportFileName(fileNameStem, now),
-                ),
+                if (document == null) {
+                    JournalExportEvent.RenderFailed
+                } else {
+                    JournalExportEvent.Share(
+                        document = document,
+                        fileName = journalExportFileName(fileNameStem, now),
+                    )
+                },
             )
         }
     }
@@ -122,21 +141,41 @@ class JournalExportDelegate(
      */
     fun saveTo(outputStream: OutputStream) {
         scope.launch {
-            try {
-                val document = buildDocument(journalGeneratedAtLabel())
-                val written = writeJournalDocument(outputStream, document.json, ioDispatcher)
-                _events.tryEmit(
-                    if (written) JournalExportEvent.Saved(document.entryCount) else JournalExportEvent.SaveFailed,
-                )
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
+            val document = renderOrNull()
+            val outcome = when {
                 // A journal read that threw despite its best-effort contract. The
-                // stream is still open at this point, so close it before reporting.
-                Timber.e(e, "Journal export failed before the document could be written")
-                outputStream.close()
-                _events.tryEmit(JournalExportEvent.SaveFailed)
+                // picker has already created the file, so its stream is closed here
+                // rather than stranded — off the main thread, like the write it
+                // replaces, and outside the catch so the cancellation gate holds.
+                document == null -> {
+                    withContext(ioDispatcher) { outputStream.close() }
+                    JournalExportEvent.RenderFailed
+                }
+                writeJournalDocument(outputStream, document.json, ioDispatcher) ->
+                    JournalExportEvent.Saved(document.entryCount)
+                else -> JournalExportEvent.SaveFailed
             }
+            _events.tryEmit(outcome)
         }
+    }
+
+    /**
+     * Renders the journal, absorbing a failure into `null`.
+     *
+     * Both repositories degrade a storage error to an empty snapshot, so reaching
+     * this catch means something else broke. It is still absorbed: the export is a
+     * diagnostic action, and crashing the screen someone opened to diagnose a
+     * problem is the one outcome with no upside.
+     *
+     * @param at Moment the document is stamped with.
+     * @return The rendered document, or `null` when it could not be built.
+     */
+    private suspend fun renderOrNull(at: Date = Date()): JournalExportDocument? = try {
+        buildDocument(journalGeneratedAtLabel(at))
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Timber.e(e, "Journal export failed before the document could be written")
+        null
     }
 }

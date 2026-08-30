@@ -152,10 +152,28 @@ class JournalExportDelegateTest {
             collector.cancel()
 
             // The picker already created the file. Leaving its stream open would
-            // strand a zero-byte document with nothing said about it.
-            assertEquals(JournalExportEvent.SaveFailed, received.single())
+            // strand a zero-byte document with nothing said about it. Reported as
+            // RenderFailed, not SaveFailed: nothing was produced to save, and the
+            // two need different words.
+            assertEquals(JournalExportEvent.RenderFailed, received.single())
             assertTrue(stream.closed)
         }
+
+    @Test
+    fun `given a journal read that throws when shared then the failure is reported rather than thrown`() = runTest {
+        val delegate = delegate { error("the database is unreadable") }
+        val received = mutableListOf<JournalExportEvent>()
+        val collector = collectInto(received, delegate)
+
+        delegate.share()
+        advanceUntilIdle()
+        collector.cancel()
+
+        // The twin of the save path above. Without this, an exception here would
+        // escape into `viewModelScope`, which has no handler — one of two adjacent
+        // actions would show a message and the other would kill the app.
+        assertEquals(JournalExportEvent.RenderFailed, received.single())
+    }
 
     @Test
     fun `given nothing requested when observed then no event is emitted`() = runTest {
