@@ -476,10 +476,20 @@ app registers (read out of the Hilt module rather than a list in the test), that
 every router's declared classes match its outgoing edge labels, and that each
 recipe is linked from the cookbook so one cannot rot unread.
 
+Both tests read files that are on no classpath — the published Markdown and the
+recipe documents — so `app/build.gradle.kts` declares them as inputs of every
+`Test` task, alongside the instrumented sources and the store metadata that have
+the same problem. This is not a precaution: without those two lines a broken
+recipe **passed `check` from a cached run**, and nothing else would have caught
+it, since `verifyCookbookDocs` does not read the recipes at all. The cost is a
+unit-test re-run when the documents change; the alternative is a guard that
+answers from cache about the very edit it polices.
+
 The generation logic is a pure string transform in `buildSrc` and is unit-tested
 there (`./gradlew -p buildSrc test`). Every gate was observed failing before
 being trusted: a removed `FIELD_REACH` entry, a node type dropped from the meta,
-an edited verdict, and a broken recipe each fail with the cause named.
+an edited verdict, and a broken recipe each fail with the cause named — the last
+one twice, before and after the caching hole above was closed.
 
 ---
 

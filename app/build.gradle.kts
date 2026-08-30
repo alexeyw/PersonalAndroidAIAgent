@@ -1115,8 +1115,16 @@ tasks.named("check") { dependsOn(verifyExternalAutomationDocs) }
 // unit-tested there.
 //
 // Inputs are resolved into local `val`s and captured by the task actions as
-// plain `File` values, so the actions never reach back into the `Project` —
-// keeping both tasks configuration-cache compatible.
+// plain `File` values, so no action reaches back into the `Project` at
+// execution time — the access Gradle 10 turns into a hard error.
+//
+// That is not the same as being configuration-cache ready, and the comment on
+// the sibling pair above claims more than it delivers: measured with
+// `--configuration-cache`, all four generate/verify pairs fail to serialize
+// ("cannot serialize Gradle script object references"), because a Kotlin-DSL
+// lambda referring to a script-level `val` captures the script itself. Closing
+// that means real task classes with annotated properties, for all four pairs at
+// once; it is tracked rather than half-done here.
 val cookbookDocsFile = file("$rootDir/docs/cookbook.md")
 val cookbookDomainNodeTypeFile =
     file("$projectDir/src/main/java/app/knotwork/android/domain/models/NodeType.kt")
@@ -1332,6 +1340,17 @@ tasks.withType<Test>().configureEach {
         .withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.file(rootProject.file(".github/workflows/instrumented.yml"))
         .withPropertyName("instrumentedWorkflow")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    // Same trap once more, and it was observed springing: `CookbookRuntimeReachTest`
+    // reads the published Markdown and `CookbookRecipeValidationTest` reads the
+    // recipe documents, neither of which is on any classpath. Without these two
+    // lines a broken recipe passed `check` from a cached run — `verifyCookbookDocs`
+    // does not read the recipes at all, so nothing else would have caught it.
+    inputs.file(rootProject.file("docs/cookbook.md"))
+        .withPropertyName("cookbookDocument")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(rootProject.file("docs/recipes"))
+        .withPropertyName("cookbookRecipes")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
