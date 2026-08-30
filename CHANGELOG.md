@@ -13,7 +13,30 @@ details.
 
 ## [Unreleased]
 
+### Added
+
+- **A questions-and-answers page — [`docs/faq.md`](docs/faq.md).** Short
+  answers to what is supported, what is not, and where a thing lives, each one
+  pointing at the page that covers it properly rather than restating it. Its
+  *Known limitations* section is the standing list of what the app deliberately
+  does not do, written without softening and with the condition that would
+  change each entry — including the ones asked for most: an arbitrary
+  OpenAI-compatible endpoint, OAuth, a connection test for MCP servers, more
+  than one image per message, and a per-run cancel.
+
 ### Changed
+
+- **Troubleshooting moved out of the user guide into
+  [`docs/troubleshooting.md`](docs/troubleshooting.md).** Same eleven entries,
+  unchanged; the guide had grown past the point where a failure was findable
+  inside it. The three pages now split by question: the guide describes how
+  things work, the FAQ says whether a thing exists, and troubleshooting handles
+  something being broken.
+
+- **The chat composer's stop button is described accurately.** It detaches the
+  screen from the run rather than ending it — the run carries on in the
+  background and its answer still arrives in the conversation. The behaviour is
+  unchanged and deliberate; the documentation implied otherwise.
 
 - **Settings options now explain themselves, in one sentence, where they
   live.** Tap the **ⓘ** beside a row's label and a short explanation opens in

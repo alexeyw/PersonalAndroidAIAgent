@@ -12,6 +12,11 @@ body:
 
         - Search [existing issues](../issues?q=is%3Aissue) (including closed)
           to avoid duplicates.
+        - Read [`docs/faq.md`](../blob/main/docs/faq.md) § *Known limitations* —
+          several frequently-requested capabilities are listed there as
+          deliberate omissions, each with the condition that would change it.
+          Saying your case meets that condition is the most useful request
+          you can file.
         - Skim [`docs/extending.md`](../blob/main/docs/extending.md) — many
           extension points (new node types, tools, prompt variables, cloud
           providers) are already supported and may not require a code change

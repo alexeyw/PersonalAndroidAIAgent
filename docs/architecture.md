@@ -1668,7 +1668,11 @@ flowchart TD
 ## 7. Further reading
 
 - [`docs/user-guide.md`](user-guide.md) — using the app as an end user
-  (chats, console, pipelines, memory, settings, troubleshooting).
+  (chats, console, pipelines, memory, settings).
+- [`docs/faq.md`](faq.md) — short answers to recurring questions, and the
+  standing list of what the app deliberately does not do.
+- [`docs/troubleshooting.md`](troubleshooting.md) — the failures that have
+  actually come up, and what to change for each.
 - [`docs/extending.md`](extending.md) — recipes for adding new
   `NodeType`s, `Tool`s, cloud providers, and prompt variables.
 - [`docs/code-style.md`](code-style.md) — Kotlin conventions and
