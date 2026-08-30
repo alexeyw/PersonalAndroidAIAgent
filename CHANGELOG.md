@@ -17,21 +17,20 @@ details.
 
 - **A pipeline cookbook — [`docs/cookbook.md`](docs/cookbook.md).** Every node
   type in one place: what it does, its ports, which blocks of the run's context
-  it is given, and a table of its configuration fields. The reference is
-  generated from the sources that define a node and a build check fails when it
-  drifts, so it cannot quietly describe a version of the app that no longer
-  exists.
+  it is given, and — first, because it is what you came for — what decides how
+  it behaves and where you change that. The reference is generated from the
+  sources that define a node and a build check fails when it drifts, so it
+  cannot quietly describe a version of the app that no longer exists.
 
-  Its most useful column is the one saying whether a field changes anything at
-  run time. A node's configuration sheet mixes fields the engine reads with
-  fields it stores and ignores, and the app gives no sign which is which — an
-  ignored field still accepts input, still survives a reopen, still exports.
-  Notably, the prompt fields of the **Intent Router**, **Decomposition**,
-  **Evaluation** and **Summary** sheets are not written back to the node, so
-  editing one appears to work while the node goes on running the prompt it was
-  created with. That is a defect, and it is documented as one rather than
-  smoothed over; a unit test holds every verdict in the table against what the
-  editor's codec actually does.
+  It is also frank about a thing the app hides. A node's configuration sheet
+  shows more than the engine reads: some fields accept input, save and export
+  while nothing consults them during a run, and there is no sign on screen which
+  is which. Every one of them is marked. Four are worse than merely ignored —
+  the prompt fields of the **Intent Router**, **Decomposition**, **Evaluation**
+  and **Summary** sheets are *required* and still never reach the run, so the
+  node goes on using the prompt it was created with; the page says where that
+  prompt really lives. A unit test holds every such claim against what the
+  editor's code actually does.
 
 - **Five importable pipeline recipes — [`docs/recipes/`](docs/recipes/).**
   Routing on intent, decomposition with a queue, a tool call behind the

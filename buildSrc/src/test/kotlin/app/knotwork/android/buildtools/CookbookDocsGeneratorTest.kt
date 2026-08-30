@@ -43,6 +43,9 @@ class CookbookDocsGeneratorTest {
 
         <!-- AUTO-GEN:NODE_CONFIG -->
         <!-- /AUTO-GEN:NODE_CONFIG -->
+
+        <!-- AUTO-GEN:FIELD_TABLE -->
+        <!-- /AUTO-GEN:FIELD_TABLE -->
     """.trimIndent()
 
     @Test
@@ -70,8 +73,44 @@ class CookbookDocsGeneratorTest {
         )
 
         assertEquals(
-            listOf(CookbookDocsGenerator.BLOCK_NODE_CONFIG),
+            listOf(CookbookDocsGenerator.BLOCK_FIELD_TABLE),
             CookbookDocsGenerator.drift(tampered, sources),
+        )
+    }
+
+    @Test
+    fun `given a run-time input whose sheet field disappears when rendered then generation fails`() {
+        // The reference now leads with what a node runs on, so the two tables
+        // have to agree. Removing the field that writes `conditionPrompt` leaves
+        // an input row promising a control that is not there — which is exactly
+        // the shape of confusion this rewrite was about.
+        val withoutExpression = sources.copy(
+            nodeConfig = sources.nodeConfig.replace("    val expression: String = \"\",\n", ""),
+        )
+
+        val error = assertThrows(CookbookDocsGenerator.GenerationException::class.java) {
+            CookbookDocsGenerator.render(skeleton, withoutExpression)
+        }
+        assertTrue(
+            "The failure does not name the unwritten input: ${error.message}",
+            error.message.orEmpty().contains("conditionPrompt"),
+        )
+    }
+
+    @Test
+    fun `given every node type when rendered then its run-time inputs and its fields agree`() {
+        // The positive case of the same guard: with the real sources, every
+        // property a sheet field writes is explained by an input row, and every
+        // row marked as having no control really has none.
+        val rendered = CookbookDocsGenerator.render(skeleton, sources)
+
+        assertTrue(
+            "The four prompt fields should still render as having no in-app control.",
+            rendered.contains("nothing in the app writes it"),
+        )
+        assertTrue(
+            "A node with no run-time inputs should say so rather than render an empty table.",
+            rendered.contains("**Nothing on this node changes a run.**"),
         )
     }
 
@@ -181,6 +220,18 @@ class CookbookDocsGeneratorTest {
         // publish the opposite of the shipped behaviour.
         assertTrue("OUTPUT starts in pass-through mode.", !nodes.getValue("OUTPUT").hasDefaultPrompt)
         assertTrue("INPUT carries no prompt.", !nodes.getValue("INPUT").hasDefaultPrompt)
+    }
+
+    @Test
+    fun `given the appendix when rendered then every configuration field appears exactly once`() {
+        val nodes = CookbookDocsGenerator.buildNodes(sources)
+        val rendered = CookbookDocsGenerator.render(skeleton, sources)
+        val appendix = rendered.substringAfter("<!-- AUTO-GEN:FIELD_TABLE -->")
+            .substringBefore("<!-- /AUTO-GEN:FIELD_TABLE -->")
+
+        val expected = nodes.sumOf { it.fields.size }
+        val actual = appendix.lines().count { it.startsWith("| `") }
+        assertEquals("The appendix does not list every field exactly once.", expected, actual)
     }
 
     @Test

@@ -98,26 +98,33 @@ class CookbookRuntimeReachTest {
             "systemPrompt" !in documented.getValue(NodeType.INTENT_ROUTER.name),
         )
         assertTrue(
-            "The cookbook no longer warns that these prompt fields are not written back.",
-            cookbook.readText().contains("Four prompt fields are not written back"),
+            "The cookbook no longer names the four node types whose prompt field is ignored.",
+            cookbook.readText().contains("Intent Router, Decomposition, Evaluation and Summary"),
         )
     }
 
     /**
-     * Reads the generated per-type tables and returns, per node type, the
-     * `NodeModel` properties the document claims a field reaches.
+     * Reads the generated appendix and returns, per node type, the `NodeModel`
+     * properties the document claims a field reaches.
+     *
+     * Every node type appears as a key, including the three whose fields all
+     * reach nothing — otherwise a type whose only wired field was lost would
+     * simply vanish from the comparison instead of failing it.
      */
     private fun parseDocumentedTargets(): Map<String, Set<String>> {
         val markdown = cookbook.readText()
-        val block = markdown.substringAfter("<!-- AUTO-GEN:NODE_CONFIG -->", "")
-            .substringBefore("<!-- /AUTO-GEN:NODE_CONFIG -->", "")
-        check(block.isNotBlank()) { "docs/cookbook.md has no generated NODE_CONFIG block." }
+        val block = markdown.substringAfter("<!-- AUTO-GEN:FIELD_TABLE -->", "")
+            .substringBefore("<!-- /AUTO-GEN:FIELD_TABLE -->", "")
+        check(block.isNotBlank()) { "docs/cookbook.md has no generated FIELD_TABLE block." }
 
-        return block.split("\n### ").drop(1).associate { section ->
-            val type = SECTION_TYPE_RE.find(section)?.groupValues?.get(1)
-                ?: error("A generated section has no node type in its heading.")
-            type to RUNTIME_ROW_RE.findAll(section).map { it.groupValues[2] }.toSet()
+        val documented = mutableMapOf<String, MutableSet<String>>()
+        block.lineSequence().forEach { line ->
+            val type = ROW_TYPE_RE.find(line)?.groupValues?.get(1) ?: return@forEach
+            val targets = documented.getOrPut(type) { mutableSetOf() }
+            RUNTIME_ROW_RE.find(line)?.let { targets += it.groupValues[1] }
         }
+        check(documented.isNotEmpty()) { "Parsed no rows from the appendix — the parse is wrong, not the document." }
+        return documented
     }
 
     /**
@@ -294,8 +301,7 @@ class CookbookRuntimeReachTest {
         const val NOTE = "Mutated description"
         const val PROMPT = "Mutated prompt that no default prompt happens to equal."
 
-        val SECTION_TYPE_RE = Regex("""^[^\n]*`([A-Z][A-Z0-9_]*)`""")
-        val RUNTIME_ROW_RE =
-            Regex("""\|\s*`(\w+)`\s*\|[^|]*\|\s*\*\*Yes\*\* — saved as the node's `(\w+)`\s*\|""")
+        val ROW_TYPE_RE = Regex("""^\|\s*`([A-Z][A-Z0-9_]*)`\s*\|""")
+        val RUNTIME_ROW_RE = Regex("""\*\*Yes\*\* — saved as the node's `(\w+)`""")
     }
 }

@@ -423,7 +423,7 @@ cannot.
 
 ### `verifyCookbookDocs` — the reference is derived, not written
 
-A build-time verification task, wired into `check`, that regenerates the
+A build-time verification task, wired into `check`, that regenerates the three
 `AUTO-GEN` blocks of the cookbook from the sources that define a node — the
 `NodeType` enum, the `:catalog` mirror of it, `NodePorts.forType`,
 `NodeContextConfig.defaultForType`, the `NodeConfig` hierarchy and
@@ -435,13 +435,24 @@ Regenerate with:
 ./gradlew :app:generateCookbookDocs
 ```
 
-Two things the generator cannot read out of the sources are hand-maintained in
+Three things the generator cannot read out of the sources are hand-maintained in
 [`CookbookDocsGenerator`](../buildSrc/src/main/kotlin/app/knotwork/android/buildtools/CookbookDocsGenerator.kt):
-the reader-facing sentence per node type (the domain KDoc is written for
-whoever implements an executor, not for whoever wires a pipeline), and the
-per-field verdict of whether a configuration field reaches the run. Neither is
-unguarded — generation fails when a node type has no sentence or a field has no
-verdict, so the reference cannot quietly lose a row.
+the reader-facing sentence per node type (the domain KDoc is written for whoever
+implements an executor, not for whoever wires a pipeline), the per-field verdict
+of whether a configuration field reaches the run, and — per node type — the list
+of what the node actually runs on.
+
+That third table is what the document leads with, and it exists because the
+first draft led with the wrong thing. Enumerating the editor's form fields is
+not the same as describing the node's inputs, and for four node types the two
+barely overlap: the form shows a prompt box that goes nowhere while the prompt
+the node really runs on appeared in no table at all. A reader who knew the
+system found the result confusing, which settled it.
+
+None of the three is unguarded. Generation fails when a node type has no
+sentence, when a field has no verdict, when a sheet field writes a property no
+input row explains, or when an input row promises a control that no field
+writes. So the two tables cannot drift apart, in either direction.
 
 The count guard matters more here than the drift check, because a generator
 paired with its own drift check agrees with itself exactly when it is wrong. So

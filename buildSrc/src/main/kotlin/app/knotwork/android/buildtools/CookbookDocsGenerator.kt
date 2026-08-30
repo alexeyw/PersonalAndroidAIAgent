@@ -63,8 +63,11 @@ object CookbookDocsGenerator {
     /** The overview table: one row per node type. */
     const val BLOCK_NODE_REFERENCE: String = "NODE_REFERENCE"
 
-    /** The per-type sections: ports, context, configuration fields. */
+    /** The per-type sections: ports, context, and what drives the node. */
     const val BLOCK_NODE_CONFIG: String = "NODE_CONFIG"
+
+    /** The closing appendix: every configuration field, its default and its verdict. */
+    const val BLOCK_FIELD_TABLE: String = "FIELD_TABLE"
 
     /**
      * Every Kotlin source the generated blocks are derived from.
@@ -203,6 +206,45 @@ object CookbookDocsGenerator {
     )
 
     /**
+     * One thing that decides what a node does while a pipeline runs, and where
+     * its value comes from.
+     *
+     * This is the table the previous shape of this document lacked, and its
+     * absence was the reason the document confused rather than explained: the
+     * per-type tables enumerated the **editor's form fields**, which is a
+     * different set from the node's actual inputs. For four node types the two
+     * sets barely overlap — the form shows a prompt box that goes nowhere while
+     * the prompt the node really runs on appeared in no table at all.
+     *
+     * So the reference now leads with the node's inputs and says, for each,
+     * which form field sets it — or that none does.
+     *
+     * @property decides What this input decides, in the reader's terms.
+     * @property property The `NodeModel` property the engine reads.
+     * @property setVia Where the value comes from.
+     */
+    data class RuntimeInput(val decides: String, val property: String, val setVia: SetVia)
+
+    /** Where a [RuntimeInput]'s value comes from. */
+    sealed interface SetVia {
+        /**
+         * A field on the node's configuration sheet writes it. Which field is
+         * resolved from [FIELD_REACH] rather than named twice; generation fails
+         * when no field writes the property.
+         */
+        data object Sheet : SetVia
+
+        /**
+         * Nothing on the sheet writes it.
+         *
+         * @property instruction What the reader can do instead. Generation
+         *   fails if a sheet field turns out to write the property after all,
+         *   so a control that gets wired up cannot leave this text behind.
+         */
+        data class NoControl(val instruction: String) : SetVia
+    }
+
+    /**
      * What happens to a configuration field once the sheet is saved.
      *
      * The distinction is the point of the table. A field the editor stores but
@@ -239,9 +281,15 @@ object CookbookDocsGenerator {
         data class EditorOnly(val note: String) : Reach
     }
 
-    /** Shared note for the four prompt fields the editor cannot write through. */
+    /**
+     * Shared note for the four prompt fields the editor cannot write through.
+     *
+     * Deliberately not a cross-reference: the row above in the same section
+     * already says where the prompt really comes from, and a note pointing at
+     * another note is how a reader ends up reading neither.
+     */
     private const val PROMPT_NOT_WRITTEN_BACK: String =
-        "the node keeps the prompt it was created with; see the note under this table"
+        "editing it changes nothing; the prompt this node runs on is the one in the table above"
 
     /** Shared note for the local sampling controls the inference engine ignores. */
     private const val SAMPLER_UNTOUCHED: String = "the engine leaves the model's own sampler in place"
@@ -290,7 +338,7 @@ object CookbookDocsGenerator {
         "CloudConfig.timeoutMs" to
             Reach.EditorOnly("cloud timeouts come from the client's own configuration"),
         "IntentRouterConfig.classes" to
-            Reach.Graph("one outbound port per class; the run follows the edge the model picks"),
+            Reach.Graph("which branches exist — one port per class, and the run follows the edge the model picks"),
         "IntentRouterConfig.classifierPrompt" to Reach.EditorOnly(PROMPT_NOT_WRITTEN_BACK),
         "IntentRouterConfig.fallbackClass" to
             Reach.EditorOnly("an answer matching no class takes the node's first outgoing edge"),
@@ -328,7 +376,7 @@ object CookbookDocsGenerator {
             Reach.EditorOnly("what happens after a failed subtask is decided by the graph, not by this switch"),
         "EvaluationConfig.criteriaPrompt" to Reach.EditorOnly(PROMPT_NOT_WRITTEN_BACK),
         "EvaluationConfig.maxRetries" to
-            Reach.Graph("above zero it gives the node a Retry port; it does not itself cap how often that branch is taken"),
+            Reach.Graph("whether the node has a Retry branch at all — it does not cap how often that branch is taken"),
         "EvaluationConfig.engineProvider" to Reach.Runtime("cloudProvider"),
         "SummaryConfig.format" to
             Reach.EditorOnly("ask for the shape in the prompt instead"),
@@ -342,6 +390,125 @@ object CookbookDocsGenerator {
         "SkillConfig.instructionPreview" to Reach.EditorOnly(EDIT_IN_SKILL_LIBRARY),
         "SkillConfig.toolRestrictionSummary" to Reach.EditorOnly(EDIT_IN_SKILL_LIBRARY),
         "SkillConfig.engine" to Reach.Runtime("cloudProvider"),
+    )
+
+    /** How a sheet-less prompt can still be changed, worded once. */
+    private const val EDIT_THE_FILE: String =
+        "nothing in the app writes it — export the pipeline, change `config.systemPrompt` on the node, " +
+            "and import it again; the browser editor also writes it correctly"
+
+    /**
+     * What each node type actually runs on, in the order a reader meets it.
+     *
+     * Hand-written, because "which properties does this executor read" is a
+     * question about the executors and no declaration answers it. The guard is
+     * one-directional and deliberately so: every property a sheet field writes
+     * ([Reach.Runtime]) must appear here, so a control that gets wired to the
+     * engine cannot stay out of the reference. The reverse — an input the
+     * engine reads that nobody listed — is not mechanically checkable from
+     * here and stays a review obligation.
+     *
+     * `modelPath` is left out of every list but `LITE_RT`'s on purpose. Every
+     * node that runs the on-device model reads it, so nine identical rows would
+     * say once each what the page says better once overall; the prose above the
+     * reference carries it instead.
+     */
+    val RUNTIME_INPUTS: Map<String, List<RuntimeInput>> = mapOf(
+        "INPUT" to emptyList(),
+        "OUTPUT" to listOf(
+            RuntimeInput(
+                decides = "Whether the answer is re-worded before you see it, and how",
+                property = "systemPrompt",
+                setVia = SetVia.Sheet,
+            ),
+        ),
+        "LITE_RT" to listOf(
+            RuntimeInput("The instruction the model follows", "systemPrompt", SetVia.Sheet),
+            RuntimeInput("Which model answers", "modelPath", SetVia.Sheet),
+        ),
+        "CLOUD" to listOf(
+            RuntimeInput("The instruction the model follows", "systemPrompt", SetVia.Sheet),
+            RuntimeInput("Which provider answers", "cloudProvider", SetVia.Sheet),
+        ),
+        "INTENT_ROUTER" to listOf(
+            RuntimeInput(
+                decides = "The instruction that sorts the message into a class",
+                property = "systemPrompt",
+                setVia = SetVia.NoControl(EDIT_THE_FILE),
+            ),
+            RuntimeInput("Whether the sorting runs on-device or in the cloud", "cloudProvider", SetVia.Sheet),
+        ),
+        "IF_CONDITION" to listOf(
+            RuntimeInput(
+                decides = "**Checked first:** whether an attached image sends the run down True",
+                property = "conditionHasImage",
+                setVia = SetVia.Sheet,
+            ),
+            RuntimeInput(
+                decides = "**Checked second:** keywords that send the run down True when the input contains one",
+                property = "conditionKeywords",
+                setVia = SetVia.NoControl(
+                    "nothing in the app writes it, and an imported pipeline that carries keywords never " +
+                        "reaches the question below",
+                ),
+            ),
+            RuntimeInput(
+                decides = "**Checked third:** an input length above which the run goes down True",
+                property = "conditionComplexity",
+                setVia = SetVia.NoControl(
+                    "nothing in the app writes it, and like keywords it is checked before the question",
+                ),
+            ),
+            RuntimeInput(
+                decides = "**Checked last:** the yes/no question put to the model",
+                property = "conditionPrompt",
+                setVia = SetVia.Sheet,
+            ),
+            RuntimeInput("Whether the question runs on-device or in the cloud", "cloudProvider", SetVia.Sheet),
+        ),
+        "CLARIFICATION" to listOf(
+            RuntimeInput("The question you are asked", "systemPrompt", SetVia.Sheet),
+            RuntimeInput("How long the run waits for your answer", "clarificationTimeoutMs", SetVia.Sheet),
+        ),
+        "TOOL" to listOf(
+            RuntimeInput(
+                decides = "Which tool is called — or, left empty, that the model picks one",
+                property = "toolName",
+                setVia = SetVia.Sheet,
+            ),
+            RuntimeInput("Whether the call is composed on-device or in the cloud", "cloudProvider", SetVia.Sheet),
+        ),
+        "DECOMPOSITION" to listOf(
+            RuntimeInput(
+                decides = "The instruction that produces the subtask list",
+                property = "systemPrompt",
+                setVia = SetVia.NoControl(EDIT_THE_FILE),
+            ),
+            RuntimeInput("Whether the planning runs on-device or in the cloud", "cloudProvider", SetVia.Sheet),
+        ),
+        "QUEUE_PROCESSOR" to emptyList(),
+        "EVALUATION" to listOf(
+            RuntimeInput(
+                decides = "The instruction that judges the result",
+                property = "systemPrompt",
+                setVia = SetVia.NoControl(EDIT_THE_FILE),
+            ),
+            RuntimeInput("Whether the judgement runs on-device or in the cloud", "cloudProvider", SetVia.Sheet),
+        ),
+        "SUMMARY" to listOf(
+            RuntimeInput(
+                decides = "The instruction that combines the results",
+                property = "systemPrompt",
+                setVia = SetVia.NoControl(EDIT_THE_FILE),
+            ),
+        ),
+        "PIPELINE" to listOf(
+            RuntimeInput("Which pipeline is run as this step", "targetPipelineId", SetVia.Sheet),
+        ),
+        "SKILL" to listOf(
+            RuntimeInput("Which skill is run — its instruction and its tool allowlist", "skillId", SetVia.Sheet),
+            RuntimeInput("Whether the skill runs on-device or in the cloud", "cloudProvider", SetVia.Sheet),
+        ),
     )
 
     /**
@@ -373,7 +540,8 @@ object CookbookDocsGenerator {
     fun render(markdown: String, sources: Sources): String {
         val nodes = buildNodes(sources)
         val withOverview = replaceBlock(markdown, BLOCK_NODE_REFERENCE, renderOverview(nodes))
-        return replaceBlock(withOverview, BLOCK_NODE_CONFIG, renderSections(nodes))
+        val withSections = replaceBlock(withOverview, BLOCK_NODE_CONFIG, renderSections(nodes))
+        return replaceBlock(withSections, BLOCK_FIELD_TABLE, renderFieldTable(nodes))
     }
 
     /**
@@ -388,6 +556,7 @@ object CookbookDocsGenerator {
         return buildList {
             if (blockBody(markdown, BLOCK_NODE_REFERENCE) != renderOverview(nodes)) add(BLOCK_NODE_REFERENCE)
             if (blockBody(markdown, BLOCK_NODE_CONFIG) != renderSections(nodes)) add(BLOCK_NODE_CONFIG)
+            if (blockBody(markdown, BLOCK_FIELD_TABLE) != renderFieldTable(nodes)) add(BLOCK_FIELD_TABLE)
         }
     }
 
@@ -402,6 +571,8 @@ object CookbookDocsGenerator {
      * @property hasDefaultPrompt Whether a fresh node is seeded with a prompt.
      * @property configClass The `NodeConfig` data class that configures it.
      * @property fields That class's own fields, in declaration order.
+     * @property inputs What the node actually runs on, and where each value
+     *   comes from.
      */
     data class NodeEntry(
         val doc: NodeDoc,
@@ -411,6 +582,7 @@ object CookbookDocsGenerator {
         val hasDefaultPrompt: Boolean,
         val configClass: String,
         val fields: List<ConfigField>,
+        val inputs: List<RuntimeInput>,
     )
 
     /**
@@ -466,7 +638,44 @@ object CookbookDocsGenerator {
                 hasDefaultPrompt = doc.id in prompted,
                 configClass = configClass,
                 fields = params.map { (name, default) -> configField(configClass, name, default) },
+                inputs = RUNTIME_INPUTS.getValue(doc.id),
             )
+        }.also(::checkInputsCoverWrittenProperties)
+    }
+
+    /**
+     * Requires every property a sheet field writes to appear in that type's
+     * [RUNTIME_INPUTS] list, and every [SetVia.NoControl] claim to still be true.
+     *
+     * The first half stops a newly wired control from staying out of the
+     * reference. The second stops the opposite drift, which is the one this
+     * document was written about: a field documented as reaching nothing, after
+     * somebody wires it up.
+     *
+     * @throws GenerationException naming the type and the property.
+     */
+    private fun checkInputsCoverWrittenProperties(nodes: List<NodeEntry>) {
+        nodes.forEach { node ->
+            val written = node.fields.mapNotNull { (it.reach as? Reach.Runtime)?.field }.toSet()
+            val listed = node.inputs.associateBy { it.property }
+            (written - listed.keys).sorted().forEach { property ->
+                throw GenerationException(
+                    "${node.doc.id}: a sheet field writes `$property`, which is not listed among the node's " +
+                        "run-time inputs. Add it to CookbookDocsGenerator.RUNTIME_INPUTS.",
+                )
+            }
+            listed.values.filter { it.setVia is SetVia.NoControl && it.property in written }.forEach { input ->
+                throw GenerationException(
+                    "${node.doc.id}: `${input.property}` is documented as having no control, but a sheet " +
+                        "field now writes it. Change its RUNTIME_INPUTS entry to SetVia.Sheet.",
+                )
+            }
+            listed.values.filter { it.setVia is SetVia.Sheet && it.property !in written }.forEach { input ->
+                throw GenerationException(
+                    "${node.doc.id}: `${input.property}` is documented as set from the sheet, but no field " +
+                        "writes it. Change its RUNTIME_INPUTS entry to SetVia.NoControl.",
+                )
+            }
         }
     }
 
@@ -511,6 +720,7 @@ object CookbookDocsGenerator {
         requireSameSet("NodeContextConfig.defaultForType", domain, contexts)
         requireSameSet("the NodeConfig hierarchy", domain, configs)
         requireSameSet("CookbookDocsGenerator.NODE_DOC_META", domain, NODE_DOC_META.map { it.id }.toSet())
+        requireSameSet("CookbookDocsGenerator.RUNTIME_INPUTS", domain, RUNTIME_INPUTS.keys)
         if (NODE_DOC_META.size != NODE_DOC_META.distinctBy { it.id }.size) {
             throw GenerationException("NODE_DOC_META lists a node type twice.")
         }
@@ -561,22 +771,109 @@ object CookbookDocsGenerator {
         return out.toString()
     }
 
-    /** Renders one section per node type: ports, context, prompt, and fields. */
+    /**
+     * Renders one section per node type: what the node runs on, where each
+     * value comes from, and — briefly — what the sheet shows that it ignores.
+     *
+     * Leading with the inputs rather than the form fields is the whole point of
+     * the layout. A reader arrives asking "what does this node do and how do I
+     * change it", and the form is only sometimes the answer.
+     */
     private fun renderSections(nodes: List<NodeEntry>): String {
         val out = StringBuilder("\n")
         nodes.forEach { node ->
             out.append("### ").append(node.doc.label).append(" — `").append(node.doc.id).append("`\n\n")
             out.append(node.doc.summary).append("\n\n")
             out.append("- **Ports.** ").append(sentencePorts(node.ports)).append('\n')
-            out.append("- **Context on a new node.** ").append(sentenceContext(node)).append('\n')
-            out.append("- **System prompt.** ").append(sentencePrompt(node)).append("\n\n")
-            out.append("| Field | Default | Reaches the run |\n|---|---|---|\n")
+            out.append("- **Context on a new node.** ").append(sentenceContext(node)).append("\n\n")
+            out.append(renderDrivers(node))
+            renderIgnored(node)?.let { out.append('\n').append(it) }
+            out.append('\n')
+        }
+        return out.toString()
+    }
+
+    /** Renders the "what decides what this node does" table, or its absence. */
+    private fun renderDrivers(node: NodeEntry): String {
+        val graphFields = node.fields.filter { it.reach is Reach.Graph }
+        if (node.inputs.isEmpty() && graphFields.isEmpty()) {
+            return "**Nothing on this node changes a run.** What it does is fixed; " +
+                "what happens around it is decided by the graph.\n"
+        }
+        val out = StringBuilder("**What decides what it does**\n\n")
+        out.append("| What it decides | Where the value comes from |\n|---|---|\n")
+        node.inputs.forEach { input ->
+            out.append("| ").append(escapePipes(input.decides)).append(" | ")
+                .append(escapePipes(describeSetVia(node, input))).append(" |\n")
+        }
+        graphFields.forEach { field ->
+            val effect = (field.reach as Reach.Graph).effect
+            out.append("| ").append(escapePipes(effect.replaceFirstChar(Char::titlecase))).append(" | ")
+                .append("the sheet's `").append(field.name).append("` |\n")
+        }
+        return out.toString()
+    }
+
+    /**
+     * Wording for one input's origin, resolved against the fields that write it.
+     *
+     * The prompt rows carry one extra fact, and it is the fact that makes the
+     * warning rows make sense: a node of a type with a shipped default prompt is
+     * not running *no* prompt when nothing writes one — it is running that
+     * default, which is why the node still works and why the broken field is
+     * easy to miss.
+     */
+    private fun describeSetVia(node: NodeEntry, input: RuntimeInput): String {
+        val seeded = input.property == "systemPrompt" && node.hasDefaultPrompt
+        return when (val via = input.setVia) {
+            is SetVia.Sheet -> {
+                val writers = node.fields
+                    .filter { (it.reach as? Reach.Runtime)?.field == input.property }
+                    .joinToString(" / ") { "`${it.name}`" }
+                val seededNote = if (seeded) " — a new node arrives with this type's shipped default in it" else ""
+                "the sheet's $writers$seededNote"
+            }
+
+            is SetVia.NoControl -> {
+                val stays = if (seeded) "it stays this type's shipped default prompt, and " else ""
+                "⚠ $stays${via.instruction}"
+            }
+        }
+    }
+
+    /**
+     * Renders the one-line summary of what the sheet shows and the run ignores,
+     * grouped so four fields sharing a reason read as one clause rather than four
+     * rows. `null` when the type has no such field.
+     */
+    private fun renderIgnored(node: NodeEntry): String? {
+        val ignored = node.fields.mapNotNull { field ->
+            (field.reach as? Reach.EditorOnly)?.let { field.name to it.note }
+        }
+        if (ignored.isEmpty()) return null
+        val clauses = ignored.groupBy({ it.second }, { it.first }).entries.joinToString("; ") { (note, names) ->
+            names.joinToString(", ") { "`$it`" } + " — " + note
+        }
+        return "**Also on the sheet, and ignored by the run:** $clauses.\n"
+    }
+
+    /**
+     * Renders the closing appendix: every configuration field of every type,
+     * with its default and its verdict.
+     *
+     * Kept complete and kept at the back. It is the answer to "what is this box
+     * for", which a reader asks second; leading with it was what made the first
+     * draft read as a list of things that do not work.
+     */
+    private fun renderFieldTable(nodes: List<NodeEntry>): String {
+        val out = StringBuilder("\n")
+        out.append("| Node | Field | Default | Reaches the run |\n|---|---|---|---|\n")
+        nodes.forEach { node ->
             node.fields.forEach { field ->
-                out.append("| `").append(field.name).append("` | ")
+                out.append("| `").append(node.doc.id).append("` | `").append(field.name).append("` | ")
                     .append(field.default?.let { "`${escapePipes(it)}`" } ?: "*required*").append(" | ")
                     .append(escapePipes(describeReach(field.reach))).append(" |\n")
             }
-            out.append('\n')
         }
         return out.toString()
     }
@@ -622,13 +919,6 @@ object CookbookDocsGenerator {
         val flags = node.context.joinToString(", ") { "`$it`" }
         val caveat = CONTEXT_EXCEPTIONS[node.doc.id]?.let { " — $it" }.orEmpty()
         return "$flags$caveat."
-    }
-
-    /** Full-sentence system-prompt description for a node's own section. */
-    private fun sentencePrompt(node: NodeEntry): String = if (node.hasDefaultPrompt) {
-        "A new node of this type starts with the shipped default prompt for its type."
-    } else {
-        "A new node of this type starts without a system prompt."
     }
 
     /** Table-cell wording for one field's verdict. */
