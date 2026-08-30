@@ -94,10 +94,31 @@ abstract class AbstractFileMapTask : DefaultTask() {
                 dropped += result.dropped
                 files += result.fileCount
             }
-            outcomes += MapOutcome(mapFile, markdown, files, counts, undescribed, dropped)
+            outcomes += MapOutcome(
+                file = mapFile,
+                displayPath = mapFile.relativeTo(root).invariantSeparatorsPath,
+                markdown = markdown,
+                fileCount = files,
+                counts = counts,
+                undescribed = undescribed,
+                dropped = dropped,
+            )
         }
         return outcomes
     }
+
+    /**
+     * Folds every block's counts into the one map the ratchet is read and
+     * written with.
+     *
+     * Shared so the numbers [GenerateFileMapTask] records and the numbers
+     * [VerifyFileMapTask] checks cannot drift apart.
+     *
+     * @param outcomes The rendered maps.
+     * @return Measured count by baseline key.
+     */
+    protected fun measuredCounts(outcomes: List<MapOutcome>): Map<String, Int> =
+        outcomes.fold(linkedMapOf()) { acc, outcome -> acc.apply { putAll(outcome.counts) } }
 
     /**
      * Renders one block of one map.
@@ -142,6 +163,9 @@ abstract class AbstractFileMapTask : DefaultTask() {
      * What one `FILE_MAP.md` looks like after regeneration.
      *
      * @property file The map file.
+     * @property displayPath Its path relative to the repository root — what a
+     *   failure message names, so the output does not depend on where the
+     *   checkout lives.
      * @property markdown Its regenerated contents.
      * @property fileCount Kotlin files rendered across the map's blocks.
      * @property counts Ratchet counts by baseline key.
@@ -150,6 +174,7 @@ abstract class AbstractFileMapTask : DefaultTask() {
      */
     protected data class MapOutcome(
         val file: File,
+        val displayPath: String,
         val markdown: String,
         val fileCount: Int,
         val counts: Map<String, Int>,
@@ -186,7 +211,12 @@ abstract class GenerateFileMapTask : AbstractFileMapTask() {
     @TaskAction
     fun generate() {
         val outcomes = renderAll()
-        val dropped = outcomes.flatMap { outcome -> outcome.dropped.map { outcome.file.name to it } }
+        val dropped = outcomes.flatMap { outcome -> outcome.dropped.map { outcome.displayPath to it } }
+        if (dropped.isNotEmpty() && acceptDroppedDescriptions.get()) {
+            // The flag says "I accept the loss", not "do not tell me what it was".
+            logger.lifecycle("Dropped ${dropped.size} description(s) whose path no longer exists:")
+            for ((map, entry) in dropped) logger.lifecycle("  $map :: ${entry.first}\n      ${entry.second}")
+        }
         if (dropped.isNotEmpty() && !acceptDroppedDescriptions.get()) {
             throw GradleException(
                 buildString {
@@ -201,7 +231,7 @@ abstract class GenerateFileMapTask : AbstractFileMapTask() {
         for (outcome in outcomes) {
             if (outcome.markdown != outcome.file.readText()) {
                 outcome.file.writeText(outcome.markdown)
-                logger.lifecycle("Regenerated ${outcome.file.name}: ${outcome.fileCount} Kotlin files.")
+                logger.lifecycle("Regenerated ${outcome.displayPath}: ${outcome.fileCount} Kotlin files.")
             }
         }
         writeBaseline(outcomes)
@@ -214,7 +244,7 @@ abstract class GenerateFileMapTask : AbstractFileMapTask() {
     /** Writes the ratchet with every measured count lowered, never raised. */
     private fun writeBaseline(outcomes: List<MapOutcome>) {
         val file = baselineFile.get().asFile
-        val measured = outcomes.fold(linkedMapOf<String, Int>()) { acc, outcome -> acc.apply { putAll(outcome.counts) } }
+        val measured = measuredCounts(outcomes)
         val recorded = if (file.isFile) FileMapBaseline.parse(file.readText()) else emptyMap()
         val rendered = FileMapBaseline.render(FileMapBaseline.lowered(measured, recorded))
         if (!file.isFile || file.readText() != rendered) {
@@ -252,11 +282,11 @@ abstract class VerifyFileMapTask : AbstractFileMapTask() {
         if (drifted.isNotEmpty()) {
             throw VerificationException(
                 "These file maps have drifted from the source tree: " +
-                    drifted.joinToString(", ") { it.file.path } + ".\n" +
+                    drifted.joinToString(", ") { it.displayPath } + ".\n" +
                     "Run `./gradlew :app:generateFileMap` and commit the result.",
             )
         }
-        val measured = outcomes.fold(linkedMapOf<String, Int>()) { acc, outcome -> acc.apply { putAll(outcome.counts) } }
+        val measured = measuredCounts(outcomes)
         val recorded = FileMapBaseline.parse(baselineFile.get().asFile.readText())
         val violations = FileMapBaseline.violations(measured, recorded)
         if (violations.isNotEmpty()) {
@@ -268,6 +298,6 @@ abstract class VerifyFileMapTask : AbstractFileMapTask() {
         }
         val stamp = stampFile.get().asFile
         stamp.parentFile.mkdirs()
-        stamp.writeText(outcomes.joinToString("\n") { "${it.file.name}=${it.fileCount}" })
+        stamp.writeText(outcomes.joinToString("\n") { "${it.displayPath}=${it.fileCount}" })
     }
 }
