@@ -173,6 +173,12 @@ guardrails that apply to runs, not the pipelines themselves; it used to be named
 in a way that promised otherwise. See
 [Library and active pipeline](user-guide.md#library-and-active-pipeline).
 
+### What does this node actually do?
+
+Every node type is described in the [pipeline cookbook](cookbook.md), together
+with what it does with its input, which of its configuration fields change a run
+and which are stored but ignored, and five importable recipes.
+
 ### Can I edit a pipeline on a computer?
 
 Yes — there is a standalone browser editor that reads and writes the same JSON,
@@ -383,6 +389,16 @@ would change it.
   report of a real server that cannot be reached any other way.
 - **No connection test for an MCP server.** You add it and read the resulting
   health row. Revisited alongside the MCP screen's next rework.
+- **Four node types ignore the prompt you type into them.** The `Intent Router`,
+  `Decomposition`, `Evaluation` and `Summary` configuration sheets each require a
+  prompt and then keep it to themselves: the node goes on running the prompt it
+  was created with. The edit survives closing and reopening the sheet, so there
+  is nothing on screen to tell you. Until it is fixed, set the prompt by editing
+  the pipeline as JSON (`config.systemPrompt` on the node) and importing it, or
+  by using the browser editor, which writes it correctly. Revisited when the
+  in-app editor is made to match — this is a defect with a known one-sided fix,
+  not a design decision. See the [cookbook](cookbook.md#node-reference) for which
+  field belongs to which node.
 - **A tool's risk level cannot be changed.** The approval gate reads a per-tool
   override, but nothing in the app writes one, so a tool classed sensitive
   stays sensitive. The controls that do exist only tighten the gate. Revisited
@@ -426,6 +442,7 @@ would change it.
 ## See also
 
 - [`user-guide.md`](user-guide.md) — how every screen and feature works.
+- [`cookbook.md`](cookbook.md) — what each node type does, and recipes to import.
 - [`troubleshooting.md`](troubleshooting.md) — what to do when something breaks.
 - [`external-automation.md`](external-automation.md) — the contract other apps
   call.

@@ -1197,12 +1197,15 @@ Reach a node's per-type configuration by either:
 - **Picking the node from the radial quick-add menu** — newly added
   nodes open the sheet immediately.
 
-The sheet is a modal bottom-sheet whose body is documented in
-`node-specs.md`. Every node type — Input, Output, LiteRt, Cloud,
-IntentRouter, IfCondition, Clarification, Tool, Decomposition,
-QueueProcessor, Evaluation, Summary, Pipeline, Skill — has its own
-form, with inline validation that disables Save until every required
-field is filled.
+The sheet is a modal bottom-sheet. Every node type — Input, Output,
+LiteRt, Cloud, IntentRouter, IfCondition, Clarification, Tool,
+Decomposition, QueueProcessor, Evaluation, Summary, Pipeline, Skill —
+has its own form, with inline validation that disables Save until every
+required field is filled. Each form's fields, their defaults, and
+**which of them actually change a run** are listed per node type in the
+[pipeline cookbook](cookbook.md) — worth reading before you spend time
+on a field, because some are stored with the pipeline and never
+consulted while it runs.
 
 By default an **Output** node has **no system prompt** and simply forwards
 the previous node's text to you *verbatim* — what the last model or tool

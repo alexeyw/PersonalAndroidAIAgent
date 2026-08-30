@@ -1,4 +1,5 @@
 import app.knotwork.android.buildtools.BrowserEditorConstantsGenerator
+import app.knotwork.android.buildtools.CookbookDocsGenerator
 import app.knotwork.android.buildtools.DetektAnalysisModeGuard
 import app.knotwork.android.buildtools.DexInstantiabilityChecker
 import app.knotwork.android.buildtools.DocsHygieneChecker
@@ -986,6 +987,12 @@ val verifySettingsHelpDocs by tasks.registering {
     }
 }
 
+// A verify task reads the file its sibling generate task writes. Without an
+// ordering rule Gradle rejects the pair the moment both are requested in one
+// invocation — `./gradlew :app:generateSettingsHelpDocs check`, which is exactly
+// how the pair is meant to be used. `mustRunAfter` states the ordering without
+// making verification depend on regeneration.
+verifySettingsHelpDocs { mustRunAfter(generateSettingsHelpDocs) }
 tasks.named("check") { dependsOn(verifySettingsHelpDocs) }
 
 val verifyBrowserEditorConstants by tasks.registering {
@@ -1012,6 +1019,7 @@ val verifyBrowserEditorConstants by tasks.registering {
         }
     }
 }
+verifyBrowserEditorConstants { mustRunAfter(generateBrowserEditorConstants) }
 tasks.named("check") { dependsOn(verifyBrowserEditorConstants) }
 
 // External-automation contract documentation sync automation.
@@ -1089,7 +1097,116 @@ val verifyExternalAutomationDocs by tasks.registering {
         }
     }
 }
+verifyExternalAutomationDocs { mustRunAfter(generateExternalAutomationDocs) }
 tasks.named("check") { dependsOn(verifyExternalAutomationDocs) }
+
+// ── Node-type cookbook reference ────────────────────────────────────────────
+// `docs/cookbook.md` is the public per-node reference. Before it existed the
+// only one was `node-specs.md`, an internal design document the public guide
+// nevertheless pointed readers at — so the reference a reader could reach was
+// no reference at all. Written by hand it would have drifted on the first node
+// type added after publication, exactly as `FILE_MAP.md` did.
+//
+// `generateCookbookDocs` rebuilds the AUTO-GEN blocks from the sources that
+// define a node — the domain enum, the `:catalog` mirror, the ports factory,
+// the context defaults, the config hierarchy and the default prompts;
+// `verifyCookbookDocs` (wired into `check`) fails the build on drift. The pure
+// generation logic lives in `buildSrc` (`CookbookDocsGenerator`) and is
+// unit-tested there.
+//
+// Inputs are resolved into local `val`s and captured by the task actions as
+// plain `File` values, so no action reaches back into the `Project` at
+// execution time — the access Gradle 10 turns into a hard error.
+//
+// That is not the same as being configuration-cache ready, and the comment on
+// the sibling pair above claims more than it delivers: measured with
+// `--configuration-cache`, all four generate/verify pairs fail to serialize
+// ("cannot serialize Gradle script object references"), because a Kotlin-DSL
+// lambda referring to a script-level `val` captures the script itself. Closing
+// that means real task classes with annotated properties, for all four pairs at
+// once; it is tracked rather than half-done here.
+val cookbookDocsFile = file("$rootDir/docs/cookbook.md")
+val cookbookDomainNodeTypeFile =
+    file("$projectDir/src/main/java/app/knotwork/android/domain/models/NodeType.kt")
+val cookbookCatalogNodeTypeFile =
+    file("$rootDir/catalog/src/main/java/app/knotwork/design/components/pipelineeditor/NodeType.kt")
+val cookbookNodePortsFile =
+    file("$rootDir/catalog/src/main/java/app/knotwork/design/components/pipelineeditor/NodePorts.kt")
+val cookbookNodeContextConfigFile =
+    file("$projectDir/src/main/java/app/knotwork/android/domain/models/NodeContextConfig.kt")
+val cookbookNodeConfigFile =
+    file("$rootDir/catalog/src/main/java/app/knotwork/design/components/pipelineeditor/NodeConfig.kt")
+val cookbookDefaultPromptsFile =
+    file("$projectDir/src/main/java/app/knotwork/android/domain/constants/DefaultPrompts.kt")
+val cookbookInputFiles: Set<File> = setOf(
+    cookbookDomainNodeTypeFile,
+    cookbookCatalogNodeTypeFile,
+    cookbookNodePortsFile,
+    cookbookNodeContextConfigFile,
+    cookbookNodeConfigFile,
+    cookbookDefaultPromptsFile,
+)
+
+// Built inline in each task action rather than by a shared helper: a `doLast`
+// block that calls a top-level function declared in the same build script is
+// not configuration-cache compatible, because the lambda then captures the
+// script instance rather than a class reference.
+val generateCookbookDocs by tasks.registering {
+    group = "build"
+    description = "Regenerates the AUTO-GEN node reference in docs/cookbook.md from the node sources."
+    inputs.files(cookbookInputFiles)
+    inputs.file(cookbookDocsFile)
+    outputs.file(cookbookDocsFile)
+    doLast {
+        val current = cookbookDocsFile.readText()
+        val rendered = CookbookDocsGenerator.render(
+            markdown = current,
+            sources = CookbookDocsGenerator.Sources(
+                domainNodeType = cookbookDomainNodeTypeFile.readText(),
+                catalogNodeType = cookbookCatalogNodeTypeFile.readText(),
+                nodePorts = cookbookNodePortsFile.readText(),
+                nodeContextConfig = cookbookNodeContextConfigFile.readText(),
+                nodeConfig = cookbookNodeConfigFile.readText(),
+                defaultPrompts = cookbookDefaultPromptsFile.readText(),
+            ),
+        )
+        if (rendered != current) {
+            cookbookDocsFile.writeText(rendered)
+            logger.lifecycle("docs/cookbook.md: regenerated the AUTO-GEN node reference.")
+        } else {
+            logger.lifecycle("docs/cookbook.md: AUTO-GEN node reference already up to date.")
+        }
+    }
+}
+
+val verifyCookbookDocs by tasks.registering {
+    group = "verification"
+    description = "Fails the build if the AUTO-GEN node reference in docs/cookbook.md has drifted."
+    inputs.files(cookbookInputFiles)
+    inputs.file(cookbookDocsFile)
+    doLast {
+        val drifted = CookbookDocsGenerator.drift(
+            markdown = cookbookDocsFile.readText(),
+            sources = CookbookDocsGenerator.Sources(
+                domainNodeType = cookbookDomainNodeTypeFile.readText(),
+                catalogNodeType = cookbookCatalogNodeTypeFile.readText(),
+                nodePorts = cookbookNodePortsFile.readText(),
+                nodeContextConfig = cookbookNodeContextConfigFile.readText(),
+                nodeConfig = cookbookNodeConfigFile.readText(),
+                defaultPrompts = cookbookDefaultPromptsFile.readText(),
+            ),
+        )
+        if (drifted.isNotEmpty()) {
+            throw GradleException(
+                "docs/cookbook.md is out of sync with the node sources.\n" +
+                    "Drifted AUTO-GEN block(s): ${drifted.joinToString(", ")}.\n" +
+                    "Run `./gradlew :app:generateCookbookDocs` and commit the updated docs/cookbook.md.",
+            )
+        }
+    }
+}
+verifyCookbookDocs { mustRunAfter(generateCookbookDocs) }
+tasks.named("check") { dependsOn(verifyCookbookDocs) }
 
 // Public documentation hygiene guard.
 //
@@ -1223,6 +1340,17 @@ tasks.withType<Test>().configureEach {
         .withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.file(rootProject.file(".github/workflows/instrumented.yml"))
         .withPropertyName("instrumentedWorkflow")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    // Same trap once more, and it was observed springing: `CookbookRuntimeReachTest`
+    // reads the published Markdown and `CookbookRecipeValidationTest` reads the
+    // recipe documents, neither of which is on any classpath. Without these two
+    // lines a broken recipe passed `check` from a cached run — `verifyCookbookDocs`
+    // does not read the recipes at all, so nothing else would have caught it.
+    inputs.file(rootProject.file("docs/cookbook.md"))
+        .withPropertyName("cookbookDocument")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(rootProject.file("docs/recipes"))
+        .withPropertyName("cookbookRecipes")
         .withPathSensitivity(PathSensitivity.RELATIVE)
 }
 

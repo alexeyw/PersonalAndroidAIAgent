@@ -1,0 +1,276 @@
+{
+  "schemaVersion": 1,
+  "id": "recipe-decompose-and-queue",
+  "name": "Recipe — decomposition and a queue",
+  "updatedAt": 1756400000000,
+  "nodes": [
+    {
+      "id": "input",
+      "type": "INPUT",
+      "position": {
+        "x": 80,
+        "y": 200
+      },
+      "label": "Input",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "INPUT",
+        "title": "Input",
+        "inputName": "user.message"
+      }
+    },
+    {
+      "id": "plan",
+      "type": "DECOMPOSITION",
+      "position": {
+        "x": 300,
+        "y": 200
+      },
+      "label": "Plan",
+      "config": {
+        "systemPrompt": "Break the user's task into a short list of simple, actionable subtasks. Output a JSON array of strings and nothing else. Keep the list under six items.\n\nWrite the subtasks in English.",
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "DECOMPOSITION",
+        "title": "Plan",
+        "planningPrompt": "Break the user's task into a short list of simple, actionable subtasks. Output a JSON array of strings and nothing else. Keep the list under six items.\n\nWrite the subtasks in English.",
+        "maxSubtasks": 5
+      }
+    },
+    {
+      "id": "queue",
+      "type": "QUEUE_PROCESSOR",
+      "position": {
+        "x": 540,
+        "y": 200
+      },
+      "label": "Each subtask",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "QUEUE_PROCESSOR",
+        "title": "Each subtask",
+        "inputList": "",
+        "itemVariable": "item",
+        "parallelism": 1,
+        "stopOnError": true
+      }
+    },
+    {
+      "id": "work",
+      "type": "LITE_RT",
+      "position": {
+        "x": 800,
+        "y": 100
+      },
+      "label": "Do the subtask",
+      "config": {
+        "systemPrompt": "You are given one subtask from a larger task. Carry out that subtask and reply with its result only — no preamble, no restating the subtask.\n\nReply in the user's language ($LANG).",
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "LITE_RT",
+        "title": "Do the subtask",
+        "modelId": "",
+        "systemPrompt": "You are given one subtask from a larger task. Carry out that subtask and reply with its result only — no preamble, no restating the subtask.\n\nReply in the user's language ($LANG).",
+        "temperature": 0.7,
+        "topP": 0.9,
+        "maxNewTokens": 1024,
+        "stopTokens": []
+      }
+    },
+    {
+      "id": "collect",
+      "type": "SUMMARY",
+      "position": {
+        "x": 800,
+        "y": 320
+      },
+      "label": "Put it together",
+      "config": {
+        "systemPrompt": "You are given the results of every subtask of one task. Combine them into a single answer to the original task. Do not list the subtasks.\n\nReply in the user's language ($LANG).",
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": true
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "SUMMARY",
+        "title": "Put it together",
+        "format": "PARAGRAPH",
+        "customPrompt": null,
+        "targetLengthChars": 600
+      }
+    },
+    {
+      "id": "output",
+      "type": "OUTPUT",
+      "position": {
+        "x": 1060,
+        "y": 200
+      },
+      "label": "Reply",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "OUTPUT",
+        "title": "Reply",
+        "format": "PLAIN_TEXT",
+        "systemPrompt": ""
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "fromNodeId": "input",
+      "toNodeId": "plan",
+      "label": null
+    },
+    {
+      "id": "c2",
+      "fromNodeId": "plan",
+      "toNodeId": "queue",
+      "label": null
+    },
+    {
+      "id": "c3",
+      "fromNodeId": "queue",
+      "toNodeId": "work",
+      "label": "Item"
+    },
+    {
+      "id": "c4",
+      "fromNodeId": "work",
+      "toNodeId": "queue",
+      "label": null
+    },
+    {
+      "id": "c5",
+      "fromNodeId": "queue",
+      "toNodeId": "collect",
+      "label": "Done"
+    },
+    {
+      "id": "c6",
+      "fromNodeId": "collect",
+      "toNodeId": "output",
+      "label": null
+    }
+  ],
+  "samplePrompts": [
+    {
+      "title": "Plan a weekend trip to a nearby city"
+    },
+    {
+      "title": "Draft an agenda for a one-hour project kickoff"
+    }
+  ]
+}

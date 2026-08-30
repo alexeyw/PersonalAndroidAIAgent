@@ -77,14 +77,20 @@ Note the one-time migration cost described in the *Pre-release notice* of
 updating a debug-signed install to it requires a reinstall. Releases from
 `0.7.0` onward update in place.
 
-### A cookbook for the node types
+### More recipes in the cookbook
 
-[extending.md](extending.md) and [user-guide.md](user-guide.md) document
-the extension points and the screens, but neither is the document you
-want open while wiring a pipeline: what each node type is for, what it
-does with its input, and which combinations are worth copying. Recipes
-per node type are the missing middle, and they matter more than any
-feature here — a pipeline editor is only as approachable as its examples.
+[cookbook.md](cookbook.md) now covers this ground: every node type, what
+it does with its input, which of its configuration fields change a run,
+and five importable recipes. What is still thin is the recipe half —
+five worked examples is a starting library, not a cookbook. The examples
+worth adding next are the ones people actually get stuck on, which is a
+question the first outside reports answer better than guessing does.
+
+Writing the reference also turned up a class of defect worth naming here:
+several configuration fields are shown, accepted and stored while nothing
+reads them during a run. They are marked as such in the cookbook rather
+than hidden, and each is either wired up or removed — but that work is
+listed in the tracker, not here.
 
 ### Whatever the first users run into
 

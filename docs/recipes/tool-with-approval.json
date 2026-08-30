@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "id": "recipe-tool-with-approval",
+  "name": "Recipe — a tool call you approve",
+  "updatedAt": 1756400000000,
+  "nodes": [
+    {
+      "id": "input",
+      "type": "INPUT",
+      "position": {
+        "x": 80,
+        "y": 200
+      },
+      "label": "Input",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "INPUT",
+        "title": "Input",
+        "inputName": "user.message"
+      }
+    },
+    {
+      "id": "draft",
+      "type": "LITE_RT",
+      "position": {
+        "x": 300,
+        "y": 200
+      },
+      "label": "Draft the note",
+      "config": {
+        "systemPrompt": "Turn the user's message into the exact text of a short note. Reply with the note text only — no title, no commentary.\n\nWrite the note in the user's language ($LANG).",
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "LITE_RT",
+        "title": "Draft the note",
+        "modelId": "",
+        "systemPrompt": "Turn the user's message into the exact text of a short note. Reply with the note text only — no title, no commentary.\n\nWrite the note in the user's language ($LANG).",
+        "temperature": 0.7,
+        "topP": 0.9,
+        "maxNewTokens": 1024,
+        "stopTokens": []
+      }
+    },
+    {
+      "id": "save",
+      "type": "TOOL",
+      "position": {
+        "x": 560,
+        "y": 200
+      },
+      "label": "Save it",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": "write_file",
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "TOOL",
+        "title": "Save it",
+        "toolId": "write_file",
+        "argumentMapping": []
+      }
+    },
+    {
+      "id": "output",
+      "type": "OUTPUT",
+      "position": {
+        "x": 820,
+        "y": 200
+      },
+      "label": "Confirm",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "OUTPUT",
+        "title": "Confirm",
+        "format": "PLAIN_TEXT",
+        "systemPrompt": ""
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "fromNodeId": "input",
+      "toNodeId": "draft",
+      "label": null
+    },
+    {
+      "id": "c2",
+      "fromNodeId": "draft",
+      "toNodeId": "save",
+      "label": null
+    },
+    {
+      "id": "c3",
+      "fromNodeId": "save",
+      "toNodeId": "output",
+      "label": null
+    }
+  ],
+  "samplePrompts": [
+    {
+      "title": "Note that the boiler service is due in March"
+    }
+  ]
+}

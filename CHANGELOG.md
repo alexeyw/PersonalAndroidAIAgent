@@ -15,6 +15,30 @@ details.
 
 ### Added
 
+- **A pipeline cookbook — [`docs/cookbook.md`](docs/cookbook.md).** Every node
+  type in one place: what it does, its ports, which blocks of the run's context
+  it is given, and — first, because it is what you came for — what decides how
+  it behaves and where you change that. The reference is generated from the
+  sources that define a node and a build check fails when it drifts, so it
+  cannot quietly describe a version of the app that no longer exists.
+
+  It is also frank about a thing the app hides. A node's configuration sheet
+  shows more than the engine reads: some fields accept input, save and export
+  while nothing consults them during a run, and there is no sign on screen which
+  is which. Every one of them is marked. Four are worse than merely ignored —
+  the prompt fields of the **Intent Router**, **Decomposition**, **Evaluation**
+  and **Summary** sheets are *required* and still never reach the run, so the
+  node goes on using the prompt it was created with; the page says where that
+  prompt really lives. A unit test holds every such claim against what the
+  editor's code actually does.
+
+- **Five importable pipeline recipes — [`docs/recipes/`](docs/recipes/).**
+  Routing on intent, decomposition with a queue, a tool call behind the
+  approval gate, a run that uses long-term memory, and one pipeline calling
+  another as a bundle. Each is a working file checked on every build with the
+  same parser the app's import uses, so a recipe that stopped importing fails
+  the build rather than the reader.
+
 - **A questions-and-answers page — [`docs/faq.md`](docs/faq.md).** Short
   answers to what is supported, what is not, and where a thing lives, each one
   pointing at the page that covers it properly rather than restating it. Its
@@ -188,6 +212,12 @@ details.
   went with them.
 
 ### Fixed
+
+- **Regenerating a documentation table and running `check` in one command no
+  longer fails.** The four `generate…` / `verify…` task pairs each read and
+  write the same file, and Gradle rejected the pair whenever both were asked
+  for at once — which is the natural way to use them. Contributors only; no
+  effect on the app.
 
 - **The `adb` examples for the external-automation contract could not work as
   written.** `adb shell` does not pass your arguments through — it joins them

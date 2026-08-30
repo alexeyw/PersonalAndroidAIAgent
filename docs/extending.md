@@ -27,6 +27,11 @@ see [`docs/user-guide.md`](user-guide.md).
 8. [Synchronization table — "if you change X, also touch Y"](#8-synchronization-table)
 9. [Quality gate](#9-quality-gate)
 
+> Extending the agent is not the same job as *using* it. For what each
+> node type does, what it does with its input, and recipes that wire them
+> together, see [`docs/cookbook.md`](cookbook.md) — and note that adding a
+> `NodeType` means regenerating its node reference (§1).
+
 ---
 
 ## 1. Add a new `NodeType`
@@ -207,6 +212,15 @@ target pipeline, `SKILL` → skill), there are two extra obligations:
    entry). The full transitive cycle and depth-limit checks stay in the
    app's `PipelineCompositionValidator` — document that limitation in a
    comment next to the editor check rather than pretending to replicate it.
+
+The public node reference in [`docs/cookbook.md`](cookbook.md) is the
+other mirror, and unlike the HTML it is generated: add the type to
+`CookbookDocsGenerator.NODE_DOC_META` with a reader-facing sentence, give
+every field of its `NodeConfig` a verdict in `FIELD_REACH`, then run
+`./gradlew :app:generateCookbookDocs` and commit the result.
+`verifyCookbookDocs` fails the build until you do, and generation itself
+fails if either table is missing an entry — the reference cannot silently
+lose a node type or a field.
 
 ### 1.7. Tests
 
@@ -1408,8 +1422,9 @@ double-check it for every recipe in this guide.**
 
 | You changed …                | Files you must also update                                                                                                                                                                                                                                          |
 |------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| A new `NodeType`             | `domain/models/NodeType.kt` · a new `NodeExecutor` implementation · `domain/engine/executors/NodeExecutorFactory.kt` · `domain/models/NodeContextConfig.kt` (`defaultForType`) · `domain/models/PipelineGraph.kt` (`validate`, if special invariants) · `buildtools/BrowserEditorConstantsGenerator.kt` (`NODE_TYPE_META`) + run `./gradlew :app:generateBrowserEditorConstants` · **`pipeline-editor.html`** (`defaultContextConfig`, `NODE_TYPE_TOOLTIPS`, optional `DEFAULT_SYSTEM_PROMPTS`; for typed config also `defaultRichConfig` / `richToFlat` / `encodeRichEnvelope` / `decodeRichEnvelope` / `deriveRichFromFlat` / `renderFormFields` / `validateRichConfig`) · executor unit test · `GraphExecutionEngineTest` |
+| A new `NodeType`             | `domain/models/NodeType.kt` · a new `NodeExecutor` implementation · `domain/engine/executors/NodeExecutorFactory.kt` · `domain/models/NodeContextConfig.kt` (`defaultForType`) · `domain/models/PipelineGraph.kt` (`validate`, if special invariants) · `buildtools/BrowserEditorConstantsGenerator.kt` (`NODE_TYPE_META`) + run `./gradlew :app:generateBrowserEditorConstants` · `buildtools/CookbookDocsGenerator.kt` (`NODE_DOC_META` + a `FIELD_REACH` entry per config field) + run `./gradlew :app:generateCookbookDocs` · **`pipeline-editor.html`** (`defaultContextConfig`, `NODE_TYPE_TOOLTIPS`, optional `DEFAULT_SYSTEM_PROMPTS`; for typed config also `defaultRichConfig` / `richToFlat` / `encodeRichEnvelope` / `decodeRichEnvelope` / `deriveRichFromFlat` / `renderFormFields` / `validateRichConfig`) · executor unit test · `GraphExecutionEngineTest` |
 | A node type that **references another entity by id** (`PIPELINE` / `SKILL`) | the flat `NodeModel` field (`targetPipelineId` / `skillId`) · `domain/pipelineio/PipelineJsonSerializer.kt` (emit + read the id in the flat `config` block) · `domain/models/PipelineGraph.kt` (`validate` → `MissingTargetPipeline` / `MissingSkill`) · `domain/services/PipelineCompositionValidator.kt` (transitive cycle / depth) · **`pipeline-editor.html`** (flat `config` key in `exportToJson`/`importFromJson`, reference form, self-ref + unresolved-id validation, node badge) · `PipelineJsonSerializerTest` round-trip |
+| A new field on a `NodeConfig` (catalog) | `catalog/.../pipelineeditor/NodeConfig.kt` · `NodeConfigForms.kt` + `NodeConfigValidation.kt` if it is edited · `presentation/ui/pipeline/editor/config/NodeConfigCodec.kt` (encode/decode, and `apply` if it must reach the runtime) · `buildtools/CookbookDocsGenerator.kt` (`FIELD_REACH` — generation fails without it) + run `./gradlew :app:generateCookbookDocs` · `CookbookRuntimeReachTest` checks the published verdict against the codec |
 | A new `Tool`                 | a new `LocalToolExecutor` implementation · `di/LocalToolsModule.kt` (`@Binds @IntoMap @StringKey`) · declare `ToolRisk` correctly · executor unit test · optional Compose test if new UI                                                                            |
 | A new **workspace tool**     | a new `LocalToolExecutor` that goes through `AgentWorkspace` (never raw `File`) · `di/LocalToolsModule.kt` (`@Binds @IntoMap @StringKey`) · risk tier in `ToolRepositoryImpl` built-in list · `docs/user-guide.md` (built-in-tools table) · executor unit test against a `@TempDir`-backed `AgentWorkspace` (happy path + `../` traversal + quota/not-found) |
 | A new callee-side AppFunction | a new `@AppFunction`-annotated wrapper under `data/tools/local/appfunctions/` (first param `AppFunctionContext`) · `App.appFunctionConfiguration` (`addEnclosingClassFactory(...)`) · wrapper unit test with a mocked `AppFunctionContext` · scenario in `AppFunctionsEndToEndTest` |
@@ -1460,6 +1475,8 @@ lives in [`docs/static-analysis.md`](static-analysis.md).
   pipeline engine, and the integration surface this guide extends.
 - [`docs/user-guide.md`](user-guide.md) — how the features you ship
   appear to end users.
+- [`docs/cookbook.md`](cookbook.md) — the per-node reference generated
+  from the sources you are editing, plus the recipes that use them.
 - [`docs/coverage-baseline.md`](coverage-baseline.md) — current
   coverage numbers and what is excluded from measurement.
 - [`docs/static-analysis.md`](static-analysis.md) — detekt / ktlint /

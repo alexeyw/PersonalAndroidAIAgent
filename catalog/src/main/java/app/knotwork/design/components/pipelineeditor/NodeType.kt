@@ -1,7 +1,7 @@
 package app.knotwork.design.components.pipelineeditor
 
 /**
- * Catalog-side enumeration of the thirteen pipeline-editor node types.
+ * Catalog-side enumeration of the pipeline-editor node types.
  *
  * Independent of `app.knotwork.android.domain.models.NodeType` so the design
  * catalog has zero dependency on the production `:app` module. The two

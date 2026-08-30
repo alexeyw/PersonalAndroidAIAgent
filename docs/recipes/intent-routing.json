@@ -1,0 +1,346 @@
+{
+  "schemaVersion": 1,
+  "id": "recipe-intent-routing",
+  "name": "Recipe — routing on intent",
+  "updatedAt": 1756400000000,
+  "nodes": [
+    {
+      "id": "input",
+      "type": "INPUT",
+      "position": {
+        "x": 80,
+        "y": 200
+      },
+      "label": "Input",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "INPUT",
+        "title": "Input",
+        "inputName": "user.message"
+      }
+    },
+    {
+      "id": "router",
+      "type": "INTENT_ROUTER",
+      "position": {
+        "x": 300,
+        "y": 200
+      },
+      "label": "Router",
+      "config": {
+        "systemPrompt": "Classify the user's message. Output EXACTLY one keyword and nothing else: Answer (you can reply from what you already know), Search (the reply needs a fact you would have to look up), Ask (the message is too vague to act on). Today is $DATE.\n\nThe keywords above are English literals: output the keyword exactly as written, in English, whatever language the user writes in.",
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": true,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "INTENT_ROUTER",
+        "title": "Router",
+        "classes": [
+          {
+            "name": "Answer",
+            "description": "Can be answered from what the model already knows.",
+            "examples": []
+          },
+          {
+            "name": "Search",
+            "description": "Needs a fact the model would have to look up.",
+            "examples": []
+          },
+          {
+            "name": "Ask",
+            "description": "Too vague to act on without one more question.",
+            "examples": []
+          }
+        ],
+        "classifierPrompt": "Classify the user's message. Output EXACTLY one keyword and nothing else: Answer (you can reply from what you already know), Search (the reply needs a fact you would have to look up), Ask (the message is too vague to act on). Today is $DATE.\n\nThe keywords above are English literals: output the keyword exactly as written, in English, whatever language the user writes in.",
+        "fallbackClass": "Answer"
+      }
+    },
+    {
+      "id": "answer",
+      "type": "LITE_RT",
+      "position": {
+        "x": 560,
+        "y": 60
+      },
+      "label": "Answer",
+      "config": {
+        "systemPrompt": "You are a concise assistant running on $MODEL. Today is $DATE. Answer the user's question directly in one short paragraph.\n\nReply in the user's language ($LANG).",
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "LITE_RT",
+        "title": "Answer",
+        "modelId": "",
+        "systemPrompt": "You are a concise assistant running on $MODEL. Today is $DATE. Answer the user's question directly in one short paragraph.\n\nReply in the user's language ($LANG).",
+        "temperature": 0.7,
+        "topP": 0.9,
+        "maxNewTokens": 1024,
+        "stopTokens": []
+      }
+    },
+    {
+      "id": "search",
+      "type": "TOOL",
+      "position": {
+        "x": 560,
+        "y": 200
+      },
+      "label": "Look it up",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": "search_tool",
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "TOOL",
+        "title": "Look it up",
+        "toolId": "search_tool",
+        "argumentMapping": []
+      }
+    },
+    {
+      "id": "from_search",
+      "type": "LITE_RT",
+      "position": {
+        "x": 800,
+        "y": 200
+      },
+      "label": "Answer from the result",
+      "config": {
+        "systemPrompt": "You are given the result of a lookup. Answer the user's question using only that result, in one short paragraph. If the result does not contain the answer, say so.\n\nReply in the user's language ($LANG).",
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": true
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "LITE_RT",
+        "title": "Answer from the result",
+        "modelId": "",
+        "systemPrompt": "You are given the result of a lookup. Answer the user's question using only that result, in one short paragraph. If the result does not contain the answer, say so.\n\nReply in the user's language ($LANG).",
+        "temperature": 0.7,
+        "topP": 0.9,
+        "maxNewTokens": 1024,
+        "stopTokens": []
+      }
+    },
+    {
+      "id": "clarify",
+      "type": "CLARIFICATION",
+      "position": {
+        "x": 560,
+        "y": 340
+      },
+      "label": "Ask one question",
+      "config": {
+        "systemPrompt": "The user's message is too vague to act on. Ask exactly one short question that would make it actionable. Ask in the user's language ($LANG).",
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": 60000,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": true,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "CLARIFICATION",
+        "title": "Ask one question",
+        "questionTemplate": "The user's message is too vague to act on. Ask exactly one short question that would make it actionable. Ask in the user's language ($LANG).",
+        "quickReplies": [],
+        "timeoutMs": 60000
+      }
+    },
+    {
+      "id": "output",
+      "type": "OUTPUT",
+      "position": {
+        "x": 1040,
+        "y": 200
+      },
+      "label": "Reply",
+      "config": {
+        "systemPrompt": null,
+        "cloudProvider": null,
+        "modelPath": null,
+        "toolName": null,
+        "targetPipelineId": null,
+        "skillId": null,
+        "clarificationTimeoutMs": null,
+        "conditionPrompt": null,
+        "conditionKeywords": null,
+        "conditionComplexity": null,
+        "conditionHasImage": null
+      },
+      "contextConfig": {
+        "chatHistory": false,
+        "originalTask": false,
+        "nodeInput": true,
+        "longTermMemory": false,
+        "toolResults": false
+      },
+      "nodeConfig": {
+        "v": 1,
+        "type": "OUTPUT",
+        "title": "Reply",
+        "format": "PLAIN_TEXT",
+        "systemPrompt": ""
+      }
+    }
+  ],
+  "connections": [
+    {
+      "id": "c1",
+      "fromNodeId": "input",
+      "toNodeId": "router",
+      "label": null
+    },
+    {
+      "id": "c2",
+      "fromNodeId": "router",
+      "toNodeId": "answer",
+      "label": "Answer"
+    },
+    {
+      "id": "c3",
+      "fromNodeId": "router",
+      "toNodeId": "search",
+      "label": "Search"
+    },
+    {
+      "id": "c4",
+      "fromNodeId": "router",
+      "toNodeId": "clarify",
+      "label": "Ask"
+    },
+    {
+      "id": "c5",
+      "fromNodeId": "search",
+      "toNodeId": "from_search",
+      "label": null
+    },
+    {
+      "id": "c6",
+      "fromNodeId": "clarify",
+      "toNodeId": "answer",
+      "label": null
+    },
+    {
+      "id": "c7",
+      "fromNodeId": "answer",
+      "toNodeId": "output",
+      "label": null
+    },
+    {
+      "id": "c8",
+      "fromNodeId": "from_search",
+      "toNodeId": "output",
+      "label": null
+    }
+  ],
+  "samplePrompts": [
+    {
+      "title": "What is the capital of Chile?"
+    },
+    {
+      "title": "Look up when the Kotlin 2.0 release happened"
+    },
+    {
+      "title": "Fix it"
+    }
+  ]
+}
