@@ -309,6 +309,7 @@ constructor(
         settingsRepository = settingsRepository,
         pipelineRepository = pipelineRepository,
         chatRepository = chatRepository,
+        pipelineRunRepository = pipelineRunRepository,
         sessions = { threads.sessionsSnapshot() },
     )
 

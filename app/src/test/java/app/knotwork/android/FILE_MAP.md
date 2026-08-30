@@ -372,6 +372,8 @@ Only Kotlin files appear inside the generated blocks.
     - `AgentApprovalReceiverTest.kt` - Robolectric coverage for `AgentApprovalReceiver` — the broadcast receiver that routes the Approve / Deny notification actions through `SubmitApprovalDecisionUseCase` (live gate or parked record) and re-posts persistent notifications on `ApprovalAction.REPOST`.
     - `ApprovalActionTest.kt` - Unit tests for `ApprovalAction`: round-trip parsing and rejection of unknown actions.
     - `ExternalAutomationReceiverTest.kt` - Robolectric coverage for `ExternalAutomationReceiver` — the exported entry point a third-party automation app broadcasts to.
+  - `run/` - Tests for the run-lifecycle collaborators in `presentation/run/`.
+    - `RunOutcomeAnnouncerImplTest.kt` - Coverage for `RunOutcomeAnnouncerImpl` — the line a stopped run leaves in the chat it ran in.
   - `ui/` - Tests for the screens and their ViewModels.
     - `about/` - Tests for the About surface.
       - `AboutAcknowledgmentsTest.kt` - Drift guard for the hand-maintained `AboutAcknowledgments` list surfaced on the About screen (`PHASE 26 — Task 7`).

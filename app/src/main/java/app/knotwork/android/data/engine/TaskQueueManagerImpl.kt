@@ -20,6 +20,7 @@ import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.AttachmentStore
+import app.knotwork.android.domain.services.RunOutcomeAnnouncer
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -58,6 +59,7 @@ class TaskQueueManagerImpl @Inject constructor(
     private val pipelineRunRepository: PipelineRunRepository,
     private val runTraceRepository: RunTraceRepository,
     private val attachmentStore: AttachmentStore,
+    private val runOutcomeAnnouncer: RunOutcomeAnnouncer,
 ) : TaskQueueManager {
 
     @VisibleForTesting
@@ -327,7 +329,7 @@ class TaskQueueManagerImpl @Inject constructor(
         val pipelines = pipelineRepository.getAllPipelines().firstOrNull() ?: emptyList()
         if (pipelines.isEmpty()) {
             val message = "No active pipeline found. Please create one in the Visual Orchestrator."
-            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, message)
+            settleRun(task, PipelineRunStatus.FAILED, message)
             val errState = AgentOrchestratorState.Error(message)
             stateFlow.emit(errState)
             _globalState.value = errState
@@ -342,7 +344,7 @@ class TaskQueueManagerImpl @Inject constructor(
 
         if (activePipeline == null) {
             val message = "No default pipeline configured. Set one in Settings or bind a pipeline to this chat."
-            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, message)
+            settleRun(task, PipelineRunStatus.FAILED, message)
             val errState = AgentOrchestratorState.Error(message)
             stateFlow.emit(errState)
             _globalState.value = errState
@@ -387,12 +389,7 @@ class TaskQueueManagerImpl @Inject constructor(
         val graph = run?.pipelineId?.let { pipelineRepository.getPipelineById(it) }
         if (run == null || graph == null || recordedHash == null || graph.contentHash() != recordedHash) {
             val message = "Pipeline graph changed before resume could start. Restart the task instead."
-            pipelineRunRepository.finishRun(
-                task.id,
-                PipelineRunStatus.INTERRUPTED,
-                message,
-                RunTerminationReason.GraphChanged,
-            )
+            settleRun(task, PipelineRunStatus.INTERRUPTED, message, RunTerminationReason.GraphChanged)
             // Same rule as the stall path below: the cause travels to the
             // surface, not only to the record. Dropping it here left a resume
             // the app refused wearing the destructive tile and a Retry, when
@@ -487,17 +484,12 @@ class TaskQueueManagerImpl @Inject constructor(
                     // settled when the in-memory flow reaches its observers.
                     when (state) {
                         is AgentOrchestratorState.Completed ->
-                            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.COMPLETED)
+                            settleRun(task, PipelineRunStatus.COMPLETED)
                         is AgentOrchestratorState.Error ->
                             // The engine's typed reason travels with the state, so a
                             // protective stop settles as one instead of arriving here
                             // as prose the journal would have to parse back.
-                            pipelineRunRepository.finishRun(
-                                task.id,
-                                PipelineRunStatus.FAILED,
-                                state.message,
-                                state.reason,
-                            )
+                            settleRun(task, PipelineRunStatus.FAILED, state.message, state.reason)
                         is AgentOrchestratorState.SuspendedInBackground -> runParked = true
                         else -> Unit
                     }
@@ -519,7 +511,7 @@ class TaskQueueManagerImpl @Inject constructor(
             // it is a forced termination rather than a pipeline defect — typed so
             // it stops being recoverable only by matching its own message text.
             val reason = if (e is RunStalledException) RunTerminationReason.RunStalled else null
-            pipelineRunRepository.finishRun(task.id, PipelineRunStatus.FAILED, message, reason)
+            settleRun(task, PipelineRunStatus.FAILED, message, reason)
             // The same reason travels to the surface, not only to the record.
             // Dropping it here left a watchdog kill wearing the destructive
             // error tile and a Retry button that would stall all over again.
@@ -548,7 +540,7 @@ class TaskQueueManagerImpl @Inject constructor(
                     // Stop / scope teardown). Cancellation is NOT a failure,
                     // so it maps to CANCELLED, and the repository's terminal
                     // guard keeps any already-settled record untouched.
-                    pipelineRunRepository.finishRun(task.id, PipelineRunStatus.CANCELLED)
+                    settleRun(task, PipelineRunStatus.CANCELLED)
                     stateFlow.emit(AgentOrchestratorState.Idle)
                 }
                 _globalState.value = AgentOrchestratorState.Idle
@@ -594,6 +586,33 @@ class TaskQueueManagerImpl @Inject constructor(
      *
      * @param task The task to be executed.
      */
+    /**
+     * Settles a run's persistent record and records the outcome in its chat.
+     *
+     * The two belong together: every terminal path here already wrote the
+     * record, and each one of them also left the thread showing a user message
+     * with no reply. Routing both through one helper is what stops a future
+     * terminal path from remembering the record and forgetting the chat.
+     *
+     * A completed run goes through here too, even though it announces nothing:
+     * making this the only way to settle a run is the point, and the announcer
+     * is what decides that success needs no line.
+     *
+     * @param task The task whose run is settling.
+     * @param status Terminal status to write.
+     * @param message Diagnostic for the record, or `null`.
+     * @param reason Typed cause when the engine classified the stop.
+     */
+    private suspend fun settleRun(
+        task: AgentTask,
+        status: PipelineRunStatus,
+        message: String? = null,
+        reason: RunTerminationReason? = null,
+    ) {
+        pipelineRunRepository.finishRun(task.id, status, message, reason)
+        runOutcomeAnnouncer.announce(task.sessionId, status, reason, message)
+    }
+
     override fun enqueueTask(task: AgentTask) {
         scope.launch {
             queueMutex.withLock {

@@ -263,6 +263,28 @@ details.
 
 ### Fixed
 
+- **A run that ends without an answer now says so, in the conversation.** A
+  failure, a stop, an approval window that elapsed, or the app being killed
+  mid-run reached you only as a banner on the chat screen — state held in
+  memory. It died with the screen, so returning to a chat whose run ended while
+  the app was in the background found your message sitting there with nothing
+  after it and no way to tell what had happened. The outcome is now written into
+  the conversation by whatever settled the run, so it is there whether or not
+  anything was watching. A run that finishes normally still says nothing — its
+  answer is the message.
+
+  The sentence is the one every other surface already uses for the same event,
+  so a run stopped by its step ceiling reads the same in the chat, in the
+  notification and on the banner.
+
+- **The chat title named the wrong pipeline.** A conversation opened by a
+  trigger, by a scheduled task or by external automation showed the name of the
+  *default* pipeline above messages a different one had produced. Those chats
+  carry no pipeline binding on purpose — they are result logs, and a follow-up
+  you type into one should use your default rather than a stale copy of whatever
+  ran. The title now names the pipeline that produced what you are reading, and
+  a chat you bound to a pipeline yourself still shows that binding.
+
 - **The prompt you type into an Intent Router, Decomposition, Evaluation or
   Summary node now reaches the run.** All four sheets require a prompt, saved
   it, showed it again when the sheet was reopened — and the node went on using

@@ -39,11 +39,13 @@ import app.knotwork.android.data.tools.local.LocalAppFunctionManager
 import app.knotwork.android.domain.services.ApprovalNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.services.ExternalAutomationCallbackNotifier
+import app.knotwork.android.domain.services.RunOutcomeAnnouncer
 import app.knotwork.android.domain.services.ScheduledTaskNotifier
 import app.knotwork.android.domain.services.TaskScheduler
 import app.knotwork.android.presentation.notifications.ApprovalNotificationManager
 import app.knotwork.android.presentation.notifications.ClarificationNotificationManager
 import app.knotwork.android.presentation.notifications.ScheduledTaskNotifierImpl
+import app.knotwork.android.presentation.run.RunOutcomeAnnouncerImpl
 import app.knotwork.android.presentation.state.ActiveSessionTracker
 import dagger.Module
 import dagger.Provides
@@ -430,6 +432,18 @@ object AppModule {
     @Provides
     @Singleton
     fun provideScheduledTaskNotifier(impl: ScheduledTaskNotifierImpl): ScheduledTaskNotifier = impl
+
+    /**
+     * Binds the presentation-layer [RunOutcomeAnnouncerImpl] to the domain-level
+     * [RunOutcomeAnnouncer] the task queue calls when a run settles.
+     *
+     * The implementation is in `presentation` because the sentence it writes
+     * comes from `RunTerminationCopyMapper`, which owns the vocabulary every
+     * other surface already uses for the same event.
+     */
+    @Provides
+    @Singleton
+    fun provideRunOutcomeAnnouncer(impl: RunOutcomeAnnouncerImpl): RunOutcomeAnnouncer = impl
 
     /**
      * Binds the presentation-layer [ClarificationNotificationManager]
