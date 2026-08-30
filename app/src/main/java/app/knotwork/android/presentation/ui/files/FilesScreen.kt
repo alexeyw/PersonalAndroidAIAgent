@@ -80,7 +80,6 @@ fun FilesScreen(onBack: () -> Unit, modifier: Modifier = Modifier, viewModel: Fi
                 FilesEvent.LaunchImport -> importLauncher.launch(arrayOf(IMPORT_MIME_FILTER))
                 is FilesEvent.LaunchSaveAs -> saveAsLauncher.launch(event.suggestedName)
                 is FilesEvent.ShareFiles -> scope.launch { context.stageAndShare(event.paths, viewModel) }
-                is FilesEvent.ShowMessage -> { /* Snackbar host lives in the app shell; logged in VM. */ }
             }
         }
     }
@@ -236,6 +235,7 @@ private suspend fun Context.stageAndShare(paths: List<String>, viewModel: FilesV
             if (ok) FileProvider.getUriForFile(this@stageAndShare, "$packageName.fileprovider", staged) else null
         }
     }
+    viewModel.messages.shareStaged(staged = uris.size, requested = paths.size)
     if (uris.isEmpty()) return
     val intent = if (uris.size == 1) {
         Intent(Intent.ACTION_SEND).apply {

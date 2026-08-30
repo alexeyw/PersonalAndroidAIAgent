@@ -403,16 +403,6 @@ would change it.
   report of a real server that cannot be reached any other way.
 - **No connection test for an MCP server.** You add it and read the resulting
   health row. Revisited alongside the MCP screen's next rework.
-- **Four node types ignore the prompt you type into them.** The `Intent Router`,
-  `Decomposition`, `Evaluation` and `Summary` configuration sheets each require a
-  prompt and then keep it to themselves: the node goes on running the prompt it
-  was created with. The edit survives closing and reopening the sheet, so there
-  is nothing on screen to tell you. Until it is fixed, set the prompt by editing
-  the pipeline as JSON (`config.systemPrompt` on the node) and importing it, or
-  by using the browser editor, which writes it correctly. Revisited when the
-  in-app editor is made to match — this is a defect with a known one-sided fix,
-  not a design decision. See the [cookbook](cookbook.md#node-reference) for which
-  field belongs to which node.
 - **A tool's risk level cannot be changed.** The approval gate reads a per-tool
   override, but nothing in the app writes one, so a tool classed sensitive
   stays sensitive. The controls that do exist only tighten the gate. Revisited

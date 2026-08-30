@@ -401,6 +401,7 @@ Only Kotlin files appear inside the generated blocks.
       - `DiscoverDetailViewModelTest.kt` - Unit tests for `DiscoverDetailViewModel`.
       - `DiscoverViewModelTest.kt` - Unit tests for `DiscoverViewModel`.
     - `files/` - Tests for the agent-workspace Files surface.
+      - `FilesMessengerTest.kt` - Unit coverage for `FilesMessenger` — the single owner of what the Files screen says when an operation does not go through.
       - `FilesScreenMappingTest.kt` - Verifies the pure `FilesUiState.toViewState()` projection used by `FilesScreen`.
       - `FilesViewModelTest.kt` - Unit tests for `FilesViewModel`.
     - `memory/` - Tests for the long-term-memory surface.

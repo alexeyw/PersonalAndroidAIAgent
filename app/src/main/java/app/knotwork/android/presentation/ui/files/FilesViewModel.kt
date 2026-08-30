@@ -2,6 +2,7 @@ package app.knotwork.android.presentation.ui.files
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.knotwork.android.R
 import app.knotwork.android.domain.models.WorkspaceResult
 import app.knotwork.android.domain.usecases.workspace.DeleteWorkspaceFilesUseCase
 import app.knotwork.android.domain.usecases.workspace.ExportWorkspaceFileUseCase
@@ -39,6 +40,9 @@ import javax.inject.Inject
  * @property deleteUseCase Deletes one or more files.
  * @property importUseCase Imports an external document with a collision policy.
  * @property exportUseCase Streams a file out (save-as / share staging).
+ * @property messages What the screen tells the user when an operation fails.
+ *   Public because `FilesScreen` stages a share itself and therefore reports
+ *   that outcome itself; see [FilesMessenger].
  */
 @HiltViewModel
 class FilesViewModel @Inject constructor(
@@ -47,6 +51,7 @@ class FilesViewModel @Inject constructor(
     private val deleteUseCase: DeleteWorkspaceFilesUseCase,
     private val importUseCase: ImportFileToWorkspaceUseCase,
     private val exportUseCase: ExportWorkspaceFileUseCase,
+    val messages: FilesMessenger,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FilesUiState())
@@ -148,14 +153,14 @@ class FilesViewModel @Inject constructor(
                         _uiState.update { it.copy(preview = FilePreviewState(path = path, preview = result.value)) }
                     is WorkspaceResult.Failure -> {
                         Timber.w("Workspace preview failed for %s: %s", path, result.error)
-                        emit(FilesEvent.ShowMessage(FilesMessage.PreviewFailed))
+                        messages.failure(R.string.files_message_preview_failed)
                     }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Timber.w(e, "Workspace preview threw for %s", path)
-                emit(FilesEvent.ShowMessage(FilesMessage.PreviewFailed))
+                messages.failure(R.string.files_message_preview_failed)
             }
         }
     }
@@ -200,12 +205,12 @@ class FilesViewModel @Inject constructor(
             }
             try {
                 val summary = deleteUseCase(targets)
-                if (!summary.allSucceeded) emit(FilesEvent.ShowMessage(FilesMessage.DeletePartial))
+                if (!summary.allSucceeded) messages.failure(R.string.files_message_delete_partial)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Timber.w(e, "Workspace delete threw")
-                emit(FilesEvent.ShowMessage(FilesMessage.DeletePartial))
+                messages.failure(R.string.files_message_delete_partial)
             }
             refresh()
         }
@@ -268,19 +273,19 @@ class FilesViewModel @Inject constructor(
             try {
                 val stream = pending.openStream()
                 if (stream == null) {
-                    emit(FilesEvent.ShowMessage(FilesMessage.ImportFailed))
+                    messages.failure(R.string.files_message_import_failed)
                     return@launch
                 }
                 val result = stream.use { importUseCase(pending.name, it, mode) }
                 if (result is WorkspaceResult.Failure) {
                     Timber.w("Workspace import failed for %s: %s", pending.name, result.error)
-                    emit(FilesEvent.ShowMessage(FilesMessage.ImportFailed))
+                    messages.failure(R.string.files_message_import_failed)
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
                 Timber.w(e, "Workspace import threw for %s", pending.name)
-                emit(FilesEvent.ShowMessage(FilesMessage.ImportFailed))
+                messages.failure(R.string.files_message_import_failed)
             } finally {
                 pendingImport = null
             }
@@ -304,7 +309,7 @@ class FilesViewModel @Inject constructor(
     suspend fun completeSaveAs(sink: OutputStream) {
         val path = pendingSavePath ?: return
         pendingSavePath = null
-        if (!exportTo(path, sink)) emit(FilesEvent.ShowMessage(FilesMessage.ExportFailed))
+        if (!exportTo(path, sink)) messages.failure(R.string.files_message_export_failed)
     }
 
     /** Ask the screen to stage + share a single file. */

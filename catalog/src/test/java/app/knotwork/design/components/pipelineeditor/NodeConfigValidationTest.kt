@@ -57,18 +57,44 @@ class NodeConfigValidationTest {
     }
 
     @Test
-    fun `given LiteRtConfig with out-of-range temperature when validate then OUT_OF_RANGE`() {
+    fun `given LiteRtConfig with out-of-range sampling when validate then no error (fields have no control)`() {
+        // ADR 0005 removed temperature / topP / maxNewTokens from the LITE_RT
+        // sheet. Validating them anyway blocked Save on a field the user cannot
+        // see: an imported pipeline carrying any out-of-range value produced an
+        // error with nothing on screen to correct. The values still round-trip
+        // on `LiteRtConfig`, and nothing reads them during a run.
         val errors = NodeConfigValidation.validate(
             config = LiteRtConfig(
                 title = "node-a",
                 modelId = "gemma-2b-it",
                 systemPrompt = "x",
                 temperature = 5f,
+                topP = 9f,
+                maxNewTokens = 999_999,
             ),
             peerTitles = noPeers,
         )
 
-        assertEquals(ValidationFailure.OUT_OF_RANGE, errors[FieldId.TEMPERATURE])
+        assertTrue(errors.isEmpty())
+    }
+
+    @Test
+    fun `given CloudConfig with out-of-range sampling when validate then no error (fields have no control)`() {
+        // Same reason as the LITE_RT case above, and as the blank-model case
+        // below: the Cloud sheet offers neither temperature, max tokens nor
+        // timeout since ADR 0005.
+        val errors = NodeConfigValidation.validate(
+            config = CloudConfig(
+                title = "cloud-a",
+                systemPrompt = "x",
+                temperature = 5f,
+                maxTokens = 999_999,
+                timeoutMs = 1,
+            ),
+            peerTitles = noPeers,
+        )
+
+        assertTrue(errors.isEmpty())
     }
 
     @Test

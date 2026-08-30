@@ -603,20 +603,6 @@ class LiteRTLlmEngine @Inject constructor(
     }
 
     /**
-     * Builds a [ConversationConfig] whose [SamplerConfig] applies [temperature]
-     * over conventional top-k / top-p values.
-     *
-     * LiteRT-LM exposes the sampler only as an all-or-nothing [SamplerConfig], so
-     * a temperature override cannot leave the model's other native sampler fields
-     * in place — they must be re-specified here. The chosen top-k / top-p are the
-     * conventional Gemma-family decode values; the override is only ever used for
-     * the structured-output repair loop, where the low [temperature] already
-     * biases generation towards near-deterministic, schema-obedient output.
-     *
-     * @param temperature The repair sampling temperature to apply.
-     * @return A conversation config carrying the repair [SamplerConfig].
-     */
-    /**
      * Builds a fresh LiteRT-LM [Backend] instance for the given [LocalBackend].
      * Used for both the compute backend and (when vision is enabled) the vision
      * backend, so the GPU/NPU/CPU mapping lives in exactly one place.
@@ -630,6 +616,20 @@ class LiteRTLlmEngine @Inject constructor(
         LocalBackend.CPU -> Backend.CPU()
     }
 
+    /**
+     * Builds a [ConversationConfig] whose [SamplerConfig] applies [temperature]
+     * over conventional top-k / top-p values.
+     *
+     * LiteRT-LM exposes the sampler only as an all-or-nothing [SamplerConfig], so
+     * a temperature override cannot leave the model's other native sampler fields
+     * in place — they must be re-specified here. The chosen top-k / top-p are the
+     * conventional Gemma-family decode values; the override is only ever used for
+     * the structured-output repair loop, where the low [temperature] already
+     * biases generation towards near-deterministic, schema-obedient output.
+     *
+     * @param temperature The repair sampling temperature to apply.
+     * @return A conversation config carrying the repair [SamplerConfig].
+     */
     private fun repairConversationConfig(temperature: Float): ConversationConfig = ConversationConfig(
         samplerConfig = SamplerConfig(
             topK = REPAIR_SAMPLER_TOP_K,
