@@ -4,10 +4,13 @@ import app.knotwork.android.buildtools.DetektAnalysisModeGuard
 import app.knotwork.android.buildtools.DexInstantiabilityChecker
 import app.knotwork.android.buildtools.DocsHygieneChecker
 import app.knotwork.android.buildtools.ExternalAutomationDocsGenerator
+import app.knotwork.android.buildtools.FileMapSpec
+import app.knotwork.android.buildtools.GenerateFileMapTask
 import app.knotwork.android.buildtools.LintBaselineGuard
 import app.knotwork.android.buildtools.R8MappingChecker
 import app.knotwork.android.buildtools.ReleaseVersionChecker
 import app.knotwork.android.buildtools.SettingsHelpDocsGenerator
+import app.knotwork.android.buildtools.VerifyFileMapTask
 import com.android.build.api.artifact.SingleArtifact
 import dev.detekt.gradle.Detekt
 import java.util.Properties
@@ -1207,6 +1210,101 @@ val verifyCookbookDocs by tasks.registering {
 }
 verifyCookbookDocs { mustRunAfter(generateCookbookDocs) }
 tasks.named("check") { dependsOn(verifyCookbookDocs) }
+
+// Generated file maps.
+//
+// `FILE_MAP.md` used to be kept in step by a post-write hook, a PR-checklist
+// item and a step of the agent workflow — all three of which name the map under
+// `app/src/main`, while the repository holds several. Measured before this pair
+// existed: that one map was accurate to four entries, the `:catalog` map was
+// missing 128 of its own sources, the unit-test map named 44 files of 375 and
+// the instrumented map 16 of 60. A map covering an eighth of its directory does
+// not read as stale; it reads as complete, which is worse.
+//
+// So the *structure* of each map is now derived from the source tree, while the
+// *descriptions* — which carry design rationale no KDoc holds — are carried
+// across by path and only seeded from KDoc when a path has none. The gap count
+// is ratcheted in `config/file-map/baseline.properties`.
+//
+// Unlike the four pairs above, these are typed task classes: an ad-hoc
+// `doLast` block that reads a build-script `val` captures the whole build
+// script (which is what makes those four configuration-cache incompatible),
+// and an ad-hoc verification task declares no output, so Gradle can never treat
+// it as up to date and re-runs it on every `check`.
+val fileMapSpecs = listOf(
+    FileMapSpec(
+        mapPath = "app/src/main/java/app/knotwork/android/FILE_MAP.md",
+        blockId = "FILE_MAP",
+        roots = listOf(FileMapSpec.Root("app/src/main/java/app/knotwork/android")),
+        baselineKey = "app-main",
+    ),
+    FileMapSpec(
+        mapPath = "app/src/main/java/app/knotwork/android/FILE_MAP.md",
+        blockId = "FILE_MAP_SOURCE_SETS",
+        roots = listOf("full", "foss", "debug", "testFull", "testFoss").map { sourceSet ->
+            FileMapSpec.Root(
+                dir = "app/src/$sourceSet/java/app/knotwork/android",
+                prefix = "$sourceSet/",
+            )
+        },
+        baselineKey = "app-source-sets",
+    ),
+    FileMapSpec(
+        mapPath = "app/src/test/java/app/knotwork/android/FILE_MAP.md",
+        blockId = "FILE_MAP",
+        roots = listOf(FileMapSpec.Root("app/src/test/java/app/knotwork/android")),
+        baselineKey = "app-test",
+    ),
+    FileMapSpec(
+        mapPath = "app/src/androidTest/java/app/knotwork/android/FILE_MAP.md",
+        blockId = "FILE_MAP",
+        roots = listOf(FileMapSpec.Root("app/src/androidTest/java/app/knotwork/android")),
+        baselineKey = "app-android-test",
+    ),
+    FileMapSpec(
+        mapPath = "catalog/FILE_MAP.md",
+        blockId = "FILE_MAP",
+        roots = listOf(FileMapSpec.Root("catalog/src/main/java/app/knotwork/design")),
+        baselineKey = "catalog",
+    ),
+)
+
+val fileMapSources: FileCollection = files(
+    fileMapSpecs
+        .flatMap { spec -> spec.roots.map { it.dir } }
+        .distinct()
+        .map { dir -> fileTree("$rootDir/$dir") { include("**/*.kt") } },
+)
+
+val fileMapFiles: FileCollection = files(fileMapSpecs.map { "$rootDir/${it.mapPath}" }.distinct())
+
+val fileMapBaselineFile = file("$rootDir/config/file-map/baseline.properties")
+
+val generateFileMap by tasks.registering(GenerateFileMapTask::class) {
+    group = "build"
+    description = "Regenerates the AUTO-GEN source trees of every FILE_MAP.md from the Kotlin sources."
+    repositoryRoot.set(rootProject.layout.projectDirectory)
+    sources.from(fileMapSources)
+    maps.from(fileMapFiles)
+    specs.set(fileMapSpecs)
+    baselineFile.set(fileMapBaselineFile)
+    outputMaps.from(fileMapFiles)
+    acceptDroppedDescriptions.set(providers.gradleProperty("acceptFileMapDrops").map { true }.orElse(false))
+}
+
+val verifyFileMap by tasks.registering(VerifyFileMapTask::class) {
+    group = "verification"
+    description = "Fails the build if a FILE_MAP.md has drifted from the Kotlin sources, or gaps grew past the ratchet."
+    repositoryRoot.set(rootProject.layout.projectDirectory)
+    sources.from(fileMapSources)
+    maps.from(fileMapFiles)
+    specs.set(fileMapSpecs)
+    baselineFile.set(fileMapBaselineFile)
+    stampFile.set(layout.buildDirectory.file("reports/file-map/verified.txt"))
+}
+
+verifyFileMap { mustRunAfter(generateFileMap) }
+tasks.named("check") { dependsOn(verifyFileMap) }
 
 // Public documentation hygiene guard.
 //

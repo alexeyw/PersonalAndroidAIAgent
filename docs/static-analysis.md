@@ -34,6 +34,7 @@ This invokes (transitively):
 | `:app:verifyExternalAutomationDocs`           | Fails if the `docs/external-automation.md` `AUTO-GEN` tables drift from the contract sources (see below). |
 | `:app:verifySettingsHelpDocs`                 | Fails if the settings reference table in `docs/user-guide.md` drifts from the shipped help strings (see below). |
 | `:app:verifyCookbookDocs`                     | Fails if the node reference in `docs/cookbook.md` drifts from the node sources (see below). |
+| `:app:verifyFileMap`                          | Fails if a generated `FILE_MAP.md` drifts from the Kotlin sources, or an undocumented-file count grows past its ratchet (see below). |
 | `:app:testFullDebugUnitTest` (`CookbookRuntimeReachTest`, `CookbookRecipeValidationTest`) | Fails if the cookbook's run-time verdicts disagree with `NodeConfigCodec`, or a published recipe no longer imports (see below). |
 | `:app:testFullDebugUnitTest` (`SettingsHelpCatalogTest`) | Fails if a registered setting has no help decision, or its text is blank, over-long, duplicated or in a forbidden register (see below). |
 | `:app:verifyLintBaselineOverrides`            | Custom rule: fail if a lint baseline suppresses a check demoted to informational severity (see below). |
@@ -584,6 +585,104 @@ resource, a display name that lives in another values file, and a crippled
 parser. The gate was verified by editing a help string without regenerating, by
 hand-editing the generated table, and by breaking the registry parser — each
 failed with the cause named.
+
+---
+
+## File-map guard (`verifyFileMap`)
+
+`:app:verifyFileMap` is wired into `check`. It regenerates the `AUTO-GEN` blocks
+of four `FILE_MAP.md` files from the Kotlin source tree and fails when the
+committed file differs, or when a documentation gap has grown.
+
+### Why generated
+
+The maps were kept in step by a post-write hook, a PR-checklist item and a
+review step — all three of which name the map under `app/src/main`, while the
+repository holds several. Measured immediately before this guard was added:
+
+| Map | Files it named | Files that existed |
+|---|---|---|
+| `app/src/main/…/FILE_MAP.md` | 704 | 701 (3 unlisted, 1 entry pointing at a moved file) |
+| `catalog/FILE_MAP.md` | 164 | 292 |
+| `app/src/test/…/FILE_MAP.md` | 44 | 375 |
+| `app/src/androidTest/…/FILE_MAP.md` | 16 | 60 |
+
+A map covering an eighth of its directory does not read as stale — it reads as
+complete, which is the more expensive failure. Deriving the structure turns
+"the map is current" into a function of the repository, which is the standard a
+verdict has to meet before it may block a build.
+
+### What is generated, and what is not
+
+The **structure** — which paths exist, how they nest, what order they are in —
+is derived. Ordering is alphabetical with directories and files interleaved,
+because the previous hand-chosen order could not be reproduced from the
+repository and therefore could not be verified.
+
+The **descriptions** are not derived. They carry design rationale no KDoc holds,
+so each is carried across regenerations by path key. A path that has none is
+seeded from the KDoc of the declaration the file is named for, and a path with
+neither gets an explicit marker.
+
+`./gradlew :app:generateFileMap` rewrites the blocks. Only Kotlin files appear
+inside them; manifests, build scripts and the maps themselves stay in the
+hand-written prose around the markers.
+
+### The three failure modes it is built around
+
+1. **A silently shorter map.** A generator that drops what it cannot parse
+   produces a shorter file and a green build. So the generator reconciles rather
+   than trusts: a description whose path still exists but which did not reach
+   the output is a hard error, and a block that matches zero Kotlin files fails
+   instead of rendering empty.
+2. **A rename eating a paragraph.** A moved file's description would otherwise
+   vanish inside a diff that reads as a routine map update. `generateFileMap`
+   refuses to write, prints every description it would lose, and accepts
+   `-PacceptFileMapDrops` once the author has confirmed the loss is intended.
+3. **A plausible but wrong description.** Seeding from "the first KDoc in the
+   file" produced, for one catalog composable, the KDoc of a private layout
+   constant declared above it — a real sentence about the wrong thing, which
+   nothing downstream can detect. The extractor therefore answers only from the
+   declaration the file is named for, or from the file's single documented
+   declaration, and otherwise returns nothing.
+
+### The ratchet
+
+`config/file-map/baseline.properties` records, per block, how many entries carry
+the "no description" marker and how many Kotlin files offer no KDoc sentence to
+seed one from.
+`verifyFileMap` fails when a measured count exceeds its record.
+
+`generateFileMap` **lowers** a number and never raises one, so an improvement is
+recorded by re-running the task while a regression leaves the record where it
+was and fails verification. Raising a number is a deliberate edit to the
+committed file, reviewed like any other change.
+
+Every `.undescribed` count is currently `0`: a new Kotlin file or package
+without a description fails `check` until one is written.
+
+### Why a typed task rather than an ad-hoc block
+
+The four generate/verify pairs above are ad-hoc `doLast` blocks. Two consequences
+this pair avoids: an ad-hoc action that reads a build-script `val` captures the
+whole build script, which is what makes those four incompatible with the
+configuration cache; and an ad-hoc verification task declares no output, so
+Gradle can never treat it as up to date and re-runs it on every `check`.
+`VerifyFileMapTask` declares a stamp output and is skipped while nothing it
+reads has changed.
+
+The action reads the tree **through** its declared `@InputFiles` property rather
+than walking the filesystem, so Gradle cannot fingerprint one set of files while
+the code reads another.
+
+### Observed failing
+
+Both gates were watched red before being trusted: a line deleted from the
+unit-test map (drift, named the file and the fix), and a new undocumented Kotlin
+file (ratchet, `app-main.undescribed: 1, recorded 0` and
+`app-main.no-kdoc-seed: 28, recorded 27`). The pure logic is unit-tested in
+`buildSrc` — `FileMapGeneratorTest`, `KdocSentenceExtractorTest`,
+`FileMapBaselineTest` (`./gradlew -p buildSrc test`).
 
 ---
 
