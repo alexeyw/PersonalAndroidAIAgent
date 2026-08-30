@@ -772,8 +772,8 @@ about *this repository*: its verdict is a function of the commit under review
 and nothing else, so a dead one is a defect the build can refuse. It resolves
 every internal link across the whole Markdown set — the top-level documents,
 `docs/`, `.github/`, the `FILE_MAP.md` family and `gradle/` — and fails naming
-the file, the line and the target. Today that is 410 internal links across 35
-documents.
+the file, the line and the target. Today that is more than 400 internal links
+across 35 Markdown files.
 
 **`:app:reportExternalDocLinks` is a report, and is not part of `check`.** An
 `http` link is a claim about somebody else's server; it can turn red while the
@@ -882,8 +882,8 @@ and the failure message says so.
 Four mutations of the real diagrams in `docs/architecture.md` — an unknown
 diagram type, a `subgraph` missing its `end`, an unquoted parenthesis in a node
 label, and a bare `->` arrow. Each turned the gate red, and each was
-independently confirmed to be rejected by the actual Mermaid parser; all eight
-committed diagrams pass both. That cross-check is the point: a structural
+independently confirmed to be rejected by the actual Mermaid parser, while
+every committed diagram passes both. That cross-check is the point: a structural
 checker is only worth having while its rules agree with the renderer, and it is
 the one claim this guard cannot make about itself.
 

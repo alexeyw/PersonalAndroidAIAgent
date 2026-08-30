@@ -29,7 +29,8 @@ class DocLinkCheckerTest {
             "docs/user-guide.md" to "Back to [the readme](../README.md).\n",
         )
 
-        val result = DocLinkChecker.check(docs, repository("docs/user-guide.md" to PathKind.FILE, "README.md" to PathKind.FILE))
+        val repository = repository("docs/user-guide.md" to PathKind.FILE, "README.md" to PathKind.FILE)
+        val result = DocLinkChecker.check(docs, repository)
 
         assertTrue(result.violations.isEmpty())
         assertEquals(3, result.internalLinkCount)
@@ -79,7 +80,9 @@ class DocLinkCheckerTest {
     fun `given a site-absolute target when checked then reported`() {
         val docs = mapOf("README.md" to "[c](/CONTRIBUTING.md)\n")
 
-        assertEquals(listOf(Reason.SITE_ABSOLUTE), DocLinkChecker.check(docs, repository()).violations.map { it.reason })
+        val violations = DocLinkChecker.check(docs, repository()).violations
+
+        assertEquals(listOf(Reason.SITE_ABSOLUTE), violations.map { it.reason })
     }
 
     @Test
@@ -127,6 +130,19 @@ class DocLinkCheckerTest {
         assertTrue(result.violations.isEmpty())
         assertEquals(0, result.internalLinkCount)
         assertEquals(listOf("https://example.com/x"), result.external.map { it.url })
+    }
+
+    @Test
+    fun `given external links when only those are asked for then no file system is consulted`() {
+        val docs = mapOf(
+            "README.md" to "[a](https://example.com/x) and [b](docs/gone.md)\n",
+            "docs/a.md" to "[c](HTTPS://Example.com/Y)\n",
+        )
+
+        val external = DocLinkChecker.externalLinksOf(docs)
+
+        assertEquals(listOf("https://example.com/x", "HTTPS://Example.com/Y"), external.map { it.url })
+        assertEquals(listOf("README.md", "docs/a.md"), external.map { it.file })
     }
 
     @Test

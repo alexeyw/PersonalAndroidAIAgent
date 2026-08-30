@@ -282,7 +282,11 @@ object MermaidBlockChecker {
         while (index >= 0) {
             val previous = if (index == 0) ' ' else unquoted[index - 1]
             if (previous != '-' && previous != '.') {
-                violations += Violation(file, line, "`->` is not a mermaid arrow; flowchart edges are `-->`, `-.->` or `==>`")
+                violations += Violation(
+                    file,
+                    line,
+                    "`->` is not a mermaid arrow; flowchart edges are `-->`, `-.->` or `==>`",
+                )
                 break
             }
             index = unquoted.indexOf("->", index + 1)

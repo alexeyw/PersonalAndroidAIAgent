@@ -73,12 +73,12 @@ abstract class AbstractDocsScanTask : DefaultTask() {
      */
     protected fun readDocuments(): Map<String, String> {
         val root = repositoryRoot.get().asFile
-        val documents = documents.files
+        val contents = documents.files
             .filter { it.isFile }
             .associate { it.relativeTo(root).invariantSeparatorsPath to it.readText() }
             .toSortedMap()
         for (prefix in requiredPrefixes.get()) {
-            val covered = documents.keys.any { path ->
+            val covered = contents.keys.any { path ->
                 if (prefix.isEmpty()) !path.contains('/') else path.startsWith(prefix)
             }
             if (!covered) {
@@ -89,7 +89,7 @@ abstract class AbstractDocsScanTask : DefaultTask() {
                 )
             }
         }
-        return documents
+        return contents
     }
 }
 
@@ -158,8 +158,7 @@ abstract class ReportExternalDocLinksTask : AbstractDocsScanTask() {
     @TaskAction
     fun report() {
         val documents = readDocuments()
-        val links = DocLinkChecker.check(documents) { DocLinkChecker.PathKind.FILE }.external
-        val targets = ExternalLinkReport.targetsOf(links)
+        val targets = ExternalLinkReport.targetsOf(DocLinkChecker.externalLinksOf(documents))
         val timeout = Duration.ofSeconds(timeoutSeconds.get().toLong())
         val client = HttpClient.newBuilder()
             .connectTimeout(timeout)
@@ -189,9 +188,17 @@ abstract class ReportExternalDocLinksTask : AbstractDocsScanTask() {
      * @param target The URL and where it is written.
      * @return The outcome for the report.
      */
-    private fun probe(client: HttpClient, timeout: Duration, target: ExternalLinkReport.Target): ExternalLinkReport.Outcome {
+    private fun probe(
+        client: HttpClient,
+        timeout: Duration,
+        target: ExternalLinkReport.Target,
+    ): ExternalLinkReport.Outcome {
         val head = request(client, timeout, target.url, "HEAD")
-        val status = if (head != null && head < METHOD_REJECTED_FLOOR) head else request(client, timeout, target.url, "GET")
+        val status = if (head != null && head < METHOD_REJECTED_FLOOR) {
+            head
+        } else {
+            request(client, timeout, target.url, "GET")
+        }
         return when {
             status == null -> ExternalLinkReport.Outcome(target.url, false, "unreachable", target.references)
             status < HTTP_ERROR_FLOOR -> ExternalLinkReport.Outcome(target.url, true, "HTTP $status", target.references)

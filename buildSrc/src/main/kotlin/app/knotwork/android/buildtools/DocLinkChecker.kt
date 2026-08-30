@@ -128,7 +128,7 @@ object DocLinkChecker {
             for (link in MarkdownLinks.linksOf(text)) {
                 val target = link.target.trim()
                 if (target.isEmpty()) continue
-                if (target.startsWith("http://") || target.startsWith("https://")) {
+                if (isExternal(target)) {
                     external += ExternalLink(path, link.line, target)
                     continue
                 }
@@ -139,6 +139,36 @@ object DocLinkChecker {
         }
         return Result(violations, external, internal)
     }
+
+    /**
+     * Collects the `http` links alone, without touching the file system.
+     *
+     * The external-link report needs exactly this and nothing else. Having it
+     * call [check] with a resolver that claims every path exists would work,
+     * but it would be a lie in the code: the report would be computing internal
+     * verdicts against a repository it invented, and discarding them.
+     *
+     * @param docs Document text by repository-relative path.
+     * @return Every external link, in document order.
+     */
+    fun externalLinksOf(docs: Map<String, String>): List<ExternalLink> =
+        docs.entries.sortedBy { it.key }.flatMap { (path, text) ->
+            MarkdownLinks.linksOf(text)
+                .filter { isExternal(it.target.trim()) }
+                .map { ExternalLink(path, it.line, it.target.trim()) }
+        }
+
+    /**
+     * Reports whether a target addresses somebody else's server.
+     *
+     * Shared by [check] and [externalLinksOf] so the gate and the report cannot
+     * end up disagreeing about which links each one owns.
+     *
+     * @param target The destination as written, trimmed.
+     * @return `true` for an absolute `http` URL.
+     */
+    private fun isExternal(target: String): Boolean =
+        target.startsWith("http://", ignoreCase = true) || target.startsWith("https://", ignoreCase = true)
 
     /**
      * Resolves one internal link.

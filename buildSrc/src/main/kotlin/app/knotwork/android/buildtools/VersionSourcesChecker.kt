@@ -35,7 +35,10 @@ object VersionSourcesChecker {
     private val RELEASE_HEADING = Regex("""^##\s+\[(\d+\.\d+\.\d+[0-9A-Za-z.\-]*)]""", RegexOption.MULTILINE)
 
     /** The `[Unreleased]` compare link, whose base tag is the last release. */
-    private val UNRELEASED_COMPARE = Regex("""^\[Unreleased]:\s*\S*/compare/v(\S+?)\.\.\.HEAD\s*$""", RegexOption.MULTILINE)
+    private val UNRELEASED_COMPARE = Regex(
+        """^\[Unreleased]:\s*\S*/compare/v(\S+?)\.\.\.HEAD\s*$""",
+        RegexOption.MULTILINE,
+    )
 
     /**
      * Verifies that every hand-written copy of the version number agrees with

@@ -1872,6 +1872,16 @@ val verifyMermaidDiagrams by tasks.registering(VerifyMermaidDiagramsTask::class)
 }
 tasks.named("check") { dependsOn(verifyMermaidDiagrams) }
 
+// The `FILE_MAP.md` files are Markdown, so they are inputs to the three tasks
+// above and outputs of `generateFileMap`. Without an ordering, asking for both
+// in one invocation fails Gradle's implicit-dependency validation outright —
+// and `./gradlew :app:generateFileMap check` is exactly what the contribution
+// workflow asks for after a Kotlin file is added or moved. Ordering only:
+// neither task should drag the other into a build that did not ask for it.
+listOf(verifyDocLinks, reportExternalDocLinks, verifyMermaidDiagrams).forEach { task ->
+    task { mustRunAfter(generateFileMap) }
+}
+
 // The version number, in every place a human wrote it down. `versionName` below
 // is the single source of truth for the build; the README badge, the topmost
 // changelog heading and the two compare links at the foot of the changelog are
