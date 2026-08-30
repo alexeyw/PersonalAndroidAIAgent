@@ -1,6 +1,11 @@
 # Directory Map: src/app/src
 
-- `androidTest/` - Contains integration tests that run on a physical or emulated Android device.
+- `androidTest/` - Instrumented tests that run on a physical or emulated Android device.
+- `debug/` - `debug` build type only: the trigger-journal dump receiver. Absent from a release build, which is why a release has no dump path.
+- `foss/` - `foss` distribution flavour: the no-op crash-reporting implementation, zero Firebase/Google dependency.
+- `full/` - `full` distribution flavour (Play / direct APK): the Firebase Crashlytics implementation.
 - `main/` - The main source code, resources, and manifest for the Android application.
-- `test/` - Contains local unit tests that run on the JVM without needing an Android device.
+- `test/` - Local unit tests that run on the JVM without an Android device.
+- `testFoss/` - Unit tests compiled only into the `foss` flavour.
+- `testFull/` - Unit tests compiled only into the `full` flavour.
 - `FILE_MAP.md` - This file mapping the current directory structure.

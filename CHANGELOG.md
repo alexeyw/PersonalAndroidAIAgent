@@ -50,6 +50,24 @@ details.
 
 ### Changed
 
+- **The file maps are generated, and now cover the whole tree.** `FILE_MAP.md`
+  used to be kept current by hand, by a checklist item that names one map while
+  the repository holds several. Measured before the change: the `:catalog` map
+  was missing 128 of its own sources, the unit-test map named 44 files of 375,
+  the instrumented map 16 of 60, and the main one carried an entry for a file
+  that had moved. `./gradlew :app:generateFileMap` now derives all four from the
+  Kotlin sources and `:app:verifyFileMap` fails the build when a committed map
+  no longer matches — the same shape as the other generated documents in the
+  build.
+
+  Descriptions stay hand-written, since they carry reasoning no KDoc holds:
+  the task carries each across by path and only seeds a new one from the KDoc
+  of the declaration a file is named for. Renaming a file therefore stops the
+  task and prints the description it would otherwise have deleted. Every file
+  and package in the four maps now has one, and the count of those that do not
+  is ratcheted at zero, so the next undocumented file fails the build instead of
+  the map quietly shrinking.
+
 - **Troubleshooting moved out of the user guide into
   [`docs/troubleshooting.md`](docs/troubleshooting.md).** Same eleven entries,
   unchanged; the guide had grown past the point where a failure was findable
