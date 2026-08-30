@@ -249,6 +249,9 @@ yourself? Choose **Start from scratch**, then open **Models**, download a
 LiteRT model through the built-in manager (or paste a custom URL), and send your
 first message once it loads.
 
+Stuck on which buttons to press, or wondering whether something is supported
+at all? [docs/faq.md](docs/faq.md) answers both, briefly.
+
 ## Tech stack
 
 | Layer            | Technology                                              |
@@ -308,6 +311,9 @@ threat model behind it, including what is explicitly *out* of scope, is in
 
 - Architecture overview — [docs/architecture.md](docs/architecture.md).
 - User guide — [docs/user-guide.md](docs/user-guide.md).
+- Frequently asked questions, and the standing list of what the app
+  deliberately does not do — [docs/faq.md](docs/faq.md).
+- Troubleshooting — [docs/troubleshooting.md](docs/troubleshooting.md).
 - External-automation contract (calling the agent from Tasker, MacroDroid or
   `adb`) — [docs/external-automation.md](docs/external-automation.md).
 - Extending the agent (new node types, tools, providers, prompt

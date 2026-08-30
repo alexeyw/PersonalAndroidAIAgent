@@ -1,5 +1,11 @@
 blank_issues_enabled: false
 contact_links:
+  - name: Frequently asked questions
+    url: https://github.com/alexeyw/knotwork/blob/main/docs/faq.md
+    about: |
+      Check the FAQ first — it covers what is supported, what deliberately
+      is not, and where things live. docs/troubleshooting.md covers the
+      failures that have already come up.
   - name: Report a security vulnerability
     url: https://github.com/alexeyw/knotwork/security/advisories/new
     about: |

@@ -11,6 +11,9 @@ body:
         Before submitting, please:
 
         - Search [existing issues](../issues?q=is%3Aissue) to avoid duplicates.
+        - Check [`docs/faq.md`](../blob/main/docs/faq.md) and
+          [`docs/troubleshooting.md`](../blob/main/docs/troubleshooting.md) —
+          some behaviour is deliberate and already documented there.
         - **Do not file security vulnerabilities here.** Report them privately
           through the **Security** tab → *Report a vulnerability*, as described
           in [`SECURITY.md`](../blob/main/SECURITY.md).
