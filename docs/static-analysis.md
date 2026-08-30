@@ -35,6 +35,9 @@ This invokes (transitively):
 | `:app:verifySettingsHelpDocs`                 | Fails if the settings reference table in `docs/user-guide.md` drifts from the shipped help strings (see below). |
 | `:app:verifyCookbookDocs`                     | Fails if the node reference in `docs/cookbook.md` drifts from the node sources (see below). |
 | `:app:verifyFileMap`                          | Fails if a generated `FILE_MAP.md` drifts from the Kotlin sources, or an undocumented-file count grows past its ratchet (see below). |
+| `:app:verifyDocLinks`                         | Fails if a relative link or an `#anchor` anywhere in the documentation leads nowhere (see below). External `http` links are reported, not gated. |
+| `:app:verifyMermaidDiagrams`                  | Fails if an embedded Mermaid diagram is structurally broken (see below). |
+| `:app:verifyVersionSources`                   | Fails if the README version badge or `CHANGELOG.md` disagrees with the declared `versionName` (see below). |
 | `:app:testFullDebugUnitTest` (`CookbookRuntimeReachTest`, `CookbookRecipeValidationTest`) | Fails if the cookbook's run-time verdicts disagree with `NodeConfigCodec`, or a published recipe no longer imports (see below). |
 | `:app:testFullDebugUnitTest` (`SettingsHelpCatalogTest`) | Fails if a registered setting has no help decision, or its text is blank, over-long, duplicated or in a forbidden register (see below). |
 | `:app:verifyLintBaselineOverrides`            | Custom rule: fail if a lint baseline suppresses a check demoted to informational severity (see below). |
@@ -338,10 +341,13 @@ from the root `check` graph (`buildSrc` is a separate build):
 
 [Konsist](https://docs.konsist.lemonappdev.com/) (Apache-2.0) is a Kotlin
 static analyzer whose checks are written as ordinary JUnit tests. The project
-uses it for **one purpose only**: mechanically enforcing the Clean
-Architecture layer boundaries that were previously guarded by item 1 of the
-manual review checklist. Because the suite lives in the `test` source set, it
-runs as part of `:app:testFullDebugUnitTest` — no extra `check` wiring is needed.
+uses it for two things: mechanically enforcing the Clean Architecture layer
+boundaries that were previously guarded by item 1 of the manual review
+checklist, and pinning a small number of **invariants that would otherwise be
+held by prose alone** — a decision recorded in a document lasts exactly until
+the first convenient occasion. Because the suite lives in the `test` source
+set, it runs as part of `:app:testFullDebugUnitTest` — no extra `check` wiring
+is needed.
 
 The suite lives in
 [`app/src/test/java/app/knotwork/android/architecture/`](../app/src/test/java/app/knotwork/android/architecture)
@@ -358,6 +364,11 @@ flag them with spurious, environment-dependent violations.
 | `DomainPurityKonsistTest`          | `domain` imports no `android.*` / `androidx.*` — the only exception is annotation-only `androidx.annotation.*`. |
 | `RepositoryPlacementKonsistTest`   | `*Repository` interfaces reside in `domain`; `*RepositoryImpl` classes reside in `data`.          |
 | `ComposableUseCaseKonsistTest`     | No `@Composable` takes a `*UseCase` parameter (see scope note below).                             |
+| `FirebaseIsolationKonsistTest`     | No file in the shared `main` source set imports the Firebase SDK, so the `foss` build is provably free of it. |
+| `UsageTelemetryNoNetworkKonsistTest` | No file on the local usage-telemetry path imports a network client. The statistics stay on-device. |
+| `PromptPackNoNetworkKonsistTest`   | No file on the prompt-pack path imports a network client — a pack is imported from a file the user picked, never fetched (see below). |
+| `TabRootEntryGuardTest`            | A bottom-nav tab root is entered as a tab switch, never pushed onto another subtree's back stack. |
+| `InstrumentedTestExclusionGuardTest` | The roster of device-only instrumented tests, and the annotation the emulator workflow excludes by, stay in step. |
 
 **Why these rules and not more.** Konsist analyses *declarations*, not the
 data flow inside a function body, so it cannot prove a `@Composable` never
@@ -372,6 +383,27 @@ The guard is regression-tested against the exact leak class it exists to
 catch: reintroducing a `domain -> data` import (or an `android.*` import in
 `domain`) turns both `LayerDependencyKonsistTest` and
 `DomainPurityKonsistTest` red — verified during the suite's introduction.
+
+**The two no-network rules, and the trap they share.** Both
+`UsageTelemetryNoNetworkKonsistTest` and `PromptPackNoNetworkKonsistTest`
+select their files by name and path, and a filter of that shape goes stale in
+silence: a new file on the same logical path, named something the filter does
+not match, is simply unguarded and nothing says so. The prompt-pack rule closes
+that with a **second instrument** — it also treats a file as in-scope when it
+*imports* the `promptpack` packages (whose names it derives from real
+declarations, so a package rename moves the guard with the code), and a
+companion test measures coverage from the file's own text, failing when a file
+that names a prompt pack falls outside the guarded set. The rule to follow when
+adding to either surface is still the cheap one: name the new file **into** the
+guard rather than widening the filter until it matches everything.
+
+`android.net` is deliberately not on the forbidden list of the prompt-pack
+rule. The file picker legitimately hands the import path an `android.net.Uri`,
+and a rule that has to be suppressed on its first day is not a rule.
+
+Both rules are pinned to `app/src/main`, so a file added under a `full` or
+`foss` flavour source set is outside their scope. Neither surface has one
+today.
 
 ---
 
@@ -731,6 +763,165 @@ nor this document — which describes the tokens in prose — matches itself.
 
 ---
 
+## Documentation link guards (`verifyDocLinks`, `reportExternalDocLinks`)
+
+Two tasks over the same links, with deliberately different powers.
+
+**`:app:verifyDocLinks` is a gate.** A relative path or an `#anchor` is a claim
+about *this repository*: its verdict is a function of the commit under review
+and nothing else, so a dead one is a defect the build can refuse. It resolves
+every internal link across the whole Markdown set — the top-level documents,
+`docs/`, `.github/`, the `FILE_MAP.md` family and `gradle/` — and fails naming
+the file, the line and the target. Today that is 410 internal links across 35
+documents.
+
+**`:app:reportExternalDocLinks` is a report, and is not part of `check`.** An
+`http` link is a claim about somebody else's server; it can turn red while the
+repository does not change at all. Gating on it would make merges depend on
+third-party uptime — the same reasoning that keeps the dependency
+version-freshness checks at informational severity. The task probes every
+distinct URL (`HEAD`, falling back to `GET`), writes
+`app/build/reports/docs-links/external-links.md`, and never fails the build.
+[`.github/workflows/docs-links.yml`](../.github/workflows/docs-links.yml) runs
+it weekly and on demand, and publishes the report to the job summary; it must
+never be added to branch protection's required checks.
+
+Both read the links through one extractor
+([`MarkdownLinks`](../buildSrc/src/main/kotlin/app/knotwork/android/buildtools/MarkdownLinks.kt)),
+so the gate and the report cannot end up disagreeing about what a link is.
+
+### The two ways a link checker reports zero and is wrong
+
+Both were met while writing one for this repository, and both are closed here:
+
+1. **Choosing inputs from the Git index.** A file set read from `git ls-files`
+   cannot see the files the branch under review is *adding*. Such a checker
+   validated 32 files and reported `0 broken` while the roughly 60 links in a
+   brand-new FAQ had never been read. The Gradle task takes its file set from
+   declared source trees instead, and the falsification below was repeated
+   inside a brand-new untracked file for exactly this reason.
+2. **Getting GitHub's anchor rule wrong.** GitHub strips punctuation *in place*
+   and then replaces **each remaining space** with a hyphen — so a heading whose
+   words are separated by punctuation keeps both surrounding spaces and
+   slugifies with a **double** hyphen. Collapsing runs of whitespace instead
+   reports a perfectly valid link as broken.
+
+The mirror-image failure — a scan that passes by covering nothing — is closed
+by `requiredPrefixes`: each declared documentation root must contribute at
+least one document, which is self-maintaining where a pinned file count would
+rot. The untracked `CLAUDE` manifest family is excluded so the gate reads the
+same corpus locally and in CI.
+
+### What it does not check
+
+Shortcut and collapsed reference usages (`[label]`, `[label][]`) are not
+resolved — `CHANGELOG.md` is full of them, and they are covered only in as much
+as their *definitions* are checked. A code span opened on one line and closed on
+the next keeps its links visible to the scanner. Anchors into a Markdown file
+outside the scanned set are reported rather than skipped: that would mean the
+scan has a hole, which is a finding about the gate itself.
+
+### Why the task is untracked
+
+`verifyDocLinks` declares no output and runs on every `check`. Its verdict
+depends on files it cannot declare as inputs — a link may point at any path in
+the repository, and the defect it exists to catch is precisely that such a path
+stopped existing. Declaring the whole working tree would hash 138 MB to answer
+a question that costs milliseconds; declaring only the documents would let the
+task report a **cached pass** over a target deleted after it last ran. Running
+every time is the honest option, and it costs a fraction of a second.
+
+### Observed failing
+
+Watched red before being trusted, in three shapes: a link to a file that does
+not exist, a link to an anchor that does not exist, and both together **inside a
+brand-new untracked file** — the case the Git-index failure mode above would
+have missed. The pure logic is unit-tested in `buildSrc` (`MarkdownLinksTest`,
+`DocLinkCheckerTest`, `ExternalLinkReportTest`).
+
+---
+
+## Mermaid diagram guard (`verifyMermaidDiagrams`)
+
+`:app:verifyMermaidDiagrams` fails the build when an embedded Mermaid diagram
+is structurally broken. A broken diagram does not degrade politely — GitHub
+renders a red error box where the architecture picture should be — and nothing
+in review reliably catches it, because a diagram is read as prose.
+
+**It is not a Mermaid parser, and the difference matters.** A real parse needs
+Mermaid's own grammar, which means a Node toolchain and a network install on the
+critical path of every build. What runs instead is a set of structural rules:
+
+1. The block is not empty, and its first significant line declares a known
+   diagram type.
+2. A `flowchart` / `graph` direction, when written, is one of `TB` `TD` `BT`
+   `RL` `LR`.
+3. Block openers balance their `end` — `subgraph` in flowcharts, and `loop` /
+   `alt` / `opt` / `par` / `critical` / `break` / `rect` / `box` in sequence
+   diagrams.
+4. In a flowchart, brackets and quotes balance on each line.
+5. In a flowchart, an unquoted node label holds no parenthesis.
+6. In a flowchart, every arrow is a real arrow — a bare `->` is not one.
+
+**Every rule was written against the real parser rather than from memory**, and
+that step changed the rule set: three plausible rules were *dropped* because
+Mermaid accepts what they would have rejected. A `flowchart` with no direction
+is valid; so are unbalanced brackets and quotes in the free text of a
+`sequenceDiagram` message or a `stateDiagram` note, which is why rules 4–6 are
+scoped to flowcharts; and the asymmetric `id>text]` node shape has brackets
+that deliberately do not pair. A gate that fails valid documents is worse than
+no gate, because it teaches everyone to distrust it.
+
+The list of known diagram types is a deliberate allowlist: adding a diagram of
+a type nobody has used here yet means adding it to
+[`MermaidBlockChecker`](../buildSrc/src/main/kotlin/app/knotwork/android/buildtools/MermaidBlockChecker.kt),
+and the failure message says so.
+
+### Observed failing
+
+Four mutations of the real diagrams in `docs/architecture.md` — an unknown
+diagram type, a `subgraph` missing its `end`, an unquoted parenthesis in a node
+label, and a bare `->` arrow. Each turned the gate red, and each was
+independently confirmed to be rejected by the actual Mermaid parser; all eight
+committed diagrams pass both. That cross-check is the point: a structural
+checker is only worth having while its rules agree with the renderer, and it is
+the one claim this guard cannot make about itself.
+
+---
+
+## Version-number agreement guard (`verifyVersionSources`)
+
+`versionName` in [`app/build.gradle.kts`](../app/build.gradle.kts) is the single
+source of truth for the build — the F-Droid recipe builds a tag with no Gradle
+properties injected and must still get the right number. The problem is that the
+number is *repeated*, for humans, in four places no build step reads:
+
+- the version badge in `README.md`;
+- the topmost released heading of `CHANGELOG.md`;
+- the `[Unreleased]` compare link at the foot of `CHANGELOG.md`;
+- the link definition of that topmost release, which names the tag it shipped as.
+
+Each is edited by hand at release time and nothing noticed when one was missed.
+The release checklist did not even mention the badge — which is the version
+number a bug reporter quotes. `:app:verifyVersionSources` compares all four
+against the declared `versionName` and fails naming both values and the file to
+edit. A source it cannot *find* is a failure too: a checker that silently finds
+nothing to compare passes everything.
+
+`versionCode` is deliberately out of scope. Its agreement with the store
+changelog file is already held by `StoreMetadataTest`, and a second, separately
+written opinion about the same fact is how two guards start disagreeing.
+
+### Observed failing
+
+Five mutations, one per source plus the whole-release case: a stale README
+badge, a changelog heading ahead of the build, a stale `[Unreleased]` compare
+link, a release heading whose link definition was deleted, and a `versionName`
+bumped with nothing else — which reported all three remaining sources at once.
+The pure logic is unit-tested in `buildSrc` (`VersionSourcesCheckerTest`).
+
+---
+
 ## R8 keep-rule guard (`verify<Variant>KeepRules`)
 
 Some keep rules protect code whose failure mode **no test in this gate can
@@ -838,6 +1029,15 @@ stayed green. Whether those tests *pass* is decided elsewhere — by
 is deliberately kept out of the required `check` workflow (and therefore out of
 the release path) because an emulator's verdict is not purely a function of the
 repository. See [`testing.md`](testing.md) § *The instrumented gate*.
+
+One workflow is deliberately **not** a gate.
+[`.github/workflows/docs-links.yml`](../.github/workflows/docs-links.yml) probes
+the external `http` links of the documentation weekly and on demand, publishes
+the result to the job summary, and never fails: an external link's verdict
+belongs to somebody else's server, so it must not sit among the conditions for
+merging. It must never be added to branch protection's required checks — and
+note that a scheduled workflow only runs from the default branch, and only once
+its definition has reached it.
 
 The same workflow is also exposed as a reusable one (`workflow_call`) and is
 called as the first job of `.github/workflows/release.yml`, so a release cannot

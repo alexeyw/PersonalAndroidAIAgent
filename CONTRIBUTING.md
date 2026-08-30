@@ -110,6 +110,13 @@ request:
   the **Konsist** architecture guard (Clean-Architecture layer boundaries; see
   [`docs/static-analysis.md`](docs/static-analysis.md)).
 - **Kover** coverage verification (`koverVerifyFullDebug`).
+- **Documentation gates** — dead internal links and `#anchors`
+  (`verifyDocLinks`), Mermaid diagram structure (`verifyMermaidDiagrams`), and
+  the version number agreeing with itself across `README.md` and
+  `CHANGELOG.md` (`verifyVersionSources`). External `http` links are reported
+  weekly by a separate workflow and never gate a merge. The full roster of
+  gates lives in
+  [`docs/static-analysis.md`](docs/static-analysis.md).
 
 Run `./gradlew check` **locally before pushing**. Pushing without running
 it just trades local feedback for slower CI feedback.

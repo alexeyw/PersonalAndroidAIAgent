@@ -558,7 +558,18 @@ maintainer's part is the version bump, the tag, and the decision to publish.
    version heading in that file is a reference link, so a heading without its
    definition renders as literal brackets, in the repository and in the release
    notes pasted from it.
-5. Land all of it on `main` through the normal review path.
+5. Update the version badge near the top of [`README.md`](../README.md) — the
+   `img.shields.io/badge/version-…` line. It is the first version number a
+   visitor sees and the one a bug reporter quotes, and it used to be the only
+   copy this checklist never mentioned.
+6. Land all of it on `main` through the normal review path.
+
+Steps 1, 2, 4 and 5 are held together by `./gradlew check`:
+`:app:verifyVersionSources` fails the build when the README badge, the topmost
+changelog heading or either compare link disagrees with the declared
+`versionName`. Do them in one commit and the gate is invisible; skip one and it
+names the file and both values. See
+[`static-analysis.md`](static-analysis.md#version-number-agreement-guard-verifyversionsources).
 
 **Tagging**
 
