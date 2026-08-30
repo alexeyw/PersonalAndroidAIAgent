@@ -348,8 +348,10 @@ object CookbookDocsGenerator {
         "IntentRouterConfig.classes" to
             Reach.Graph("which branches exist — one port per class, and the run follows the edge the model picks"),
         "IntentRouterConfig.classifierPrompt" to Reach.EditorOnly(PROMPT_NOT_WRITTEN_BACK),
-        "IntentRouterConfig.fallbackClass" to
-            Reach.EditorOnly("an answer matching no class takes the node's first outgoing edge"),
+        "IntentRouterConfig.fallbackClass" to Reach.EditorOnly(
+            "an answer matching no class takes whichever branch you connected first, not the class named " +
+                "here; connect the branch you want as the fallback before the others",
+        ),
         "IntentRouterConfig.engineProvider" to Reach.Runtime("cloudProvider"),
         "IfConditionConfig.expression" to Reach.Runtime("conditionPrompt"),
         "IfConditionConfig.labelTrue" to
@@ -863,10 +865,14 @@ object CookbookDocsGenerator {
             (field.reach as? Reach.EditorOnly)?.let { field.name to it.note }
         }
         if (ignored.isEmpty()) return null
-        val clauses = ignored.groupBy({ it.second }, { it.first }).entries.joinToString("; ") { (note, names) ->
-            names.joinToString(", ") { "`$it`" } + " — " + note
+        // A list rather than a sentence: the notes carry their own dashes and
+        // semicolons, so joining them inline produced a line that had to be
+        // read twice to see where one field ended and the next began.
+        val out = StringBuilder("**Also on the sheet, and ignored by the run:**\n\n")
+        ignored.groupBy({ it.second }, { it.first }).forEach { (note, names) ->
+            out.append("- ").append(names.joinToString(", ") { "`$it`" }).append(" — ").append(note).append("\n")
         }
-        return "**Also on the sheet, and ignored by the run:** $clauses.\n"
+        return out.toString()
     }
 
     /**

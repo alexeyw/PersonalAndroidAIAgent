@@ -115,7 +115,10 @@ Where the run starts: your message, a shared page, or the prompt a trigger carri
 
 **Nothing on this node changes a run.** What it does is fixed; what happens around it is decided by the graph.
 
-**Also on the sheet, and ignored by the run:** `inputName` — the entry contract is fixed; the run's text arrives as it is; `schemaJson` — typed pipeline inputs are not implemented.
+**Also on the sheet, and ignored by the run:**
+
+- `inputName` — the entry contract is fixed; the run's text arrives as it is
+- `schemaJson` — typed pipeline inputs are not implemented
 
 ### Output — `OUTPUT`
 
@@ -130,7 +133,9 @@ Where the run ends and the answer reaches you. With no prompt of its own it forw
 |---|---|
 | Whether the answer is re-worded before you see it, and how | the sheet's `systemPrompt` |
 
-**Also on the sheet, and ignored by the run:** `format` — ask for the format in the prompt instead.
+**Also on the sheet, and ignored by the run:**
+
+- `format` — ask for the format in the prompt instead
 
 ### LiteRT — `LITE_RT`
 
@@ -146,7 +151,9 @@ One inference step on the model running on the phone. The default answering node
 | The instruction the model follows | the sheet's `systemPrompt` — a new node arrives with this type's shipped default in it |
 | Which model answers | the sheet's `modelId` |
 
-**Also on the sheet, and ignored by the run:** `temperature`, `topP`, `maxNewTokens`, `stopTokens` — the engine leaves the model's own sampler in place.
+**Also on the sheet, and ignored by the run:**
+
+- `temperature`, `topP`, `maxNewTokens`, `stopTokens` — the engine leaves the model's own sampler in place
 
 ### Cloud — `CLOUD`
 
@@ -162,7 +169,11 @@ One inference step against a configured cloud provider. Everything this node is 
 | The instruction the model follows | the sheet's `systemPrompt` — a new node arrives with this type's shipped default in it |
 | Which provider answers | the sheet's `provider` |
 
-**Also on the sheet, and ignored by the run:** `model` — the model comes from the provider's own setting; `temperature`, `maxTokens` — the request carries no sampling parameters; `timeoutMs` — cloud timeouts come from the client's own configuration.
+**Also on the sheet, and ignored by the run:**
+
+- `model` — the model comes from the provider's own setting
+- `temperature`, `maxTokens` — the request carries no sampling parameters
+- `timeoutMs` — cloud timeouts come from the client's own configuration
 
 ### Intent Router — `INTENT_ROUTER`
 
@@ -179,7 +190,10 @@ Sorts the incoming text into one of the classes you declare and sends the run do
 | Whether the sorting runs on-device or in the cloud | the sheet's `engineProvider` |
 | Which branches exist — one port per class, and the run follows the edge the model picks | the sheet's `classes` |
 
-**Also on the sheet, and ignored by the run:** `classifierPrompt` — editing it changes nothing; the prompt this node runs on is the one in the table above; `fallbackClass` — an answer matching no class takes the node's first outgoing edge.
+**Also on the sheet, and ignored by the run:**
+
+- `classifierPrompt` — editing it changes nothing; the prompt this node runs on is the one in the table above
+- `fallbackClass` — an answer matching no class takes whichever branch you connected first, not the class named here; connect the branch you want as the fallback before the others
 
 ### If Condition — `IF_CONDITION`
 
@@ -198,7 +212,9 @@ A two-way branch: a yes/no question about the input, or a deterministic check fo
 | **Checked last:** the yes/no question put to the model | the sheet's `expression` |
 | Whether the question runs on-device or in the cloud | the sheet's `engineProvider` |
 
-**Also on the sheet, and ignored by the run:** `labelTrue`, `labelFalse` — the ports are always labelled True and False.
+**Also on the sheet, and ignored by the run:**
+
+- `labelTrue`, `labelFalse` — the ports are always labelled True and False
 
 ### Clarification — `CLARIFICATION`
 
@@ -214,7 +230,9 @@ Pauses the run to ask you a question and waits for the answer, which then become
 | The question you are asked | the sheet's `questionTemplate` — a new node arrives with this type's shipped default in it |
 | How long the run waits for your answer | the sheet's `timeoutMs` |
 
-**Also on the sheet, and ignored by the run:** `quickReplies` — the answer options are produced by the model.
+**Also on the sheet, and ignored by the run:**
+
+- `quickReplies` — the answer options are produced by the model
 
 ### Tool — `TOOL`
 
@@ -230,7 +248,10 @@ Calls one tool — a built-in, an AppFunction from another app, or one published
 | Which tool is called — or, left empty, that the model picks one | the sheet's `toolId` |
 | Whether the call is composed on-device or in the cloud | the sheet's `engineProvider` |
 
-**Also on the sheet, and ignored by the run:** `argumentMapping` — arguments are produced by the model from the node's input; `confirmOverride` — approval follows the tool's risk level and your settings.
+**Also on the sheet, and ignored by the run:**
+
+- `argumentMapping` — arguments are produced by the model from the node's input
+- `confirmOverride` — approval follows the tool's risk level and your settings
 
 ### Decomposition — `DECOMPOSITION`
 
@@ -246,7 +267,11 @@ Turns one instruction into a list of subtasks. On its own it only produces the l
 | The instruction that produces the subtask list | ⚠ it stays this type's shipped default prompt, and nothing in the app writes it — export the pipeline, change `config.systemPrompt` on the node, and import it again; the browser editor also writes it correctly |
 | Whether the planning runs on-device or in the cloud | the sheet's `engineProvider` |
 
-**Also on the sheet, and ignored by the run:** `planningPrompt` — editing it changes nothing; the prompt this node runs on is the one in the table above; `maxSubtasks` — how many subtasks appear is decided by the prompt and the run's step ceiling; `outputSchemaJson` — the subtask list is validated against a fixed shape.
+**Also on the sheet, and ignored by the run:**
+
+- `planningPrompt` — editing it changes nothing; the prompt this node runs on is the one in the table above
+- `maxSubtasks` — how many subtasks appear is decided by the prompt and the run's step ceiling
+- `outputSchemaJson` — the subtask list is validated against a fixed shape
 
 ### Queue Processor — `QUEUE_PROCESSOR`
 
@@ -257,7 +282,12 @@ Walks a list of subtasks one at a time, sending each down the Item branch and ta
 
 **Nothing on this node changes a run.** What it does is fixed; what happens around it is decided by the graph.
 
-**Also on the sheet, and ignored by the run:** `inputList` — the queue is the subtask list produced upstream; `itemVariable` — the current subtask arrives as the node's input; `parallelism` — subtasks always run one at a time; `stopOnError` — what happens after a failed subtask is decided by the graph, not by this switch.
+**Also on the sheet, and ignored by the run:**
+
+- `inputList` — the queue is the subtask list produced upstream
+- `itemVariable` — the current subtask arrives as the node's input
+- `parallelism` — subtasks always run one at a time
+- `stopOnError` — what happens after a failed subtask is decided by the graph, not by this switch
 
 ### Evaluation — `EVALUATION`
 
@@ -274,7 +304,9 @@ Judges what the previous step produced and answers Pass, Retry or Fail — the n
 | Whether the judgement runs on-device or in the cloud | the sheet's `engineProvider` |
 | Whether the node has a Retry branch at all — it does not cap how often that branch is taken | the sheet's `maxRetries` |
 
-**Also on the sheet, and ignored by the run:** `criteriaPrompt` — editing it changes nothing; the prompt this node runs on is the one in the table above.
+**Also on the sheet, and ignored by the run:**
+
+- `criteriaPrompt` — editing it changes nothing; the prompt this node runs on is the one in the table above
 
 ### Summary — `SUMMARY`
 
@@ -289,7 +321,11 @@ Condenses what several earlier steps produced into one piece of text, typically 
 |---|---|
 | The instruction that combines the results | ⚠ it stays this type's shipped default prompt, and nothing in the app writes it — export the pipeline, change `config.systemPrompt` on the node, and import it again; the browser editor also writes it correctly |
 
-**Also on the sheet, and ignored by the run:** `format` — ask for the shape in the prompt instead; `customPrompt` — editing it changes nothing; the prompt this node runs on is the one in the table above; `targetLengthChars` — ask for the length in the prompt instead.
+**Also on the sheet, and ignored by the run:**
+
+- `format` — ask for the shape in the prompt instead
+- `customPrompt` — editing it changes nothing; the prompt this node runs on is the one in the table above
+- `targetLengthChars` — ask for the length in the prompt instead
 
 ### Pipeline — `PIPELINE`
 
@@ -541,7 +577,7 @@ and still never reach the run.
 | `CLOUD` | `timeoutMs` | `30_000` | **No** — stored and exported, but nothing reads it during a run (cloud timeouts come from the client's own configuration) |
 | `INTENT_ROUTER` | `classes` | `emptyList()` | **Shapes the graph** — which branches exist — one port per class, and the run follows the edge the model picks |
 | `INTENT_ROUTER` | `classifierPrompt` | `""` | **No** — stored and exported, but nothing reads it during a run (editing it changes nothing; the prompt this node runs on is the one in the table above) |
-| `INTENT_ROUTER` | `fallbackClass` | `null` | **No** — stored and exported, but nothing reads it during a run (an answer matching no class takes the node's first outgoing edge) |
+| `INTENT_ROUTER` | `fallbackClass` | `null` | **No** — stored and exported, but nothing reads it during a run (an answer matching no class takes whichever branch you connected first, not the class named here; connect the branch you want as the fallback before the others) |
 | `INTENT_ROUTER` | `engineProvider` | `null` | **Yes** — saved as the node's `cloudProvider` |
 | `IF_CONDITION` | `expression` | `""` | **Yes** — saved as the node's `conditionPrompt` |
 | `IF_CONDITION` | `labelTrue` | `"True"` | **No** — stored and exported, but nothing reads it during a run (the ports are always labelled True and False) |
