@@ -113,7 +113,7 @@ object NodeConfigForms {
                 onChange = { next -> onChange(config.withTitle(next)) },
             )
             when (config) {
-                is InputConfig -> InputFormBody(config, errors, onChange)
+                is InputConfig -> InputFormBody()
                 is OutputConfig -> OutputFormBody(config, onChange, onPickFromLibrary, onSavePreset)
                 is LiteRtConfig -> LiteRtFormBody(
                     config = config,
@@ -153,7 +153,7 @@ object NodeConfigForms {
                     onPickFromLibrary = onPickFromLibrary,
                     onSavePreset = onSavePreset,
                 )
-                is QueueProcessorConfig -> QueueProcessorFormBody(config, errors, onChange)
+                is QueueProcessorConfig -> QueueProcessorFormBody(config, onChange)
                 is EvaluationConfig -> EvaluationFormBody(
                     config = config,
                     errors = errors,
@@ -506,25 +506,17 @@ private fun EngineProviderRow(selected: CloudProvider?, onSelect: (CloudProvider
 // Per-type forms
 // ─────────────────────────────────────────────────────────────────────────
 
+/**
+ * INPUT has no fields of its own beyond the shared title and description: the
+ * entry contract is fixed and the run's text arrives as it is. The body is a
+ * single line saying so, rather than an empty sheet that reads as unfinished.
+ */
 @Composable
-private fun InputFormBody(
-    config: InputConfig,
-    errors: Map<FieldId, ValidationFailure>,
-    onChange: (NodeConfig) -> Unit,
-) {
-    TextField(
-        label = stringResource(R.string.knotwork_node_field_input_name),
-        value = config.inputName,
-        error = errors[FieldId.INPUT_NAME],
-        singleLine = true,
-        onChange = { next -> onChange(config.copy(inputName = next)) },
-    )
-    TextField(
-        label = stringResource(R.string.knotwork_node_field_schema_json),
-        value = config.schemaJson.orEmpty(),
-        error = errors[FieldId.SCHEMA_JSON],
-        singleLine = false,
-        onChange = { next -> onChange(config.copy(schemaJson = next.takeIf { it.isNotBlank() })) },
+private fun InputFormBody() {
+    Text(
+        text = stringResource(R.string.knotwork_node_input_no_settings),
+        style = KnotworkTextStyles.BodySm,
+        color = KnotworkTheme.extended.onSurfaceMuted,
     )
 }
 
@@ -535,16 +527,6 @@ private fun OutputFormBody(
     onPickFromLibrary: PromptLibraryHook?,
     onSavePreset: SavePresetHook?,
 ) {
-    SegmentedChipRow(
-        label = stringResource(R.string.knotwork_node_field_format),
-        values = listOf(
-            OutputFormat.PLAIN_TEXT to "Plain text",
-            OutputFormat.MARKDOWN to "Markdown",
-            OutputFormat.JSON to "JSON",
-        ),
-        selected = config.format,
-        onSelect = { next -> onChange(config.copy(format = next)) },
-    )
     // Optional system prompt — when blank the executor forwards the
     // upstream text verbatim; when set the LLM wraps the upstream payload
     // through this template.
@@ -778,19 +760,43 @@ private fun IfConditionFormBody(
     onPickFromLibrary: PromptLibraryHook?,
     onSavePreset: SavePresetHook?,
 ) {
-    // Deterministic image-presence branch. When on, the node forks True whenever the
-    // user's message carries an image — no LLM call — and the `expression` below is
-    // ignored. Surfaced first so it is clearly the overriding switch.
+    // The four checks are laid out in the order the engine applies them, and the
+    // first that matches decides the branch. That order used to be invisible:
+    // the expression sat directly under the image toggle, above the two
+    // deterministic checks that in fact run before it, so the sheet read as if
+    // it were evaluated first when it is evaluated last.
+    //
+    // First: deterministic image presence. When on, the node forks True whenever
+    // the user's message carries an image — no LLM call, nothing below consulted.
     ToggleRowField(
         label = stringResource(R.string.knotwork_node_field_branch_on_image),
         checked = config.branchOnImage,
         onChange = { next -> onChange(config.copy(branchOnImage = next)) },
     )
-    // The `expression` field maps to domain `NodeModel.conditionPrompt` —
-    // a free-form natural-language condition the LLM classifies as
-    // `true`/`false` via `DefaultPrompts.IfCondition.EVALUATION_TEMPLATE`.
-    // It accepts presets exactly like the other LLM-driven fields. Ignored at
-    // runtime while the image-presence branch above owns the decision.
+    // The two deterministic checks. Both were read by the engine long before
+    // they had controls: an imported pipeline could carry keywords that decided
+    // every branch, and the sheet said nothing about it.
+    TextField(
+        label = stringResource(R.string.knotwork_node_field_keywords),
+        value = config.keywords,
+        error = errors[FieldId.KEYWORDS],
+        singleLine = true,
+        onChange = { next -> onChange(config.copy(keywords = next)) },
+    )
+    FieldCaption(text = stringResource(R.string.knotwork_node_field_keywords_help))
+    IntSliderField(
+        label = stringResource(R.string.knotwork_node_field_complexity_threshold),
+        value = config.complexityThreshold ?: 0,
+        range = 0..COMPLEXITY_THRESHOLD_MAX,
+        error = errors[FieldId.COMPLEXITY_THRESHOLD],
+        onChange = { next -> onChange(config.copy(complexityThreshold = next.takeIf { it > 0 })) },
+    )
+    FieldCaption(text = stringResource(R.string.knotwork_node_field_complexity_threshold_help))
+    // Last of the four, and the only one that costs a model call. The field maps
+    // to domain `NodeModel.conditionPrompt` — a free-form natural-language
+    // condition the LLM classifies as `true`/`false` via
+    // `DefaultPrompts.IfCondition.EVALUATION_TEMPLATE`. It accepts presets
+    // exactly like the other LLM-driven fields.
     TextField(
         label = stringResource(R.string.knotwork_node_field_expression),
         value = config.expression,
@@ -801,20 +807,7 @@ private fun IfConditionFormBody(
         onPickFromLibrary = onPickFromLibrary,
         onSavePreset = onSavePreset,
     )
-    TextField(
-        label = stringResource(R.string.knotwork_node_field_label_true),
-        value = config.labelTrue,
-        error = errors[FieldId.LABEL_TRUE],
-        singleLine = true,
-        onChange = { next -> onChange(config.copy(labelTrue = next)) },
-    )
-    TextField(
-        label = stringResource(R.string.knotwork_node_field_label_false),
-        value = config.labelFalse,
-        error = errors[FieldId.LABEL_FALSE],
-        singleLine = true,
-        onChange = { next -> onChange(config.copy(labelFalse = next)) },
-    )
+    FieldCaption(text = stringResource(R.string.knotwork_node_field_expression_help))
     EngineProviderRow(config.engineProvider) { next -> onChange(config.copy(engineProvider = next)) }
 }
 
@@ -869,6 +862,16 @@ private fun ClarificationFormBody(
 }
 
 /** Milliseconds per second — Clarify timeout slider works in whole seconds. */
+/**
+ * Top of the IF_CONDITION length-threshold slider, in characters.
+ *
+ * 2 000 rather than a round 1 000 or 10 000: the check exists to fork "short
+ * question" from "long brief", and a brief long enough to matter is a few
+ * paragraphs. Past this the condition would never fire on anything a person
+ * types into a chat.
+ */
+private const val COMPLEXITY_THRESHOLD_MAX: Int = 2_000
+
 private const val MILLIS_PER_SECOND: Int = 1_000
 
 /** Upper bound (seconds) of the Clarify wait-timeout slider. */
@@ -1173,49 +1176,7 @@ private fun ToolFormBody(
         availableToolIds = availableToolIds,
         onChange = onChange,
     )
-    Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1)) {
-        FieldLabel(text = stringResource(R.string.knotwork_node_field_arg_mapping))
-        config.argumentMapping.forEachIndexed { index, row ->
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-            ) {
-                OutlinedTextField(
-                    value = row.name,
-                    onValueChange = { nextKey ->
-                        onChange(
-                            config.copy(
-                                argumentMapping = config.argumentMapping.toMutableList().apply {
-                                    this[index] = row.copy(name = nextKey)
-                                },
-                            ),
-                        )
-                    },
-                    singleLine = true,
-                    textStyle = KnotworkTextStyles.MonoBase,
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                    isError = row.name.isBlank(),
-                )
-                OutlinedTextField(
-                    value = row.expression,
-                    onValueChange = { nextValue ->
-                        onChange(
-                            config.copy(
-                                argumentMapping = config.argumentMapping.toMutableList().apply {
-                                    this[index] = row.copy(expression = nextValue)
-                                },
-                            ),
-                        )
-                    },
-                    singleLine = true,
-                    textStyle = KnotworkTextStyles.MonoBase,
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                    isError = row.expression.isBlank(),
-                )
-            }
-        }
-        InlineError(failure = errors[FieldId.ARGUMENT_MAPPING])
-    }
+    FieldCaption(text = stringResource(R.string.knotwork_node_tool_arguments_help))
     SegmentedChipRow(
         label = stringResource(R.string.knotwork_node_field_confirm_override),
         values = listOf<Pair<ConfirmPolicy?, String>>(
@@ -1259,44 +1220,12 @@ private fun DecompositionFormBody(
         error = errors[FieldId.MAX_SUBTASKS],
         onChange = { next -> onChange(config.copy(maxSubtasks = next)) },
     )
-    TextField(
-        label = stringResource(R.string.knotwork_node_field_schema_json),
-        value = config.outputSchemaJson.orEmpty(),
-        error = errors[FieldId.OUTPUT_SCHEMA_JSON],
-        singleLine = false,
-        onChange = { next -> onChange(config.copy(outputSchemaJson = next.takeIf { it.isNotBlank() })) },
-    )
     EngineProviderRow(config.engineProvider) { next -> onChange(config.copy(engineProvider = next)) }
 }
 
 @Composable
-private fun QueueProcessorFormBody(
-    config: QueueProcessorConfig,
-    errors: Map<FieldId, ValidationFailure>,
-    onChange: (NodeConfig) -> Unit,
-) {
-    TextField(
-        label = stringResource(R.string.knotwork_node_field_input_list),
-        value = config.inputList,
-        error = errors[FieldId.INPUT_LIST],
-        singleLine = true,
-        onChange = { next -> onChange(config.copy(inputList = next)) },
-    )
-    FieldCaption(text = stringResource(R.string.knotwork_node_field_input_list_help))
-    TextField(
-        label = stringResource(R.string.knotwork_node_field_item_variable),
-        value = config.itemVariable,
-        error = errors[FieldId.ITEM_VARIABLE],
-        singleLine = true,
-        onChange = { next -> onChange(config.copy(itemVariable = next)) },
-    )
-    IntSliderField(
-        label = stringResource(R.string.knotwork_node_field_parallelism),
-        value = config.parallelism,
-        range = 1..8,
-        error = errors[FieldId.PARALLELISM],
-        onChange = { next -> onChange(config.copy(parallelism = next)) },
-    )
+private fun QueueProcessorFormBody(config: QueueProcessorConfig, onChange: (NodeConfig) -> Unit) {
+    FieldCaption(text = stringResource(R.string.knotwork_node_queue_source_help))
     ToggleRowField(
         label = stringResource(R.string.knotwork_node_field_stop_on_error),
         checked = config.stopOnError,
@@ -1345,38 +1274,24 @@ private fun SummaryFormBody(
     onPickFromLibrary: PromptLibraryHook?,
     onSavePreset: SavePresetHook?,
 ) {
-    SegmentedChipRow(
-        label = stringResource(R.string.knotwork_node_field_format),
-        values = listOf(
-            SummaryFormat.BULLETS to "Bullets",
-            SummaryFormat.PARAGRAPH to "Paragraph",
-            SummaryFormat.CUSTOM to "Custom",
-        ),
-        selected = config.format,
-        onSelect = { next -> onChange(config.copy(format = next)) },
+    // The prompt is the only lever the executor reads, so shape and length are
+    // asked for in it. Always editable now: it used to be gated behind a
+    // `format == CUSTOM` chip row that decided nothing, which meant the one
+    // field that worked was hidden behind two that did not.
+    TextField(
+        label = stringResource(R.string.knotwork_node_field_custom_prompt),
+        value = config.customPrompt.orEmpty(),
+        error = errors[FieldId.CUSTOM_PROMPT],
+        singleLine = false,
+        onChange = { next -> onChange(config.copy(customPrompt = next.takeIf { it.isNotBlank() })) },
+        libraryCategory = "SUMMARY",
+        onPickFromLibrary = onPickFromLibrary,
+        onSavePreset = onSavePreset,
     )
-    if (config.format == SummaryFormat.CUSTOM) {
-        TextField(
-            label = stringResource(R.string.knotwork_node_field_custom_prompt),
-            value = config.customPrompt.orEmpty(),
-            error = errors[FieldId.CUSTOM_PROMPT],
-            singleLine = false,
-            onChange = { next -> onChange(config.copy(customPrompt = next.takeIf { it.isNotBlank() })) },
-            libraryCategory = "SUMMARY",
-            onPickFromLibrary = onPickFromLibrary,
-            onSavePreset = onSavePreset,
-        )
-        VariableChipsRow(onInsert = { variable ->
-            onChange(config.copy(customPrompt = (config.customPrompt.orEmpty() + variable)))
-        })
-    }
-    IntSliderField(
-        label = stringResource(R.string.knotwork_node_field_target_length),
-        value = config.targetLengthChars,
-        range = 200..4_000,
-        error = errors[FieldId.TARGET_LENGTH_CHARS],
-        onChange = { next -> onChange(config.copy(targetLengthChars = next)) },
-    )
+    VariableChipsRow(onInsert = { variable ->
+        onChange(config.copy(customPrompt = (config.customPrompt.orEmpty() + variable)))
+    })
+    FieldCaption(text = stringResource(R.string.knotwork_node_summary_shape_help))
 }
 
 /**

@@ -14,9 +14,6 @@ import org.json.JSONObject
 enum class FieldId {
     TITLE,
     DESCRIPTION,
-    INPUT_NAME,
-    SCHEMA_JSON,
-    FORMAT,
     MODEL_ID,
     SYSTEM_PROMPT,
     TEMPERATURE,
@@ -31,25 +28,19 @@ enum class FieldId {
     CLASSIFIER_PROMPT,
     FALLBACK_CLASS,
     EXPRESSION,
-    LABEL_TRUE,
-    LABEL_FALSE,
+    KEYWORDS,
+    COMPLEXITY_THRESHOLD,
     QUESTION_TEMPLATE,
     QUICK_REPLIES,
     TIMEOUT_OPTIONAL,
     TOOL_ID,
-    ARGUMENT_MAPPING,
     CONFIRM_OVERRIDE,
     PLANNING_PROMPT,
     MAX_SUBTASKS,
-    OUTPUT_SCHEMA_JSON,
-    INPUT_LIST,
-    ITEM_VARIABLE,
-    PARALLELISM,
     STOP_ON_ERROR,
     CRITERIA_PROMPT,
     MAX_RETRIES,
     CUSTOM_PROMPT,
-    TARGET_LENGTH_CHARS,
     TARGET_PIPELINE_ID,
     SKILL_ID,
 }
@@ -78,9 +69,6 @@ enum class ValidationFailure(val stringRes: Int) {
     /** JSON-Schema body failed to parse. */
     INVALID_JSON(app.knotwork.design.R.string.knotwork_node_validation_invalid_json),
 
-    /** QueueProcessor parallelism outside `1..8`. */
-    PARALLELISM_RANGE(app.knotwork.design.R.string.knotwork_node_validation_parallelism_range),
-
     /**
      * IntentRouter `fallbackClass` references a name that is no longer in
      * the declared `classes` list — typically after the user renamed /
@@ -96,14 +84,6 @@ enum class ValidationFailure(val stringRes: Int) {
      * routing, so the rule fires on `FieldId.CLASSES`.
      */
     CLASS_NAME_DUPLICATE(app.knotwork.design.R.string.knotwork_node_validation_class_duplicate),
-
-    /**
-     * Two `ToolConfig.argumentMapping` rows share the same key. With an
-     * ordered `List<ToolArgument>` we preserve every keystroke, but the
-     * tool's typed schema cannot accept duplicate keys, so the rule
-     * fires on `FieldId.ARGUMENT_MAPPING`.
-     */
-    KEY_DUPLICATE(app.knotwork.design.R.string.knotwork_node_validation_arg_key_duplicate),
 
     /**
      * A [PipelineConfig] has no target pipeline selected (its
@@ -122,14 +102,8 @@ enum class ValidationFailure(val stringRes: Int) {
 /** Allowed range for [DecompositionConfig.maxSubtasks]. */
 private val MAX_SUBTASKS_RANGE = 1..20
 
-/** Allowed range for [QueueProcessorConfig.parallelism]. */
-private val PARALLELISM_RANGE = 1..8
-
 /** Allowed range for [EvaluationConfig.maxRetries]. */
 private val MAX_RETRIES_RANGE = 0..5
-
-/** Allowed range for [SummaryConfig.targetLengthChars]. */
-private val TARGET_LENGTH_RANGE = 200..4_000
 
 /** Inclusive bounds on [IntentRouterConfig.classes]. */
 private val INTENT_CLASSES_RANGE = 2..6
@@ -169,18 +143,18 @@ object NodeConfigValidation {
         val errors = mutableMapOf<FieldId, ValidationFailure>()
         validateTitle(config.title, peerTitles)?.let { errors[FieldId.TITLE] = it }
         when (config) {
-            is InputConfig -> errors += validateInput(config)
+            is InputConfig -> Unit // No fields beyond title and description.
             is OutputConfig -> Unit // No type-specific rules beyond title.
             is LiteRtConfig -> errors += validateLiteRt(config)
             is CloudConfig -> errors += validateCloud(config)
             is IntentRouterConfig -> errors += validateIntentRouter(config)
             is IfConditionConfig -> errors += validateIfCondition(config)
             is ClarificationConfig -> errors += validateClarification(config)
-            is ToolConfig -> errors += validateTool(config)
+            is ToolConfig -> errors += validateTool()
             is DecompositionConfig -> errors += validateDecomposition(config)
-            is QueueProcessorConfig -> errors += validateQueueProcessor(config)
+            is QueueProcessorConfig -> errors += validateQueueProcessor()
             is EvaluationConfig -> errors += validateEvaluation(config)
-            is SummaryConfig -> errors += validateSummary(config)
+            is SummaryConfig -> errors += validateSummary()
             is PipelineConfig -> errors += validatePipeline(config)
             is SkillConfig -> errors += validateSkill(config)
         }
@@ -200,15 +174,6 @@ object NodeConfigValidation {
         title.isBlank() -> ValidationFailure.TITLE_EMPTY
         title in peerTitles -> ValidationFailure.TITLE_DUPLICATE
         else -> null
-    }
-
-    private fun validateInput(config: InputConfig): Map<FieldId, ValidationFailure> {
-        val errors = mutableMapOf<FieldId, ValidationFailure>()
-        if (config.inputName.isBlank()) errors[FieldId.INPUT_NAME] = ValidationFailure.REQUIRED
-        config.schemaJson?.takeIf { it.isNotBlank() }?.let { json ->
-            if (!isValidJson(json)) errors[FieldId.SCHEMA_JSON] = ValidationFailure.INVALID_JSON
-        }
-        return errors
     }
 
     private fun validateLiteRt(config: LiteRtConfig): Map<FieldId, ValidationFailure> {
@@ -279,8 +244,12 @@ object NodeConfigValidation {
         if (!config.branchOnImage && config.expression.isBlank()) {
             errors[FieldId.EXPRESSION] = ValidationFailure.REQUIRED
         }
-        if (config.labelTrue.isBlank()) errors[FieldId.LABEL_TRUE] = ValidationFailure.REQUIRED
-        if (config.labelFalse.isBlank()) errors[FieldId.LABEL_FALSE] = ValidationFailure.REQUIRED
+        // Keywords are free text and a blank threshold means "off", so neither
+        // deterministic check can be invalid. The slider's own range is the only
+        // bound, and a value outside it cannot be produced by the sheet.
+        config.complexityThreshold?.let { threshold ->
+            if (threshold <= 0) errors[FieldId.COMPLEXITY_THRESHOLD] = ValidationFailure.OUT_OF_RANGE
+        }
         return errors
     }
 
@@ -296,45 +265,25 @@ object NodeConfigValidation {
         return errors
     }
 
-    private fun validateTool(config: ToolConfig): Map<FieldId, ValidationFailure> {
-        val errors = mutableMapOf<FieldId, ValidationFailure>()
-        // A blank toolId is the "Auto" selection — the agent picks the tool at
-        // run time — so it is valid and must NOT block Save.
-        val names = config.argumentMapping.map { it.name }
-        when {
-            config.argumentMapping.any { it.name.isBlank() || it.expression.isBlank() } -> {
-                errors[FieldId.ARGUMENT_MAPPING] = ValidationFailure.REQUIRED
-            }
-            // Same ordering rationale as IntentRouter — duplicate-key check
-            // only fires once every row has a non-blank name.
-            names.distinct().size != names.size -> {
-                errors[FieldId.ARGUMENT_MAPPING] = ValidationFailure.KEY_DUPLICATE
-            }
-        }
-        return errors
-    }
+    // A blank toolId is the "Auto" selection — the agent picks the tool at run
+    // time — so it is valid and must NOT block Save, and nothing else on the
+    // sheet can be invalid: the confirm-policy override is a closed set of
+    // choices. Kept as an explicit empty verdict rather than dropped from the
+    // dispatch, so the `when` over config types stays exhaustive.
+    private fun validateTool(): Map<FieldId, ValidationFailure> = emptyMap()
 
     private fun validateDecomposition(config: DecompositionConfig): Map<FieldId, ValidationFailure> {
         val errors = mutableMapOf<FieldId, ValidationFailure>()
         if (config.planningPrompt.isBlank()) errors[FieldId.PLANNING_PROMPT] = ValidationFailure.REQUIRED
         if (config.maxSubtasks !in MAX_SUBTASKS_RANGE) errors[FieldId.MAX_SUBTASKS] = ValidationFailure.OUT_OF_RANGE
-        config.outputSchemaJson?.takeIf { it.isNotBlank() }?.let { json ->
-            if (!isValidJson(json)) errors[FieldId.OUTPUT_SCHEMA_JSON] = ValidationFailure.INVALID_JSON
-        }
         return errors
     }
 
-    private fun validateQueueProcessor(config: QueueProcessorConfig): Map<FieldId, ValidationFailure> {
-        val errors = mutableMapOf<FieldId, ValidationFailure>()
-        // The input-list expression is optional: left blank, the processor
-        // consumes the list produced by the previous node (typically
-        // DECOMPOSITION). It must not be a required field.
-        if (config.itemVariable.isBlank()) errors[FieldId.ITEM_VARIABLE] = ValidationFailure.REQUIRED
-        if (config.parallelism !in PARALLELISM_RANGE) {
-            errors[FieldId.PARALLELISM] = ValidationFailure.PARALLELISM_RANGE
-        }
-        return errors
-    }
+    // QUEUE_PROCESSOR has nothing left to validate: the queue comes from
+    // upstream and the only field is a toggle. Kept as an explicit empty
+    // verdict rather than dropped from the dispatch, so the `when` over config
+    // types stays exhaustive and a new field cannot be added without a home.
+    private fun validateQueueProcessor(): Map<FieldId, ValidationFailure> = emptyMap()
 
     private fun validateEvaluation(config: EvaluationConfig): Map<FieldId, ValidationFailure> {
         val errors = mutableMapOf<FieldId, ValidationFailure>()
@@ -343,16 +292,10 @@ object NodeConfigValidation {
         return errors
     }
 
-    private fun validateSummary(config: SummaryConfig): Map<FieldId, ValidationFailure> {
-        val errors = mutableMapOf<FieldId, ValidationFailure>()
-        if (config.format == SummaryFormat.CUSTOM && config.customPrompt.isNullOrBlank()) {
-            errors[FieldId.CUSTOM_PROMPT] = ValidationFailure.REQUIRED
-        }
-        if (config.targetLengthChars !in TARGET_LENGTH_RANGE) {
-            errors[FieldId.TARGET_LENGTH_CHARS] = ValidationFailure.OUT_OF_RANGE
-        }
-        return errors
-    }
+    // The custom prompt is optional — blank leaves the built-in summarisation
+    // prompt in place, which is a first-class choice — so nothing on the sheet
+    // can be invalid. Explicit empty verdict, same reason as [validateTool].
+    private fun validateSummary(): Map<FieldId, ValidationFailure> = emptyMap()
 
     private fun validatePipeline(config: PipelineConfig): Map<FieldId, ValidationFailure> {
         val errors = mutableMapOf<FieldId, ValidationFailure>()

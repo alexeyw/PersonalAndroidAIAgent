@@ -19,9 +19,6 @@ sealed interface NodeConfig {
     val description: String?
 }
 
-/** Output text format for [OutputConfig]. */
-enum class OutputFormat { PLAIN_TEXT, MARKDOWN, JSON }
-
 /**
  * One installed local model the user can pick in the LiteRt config sheet. Defined here
  * (catalog side) as a plain pair of id / display name plus an `isActive` flag so the
@@ -45,9 +42,6 @@ data class LocalModelOption(val id: String, val displayName: String, val isActiv
  */
 enum class CloudProvider { OPEN_AI, ANTHROPIC, GOOGLE, COMPATIBLE, AUTO }
 
-/** Summary rendering style for [SummaryConfig]. */
-enum class SummaryFormat { BULLETS, PARAGRAPH, CUSTOM }
-
 /** Tool-call confirmation override for [ToolConfig]. `null` = inherit declared risk. */
 enum class ConfirmPolicy { ALWAYS_CONFIRM, ALLOW_READONLY, ALLOW_SENSITIVE }
 
@@ -56,15 +50,12 @@ enum class ConfirmPolicy { ALWAYS_CONFIRM, ALLOW_READONLY, ALLOW_SENSITIVE }
  *
  * @property title display title.
  * @property description optional one-line note.
- * @property inputName variable name exposed downstream.
- * @property schemaJson optional JSON-Schema body for typed inputs.
+ *
+ * Carries no payload of its own. The entry contract is fixed — the run's text
+ * arrives as it is — so the `inputName` and `schemaJson` fields that used to sit
+ * here were removed rather than left as controls that changed nothing.
  */
-data class InputConfig(
-    override val title: String,
-    override val description: String? = null,
-    val inputName: String = "user.message",
-    val schemaJson: String? = null,
-) : NodeConfig {
+data class InputConfig(override val title: String, override val description: String? = null) : NodeConfig {
     override val type: NodeType get() = NodeType.INPUT
 }
 
@@ -73,7 +64,6 @@ data class InputConfig(
  *
  * @property title display title.
  * @property description optional one-line note.
- * @property format output rendering format.
  * @property systemPrompt optional system prompt sent to the model that
  *   formats the final response. When blank the node forwards the upstream
  *   text verbatim (the engine wraps a non-blank prompt around the LLM
@@ -83,7 +73,6 @@ data class InputConfig(
 data class OutputConfig(
     override val title: String,
     override val description: String? = null,
-    val format: OutputFormat = OutputFormat.PLAIN_TEXT,
     val systemPrompt: String = "",
 ) : NodeConfig {
     override val type: NodeType get() = NodeType.OUTPUT
@@ -181,12 +170,22 @@ data class IntentRouterConfig(
  * @property description optional one-line note.
  * @property expression mono boolean expression evaluated against upstream
  * node outputs.
- * @property labelTrue port label for the True branch (also the [EdgeLabel]).
- * @property labelFalse port label for the False branch.
+ * @property keywords comma-separated words matched against the run's text
+ * before any model is asked; any match takes the True branch outright. Blank
+ * disables the check. Checked after [branchOnImage] and before
+ * [complexityThreshold].
+ * @property complexityThreshold input length in characters at or above which the
+ * True branch is taken without asking a model; `null` disables the check.
+ * Checked after [keywords] and before [expression].
  * @property branchOnImage when `true`, the node takes the True branch whenever the
- * run input carries an image attachment — a deterministic check evaluated before the
- * [expression], so a pipeline can fork on "did the user send a picture?". The
- * [expression] is ignored while this is on.
+ * run input carries an image attachment — a deterministic check evaluated before
+ * everything else, so a pipeline can fork on "did the user send a picture?".
+ *
+ * The four checks are a priority order, not alternatives: the first one that
+ * matches decides the branch and the rest are never consulted. The port labels
+ * are fixed at `True` / `False`, because that is what the engine matches an
+ * outgoing edge against — the `labelTrue` / `labelFalse` fields that used to
+ * suggest otherwise were removed.
  * @property engineProvider optional cloud provider backing this node's
  * structured inference; `null` runs on-device (the default).
  */
@@ -194,8 +193,8 @@ data class IfConditionConfig(
     override val title: String,
     override val description: String? = null,
     val expression: String = "",
-    val labelTrue: String = "True",
-    val labelFalse: String = "False",
+    val keywords: String = "",
+    val complexityThreshold: Int? = null,
     val branchOnImage: Boolean = false,
     val engineProvider: CloudProvider? = null,
 ) : NodeConfig {
@@ -224,28 +223,11 @@ data class ClarificationConfig(
 }
 
 /**
- * One row of [ToolConfig.argumentMapping]. Modelled as an ordered list
- * (not a `Map`) so the editor can preserve every row even while the
- * user is mid-rename and two rows temporarily share the same key — a
- * `Map<String, String>` would silently drop the older entry on
- * deduplication. Validation catches the collision via
- * `ValidationFailure.KEY_DUPLICATE` and disables Save until resolved.
- *
- * @property name argument key emitted to the tool's typed schema.
- * @property expression upstream-node expression that resolves to the
- * value passed to the tool.
- */
-data class ToolArgument(val name: String, val expression: String)
-
-/**
  * Configuration for [NodeType.TOOL] — AppFunctions / MCP tool invocation.
  *
  * @property title display title.
  * @property description optional one-line note.
  * @property toolId fully-qualified tool identifier (e.g. `fs.write_file`).
- * @property argumentMapping ordered list of `(name, expression)` rows
- * mapped to the tool's typed argument schema. Required arguments not
- * declared here surface as validation errors.
  * @property confirmOverride optional override of the tool's declared risk
  * policy; `null` inherits the tool's declared risk.
  * @property engineProvider optional cloud provider backing this node's
@@ -255,7 +237,6 @@ data class ToolConfig(
     override val title: String,
     override val description: String? = null,
     val toolId: String = "",
-    val argumentMapping: List<ToolArgument> = emptyList(),
     val confirmOverride: ConfirmPolicy? = null,
     val engineProvider: CloudProvider? = null,
 ) : NodeConfig {
@@ -270,7 +251,6 @@ data class ToolConfig(
  * @property description optional one-line note.
  * @property planningPrompt mono multi-line planning prompt; supports `$INPUT`.
  * @property maxSubtasks generation cap, range `1..20`.
- * @property outputSchemaJson optional structured-output JSON schema.
  * @property engineProvider optional cloud provider backing this node's
  * structured inference; `null` runs on-device (the default).
  */
@@ -279,7 +259,6 @@ data class DecompositionConfig(
     override val description: String? = null,
     val planningPrompt: String = "",
     val maxSubtasks: Int = 5,
-    val outputSchemaJson: String? = null,
     val engineProvider: CloudProvider? = null,
 ) : NodeConfig {
     override val type: NodeType get() = NodeType.DECOMPOSITION
@@ -290,17 +269,16 @@ data class DecompositionConfig(
  *
  * @property title display title.
  * @property description optional one-line note.
- * @property inputList upstream expression that resolves to a list.
- * @property itemVariable variable name exposed inside the loop body.
- * @property parallelism concurrent workers, range `1..8`.
  * @property stopOnError when `true`, the first failure short-circuits the loop.
+ *
+ * The queue itself is not configured here: it is the subtask list produced
+ * upstream, the current subtask arrives as the node's input, and subtasks always
+ * run one at a time. The `inputList` / `itemVariable` / `parallelism` fields that
+ * once said otherwise were removed rather than left saying it.
  */
 data class QueueProcessorConfig(
     override val title: String,
     override val description: String? = null,
-    val inputList: String = "",
-    val itemVariable: String = "item",
-    val parallelism: Int = 1,
     val stopOnError: Boolean = true,
 ) : NodeConfig {
     override val type: NodeType get() = NodeType.QUEUE_PROCESSOR
@@ -333,17 +311,15 @@ data class EvaluationConfig(
  *
  * @property title display title.
  * @property description optional one-line note.
- * @property format summary rendering style.
- * @property customPrompt mono multi-line prompt; required when
- * [format] == [SummaryFormat.CUSTOM] and ignored otherwise.
- * @property targetLengthChars target character count, range `200..4000`.
+ * @property customPrompt mono multi-line prompt replacing the built-in
+ * summarisation prompt; blank leaves the default in place. Shape and length
+ * are asked for here, in words — the `format` and `targetLengthChars` fields
+ * that used to promise them separately reached no executor and were removed.
  */
 data class SummaryConfig(
     override val title: String,
     override val description: String? = null,
-    val format: SummaryFormat = SummaryFormat.BULLETS,
     val customPrompt: String? = null,
-    val targetLengthChars: Int = 600,
 ) : NodeConfig {
     override val type: NodeType get() = NodeType.SUMMARY
 }
