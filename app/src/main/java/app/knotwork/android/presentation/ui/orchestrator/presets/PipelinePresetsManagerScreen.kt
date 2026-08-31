@@ -101,7 +101,7 @@ fun PipelinePresetsManagerScreen(viewModel: PipelinePresetsViewModel = hiltViewM
         callbacks = PresetManagerCallbacks(
             onBack = onBack,
             onTabSelected = { id -> viewModel.selectTab(tabFromId(id)) },
-            onCategorySelected = { id -> viewModel.selectCategory(id?.let(PresetCategory::valueOf)) },
+            onCategorySelected = { id -> viewModel.selectCategory(categoryFromId(id)) },
             onRename = { id -> renameTarget = state.filteredPresets.firstOrNull { it.id == id } },
             onDelete = { id -> deleteTarget = state.filteredPresets.firstOrNull { it.id == id } },
             onExport = { id ->
@@ -228,6 +228,19 @@ internal fun PipelinePresetsUiState.presetChips(context: Context): List<PresetCh
         }
     }
 }
+
+/**
+ * Maps an opaque category id back to the domain enum.
+ *
+ * Total rather than `valueOf`: the ids are ours, but a chip id that no longer
+ * parses should drop the filter, not crash the screen — the reset chip's `null`
+ * is already a valid answer.
+ *
+ * @param id The id handed back by the design module, or `null` for the reset chip.
+ * @return The matching category, or `null`.
+ */
+internal fun categoryFromId(id: String?): PresetCategory? =
+    id?.let { name -> PresetCategory.entries.firstOrNull { it.name == name } }
 
 /**
  * Maps an opaque tab id back to the presentation enum, for the picker sheet.

@@ -133,7 +133,7 @@ fun PresetPickerSheet(
 
             PresetCategoryChipRow(
                 chips = state.presetChips(LocalContext.current),
-                onCategorySelected = { id -> onCategorySelected(id?.let(PresetCategory::valueOf)) },
+                onCategorySelected = { id -> onCategorySelected(categoryFromId(id)) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(
