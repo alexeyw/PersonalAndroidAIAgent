@@ -27,7 +27,7 @@
     <string name="settings_row_resume_window_title">Resume window</string>
     <string name="settings_row_approval_window_title">Approval window</string>
     <string name="settings_row_voice_length_title">Voice input length</string>
-    <string name="settings_row_tool_call_timeout_title">Tool call timeout</string>
+    <string name="settings_row_tool_call_timeout_title">Approval wait</string>
     <string name="settings_row_workspace_max_file_size_title">Largest file</string>
     <string name="settings_row_workspace_max_total_title">Workspace size limit</string>
     <string name="settings_row_workspace_read_budget_title">Single read budget</string>

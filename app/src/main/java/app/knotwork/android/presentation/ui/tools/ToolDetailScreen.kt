@@ -10,9 +10,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.knotwork.android.data.repositories.McpServerRepositoryImpl
 import app.knotwork.android.domain.models.McpConnectionStatus
-import app.knotwork.android.domain.models.ToolRisk
-import app.knotwork.android.domain.models.ToolSource
-import app.knotwork.design.screens.tools.BuiltInToolRisk
 import app.knotwork.design.screens.tools.ToolDetailCallbacks
 import app.knotwork.design.screens.tools.ToolDetailContent
 import app.knotwork.design.screens.tools.ToolDetailViewState
@@ -71,7 +68,7 @@ fun ToolDetailScreen(
             // Keyed per server, exactly as `ToolRepositoryImpl.getRisk` looks it
             // up: the id already carries the server hash, so two servers
             // advertising the same tool name stay two separate decisions.
-            risk = ToolRiskUi.Editable(uiState.toolRiskOverrides.effectiveRisk(toolId)),
+            risk = ToolRiskUi.Editable(ToolRiskResolution.forOverridable(toolId, uiState.toolRiskOverrides)),
         )
     } else {
         val tool = remember(toolId, uiState.localTools) {
@@ -92,10 +89,10 @@ fun ToolDetailScreen(
             // read (`ToolRepositoryImpl.getRisk` returns on `builtinRisk`), so
             // only a discovered AppFunction gets a control here. Offering one
             // for a built-in would be a control that cannot act.
-            risk = if (tool?.source == ToolSource.APP_FUNCTION) {
-                ToolRiskUi.Editable(uiState.toolRiskOverrides.effectiveRisk(toolId))
+            risk = if (ToolRiskResolution.isOverridable(tool)) {
+                ToolRiskUi.Editable(ToolRiskResolution.forOverridable(toolId, uiState.toolRiskOverrides))
             } else {
-                ToolRiskUi.Fixed((tool?.risk ?: ToolRisk.SENSITIVE).toUiRisk())
+                ToolRiskUi.Fixed(ToolRiskResolution.forLocalTool(tool, uiState.toolRiskOverrides))
             },
         )
     }
@@ -109,7 +106,9 @@ fun ToolDetailScreen(
                 viewModel.toggleLocalTool(toolName = toolId, isEnabled = isEnabled)
             }
         },
-        onRiskChange = { chosen -> viewModel.setToolRisk(toolKey = toolId, risk = chosen.toDomainRisk()) },
+        onRiskChange = { chosen ->
+            viewModel.setToolRisk(toolKey = toolId, risk = with(ToolRiskResolution) { chosen.toDomain() })
+        },
     )
 
     ToolDetailContent(
@@ -117,34 +116,6 @@ fun ToolDetailScreen(
         callbacks = callbacks,
         modifier = modifier.testTag(tag = TOOL_DETAIL_ROOT_TEST_TAG),
     )
-}
-
-/**
- * Resolves the risk the approval gate will actually apply to [toolKey].
- *
- * Mirrors `ToolRepositoryImpl.getRisk` for the two families that consult the
- * override — an absent entry resolves to [ToolRisk.SENSITIVE], the same
- * conservative default the gate falls back to, so the control never shows a
- * level the gate would not enforce.
- *
- * @param toolKey The override key (bare AppFunction name, or MCP tool id).
- * @return The effective level, as the catalog's UI enum.
- */
-private fun Map<String, ToolRisk>.effectiveRisk(toolKey: String): BuiltInToolRisk =
-    (this[toolKey] ?: ToolRisk.SENSITIVE).toUiRisk()
-
-/** Maps a domain risk level onto the catalog's UI enum. */
-private fun ToolRisk.toUiRisk(): BuiltInToolRisk = when (this) {
-    ToolRisk.READ_ONLY -> BuiltInToolRisk.ReadOnly
-    ToolRisk.SENSITIVE -> BuiltInToolRisk.Sensitive
-    ToolRisk.DESTRUCTIVE -> BuiltInToolRisk.Destructive
-}
-
-/** Maps the catalog's UI enum back onto the domain risk level. */
-private fun BuiltInToolRisk.toDomainRisk(): ToolRisk = when (this) {
-    BuiltInToolRisk.ReadOnly -> ToolRisk.READ_ONLY
-    BuiltInToolRisk.Sensitive -> ToolRisk.SENSITIVE
-    BuiltInToolRisk.Destructive -> ToolRisk.DESTRUCTIVE
 }
 
 /**

@@ -500,7 +500,7 @@ internal fun ProviderNavRow(row: ProviderRowState, onClick: () -> Unit) {
     }
 }
 
-// ─── System-instructions / tool-usage textareas ──────────────────────────────
+// ─── System-instructions textarea ────────────────────────────────────────────
 
 /**
  * System-instructions textarea with its `$VARIABLE` chip row and counter. Kept

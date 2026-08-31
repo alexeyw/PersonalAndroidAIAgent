@@ -1767,7 +1767,7 @@ budget is used out of its limit, with a fill bar. As the workspace fills
 it ramps from neutral to amber (near the limit) to red. If it is full,
 a banner explains that the agent's writes are being refused until space
 is freed; delete files or raise the limit (Settings → Tools & workspace →
-Advanced → Workspace max total size) to recover.
+Advanced → Workspace size limit) to recover.
 
 Pull down to refresh the listing.
 
@@ -2160,11 +2160,11 @@ repeated here.
 | **Block destructive tools** | On, a destructive tool call is refused outright rather than offered for approval, and the run sees it as a failed call. |
 | **Block network from local model** | On, no cloud provider can be reached even with a key saved. Only a model on this device, or Ollama on your own network, answers. |
 | **Manage tools / MCP servers** | *(no explanation — opens a screen that explains itself)* |
-| **Tool-call timeout** | How long a run waits for you to approve a tool call before it parks and asks again later. It does not bound the call itself. |
-| **Workspace max file size** | The largest single file the workspace accepts, for both writing one and reading one whole. |
-| **Workspace max total size** | How much device storage the whole workspace may hold. A write that would push past it is refused rather than trimmed. |
-| **Workspace read budget** | How much of a file one read may put in front of the model. The rest is cut, leaving room for the prompt and the thread. |
-| **HTTP response cap** | How much of a web response reaches the model. Past it the body is cut and marked, so remote text cannot flood the context. |
+| **Approval wait** | How long a run waits for you to approve a tool call before it parks and asks again later. It does not bound the call itself. |
+| **Largest file** | The largest single file the workspace accepts, for both writing one and reading one whole. |
+| **Workspace size limit** | How much device storage the whole workspace may hold. A write that would push past it is refused rather than trimmed. |
+| **Single read budget** | How much of a file one read may put in front of the model. The rest is cut, leaving room for the prompt and the thread. |
+| **Largest web response** | How much of a web response reaches the model. Past it the body is cut and marked, so remote text cannot flood the context. |
 | **Allowed HTTP domains** | *(no explanation — opens a screen that explains itself)* |
 
 #### Background & triggers
@@ -2452,9 +2452,9 @@ Basic:
 
 Advanced:
 
-- **Tool call timeout** (5 – 300 s, default 60) — how long one tool call may take
-  before it is given up on. It bounds an MCP server's silence, not the length of
-  a healthy answer.
+- **Approval wait** (5 – 300 s, default 60) — how long a run holds an approval
+  request open in front of you before parking it and asking again later. It does
+  not bound the tool call itself; that deadline is not a setting.
 - **Largest file** (1 – 50 MB, default 5) and **Workspace size limit**
   (10 – 1024 MB, default 100) — the per-file and total ceilings on the agent
   workspace. A write that would cross either is refused.

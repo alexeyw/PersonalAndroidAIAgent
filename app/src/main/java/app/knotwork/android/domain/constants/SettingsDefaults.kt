@@ -34,17 +34,29 @@ object SettingsDefaults {
     /** Default `top-p` (nucleus sampling) parameter for local LLM generation. */
     const val TOP_P_DEFAULT: Float = 0.9f
 
-    /** Default wall-clock timeout for a single tool invocation, in milliseconds. */
+    /**
+     * Default length of the **live** phase of a tool-approval gate, in
+     * milliseconds. `ToolInvocationGate` waits this long in-process for the
+     * user's answer, then parks the run on a durable pending record.
+     *
+     * The name is historical and the DataStore key it backs cannot be renamed
+     * without a migration for nothing; it does **not** bound the tool call
+     * itself. The MCP round-trip has its own deadline in `KoogMcpClient`.
+     */
     const val TOOL_CALL_TIMEOUT_MS_DEFAULT: Long = 60_000L
 
     /**
-     * Lower bound of the tool-call timeout slider, in milliseconds (5 s). Not a
-     * taste value: below roughly this, a healthy MCP round-trip over a slow link
-     * would be cut off as a timeout, so the ceiling would read as a broken tool.
+     * Lower bound of the live-approval slider, in milliseconds (5 s).
+     *
+     * Not a taste value: this window is how long the run holds an approval
+     * request in-process before parking it durably, and a person answering from
+     * a notification needs time to unlock the phone. Below roughly this, every
+     * approval would park before it could be answered — which works, but turns
+     * the fastest path into the slowest one.
      */
     const val TOOL_CALL_TIMEOUT_MS_MIN: Long = 5_000L
 
-    /** Upper bound of the tool-call timeout slider, in milliseconds (5 min). */
+    /** Upper bound of the live-approval slider, in milliseconds (5 min). */
     const val TOOL_CALL_TIMEOUT_MS_MAX: Long = 300_000L
 
     /**

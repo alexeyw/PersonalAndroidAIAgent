@@ -26,9 +26,8 @@ enum class NoHint {
     /**
      * The row's behaviour does not currently happen, so there is nothing
      * truthful to explain. Writing a hint for one of these would document
-     * behaviour the build does not have, which is the failure this whole task
-     * exists to stop. Each is filed against the bug-fix container, and each is
-     * owed a hint as soon as its row does something.
+     * behaviour the build does not have, which is the failure this category
+     * exists to stop.
      *
      * **No row qualifies today, and the enum stays** — as the place the next
      * one is recorded rather than quietly explained. The seven that once did

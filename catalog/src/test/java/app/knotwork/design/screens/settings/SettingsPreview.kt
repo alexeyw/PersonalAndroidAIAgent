@@ -51,7 +51,7 @@ internal object SettingsPreview {
                 synonym = "max",
             ),
             searchRow("MAX_MEMORY_CHUNKS", SettingsCategoryId.Memory, "Max memory chunks", 0, 3),
-            searchRow("WORKSPACE_MAX_FILE_SIZE_BYTES", SettingsCategoryId.Tools, "Workspace max file size", 10, 3),
+            searchRow("WORKSPACE_MAX_FILE_SIZE_BYTES", SettingsCategoryId.Tools, "Largest file", 10, 3),
             searchRow("RESUME_MAX_AGE_HOURS", SettingsCategoryId.Background, "Resume max age", 7, 3),
         ),
     )
@@ -287,7 +287,7 @@ internal object SettingsPreview {
     private fun toolsSliders(): List<SettingSliderRow> = listOf(
         SettingSliderRow(
             SLIDER_TOOL_CALL_TIMEOUT,
-            "Tool call timeout",
+            "Approval wait",
             "60 s",
             60f,
             5f..300f,

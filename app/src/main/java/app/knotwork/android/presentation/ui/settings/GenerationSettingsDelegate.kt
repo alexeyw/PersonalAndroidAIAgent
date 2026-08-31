@@ -15,10 +15,9 @@ import kotlinx.coroutines.launch
 /**
  * Generation category delegate of [SettingsViewModel].
  *
- * Owns the system-instructions textarea (plus its `$VARIABLE` catalog chips), the
- * tool-usage instruction guidance, the five sampling parameters (temperature /
- * top-K / top-P / repetition penalty / max context length) and the voice-input
- * capture length. Observes the persisted flows into the shared [state]
+ * Owns the system-instructions textarea (plus its `$VARIABLE` catalog chips),
+ * the four sampling parameters (temperature / top-K / top-P / max context
+ * length) and the voice-input capture length. Observes the persisted flows into the shared [state]
  * and routes edits back through [settingsRepository]. Shares the ViewModel's
  * [scope] and single [SettingsUiState] reducer.
  *

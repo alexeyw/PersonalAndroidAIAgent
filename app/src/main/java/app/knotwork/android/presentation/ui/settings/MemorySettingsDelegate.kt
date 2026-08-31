@@ -447,8 +447,4 @@ class MemorySettingsDelegate(
     private fun emitSnackbar(message: String) {
         state.update { it.copy(snackbarMessage = message) }
     }
-
-    private companion object {
-        const val MAX_PERCENT = 100
-    }
 }

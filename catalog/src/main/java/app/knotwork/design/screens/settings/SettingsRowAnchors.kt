@@ -17,8 +17,6 @@ object SettingsRowAnchors {
     /** Generation · system instructions textarea. */
     const val SYSTEM_PROMPT_PREFIX = "SYSTEM_PROMPT_PREFIX"
 
-    /** Generation · tool-usage instruction textarea. */
-
     /** Models · local-model backend chooser. */
     const val LOCAL_MODEL_BACKEND = "LOCAL_MODEL_BACKEND"
 
@@ -57,8 +55,6 @@ object SettingsRowAnchors {
 
     /** Tools · allowed-HTTP-domains link. */
     const val LINK_FILES_DOMAINS = "LINK_FILES_DOMAINS"
-
-    /** Background · long-running-task notifications toggle. */
 
     /** Background · scheduled-task notifications toggle. */
     const val SCHEDULED_TASK_NOTIFICATIONS = "SCHEDULED_TASK_NOTIFICATIONS"

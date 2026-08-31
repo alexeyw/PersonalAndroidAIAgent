@@ -36,7 +36,6 @@ class SettingsCallbacks(
     val onSystemInstructionsChange: (String) -> Unit = {},
     /** Insert a `$VARIABLE` placeholder into the system instructions. */
     val onChipInsert: (String) -> Unit = {},
-    /** Tool-usage instruction textarea edit. */
     /** Sampling / voice slider change, keyed by `SLIDER_*` id. */
     val onGenerationSliderChange: (id: String, value: Float) -> Unit = { _, _ -> },
     /** Restore the sampling parameters to defaults. */
@@ -91,7 +90,6 @@ class SettingsCallbacks(
     val onClearMemoryClick: () -> Unit = {},
 
     // ─── Background ──────────────────────────────────────────────────────────
-    /** "Long-running task alerts" toggle. */
     /** "Scheduled task alerts" toggle. */
     val onScheduledResultsToggle: (Boolean) -> Unit = {},
     /** Background slider change (resume / approval window), keyed by id. */

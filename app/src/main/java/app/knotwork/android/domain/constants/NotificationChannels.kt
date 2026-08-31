@@ -40,9 +40,8 @@ object NotificationChannels {
      * ("Task completed" / "Task failed"). Kept separate from the HITL
      * approval channels (those are high-importance, action-carrying prompts)
      * so the user can tune result announcements independently. Backs the
-     * Settings →
-     * Notifications → "Scheduled task results" toggle; `ScheduledTaskNotifier`
-     * posts to it when the user-controlled flag is on.
+     * Settings → Notifications → "Scheduled task results" toggle;
+     * `ScheduledTaskNotifier` posts to it when the user-controlled flag is on.
      */
     const val TASK_RESULTS: String = "TaskResultsChannel"
 

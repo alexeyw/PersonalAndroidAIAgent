@@ -124,7 +124,7 @@ private val TOOLS_ENTRIES = listOf(
     setting("BLOCK_DESTRUCTIVE_TOOLS", BASIC, TOGGLE, hubBasic = true, syn = listOf("safety")),
     setting("BLOCK_NETWORK_FROM_LOCAL_MODEL", BASIC, TOGGLE, syn = listOf("network", "offline")),
     link(BASIC, "Tools screen", syn = listOf("mcp", "tools", "servers")),
-    setting("TOOL_CALL_TIMEOUT_MS", ADVANCED, SLIDER, syn = listOf("timeout", "max")),
+    setting("TOOL_CALL_TIMEOUT_MS", ADVANCED, SLIDER, syn = listOf("timeout", "approval", "wait")),
     setting("WORKSPACE_MAX_FILE_SIZE_BYTES", ADVANCED, SLIDER, syn = listOf("file", "max")),
     setting("WORKSPACE_MAX_TOTAL_BYTES", ADVANCED, SLIDER, syn = listOf("workspace", "max", "total")),
     setting("WORKSPACE_READ_TOKEN_BUDGET", ADVANCED, SLIDER, syn = listOf("max", "tokens", "read")),

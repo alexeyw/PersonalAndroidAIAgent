@@ -1225,8 +1225,8 @@ interface SettingsRepository {
      * user-entered content or configuration: long-term memory, chats,
      * pipelines, presets, skills, secrets (API keys / HuggingFace token),
      * MCP servers, the `http_request` domain allowlist, per-tool enable/disable
-     * and risk overrides, the user-authored system-instructions prefix and
-     * tool-usage instruction, the active embedding provider (and its re-embed
+     * and risk overrides, the user-authored system-instructions prefix, the
+     * active embedding provider (and its re-embed
      * marker), the default-pipeline binding, the per-surface entry-point
      * pipeline bindings (share target, Quick Settings tile), the selected local
      * backend, and onboarding / transient state. Everything it resets has a documented
