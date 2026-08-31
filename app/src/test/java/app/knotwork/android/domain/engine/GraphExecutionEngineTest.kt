@@ -663,6 +663,94 @@ class GraphExecutionEngineTest {
     }
 
     @Test
+    fun `INTENT_ROUTER with a fallback class routes an unmatched answer to that branch`() = runTest {
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        // The wrong branch is wired FIRST on purpose: without a fallback class
+        // the run would take it, which is the behaviour this field exists to
+        // replace — and the reason the skill guide told authors to order their
+        // edges by hand.
+        val routerNode = NodeModel("router", NodeType.INTENT_ROUTER, 0f, 0f, fallbackClass = "other")
+        val deadNode = NodeModel("dead", NodeType.LITE_RT, 0f, 0f)
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g1",
+            name = "Router fallback",
+            nodes = listOf(inputNode, routerNode, deadNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "router"),
+                ConnectionModel("c2", "router", "dead", label = "billing"),
+                ConnectionModel("c3", "router", "output", label = "other"),
+            ),
+        )
+        // The gate constrains the model to the wired labels, so an unroutable run
+        // is one where it never produced a usable verdict at all.
+        every { llmEngine.generateResponseStream(any(), any(), any()) } returns flowOf("nonsense")
+
+        val states = engine(sessionId, "query", graph).toList()
+
+        assertTrue(
+            "Expected Completed via the fallback branch, got: ${states.last()}",
+            states.last() is AgentOrchestratorState.Completed,
+        )
+    }
+
+    @Test
+    fun `INTENT_ROUTER with a fallback class whose branch is unwired terminates`() = runTest {
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val routerNode = NodeModel("router", NodeType.INTENT_ROUTER, 0f, 0f, fallbackClass = "other")
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g1",
+            name = "Router fallback unwired",
+            nodes = listOf(inputNode, routerNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "router"),
+                ConnectionModel("c2", "router", "output", label = "billing"),
+            ),
+        )
+        every { llmEngine.generateResponseStream(any(), any(), any()) } returns flowOf("nonsense")
+
+        val states = engine(sessionId, "query", graph).toList()
+
+        // Terminating beats running the wrong branch, which is the same call
+        // IF_CONDITION already makes: an author who named a fallback and left it
+        // unconnected asked for neither of the branches that do exist.
+        val last = states.last()
+        assertTrue("Expected Error, got: $last", last is AgentOrchestratorState.Error)
+        assertTrue((last as AgentOrchestratorState.Error).message.contains("without reaching OUTPUT"))
+    }
+
+    @Test
+    fun `INTENT_ROUTER without a fallback class keeps taking the first wired branch`() = runTest {
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val routerNode = NodeModel("router", NodeType.INTENT_ROUTER, 0f, 0f)
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g1",
+            name = "Router legacy fallthrough",
+            nodes = listOf(inputNode, routerNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "router"),
+                ConnectionModel("c2", "router", "output", label = "billing"),
+            ),
+        )
+        every { llmEngine.generateResponseStream(any(), any(), any()) } returns flowOf("nonsense")
+
+        val states = engine(sessionId, "query", graph).toList()
+
+        // Every pipeline saved before the field existed relies on this. Changing
+        // it for them would be a silent re-route of graphs whose authors never
+        // made the decision.
+        assertTrue(
+            "Expected Completed via the first branch, got: ${states.last()}",
+            states.last() is AgentOrchestratorState.Completed,
+        )
+    }
+
+    @Test
     fun `INTENT_ROUTER fuzzy fallback matches a whole word not an incidental substring`() = runTest {
         val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
         val routerNode = NodeModel("router", NodeType.INTENT_ROUTER, 0f, 0f)
@@ -1267,6 +1355,82 @@ class GraphExecutionEngineTest {
         val last = states.last()
         assertTrue("Expected Error but got: $last", last is AgentOrchestratorState.Error)
         assertTrue((last as AgentOrchestratorState.Error).message.contains("item processor crashed"))
+    }
+
+    @Test
+    fun `given a queue with stopOnError off when an item fails then the run continues to the next`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(20)
+
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val listGenNode = NodeModel("list_gen", NodeType.LITE_RT, 0f, 0f)
+        val queueNode = NodeModel("queue", NodeType.QUEUE_PROCESSOR, 0f, 0f, stopOnError = false)
+        val itemProcNode = NodeModel("item_proc", NodeType.LITE_RT, 0f, 0f)
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g3b",
+            name = "Queue survives a failing item",
+            nodes = listOf(inputNode, listGenNode, queueNode, itemProcNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "list_gen"),
+                ConnectionModel("c2", "list_gen", "queue"),
+                ConnectionModel("c3", "queue", "item_proc", label = "Item"),
+                ConnectionModel("c4", "queue", "output", label = "Done"),
+            ),
+        )
+
+        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+            flowOf("""["first", "second"]"""),
+            kotlinx.coroutines.flow.flow { throw RuntimeException("item processor crashed") },
+            flowOf("second done"),
+            flowOf("final answer"),
+        )
+
+        val states = engine(sessionId, "Two items, one crashes", graph).toList()
+
+        // The failure becomes that item's result rather than the run's outcome,
+        // and the second item still runs. Opt-in: `null` and `true` both keep
+        // the historical behaviour, which the test above still pins.
+        assertTrue(
+            "Expected Completed despite one failing item, got: ${states.last()}",
+            states.last() is AgentOrchestratorState.Completed,
+        )
+    }
+
+    @Test
+    fun `given a queue with stopOnError off when the run hits its step ceiling then it still ends`() = runTest {
+        // The ceiling is what makes the queue's survival opt-in safe: without
+        // this, a queue set to carry on would keep spending the budget a breach
+        // has already reported as gone.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(4)
+
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val listGenNode = NodeModel("list_gen", NodeType.LITE_RT, 0f, 0f)
+        val queueNode = NodeModel("queue", NodeType.QUEUE_PROCESSOR, 0f, 0f, stopOnError = false)
+        val itemProcNode = NodeModel("item_proc", NodeType.LITE_RT, 0f, 0f)
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g3c",
+            name = "Queue meets the ceiling",
+            nodes = listOf(inputNode, listGenNode, queueNode, itemProcNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "list_gen"),
+                ConnectionModel("c2", "list_gen", "queue"),
+                ConnectionModel("c3", "queue", "item_proc", label = "Item"),
+                ConnectionModel("c4", "queue", "output", label = "Done"),
+            ),
+        )
+        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+            flowOf("""["a", "b", "c", "d", "e", "f"]"""),
+        ) + List(10) { flowOf("done") }
+
+        val states = engine(sessionId, "Many items, small ceiling", graph).toList()
+
+        assertTrue(
+            "Expected the ceiling to end the run, got: ${states.last()}",
+            states.last() is AgentOrchestratorState.Error,
+        )
     }
 
     // ─── PromptTemplateEngine integration ────────────────────────────────────

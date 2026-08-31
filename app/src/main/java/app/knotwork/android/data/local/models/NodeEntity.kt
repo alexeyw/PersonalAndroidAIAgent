@@ -25,6 +25,11 @@ import app.knotwork.android.domain.models.NodeContextConfig
  * @property conditionComplexity Threshold for task complexity.
  * @property conditionKeywords Comma-separated keywords for condition.
  * @property conditionPrompt Free-form prompt for condition classification.
+ * @property fallbackClass INTENT_ROUTER: class an unmatched answer routes to.
+ * @property quickReplies CLARIFICATION: comma-separated answer chips.
+ * @property alwaysConfirm TOOL: ask for approval on every call through this node.
+ * @property maxSubtasks DECOMPOSITION: cap on the generated sub-task list.
+ * @property stopOnError QUEUE_PROCESSOR: fail the run on the first failing item.
  * @property conditionHasImage When `true` on an IF_CONDITION node, branch True whenever the run
  *   input carries an image attachment (deterministic, no-LLM check). Nullable `INTEGER` column;
  *   `null` and `false` are treated identically.
@@ -73,6 +78,11 @@ data class NodeEntity(
     val systemPrompt: String? = null,
     val cloudProvider: String? = null,
     val clarificationTimeoutMs: Long? = null,
+    val fallbackClass: String? = null,
+    val quickReplies: String? = null,
+    val alwaysConfirm: Boolean? = null,
+    val maxSubtasks: Int? = null,
+    val stopOnError: Boolean? = null,
     @ColumnInfo(name = "context_config")
     val contextConfig: NodeContextConfig = NodeContextConfig.ALL_ENABLED,
     @ColumnInfo(name = "config_json")

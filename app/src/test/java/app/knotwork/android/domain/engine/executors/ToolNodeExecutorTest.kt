@@ -172,6 +172,50 @@ class ToolNodeExecutorTest {
     }
 
     @Test
+    fun `given a node that always confirms then a READ_ONLY tool still asks`() = runTest {
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(false)
+        coEvery { toolRepository.getRisk(any(), any()) } returns ToolRisk.READ_ONLY
+
+        val toolName = "ReadTool"
+        val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName, alwaysConfirm = true)
+        coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool(toolName, "Desc", "Schema"))
+        every { llmEngine.generateResponseStream(any()) } returns
+            flowOf("""{"tool": "ReadTool", "arguments": "args"}""")
+
+        val states = executor.execute(node, "Read", "session-1", "").toList().unwrap()
+
+        // The node's switch ADDS a prompt the policy would not have raised. It
+        // is the only direction it can move the gate in — see the ORing in
+        // `ToolInvocationGate`.
+        assertTrue(
+            "A node set to always confirm must ask even for a READ_ONLY tool",
+            states.any { it is AgentOrchestratorState.WaitingForApproval },
+        )
+    }
+
+    @Test
+    fun `given a node that always confirms then it cannot waive the destructive block`() = runTest {
+        every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.NeverPrompt)
+        every { settingsRepository.blockDestructiveTools } returns flowOf(true)
+        coEvery { toolRepository.getRisk(any(), any()) } returns ToolRisk.DESTRUCTIVE
+
+        val toolName = "DeleteTool"
+        val node = NodeModel("1", NodeType.TOOL, 0f, 0f, toolName = toolName, alwaysConfirm = true)
+        coEvery { toolRepository.getAvailableTools() } returns listOf(AgentTool(toolName, "Desc", "Schema"))
+        every { llmEngine.generateResponseStream(any()) } returns
+            flowOf("""{"tool": "DeleteTool", "arguments": "args"}""")
+
+        val states = executor.execute(node, "Delete", "session-1", "").toList().unwrap()
+
+        // The hard-deny gate runs first and the node has no say in it. Asserted
+        // because the opposite — a node able to talk its way past a user's
+        // block — is the failure this control had to be designed around.
+        val last = states.last() as NodeExecutionResult
+        assertTrue("Expected the block to stand, got: $last", last.error?.contains("blocked by Settings") == true)
+    }
+
+    @Test
     fun `given READ_ONLY tool and global override off when execute then no approval emitted`() = runTest {
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)

@@ -220,4 +220,28 @@ class SystemNodeExecutorTest {
 
         assertNotNull(outputs.lastResult().error)
     }
+
+    @Test
+    fun `given DECOMPOSITION with a subtask cap then only that many subtasks reach the queue`() = runTest {
+        val node = NodeModel("1", NodeType.DECOMPOSITION, 0f, 0f, maxSubtasks = 2)
+        every { llmEngine.generateResponseStream(any(), any(), any()) } returns
+            flowOf("[\"a\", \"b\", \"c\", \"d\"]")
+
+        val outputs = executor.execute(node, "input", "session-1", "prompt", scope = ExecutionScope()).toList()
+
+        // Enforced here rather than asked for in the prompt: a model that
+        // overshoots would otherwise hand the queue more work than the author
+        // allowed, and the prompt is the thing least able to hold a number.
+        assertEquals("[\"a\",\"b\"]", outputs.lastResult().outputText)
+    }
+
+    @Test
+    fun `given DECOMPOSITION with no cap then every produced subtask is kept`() = runTest {
+        val node = NodeModel("1", NodeType.DECOMPOSITION, 0f, 0f)
+        every { llmEngine.generateResponseStream(any(), any(), any()) } returns flowOf("[\"a\", \"b\", \"c\"]")
+
+        val outputs = executor.execute(node, "input", "session-1", "prompt", scope = ExecutionScope()).toList()
+
+        assertEquals("[\"a\",\"b\",\"c\"]", outputs.lastResult().outputText)
+    }
 }

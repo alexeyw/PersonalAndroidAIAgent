@@ -817,7 +817,8 @@
     <string name="knotwork_node_field_timeout_none">none</string>
     <string name="knotwork_node_field_timeout_seconds_value">%1$d s</string>
     <string name="knotwork_node_field_tool">Tool</string>
-    <string name="knotwork_node_field_confirm_override">Confirm policy override</string>
+    <string name="knotwork_node_field_always_confirm">Always ask before this call</string>
+    <string name="knotwork_node_field_always_confirm_help">Adds a confirmation to every call this node makes, whatever the tool\'s risk. It can only add one — a node cannot waive a confirmation the tool\'s risk requires.</string>
     <string name="knotwork_node_field_planning_prompt">Planning prompt</string>
     <string name="knotwork_node_field_max_subtasks">Max subtasks</string>
     <string name="knotwork_node_field_stop_on_error">Stop on error</string>

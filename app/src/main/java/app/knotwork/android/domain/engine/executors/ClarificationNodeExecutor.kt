@@ -141,7 +141,18 @@ class ClarificationNodeExecutor @Inject constructor(
         }
 
         val rawText = accumulatedResponse.toString().trim()
-        val (question, options) = parseClarificationJson(rawText)
+        val (question, generatedOptions) = parseClarificationJson(rawText)
+
+        // The node's own answers win over the model's when the author wrote
+        // any. The model still writes the question — only the choices are
+        // pinned, which is the point: an author who needs a fixed set of
+        // answers to branch on cannot have them re-invented each run.
+        val configuredOptions = node.quickReplies
+            ?.split(",")
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?.takeIf { it.isNotEmpty() }
+        val options = configuredOptions ?: generatedOptions
 
         val request = ClarificationRequest(
             id = UUID.randomUUID().toString(),

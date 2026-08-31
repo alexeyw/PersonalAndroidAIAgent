@@ -44,6 +44,27 @@ import app.knotwork.android.domain.constants.DefaultPrompts
  * results) that the orchestrator concatenates into the node's input on every
  * execution. Defaults to [NodeContextConfig.ALL_ENABLED] so older pipelines
  * keep their default behaviour.
+ * @property fallbackClass INTENT_ROUTER only: the class an answer matching no
+ * declared class routes to. `null` keeps the historical behaviour — the first
+ * outgoing edge in storage order — because changing that for every already-saved
+ * graph would be a silent re-route.
+ * @property quickReplies CLARIFICATION only: comma-separated answers offered as
+ * chips under the question, replacing the ones the model would have produced.
+ * `null` or blank leaves the model's own options in place.
+ * @property alwaysConfirm TOOL only: `true` asks for approval on every call
+ * through this node, whatever the tool's risk. `null` / `false` inherits the
+ * tool's risk and the user's settings.
+ *
+ * Deliberately one-directional. The per-node control can only make the gate
+ * **stricter**, never weaker, for the same reason the app-wide
+ * `requiresUserConfirmation` can: a pipeline file is a document that can be
+ * shared, and a node able to declare "do not ask about this destructive call"
+ * would let a document written by someone else walk past the gate.
+ * @property maxSubtasks DECOMPOSITION only: how many sub-tasks are kept from the
+ * generated list. `null` keeps every one the model produced.
+ * @property stopOnError QUEUE_PROCESSOR only: `true` (and `null`, the historical
+ * behaviour) fails the whole run on the first failing item; `false` records the
+ * failure as that item's result and carries on with the next one.
  * @property configJson Optional JSON payload encoding the per-type
  * [app.knotwork.design.components.pipelineeditor.NodeConfig] populated from
  * the `NodeConfigSheet`. `null` for older pipelines without per-node config;
@@ -68,6 +89,11 @@ data class NodeModel(
     val systemPrompt: String? = DefaultPrompts.getDefaultPromptForNodeType(type),
     val cloudProvider: String? = null,
     val clarificationTimeoutMs: Long? = null,
+    val fallbackClass: String? = null,
+    val quickReplies: String? = null,
+    val alwaysConfirm: Boolean? = null,
+    val maxSubtasks: Int? = null,
+    val stopOnError: Boolean? = null,
     val contextConfig: NodeContextConfig = NodeContextConfig.ALL_ENABLED,
     val configJson: String? = null,
 )

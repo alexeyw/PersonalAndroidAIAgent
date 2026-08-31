@@ -10,6 +10,7 @@ import app.knotwork.android.domain.engine.stuck.RunStepObservation
 import app.knotwork.android.domain.engine.stuck.StuckVerdict
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ChatHistorySummary
+import app.knotwork.android.domain.models.ConnectionModel
 import app.knotwork.android.domain.models.ConsoleEvent
 import app.knotwork.android.domain.models.ConsoleEventType
 import app.knotwork.android.domain.models.EngineImageInput
@@ -998,6 +999,28 @@ constructor(
                     ConsoleEventType.Error,
                     "${currentNode.type.name}: ${nodeResult?.error}",
                 )
+                // A queue whose author turned `stopOnError` off keeps going: the
+                // failure becomes this item's result and the next item starts.
+                // Opt-in on purpose — `null` and `true` both fail the run, which
+                // is what every pipeline saved before this field did.
+                //
+                // A typed cause is never survivable, whatever the switch says. A
+                // `PIPELINE` node forwards a sub-pipeline's ceiling breach or
+                // stuck-detector verdict through this same field, and those are
+                // not "this subtask failed" — they are the run being out of
+                // budget or going in circles. Carrying on would spend the very
+                // budget the breach reported as gone.
+                val failedQueueId = activeQueueProcessorId
+                val queueNode = failedQueueId?.let { id -> graph.nodes.find { it.id == id } }
+                val survivable = nodeResult?.terminationReason == null
+                if (survivable && failedQueueId != null && queueNode?.stopOnError == false) {
+                    queueResults.add("Subtask failed: ${nodeResult?.error}")
+                    val step = stepQueue(graph, failedQueueId, activeQueue, queueResults)
+                    if (step.queueFinished) activeQueueProcessorId = null
+                    currentInputText = step.inputText
+                    currentNode = step.node
+                    continue
+                }
                 // A `PIPELINE` node forwards its sub-pipeline's typed cause here.
                 // Re-emitting it is what keeps a ceiling breach one nesting
                 // level down from settling the root run as an ordinary failure.
@@ -1239,36 +1262,14 @@ constructor(
                 estimatedTotalSteps = stepCount + countNodesOnPath(nextNode, graph)
             }
 
-            if (activeQueueProcessorId != null && (nextNode == null || nextNode.type == NodeType.QUEUE_PROCESSOR)) {
+            val activeQueueId = activeQueueProcessorId
+            if (activeQueueId != null && (nextNode == null || nextNode.type == NodeType.QUEUE_PROCESSOR)) {
                 queueResults.add(currentInputText)
-
-                val edges = graph.connections.filter { it.sourceNodeId == activeQueueProcessorId }
-                val itemNodeId = edges.find { it.label.equals("Item", ignoreCase = true) }?.targetNodeId
-                    ?: edges.firstOrNull()?.targetNodeId
-                val doneNodeId = edges.find { it.label.equals("Done", ignoreCase = true) }?.targetNodeId
-
-                if (activeQueue.isNotEmpty() && itemNodeId != null) {
-                    val nextItem = activeQueue.removeAt(0)
-                    val contextStr = queueResults.mapIndexed { i, res ->
-                        "Result of Subtask ${i + 1}:\n$res"
-                    }.joinToString("\n\n")
-                    val subtaskInstruction = DefaultPrompts.QueueProcessor.SUBTASK_INSTRUCTION
-                    if (contextStr.isNotEmpty()) {
-                        currentInputText =
-                            "PREVIOUS RESULTS CONTEXT:\n$contextStr\n\n---\n\n$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
-                    } else {
-                        currentInputText = "$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
-                    }
-                    currentNode = graph.nodes.find { it.id == itemNodeId }
-                    continue
-                } else {
-                    currentInputText =
-                        "Queue execution completed.\nResults:\n" +
-                        queueResults.mapIndexed { i, res -> "${i + 1}. $res" }.joinToString("\n")
-                    activeQueueProcessorId = null
-                    currentNode = graph.nodes.find { it.id == doneNodeId }
-                    continue
-                }
+                val step = stepQueue(graph, activeQueueId, activeQueue, queueResults)
+                if (step.queueFinished) activeQueueProcessorId = null
+                currentInputText = step.inputText
+                currentNode = step.node
+                continue
             }
 
             currentNode = nextNode
@@ -1374,10 +1375,18 @@ constructor(
                 // legacy fall-through so an unlabelled pass-through still routes.
                 else -> edges.firstOrNull()?.targetNodeId
             }
-        } else if (currentNode.type == NodeType.INTENT_ROUTER && routingKey != null) {
-            val matchedEdge = edges.find { it.label?.equals(routingKey, ignoreCase = true) == true }
-                ?: edges.find { !it.label.isNullOrBlank() && routingKeyContainsLabelAsWord(routingKey, it.label) }
-            matchedEdge?.targetNodeId ?: edges.firstOrNull()?.targetNodeId
+        } else if (currentNode.type == NodeType.INTENT_ROUTER) {
+            // `routingKey == null` is the router's real failure mode, not an
+            // absent one: the structured gate constrains the answer to the
+            // labelled edges, so a *successful* verdict always names one of
+            // them. What actually goes unrouted is a gate that gave up after its
+            // repair attempts — which is why the fallback has to cover the null
+            // case, and why it was reachable by nothing when it did not.
+            val matchedEdge = routingKey?.let { key ->
+                edges.find { it.label?.equals(key, ignoreCase = true) == true }
+                    ?: edges.find { !it.label.isNullOrBlank() && routingKeyContainsLabelAsWord(key, it.label) }
+            }
+            matchedEdge?.targetNodeId ?: unmatchedRouterTarget(currentNode, edges)
         } else if (currentNode.type == NodeType.EVALUATION && routingKey != null) {
             // EVALUATION emits a Pass / Retry / Fail verdict as the routing key;
             // route to the edge whose label matches the verdict, falling back to
@@ -1391,6 +1400,95 @@ constructor(
         val edgeLabel = edges.find { it.targetNodeId == targetNodeId }?.label ?: "null"
         Timber.tag("PipelineDebug").d("[ROUTE] from=${currentNode.id} label=$edgeLabel -> to=$targetNodeId")
         return targetNodeId
+    }
+
+    /**
+     * One QUEUE_PROCESSOR iteration boundary: the node the walk moves to next,
+     * and the input it carries there.
+     *
+     * @property node Next node, or `null` when the `Done` edge is unwired.
+     * @property inputText Input for [node].
+     * @property queueFinished `true` when the queue is exhausted and the walk is
+     *   leaving it by the `Done` edge — the caller clears its active-queue
+     *   cursor on that.
+     */
+    private data class QueueStep(val node: NodeModel?, val inputText: String, val queueFinished: Boolean)
+
+    /**
+     * Ends one QUEUE_PROCESSOR iteration and begins the next, or leaves the
+     * queue by its `Done` edge when nothing is left.
+     *
+     * Extracted from the walk when a second caller appeared: an item failing
+     * inside a queue whose author set `stopOnError = false` has to advance to
+     * the next item exactly as a successful one does. Written as a member
+     * function taking what it needs rather than a closure over the walk's
+     * locals, because capturing the walk's `currentNode` would cost every smart
+     * cast in the loop — a large, unrelated edit in the app's most load-bearing
+     * function.
+     *
+     * @param graph The running graph.
+     * @param queueProcessorId Id of the QUEUE_PROCESSOR that owns the loop.
+     * @param remainingItems Items not yet executed; the next one is **removed**.
+     * @param results Results accumulated so far, rendered into the next input.
+     * @return Where the walk goes next.
+     */
+    private fun stepQueue(
+        graph: PipelineGraph,
+        queueProcessorId: String,
+        remainingItems: MutableList<String>,
+        results: List<String>,
+    ): QueueStep {
+        val edges = graph.connections.filter { it.sourceNodeId == queueProcessorId }
+        val itemNodeId = edges.find { it.label.equals("Item", ignoreCase = true) }?.targetNodeId
+            ?: edges.firstOrNull()?.targetNodeId
+        val doneNodeId = edges.find { it.label.equals("Done", ignoreCase = true) }?.targetNodeId
+
+        if (remainingItems.isEmpty() || itemNodeId == null) {
+            val summary = "Queue execution completed.\nResults:\n" +
+                results.mapIndexed { i, res -> "${i + 1}. $res" }.joinToString("\n")
+            return QueueStep(graph.nodes.find { it.id == doneNodeId }, summary, queueFinished = true)
+        }
+
+        val nextItem = remainingItems.removeAt(0)
+        val contextStr = results.mapIndexed { i, res -> "Result of Subtask ${i + 1}:\n$res" }.joinToString("\n\n")
+        val subtaskInstruction = DefaultPrompts.QueueProcessor.SUBTASK_INSTRUCTION
+        val input = if (contextStr.isNotEmpty()) {
+            "PREVIOUS RESULTS CONTEXT:\n$contextStr\n\n---\n\n$subtaskInstruction" +
+                "\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
+        } else {
+            "$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
+        }
+        return QueueStep(graph.nodes.find { it.id == itemNodeId }, input, queueFinished = false)
+    }
+
+    /**
+     * Where an INTENT_ROUTER sends a run it could not route.
+     *
+     * Reached when the structured gate gave up after its repair attempts (no
+     * verdict at all) or, rarely, when a verdict names no wired edge. The first
+     * is the common one: the gate constrains the model to the labelled edges, so
+     * a successful answer already names one.
+     *
+     * With a [NodeModel.fallbackClass] set, the run takes the edge labelled with
+     * it — and **terminates** when no such edge is wired, for the same reason
+     * IF_CONDITION does above: an author who named a fallback and then failed to
+     * connect it is better served by "terminated without OUTPUT" than by the
+     * wrong branch running on a verdict nobody chose.
+     *
+     * With no fallback class — every pipeline saved before this field existed —
+     * the historical first-edge-in-storage-order behaviour is kept. Changing it
+     * would silently re-route graphs whose authors never made this decision, and
+     * the workaround those authors were told to use (put the fallback branch
+     * first) depends on exactly that behaviour.
+     *
+     * @param node The routing node.
+     * @param edges Its outgoing connections.
+     * @return The next node id, or `null` to terminate the branch.
+     */
+    private fun unmatchedRouterTarget(node: NodeModel, edges: List<ConnectionModel>): String? {
+        val fallback = node.fallbackClass?.takeIf { it.isNotBlank() }
+            ?: return edges.firstOrNull()?.targetNodeId
+        return edges.find { it.label?.equals(fallback, ignoreCase = true) == true }?.targetNodeId
     }
 
     /**
