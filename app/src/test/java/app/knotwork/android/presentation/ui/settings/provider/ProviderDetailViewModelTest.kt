@@ -186,6 +186,39 @@ class ProviderDetailViewModelTest {
     }
 
     @Test
+    fun `given a base url with no scheme when updateOllamaBaseUrl then it is flagged invalid`() = runTest {
+        // Found on the device. The check used to be `isBlank()` alone, so a bare
+        // address was accepted in silence — and because `CleartextPolicy` treats
+        // anything without an `http://` prefix as *not cleartext*, no consent
+        // was asked for either. The value was stored, looked right, and failed
+        // at request time.
+        viewModel.updateOllamaBaseUrl("192.168.1.24")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.ollamaBaseUrlInvalid)
+    }
+
+    @Test
+    fun `given a host with a port but no scheme when updateOllamaBaseUrl then it is flagged invalid`() = runTest {
+        // The shape a person is most likely to type, and the one that reads most
+        // like a finished URL.
+        viewModel.updateOllamaBaseUrl("192.168.1.24:11434")
+        advanceUntilIdle()
+
+        assertTrue(viewModel.uiState.value.ollamaBaseUrlInvalid)
+    }
+
+    @Test
+    fun `given an https base url when updateOllamaBaseUrl then it is accepted`() = runTest {
+        // The validator asks for a parseable scheme and host, not for cleartext:
+        // a TLS-terminated Ollama behind a reverse proxy is a legitimate setup.
+        viewModel.updateOllamaBaseUrl("https://ollama.example.net")
+        advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.ollamaBaseUrlInvalid)
+    }
+
+    @Test
     fun `given valid base url when updateOllamaBaseUrl then clears invalid and persists value`() = runTest {
         viewModel.updateOllamaBaseUrl("http://localhost:11434")
         advanceUntilIdle()

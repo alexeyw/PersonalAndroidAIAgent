@@ -426,8 +426,22 @@ class ProviderDetailViewModel @Inject constructor(
         viewModelScope.launch { apiKeyRepository.setDeepSeekModel(value.takeIf { it.isNotBlank() }) }
     }
 
+    /**
+     * Persists the Ollama base URL and flags whether it can be used.
+     *
+     * The check used to be `isBlank()` alone, so the only invalid value was an
+     * empty field: `192.168.1.24` was accepted silently, and — because
+     * `CleartextPolicy.classify` treats anything without an `http://` prefix as
+     * *not cleartext* — no consent was asked for either. The address was stored,
+     * looked fine, and failed at request time. `hostOf` returns `null` exactly
+     * when there is no parseable scheme and host, which is the same condition
+     * every downstream gate applies.
+     *
+     * @param value The URL as typed; blank clears the setting.
+     */
     fun updateOllamaBaseUrl(value: String) {
-        _uiState.update { it.copy(ollamaBaseUrl = value, ollamaBaseUrlInvalid = value.isBlank()) }
+        val unusable = value.isBlank() || CleartextPolicy.hostOf(value) == null
+        _uiState.update { it.copy(ollamaBaseUrl = value, ollamaBaseUrlInvalid = unusable) }
         viewModelScope.launch { apiKeyRepository.setOllamaBaseUrl(value.takeIf { it.isNotBlank() }) }
     }
 
