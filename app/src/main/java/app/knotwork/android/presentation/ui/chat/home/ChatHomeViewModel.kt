@@ -309,6 +309,7 @@ constructor(
         settingsRepository = settingsRepository,
         pipelineRepository = pipelineRepository,
         chatRepository = chatRepository,
+        pipelineRunRepository = pipelineRunRepository,
         sessions = { threads.sessionsSnapshot() },
     )
 
@@ -1051,7 +1052,14 @@ constructor(
                         // surface can render a sentence for it. `state.message`
                         // is the diagnostic when a reason is present, and is
                         // shown verbatim only when it is not.
-                        visual = ChatHomeUiState.Error(state.message, reason = state.reason),
+                        // The run settled, so `PipelineRunRepository.finishRun`
+                        // has already written this outcome into the thread. The
+                        // tile must not repeat it — see `ChatHomeUiState.Error`.
+                        visual = ChatHomeUiState.Error(
+                            state.message,
+                            reason = state.reason,
+                            announcedInThread = true,
+                        ),
                         // The run is over; an advisory about how it was going
                         // has no reader once the outcome is on screen.
                         runNotice = null,

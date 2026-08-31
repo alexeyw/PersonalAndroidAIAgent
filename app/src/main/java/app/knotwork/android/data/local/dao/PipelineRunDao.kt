@@ -5,6 +5,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import app.knotwork.android.data.local.models.PipelineRunEntity
+import app.knotwork.android.data.local.models.RunChatIdentityProjection
 import app.knotwork.android.data.local.models.RunSpendProjection
 import kotlinx.coroutines.flow.Flow
 
@@ -153,6 +154,17 @@ interface PipelineRunDao {
      */
     @Query("SELECT * FROM pipeline_runs WHERE id = :runId")
     suspend fun getRun(runId: String): PipelineRunEntity?
+
+    /**
+     * Returns the session and parent of [runId], or `null` when no such row
+     * exists. Two-column projection, for the same reason [getSpend] is one:
+     * read on every terminal transition, to decide whether the run leaves a line
+     * in a chat and in which one.
+     *
+     * @param runId Id of the run to inspect.
+     */
+    @Query("SELECT sessionId, parentRunId FROM pipeline_runs WHERE id = :runId")
+    suspend fun getRunChatIdentity(runId: String): RunChatIdentityProjection?
 
     /**
      * Returns just the [PipelineRunEntity.origin] discriminator of [runId], or

@@ -327,6 +327,7 @@ class BackgroundAutonomyCycleIntegrationTest {
             triggerJournal,
             mockk(relaxed = true),
             mockk(relaxed = true),
+            mockk(relaxed = true),
         )
         val traceRepository = RunTraceRepositoryImpl(database.traceStepDao())
             .apply { dispatcher = testDispatcher }

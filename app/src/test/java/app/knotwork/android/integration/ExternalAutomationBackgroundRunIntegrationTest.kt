@@ -413,6 +413,7 @@ class ExternalAutomationBackgroundRunIntegrationTest {
             triggerJournal,
             externalJournal,
             externalCallback,
+            mockk(relaxed = true),
         )
         val traceRepository = RunTraceRepositoryImpl(database.traceStepDao())
             .apply { dispatcher = testDispatcher }

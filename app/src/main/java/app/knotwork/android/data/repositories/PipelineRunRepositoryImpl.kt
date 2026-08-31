@@ -14,6 +14,7 @@ import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.TriggerJournalRepository
 import app.knotwork.android.domain.repositories.UsageTelemetryRepository
 import app.knotwork.android.domain.services.ExternalAutomationCallbackNotifier
+import app.knotwork.android.domain.services.RunOutcomeAnnouncer
 import app.knotwork.android.domain.usecases.triggerRunOutcomeForTerminal
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -55,6 +56,7 @@ class PipelineRunRepositoryImpl @Inject constructor(
     private val triggerJournal: TriggerJournalRepository,
     private val externalAutomationJournal: ExternalAutomationJournalRepository,
     private val externalAutomationCallback: ExternalAutomationCallbackNotifier,
+    private val runOutcomeAnnouncer: RunOutcomeAnnouncer,
 ) : PipelineRunRepository {
 
     /**
@@ -141,6 +143,7 @@ class PipelineRunRepositoryImpl @Inject constructor(
         if (rowsTransitioned > 0) {
             recordRunTelemetry(runId, status)
             recordOriginBoundOutcome(runId, status, errorMessage, reason)
+            announceOutcomeInChat(runId, status, errorMessage, reason)
         }
     }
 
@@ -178,6 +181,37 @@ class PipelineRunRepositoryImpl @Inject constructor(
      * Best-effort throughout: the origin read is absorbed and each store absorbs
      * its own storage failures, so this can never disturb the run it observes.
      */
+    /**
+     * Leaves a line in the run's chat when it ended without an answer.
+     *
+     * Inside the `rowsTransitioned > 0` guard with the other two terminal
+     * side-effects, and for the same reason: a duplicate or racing `finishRun`
+     * on an already-terminal run is a DB no-op, and an announcement outside the
+     * guard would put a second identical line in the conversation. That race is
+     * not hypothetical — `ParkedRunResumer.failPark` is reachable both from the
+     * user's response and from the expiry pass.
+     *
+     * Nested sub-pipeline children are skipped: a child shares its parent's
+     * session, and its failure already reaches the user as the root's.
+     *
+     * @param runId The run that just transitioned.
+     * @param status Terminal status it settled at.
+     * @param errorMessage Diagnostic written to the record.
+     * @param reason Typed cause, when the engine classified the stop.
+     */
+    private suspend fun announceOutcomeInChat(
+        runId: String,
+        status: PipelineRunStatus,
+        errorMessage: String?,
+        reason: RunTerminationReason?,
+    ) {
+        val identity = absorbing("getRunChatIdentity") {
+            withContext(Dispatchers.IO) { pipelineRunDao.getRunChatIdentity(runId) }
+        } ?: return
+        if (identity.parentRunId != null) return
+        runOutcomeAnnouncer.announce(identity.sessionId, status, reason, errorMessage)
+    }
+
     private suspend fun recordOriginBoundOutcome(
         runId: String,
         status: PipelineRunStatus,

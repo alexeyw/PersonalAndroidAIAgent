@@ -174,4 +174,19 @@
     <string name="run_termination_notification_body_step_ceiling" tools:ignore="PluralsCandidate">“%1$s” stopped at its step limit, after %2$,d steps.</string>
     <string name="run_termination_notification_body_token_ceiling" tools:ignore="PluralsCandidate">“%1$s” stopped at its token limit, after %2$,d tokens.</string>
 
+
+    <!--
+        Chat-thread lines for a run that ended without an answer. Written into
+        the thread by `RunOutcomeAnnouncer` so the outcome survives the app
+        being backgrounded; the protective stops reuse the
+        `run_termination_body_*` vocabulary above rather than adding wordings.
+    -->
+    <!-- The run failed and the engine did not classify why; %1$s is its diagnostic. -->
+    <string name="run_outcome_chat_failed_with_diagnostic">This run stopped before it could answer: %1$s</string>
+    <!-- The run failed with nothing concrete to report. -->
+    <string name="run_outcome_chat_failed">This run stopped before it could answer.</string>
+    <!-- The run was cancelled — the user stopped it, or the app was killed mid-run. -->
+    <string name="run_outcome_chat_cancelled">This run was stopped before it could answer.</string>
+    <!-- The run was interrupted and left unfinished. -->
+    <string name="run_outcome_chat_interrupted">This run was interrupted and did not finish.</string>
 </resources>

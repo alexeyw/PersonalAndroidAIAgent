@@ -270,10 +270,25 @@ data class ChatHomeViewState(
      * state — and archiving is a user decision that only the user reverses.
      */
     val archivedReadOnly: Boolean = false,
+    /**
+     * `true` when the failure is already written into the conversation as a
+     * message, so this surface owes the user no tile of its own.
+     *
+     * The invariant below is about the user being told, not about a particular
+     * widget: a run settles its outcome into the thread whether or not anyone
+     * was watching, and a tile repeating a line two rows above it is the
+     * duplication this flag exists to end. A failure with no run behind it — a
+     * blocked attachment, a model that would not load — has no such line, and
+     * still has to carry [errorMessage].
+     */
+    val explainedInThread: Boolean = false,
 ) {
     init {
-        require((visualState == ChatHomeVisualState.Error) == (errorMessage != null || termination != null)) {
-            "the Error visual must carry exactly one explanation: errorMessage or termination"
+        require(
+            (visualState == ChatHomeVisualState.Error) ==
+                (errorMessage != null || termination != null || explainedInThread),
+        ) {
+            "the Error visual must be explained somewhere: errorMessage, termination, or the thread itself"
         }
         require(errorMessage == null || termination == null) {
             "a stopped run is either an untyped failure or a typed termination, never both"
@@ -451,7 +466,6 @@ data class ChatTerminationUi(
     val tone: RunTerminationToneUi,
     val toneLabel: String,
     val title: String,
-    val body: String,
     val banner: String,
     val meter: String? = null,
     val actionLabel: String? = null,

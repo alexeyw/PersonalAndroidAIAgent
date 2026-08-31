@@ -179,10 +179,20 @@ now built on the Knotwork design system and shows, top to bottom:
   name beneath it (e.g. *Gemma 2 · 2B*), a menu icon on the left that
   opens the thread drawer, and an overflow menu on the right. The model
   name is a status line, not a control — switch models under
-  **More → Models**.
+  **More → Models**. The bar also names the chat's pipeline: the one it
+  is bound to if you picked one, and otherwise the pipeline that
+  actually produced the conversation you are reading — which is what a
+  chat opened by a trigger, by a scheduled task or by external
+  automation shows, since those carry no binding of their own.
 - A **message list** with user and assistant bubbles, inline tool
   invocations, and any clarification or HITL confirmation card the
-  agent surfaced for the current run.
+  agent surfaced for the current run. A run that ends **without an
+  answer** — it failed, you stopped it, an approval window elapsed, or
+  the app was killed mid-run — leaves a line in the conversation saying
+  so. The line is part of the history, so it is still there when you
+  come back to a chat whose run ended while the app was in the
+  background; you will not find a message of yours sitting there with
+  nothing after it.
 - A pinned **composer** at the bottom — type a message or dictate with
   the microphone. The send button morphs into a **stop** button while
   the agent is generating, and into a **retry** button after an error.

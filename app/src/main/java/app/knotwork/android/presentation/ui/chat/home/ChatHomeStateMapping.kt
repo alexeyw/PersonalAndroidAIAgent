@@ -192,8 +192,9 @@ fun ChatHomeScreenState.toViewState(
                 // composer instead — the error banner is destructive-red, which
                 // would have contradicted the tile two inches above it.
                 composerState = untypedComposerState(visual.message, termination),
-                errorMessage = untypedErrorMessage(visual.message, termination),
+                errorMessage = untypedErrorMessage(visual.message, termination, visual.announcedInThread),
                 termination = termination?.toCatalog(resolveText),
+                explainedInThread = visual.announcedInThread,
                 pipelineName = resolvedPipelineName,
                 tokensUsed = tokens.used,
                 tokensMax = tokens.max,
@@ -257,17 +258,31 @@ private fun untypedComposerState(message: String, termination: RunTerminationCop
     if (termination == null) ComposerState.Error(message) else ComposerState.Idle
 
 /**
- * The verbatim failure text, likewise reserved for an untyped failure.
+ * The verbatim failure text, reserved for an untyped failure the thread does not
+ * already account for.
  *
- * For a typed stop this string is the diagnostic that lands in the run record,
- * and showing it would put `step-ceiling: 15/15 steps` in front of a person.
+ * Two exclusions, for different reasons. For a **typed** stop this string is the
+ * diagnostic that lands in the run record, and showing it would put
+ * `step-ceiling: 15/15 steps` in front of a person. For a failure a settled run
+ * has **already announced**, the sentence is in the conversation a few lines up,
+ * and a tile repeating it is the duplication this surface was asked to stop —
+ * the composer keeps its Retry either way.
+ *
+ * What survives both is the case with no run behind it at all — a blocked
+ * attachment, a model that would not load — where this text is the only account
+ * the user gets.
  *
  * @param message The failure description or diagnostic.
  * @param termination The typed cause, when there was one.
- * @return The text to render, or `null` when the cause is typed.
+ * @param announcedInThread Whether a settled run already wrote the outcome into
+ *   the conversation.
+ * @return The text to render, or `null` when something else already says it.
  */
-private fun untypedErrorMessage(message: String, termination: RunTerminationCopy?): String? =
-    message.takeIf { termination == null }
+private fun untypedErrorMessage(
+    message: String,
+    termination: RunTerminationCopy?,
+    announcedInThread: Boolean,
+): String? = message.takeIf { termination == null && !announcedInThread }
 
 /**
  * Projects the live run advisory onto the catalog's strip model.
@@ -290,7 +305,11 @@ private fun RunTerminationCopy.toCatalog(resolveText: (UiText) -> String): ChatT
     tone = tone.toCatalog(),
     toneLabel = resolveText(UiText.Resource(tone.labelRes)),
     title = resolveText(title),
-    body = resolveText(body),
+    // `body` is deliberately not projected. It is the sentence the run wrote
+    // into the conversation as it settled, so the tile would be repeating a line
+    // sitting a few rows above it in the same list. `RunTerminationCopy` still
+    // carries it — the notifications and the composer banner resolve the same
+    // value, and a second wording is what that type exists to prevent.
     // Its own short clause, not the tile's sentence: the strip is clamped to
     // two lines, and one string trying to serve both is what got the copy cut
     // in half at large font scales.

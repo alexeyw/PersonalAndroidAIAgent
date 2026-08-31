@@ -1498,6 +1498,53 @@ class ChatHomeViewModelTest {
     }
 
     @Test
+    fun `pipelineName names the run's pipeline when the session is unbound`() = runTest(testDispatcher) {
+        // The reported defect. A session created by a trigger, by the scheduler
+        // or by external automation carries no binding — deliberately, so a
+        // follow-up typed into it uses the default — and the title therefore
+        // named the default above a conversation another pipeline produced.
+        val sessionId = "session-triggered"
+        seedSavedSession(sessionId)
+        every { pipelineRunRepository.observeRunsForSession(sessionId) } returns
+            flowOf(listOf(runRecord(sessionId, PipelineRunStatus.COMPLETED, pipelineId = "p2")))
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        pipelinesFlow.value = listOf(
+            PipelineGraph(id = "p1", name = "Default"),
+            PipelineGraph(id = "p2", name = "Nightly digest"),
+        )
+        defaultPipelineIdFlow.value = "p1"
+        advanceUntilIdle()
+
+        assertEquals("Nightly digest", viewModel.state.value.pipelineName)
+    }
+
+    @Test
+    fun `pipelineName keeps the binding even when the last run used another pipeline`() = runTest(testDispatcher) {
+        // The binding is the user's own choice — picking a pipeline opens a new
+        // chat carrying it — so a run must never overrule it. Without this the
+        // title of a bound chat would drift to whatever last happened to run.
+        val sessionId = "session-bound"
+        savedSessionIdFlow.value = sessionId
+        sessionsFlow.value = listOf(
+            ChatSession(id = sessionId, name = "Existing", updatedAt = 0, pipelineId = "p1"),
+        )
+        every { pipelineRunRepository.observeRunsForSession(sessionId) } returns
+            flowOf(listOf(runRecord(sessionId, PipelineRunStatus.COMPLETED, pipelineId = "p2")))
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        pipelinesFlow.value = listOf(
+            PipelineGraph(id = "p1", name = "Bound"),
+            PipelineGraph(id = "p2", name = "Nightly digest"),
+        )
+        advanceUntilIdle()
+
+        assertEquals("Bound", viewModel.state.value.pipelineName)
+    }
+
+    @Test
     fun `pipelineName is null when session is unbound and no default is marked`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()

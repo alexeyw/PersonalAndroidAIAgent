@@ -3,12 +3,18 @@ package app.knotwork.android.presentation.ui.chat.home
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
+import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
@@ -36,6 +42,9 @@ import kotlinx.coroutines.launch
  * @property settingsRepository Source of the user-set default pipeline id.
  * @property pipelineRepository Source of the pipeline library.
  * @property chatRepository Rebinds a session to the default when its pipeline is gone.
+ * @property pipelineRunRepository Source of the session's runs, used to name the
+ *   pipeline that actually produced what is on screen when the session carries
+ *   no binding of its own.
  * @property sessions Provider of the live session cache (owned by the ViewModel).
  */
 class ChatHomePipelineBindingDelegate(
@@ -44,6 +53,7 @@ class ChatHomePipelineBindingDelegate(
     private val settingsRepository: SettingsRepository,
     private val pipelineRepository: PipelineRepository,
     private val chatRepository: ChatRepository,
+    private val pipelineRunRepository: PipelineRunRepository,
     private val sessions: () -> List<ChatSession>,
 ) {
 
@@ -61,10 +71,18 @@ class ChatHomePipelineBindingDelegate(
     private var availablePipelinesObserved: Boolean = false
     private var defaultPipelineId: String? = null
 
-    /** Launches the pipeline-library and default-pipeline observers. Called once from the ViewModel `init`. */
+    /**
+     * Pipeline of the most recent run of the active session, or `null` when it
+     * has never run. Read only for sessions that carry no binding of their own —
+     * see [resolveActivePipeline].
+     */
+    private var lastRunPipelineId: String? = null
+
+    /** Launches the pipeline-library, default-pipeline and session-run observers. Called once from the ViewModel `init`. */
     fun startObservers() {
         observeAvailablePipelines()
         observeDefaultPipelineId()
+        observeActiveSessionRuns()
     }
 
     /**
@@ -86,6 +104,42 @@ class ChatHomePipelineBindingDelegate(
                 availablePipelinesObserved = true
                 handleDeletedBoundPipeline(summaries)
             }
+        }
+    }
+
+    /**
+     * Tracks the pipeline of the active session's most recent run.
+     *
+     * A session created by a trigger or by the scheduler deliberately carries no
+     * pipeline binding — `FireTriggerUseCase` documents why: the session is a
+     * result log, so a follow-up the user types into it should use the
+     * application default rather than a stale copy of whatever the trigger ran.
+     * External automation goes further and funnels every request into one fixed
+     * session, which therefore cannot have a binding right for all of them.
+     *
+     * The consequence was a title naming the default pipeline above a
+     * conversation produced by a different one. Reading the run rather than
+     * rebinding the session fixes what is displayed without touching what runs
+     * next — the two really are different questions here.
+     *
+     * Restarted per session; the runs flow is ordered most-recent-first.
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun observeActiveSessionRuns() {
+        scope.launch {
+            state
+                .map { it.thread.currentSessionId }
+                .distinctUntilChanged()
+                // Blank is the window before a session is chosen, on every cold
+                // start. Querying for it would be a guaranteed-empty read.
+                .filter { it.isNotBlank() }
+                .flatMapLatest { sessionId ->
+                    pipelineRunRepository.observeRunsForSession(sessionId)
+                }
+                .collect { runs ->
+                    lastRunPipelineId = runs.firstOrNull()?.pipelineId
+                    state.update { pipelineNameRefreshed(it) }
+                }
         }
     }
 
@@ -174,7 +228,15 @@ class ChatHomePipelineBindingDelegate(
         val session = sessions.firstOrNull { it.id == currentSessionId }
         val boundId = session?.pipelineId
         val boundMatch = boundId?.let { id -> summaries.firstOrNull { it.id == id } }
+        // The binding comes first because it is the user's own choice: picking a
+        // pipeline opens a NEW chat carrying it, so a bound session's title must
+        // never be overruled by a run.
         if (boundMatch != null) return boundMatch
+        // Unbound: name the pipeline that produced what is on screen. This is the
+        // trigger / scheduler / external-automation case, where the session has
+        // no binding by design and the default is not what ran.
+        val lastRunMatch = lastRunPipelineId?.let { id -> summaries.firstOrNull { it.id == id } }
+        if (lastRunMatch != null) return lastRunMatch
         return defaultPipelineId?.let { id -> summaries.firstOrNull { it.id == id } }
     }
 }
