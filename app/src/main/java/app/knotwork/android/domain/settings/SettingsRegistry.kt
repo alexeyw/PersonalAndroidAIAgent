@@ -230,7 +230,7 @@ object SettingsRegistry {
     fun allEntries(): List<SettingEntry> = categories.flatMap { it.entries }
 
     /**
-     * The six cross-category rows surfaced inline on the hub. Returned in
+     * The five cross-category rows surfaced inline on the hub. Returned in
      * category display order.
      */
     fun hubBasicEntries(): List<SettingEntry> = allEntries().filter { it.hubBasic }

@@ -120,7 +120,7 @@ data class SettingsNavActions(
     val onOpenRunLimits: () -> Unit,
 )
 
-/** Settings hub: search field, the six inline Basic controls and the category list. */
+/** Settings hub: search field, the five inline Basic controls and the category list. */
 @Composable
 fun SettingsHubScreen(viewModel: SettingsViewModel, nav: SettingsNavActions) {
     val uiState by viewModel.uiState.collectAsState()

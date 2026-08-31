@@ -122,8 +122,9 @@ private val HUB_CATEGORIES: List<HubCategoryMeta> = listOf(
 )
 
 /**
- * Stateless settings hub: a top-bar subtitle, an inline "Basic" block of the six
- * most-touched cross-category controls, and the eight category navigation rows.
+ * Stateless settings hub: a top-bar subtitle, an inline "Basic" block of the
+ * five most-touched cross-category controls, and the eight category navigation
+ * rows.
  *
  * The search field that the design reserves at the top of the hub is wired in a
  * later task (settings search); it is intentionally omitted here so the hub ships
@@ -410,9 +411,9 @@ private fun HubBasicBlock(state: SettingsHubViewState, callbacks: SettingsCallba
     ) {
         SettingsSectionLabel(text = stringResource(R.string.knotwork_settings_hub_basic))
         // Every hub row is anchored, exactly like a category row. Without this
-        // the six controls most people ever touch were the six with no
-        // explanation available — the hub was the one screen where the whole
-        // feature was invisible.
+        // the controls most people ever touch were the ones with no explanation
+        // available — the hub was the one screen where the whole feature was
+        // invisible.
         SettingsAnchor(anchorKey = SettingsRowAnchors.SYSTEM_PROMPT_PREFIX) {
             NavLinkRow(
                 icon = AppIcons.Spark,

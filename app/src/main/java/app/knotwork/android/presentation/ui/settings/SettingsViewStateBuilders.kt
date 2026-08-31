@@ -58,7 +58,7 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import kotlin.math.roundToInt
 
-/** Builds the settings hub state (subtitle, the six inline Basic controls, restart, search). */
+/** Builds the settings hub state (subtitle, the five inline Basic controls, restart, search). */
 @Composable
 internal fun buildHubViewState(uiState: SettingsUiState): SettingsHubViewState = SettingsHubViewState(
     loading = uiState.identity == null,

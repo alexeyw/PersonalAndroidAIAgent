@@ -131,7 +131,7 @@ data class SettingsHubViewState(
  *
  * @property systemInstructions Basic system-instructions textarea slice.
  * @property advancedSliders Sampling + voice sliders (temperature, top-K, top-P,
- *   repetition penalty, max context, voice length), all Advanced.
+ *   max context, voice length), all Advanced.
  */
 data class GenerationSettingsViewState(
     val systemInstructions: SystemInstructionsCardState,
