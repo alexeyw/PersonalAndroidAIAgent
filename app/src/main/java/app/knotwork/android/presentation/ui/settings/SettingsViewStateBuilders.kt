@@ -29,6 +29,7 @@ import app.knotwork.design.screens.settings.ProviderRowState
 import app.knotwork.design.screens.settings.SLIDER_AUDIO_MAX_DURATION
 import app.knotwork.design.screens.settings.SLIDER_BACKGROUND_APPROVAL_WINDOW
 import app.knotwork.design.screens.settings.SLIDER_BACKGROUND_RESUME_MAX_AGE
+import app.knotwork.design.screens.settings.SLIDER_HTTP_TOOL_MAX_RESPONSE
 import app.knotwork.design.screens.settings.SLIDER_MAX_CONTEXT
 import app.knotwork.design.screens.settings.SLIDER_MEMORY_COMPACTION_AGE
 import app.knotwork.design.screens.settings.SLIDER_MEMORY_COMPRESSION_THRESHOLD
@@ -42,10 +43,9 @@ import app.knotwork.design.screens.settings.SLIDER_PIPELINE_NESTING_DEPTH
 import app.knotwork.design.screens.settings.SLIDER_PIPELINE_STRUCTURED_REPAIRS
 import app.knotwork.design.screens.settings.SLIDER_PRIVACY_RETENTION_AGE
 import app.knotwork.design.screens.settings.SLIDER_PRIVACY_RETENTION_RUNS
-import app.knotwork.design.screens.settings.SLIDER_HTTP_TOOL_MAX_RESPONSE
 import app.knotwork.design.screens.settings.SLIDER_TEMPERATURE
-import app.knotwork.design.screens.settings.SLIDER_TOP_K
 import app.knotwork.design.screens.settings.SLIDER_TOOL_CALL_TIMEOUT
+import app.knotwork.design.screens.settings.SLIDER_TOP_K
 import app.knotwork.design.screens.settings.SLIDER_TOP_P
 import app.knotwork.design.screens.settings.SLIDER_WORKSPACE_MAX_FILE_SIZE
 import app.knotwork.design.screens.settings.SLIDER_WORKSPACE_MAX_TOTAL
@@ -74,7 +74,7 @@ internal fun buildHubViewState(uiState: SettingsUiState): SettingsHubViewState =
     backendLabel = stringResource(R.string.settings_row_inference_backend_subtitle, uiState.localModelBackend),
     selectedBackend = uiState.localModelBackend,
     backendOptions = LocalBackend.entries.map { it.key },
-        crashReportingEnabled = uiState.crashReportingEnabled,
+    crashReportingEnabled = uiState.crashReportingEnabled,
     restartRequiredMessage = stringResource(R.string.settings_restart_required_message)
         .takeIf { uiState.restartRequired },
     searchQuery = uiState.searchQuery,
@@ -245,10 +245,9 @@ internal fun buildPipelinesViewState(uiState: SettingsUiState): PipelinesSetting
  * tool / workspace ceilings).
  *
  * The five ceilings are shown in the units a person thinks in — seconds,
- * megabytes, kilobytes, tokens — and converted back on the way out by
- * `routeToolsSlider`. The byte-valued three are stored in bytes, so the
- * conversion has to live somewhere; putting it at the two edges keeps every
- * consumer of the setting reading plain bytes.
+ * megabytes, kilobytes, tokens — through [ToolCeilingUnits], which also owns
+ * the inverse `routeToolsSlider` applies. Converting at the two edges keeps
+ * every consumer of the setting reading plain bytes and milliseconds.
  */
 @Composable
 internal fun buildToolsViewState(uiState: SettingsUiState): ToolsSettingsViewState = ToolsSettingsViewState(
@@ -262,26 +261,26 @@ internal fun buildToolsViewState(uiState: SettingsUiState): ToolsSettingsViewSta
         intSlider(
             SLIDER_TOOL_CALL_TIMEOUT,
             stringResource(R.string.settings_row_tool_call_timeout_title),
-            "${uiState.toolCallTimeoutMs / MILLIS_PER_SECOND} s",
-            (uiState.toolCallTimeoutMs / MILLIS_PER_SECOND).toInt(),
-            (SettingsDefaults.TOOL_CALL_TIMEOUT_MS_MIN / MILLIS_PER_SECOND).toInt(),
-            (SettingsDefaults.TOOL_CALL_TIMEOUT_MS_MAX / MILLIS_PER_SECOND).toInt(),
+            "${ToolCeilingUnits.toSeconds(uiState.toolCallTimeoutMs)} s",
+            ToolCeilingUnits.toSeconds(uiState.toolCallTimeoutMs),
+            ToolCeilingUnits.toSeconds(SettingsDefaults.TOOL_CALL_TIMEOUT_MS_MIN),
+            ToolCeilingUnits.toSeconds(SettingsDefaults.TOOL_CALL_TIMEOUT_MS_MAX),
         ),
         intSlider(
             SLIDER_WORKSPACE_MAX_FILE_SIZE,
             stringResource(R.string.settings_row_workspace_max_file_size_title),
-            "${uiState.workspaceMaxFileSizeBytes / BYTES_PER_MB} MB",
-            (uiState.workspaceMaxFileSizeBytes / BYTES_PER_MB).toInt(),
-            (SettingsDefaults.WORKSPACE_MAX_FILE_SIZE_BYTES_MIN / BYTES_PER_MB).toInt(),
-            (SettingsDefaults.WORKSPACE_MAX_FILE_SIZE_BYTES_MAX / BYTES_PER_MB).toInt(),
+            "${ToolCeilingUnits.toMegabytes(uiState.workspaceMaxFileSizeBytes)} MB",
+            ToolCeilingUnits.toMegabytes(uiState.workspaceMaxFileSizeBytes),
+            ToolCeilingUnits.toMegabytes(SettingsDefaults.WORKSPACE_MAX_FILE_SIZE_BYTES_MIN),
+            ToolCeilingUnits.toMegabytes(SettingsDefaults.WORKSPACE_MAX_FILE_SIZE_BYTES_MAX),
         ),
         intSlider(
             SLIDER_WORKSPACE_MAX_TOTAL,
             stringResource(R.string.settings_row_workspace_max_total_title),
-            "${uiState.workspaceMaxTotalBytes / BYTES_PER_MB} MB",
-            (uiState.workspaceMaxTotalBytes / BYTES_PER_MB).toInt(),
-            (SettingsDefaults.WORKSPACE_MAX_TOTAL_BYTES_MIN / BYTES_PER_MB).toInt(),
-            (SettingsDefaults.WORKSPACE_MAX_TOTAL_BYTES_MAX / BYTES_PER_MB).toInt(),
+            "${ToolCeilingUnits.toMegabytes(uiState.workspaceMaxTotalBytes)} MB",
+            ToolCeilingUnits.toMegabytes(uiState.workspaceMaxTotalBytes),
+            ToolCeilingUnits.toMegabytes(SettingsDefaults.WORKSPACE_MAX_TOTAL_BYTES_MIN),
+            ToolCeilingUnits.toMegabytes(SettingsDefaults.WORKSPACE_MAX_TOTAL_BYTES_MAX),
         ),
         intSlider(
             SLIDER_WORKSPACE_READ_TOKEN_BUDGET,
@@ -294,10 +293,10 @@ internal fun buildToolsViewState(uiState: SettingsUiState): ToolsSettingsViewSta
         intSlider(
             SLIDER_HTTP_TOOL_MAX_RESPONSE,
             stringResource(R.string.settings_row_http_tool_max_response_title),
-            "${uiState.httpToolMaxResponseBytes / BYTES_PER_KB} KB",
-            (uiState.httpToolMaxResponseBytes / BYTES_PER_KB).toInt(),
-            (SettingsDefaults.HTTP_TOOL_MAX_RESPONSE_BYTES_MIN / BYTES_PER_KB).toInt(),
-            (SettingsDefaults.HTTP_TOOL_MAX_RESPONSE_BYTES_MAX / BYTES_PER_KB).toInt(),
+            "${ToolCeilingUnits.toKilobytes(uiState.httpToolMaxResponseBytes)} KB",
+            ToolCeilingUnits.toKilobytes(uiState.httpToolMaxResponseBytes),
+            ToolCeilingUnits.toKilobytes(SettingsDefaults.HTTP_TOOL_MAX_RESPONSE_BYTES_MIN),
+            ToolCeilingUnits.toKilobytes(SettingsDefaults.HTTP_TOOL_MAX_RESPONSE_BYTES_MAX),
         ),
     ).withAnchors(),
 )
@@ -669,14 +668,6 @@ private fun repairsSteps(): Int =
 private const val MS_PER_SECOND_F = 1_000f
 private const val MAX_PERCENT = 100
 
-/** Milliseconds per second — the tool-call timeout is stored in ms, shown in s. */
-private const val MILLIS_PER_SECOND = 1_000L
-
-/** Bytes per kilobyte, for the byte-valued ceilings shown in KB. */
-private const val BYTES_PER_KB = 1024L
-
-/** Bytes per megabyte, for the byte-valued ceilings shown in MB. */
-private const val BYTES_PER_MB = 1024L * 1024
 private const val TOP_K_STEPS = 99
 private const val MAX_CONTEXT_STEPS = 14
 private const val HOURS_MIN = 1f

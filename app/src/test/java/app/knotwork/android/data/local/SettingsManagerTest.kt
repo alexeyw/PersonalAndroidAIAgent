@@ -403,8 +403,10 @@ class SettingsManagerTest {
     fun `setHttpToolMaxResponseBytes persists and is read back`() = runTest {
         val (manager, scope) = freshManagerWithRealDataStore()
         try {
-            manager.setHttpToolMaxResponseBytes(2_048L)
-            assertEquals(2_048L, manager.httpToolMaxResponseBytes.first())
+            // 2 KB before this setting had bounds; now below the 64 KB floor,
+            // which the coercion test covers separately.
+            manager.setHttpToolMaxResponseBytes(2L * 1024 * 1024)
+            assertEquals(2L * 1024 * 1024, manager.httpToolMaxResponseBytes.first())
         } finally {
             scope.cancel()
         }
@@ -647,6 +649,45 @@ class SettingsManagerTest {
 
             manager.setPipelineMaxNestingDepth(4)
             assertEquals(4, manager.pipelineMaxNestingDepth.first())
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `every tool ceiling coerces into its sanctioned range`() = runTest {
+        val (manager, scope) = freshManagerWithRealDataStore()
+        try {
+            // These five gained sliders before they gained bounds. A zero
+            // tool-call deadline would time out every MCP round-trip and a zero
+            // workspace ceiling would refuse every write, so the setter clamps
+            // rather than trusting whatever the caller hands it.
+            manager.setToolCallTimeoutMs(0L)
+            assertEquals(SettingsDefaults.TOOL_CALL_TIMEOUT_MS_MIN, manager.toolCallTimeoutMs.first())
+            manager.setToolCallTimeoutMs(Long.MAX_VALUE)
+            assertEquals(SettingsDefaults.TOOL_CALL_TIMEOUT_MS_MAX, manager.toolCallTimeoutMs.first())
+
+            manager.setWorkspaceMaxFileSizeBytes(0L)
+            assertEquals(
+                SettingsDefaults.WORKSPACE_MAX_FILE_SIZE_BYTES_MIN,
+                manager.workspaceMaxFileSizeBytes.first(),
+            )
+            manager.setWorkspaceMaxTotalBytes(0L)
+            assertEquals(SettingsDefaults.WORKSPACE_MAX_TOTAL_BYTES_MIN, manager.workspaceMaxTotalBytes.first())
+            manager.setWorkspaceReadTokenBudget(0)
+            assertEquals(
+                SettingsDefaults.WORKSPACE_READ_TOKEN_BUDGET_MIN,
+                manager.workspaceReadTokenBudget.first(),
+            )
+            manager.setHttpToolMaxResponseBytes(Long.MAX_VALUE)
+            assertEquals(
+                SettingsDefaults.HTTP_TOOL_MAX_RESPONSE_BYTES_MAX,
+                manager.httpToolMaxResponseBytes.first(),
+            )
+
+            // An in-range value is stored verbatim — the clamp must not round.
+            manager.setToolCallTimeoutMs(30_000L)
+            assertEquals(30_000L, manager.toolCallTimeoutMs.first())
         } finally {
             scope.cancel()
         }

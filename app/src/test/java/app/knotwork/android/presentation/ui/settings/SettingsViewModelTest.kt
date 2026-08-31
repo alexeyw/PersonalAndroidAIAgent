@@ -108,6 +108,15 @@ class SettingsViewModelTest {
         every { settings.systemPromptPrefix } returns MutableStateFlow("")
         every { settings.toolApprovalPolicy } returns MutableStateFlow(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settings.blockDestructiveTools } returns MutableStateFlow(false)
+        every { settings.toolCallTimeoutMs } returns MutableStateFlow(SettingsDefaults.TOOL_CALL_TIMEOUT_MS_DEFAULT)
+        every { settings.workspaceMaxFileSizeBytes } returns
+            MutableStateFlow(SettingsDefaults.WORKSPACE_MAX_FILE_SIZE_BYTES_DEFAULT)
+        every { settings.workspaceMaxTotalBytes } returns
+            MutableStateFlow(SettingsDefaults.WORKSPACE_MAX_TOTAL_BYTES_DEFAULT)
+        every { settings.workspaceReadTokenBudget } returns
+            MutableStateFlow(SettingsDefaults.WORKSPACE_READ_TOKEN_BUDGET_DEFAULT)
+        every { settings.httpToolMaxResponseBytes } returns
+            MutableStateFlow(SettingsDefaults.HTTP_TOOL_MAX_RESPONSE_BYTES_DEFAULT)
         every { settings.blockNetworkFromLocalModel } returns MutableStateFlow(false)
         every { settings.pipelineMaxSteps } returns MutableStateFlow(20)
         every { settings.temperature } returns MutableStateFlow(0.7f)
@@ -188,6 +197,39 @@ class SettingsViewModelTest {
         viewModel.setBlockDestructiveTools(true)
         advanceUntilIdle()
         coVerify { settings.setBlockDestructiveTools(true) }
+    }
+
+    @Test
+    fun `every tool ceiling is observed into state`() = runTest {
+        advanceUntilIdle()
+
+        // The five ceilings were registered, searchable and consumed by real
+        // code while no screen rendered them, so nothing observed them into
+        // state either. This is the observation half of that repair.
+        val state = viewModel.uiState.value
+        assertEquals(SettingsDefaults.TOOL_CALL_TIMEOUT_MS_DEFAULT, state.toolCallTimeoutMs)
+        assertEquals(SettingsDefaults.WORKSPACE_MAX_FILE_SIZE_BYTES_DEFAULT, state.workspaceMaxFileSizeBytes)
+        assertEquals(SettingsDefaults.WORKSPACE_MAX_TOTAL_BYTES_DEFAULT, state.workspaceMaxTotalBytes)
+        assertEquals(SettingsDefaults.WORKSPACE_READ_TOKEN_BUDGET_DEFAULT, state.workspaceReadTokenBudget)
+        assertEquals(SettingsDefaults.HTTP_TOOL_MAX_RESPONSE_BYTES_DEFAULT, state.httpToolMaxResponseBytes)
+    }
+
+    @Test
+    fun `every tool ceiling edit routes through repository`() = runTest {
+        advanceUntilIdle()
+
+        viewModel.setToolCallTimeoutMs(30_000L)
+        viewModel.setWorkspaceMaxFileSizeBytes(2L * 1024 * 1024)
+        viewModel.setWorkspaceMaxTotalBytes(200L * 1024 * 1024)
+        viewModel.setWorkspaceReadTokenBudget(1_500)
+        viewModel.setHttpToolMaxResponseBytes(512L * 1024)
+        advanceUntilIdle()
+
+        coVerify { settings.setToolCallTimeoutMs(30_000L) }
+        coVerify { settings.setWorkspaceMaxFileSizeBytes(2L * 1024 * 1024) }
+        coVerify { settings.setWorkspaceMaxTotalBytes(200L * 1024 * 1024) }
+        coVerify { settings.setWorkspaceReadTokenBudget(1_500) }
+        coVerify { settings.setHttpToolMaxResponseBytes(512L * 1024) }
     }
 
     @Test

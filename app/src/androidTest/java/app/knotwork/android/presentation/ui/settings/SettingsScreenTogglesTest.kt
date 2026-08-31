@@ -22,11 +22,11 @@ class SettingsScreenTogglesTest {
     val composeTestRule = createComposeRule()
 
     @Test
-    fun longRunningToggleRow_tap_invokesSetLongRunningTaskNotificationsEnabled() {
+    fun scheduledResultsToggleRow_tap_invokesSetScheduledTaskNotificationsEnabled() {
         val (vm, _) = mockSettingsViewModel(
             initialUiState = SettingsUiState(
                 identity = identityStub(),
-                longRunningTaskNotificationsEnabled = true,
+                scheduledTaskNotificationsEnabled = true,
             ),
         )
 
@@ -35,14 +35,16 @@ class SettingsScreenTogglesTest {
         }
 
         val ctx = InstrumentationRegistry.getInstrumentation().targetContext
-        val rowTitle = ctx.getString(KnotworkR.string.knotwork_settings_notifications_long_running)
+        val rowTitle = ctx.getString(KnotworkR.string.knotwork_settings_notifications_scheduled_results)
 
         // Clicking the row toggles the Switch via the IconToggleRow's clickable
-        // modifier; the resulting `onLongRunningToggle(false)` lands on the VM
-        // via the SettingsCallbacks wiring.
+        // modifier; the resulting `onScheduledResultsToggle(false)` lands on the
+        // VM via the SettingsCallbacks wiring. This used to exercise the
+        // Long-running tasks row, which was removed for gating a notification
+        // nothing posted — the wiring under test is the same.
         composeTestRule.onNodeWithText(text = rowTitle).performClick()
 
-        verify(exactly = 1) { vm.setLongRunningTaskNotificationsEnabled(enabled = false) }
+        verify(exactly = 1) { vm.setScheduledTaskNotificationsEnabled(enabled = false) }
     }
 
     private fun identityStub(): Identity = Identity(

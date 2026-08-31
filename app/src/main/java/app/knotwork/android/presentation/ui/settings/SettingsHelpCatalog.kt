@@ -176,4 +176,7 @@ private fun text(@StringRes res: Int): SettingHelp = SettingHelp.Text(res)
 
 private fun none(why: NoHint): SettingHelp = SettingHelp.None(why)
 
-private fun notShipped(@StringRes res: Int): SettingHelp = SettingHelp.NotShipped(res)
+// No `notShipped(...)` shorthand: nothing constructs one today, and a private
+// factory with no caller is dead code. `SettingHelp.NotShipped(res)` is written
+// out directly if a row ever needs it again — which the gate in
+// `SettingsHelpCatalogTest` is still watching for.

@@ -59,6 +59,7 @@ import app.knotwork.design.screens.settings.PrivacySettingsContent
 import app.knotwork.design.screens.settings.SLIDER_AUDIO_MAX_DURATION
 import app.knotwork.design.screens.settings.SLIDER_BACKGROUND_APPROVAL_WINDOW
 import app.knotwork.design.screens.settings.SLIDER_BACKGROUND_RESUME_MAX_AGE
+import app.knotwork.design.screens.settings.SLIDER_HTTP_TOOL_MAX_RESPONSE
 import app.knotwork.design.screens.settings.SLIDER_MAX_CONTEXT
 import app.knotwork.design.screens.settings.SLIDER_MEMORY_COMPACTION_AGE
 import app.knotwork.design.screens.settings.SLIDER_MEMORY_COMPRESSION_THRESHOLD
@@ -72,10 +73,9 @@ import app.knotwork.design.screens.settings.SLIDER_PIPELINE_NESTING_DEPTH
 import app.knotwork.design.screens.settings.SLIDER_PIPELINE_STRUCTURED_REPAIRS
 import app.knotwork.design.screens.settings.SLIDER_PRIVACY_RETENTION_AGE
 import app.knotwork.design.screens.settings.SLIDER_PRIVACY_RETENTION_RUNS
-import app.knotwork.design.screens.settings.SLIDER_HTTP_TOOL_MAX_RESPONSE
 import app.knotwork.design.screens.settings.SLIDER_TEMPERATURE
-import app.knotwork.design.screens.settings.SLIDER_TOP_K
 import app.knotwork.design.screens.settings.SLIDER_TOOL_CALL_TIMEOUT
+import app.knotwork.design.screens.settings.SLIDER_TOP_K
 import app.knotwork.design.screens.settings.SLIDER_TOP_P
 import app.knotwork.design.screens.settings.SLIDER_WORKSPACE_MAX_FILE_SIZE
 import app.knotwork.design.screens.settings.SLIDER_WORKSPACE_MAX_TOTAL
@@ -87,7 +87,6 @@ import app.knotwork.design.screens.settings.ToolsSettingsContent
 import com.jakewharton.processphoenix.ProcessPhoenix
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
-import kotlin.math.roundToLong
 import app.knotwork.android.domain.settings.SettingsCategoryId as DomainCategoryId
 
 /**
@@ -551,15 +550,18 @@ private fun routeGenerationSlider(viewModel: SettingsViewModel, id: String, valu
 /**
  * Dispatches a Tools-&-workspace slider back to the ViewModel, converting the
  * human-facing unit shown on the row (seconds, MB, KB, tokens) into the unit the
- * setting is stored in. Inverse of the unit maths in `buildToolsViewState`.
+ * setting is stored in — through [ToolCeilingUnits], the same object
+ * `buildToolsViewState` reads the value out with.
  */
 private fun routeToolsSlider(viewModel: SettingsViewModel, id: String, value: Float) {
     when (id) {
-        SLIDER_TOOL_CALL_TIMEOUT -> viewModel.setToolCallTimeoutMs(value.roundToLong() * MILLIS_PER_SECOND)
-        SLIDER_WORKSPACE_MAX_FILE_SIZE -> viewModel.setWorkspaceMaxFileSizeBytes(value.roundToLong() * BYTES_PER_MB)
-        SLIDER_WORKSPACE_MAX_TOTAL -> viewModel.setWorkspaceMaxTotalBytes(value.roundToLong() * BYTES_PER_MB)
+        SLIDER_TOOL_CALL_TIMEOUT -> viewModel.setToolCallTimeoutMs(ToolCeilingUnits.secondsToMillis(value))
+        SLIDER_WORKSPACE_MAX_FILE_SIZE ->
+            viewModel.setWorkspaceMaxFileSizeBytes(ToolCeilingUnits.megabytesToBytes(value))
+        SLIDER_WORKSPACE_MAX_TOTAL -> viewModel.setWorkspaceMaxTotalBytes(ToolCeilingUnits.megabytesToBytes(value))
         SLIDER_WORKSPACE_READ_TOKEN_BUDGET -> viewModel.setWorkspaceReadTokenBudget(value.roundToInt())
-        SLIDER_HTTP_TOOL_MAX_RESPONSE -> viewModel.setHttpToolMaxResponseBytes(value.roundToLong() * BYTES_PER_KB)
+        SLIDER_HTTP_TOOL_MAX_RESPONSE ->
+            viewModel.setHttpToolMaxResponseBytes(ToolCeilingUnits.kilobytesToBytes(value))
     }
 }
 
@@ -657,12 +659,3 @@ private val IMPORT_BUTTON_GAP = 8.dp
 
 /** Dwell before a settings-search deep-link highlight clears (covers the flash). */
 private const val HIGHLIGHT_CONSUME_MS = 1500L
-
-/** Milliseconds per second — the tool-call timeout row is shown in seconds. */
-private const val MILLIS_PER_SECOND = 1_000L
-
-/** Bytes per kilobyte, for the ceiling rows shown in KB. */
-private const val BYTES_PER_KB = 1024L
-
-/** Bytes per megabyte, for the ceiling rows shown in MB. */
-private const val BYTES_PER_MB = 1024L * 1024

@@ -102,6 +102,19 @@ class ToolsContentSnapshotTest {
         ToolDetailContent(state = ToolsPreview.toolDetailDefault())
     }
 
+    // The two risk branches are different controls, not two values of one — a
+    // built-in states its level, an MCP tool offers the choice — so each needs
+    // its own frame.
+    @Test
+    fun tool_detail_fixed_risk_light() = snapshot(name = "tool_detail_fixed_risk", dark = false) {
+        ToolDetailContent(state = ToolsPreview.toolDetailFixedRisk())
+    }
+
+    @Test
+    fun tool_detail_fixed_risk_dark() = snapshot(name = "tool_detail_fixed_risk", dark = true) {
+        ToolDetailContent(state = ToolsPreview.toolDetailFixedRisk())
+    }
+
     @Test
     fun tool_detail_schema_error_light() = snapshot(name = "tool_detail_schema_error", dark = false) {
         ToolDetailContent(state = ToolsPreview.toolDetailSchemaError())

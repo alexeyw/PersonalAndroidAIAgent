@@ -424,14 +424,6 @@ class LiteRTLlmEngine @Inject constructor(
      */
     private fun streamConversation(temperature: Float?, openResponses: (Conversation) -> Flow<Message>): Flow<String> =
         flow {
-            // Resolved before the lock is taken: it is a DataStore read, and
-            // holding the generation mutex across it would serialise one
-            // conversation's disk I/O in front of the next one's decode.
-            val conversationConfig = if (temperature == null) {
-                userConversationConfig()
-            } else {
-                repairConversationConfig(temperature)
-            }
             generationMutex.withLock {
                 // Read the native engine handle inside the lock so it cannot be
                 // freed by a concurrent unload between the null-check and use.
@@ -444,6 +436,15 @@ class LiteRTLlmEngine @Inject constructor(
                 // LiteRT-LM allows only one active session. The orchestrator supplies
                 // the full history every time, so we close the old conversation and
                 // open a fresh one to prevent token accumulation and OOM crashes.
+                // Resolved after the initialization check, so an uninitialized
+                // engine still fails on that and not on a settings read. The
+                // mutex is held for the whole decode anyway, so one cached
+                // DataStore read inside it costs nothing measurable.
+                val conversationConfig = if (temperature == null) {
+                    userConversationConfig()
+                } else {
+                    repairConversationConfig(temperature)
+                }
                 conversation?.close()
                 val activeConversation = currentEngine.createConversation(conversationConfig)
                 conversation = activeConversation
