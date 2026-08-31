@@ -220,7 +220,6 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
         val autoFixNoneMessage = stringResource(R.string.pipeline_editor_validation_auto_fix_none)
         val pasteEmptyMessage = stringResource(R.string.pipeline_editor_overflow_paste_empty)
         val autoFixDoneMessage = stringResource(R.string.pipeline_editor_validation_auto_fix_done)
-        val saveDoneMessage = stringResource(R.string.pipeline_editor_save_done)
         val connectionDroppedHint = stringResource(R.string.pipeline_editor_connection_dropped_hint)
         val onUndoClick: () -> Unit = {
             val previous = editor.undoRedo.undo(pipeline)
@@ -449,8 +448,10 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                     text = { Text(stringResource(R.string.pipeline_editor_overflow_save)) },
                     onClick = {
                         overflowOpen = false
+                        // No eager snackbar: the confirmation now rides on the
+                        // save's own outcome via `feedbackMessage`, so a
+                        // rejected save no longer says "Pipeline saved."
                         viewModel.saveCurrentPipeline()
-                        scope.launch { snackbarHostState.showSnackbar(saveDoneMessage) }
                     },
                     leadingIcon = {
                         Icon(AppIcons.Save, contentDescription = null)

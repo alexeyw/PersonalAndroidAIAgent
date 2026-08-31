@@ -1021,6 +1021,16 @@ constructor(
                     // now: an edit made while the save was in flight is still
                     // unsaved, and saying otherwise is how work goes missing.
                     persistedPipeline = if (result.isSuccess) saved else state.persistedPipeline,
+                    // Confirmation follows the outcome. The editor's overflow
+                    // used to announce "Pipeline saved." the moment the item was
+                    // tapped, so a save the validator rejected reported success
+                    // and failure at once — invisible until the toolbar started
+                    // carrying an Unsaved marker to contradict it.
+                    feedbackMessage = if (result.isSuccess) {
+                        UiText(R.string.pipeline_editor_save_done)
+                    } else {
+                        state.feedbackMessage
+                    },
                     errorMessage = result.exceptionOrNull()?.let(::messageForSaveError),
                 )
             }
@@ -1325,6 +1335,10 @@ constructor(
      * [CreatePipelineUseCase], which validates the name and seeds the graph so
      * the freshly created pipeline already passes [PipelineGraph.validate].
      *
+     * The created graph becomes the saved baseline as well as the current one:
+     * it went to storage on the way here, so opening the editor on it must not
+     * greet the user with an Unsaved marker for work they have not done yet.
+     *
      * @param name Display name for the new pipeline.
      */
     fun createNewPipeline(name: String) {
@@ -1336,6 +1350,7 @@ constructor(
                 state.copy(
                     isLoading = false,
                     currentPipeline = created ?: state.currentPipeline,
+                    persistedPipeline = created ?: state.persistedPipeline,
                     errorMessage = result.exceptionOrNull()?.message?.let { UiText.Dynamic(it) },
                     feedbackMessage = if (created != null) {
                         UiText(R.string.orchestrator_feedback_pipeline_created)

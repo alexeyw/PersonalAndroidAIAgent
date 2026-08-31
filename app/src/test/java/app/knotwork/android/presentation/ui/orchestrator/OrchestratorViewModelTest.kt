@@ -430,6 +430,35 @@ class OrchestratorViewModelTest {
     }
 
     @Test
+    fun `given a rejected save then no success feedback is shown`() = runTest {
+        coEvery { savePipelineUseCase(any()) } returns
+            Result.failure(PipelineValidationException(listOf(PipelineValidationError.MissingOutput)))
+        viewModel.addNode(NodeType.LITE_RT, 10f, 10f)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.saveCurrentPipeline()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // The editor used to announce "Pipeline saved." the moment the menu item
+        // was tapped, so a rejected save reported success and failure at once.
+        val state = viewModel.uiState.value
+        assertEquals(null, state.feedbackMessage)
+        assertTrue("A rejected save must still surface its error", state.errorMessage != null)
+    }
+
+    @Test
+    fun `given a successful save then the confirmation is shown`() = runTest {
+        coEvery { savePipelineUseCase(any()) } returns Result.success(Unit)
+        viewModel.addNode(NodeType.LITE_RT, 10f, 10f)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.saveCurrentPipeline()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue("A successful save must confirm", viewModel.uiState.value.feedbackMessage != null)
+    }
+
+    @Test
     fun `saveCurrentPipeline calls use case and updates state`() = runTest {
         coEvery { savePipelineUseCase(any()) } returns Result.success(Unit)
 
