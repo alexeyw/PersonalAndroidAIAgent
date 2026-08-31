@@ -1,23 +1,7 @@
 package app.knotwork.android.presentation.ui.settings.provider
 
 import android.content.Context
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -25,10 +9,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -39,20 +20,16 @@ import app.knotwork.android.domain.models.ProviderId
 import app.knotwork.android.domain.repositories.ApiKeyRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.CleartextPolicy
-import app.knotwork.design.components.misc.KnotworkWarningBanner
-import app.knotwork.design.icons.AppIcons
-import app.knotwork.design.screens.settings.KnotworkParamSlider
+import app.knotwork.design.screens.settings.CleartextConsentUi
+import app.knotwork.design.screens.settings.CloudRetryViewState
 import app.knotwork.design.screens.settings.KnotworkProviderRow
 import app.knotwork.design.screens.settings.LocalSettingsHints
-import app.knotwork.design.screens.settings.LocalSettingsRowAnchor
 import app.knotwork.design.screens.settings.OllamaProviderInputs
+import app.knotwork.design.screens.settings.ProviderDetailCallbacks
+import app.knotwork.design.screens.settings.ProviderDetailContent
+import app.knotwork.design.screens.settings.ProviderDetailViewState
 import app.knotwork.design.screens.settings.SettingsHint
-import app.knotwork.design.screens.settings.SettingsHintBody
 import app.knotwork.design.screens.settings.SettingsHintController
-import app.knotwork.design.screens.settings.SettingsHintGlyph
-import app.knotwork.design.screens.settings.SettingsSectionLabel
-import app.knotwork.design.theme.KnotworkTheme
-import app.knotwork.design.tokens.KnotworkTextStyles
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -85,208 +62,137 @@ fun ProviderDetailScreen(
 ) {
     LaunchedEffect(providerId) { viewModel.bind(providerId) }
     val uiState by viewModel.uiState.collectAsState()
-    val locale = LocalConfiguration.current.locales[0]
+    val context = LocalContext.current
+    val hints = remember(context) { retryHints(context) }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.surface,
-        // The outer AppShellScaffold already absorbs the system bars; defaulting
-        // to safeDrawing here would double-count the insets.
-        contentWindowInsets = WindowInsets(left = 0, top = 0, right = 0, bottom = 0),
-        topBar = {
-            app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
-                TopAppBar(
-                    title = {
-                        Text(
-                            text = stringResource(R.string.settings_provider_detail_title, providerLabel(providerId)),
-                            style = KnotworkTextStyles.TitleMd,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                imageVector = AppIcons.Back,
-                                contentDescription = stringResource(R.string.common_back),
-                                tint = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        titleContentColor = MaterialTheme.colorScheme.onSurface,
-                    ),
-                )
-            }
-        },
-    ) { padding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding),
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(KnotworkTheme.spacing.sp4),
-            ) {
-                when (providerId) {
-                    ProviderId.OpenAi -> CommonProviderEditor(
-                        title = providerLabel(providerId),
-                        keyValue = uiState.openAiKey,
-                        onKeyChange = viewModel::updateOpenAiKey,
-                        modelValue = uiState.openAiModel,
-                        onModelChange = viewModel::updateOpenAiModel,
-                        availableModels = KoogModelMapper.getOpenAIModelIdList(),
-                    )
-                    ProviderId.Anthropic -> CommonProviderEditor(
-                        title = providerLabel(providerId),
-                        keyValue = uiState.anthropicKey,
-                        onKeyChange = viewModel::updateAnthropicKey,
-                        modelValue = uiState.anthropicModel,
-                        onModelChange = viewModel::updateAnthropicModel,
-                        availableModels = KoogModelMapper.getAnthropicModelIdList(),
-                    )
-                    ProviderId.Google -> CommonProviderEditor(
-                        title = providerLabel(providerId),
-                        keyValue = uiState.googleKey,
-                        onKeyChange = viewModel::updateGoogleKey,
-                        modelValue = uiState.googleModel,
-                        onModelChange = viewModel::updateGoogleModel,
-                        availableModels = KoogModelMapper.getGoogleModelIdList(),
-                    )
-                    ProviderId.DeepSeek -> CommonProviderEditor(
-                        title = providerLabel(providerId),
-                        keyValue = uiState.deepSeekKey,
-                        onKeyChange = viewModel::updateDeepSeekKey,
-                        modelValue = uiState.deepSeekModel,
-                        onModelChange = viewModel::updateDeepSeekModel,
-                        availableModels = KoogModelMapper.getDeepSeekModelIdList(),
-                    )
-                    ProviderId.Ollama -> {
-                        val ollamaError = if (uiState.ollamaBaseUrlInvalid) {
-                            stringResource(R.string.settings_ollama_base_url_error)
-                        } else {
-                            null
-                        }
-                        KnotworkProviderRow(
-                            title = providerLabel(providerId),
-                            keyValue = "",
-                            onKeyChange = {},
-                            keyLabel = "",
-                            modelValue = uiState.ollamaModel,
-                            onModelChange = viewModel::updateOllamaModel,
-                            modelLabel = stringResource(R.string.settings_ollama_model_label),
-                            availableModels = emptyList(),
-                            // Ollama runs LAN-local without authentication — hide the API-key
-                            // input entirely. Only base URL, model name, and context window
-                            // remain configurable.
-                            showApiKey = false,
-                            ollama = OllamaProviderInputs(
-                                baseUrl = uiState.ollamaBaseUrl,
-                                baseUrlPlaceholder = stringResource(R.string.settings_ollama_base_url_placeholder),
-                                baseUrlValidationError = ollamaError,
-                                contextWindow = uiState.ollamaContextWindow,
-                                contextWindowLabel = stringResource(R.string.settings_ollama_context_label),
-                                baseUrlLabel = stringResource(R.string.settings_ollama_base_url_label),
-                            ),
-                            onOllamaBaseUrlChange = viewModel::updateOllamaBaseUrl,
-                            onOllamaContextWindowChange = viewModel::updateOllamaContextWindow,
-                        )
-                        // Unencrypted LAN traffic is refused until the user says
-                        // otherwise for this exact address. The notice is a banner
-                        // rather than a dialog because the base URL persists on every
-                        // keystroke — a dialog would open mid-typing.
-                        uiState.cleartextConsentOrigin?.let { origin ->
-                            KnotworkWarningBanner(
-                                text = stringResource(R.string.settings_cleartext_consent_body, origin),
-                                actionLabel = stringResource(R.string.settings_cleartext_consent_action),
-                                onAction = viewModel::approveCleartextOrigin,
-                                testTag = CLEARTEXT_CONSENT_BANNER_TAG,
-                            )
-                        }
-                    }
-                }
-                CloudRetrySection(
-                    maxAttempts = uiState.cloudRetryMaxAttempts,
-                    baseDelayMs = uiState.cloudRetryBaseDelayMs,
-                    onMaxAttemptsChange = viewModel::updateCloudRetryMaxAttempts,
-                    onBaseDelayChange = viewModel::updateCloudRetryBaseDelayMs,
-                )
-            }
-        }
+    CompositionLocalProvider(LocalSettingsHints provides hints) {
+        ProviderDetailContent(
+            state = uiState.toViewState(providerId, context),
+            callbacks = ProviderDetailCallbacks(
+                onBack = onBack,
+                onApiKeyChange = { value -> viewModel.updateKey(providerId, value) },
+                onModelChange = { value -> viewModel.updateModel(providerId, value) },
+                onOllamaBaseUrlChange = viewModel::updateOllamaBaseUrl,
+                onOllamaContextWindowChange = viewModel::updateOllamaContextWindow,
+                onApproveCleartextOrigin = viewModel::approveCleartextOrigin,
+                onRetryAttemptsChange = viewModel::updateCloudRetryMaxAttempts,
+                onRetryDelayChange = viewModel::updateCloudRetryBaseDelayMs,
+            ),
+        )
     }
 }
 
 /**
- * Global cloud-retry policy controls, shown on every provider detail screen
- * because the policy applies to all cloud providers (and cloud embeddings)
- * uniformly. Two sliders map onto the persisted
- * [SettingsRepository.cloudRetryMaxAttempts] (initial call + retries) and
- * [SettingsRepository.cloudRetryBaseDelayMs] (base backoff delay); the store
- * coerces both to their valid ranges. An attempt budget of `1` disables retries.
+ * Projects the VM state onto the catalog's view state, resolving every string
+ * here so the design module never learns which providers exist.
  *
- * @param maxAttempts current attempt budget.
- * @param baseDelayMs current base delay in milliseconds.
- * @param onMaxAttemptsChange invoked as the attempts slider settles.
- * @param onBaseDelayChange invoked as the delay slider settles.
+ * The provider `when` is the one place that knows a provider's shape. Ollama is
+ * the outlier twice over: it runs LAN-local without authentication, so its API
+ * key is `null` rather than empty, and its model is typed rather than chosen
+ * from a list.
+ *
+ * @param providerId Which provider the screen was opened for.
+ * @param context Resource resolution.
+ * @return The resolved view state.
  */
-@Composable
-private fun CloudRetrySection(
-    maxAttempts: Int,
-    baseDelayMs: Long,
-    onMaxAttemptsChange: (Int) -> Unit,
-    onBaseDelayChange: (Long) -> Unit,
-) {
+private fun ProviderDetailUiState.toViewState(providerId: ProviderId, context: Context): ProviderDetailViewState {
+    val label = providerLabel(providerId)
+    val ollamaError = context.getString(R.string.settings_ollama_base_url_error).takeIf { ollamaBaseUrlInvalid }
+    return ProviderDetailViewState(
+        title = context.getString(R.string.settings_provider_detail_title, label),
+        providerLabel = label,
+        backContentDescription = context.getString(R.string.common_back),
+        apiKey = when (providerId) {
+            ProviderId.OpenAi -> openAiKey
+            ProviderId.Anthropic -> anthropicKey
+            ProviderId.Google -> googleKey
+            ProviderId.DeepSeek -> deepSeekKey
+            ProviderId.Ollama -> null
+        },
+        apiKeyLabel = context.getString(R.string.settings_provider_api_key_label, label),
+        model = when (providerId) {
+            ProviderId.OpenAi -> openAiModel
+            ProviderId.Anthropic -> anthropicModel
+            ProviderId.Google -> googleModel
+            ProviderId.DeepSeek -> deepSeekModel
+            ProviderId.Ollama -> ollamaModel
+        },
+        modelLabel = when (providerId) {
+            ProviderId.Ollama -> context.getString(R.string.settings_ollama_model_label)
+            else -> context.getString(R.string.settings_provider_model_label, label)
+        },
+        availableModels = when (providerId) {
+            ProviderId.OpenAi -> KoogModelMapper.getOpenAIModelIdList()
+            ProviderId.Anthropic -> KoogModelMapper.getAnthropicModelIdList()
+            ProviderId.Google -> KoogModelMapper.getGoogleModelIdList()
+            ProviderId.DeepSeek -> KoogModelMapper.getDeepSeekModelIdList()
+            ProviderId.Ollama -> emptyList()
+        },
+        ollama = if (providerId == ProviderId.Ollama) {
+            OllamaProviderInputs(
+                baseUrl = ollamaBaseUrl,
+                baseUrlPlaceholder = context.getString(R.string.settings_ollama_base_url_placeholder),
+                baseUrlValidationError = ollamaError,
+                contextWindow = ollamaContextWindow,
+                contextWindowLabel = context.getString(R.string.settings_ollama_context_label),
+                baseUrlLabel = context.getString(R.string.settings_ollama_base_url_label),
+            )
+        } else {
+            null
+        },
+        cleartextConsent = cleartextConsentOrigin?.let { origin ->
+            CleartextConsentUi(
+                body = context.getString(R.string.settings_cleartext_consent_body, origin),
+                actionLabel = context.getString(R.string.settings_cleartext_consent_action),
+            )
+        },
+        retry = cloudRetryViewState(context),
+    )
+}
+
+/**
+ * Resolves the cloud-retry sliders, bounds included.
+ *
+ * The bounds travel with the state rather than living in the design module: they
+ * are the same `SettingsDefaults` values the store coerces against, and a second
+ * copy over there could disagree with the range actually enforced.
+ *
+ * @param context Resource resolution.
+ * @return The resolved retry state.
+ */
+private fun ProviderDetailUiState.cloudRetryViewState(context: Context): CloudRetryViewState {
     val minAttempts = SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_MIN
-    val maxAttemptsBound = SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_MAX
-    val attemptsRange = minAttempts.toFloat()..maxAttemptsBound.toFloat()
-    val minDelay = SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_MIN.toFloat()
-    val maxDelay = SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_MAX.toFloat()
-    val delayRange = minDelay..maxDelay
-    // Built from the catalog's settings components rather than raw Material
-    // ones. This screen had grown its own look — a title in `TitleMd`, a grey
-    // paragraph, `Text` + bare `Slider` pairs — so a reader arriving from any
-    // other settings screen met a different visual language, and none of the
-    // help affordance the rest of Settings had just gained.
-    val context = LocalContext.current
-    val hints = remember(context) { retryHints(context) }
-    CompositionLocalProvider(LocalSettingsHints provides hints) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(top = KnotworkTheme.spacing.sp4),
-            verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-        ) {
-            CompositionLocalProvider(LocalSettingsRowAnchor provides RETRY_SECTION_ANCHOR) {
-                SettingsSectionLabel(text = stringResource(R.string.settings_cloud_retry_title)) {
-                    SettingsHintGlyph(settingName = stringResource(R.string.settings_cloud_retry_title))
-                }
-                // The paragraph that used to sit here explained the policy in
-                // muted body text — the slot this app reserves for machine
-                // state, and the reason such text went unread. It is the
-                // section's hint now.
-                SettingsHintBody()
-            }
-            CompositionLocalProvider(LocalSettingsRowAnchor provides RETRY_ATTEMPTS_ANCHOR) {
-                KnotworkParamSlider(
-                    label = stringResource(R.string.settings_cloud_retry_attempts_title),
-                    valueLabel = maxAttempts.toString(),
-                    value = maxAttempts.toFloat(),
-                    onValueChange = { onMaxAttemptsChange(it.toInt()) },
-                    valueRange = attemptsRange,
-                    steps = maxAttemptsBound - minAttempts - 1,
-                )
-            }
-            CompositionLocalProvider(LocalSettingsRowAnchor provides RETRY_DELAY_ANCHOR) {
-                KnotworkParamSlider(
-                    label = stringResource(R.string.settings_cloud_retry_delay_title),
-                    valueLabel = stringResource(R.string.settings_cloud_retry_delay_value, baseDelayMs),
-                    value = baseDelayMs.toFloat(),
-                    onValueChange = { onBaseDelayChange(it.toLong()) },
-                    valueRange = delayRange,
-                )
-            }
-        }
-    }
+    val maxAttempts = SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_MAX
+    return CloudRetryViewState(
+        sectionTitle = context.getString(R.string.settings_cloud_retry_title),
+        sectionAnchor = RETRY_SECTION_ANCHOR,
+        attempts = cloudRetryMaxAttempts,
+        attemptsLabel = context.getString(R.string.settings_cloud_retry_attempts_title),
+        attemptsValueLabel = cloudRetryMaxAttempts.toString(),
+        attemptsRange = minAttempts.toFloat()..maxAttempts.toFloat(),
+        attemptsSteps = maxAttempts - minAttempts - 1,
+        attemptsAnchor = RETRY_ATTEMPTS_ANCHOR,
+        delayMs = cloudRetryBaseDelayMs,
+        delayLabel = context.getString(R.string.settings_cloud_retry_delay_title),
+        delayValueLabel = context.getString(R.string.settings_cloud_retry_delay_value, cloudRetryBaseDelayMs),
+        delayRange = delayRange(),
+        delayAnchor = RETRY_DELAY_ANCHOR,
+    )
+}
+
+/**
+ * Allowed base-delay range, as floats for the slider.
+ *
+ * Its own function only because the two qualified constants do not fit on one
+ * line together, and a range expression wrapped across lines reads worse than a
+ * name.
+ *
+ * @return The delay bounds.
+ */
+private fun delayRange(): ClosedFloatingPointRange<Float> {
+    val min = SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_MIN.toFloat()
+    val max = SettingsDefaults.CLOUD_RETRY_BASE_DELAY_MS_MAX.toFloat()
+    return min..max
 }
 
 /** Anchor of the retry-policy section header. */
@@ -317,28 +223,12 @@ private fun retryHints(context: Context): SettingsHintController = SettingsHintC
     }
 }
 
-@Composable
-private fun CommonProviderEditor(
-    title: String,
-    keyValue: String,
-    onKeyChange: (String) -> Unit,
-    modelValue: String,
-    onModelChange: (String) -> Unit,
-    availableModels: List<String>,
-) {
-    KnotworkProviderRow(
-        title = title,
-        keyValue = keyValue,
-        onKeyChange = onKeyChange,
-        keyLabel = stringResource(R.string.settings_provider_api_key_label, title),
-        modelValue = modelValue,
-        onModelChange = onModelChange,
-        modelLabel = stringResource(R.string.settings_provider_model_label, title),
-        availableModels = availableModels,
-    )
-}
-
-@Composable
+/**
+ * The provider's own name. Not localized: these are product names.
+ *
+ * @param id The provider.
+ * @return Its display name.
+ */
 private fun providerLabel(id: ProviderId): String = when (id) {
     ProviderId.OpenAi -> "OpenAI"
     ProviderId.Anthropic -> "Anthropic"
@@ -461,6 +351,43 @@ class ProviderDetailViewModel @Inject constructor(
                     .onEach { v -> _uiState.update { it.copy(ollamaContextWindow = v.toString()) } }
                     .launchIn(viewModelScope)
             }
+        }
+    }
+
+    /**
+     * Routes a key edit to the bound provider's own setter.
+     *
+     * The screen no longer names providers when wiring its callbacks — the one
+     * place that knows a provider's shape is the projection above — so the
+     * dispatch lives here instead of being spelled out five times at the call
+     * site. Ollama has no key and never reaches this.
+     *
+     * @param providerId The provider being edited.
+     * @param value The new key; blank clears it.
+     */
+    fun updateKey(providerId: ProviderId, value: String) {
+        when (providerId) {
+            ProviderId.OpenAi -> updateOpenAiKey(value)
+            ProviderId.Anthropic -> updateAnthropicKey(value)
+            ProviderId.Google -> updateGoogleKey(value)
+            ProviderId.DeepSeek -> updateDeepSeekKey(value)
+            ProviderId.Ollama -> Unit
+        }
+    }
+
+    /**
+     * Routes a model edit to the bound provider's own setter.
+     *
+     * @param providerId The provider being edited.
+     * @param value The new model id.
+     */
+    fun updateModel(providerId: ProviderId, value: String) {
+        when (providerId) {
+            ProviderId.OpenAi -> updateOpenAiModel(value)
+            ProviderId.Anthropic -> updateAnthropicModel(value)
+            ProviderId.Google -> updateGoogleModel(value)
+            ProviderId.DeepSeek -> updateDeepSeekModel(value)
+            ProviderId.Ollama -> updateOllamaModel(value)
         }
     }
 
