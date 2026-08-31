@@ -64,6 +64,16 @@ class AgentOrchestratorUseCase @Inject constructor(private val taskQueueManager:
         taskQueueManager.pendingApproval(sessionId)
 
     /**
+     * Stops the run of [sessionId] — the one executing, and any of that
+     * session's tasks still queued behind it.
+     *
+     * @param sessionId The session whose run should be stopped.
+     */
+    fun cancelRun(sessionId: String) {
+        taskQueueManager.cancelRun(sessionId)
+    }
+
+    /**
      * Starts the orchestration cycle for a given user prompt by queueing a task.
      *
      * @param sessionId The current chat session ID.

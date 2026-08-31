@@ -45,6 +45,28 @@ interface TaskQueueManager {
     fun resumeWithApproval(sessionId: String, isApproved: Boolean)
 
     /**
+     * Cancels the run of [sessionId] — the one executing, and any of that
+     * session's tasks still waiting in the queue.
+     *
+     * The composer's Stop button used to only detach the screen from the
+     * stream: the run carried on in the queue's own scope and its answer
+     * arrived anyway, so a control named `stop` did something the word does not
+     * mean. Cancelling settles the run as
+     * [app.knotwork.android.domain.models.PipelineRunStatus.CANCELLED], which is
+     * how it reaches the conversation as a line rather than as a failure.
+     *
+     * Cancelling one run must not disturb another. Every other session's work —
+     * running, queued, or parked on a human's answer — is untouched, which is
+     * the whole reason this is per-session rather than a scope teardown.
+     *
+     * A no-op when the session has nothing in flight, so a Stop pressed as the
+     * last token arrives cannot resurrect or corrupt a finished run.
+     *
+     * @param sessionId The session whose run should be stopped.
+     */
+    fun cancelRun(sessionId: String)
+
+    /**
      * Returns the tool-approval request the run of [sessionId] is currently
      * suspended on, or `null` when no approval gate is active for that session.
      *

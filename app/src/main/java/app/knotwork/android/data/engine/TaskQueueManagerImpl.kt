@@ -23,6 +23,7 @@ import app.knotwork.android.domain.services.AttachmentStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -40,7 +41,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import timber.log.Timber
 import java.util.PriorityQueue
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -88,6 +91,17 @@ class TaskQueueManagerImpl @Inject constructor(
     override val globalState: StateFlow<AgentOrchestratorState> = _globalState.asStateFlow()
 
     // Priority queue for tasks
+    /**
+     * The task currently executing, or `null` between tasks.
+     *
+     * The worker is serial, so there is at most one — which is why this is a
+     * single reference rather than a map. Held in an [AtomicReference] because
+     * it is written by the worker and read by [cancelRun] on whatever thread
+     * pressed Stop; the queue's own [queueMutex] is not involved, so a cancel
+     * never waits behind a task being polled.
+     */
+    private val activeRun = AtomicReference<ActiveRun?>(null)
+
     private val queueMutex = Mutex()
     private val taskQueue = PriorityQueue<AgentTask> { t1, t2 ->
         val p1 = t1.priority.ordinal
@@ -267,11 +281,59 @@ class TaskQueueManagerImpl @Inject constructor(
                         taskQueue.poll()
                     } ?: break // Exit inner loop when queue is empty
 
-                    processTask(task)
+                    // Each task runs in its own child job so [cancelRun] can end
+                    // one run without taking the worker down with it — and the
+                    // worker is the only thing driving every other chat, so
+                    // cancelling it would freeze the app rather than stop a run.
+                    // `join` (not `await`) because a cancelled child is not a
+                    // failure to propagate: the loop must go straight on to the
+                    // next task.
+                    val job = launch { processTask(task) }
+                    activeRun.set(ActiveRun(sessionId = task.sessionId, job = job))
+                    job.join()
+                    // Compare-and-set, never a bare clear: by the time this runs
+                    // the reference may already describe the *next* task if a
+                    // cancel raced the handover, and clearing that would leave a
+                    // live run nothing could stop.
+                    activeRun.compareAndSet(ActiveRun(sessionId = task.sessionId, job = job), null)
                 }
             }
         }
     }
+
+    override fun cancelRun(sessionId: String) {
+        // Cancel the executing run first, then drain the queue: the other order
+        // leaves a window in which the drained queue is refilled by nothing but
+        // the run that is about to be cancelled finishing normally.
+        activeRun.get()
+            ?.takeIf { it.sessionId == sessionId }
+            ?.let { active ->
+                Timber.d("Cancelling the active run of session %s", sessionId)
+                active.job.cancel()
+            }
+        scope.launch {
+            val dropped = queueMutex.withLock {
+                val matching = taskQueue.filter { it.sessionId == sessionId }
+                taskQueue.removeAll(matching.toSet())
+                matching
+            }
+            // A task cancelled before it ever ran still owns a QUEUED record.
+            // Left alone it would sit there until the next launch swept it as an
+            // orphan and blamed a dead process for something the user did.
+            dropped.forEach { task ->
+                pipelineRunRepository.finishRun(task.id, PipelineRunStatus.CANCELLED)
+                getOrCreateStateFlow(task.sessionId).emit(AgentOrchestratorState.Idle)
+            }
+        }
+    }
+
+    /**
+     * A task being executed, paired with the job driving it.
+     *
+     * @property sessionId Session the task belongs to.
+     * @property job The coroutine running it, cancelled by [cancelRun].
+     */
+    private data class ActiveRun(val sessionId: String, val job: Job)
 
     private suspend fun processTask(task: AgentTask) {
         if (task.isResume) {
