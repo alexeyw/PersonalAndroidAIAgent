@@ -302,16 +302,14 @@ class TaskQueueManagerImpl @Inject constructor(
     }
 
     override fun cancelRun(sessionId: String) {
-        // Cancel the executing run first, then drain the queue: the other order
-        // leaves a window in which the drained queue is refilled by nothing but
-        // the run that is about to be cancelled finishing normally.
-        activeRun.get()
-            ?.takeIf { it.sessionId == sessionId }
-            ?.let { active ->
-                Timber.d("Cancelling the active run of session %s", sessionId)
-                active.job.cancel()
-            }
         scope.launch {
+            // The queue is drained BEFORE the running job is cancelled, and the
+            // order is load-bearing rather than tidy. The worker sits in
+            // `job.join()` for as long as that job lives, so draining first
+            // happens while it provably cannot poll. Cancelling first and
+            // draining after leaves a window: the join returns, the worker takes
+            // this session's next task, and the drain then finds a queue that no
+            // longer holds it — a Stop that stopped one run and started another.
             val dropped = queueMutex.withLock {
                 val matching = taskQueue.filter { it.sessionId == sessionId }
                 taskQueue.removeAll(matching.toSet())
@@ -320,9 +318,21 @@ class TaskQueueManagerImpl @Inject constructor(
             // A task cancelled before it ever ran still owns a QUEUED record.
             // Left alone it would sit there until the next launch swept it as an
             // orphan and blamed a dead process for something the user did.
-            dropped.forEach { task ->
-                pipelineRunRepository.finishRun(task.id, PipelineRunStatus.CANCELLED)
-                getOrCreateStateFlow(task.sessionId).emit(AgentOrchestratorState.Idle)
+            dropped.forEach { task -> pipelineRunRepository.finishRun(task.id, PipelineRunStatus.CANCELLED) }
+
+            // Re-read rather than captured before the launch: by now the worker
+            // may have moved on to another session, and that run is not ours to
+            // end.
+            val active = activeRun.get()?.takeIf { it.sessionId == sessionId }
+            if (active != null) {
+                Timber.d("Cancelling the active run of session %s", sessionId)
+                active.job.cancel()
+            } else if (dropped.isNotEmpty()) {
+                // Only when nothing was running: a cancelled run settles the
+                // session itself from `executeRun`'s `finally`, and a second
+                // Idle racing that would settle the surface before the run has
+                // finished unwinding.
+                getOrCreateStateFlow(sessionId).emit(AgentOrchestratorState.Idle)
             }
         }
     }
